@@ -312,6 +312,11 @@ export class ReadRepo<
     filter?: FilterOf<R, Self>,
     options?: FindOptions & { project?: never; aggregates?: never },
   ): Promise<NormResult<DefaultRowOf<R, Self>[]>>;
+  /**
+   * @throws {@link NormQueryError} When the filter, ordering, or projection
+   *   references an unknown column or misuses a hashed/encrypted one, or a
+   *   scoped handle's guard is violated (`SCOPE_VIOLATION`).
+   */
   public async find(
     filter?: FilterOf<R, Self>,
     options: FindOptions = {},
@@ -547,6 +552,10 @@ export class ReadRepo<
     filter?: FilterOf<R, Self>,
     options?: Omit<FindOptions, 'limit'> & { project?: never },
   ): Promise<NormResult<DefaultRowOf<R, Self> | null>>;
+  /**
+   * @throws {@link NormQueryError} Propagated from the underlying {@link find}
+   *   — an illegal filter/order/projection or a scope violation.
+   */
   public async findOne(
     filter?: FilterOf<R, Self>,
     options: Omit<FindOptions, 'limit'> = {},
@@ -568,7 +577,13 @@ export class ReadRepo<
     return out as any;
   }
 
-  /** The envelope's `count` carries the answer; there is no `data`. */
+  /**
+   * The envelope's `count` carries the answer; there is no `data`.
+   *
+   * @throws {@link NormQueryError} When `filter` references an unknown column
+   *   or misuses a hashed/encrypted one, or a scoped handle's guard is
+   *   violated.
+   */
   public async count(filter?: FilterOf<R, Self>): Promise<NormResult> {
     const id = ulid();
     const c = this._compiled;
@@ -1929,6 +1944,10 @@ export class Repo<
     pk: PrimaryKeyOf<D>,
     options: { project: P; decrypt?: boolean },
   ): Promise<NormResult<ProjectedRowOf<R, Self, P> | null>>;
+  /**
+   * @throws {@link NormQueryError} Propagated from {@link find} — e.g. an
+   *   illegal projection or a scoped handle's guard violation.
+   */
   public async getByPK(
     pk: PrimaryKeyOf<D>,
     options: { project?: ProjectionInput; decrypt?: boolean } = {},
@@ -1961,6 +1980,8 @@ export class Repo<
    *
    * @param data - One row, or an array for a batch insert.
    * @param opts - `decrypt: false` leaves ciphertext in the result.
+   * @throws {@link NormQueryError} If a payload value contradicts the active
+   *   `db.scope(...)` (`SCOPE_VIOLATION`).
    * @throws {@link NormValidationError} If a value fails its column rules.
    *
    * @example
@@ -2286,8 +2307,15 @@ export class Repo<
     });
   }
 
-  /** Update matching rows; OMITTING the filter updates ALL rows
-   * (warned). Hashed columns filter by plaintext equality. */
+  /**
+   * Update matching rows; OMITTING the filter updates ALL rows
+   * (warned). Hashed columns filter by plaintext equality.
+   *
+   * @throws {@link NormQueryError} When `filter` references an unknown or
+   *   hashed/encrypted column illegally, or a scoped update would move a row
+   *   to a different scope (`SCOPE_VIOLATION`).
+   * @throws {@link NormValidationError} If a value fails its column rules.
+   */
   public async update(
     data: UpdateOf<D>,
     filter?: FilterOf<R, Self>,
@@ -2364,8 +2392,14 @@ export class Repo<
     });
   }
 
-  /** Update the single row with this primary key. Equivalent to
-   * `update(data, pkFilter)`; composite keys pass every pk column. */
+  /**
+   * Update the single row with this primary key. Equivalent to
+   * `update(data, pkFilter)`; composite keys pass every pk column.
+   *
+   * @throws {@link NormQueryError} Propagated from {@link update} — e.g. a
+   *   scoped update crossing scopes (`SCOPE_VIOLATION`).
+   * @throws {@link NormValidationError} If a value fails its column rules.
+   */
   public updateByPK(
     data: UpdateOf<D>,
     pk: PrimaryKeyOf<D>,
@@ -2373,8 +2407,13 @@ export class Repo<
     return this.update(data, this._pkWhere(pk as Row) as FilterOf<R, Self>);
   }
 
-  /** Delete matching rows; OMITTING the filter deletes ALL rows
-   * (warned). */
+  /**
+   * Delete matching rows; OMITTING the filter deletes ALL rows
+   * (warned).
+   *
+   * @throws {@link NormQueryError} When `filter` references an unknown or
+   *   hashed/encrypted column illegally.
+   */
   public async delete(filter?: FilterOf<R, Self>): Promise<NormResult> {
     const id = ulid();
     let where: QueryFilter | undefined;
@@ -2426,8 +2465,13 @@ export class Repo<
     });
   }
 
-  /** Delete the single row with this primary key. Fires the
-   * `beforeDelete` hook with the pk filter, like {@link delete}. */
+  /**
+   * Delete the single row with this primary key. Fires the
+   * `beforeDelete` hook with the pk filter, like {@link delete}.
+   *
+   * @throws {@link NormQueryError} Propagated from {@link delete} when the
+   *   primary-key filter is rejected.
+   */
   public deleteByPK(pk: PrimaryKeyOf<D>): Promise<NormResult> {
     return this.delete(this._pkWhere(pk as Row) as FilterOf<R, Self>);
   }
@@ -2972,6 +3016,8 @@ export class QueryAccessor<D extends AnyDef> {
    * Result rows come back RAW — stored queries lack column
    * provenance, so ciphertext is not decrypted. The afterRead row
    * hook still runs per row.
+   *
+   * @throws {@link NormHookError} When the entity's `afterRead` hook throws.
    */
   public async find(
     opts: { limit?: number; offset?: number } = {},

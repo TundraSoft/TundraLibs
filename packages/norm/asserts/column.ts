@@ -143,7 +143,12 @@ export function columnSpecIssues(
   return issues;
 }
 
-/** Throwing wrapper over {@linkcode columnSpecIssues}. */
+/**
+ * Throwing wrapper over {@linkcode columnSpecIssues}.
+ *
+ * @throws {@link NormDefinitionError} When `spec` violates any column rule —
+ *   the thrown error's `context.issues` carries every aggregated issue.
+ */
 export function assertColumnSpec(
   model: string,
   colName: string,

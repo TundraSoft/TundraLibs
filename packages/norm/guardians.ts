@@ -23,12 +23,15 @@
  * @since 1.0.0
  */
 
-import { Guardian, GuardianError } from '@tundralibs/guardian';
-import type { FinishedGuardian, ObjectGuardian } from '@tundralibs/guardian';
+import {
+  type FinishedGuardian,
+  Guardian,
+  GuardianError,
+  type ObjectGuardian,
+} from '@tundralibs/guardian';
 import type { ColumnSpec } from './definition/mod.ts';
 import { isExpressionValue } from './definition/Column.ts';
-import { NormValidationError } from './errors/mod.ts';
-import type { ValidationIssue } from './errors/mod.ts';
+import { NormValidationError, type ValidationIssue } from './errors/mod.ts';
 
 // Re-exported for the runtime importers (compile.ts / Repo.ts) that
 // have historically pulled it from here — the ONE definition lives in

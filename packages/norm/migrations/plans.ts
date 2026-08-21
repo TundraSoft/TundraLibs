@@ -29,8 +29,7 @@ import {
   SQLiteTranslator,
 } from '@tundralibs/oql/translator';
 import type { DdlQuery } from '../executor.ts';
-import type { MigrationAction } from './rebuild.ts';
-import { isRebuild, rebuildDdlPlan } from './rebuild.ts';
+import { isRebuild, type MigrationAction, rebuildDdlPlan } from './rebuild.ts';
 import { fnv1a64 } from './snapshot.ts';
 
 /** Dialects that get plan artifacts (Mongo DDL is mostly no-op). */

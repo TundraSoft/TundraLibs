@@ -51,8 +51,12 @@
 
 import type { Query } from '@tundralibs/oql/types';
 import { assertDefinition } from '../asserts/definition.ts';
-import type { AnyColumnBuilder, ColumnBuilder, ColumnSpec } from './Column.ts';
-import { hashSiblingOf } from './Column.ts';
+import {
+  type AnyColumnBuilder,
+  type ColumnBuilder,
+  type ColumnSpec,
+  hashSiblingOf,
+} from './Column.ts';
 import type { InsertOf, ReadRowOf, UpdateOf } from './infer.ts';
 
 /** Referential actions norm emits — the cross-dialect-safe subset
@@ -556,6 +560,15 @@ export function Entity<
   C extends Record<string, AnyColumnBuilder>,
   const O extends EntityTableOptions<C>,
 >(name: N, columns: C, options: O): TableDefinition<C, O, N>;
+/**
+ * Runtime constructor shared by all three {@link Entity} overloads.
+ *
+ * @throws {Error} When `name` is empty, when `columns` is empty, when an
+ *   `insert`/`update` scope names a column that does not exist, or when a
+ *   `hash` column collides with the `<column>_hash` sibling norm synthesises.
+ * @throws {@link NormDefinitionError} When the emitted definition fails
+ *   structural validation (delegated to {@link assertDefinition}).
+ */
 export function Entity(
   name: string,
   columns: Record<string, AnyColumnBuilder>,

@@ -32,9 +32,9 @@ import type { Query } from '@tundralibs/oql/types';
 import { runtimeOf } from '../Norm.ts';
 import type { Runtime } from '../compile.ts';
 import { NormAdvisoryLockError, NormMigrationError } from '../errors/mod.ts';
-import { hashSourceOf } from '../definition/Column.ts';
+import { hashSourceOf } from '../definition/mod.ts';
 import { coerceCount } from '../result.ts';
-import { buildSnapshot, type MigrationSnapshot } from './snapshot.ts';
+import { buildSnapshot, fnv1a64, type MigrationSnapshot } from './snapshot.ts';
 import { diffSnapshots } from './diff.ts';
 import {
   isRebuild,
@@ -62,7 +62,6 @@ import {
   type HistoryRow,
 } from './history.ts';
 import { PROGRESS_TABLE_NAME, progressCreateQuery } from './progress.ts';
-import { fnv1a64 } from './snapshot.ts';
 
 type Row = Record<string, unknown>;
 
@@ -176,24 +175,24 @@ export type ApplyResult = {
  * ```
  */
 export class Migrator {
-  readonly #runtime: Runtime;
-  readonly #dir: string;
-  readonly #chunk: number;
-  readonly #renderSql: boolean;
-  readonly #lockStaleMs: number;
+  private readonly __runtime: Runtime;
+  private readonly __dir: string;
+  private readonly __chunk: number;
+  private readonly __renderSql: boolean;
+  private readonly __lockStaleMs: number;
   /** Per-version transaction timeout in SECONDS (0 = disarmed). */
-  readonly #txTimeoutSec: number;
+  private readonly __txTimeoutSec: number;
   /** The FileLock held by the in-flight apply()/rollback(), so long
-   * single steps can re-stamp it mid-run (see #touchLock). */
-  #activeLock: FileLock | undefined;
-  #historyEnsured = false;
-  #progressEnsured = false;
+   * single steps can re-stamp it mid-run (see __touchLock). */
+  private __activeLock: FileLock | undefined;
+  private __historyEnsured = false;
+  private __progressEnsured = false;
   /** Parsed snapshots by version — files are write-once per version, so
    * one apply()'s status/plan/verify passes read each at most once. */
-  readonly #snapshotCache = new Map<number, MigrationSnapshot>();
+  private readonly __snapshotCache = new Map<number, MigrationSnapshot>();
   /** Memoized `readDir` version scan; invalidated whenever `snapshot()`
    * writes a new version file. */
-  #versionsCache: number[] | undefined;
+  private __versionsCache: number[] | undefined;
 
   /**
    * Bind a migrator to a `norm.use(...)` handle and migrations directory.
@@ -201,23 +200,23 @@ export class Migrator {
    * @param db The handle returned by `norm.use(...)`.
    */
   constructor(db: object, options: MigratorOptions) {
-    this.#runtime = runtimeOf(db);
+    this.__runtime = runtimeOf(db);
     // Trailing slashes are trimmed by scanning back from the end rather than
     // with `/\/+$/`: that pattern re-tries from every position and re-scans the
     // run each time, so a path of many slashes costs O(n^2). This is O(n) with
     // a single allocation.
     let dirEnd = options.dir.length;
     while (dirEnd > 0 && options.dir[dirEnd - 1] === '/') dirEnd--;
-    this.#dir = options.dir.slice(0, dirEnd);
+    this.__dir = options.dir.slice(0, dirEnd);
     // A non-positive chunk is nonsense for the rebuild pager: `limit: 0`
     // means UNBOUNDED downstream and `offset += 0` never advances, so the
     // copy loop would re-read the same page forever. Floor at one row.
     const chunk = options.rebuildChunkSize;
-    this.#chunk = chunk === undefined || !Number.isFinite(chunk)
+    this.__chunk = chunk === undefined || !Number.isFinite(chunk)
       ? REBUILD_CHUNK
       : Math.max(1, Math.floor(chunk));
-    this.#renderSql = options.renderSql ?? false;
-    this.#lockStaleMs = options.lockStaleMs ?? DEFAULT_STALE_MS;
+    this.__renderSql = options.renderSql ?? false;
+    this.__lockStaleMs = options.lockStaleMs ?? DEFAULT_STALE_MS;
     // 0 (the default, and any non-positive value) DISARMS the driver's
     // request-scale auto-rollback timer; a positive ms value re-imposes a
     // ceiling (rounded up to whole seconds, the driver's unit; never
@@ -226,7 +225,7 @@ export class Migrator {
     // 0` fall into the clamp and arm a 1-SECOND cap — the polar opposite
     // of "disarmed", killing every version whose DDL ran past a second.
     const txMs = options.transactionTimeoutMs;
-    this.#txTimeoutSec = txMs === undefined || !(txMs > 0)
+    this.__txTimeoutSec = txMs === undefined || !(txMs > 0)
       ? 0
       : Math.max(1, Math.ceil(txMs / 1000));
   }
@@ -236,9 +235,9 @@ export class Migrator {
    * mistaken for an abandoned lock and reclaimed by a contender — which,
    * on engines with no server-side advisory lock (Mongo, SQLite), is the
    * ONLY thing keeping two runners off the same version. No-op / never
-   * throws when no apply is in flight (touch() guards `#held`). */
-  #touchLock(): Promise<void> {
-    return this.#activeLock?.touch() ?? Promise.resolve();
+   * throws when no apply is in flight (touch() guards `__held`). */
+  private __touchLock(): Promise<void> {
+    return this.__activeLock?.touch() ?? Promise.resolve();
   }
 
   // ─── Snapshot ──────────────────────────────────────────────────────
@@ -246,34 +245,34 @@ export class Migrator {
   /** Write the next versioned snapshot — unless the schema is
    * hash-identical to the current head. */
   async snapshot(): Promise<SnapshotResult> {
-    await ensureDir(this.#dir);
+    await ensureDir(this.__dir);
     const current = buildSnapshot(
-      this.#runtime.registry,
+      this.__runtime.registry,
       new Date().toISOString(),
     );
-    const versions = await this.#fsVersions();
+    const versions = await this.__fsVersions();
     const head = versions.at(-1);
     if (head !== undefined) {
-      const headSnap = await this.#readSnapshot(head);
+      const headSnap = await this.__readSnapshot(head);
       if (headSnap.hash === current.hash) {
         return {
           version: head,
-          path: `${this.#dir}/${formatVersionFilename(head)}`,
+          path: `${this.__dir}/${formatVersionFilename(head)}`,
           written: false,
         };
       }
     }
     const version = (head ?? 0) + 1;
-    const path = `${this.#dir}/${formatVersionFilename(version)}`;
+    const path = `${this.__dir}/${formatVersionFilename(version)}`;
     await writeTextFile(path, JSON.stringify(current, null, 2));
-    this.#versionsCache = undefined; // a new version file now exists
+    this.__versionsCache = undefined; // a new version file now exists
     // Reviewable `.sql` plan artifacts are opt-in (`renderSql`) — the JSON
     // snapshot is always the source of truth. When enabled they ride along
     // here and apply() hash-verifies them; otherwise generate them on demand
     // with renderPlans(), and apply() runs the freshly-computed plan.
-    if (this.#renderSql) {
-      const prev = head !== undefined ? await this.#readSnapshot(head) : null;
-      await this.#writePlanArtifacts(version, prev, current);
+    if (this.__renderSql) {
+      const prev = head !== undefined ? await this.__readSnapshot(head) : null;
+      await this.__writePlanArtifacts(version, prev, current);
     }
     return { version, path, written: true };
   }
@@ -284,15 +283,15 @@ export class Migrator {
   async renderPlans(): Promise<
     ReadonlyArray<{ version: number; files: ReadonlyArray<string> }>
   > {
-    const versions = await this.#fsVersions();
+    const versions = await this.__fsVersions();
     const out: Array<{ version: number; files: string[] }> = [];
     for (const version of versions) {
       const prevVersion = versions.filter((v) => v < version).at(-1);
       const prev = prevVersion === undefined
         ? null
-        : await this.#readSnapshot(prevVersion);
-      const curr = await this.#readSnapshot(version);
-      const files = await this.#writePlanArtifacts(version, prev, curr);
+        : await this.__readSnapshot(prevVersion);
+      const curr = await this.__readSnapshot(version);
+      const files = await this.__writePlanArtifacts(version, prev, curr);
       out.push({ version, files });
     }
     return out;
@@ -305,19 +304,19 @@ export class Migrator {
    * them, and whether the applied head still matches its recorded
    * hash (`hashOk: false` means the definitions drifted after apply). */
   async status(): Promise<MigratorStatus> {
-    const versions = await this.#fsVersions();
+    const versions = await this.__fsVersions();
     const fsVersion = versions.at(-1) ?? 0;
-    const dbVersion = await this.#dbHeadVersion();
+    const dbVersion = await this.__dbHeadVersion();
     const pending = versions.filter((v) => v > dbVersion);
     let hashOk = true;
     if (dbVersion > 0) {
-      const row = await this.#historyRow(dbVersion);
+      const row = await this.__historyRow(dbVersion);
       if (row !== undefined) {
         if (!versions.includes(dbVersion)) {
           // Applied snapshot file is GONE — nothing to verify against.
           hashOk = false;
         } else {
-          const snap = await this.#readSnapshot(dbVersion);
+          const snap = await this.__readSnapshot(dbVersion);
           hashOk = snap.hash === row.hash;
         }
       }
@@ -328,14 +327,14 @@ export class Migrator {
   /** The DDL each pending version would run, oldest first. Throws
    * loudly when a step needs an ALTER this dialect cannot do. */
   async plan(opts: { allowDrop?: boolean } = {}): Promise<PlannedStep[]> {
-    const versions = await this.#fsVersions();
-    const dbVersion = await this.#dbHeadVersion();
+    const versions = await this.__fsVersions();
+    const dbVersion = await this.__dbHeadVersion();
     if (dbVersion > 0 && !versions.includes(dbVersion)) {
       throw new NormMigrationError(
-        `Applied snapshot ${dbVersion} is missing from ${this.#dir} — ` +
+        `Applied snapshot ${dbVersion} is missing from ${this.__dir} — ` +
           `pending diffs would baseline against the wrong version. ` +
           `Restore the file.`,
-        { dir: this.#dir, version: dbVersion, code: 'MISSING_SNAPSHOT' },
+        { dir: this.__dir, version: dbVersion, code: 'MISSING_SNAPSHOT' },
       );
     }
     const pending = versions.filter((v) => v > dbVersion);
@@ -344,9 +343,9 @@ export class Migrator {
       const prevVersion = versions.filter((v) => v < version).at(-1);
       const prev = prevVersion === undefined
         ? null
-        : await this.#readSnapshot(prevVersion);
-      const curr = await this.#readSnapshot(version);
-      const caps = this.#runtime.executor.capabilities;
+        : await this.__readSnapshot(prevVersion);
+      const curr = await this.__readSnapshot(version);
+      const caps = this.__runtime.executor.capabilities;
       const diff = diffSnapshots(prev, curr, {
         allowDrop: opts.allowDrop,
         inPlaceAlter: caps.alterColumns && caps.alterConstraints,
@@ -391,7 +390,7 @@ export class Migrator {
     const started = Date.now();
     if (opts.dryRun === true) {
       const status = await this.status();
-      if (!status.hashOk) this.#throwDrift(status.dbVersion);
+      if (!status.hashOk) this.__throwDrift(status.dbVersion);
       return {
         applied: [],
         durationMs: Date.now() - started,
@@ -402,19 +401,19 @@ export class Migrator {
     // Status + plan are computed INSIDE the lock: a plan computed
     // before waiting on a concurrent apply would be stale by the time
     // it runs.
-    const lock = new FileLock(this.#dir, this.#lockStaleMs);
+    const lock = new FileLock(this.__dir, this.__lockStaleMs);
     await lock.acquire(opts.lockTimeoutMs);
-    this.#activeLock = lock;
+    this.__activeLock = lock;
     const applied: number[] = [];
     try {
       // The advisory lock wraps the critical section INSIDE the try: it
       // throws LOCK_TIMEOUT when another host is mid-deploy, and a throw
       // outside would strand migrator.lock on this host forever. The
       // executor pins acquire+release to one connection and releases on
-      // every exit path (see #withAdvisoryLock).
-      await this.#withAdvisoryLock(opts.lockTimeoutMs ?? 30_000, async () => {
+      // every exit path (see __withAdvisoryLock).
+      await this.__withAdvisoryLock(opts.lockTimeoutMs ?? 30_000, async () => {
         const status = await this.status();
-        if (!status.hashOk) this.#throwDrift(status.dbVersion);
+        if (!status.hashOk) this.__throwDrift(status.dbVersion);
         const steps = await this.plan({ allowDrop: opts.allowDrop });
         const blocked = steps.flatMap((s) =>
           s.blockedDrops.map((b) => `v${s.version}: ${b}`)
@@ -426,14 +425,14 @@ export class Migrator {
             `apply refused: drops are blocked (allowDrop: false) — ` +
               `${blocked.join('; ')}. Pass allowDrop: true, or add ` +
               `renamedFrom hints if these are renames.`,
-            { dir: this.#dir, code: 'BLOCKED_DROPS' },
+            { dir: this.__dir, code: 'BLOCKED_DROPS' },
           );
         }
         // steps.length === 0 → the loop is a no-op and `applied` stays
         // empty, yielding the same result as the old empty-plan return.
         for (const step of steps) {
-          await this.#verifyPlanArtifact(step.version, step.queries);
-          await this.#applyStep(step, opts.appliedBy);
+          await this.__verifyPlanArtifact(step.version, step.queries);
+          await this.__applyStep(step, opts.appliedBy);
           applied.push(step.version);
           // Keep the file lock fresh so a long multi-version apply is
           // never mistaken for an abandoned one.
@@ -441,7 +440,7 @@ export class Migrator {
         }
       });
     } finally {
-      this.#activeLock = undefined;
+      this.__activeLock = undefined;
       await lock.release();
     }
     return { applied, durationMs: Date.now() - started };
@@ -455,15 +454,15 @@ export class Migrator {
    * the version back completely. Everything else checkpoints per action
    * so the retry resumes instead of re-emitting.
    */
-  async #applyStep(
+  private async __applyStep(
     step: PlannedStep,
     appliedBy: string | undefined,
   ): Promise<void> {
-    const ex = this.#runtime.executor;
+    const ex = this.__runtime.executor;
     const stepStart = Date.now();
-    const snap = await this.#readSnapshot(step.version);
+    const snap = await this.__readSnapshot(step.version);
     const record = (txId?: string): Promise<void> =>
-      this.#insertHistory({
+      this.__insertHistory({
         version: step.version,
         hash: snap.hash,
         appliedAt: new Date().toISOString(),
@@ -473,7 +472,7 @@ export class Migrator {
     // The history table must exist BEFORE the transaction opens — its
     // CREATE is DDL of its own and would join (and on SQLite, be rolled
     // back with) the version's transaction.
-    await this.#ensureHistory();
+    await this.__ensureHistory();
 
     if (ex.capabilities.transactionalDdl) {
       // CREATE_SCHEMA is deliberately left outside: SQLite emulates
@@ -488,11 +487,11 @@ export class Migrator {
       }
       await ex.transaction(async (session) => {
         for (const q of inTx) {
-          if (isRebuild(q)) await this.#rebuild(q, session.id);
+          if (isRebuild(q)) await this.__rebuild(q, session.id);
           else await ex.ddl(q, session.id);
         }
         await record(session.id);
-      }, { timeout: this.#txTimeoutSec });
+      }, { timeout: this.__txTimeoutSec });
       return;
     }
 
@@ -500,20 +499,20 @@ export class Migrator {
     // Mongo has no transactions). Atomicity is impossible, so make the
     // RETRY safe: checkpoint after every action and resume from there.
     const planHash = actionsHash(step.queries);
-    let done = await this.#readProgress(step.version, planHash);
+    let done = await this.__readProgress(step.version, planHash);
     for (let i = done; i < step.queries.length; i++) {
       const q = step.queries[i]!;
-      if (isRebuild(q)) await this.#rebuild(q);
+      if (isRebuild(q)) await this.__rebuild(q);
       else await ex.ddl(q);
-      await this.#writeProgress(step.version, planHash, i + 1, done > 0);
+      await this.__writeProgress(step.version, planHash, i + 1, done > 0);
       // Re-stamp the file lock per action: on advisory-lock-less engines
       // (Mongo) it is the sole guard, and a version whose actions exceed
       // the stale TTL would otherwise look abandoned mid-run.
-      await this.#touchLock();
+      await this.__touchLock();
       done = i + 1;
     }
     await record();
-    await this.#clearProgress(step.version);
+    await this.__clearProgress(step.version);
   }
 
   /**
@@ -530,50 +529,50 @@ export class Migrator {
     opts: { to?: number; lockTimeoutMs?: number } = {},
   ): Promise<{ reverted: ReadonlyArray<number>; durationMs: number }> {
     const started = Date.now();
-    const dbVersion = await this.#dbHeadVersion();
+    const dbVersion = await this.__dbHeadVersion();
     if (dbVersion === 0) return { reverted: [], durationMs: 0 };
     const target = opts.to ?? dbVersion - 1;
     if (target < 0 || target >= dbVersion) {
       throw new NormMigrationError(
         `rollback target ${target} is not below the applied head ` +
           `${dbVersion}.`,
-        { dir: this.#dir, version: target, code: 'INVALID_ROLLBACK' },
+        { dir: this.__dir, version: target, code: 'INVALID_ROLLBACK' },
       );
     }
-    const versions = await this.#fsVersions();
-    const lock = new FileLock(this.#dir, this.#lockStaleMs);
+    const versions = await this.__fsVersions();
+    const lock = new FileLock(this.__dir, this.__lockStaleMs);
     await lock.acquire(opts.lockTimeoutMs);
-    this.#activeLock = lock;
+    this.__activeLock = lock;
     const reverted: number[] = [];
     try {
       // Same reasoning as apply(): a LOCK_TIMEOUT from the advisory lock
       // must not strand migrator.lock on this host.
-      await this.#withAdvisoryLock(opts.lockTimeoutMs ?? 30_000, async () => {
+      await this.__withAdvisoryLock(opts.lockTimeoutMs ?? 30_000, async () => {
         for (let v = dbVersion; v > target; v--) {
           if (!versions.includes(v)) {
             throw new NormMigrationError(
               `Cannot roll back version ${v}: its snapshot file is missing.`,
-              { dir: this.#dir, version: v, code: 'MISSING_SNAPSHOT' },
+              { dir: this.__dir, version: v, code: 'MISSING_SNAPSHOT' },
             );
           }
-          const from = await this.#readSnapshot(v);
+          const from = await this.__readSnapshot(v);
           const prevVersion = versions.filter((x) => x < v).at(-1);
           const to = prevVersion === undefined
             ? { format: 1 as const, generatedAt: '', hash: '', entities: {} }
-            : await this.#readSnapshot(prevVersion);
+            : await this.__readSnapshot(prevVersion);
           // Reverse diff; drops are the point of a rollback.
-          const caps = this.#runtime.executor.capabilities;
+          const caps = this.__runtime.executor.capabilities;
           const diff = diffSnapshots(from, to, {
             allowDrop: true,
             inPlaceAlter: caps.alterColumns && caps.alterConstraints,
           });
-          await this.#revertStep(v, diff.actions);
+          await this.__revertStep(v, diff.actions);
           reverted.push(v);
           await lock.touch();
         }
       });
     } finally {
-      this.#activeLock = undefined;
+      this.__activeLock = undefined;
       await lock.release();
     }
     return { reverted, durationMs: Date.now() - started };
@@ -581,42 +580,42 @@ export class Migrator {
 
   /** Execute ONE reverse diff and un-record the version, under the same
    * per-dialect atomicity rules as {@linkcode Migrator.apply}. */
-  async #revertStep(
+  private async __revertStep(
     version: number,
     actions: ReadonlyArray<MigrationAction>,
   ): Promise<void> {
-    const ex = this.#runtime.executor;
-    await this.#ensureHistory();
+    const ex = this.__runtime.executor;
+    await this.__ensureHistory();
     if (ex.capabilities.transactionalDdl) {
       await ex.transaction(async (session) => {
         for (const q of actions) {
-          if (isRebuild(q)) await this.#rebuild(q, session.id);
+          if (isRebuild(q)) await this.__rebuild(q, session.id);
           else await ex.ddl(q, session.id);
         }
-        await this.#deleteHistory(version, session.id);
-      }, { timeout: this.#txTimeoutSec });
+        await this.__deleteHistory(version, session.id);
+      }, { timeout: this.__txTimeoutSec });
       // A rolled-back version can have no checkpoint left to honour.
-      await this.#clearProgress(version);
+      await this.__clearProgress(version);
       return;
     }
     const planHash = actionsHash(actions);
-    let done = await this.#readProgress(version, planHash);
+    let done = await this.__readProgress(version, planHash);
     for (let i = done; i < actions.length; i++) {
       const q = actions[i]!;
-      if (isRebuild(q)) await this.#rebuild(q);
+      if (isRebuild(q)) await this.__rebuild(q);
       else await ex.ddl(q);
-      await this.#writeProgress(version, planHash, i + 1, done > 0);
-      await this.#touchLock();
+      await this.__writeProgress(version, planHash, i + 1, done > 0);
+      await this.__touchLock();
       done = i + 1;
     }
-    await this.#deleteHistory(version);
-    await this.#clearProgress(version);
+    await this.__deleteHistory(version);
+    await this.__clearProgress(version);
   }
 
   /** Applied migrations, newest first. */
   async history(): Promise<HistoryRow[]> {
-    await this.#ensureHistory();
-    const res = await this.#runtime.executor.execute<Row>(
+    await this.__ensureHistory();
+    const res = await this.__runtime.executor.execute<Row>(
       {
         type: 'SELECT',
         table: HISTORY_TABLE_NAME,
@@ -656,8 +655,11 @@ export class Migrator {
    * lock — a pooled unlock can otherwise land on a different backend
    * and leak the lock permanently. `fn`'s own errors propagate
    * unchanged; only an ACQUIRE failure is remapped to `LOCK_TIMEOUT`. */
-  #withAdvisoryLock<T>(timeoutMs: number, fn: () => Promise<T>): Promise<T> {
-    const ex = this.#runtime.executor;
+  private __withAdvisoryLock<T>(
+    timeoutMs: number,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const ex = this.__runtime.executor;
     if (!ex.capabilities.advisoryLock) return fn();
     return ex.withAdvisoryLock(ADVISORY_LOCK_KEY, timeoutMs, fn).catch(
       (cause: unknown) => {
@@ -667,7 +669,7 @@ export class Migrator {
           throw new NormMigrationError(
             `Another process holds the migration advisory lock ` +
               `('${ADVISORY_LOCK_KEY}') — is a deploy running elsewhere?`,
-            { dir: this.#dir, code: 'LOCK_TIMEOUT' },
+            { dir: this.__dir, code: 'LOCK_TIMEOUT' },
             cause,
           );
         }
@@ -686,8 +688,8 @@ export class Migrator {
    * checkpoint cannot help mid-rebuild, so that case stays manual.
    * @param txId - Transaction to run inside, on engines with
    *   transactional DDL (the whole rebuild then rolls back as one). */
-  async #rebuild(r: RebuildTable, txId?: string): Promise<void> {
-    const ex = this.#runtime.executor;
+  private async __rebuild(r: RebuildTable, txId?: string): Promise<void> {
+    const ex = this.__runtime.executor;
     // ONE shared plan builder feeds this loop AND the stored plan
     // artifacts — see rebuildDdlPlan.
     const plan = rebuildDdlPlan(r);
@@ -697,7 +699,7 @@ export class Migrator {
     if (plan.structuralCopy !== null) {
       await ex.execute(plan.structuralCopy, txId);
     } else {
-      await this.#copyTransformed(r, aside, txId);
+      await this.__copyTransformed(r, aside, txId);
     }
 
     // 4. Verify BEFORE dropping the source of truth.
@@ -745,13 +747,13 @@ export class Migrator {
    * CHUNKED — pages the aside table by pk order and inserts per
    * batch, so a multi-million-row rebuild never materializes the
    * whole table in memory. */
-  async #copyTransformed(
+  private async __copyTransformed(
     r: RebuildTable,
     aside: string,
     txId?: string,
   ): Promise<void> {
-    const ex = this.#runtime.executor;
-    const crypto = this.#runtime.crypto;
+    const ex = this.__runtime.executor;
+    const crypto = this.__runtime.crypto;
     const secret = crypto.secret;
     if (secret === undefined || secret.length === 0) {
       throw new NormMigrationError(
@@ -783,7 +785,7 @@ export class Migrator {
       }
     }
 
-    for (let offset = 0;; offset += this.#chunk) {
+    for (let offset = 0;; offset += this.__chunk) {
       const res = await ex.execute<Record<string, unknown>>(
         {
           type: 'SELECT',
@@ -792,7 +794,7 @@ export class Migrator {
           columns: r.pairs.map(([, prev]) => prev),
           projection,
           ...(Object.keys(orderBy).length > 0 ? { orderBy } : {}),
-          limit: this.#chunk,
+          limit: this.__chunk,
           offset,
         },
         txId,
@@ -861,14 +863,14 @@ export class Migrator {
       // minutes — far past the stale TTL — and on engines with no
       // server-side advisory lock the file lock is all that stops a
       // contender from reclaiming and running the same version.
-      await this.#touchLock();
-      if (batch.length < this.#chunk) break;
+      await this.__touchLock();
+      if (batch.length < this.__chunk) break;
     }
   }
 
   /** Render + write `000N.<dialect>.sql` for every SQL dialect.
    * Always `allowDrop: true` — reviewers must SEE implied drops. */
-  async #writePlanArtifacts(
+  private async __writePlanArtifacts(
     version: number,
     prev: MigrationSnapshot | null,
     curr: MigrationSnapshot,
@@ -880,7 +882,7 @@ export class Migrator {
         inPlaceAlter: dialect !== 'sqlite',
       });
       const rendered = renderPlan(version, dialect, diff.actions);
-      const file = `${this.#dir}/${planFilename(version, dialect)}`;
+      const file = `${this.__dir}/${planFilename(version, dialect)}`;
       await writeTextFile(file, rendered.text);
       files.push(file);
     }
@@ -891,14 +893,14 @@ export class Migrator {
    * version and refuse when its hash no longer matches the stored
    * artifact — production must execute exactly what was reviewed.
    * Mongo has no SQL artifacts; it skips. */
-  async #verifyPlanArtifact(
+  private async __verifyPlanArtifact(
     version: number,
     actions: PlannedStep['queries'],
   ): Promise<void> {
-    const caps = this.#runtime.executor.capabilities;
+    const caps = this.__runtime.executor.capabilities;
     if (caps.dialect === 'mongo') return;
     const dialect = caps.dialect as SqlDialect;
-    const file = `${this.#dir}/${planFilename(version, dialect)}`;
+    const file = `${this.__dir}/${planFilename(version, dialect)}`;
     let stored: string;
     try {
       stored = await readTextFile(file);
@@ -921,59 +923,59 @@ export class Migrator {
           `computed ${rendered.hash}) — the snapshot or artifact changed ` +
           `after review. Re-run renderPlans(), get the diff re-reviewed, ` +
           `then apply.`,
-        { dir: this.#dir, version, code: 'PLAN_HASH_MISMATCH' },
+        { dir: this.__dir, version, code: 'PLAN_HASH_MISMATCH' },
       );
     }
   }
 
-  #throwDrift(version: number): never {
+  private __throwDrift(version: number): never {
     throw new NormMigrationError(
       `Applied snapshot ${version} no longer matches its recorded ` +
         `hash — was the file edited (or deleted) after application?`,
-      { dir: this.#dir, version, code: 'DRIFT' },
+      { dir: this.__dir, version, code: 'DRIFT' },
     );
   }
 
   /** Versioned snapshot files on disk (sorted). Memoized for the run —
    * only `snapshot()` adds files, and it clears the memo when it does —
    * so status/plan share ONE readDir scan per apply(). */
-  async #fsVersions(): Promise<number[]> {
-    if (this.#versionsCache !== undefined) return this.#versionsCache;
-    if (!(await pathExists(this.#dir))) return (this.#versionsCache = []);
+  private async __fsVersions(): Promise<number[]> {
+    if (this.__versionsCache !== undefined) return this.__versionsCache;
+    if (!(await pathExists(this.__dir))) return (this.__versionsCache = []);
     const versions: number[] = [];
-    for await (const entry of readDir(this.#dir)) {
+    for await (const entry of readDir(this.__dir)) {
       const v = parseVersion(entry.name);
       if (v !== null) versions.push(v);
     }
-    return (this.#versionsCache = versions.sort((a, b) => a - b));
+    return (this.__versionsCache = versions.sort((a, b) => a - b));
   }
 
-  async #readSnapshot(version: number): Promise<MigrationSnapshot> {
-    const cached = this.#snapshotCache.get(version);
+  private async __readSnapshot(version: number): Promise<MigrationSnapshot> {
+    const cached = this.__snapshotCache.get(version);
     if (cached !== undefined) return cached;
-    const path = `${this.#dir}/${formatVersionFilename(version)}`;
+    const path = `${this.__dir}/${formatVersionFilename(version)}`;
     try {
       const snap = JSON.parse(await readTextFile(path)) as MigrationSnapshot;
-      this.#snapshotCache.set(version, snap);
+      this.__snapshotCache.set(version, snap);
       return snap;
     } catch (cause) {
       throw new NormMigrationError(
         `Cannot read snapshot ${path}.`,
-        { dir: this.#dir, version, code: 'MISSING_SNAPSHOT' },
+        { dir: this.__dir, version, code: 'MISSING_SNAPSHOT' },
         cause instanceof Error ? cause : new Error(String(cause)),
       );
     }
   }
 
-  async #ensureHistory(): Promise<void> {
-    if (this.#historyEnsured) return;
-    await this.#runtime.executor.ddl(historyCreateQuery());
-    this.#historyEnsured = true;
+  private async __ensureHistory(): Promise<void> {
+    if (this.__historyEnsured) return;
+    await this.__runtime.executor.ddl(historyCreateQuery());
+    this.__historyEnsured = true;
   }
 
-  async #dbHeadVersion(): Promise<number> {
-    await this.#ensureHistory();
-    const res = await this.#runtime.executor.execute<Row>(
+  private async __dbHeadVersion(): Promise<number> {
+    await this.__ensureHistory();
+    const res = await this.__runtime.executor.execute<Row>(
       {
         type: 'SELECT',
         table: HISTORY_TABLE_NAME,
@@ -989,11 +991,11 @@ export class Migrator {
 
   /** The recorded hash for an applied version — the ONLY field
    * status()'s drift check reads. */
-  async #historyRow(
+  private async __historyRow(
     version: number,
   ): Promise<{ version: number; hash: string } | undefined> {
-    await this.#ensureHistory();
-    const res = await this.#runtime.executor.execute<Row>(
+    await this.__ensureHistory();
+    const res = await this.__runtime.executor.execute<Row>(
       {
         type: 'SELECT',
         table: HISTORY_TABLE_NAME,
@@ -1007,9 +1009,9 @@ export class Migrator {
     return { version, hash: String(r.hash) };
   }
 
-  async #insertHistory(row: HistoryRow, txId?: string): Promise<void> {
-    await this.#ensureHistory();
-    await this.#runtime.executor.execute(
+  private async __insertHistory(row: HistoryRow, txId?: string): Promise<void> {
+    await this.__ensureHistory();
+    await this.__runtime.executor.execute(
       {
         type: 'INSERT',
         table: HISTORY_TABLE_NAME,
@@ -1026,8 +1028,8 @@ export class Migrator {
     );
   }
 
-  async #deleteHistory(version: number, txId?: string): Promise<void> {
-    await this.#runtime.executor.execute(
+  private async __deleteHistory(version: number, txId?: string): Promise<void> {
+    await this.__runtime.executor.execute(
       {
         type: 'DELETE',
         table: HISTORY_TABLE_NAME,
@@ -1043,10 +1045,10 @@ export class Migrator {
   /** Create `_norm_migration_progress` on first use. Only the
    * non-transactional path ever calls this, so Postgres/SQLite
    * databases never grow the table. */
-  async #ensureProgress(): Promise<void> {
-    if (this.#progressEnsured) return;
-    await this.#runtime.executor.ddl(progressCreateQuery());
-    this.#progressEnsured = true;
+  private async __ensureProgress(): Promise<void> {
+    if (this.__progressEnsured) return;
+    await this.__runtime.executor.ddl(progressCreateQuery());
+    this.__progressEnsured = true;
   }
 
   /**
@@ -1055,9 +1057,12 @@ export class Migrator {
    * @throws {NormMigrationError} `PLAN_CHANGED` when a checkpoint exists
    *   for a DIFFERENT plan — resuming would skip the wrong statements.
    */
-  async #readProgress(version: number, planHash: string): Promise<number> {
-    await this.#ensureProgress();
-    const res = await this.#runtime.executor.execute<Row>(
+  private async __readProgress(
+    version: number,
+    planHash: string,
+  ): Promise<number> {
+    await this.__ensureProgress();
+    const res = await this.__runtime.executor.execute<Row>(
       {
         type: 'SELECT',
         table: PROGRESS_TABLE_NAME,
@@ -1075,23 +1080,23 @@ export class Migrator {
           `DIFFERENT plan (recorded ${stored}, computed ${planHash}) — ` +
           `the snapshots changed since it failed. Reconcile the schema ` +
           `by hand, then delete the row from ${PROGRESS_TABLE_NAME}.`,
-        { dir: this.#dir, version, code: 'PLAN_CHANGED' },
+        { dir: this.__dir, version, code: 'PLAN_CHANGED' },
       );
     }
     return coerceCount(row.completed);
   }
 
   /** Record that `completed` actions of `version` have landed. */
-  async #writeProgress(
+  private async __writeProgress(
     version: number,
     planHash: string,
     completed: number,
     exists: boolean,
   ): Promise<void> {
-    await this.#ensureProgress();
+    await this.__ensureProgress();
     const updatedAt = new Date().toISOString();
     if (exists) {
-      await this.#runtime.executor.execute({
+      await this.__runtime.executor.execute({
         type: 'UPDATE',
         table: PROGRESS_TABLE_NAME,
         columns: ['version', 'planHash', 'completed', 'updatedAt'],
@@ -1100,7 +1105,7 @@ export class Migrator {
       });
       return;
     }
-    await this.#runtime.executor.execute({
+    await this.__runtime.executor.execute({
       type: 'INSERT',
       table: PROGRESS_TABLE_NAME,
       columns: ['version', 'planHash', 'completed', 'updatedAt'],
@@ -1109,9 +1114,9 @@ export class Migrator {
   }
 
   /** Drop the checkpoint — the version is fully applied (or reverted). */
-  async #clearProgress(version: number): Promise<void> {
-    if (!this.#progressEnsured) return;
-    await this.#runtime.executor.execute({
+  private async __clearProgress(version: number): Promise<void> {
+    if (!this.__progressEnsured) return;
+    await this.__runtime.executor.execute({
       type: 'DELETE',
       table: PROGRESS_TABLE_NAME,
       columns: ['version'],
