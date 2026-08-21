@@ -1439,7 +1439,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param key - Option key
    * @param value - Option value
    * @returns Processed option value
-   * @throws {RESTlerConfigError} If the option value is invalid
+   * @throws {@link RESTlerConfigError} If the option value is invalid
    */
   protected override _processOption<K extends keyof RESTlerOptions>(
     key: K,

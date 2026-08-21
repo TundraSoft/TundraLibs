@@ -5,7 +5,8 @@
  */
 import type { RESTlerContentType } from './RESTlerContentType.ts';
 import type { RESTlerAuth } from './RESTlerAuth.ts';
-import type { RESTlerHeaderProvider, Witness } from './RESTlerHooks.ts';
+import type { Witness } from './Witness.ts';
+import type { RESTlerHeaderProvider } from './RESTlerHeaderProvider.ts';
 import type { TLSOptions } from '@tundralibs/compat/common';
 
 /**
