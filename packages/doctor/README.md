@@ -27,12 +27,6 @@ Doctor is a small DI container built around three primitives:
 ```typescript
 import { inject, Vial } from '@tundralibs/doctor';
 
-declare module '@tundralibs/doctor' {
-  interface VialRegistry {
-    Logger: Logger;
-  }
-}
-
 @Vial('SINGLETON')
 class Logger {
   log(msg: string) {
@@ -41,7 +35,7 @@ class Logger {
 }
 
 class App {
-  logger = inject('Logger'); // resolves while `new App()` runs
+  logger = inject(Logger); // resolves while `new App()` runs — typed Logger
 
   start() {
     this.logger.log('app started');
@@ -71,9 +65,9 @@ Doctor 1.1 drops the legacy-decorator machinery — `experimentalDecorators`,
 
 | 1.0.x                                            | 1.1+                                                                                          |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `@Dose() logger!: Logger`                        | `logger = inject('Logger')`                                                                   |
+| `@Dose() logger!: Logger`                        | `logger = inject(Logger)`                                                                     |
 | `@Inoculate()` on the class                      | nothing — `inject()` fields wire themselves on `new`                                          |
-| `@Inoculate('scope')`                            | `inject('Db', 'scope')` per field, or `Doctor.resolve(Class, 'scope')`                        |
+| `@Inoculate('scope')`                            | `inject(Db, 'scope')` per field, or `Doctor.resolve(Class, 'scope')`                          |
 | `Doctor.treat(instance)`                         | removed — injection happens during construction                                               |
 | `import 'reflect-metadata'`                      | removed — no runtime dependency                                                               |
 | `experimentalDecorators: true` (tsconfig)        | **must be off** — `@Vial` is a TC39 standard decorator                                        |
@@ -161,16 +155,16 @@ so not provably side-effect-free), the narrow subpath doesn't.
 class Handler {
   // EAGER — field initializer. Resolves while `new` runs; a missing
   // registration fails loudly at construction.
-  logger = inject('Logger');
+  logger = inject(Logger);
 
   // EAGER — constructor default parameter. Same timing; handy when
   // tests want to pass a double explicitly: new Handler(fakeDb).
-  constructor(private db = inject('Db')) {}
+  constructor(private db = inject(Db)) {}
 
   // LAZY — memoizing getter. Resolves on FIRST ACCESS.
   private __audit?: Audit;
   get audit(): Audit {
-    return this.__audit ??= inject('Audit', 'jobs');
+    return this.__audit ??= inject(Audit, 'jobs');
   }
 }
 ```
@@ -226,8 +220,8 @@ and names no scope of its own inherits it:
 
 ```typescript ignore
 class UserHandler {
-  db = inject('Database'); // SCOPED — no scope named here
-  repo = inject('UserRepository'); // TRANSIENT, whose own fields inject 'Database'
+  db = inject(Database); // SCOPED — no scope named here
+  repo = inject(UserRepository); // TRANSIENT, whose own fields inject Database
 }
 
 const h = Doctor.resolve(UserHandler, `req-${id}`);
@@ -235,7 +229,7 @@ h.db === h.repo.db; // true — both resolved under `req-${id}`
 ```
 
 Precedence: an explicit argument always wins —
-`inject('Db', 'pinned')` resolves under `'pinned'` no matter what
+`inject(Db, 'pinned')` resolves under `'pinned'` no matter what
 operation is in flight. Outside any operation there is no ambient
 scope, so a scope-less `inject()` of a SCOPED vial throws
 `ScopeRequiredError` — loudly, at `new`.
@@ -260,7 +254,7 @@ to warm). Returns the number of singletons dispensed.
 
 See it catch a real missing dependency, then pass once the
 dependency registers, in the
-[lazy-and-cycles example](examples/lazy-and-cycles/) (Scenarios 1–2).
+[order-service example](examples/order-service/) (`wiring.ts`).
 
 ## Vials with constructor arguments
 
@@ -285,39 +279,20 @@ The decorator form accepts the same options object:
 class Database { ... }
 ```
 
-## Import-free injection with tokens
+## Strings: the untyped escape hatch
 
-`inject('Token')` resolves a vial by its class-name token, so a consumer never
-imports the dependency class. The return type comes from a `VialRegistry` you
-generate from your `@Vial` classes with `@tundralibs/doctor/build`:
-
-```typescript ignore
-// dev/CI step (Deno)
-import { build } from '@tundralibs/doctor/build';
-await build({ roots: ['./src'], out: './src/vial-registry.ts' });
-```
-
-```typescript ignore
-import './vial-registry.ts'; // the generated type augmentation
-import { inject } from '@tundralibs/doctor';
-
-const config = inject('Config'); // typed as Config — no `import { Config }`
-```
-
-The build step itself is **Deno-only** — it walks files with
-`Deno.readDir` / `Deno.writeTextFile`, which is why the `./build` subpath is
-exported from `deno.json` only (not `package.json`). The registry file it
-emits is plain type declarations, consumed unchanged on every runtime.
-
-The token is the class name, so names must be unique and survive minification.
-See [inject](docs/Doctor-Inject.md) and [build](docs/Doctor-Build.md) for the
-full API and caveats.
+`inject('Config')` and `Doctor.dispenseByName('Config')` resolve by
+**name** — a class's name, or a label's — and return `unknown`. Keep them
+for genuinely dynamic wiring (a token read from configuration) and for
+breaking a value-import cycle; everywhere else `inject(Class)` or a
+[label](#ready-made-values--label--stock) is typed and survives
+minification, which a class name does not.
 
 ## Ready-made values — `label` + `stock`
 
 Not everything is a class Doctor can `new`: a connected database, a
 parsed config object, a client built by an `await`. Stock such a value
-under a typed **label** and `inject` it — typed, with no `VialRegistry`
+under a typed **label** and `inject` it — typed, with no module
 augmentation:
 
 ```typescript
@@ -330,7 +305,7 @@ export const Db = label<BlogDb>('Db'); // a typed label: name + contents
 Doctor.stock(Db, db); // stock a ready-made value under it
 
 class Posts {
-  db = inject(Db); // typed as BlogDb, no module augmentation
+  db = inject(Db); // typed as BlogDb
 }
 ```
 
@@ -363,8 +338,7 @@ singleton with a fake — one entry, caches included — instead of
 `Doctor.reset()`, which wipes the whole process-wide registry.
 
 Labels are keyed by **name**: `inject('Db')` and
-`Doctor.dispenseByName('Db')` reach the same entry (the string form is
-typed only once `Db` is in `VialRegistry`). `Doctor.has(Db)` checks for
+`Doctor.dispenseByName('Db')` reach the same entry, untyped. `Doctor.has(Db)` checks for
 an optional service; `Doctor.revoke(Db)` drops one — caches included —
 so a test can stock a fake in its place without `reset()`.
 
@@ -383,55 +357,34 @@ Full API in [stock](docs/Doctor-Stock.md).
 | Module       | Description                                                  | Documentation                            |
 | ------------ | ------------------------------------------------------------ | ---------------------------------------- |
 | `Doctor`     | Process-wide injector (register, dispense, resolve, checkup) | This page                                |
-| `inject`     | Resolve by label, by class, or by token (class name)         | [Doctor-Inject](docs/Doctor-Inject.md)   |
+| `inject`     | Resolve by label, by class, or — untyped — by name           | [Doctor-Inject](docs/Doctor-Inject.md)   |
 | `stock`      | Typed labels for ready-made values and labelled factories    | [Doctor-Stock](docs/Doctor-Stock.md)     |
 | `@Vial`      | Class decorator — registers the class                        | [Doctor-Vial](docs/Doctor-Vial.md)       |
-| `./build`    | Codegen (Deno-only) — `VialRegistry` from `@Vial` classes    | [Doctor-Build](docs/Doctor-Build.md)     |
 | `./errors`   | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](errors/Doctor-Errors.md) |
 | `./types`    | `Vial`, `VialModes`, `VialOptions`, `Label`, `StockOptions`  | —                                        |
-| `./examples` | Runnable multi-file examples                                 | [examples/](examples/)                   |
+| `./examples` | The runnable order-service example                           | [examples/](examples/order-service/)     |
 
-## Examples
+## Example
 
-Three runnable multi-file examples live under
-[`packages/doctor/examples/`](examples/):
-
-- **[web-app/](examples/web-app/)** — `Doctor.resolve(Class, scope)`
-  for per-request scope variation. SINGLETON config + logger, SCOPED
-  database per request, TRANSIENT repository, plain handler resolved
-  per call. Demonstrates lazy singletons, the ambient operation
-  scope, scope isolation, and cleanup via `discharge`.
-- **[cli-tool/](examples/cli-tool/)** — one-shot CLIs where every
-  dependency is a singleton: plain command classes wired by their
-  `inject()` fields on `new`, no per-call scoping.
-- **[lazy-and-cycles/](examples/lazy-and-cycles/)** — a lazy getter
-  breaking an eager/eager cycle, `Doctor.checkup()` catching a
-  missing dependency at boot, deferred vial registration, and a live
-  `CircularDependencyError` from a cycle nothing breaks.
-
-Run them:
+One runnable, multi-file app under
+[`packages/doctor/examples/order-service/`](examples/order-service/) covers
+every idea on this page: typed labels stocked at boot, a factory-prescribed
+vial, SINGLETON / SCOPED / TRANSIENT lifecycles, the ambient operation
+scope via `Doctor.resolve(Handler, scope)` + `discharge`, a lazy getter
+breaking a cycle, an optional dependency via `Doctor.has`, `checkup()`, and
+a test that swaps fakes with `revoke` + `stock`.
 
 ```bash
-deno run packages/doctor/examples/web-app/main.ts
-deno run packages/doctor/examples/cli-tool/main.ts hello Alice
-deno run packages/doctor/examples/lazy-and-cycles/main.ts
+deno run packages/doctor/examples/order-service/main.ts
 ```
-
-See [examples/web-app/README.md](examples/web-app/README.md),
-[examples/cli-tool/README.md](examples/cli-tool/README.md), and
-[examples/lazy-and-cycles/README.md](examples/lazy-and-cycles/README.md)
-for walkthroughs and expected output.
 
 ## Related Documentation
 
-- [inject](docs/Doctor-Inject.md) — resolve by label, by class, or by token
+- [inject](docs/Doctor-Inject.md) — resolve by label, by class, or untyped by name
 - [stock](docs/Doctor-Stock.md) — typed labels for ready-made values and labelled factories
-- [build](docs/Doctor-Build.md) — generate the `VialRegistry` from `@Vial` classes
 - [@Vial](docs/Doctor-Vial.md) — registration decorator
 - [Errors](errors/Doctor-Errors.md) — error classes and matching strategies
-- [web-app example](examples/web-app/) — per-request scoping via `Doctor.resolve`
-- [cli-tool example](examples/cli-tool/) — singleton wiring with plain `new`
-- [lazy-and-cycles example](examples/lazy-and-cycles/) — lazy getters, `checkup()`, deferred registration, `CircularDependencyError`
+- [order-service example](examples/order-service/) — every idea above in one runnable app
 
 ## License
 

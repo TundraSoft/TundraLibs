@@ -135,10 +135,10 @@ class B {
 - `vialName: string` — Name of the vial whose resolution
   re-entered while it was already being resolved.
 
-The [lazy-and-cycles example](../examples/lazy-and-cycles/) runs both
-halves of this live: `JobLogger` breaks a real cycle with a lazy
-getter (Scenario 4), and `CycleA` / `CycleB` show what happens when
-neither side does (Scenario 5).
+The [order-service example](../examples/order-service/) breaks a real
+cycle with a lazy getter — `AuditTrail.orders` reaches back to the
+`OrderService` that eagerly injects it. Make that getter an eager field
+and the boot-time `checkup()` throws this error.
 
 ## DuplicateVialError
 
@@ -177,15 +177,16 @@ variant-specific data — there is no error-code table.
 
 ## See in context
 
-The [web-app example](../examples/web-app/) doesn't throw any of
-these in its happy path, but you can provoke each one by:
+The [order-service example](../examples/order-service/) throws only
+`ScopeRequiredError` in its happy path (step 4 of `main.ts` dispenses the
+SCOPED `Connection` with no scope, on purpose). Provoke the others by:
 
-- Dropping `Doctor.prescribe(WebConfig, …)` from
-  [`registry.ts`](../examples/web-app/registry.ts) →
-  `UnregisteredVialError` when the logger is dispensed.
-- Calling `Doctor.dispense(Database)` (without a scope) from
-  [`main.ts`](../examples/web-app/main.ts) → `ScopeRequiredError`.
-- Calling `Doctor.prescribe(WebConfig, …)` twice in `registry.ts` →
+- Dropping `Doctor.stock(CONFIG, …)` from
+  [`wiring.ts`](../examples/order-service/wiring.ts) →
+  `UnregisteredVialError` from `checkup()` when the logger is built.
+- Calling `Doctor.prescribe(PaymentGateway, …)` twice in `wiring.ts` →
   `DuplicateVialError`.
+- Turning `AuditTrail.orders` into an eager field →
+  `CircularDependencyError`.
 
 ---

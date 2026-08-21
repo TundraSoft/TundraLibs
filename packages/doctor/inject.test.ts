@@ -20,21 +20,13 @@ class Session {
 type BlogDb = { repo(name: string): string };
 const Db = label<BlogDb>('Db');
 
-// Stand in for the generated registry so `inject('Config')` is typed.
-declare module './mod.ts' {
-  interface VialRegistry {
-    Config: Config;
-    Session: Session;
-    Db: BlogDb; // a stocked label, reachable by string once declared here
-  }
-}
-
 describe('inject / dispenseByName', () => {
-  it('resolves a registered vial by its class-name token, typed', () => {
+  it('resolves a registered vial by its class-name token — untyped, the caller asserts', () => {
     Doctor.reset();
     Doctor.prescribe(Config, 'SINGLETON');
-    const cfg = inject('Config'); // inferred as Config
-    asserts.assertEquals(cfg.appName, 'demo');
+    const cfg = inject('Config'); // unknown
+    asserts.assertEquals((cfg as Config).appName, 'demo');
+    asserts.assertStrictEquals(cfg, inject(Config)); // same entry as the typed form
   });
 
   it('returns the same singleton instance across calls', () => {
@@ -137,7 +129,7 @@ describe('inject / dispenseByName', () => {
       class Handler {
         private __config?: Config;
         get config(): Config {
-          return this.__config ??= inject('Config');
+          return this.__config ??= inject('Config') as Config;
         }
       }
       // Constructing BEFORE the vial is registered is fine — lazy.
