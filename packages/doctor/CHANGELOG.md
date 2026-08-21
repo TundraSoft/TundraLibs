@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.1.1...doctor-v1.2.0) (2026-08-21)
+
+
+### Features
+
+* **doctor:** add label() + stock() for ready-made values and labelled factories ([f0a58fe](https://github.com/TundraSoft/TundraLibs/commit/f0a58fe7a1d1aaada9463f545cf7c90d458faed7))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.1.0...doctor-v1.1.1) (2026-08-19)
 
 
