@@ -21,12 +21,13 @@ export type {
 } from './types/mod.ts';
 
 // ─── OAuth (in-house auth-code + PKCE client) ─────────────────────────
-export { OAuthClient } from './oauth/OAuthClient.ts';
-export { IdTokenVerifier } from './oauth/IdTokenVerifier.ts';
+export { IdTokenVerifier, OAuthClient } from './oauth/mod.ts';
 export type {
   AuthorizationUrlOptions,
   CallbackParams,
+  IdTokenContext,
   IdTokenVerificationPolicy,
+  IdTokenVerifierOptions,
   OAuthProfile,
   OAuthProviderConfig,
   OAuthProviderKind,

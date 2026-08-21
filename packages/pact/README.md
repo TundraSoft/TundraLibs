@@ -90,7 +90,7 @@ const pact = new PACT({
   // groups: PACT resolves + caches; you own the data
   groupResolver: async (ids) => await myDb.grantsForGroups(ids),
   // tokens: configured once, delegated to @tundralibs/crypt
-  secret: Deno.env.get('PACT_SECRET')!,
+  secret: 'a-256-bit-shared-secret-for-hs256!', // load from your env store
   issuer: 'api.example.com',
   expiry: 3600,
   isRevoked: (claims) => blocklist.has(String(claims.jti)),
