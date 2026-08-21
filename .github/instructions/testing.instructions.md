@@ -15,7 +15,13 @@ testing-specific detail on top.
 
 All code in TundraLibs MUST have comprehensive test coverage. Tests should:
 
-1. **Be cross-runtime** - Work on Deno, Bun, and Node.js
+1. **Be cross-runtime** - The automated suite runs on Deno, Bun, and Node.js
+   (the runtimes with a test runner). Supported code targets are broader —
+   Deno, Bun, Node, Cloudflare Workers, and the browser (see
+   [AGENTS.md](../../AGENTS.md)) — so cover Workers/browser behaviour with
+   feature-detected unit tests (e.g. `detectRuntime(fakeGlobals)`, asserting an
+   `UnsupportedRuntimeError` on an unavailable path) rather than assuming a
+   runner exists there.
 2. **Test all scenarios** - Happy paths, edge cases, and error conditions
 3. **Use runtime filters** - Skip tests that don't apply to specific runtimes/OS
 4. **Be deterministic** - No flaky tests, no random data

@@ -8,17 +8,22 @@ Copilot (via `.github/copilot-instructions.md`, which points here).
 
 ## Golden rules
 
-- **Deno, Bun, and Node are the three first-class targets — every package
-  runs identically on all three.** Never use a runtime-only global directly;
-  go through `@tundralibs/compat`. **Cloudflare Workers and the browser are
-  secondary, best-effort targets** — not top priority and never
-  release-blocking, but make a genuine effort to stay compatible: portable
-  code, side-effect-free imports so a package at least _loads_ there. Some
-  capabilities fundamentally can't run in those environments — raw TCP/UNIX
-  sockets, the filesystem, `process`, a port-listening HTTP server won't work
-  in the browser, and only the Fetch-style subset runs on Workers — so
-  **degrade gracefully**: feature-detect and reject with a clear error (as
-  `compat`'s `udpSocket` and `WebServer` already do), never assume they exist.
+- **Deno, Bun, Node, Cloudflare Workers, and the browser are all supported
+  targets — every package must run on all five unless it explicitly documents
+  otherwise.** Never use a runtime-only global directly; go through
+  `@tundralibs/compat`. Keep code portable and imports side-effect-free so a
+  package _loads_ cleanly on every target. "Supports all five" does **not**
+  mean every capability runs on every runtime — raw TCP/UNIX sockets, the
+  filesystem, `process`, and a port-listening HTTP server don't exist in the
+  browser, and only the Fetch-style subset (plus a partial `nodejs_compat`
+  builtin set) runs on Workers. It means: the package loads without error, and
+  a capability the target lacks **degrades gracefully** — detect the runtime
+  and reject with a clear, typed `UnsupportedRuntimeError`, never a raw
+  `TypeError` on a missing builtin and never a silent wrong result. `compat`'s
+  `runtime` (`isWorkers` / `isBrowser` / `detectRuntime`), `udpSocket`,
+  `WebServer`, `file`, and `net` are the reference pattern. When a package
+  genuinely cannot support a target, say so in its README and note which
+  subpaths are affected — an undocumented break is a bug, not a scope choice.
 - **One package per PR.** A change spanning packages needs the `multi-package`
   label and a clear reason. Conventional-commit PR titles (`feat(oql): …`,
   `docs(guardian): …`, `fix(compat): …`).
