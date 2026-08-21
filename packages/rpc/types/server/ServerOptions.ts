@@ -1,5 +1,5 @@
 import type { UpgradeDecision } from '@tundralibs/compat/webserver';
-import type { PubSubAdapter } from '../../pubsub/Adapter.ts';
+import type { PubSubAdapter } from '../../pubsub/mod.ts';
 import type { BackpressureHandler } from './BackpressureHandler.ts';
 
 /**

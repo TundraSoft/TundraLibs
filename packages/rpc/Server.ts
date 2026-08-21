@@ -29,8 +29,11 @@ import type {
   WebSocketHandler,
 } from '@tundralibs/compat/webserver';
 import { RpcRegistrationError, RpcStateError } from './errors/mod.ts';
-import { type PubSubAdapter, type Subscription } from './pubsub/Adapter.ts';
-import { MemoryPubSubAdapter } from './pubsub/MemoryPubSubAdapter.ts';
+import {
+  MemoryPubSubAdapter,
+  type PubSubAdapter,
+  type Subscription,
+} from './pubsub/mod.ts';
 import { decodeFrame, encodeFrame, recoverFrameId } from './protocol.ts';
 import type {
   ChannelOptions,
@@ -49,13 +52,13 @@ import type {
 } from './types/mod.ts';
 
 /** Codec mapping the rpc wire protocol onto the base primitive. */
-const ServerCodec: Codec<InboundFrame> = {
+const serverCodec: Codec<InboundFrame> = {
   encode: () => {
     // Server does not use the codec for outbound frames — it sends
     // OutboundFrame shapes directly. This branch is only reached if
     // a caller calls `wss.broadcast` on the underlying primitive,
     // which Server does not do.
-    throw new Error('ServerCodec.encode is not called by Server');
+    throw new Error('serverCodec.encode is not called by Server');
   },
   decode: (raw) => (typeof raw === 'string' ? decodeFrame(raw) : null),
 };
@@ -127,7 +130,7 @@ export class Server<T = unknown> {
     this._pubsub = options.pubsub ?? new MemoryPubSubAdapter();
 
     this._wss = new WebSocketServer<T, InboundFrame>({
-      codec: ServerCodec,
+      codec: serverCodec,
       upgrade: options.upgrade,
       maxFrameSize: options.maxFrameSize,
       backpressureThreshold: options.backpressureThreshold,
@@ -202,6 +205,8 @@ export class Server<T = unknown> {
    * Register a middleware that wraps every command. Middleware runs in
    * registration order; call `next()` to delegate to the next
    * middleware (or the handler when last in the chain).
+   *
+   * @throws {@link RpcStateError} When the Server has been closed.
    */
   use(middleware: Middleware<T>): this {
     if (this._closed) throw new RpcStateError('Server is closed');
@@ -218,6 +223,9 @@ export class Server<T = unknown> {
    *   Pass `undefined` to skip validation (handler receives raw payload).
    * @param handler - Function called with the validated payload. The
    *   return value is sent back to the client as `result.data`.
+   *
+   * @throws {@link RpcStateError} When the Server has been closed.
+   * @throws {@link RpcRegistrationError} When `name` is already registered.
    */
   command<P, R>(
     name: string,
@@ -242,6 +250,9 @@ export class Server<T = unknown> {
    * Pattern matching (e.g. `'chat:*'`) is not supported in v1 — use
    * one channel registration per concrete name, or register a single
    * channel and dispatch internally based on the frame's channel string.
+   *
+   * @throws {@link RpcStateError} When the Server has been closed.
+   * @throws {@link RpcRegistrationError} When `name` is already registered.
    */
   channel(name: string, options: ChannelOptions<T>): this {
     if (this._closed) throw new RpcStateError('Server is closed');
