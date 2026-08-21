@@ -6,7 +6,7 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertSelectQuery } from '../DML/select.ts';
+import { assertSelectQuery } from '../DML/mod.ts';
 import { validateIdentifierName } from './common.ts';
 
 const CREATE_VIEW_PROPS = new Set([

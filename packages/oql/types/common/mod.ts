@@ -1,9 +1,0 @@
-export type { ColumnIdentifier } from './ColumnIdentifier.ts';
-export type { ColumnTypes } from './ColumnTypes.ts';
-export type { ForeignKeyAction } from './ForeignKeyAction.ts';
-export type { ForeignKeyConstraint } from './ForeignKeyConstraint.ts';
-export type { GetColumnByType } from './GetColumnByType.ts';
-export type { IndexMethod } from './IndexMethod.ts';
-export type { SQLDataType } from './SQLDataType.ts';
-export type { SQLTypes } from './SQLTypes.ts';
-export type { TableType } from './TableType.ts';
