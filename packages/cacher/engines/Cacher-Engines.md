@@ -5,6 +5,13 @@ Built-in cache engine implementations for the Cacher package.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
+
+> **Runtime note:** `MemoryCacher` is process-local and works on every
+> runtime, including Cloudflare Workers and the browser. `RedisCacher` and
+> `MemCacher` need a reachable TCP target — available on Workers via
+> `cloudflare:sockets` (under `nodejs_compat`), but not in a plain browser.
 
 ## Overview
 
