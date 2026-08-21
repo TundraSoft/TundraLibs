@@ -386,10 +386,12 @@ store-injection is the one breaking change and must land before release.
   routes. Unlocks in-process tests without ports, `Deno.serve`/`Bun.serve`
   embedding, and Cloudflare Workers. MEASURED on workerd (wrangler 4.125):
   every rapid subpath loads and the module system runs end-to-end.
-  REMAINING for Workers HTTP (waits on the compat PR adding
-  `isWorkers`/`isBrowser` + explicit `UnsupportedRuntimeError`s): skip the
-  upload temp dir on Workers/browser and reject uploads with a clear error
-  (no filesystem there — `serveStatic`/`ctx.serve`/FileHandler likewise).
+  Workers HTTP DONE 2026-08-21 (compat 2.2.0): the upload temp dir is
+  skipped on Workers/browser (`isWorkers`/`isBrowser`), a file upload is
+  rejected with `RAPID_UPLOADS_UNAVAILABLE` (501) instead of a TypeError,
+  and text-only multipart still parses; `serveStatic`/`ctx.serve`/
+  FileHandler surface compat's `UnsupportedRuntimeError` directly.
+  Verified on real workerd: construct + GET via `app.fetch`, upload → 501.
 - **Auth — DECIDED 2026-08-21: no "auth handoff" in rapid core.** Ship a
   first-party `pact`-backed middleware in the catalog, store-injection
   shaped like `rateLimit`: the caller passes the functions that verify a

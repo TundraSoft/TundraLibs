@@ -215,7 +215,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     const uploads = this.app.option('uploads')!;
     const { value, files } = await parseBody(this.request, {
       maxBodySize: server.maxBodySize!,
-      uploads: { ...uploads, path: uploads.path! },
+      uploads: { ...uploads, path: uploads.path },
     });
     // Track written uploads so cleanup() removes them post-response.
     this._fileUploads.push(...files);

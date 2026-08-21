@@ -1,6 +1,7 @@
 import { ambient } from '@tundralibs/ambient';
 import { makeTempDirSync, remove, removeSync } from '@tundralibs/compat/file';
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+import { isBrowser, isWorkers } from '@tundralibs/compat/runtime';
 import { Tracer } from '@tundralibs/tracer';
 import {
   Config,
@@ -141,10 +142,14 @@ export class Application<S extends RapidContextState = RapidContextState>
     // Created eagerly (regardless of whether the app ever registers an
     // upload route) only when the caller didn't supply their own path —
     // tracked so stop() can remove it, and so a constructor failure
-    // below doesn't strand it (see the catch block).
-    const ownedUploadPath = options.uploads?.path === undefined
-      ? makeTempDirSync({ prefix: 'rapid-' })
-      : undefined;
+    // below doesn't strand it (see the catch block). SKIPPED on a
+    // filesystem-less runtime (Workers, browser): there is nowhere to
+    // put it, and a file upload that arrives is rejected at parse time
+    // with RAPID_UPLOADS_UNAVAILABLE rather than crashing construction.
+    const ownedUploadPath =
+      options.uploads?.path === undefined && !isWorkers && !isBrowser
+        ? makeTempDirSync({ prefix: 'rapid-' })
+        : undefined;
     try {
       // Group defaults merge UNDER the user's partial groups BEFORE
       // _setOptions — its top-level merge would otherwise let a partial

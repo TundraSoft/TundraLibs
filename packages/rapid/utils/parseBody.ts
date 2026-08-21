@@ -29,7 +29,7 @@ export type ParseBodyOptions = {
    */
   maxBodySize: number;
   /** Upload handling — `path` is required (always set at runtime). */
-  uploads: RapidApplicationUploadOptions & { path: string };
+  uploads: RapidApplicationUploadOptions & { path?: string };
 };
 
 /** Parse result: the body plus the temp files written (for cleanup). */
@@ -141,6 +141,14 @@ async function collectFormData(
     if (!(value instanceof File)) {
       append(key, value);
       continue;
+    }
+    // No filesystem (Workers, browser): a text-only multipart form is
+    // fine — an actual file has nowhere to land, so reject it explicitly
+    // rather than TypeError on `path.join(undefined, …)`.
+    if (uploadPath === undefined) {
+      throw new RapidError('RAPID_UPLOADS_UNAVAILABLE', {
+        details: { file: value.name },
+      });
     }
     const extension = path.extname(value.name).toLowerCase();
     if (maxFileSize && value.size > maxFileSize) {

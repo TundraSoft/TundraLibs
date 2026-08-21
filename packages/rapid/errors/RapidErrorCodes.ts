@@ -38,6 +38,11 @@ export const RAPID_ERROR_CODES = {
   RAPID_TIMEOUT: { status: 504, message: 'Request timed out' },
   /** Transport-layer rate limit tripped. */
   RAPID_RATE_LIMITED: { status: 429, message: 'Too many requests' },
+  /** A file upload arrived on a runtime with no filesystem (Workers, browser). */
+  RAPID_UPLOADS_UNAVAILABLE: {
+    status: 501,
+    message: 'File uploads are not available in this runtime',
+  },
 } as const satisfies Record<
   string,
   { status: StatusCode; message: string }

@@ -126,4 +126,46 @@ describe('rapid.parseBody', () => {
     const { files } = await parseBody(req('{}', 'application/json'), opts());
     asserts.assertEquals(files, []);
   });
+  it('multipart file with no upload path (Workers/browser) → RAPID_UPLOADS_UNAVAILABLE, not a TypeError', async () => {
+    const form = new FormData();
+    form.append('doc', new File(['hello'], 'a.txt', { type: 'text/plain' }));
+    const noFs = {
+      maxBodySize: 1_048_576,
+      uploads: {
+        maxSize: 10_485_760,
+        allowedExtensions: ['.txt'],
+        path: undefined,
+      },
+    };
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(
+          new Request('http://x/', { method: 'POST', body: form }),
+          noFs,
+        ),
+      RapidError,
+    );
+    asserts.assertEquals(err.code, 'RAPID_UPLOADS_UNAVAILABLE');
+    asserts.assertEquals(err.status, 501);
+  });
+
+  it('a TEXT-ONLY multipart form still parses with no upload path — only files need disk', async () => {
+    const form = new FormData();
+    form.append('title', 'hi');
+    form.append('tag', 'a');
+    form.append('tag', 'b');
+    const { value, files } = await parseBody(
+      new Request('http://x/', { method: 'POST', body: form }),
+      {
+        maxBodySize: 1_048_576,
+        uploads: {
+          maxSize: 10_485_760,
+          allowedExtensions: [],
+          path: undefined,
+        },
+      },
+    );
+    asserts.assertEquals(value, { title: 'hi', tag: ['a', 'b'] });
+    asserts.assertEquals(files, []);
+  });
 });
