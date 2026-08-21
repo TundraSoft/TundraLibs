@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.3.0...norm-v1.3.1) (2026-08-21)
+
+
+### Refactoring
+
+* **norm:** align with repo conventions ([bede370](https://github.com/TundraSoft/TundraLibs/commit/bede370324a850661e9c58d50dfb7d7d1904ec4b))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.4...norm-v1.3.0) (2026-08-20)
 
 
