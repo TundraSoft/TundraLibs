@@ -7,6 +7,13 @@
  * @module
  */
 
+export {
+  type AuthBag,
+  authenticate,
+  type AuthenticateOptions,
+  authorize,
+  permission,
+} from './auth.ts';
 export { compress, type CompressOptions } from './compress.ts';
 export { cors, type CorsOptions } from './cors.ts';
 export { etag } from './etag.ts';

@@ -275,10 +275,15 @@ store-injection is the one breaking change and must land before release.
   (the stored file's `type` is now server-derived from the validated
   extension, not the client's unverified `value.type`). The comprehensive
   resolver the static-serving item needs is now in place.
-- **CLI — scaffolder, `modules` barrel generator, build, health.** A
-  Fresh-flavoured `deno run -Ar jsr:@tundralibs/rapid/init` lays down a
-  new project (app entry, config, a sample module, tasks) and `upgrade`
-  bumps the rapid version / migrates scaffolding. Plus:
+- **CLI (`./cli`) — ✅ init / upgrade / modules / health DONE 2026-08-22;
+  build deferred.** One entry `deno run -A jsr:@tundralibs/rapid/cli
+  <command>`, cross-runtime via `compat/cli`. `init` scaffolds a project
+  (prompts: name / module / norm / docker / git, plus flags + `--yes`;
+  templates are editable string modules in `cli/templates.ts`; Docker uses
+  the `tundrasoft/{deno,bun,node}` base images; writes deno.json +
+  package.json with `dev`/`modules`/`upgrade` tasks). `upgrade` bumps
+  `@tundralibs/*` to their latest JSR versions. `health` pings a running
+  app (exit 0 on 2xx). Remaining:
   - **`modules` — generate `modules/mod.ts`.** The barrel is the ONE
     module-loading input rapid supports at runtime (see the DI items
     below: `initModules({ modules: [ns] })` takes static namespaces so the
@@ -290,12 +295,12 @@ store-injection is the one breaking change and must land before release.
     header, idempotent; `--check` fails CI when the barrel is stale (same
     pattern as the repo's own `workspace:sync --check`). UNTIL THIS EXISTS
     the barrel is hand-written (two lines in the blog example).
-  - **`build`** — bundle/compile the app for its deploy target (Deno
-    Deploy, Workers via a fetch adapter, a Node bundle), regenerating the
-    barrel first.
-  - **`health`** — hit a running app's `healthCheck` path (+ metrics) from
-    the terminal; a CI/ops smoke.
-    Not a route inspector — the live wired-surface view is the dashboard.
+  - ✅ **`modules`** — DONE: static-parse each file for `export class X`
+    (skipping `export abstract class`, which auto-excludes bases), emit
+    sorted re-exports under a generated header; `--check` fails CI when
+    stale.
+  - **`build`** — deferred; a scaffold deno task wrapping `deno compile` /
+    the fetch-adapter bundle rather than a heavy CLI command.
 - **Dev console (TUI). 🎨 DESIGN FROZEN 2026-08-22; build pending.** A
   full-screen alternate-buffer terminal console that replaces the plain
   log spew when the app runs on a TTY. Frozen spec (mockup + runnable
@@ -423,19 +428,19 @@ store-injection is the one breaking change and must land before release.
   and text-only multipart still parses; `serveStatic`/`ctx.serve`/
   FileHandler surface compat's `UnsupportedRuntimeError` directly.
   Verified on real workerd: construct + GET via `app.fetch`, upload → 501.
-- **Auth — DECIDED 2026-08-22 (refines the 2026-08-21 call): an auth bag
-  seam + an OPTIONAL pact middleware, not a framework flow.**
+- ✅ **Auth — DONE 2026-08-22. An auth bag seam + an OPTIONAL pact
+  middleware, not a framework flow.**
   - **The seam — `ctx.auth`.** A per-invocation, **set-once, read-only**
     auth bag holding the authenticated identity (id, grants, whatever the
-    app puts there). Typed via a **second optional `Application` generic**
-    — `Application<S, A = Record<string, unknown>>` — threaded like `S`
-    through context / middleware / handlers: typed when the app specifies
-    `A`, frictionless when it doesn't (the default keeps every existing
-    `Application<S>` / `Context<S>` signature working). **Not `ctx.state`**
-    (which `stateMode: 'SHARE'` shares across invocations); it **rides the
-    module `invoke` seed**, so a guard reads the same identity on an HTTP
-    route and inside `invoke`. This bag is the **only** framework seam —
-    rapid never verifies a token or touches a session.
+    app puts there), typed `Record<string, unknown> | undefined` — **the
+    caller type-casts on use** (`ctx.auth as MyUser`); no second
+    `Application` generic, so no churn through the type surface. **Not
+    `ctx.state`** (which `stateMode: 'SHARE'` shares across invocations);
+    it **rides the module `invoke` seed**, so a guard reads the same
+    identity on an HTTP route and inside `invoke`. This bag is the **only**
+    framework seam — rapid never verifies a token or touches a session.
+    Shipped: `ctx.auth` / `ctx.setAuth` on every context; `auth` on the
+    module invoke seed + `InvokeContext`.
   - **The convenience — optional catalog middleware.** A shipped
     authentication + authorization middleware, `pact`-backed and
     **store/hook-injection shaped like `rateLimit`/cacher**: the app passes

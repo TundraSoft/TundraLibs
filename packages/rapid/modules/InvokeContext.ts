@@ -16,6 +16,7 @@ export type InvokeContextInit = {
   target: string;
   method: string;
   args: readonly unknown[];
+  auth?: Record<string, unknown>;
 };
 
 export class InvokeContext {
@@ -32,6 +33,8 @@ export class InvokeContext {
   public readonly target: string;
   public readonly method: string;
   public readonly args: readonly unknown[];
+  /** The caller's authenticated identity, flowed in via the seed. */
+  public readonly auth?: Record<string, unknown>;
   /** Set by dispatch, or by middleware to short-circuit. */
   public response: Reply | null = null;
 
@@ -42,5 +45,6 @@ export class InvokeContext {
     this.target = init.target;
     this.method = init.method;
     this.args = init.args;
+    this.auth = init.auth;
   }
 }

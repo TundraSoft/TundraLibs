@@ -443,6 +443,10 @@ export class ModuleRuntime {
       target: mounted.key,
       method,
       args,
+      // The identity flows down: an explicit seed wins, else inherit the
+      // caller's (an EVENT parent carries none).
+      auth: seed?.auth ??
+        (parent?.type === 'INVOKE' ? parent.auth : undefined),
     });
     const holder: Holder = { pending: undefined, settled: false };
     const dispatch = (): void | Promise<void> => {

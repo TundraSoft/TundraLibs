@@ -11,4 +11,6 @@
 export type RapidModuleInvokeSeed = {
   requestId?: string;
   state?: Record<string, unknown>;
+  /** The authenticated identity to flow into the invocation (read-only). */
+  auth?: Record<string, unknown>;
 };

@@ -58,6 +58,10 @@ export {
   reply,
 } from './modules/mod.ts';
 export {
+  type AuthBag,
+  authenticate,
+  type AuthenticateOptions,
+  authorize,
   cors,
   type CorsOptions,
   guardHTTP,
@@ -69,6 +73,7 @@ export {
   onlyHTTP,
   onlyJOB,
   onlySOCKET,
+  permission,
   rateLimit,
   type RateLimitOptions,
   requestId,

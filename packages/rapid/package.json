@@ -7,6 +7,7 @@
   "main": "mod.ts",
   "exports": {
     ".": "./mod.ts",
+    "./cli": "./cli/mod.ts",
     "./context": "./context/mod.ts",
     "./decorators": "./decorators/mod.ts",
     "./errors": "./errors/mod.ts",

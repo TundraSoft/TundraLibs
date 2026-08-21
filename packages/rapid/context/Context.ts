@@ -97,6 +97,34 @@ export abstract class Context<
     return this.app.publish(channel, data);
   }
 
+  protected _auth?: Record<string, unknown>;
+
+  /**
+   * The authenticated identity for this invocation, or `undefined` when
+   * anonymous — a set-once, read-only bag an authentication middleware
+   * fills (`ctx.setAuth(...)`). The caller type-casts on use
+   * (`ctx.auth as MyUser`). Distinct from `ctx.state`: never shared across
+   * invocations, and it rides the module `invoke` seed.
+   */
+  public get auth(): Record<string, unknown> | undefined {
+    return this._auth;
+  }
+
+  /**
+   * Set the auth bag — once. A second call throws, so a later middleware
+   * can't silently overwrite the identity.
+   *
+   * @throws {RapidError} RAPID_CONFIG when auth is already set.
+   */
+  public setAuth(auth: Record<string, unknown>): void {
+    if (this._auth !== undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'ctx.auth is already set — the auth bag is written once',
+      });
+    }
+    this._auth = auth;
+  }
+
   /**
    * The INTERPRETED outcome status — 200 until something sets one.
    * Distinct from `response?.status`, which is `null` whenever the
