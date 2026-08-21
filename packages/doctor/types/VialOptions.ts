@@ -18,8 +18,8 @@ export type VialOptions = {
   /**
    * Custom constructor. Called every time Doctor needs a fresh
    * instance (once for SINGLETON, once per scope for SCOPED, every
-   * resolution for TRANSIENT). The returned instance is then
-   * inoculated like any other.
+   * resolution for TRANSIENT). The returned instance wires itself
+   * while constructing, like any other.
    */
   factory?: () => unknown;
 };

@@ -3,14 +3,14 @@
  *
  * Injection is construction-time (`inject()` field initializers and
  * constructor default parameters) — no metadata emission — so unlike
- * the 1.x suite these tests run on Deno, Bun, AND Node.
+ * the 1.0.x suite these tests run on Deno, Bun, AND Node.
  *
  * @module
  */
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { Doctor, inject, Vial } from './mod.ts';
+import { Doctor, inject, label, Vial } from './mod.ts';
 import {
   CircularDependencyError,
   DuplicateVialError,
@@ -465,6 +465,277 @@ describe('Doctor', () => {
       Doctor.reset();
       class Never {}
       asserts.assertEquals(Doctor.revoke(Never), false);
+    });
+
+    it('should revoke a stocked label and free its name for a replacement', () => {
+      Doctor.reset();
+      const Db = label<{ real: boolean }>('Db');
+      Doctor.stock(Db, { real: true });
+      Doctor.dispense(Db);
+      asserts.assertEquals(Doctor.revoke(Db), true);
+      asserts.assertEquals(Doctor.has(Db), false);
+      asserts.assertThrows(() => Doctor.dispense(Db), UnregisteredVialError);
+      asserts.assertEquals(Doctor.revoke(Db), false);
+      // The name is free again: the test-double swap, no reset() needed.
+      Doctor.stock(Db, { real: false });
+      asserts.assertEquals(Doctor.dispense(Db).real, false);
+    });
+
+    it('should drop a revoked label’s scoped instances too', () => {
+      Doctor.reset();
+      const Conn = label<number>('Conn');
+      Doctor.stock(Conn, { mode: 'SCOPED', factory: () => 1 });
+      asserts.assertEquals(Doctor.dispense(Conn, 'a'), 1);
+      Doctor.revoke(Conn);
+      Doctor.stock(Conn, { mode: 'SCOPED', factory: () => 2 });
+      asserts.assertEquals(Doctor.dispense(Conn, 'a'), 2);
+    });
+
+    it('should revoke by bare name whatever that name resolves to', () => {
+      Doctor.reset();
+      Doctor.prescribe(DLogger, 'SINGLETON');
+      asserts.assertEquals(Doctor.revoke('DLogger'), true);
+      asserts.assertEquals(Doctor.knows(DLogger), false);
+      asserts.assertEquals(Doctor.revoke('DLogger'), false);
+    });
+  });
+
+  describe('stock()', () => {
+    it('should hand out the same stocked value on every dispense, by label and by name', () => {
+      Doctor.reset();
+      const Db = label<{ url: string }>('Db');
+      const db = { url: 'pg://' };
+      Doctor.stock(Db, db);
+      asserts.assertStrictEquals(Doctor.dispense(Db), db);
+      asserts.assertStrictEquals(Doctor.dispense(Db), db);
+      asserts.assertStrictEquals(Doctor.dispenseByName('Db'), db);
+      // Labels are name-keyed: a second label object is the same entry.
+      asserts.assertStrictEquals(
+        Doctor.dispense(label<{ url: string }>('Db')),
+        db,
+      );
+    });
+
+    it('should return a stocked function as-is, never calling it', () => {
+      Doctor.reset();
+      let calls = 0;
+      const fn = () => ++calls;
+      Doctor.stock('fn', fn);
+      asserts.assertStrictEquals(
+        Doctor.dispense(label<() => number>('fn')),
+        fn,
+      );
+      asserts.assertEquals(calls, 0);
+    });
+
+    it('should call a SINGLETON factory once and cache its result', () => {
+      Doctor.reset();
+      let calls = 0;
+      const Conn = label<{ id: number }>('Conn');
+      Doctor.stock(Conn, {
+        mode: 'SINGLETON',
+        factory: () => ({ id: ++calls }),
+      });
+      const first = Doctor.dispense(Conn);
+      asserts.assertStrictEquals(Doctor.dispense(Conn), first);
+      asserts.assertEquals(calls, 1);
+    });
+
+    it('should build a SCOPED factory once per scope, drop it on discharge, and require a scope', () => {
+      Doctor.reset();
+      let calls = 0;
+      const Conn = label<{ id: number }>('Conn');
+      Doctor.stock(Conn, { mode: 'SCOPED', factory: () => ({ id: ++calls }) });
+      const a1 = Doctor.dispense(Conn, 'a');
+      asserts.assertStrictEquals(Doctor.dispense(Conn, 'a'), a1);
+      asserts.assert(Doctor.dispense(Conn, 'b') !== a1);
+      asserts.assertEquals(calls, 2);
+      asserts.assertEquals(Doctor.discharge('a'), true);
+      asserts.assert(Doctor.dispense(Conn, 'a') !== a1);
+      asserts.assertEquals(calls, 3);
+      asserts.assertThrows(
+        () => Doctor.dispense(Conn),
+        ScopeRequiredError,
+        "Label 'Conn' is SCOPED",
+      );
+    });
+
+    it('should call a TRANSIENT factory on every dispense', () => {
+      Doctor.reset();
+      let calls = 0;
+      const Id = label<number>('Id');
+      Doctor.stock(Id, { mode: 'TRANSIENT', factory: () => ++calls });
+      asserts.assertEquals(Doctor.dispense(Id), 1);
+      asserts.assertEquals(Doctor.dispense(Id), 2);
+    });
+
+    it('should thread the ambient scope into inject(label) during construction', () => {
+      Doctor.reset();
+      let calls = 0;
+      const Conn = label<{ id: number }>('Conn');
+      Doctor.stock(Conn, { mode: 'SCOPED', factory: () => ({ id: ++calls }) });
+      class Handler {
+        conn = inject(Conn); // no scope of its own
+      }
+      const h1 = Doctor.resolve(Handler, 'req-1');
+      const h2 = Doctor.resolve(Handler, 'req-1');
+      const h3 = Doctor.resolve(Handler, 'req-2');
+      asserts.assertStrictEquals(h1.conn, h2.conn);
+      asserts.assert(h1.conn !== h3.conn);
+    });
+
+    it('should preflight SINGLETON labelled factories in checkup()', () => {
+      Doctor.reset();
+      Doctor.stock('ok', { mode: 'SINGLETON', factory: () => 1 });
+      asserts.assertEquals(Doctor.checkup(), 1);
+      Doctor.stock('bad', {
+        mode: 'SINGLETON',
+        factory: () => {
+          throw new Error('boom');
+        },
+      });
+      asserts.assertThrows(() => Doctor.checkup(), Error, 'boom');
+    });
+
+    it('should throw UnregisteredVialError for a label nothing is stocked under', () => {
+      Doctor.reset();
+      asserts.assertThrows(
+        () => Doctor.dispense(label('Ghost')),
+        UnregisteredVialError,
+        "Nothing stocked under label 'Ghost'",
+      );
+    });
+
+    it('should stock a ready instance under a class token, reachable by class and by name', () => {
+      Doctor.reset();
+      const logger = new DLogger();
+      Doctor.stock(DLogger, logger);
+      asserts.assertStrictEquals(Doctor.dispense(DLogger), logger);
+      asserts.assertStrictEquals(Doctor.dispenseByName('DLogger'), logger);
+      asserts.assertStrictEquals(inject('DLogger'), logger);
+      asserts.assertEquals(Doctor.has(DLogger), true);
+      asserts.assertEquals(Doctor.knows(DLogger), true);
+    });
+
+    it('should override a @Vial singleton with a fake via revoke + stock', () => {
+      Doctor.reset();
+      @Vial('SINGLETON')
+      class Clock {
+        tick = 1;
+        now(): number {
+          return this.tick;
+        }
+      }
+      const real = Doctor.dispense(Clock);
+      const fake = { tick: 0, now: () => 0 };
+      // A live registration is refused: revoke it first.
+      asserts.assertThrows(() => Doctor.stock(Clock, fake), DuplicateVialError);
+      asserts.assertEquals(Doctor.revoke(Clock), true);
+      Doctor.stock(Clock, fake);
+      asserts.assertStrictEquals(Doctor.dispense(Clock), fake);
+      asserts.assert(Doctor.dispense(Clock) !== real);
+      asserts.assertEquals(inject(Clock).now(), 0);
+      asserts.assertStrictEquals(Doctor.dispenseByName('Clock'), fake);
+    });
+
+    it('should pin a class-token instance to the class type at compile time', () => {
+      Doctor.reset();
+      class Counter {
+        n = 0;
+      }
+      // @ts-expect-error — 42 is not a Counter
+      Doctor.stock(Counter, 42);
+      Doctor.revoke(Counter);
+      Doctor.stock(Counter, { n: 7 }); // a structural fake is fine
+      asserts.assertEquals(inject(Counter).n, 7);
+    });
+
+    it('should refuse a class token whose name another entry holds', () => {
+      Doctor.reset();
+      const A = class Same {};
+      Doctor.stock('Same', {});
+      asserts.assertThrows(() => Doctor.stock(A, new A()), DuplicateVialError);
+      Doctor.reset();
+      const B = class Same {};
+      Doctor.prescribe(B, 'SINGLETON');
+      // Stricter than prescribe's class-vs-class last-wins.
+      asserts.assertThrows(() => Doctor.stock(A, new A()), DuplicateVialError);
+    });
+
+    it('should keep a value whose shape only resembles the factory form as a value', () => {
+      Doctor.reset();
+      const theme = { mode: 'dark', factory: () => 'x' }; // not a vial mode
+      const odd = { mode: 'SINGLETON', factory: 'not-a-fn' }; // not a function
+      Doctor.stock('theme', theme);
+      Doctor.stock('odd', odd);
+      asserts.assertStrictEquals(Doctor.dispenseByName('theme'), theme);
+      asserts.assertStrictEquals(Doctor.dispenseByName('odd'), odd);
+    });
+
+    it('should be cleared by reset()', () => {
+      Doctor.reset();
+      Doctor.stock('Db', {});
+      Doctor.reset();
+      asserts.assertEquals(Doctor.has('Db'), false);
+      asserts.assertThrows(
+        () => Doctor.dispenseByName('Db'),
+        UnregisteredVialError,
+      );
+    });
+
+    describe('duplicate guards', () => {
+      it('should refuse to stock a name twice', () => {
+        Doctor.reset();
+        const Db = label<number>('Db');
+        Doctor.stock(Db, 1);
+        asserts.assertThrows(
+          () => Doctor.stock(Db, 2),
+          DuplicateVialError,
+          "Label 'Db' is already stocked",
+        );
+        asserts.assertThrows(() => Doctor.stock('Db', 2), DuplicateVialError);
+        asserts.assertEquals(Doctor.dispense(Db), 1); // first one stands
+      });
+
+      it('should refuse a label whose name a prescribed class already holds', () => {
+        Doctor.reset();
+        Doctor.prescribe(DLogger, 'SINGLETON');
+        asserts.assertThrows(
+          () => Doctor.stock('DLogger', {}),
+          DuplicateVialError,
+        );
+      });
+
+      it('should refuse a class whose name a label already holds, but keep class-vs-class last-wins', () => {
+        Doctor.reset();
+        Doctor.stock('DLogger', {});
+        asserts.assertThrows(
+          () => Doctor.prescribe(DLogger, 'SINGLETON'),
+          DuplicateVialError,
+        );
+        // Unchanged: two distinct classes sharing a name do not throw.
+        const A = class Same {};
+        const B = class Same {};
+        Doctor.prescribe(A, 'SINGLETON');
+        Doctor.prescribe(B, 'SINGLETON');
+        asserts.assert(Doctor.dispenseByName('Same') instanceof B);
+      });
+    });
+  });
+
+  describe('has()', () => {
+    it('should report labels, bare names, and classes', () => {
+      Doctor.reset();
+      const Db = label<number>('Db');
+      asserts.assertEquals(Doctor.has(Db), false);
+      Doctor.stock(Db, 1);
+      asserts.assertEquals(Doctor.has(Db), true);
+      asserts.assertEquals(Doctor.has('Db'), true);
+      asserts.assertEquals(Doctor.has('Nope'), false);
+      asserts.assertEquals(Doctor.has(DLogger), false);
+      Doctor.prescribe(DLogger, 'SINGLETON');
+      asserts.assertEquals(Doctor.has(DLogger), true);
+      asserts.assertEquals(Doctor.has('DLogger'), true);
     });
   });
 

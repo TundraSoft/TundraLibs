@@ -1,10 +1,10 @@
 # inject
 
-Resolve a registered vial by its **token — the class name** — so a consumer
-never has to import the dependency class. `inject` is Doctor's ONE injection
-primitive: used as a field initializer or constructor default parameter it
-wires an instance while it constructs; used inside a getter it injects
-lazily.
+Resolve a dependency by a typed **label**, by the **class** itself, or by
+its **token — the class name** — so a consumer never has to import the
+dependency class. `inject` is Doctor's ONE injection primitive: used as a
+field initializer or constructor default parameter it wires an instance
+while it constructs; used inside a getter it injects lazily.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
@@ -13,13 +13,20 @@ lazily.
 ## Signature
 
 ```typescript ignore
+inject<T>(target: Vial<T> | Label<T>, scope?: string): T;
 inject<K extends keyof VialRegistry>(token: K, scope?: string): VialRegistry[K];
 ```
 
-`inject('Config')` returns the same instance `Doctor.dispense(Config)` would —
-honouring the registered lifecycle — but keyed by the class name rather than the
-class object. The return type is taken from [`VialRegistry`](#vialregistry), so a
-mistyped token is a compile error.
+- `inject(Db)` — `Db` a label from `label<BlogDb>('Db')` — returns what
+  [`Doctor.stock`](Doctor-Stock.md) put under it, typed `BlogDb`. No
+  registry needed: the label carries the type.
+- `inject(Config)` — the class — returns the registered instance,
+  honouring its lifecycle, typed `Config`. A class is a value that
+  carries its own type.
+- `inject('Config')` returns the same instance `Doctor.dispense(Config)`
+  would, keyed by the class name rather than the class object. The
+  return type is taken from [`VialRegistry`](#vialregistry), so a
+  mistyped token is a compile error — never `unknown`.
 
 ## The three idioms
 
@@ -88,13 +95,16 @@ declare module '@tundralibs/doctor' {
 
 Until the registry has an entry for a token, `inject('That')` is rejected at
 compile time (`keyof VialRegistry` is `never`) — generate or declare the
-augmentation first.
+augmentation first. A stocked label's name works the same way: declare
+`Db: BlogDb` here to reach it as `inject('Db')`, or skip the registry and
+write `inject(Db)`.
 
 ## Doctor.dispenseByName
 
-`inject` delegates to `Doctor.dispenseByName(name, scope?)`, which looks the
-class up in a name index kept in sync by `prescribe` / `revoke` / `reset`. Use
-it directly when you need the loosely-typed (`unknown`) form:
+The string form delegates to `Doctor.dispenseByName(name, scope?)`, which
+looks the class or label up in a name index kept in sync by `prescribe` /
+`stock` / `revoke` / `reset`. Use it directly when you need the
+loosely-typed (`unknown`) form:
 
 ```typescript ignore
 const config = Doctor.dispenseByName<Config>('Config');
@@ -106,7 +116,8 @@ ambient-scope fallback lives in `inject`, not here.
 ## Throws
 
 - [`UnregisteredVialError`](../errors/Doctor-Errors.md#unregisteredvialerror) —
-  when no vial is registered under the token at runtime.
+  when no vial is registered — or nothing is stocked — for the target at
+  runtime.
 - [`ScopeRequiredError`](../errors/Doctor-Errors.md#scoperequirederror) —
   propagated when the resolved vial is `SCOPED` and no scope was given
   explicitly, by the ambient operation, or at all.
@@ -116,18 +127,22 @@ ambient-scope fallback lives in `inject`, not here.
 
 ## Caveats
 
-The token **is** the class name, so:
+The string token **is** the class name, so:
 
-- Names must be unique across registered vials (last registration wins).
+- Names must be unique across registered vials (last registration wins),
+  and a name held by a stocked label cannot also be a class's.
 - They must **survive minification** — a bundler that renames classes
   (`Config` → `a`) breaks token resolution. Don't rely on this in a minified
-  build; use `Doctor.dispense(Class)` there instead.
+  build; use `inject(Class)` or a [label](Doctor-Stock.md) there instead —
+  a label's name is an explicit string, untouched by minifiers.
 
 ## See also
 
 - [build](Doctor-Build.md) — generate the `VialRegistry` from your `@Vial`
   classes
 - [@Vial](Doctor-Vial.md) — registers the classes `inject` resolves
+- [stock](Doctor-Stock.md) — typed labels for ready-made values and labelled
+  factories
 
 ---
 
