@@ -19,25 +19,29 @@ The Runtime module provides reliable detection of the current JavaScript runtime
 
 ### Features
 
-| Feature             | Bun | Deno | Node.js |
-| ------------------- | --- | ---- | ------- |
-| Runtime detection   | ✅  | ✅   | ✅      |
-| OS detection        | ✅  | ✅   | ✅      |
-| CPU architecture    | ✅  | ✅   | ✅      |
-| Environment vars    | ✅  | ✅   | ✅      |
-| Process ID          | ✅  | ✅   | ✅      |
-| Process exit        | ✅  | ✅   | ✅      |
-| Working directory   | ✅  | ✅   | ✅      |
-| Exit handler        | ✅  | ✅   | ✅      |
-| Error handler       | ✅  | ✅   | ✅      |
-| Unhandled rejection | ✅  | ✅   | ✅      |
-| Signal handler      | ✅  | ✅   | ✅      |
-| CPU count           | ✅  | ✅   | ✅      |
-| Memory totals       | ✅  | ✅   | ✅      |
-| System uptime       | ✅  | ✅   | ✅      |
-| Memory usage        | ✅  | ✅\* | ✅      |
+| Feature             | Bun | Deno | Node.js | Workers | Browser |
+| ------------------- | --- | ---- | ------- | ------- | ------- |
+| Runtime detection   | ✅  | ✅   | ✅      | ✅      | ✅      |
+| OS detection        | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| CPU architecture    | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Environment vars    | ✅  | ✅   | ✅      | ✅†     | ⬜      |
+| Process ID          | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Process exit        | ✅  | ✅   | ✅      | ❌      | ❌      |
+| Working directory   | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Exit handler        | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Error handler       | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Unhandled rejection | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Signal handler      | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| CPU count           | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Memory totals       | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| System uptime       | ✅  | ✅   | ✅      | ⬜      | ⬜      |
+| Memory usage        | ✅  | ✅\* | ✅      | ⬜      | ⬜      |
 
 \* Deno's `Deno.memoryUsage()` does not expose `arrayBuffers`; the field is reported as `0`.
+
+† On Workers, `getEnv()` returns `process.env` when `nodejs_compat` populates it, else `{}`.
+
+Legend: ✅ works · ⬜ returns a safe fallback (`0`, `1`, `''`, `{}`, no-op) · ❌ throws.
 
 ## Installation
 
@@ -66,11 +70,19 @@ npx jsr add @tundralibs/compat
 #### Constants
 
 ```typescript ignore
-const RUNTIME: Runtime; // 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN'
+const RUNTIME: Runtime; // 'DENO' | 'BUN' | 'NODE' | 'WORKERS' | 'BROWSER' | 'UNKNOWN'
 const isDeno: boolean; // true if running in Deno
 const isBun: boolean; // true if running in Bun
-const isNode: boolean; // true if running in Node.js
+const isNode: boolean; // true if GENUINE Node (excludes workerd)
+const isWorkers: boolean; // true if running on Cloudflare Workers (workerd)
+const isBrowser: boolean; // true if a browser or web/service worker
 ```
+
+`isNode` is **genuine Node only**. Cloudflare Workers under `nodejs_compat`
+exposes `process.versions.node`, so it would otherwise masquerade as Node;
+`isWorkers` is checked first and `isNode` excludes it. This is what makes a
+Node-gated builtin (`node:http`, `node:fs`, …) that workerd does not provide
+surface as an `UnsupportedRuntimeError` rather than a raw `TypeError`.
 
 **Example:**
 
@@ -94,16 +106,27 @@ Gets the current runtime.
 
 ```typescript ignore
 function getRuntime(): Runtime;
+function detectRuntime(globals?: object): Runtime;
 
-type Runtime = 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN';
+type Runtime = 'DENO' | 'BUN' | 'NODE' | 'WORKERS' | 'BROWSER' | 'UNKNOWN';
 ```
+
+`getRuntime()` is `detectRuntime(globalThis)`. `detectRuntime` is pure —
+pass a fake `globals` object to test any outcome without the real runtime.
 
 **Detection Order:**
 
-1. Deno - Checks for `globalThis.Deno`
-2. Bun - Checks for `globalThis.Bun`
-3. Node.js - Checks for `process.versions.node`
-4. Unknown - If none match
+1. Deno — `globalThis.Deno`
+2. Bun — `globalThis.Bun`
+3. Workers — `navigator.userAgent === 'Cloudflare-Workers'` (checked before
+   Node, since workerd also exposes `process.versions.node`)
+4. Node.js — `process.versions.node`
+5. Browser — `document`, or a worker global scope (`WorkerGlobalScope` /
+   `importScripts`)
+6. Unknown — if none match
+
+A jsdom-under-Node environment carries both `document` and
+`process.versions.node`; the Node test wins, so it stays `'NODE'`.
 
 **Example:**
 
@@ -121,8 +144,31 @@ switch (runtime) {
   case 'NODE':
     console.log('Using Node.js APIs');
     break;
+  case 'WORKERS':
+    console.log('Cloudflare Workers — fetch-style APIs only');
+    break;
+  case 'BROWSER':
+    console.log('Browser or web worker');
+    break;
 }
 ```
+
+### Workers and browsers
+
+On `'WORKERS'` and `'BROWSER'` the informational helpers return safe
+fallbacks rather than throwing: `cpus() → 1`, `totalmem()`/`freemem()`/
+`uptime() → 0`, `cwd() → ''`, `getProcessId() → undefined`, `memoryUsage()`
+→ all-zero, and the `on*` handler registrations are no-ops. `getEnv()`
+returns `{}` — except on Workers, where it returns `process.env` when
+`nodejs_compat` has populated it. `exit()` throws (there is no process to
+exit).
+
+Capability-backed operations that need a primitive the runtime lacks throw
+[`UnsupportedRuntimeError`](../errors/) instead of a raw `TypeError`: the
+whole of `file` (filesystem), `net`/`udp` (sockets), `watch` (file
+watching), `webserver`'s `start()` (a port-listening server), and the
+interactive `cli` prompts. Feature-detect with `isWorkers` / `isBrowser`
+(or `RUNTIME`) and avoid those paths, or catch the error.
 
 ### Operating System Detection
 

@@ -690,8 +690,20 @@ server.on('onResponse', [
 
 - Full HTTP/HTTPS support
 - WebSocket via the [`ws`][ws-pkg] npm package (taken as a normal
-  dependency of `@tundralibs/compat`)
+  dependency of `@tundralibs/compat`), loaded lazily on `start()` so
+  importing the module never pulls it in
 - All TCP options supported
+
+### Cloudflare Workers, browsers, and other runtimes
+
+`WebServer` needs a port-listening HTTP server, which these runtimes do
+not provide. Construction is safe — `new WebServer(...)` never throws on
+them (the filesystem-touching option validation for UNIX sockets and
+file-based TLS is skipped) — but `start()` rejects with
+[`UnsupportedRuntimeError`](../errors/) (`operation: 'WebServer.start'`).
+Gate on `isWorkers` / `isBrowser` from `@tundralibs/compat/runtime`, or
+catch the error. On Cloudflare Workers, export a `fetch` handler instead
+of starting a server.
 
 [ws-pkg]: https://github.com/websockets/ws
 
