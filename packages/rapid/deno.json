@@ -9,6 +9,7 @@
     "./decorators": "./decorators/mod.ts",
     "./errors": "./errors/mod.ts",
     "./middlewares": "./middlewares/mod.ts",
+    "./modules": "./modules/mod.ts",
     "./types": "./types/mod.ts"
   },
   "imports": {}

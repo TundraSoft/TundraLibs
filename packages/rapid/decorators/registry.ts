@@ -33,7 +33,11 @@
  */
 
 import { RapidError } from '../errors/mod.ts';
-import type { RapidDecoration, RapidModuleMeta } from '../types/mod.ts';
+import type {
+  RapidDecoration,
+  RapidModuleInvokeMiddleware,
+  RapidModuleMeta,
+} from '../types/mod.ts';
 
 /** The side-table. WeakMap: entries die with the class, no leaks. */
 const REGISTRY = new WeakMap<object, RapidDecoration[]>();
@@ -46,6 +50,10 @@ const REGISTRY = new WeakMap<object, RapidDecoration[]>();
  * each stays a plain, ungapped lookup.
  */
 const MODULES = new WeakMap<object, RapidModuleMeta>();
+/** `@On` subscriptions per handler method (module system). */
+const ON_EVENTS = new WeakMap<object, string[]>();
+/** `@Use` invoke-middleware per method, in EXECUTION order (module system). */
+const INVOKE_MIDDLEWARE = new WeakMap<object, RapidModuleInvokeMiddleware[]>();
 
 /**
  * Append one decoration for `method`. APPEND, never overwrite — the
@@ -181,4 +189,37 @@ export function assertClassContext(
       details: { decorator, kind: ctx.kind },
     });
   }
+}
+
+/** Record `@On` events for a handler (appends; several `@On` may stack). */
+export function recordOn(method: object, events: readonly string[]): void {
+  const existing = ON_EVENTS.get(method);
+  if (existing === undefined) ON_EVENTS.set(method, [...events]);
+  else existing.push(...events);
+}
+
+/** The events a handler subscribes to, or `undefined` when it has no `@On`. */
+export function onEventsOf(method: object): readonly string[] | undefined {
+  return ON_EVENTS.get(method);
+}
+
+/**
+ * Record `@Use` middleware for a method. Decorators apply bottom-up, so
+ * each call PREPENDS — the top-most `@Use` in source runs first.
+ */
+export function recordUse(
+  method: object,
+  middleware: readonly RapidModuleInvokeMiddleware[],
+): void {
+  INVOKE_MIDDLEWARE.set(method, [
+    ...middleware,
+    ...(INVOKE_MIDDLEWARE.get(method) ?? []),
+  ]);
+}
+
+/** A method's `@Use` chain in execution order, or `undefined` when bare. */
+export function middlewareOf(
+  method: object,
+): readonly RapidModuleInvokeMiddleware[] | undefined {
+  return INVOKE_MIDDLEWARE.get(method);
 }

@@ -16,7 +16,11 @@ export {
   serializeCookie,
 } from './cookies.ts';
 export { mimeTypeFor } from './mimeTypeFor.ts';
-export { type ModuleMountTarget, mountModule } from './mountModule.ts';
+export {
+  hasDecorations,
+  type ModuleMountTarget,
+  mountModule,
+} from './mountModule.ts';
 export {
   parseBody,
   type ParseBodyOptions,

@@ -6,8 +6,8 @@
  * @module
  */
 
-import type { ModuleRuntime } from '../ModuleRuntime.ts';
-import type { RapidModule } from '../RapidModule.ts';
+import type { ModuleRuntime } from '../../modules/ModuleRuntime.ts';
+import type { RapidModule } from '../../modules/RapidModule.ts';
 import type { RapidModuleEventMap } from './EventMap.ts';
 import type { RapidModuleInstances } from './Instances.ts';
 

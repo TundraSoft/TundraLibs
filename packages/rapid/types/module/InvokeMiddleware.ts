@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { InvokeContext } from '../InvokeContext.ts';
+import type { InvokeContext } from '../../modules/InvokeContext.ts';
 
 /** Middleware over an {@link InvokeContext}. */
 export type RapidModuleInvokeMiddleware = (

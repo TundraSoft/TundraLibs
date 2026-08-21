@@ -11,11 +11,11 @@ import { ambient } from '@tundralibs/ambient';
 import { Doctor, inject } from '@tundralibs/doctor';
 import { RapidError } from '../errors/mod.ts';
 import {
+  event,
   type EventContext,
   initModules,
   type ModuleRuntime,
   On,
-  payload,
   RapidModule,
   type RapidModuleEventMap,
   type RapidModuleInvokeMiddleware,
@@ -53,7 +53,7 @@ const order: string[] = [];
 abstract class Base<E extends RapidModuleEventMap = Record<string, never>>
   extends RapidModule<E> {}
 
-const ALPHA_EVENTS = { Pinged: payload<{ n: number }>() };
+const ALPHA_EVENTS = { Pinged: event<{ n: number }>() };
 class Alpha extends Base<typeof ALPHA_EVENTS> {
   readonly name = 'Alpha';
   readonly namespace = 'alpha';

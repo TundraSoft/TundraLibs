@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { RapidModule } from '../RapidModule.ts';
+import type { RapidModule } from '../../modules/RapidModule.ts';
 import type { RapidModuleEventMap } from './EventMap.ts';
 import type { RapidModuleEventsOf } from './EventsOf.ts';
 import type { RapidModulePayloadOf } from './PayloadOf.ts';

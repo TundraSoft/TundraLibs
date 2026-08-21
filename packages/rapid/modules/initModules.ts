@@ -26,7 +26,7 @@ import type {
   RapidModuleInitResult,
   RapidModuleInstances,
   RapidModuleSources,
-} from './types/mod.ts';
+} from '../types/mod.ts';
 
 type AnyModule = RapidModule<RapidModuleEventMap>;
 type ModuleCtor = new () => AnyModule;

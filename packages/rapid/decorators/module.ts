@@ -68,19 +68,47 @@ export type ModuleDecoratorOptions = {
  *   non-empty and does not start with `/`, or at decoration time
  *   under legacy decorator compilation.
  */
-export function Module(
-  name: string,
-  options: ModuleDecoratorOptions = {},
-): <Class extends abstract new (...args: never[]) => unknown>(
+/** The options-only form's options: identity comes from the module's fields. */
+export type ModuleMountOptions = Pick<
+  ModuleDecoratorOptions,
+  'prefix' | 'version'
+>;
+
+type ModuleClassDecorator = <
+  Class extends abstract new (...args: never[]) => unknown,
+>(
   target: Class,
   context: ClassDecoratorContext<Class>,
-) => void {
-  if (name.trim() === '') {
+) => void;
+
+/**
+ * Options-only form, for `RapidModule` subclasses: `name`/`namespace` are
+ * the module's own fields (single source of truth — declaring them here
+ * too is a RAPID_CONFIG mount error); the decorator adds the HTTP
+ * `prefix` and the default route `version`, both optional.
+ */
+export function Module(options?: ModuleMountOptions): ModuleClassDecorator;
+/**
+ * Named form, for plain decorated classes: `name` + optional `namespace`
+ * (flat SOCKET/JOB names), `prefix` (HTTP paths only), `version`.
+ */
+export function Module(
+  name: string,
+  options?: ModuleDecoratorOptions,
+): ModuleClassDecorator;
+export function Module(
+  nameOrOptions: string | ModuleMountOptions = {},
+  options: ModuleDecoratorOptions = {},
+): ModuleClassDecorator {
+  const named = typeof nameOrOptions === 'string';
+  const name = named ? nameOrOptions : undefined;
+  const opts: ModuleDecoratorOptions = named ? options : nameOrOptions;
+  if (named && name!.trim() === '') {
     throw new RapidError('RAPID_CONFIG', {
       message: '@Module name must be a non-empty string',
     });
   }
-  const prefix = options.prefix ?? '';
+  const prefix = opts.prefix ?? '';
   if (prefix !== '' && !prefix.startsWith('/')) {
     throw new RapidError('RAPID_CONFIG', {
       message:
@@ -89,12 +117,10 @@ export function Module(
     });
   }
   const meta: RapidModuleMeta = {
-    name,
+    ...(name !== undefined ? { name } : {}),
     prefix,
-    ...(options.namespace !== undefined
-      ? { namespace: options.namespace }
-      : {}),
-    ...(options.version !== undefined ? { version: options.version } : {}),
+    ...(opts.namespace !== undefined ? { namespace: opts.namespace } : {}),
+    ...(opts.version !== undefined ? { version: opts.version } : {}),
   };
   return (target, context): void => {
     assertClassContext(context, 'Module');

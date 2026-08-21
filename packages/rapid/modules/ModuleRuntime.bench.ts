@@ -8,9 +8,9 @@
 
 import { bench } from '@tundralibs/compat/bench';
 import {
+  event,
   initModules,
   On,
-  payload,
   RapidModule,
   type RapidModuleInvokeMiddleware,
   Use,
@@ -18,7 +18,7 @@ import {
 
 const pass: RapidModuleInvokeMiddleware = (_ctx, next) => next();
 
-const EMITTER_EVENTS = { Tick: payload<{ n: number }>() };
+const EMITTER_EVENTS = { Tick: event<{ n: number }>() };
 class Emitter extends RapidModule<typeof EMITTER_EVENTS> {
   readonly name = 'Emitter';
   readonly namespace = 'bench';
@@ -34,7 +34,7 @@ class Emitter extends RapidModule<typeof EMITTER_EVENTS> {
     return this.emit('Tick', { n });
   }
 }
-const SILENT_EVENTS = { Nothing: payload<number>() };
+const SILENT_EVENTS = { Nothing: event<number>() };
 class Silent extends RapidModule<typeof SILENT_EVENTS> {
   readonly name = 'Silent';
   readonly namespace = 'silent';

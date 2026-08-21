@@ -338,34 +338,28 @@ store-injection is the one breaking change and must land before release.
   `norm.use(schema)` ONCE at boot and stock the handle (no per-module
   `use()` recompiles). Labels are the primitive; a central registry is a
   userland pattern over them.
-- **Standard base module + `initModules`. LOCKED, BUILDING (rapid).**
-  - `RapidModule` — opt-in abstract base exposing `protected log`
-    (the Application's Slogger: request-correlated inside a rapid
-    invocation via ambient, plain outside) and `protected config`. State
-    lives in a rapid-side **WeakMap side table** (like the decoration
-    registry) — nothing stored on the instance, and NO `app` handle
-    (modules must not reach the framework's control surface). Not
-    attached → throw `RAPID_CONFIG`; **never a silent fallback logger**
-    (it would be a second, divergent logging config). Apps extend it with
-    their own deps: `abstract class BaseModule extends RapidModule {
-    protected db = inject(Db) }`.
-  - `initModules(context, { modules: [ns | instance] })` — the ONE
-    bootstrap; `app.modules(...)` calls it then mounts; `app.module(
-    ...instances)` stays as the sync typed path. `context` is either a
-    ready `{ config, log }` or plain application options, in which case
-    rapid builds config + the Slogger through the SAME builder
-    `Application`'s constructor uses (factored, not duplicated) — full
-    parity for standalone/test initialization. Sources are STATIC
-    NAMESPACES (the `modules/mod.ts` barrel) or instances — no runtime
-    path walking (that's the CLI generator), so it is identical on
-    Workers. Scans exports for decorated classes, skips abstract/
-    undecorated ones, **constructs with zero args** (the one amendment to
-    "rapid never calls `new`": zero-arg construction of a discovered
-    module class only — anything needing ctor args is passed as an
-    instance; `Class.length > 0` → `RAPID_CONFIG`). Returns a record
-    keyed by EXPORT name, typed via a mapped type over the namespace
-    (abstract + non-zero-arg classes filtered at the type level too), so
-    `const { Posts } = await initModules(...)` is fully typed.
+- ✅ **Standard base module + `initModules` + `app.modules()` — DONE
+  2026-08-21 (greenlit after 3 adversarial reviews + fix pass).** Files:
+  `modules/` (RapidModule, ModuleRuntime, initModules, InvokeContext,
+  EventContext, reply, events), `decorators/on.ts` + `use.ts` (registry
+  side tables), `types/module/*`, subpath `./modules` + root re-exports.
+  `RapidModule<E>`: abstract `name`/`namespace`/`events` (`event<T>()`
+  markers — renamed from `payload()` to avoid the binder), `protected
+  log` = the app logger SCOPED `{ module: 'ns:Name' }`, `config`, typed
+  `emit`, guarded `invoke` → `Reply`; three channels (plain call / invoke /
+  event); single-ALS invoke spine; correlation inherited from the
+  transport request. `app.modules({ modules: [ns], instances? })` = the
+  ONE bootstrap on an app: initModules with the app's log/config/mode,
+  mounts every decorated instance, `app.moduleRuntime`, disposed by
+  `stop()`; once per app. Identity rule: a RapidModule's name/namespace
+  are its FIELDS — `@Module({ prefix?, version? })` (new options-only
+  form) may add only those; the named form stays for plain classes.
+  Decisions: keep doctor dep (single-instance rule); InvokeContext/
+  EventContext are module-only types (not in RapidContext); no
+  `@Invokable`. The blog example is the showcase (BlogModule base with
+  doctor-injected Norm, Posts events, CommentsSocket → `invoke(Posts,
+  'get')`, event-only Audit, static barrel). Pending: auth credentials
+  slot riding the invoke seed (see Auth below).
 - **Testing helper (`@tundralibs/rapid/testing`).** First-class module/
   route testing without a socket or a bound port: register fakes for the
   injected services and drive a module method or a route through the

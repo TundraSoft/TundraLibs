@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { RapidApplicationOptions } from '../../types/mod.ts';
+import type { RapidApplicationOptions } from '../mod.ts';
 
 /** `name` is required (slogger's appName); `mode`/`logger` as on the app. */
 export type RapidModuleInitOptions = Pick<

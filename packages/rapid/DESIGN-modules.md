@@ -27,6 +27,11 @@ What that means, concretely:
   and binds its decorated methods to transports. No `new` inside the
   framework, no resolver seam to configure, no container to teach it
   about.
+  **One amendment (module system, 2026-08-21):** `app.modules()` /
+  `initModules()` DO construct the zero-argument `RapidModule` classes
+  exported from a namespace — that is their job — and dispense a class
+  doctor already knows. Anything with constructor arguments is still
+  handed over as an instance (`instances: { … }`).
 - rAPId makes exactly ONE demand of a method: the shape of what it
   returns ({@link RapidModuleReply}), because that is the one thing
   that must become a response.
@@ -115,7 +120,7 @@ Both funnel into one internal path: prototype-walk the instance → read
 `app.socket()` / `app.job()` uses. Explicit at every level, so two
 Applications never see each other's modules and tests stay isolated.
 
-A namespace/directory sugar (`app.modules(await import(...))`,
+`app.modules({ modules: [ns] })` is the module-system entry point (built); a directory-walking sugar (`app.discover(dir)`,
 `app.discover('./modules')`) is possible on top — the namespace-scan
 mechanism is verified below — but it needs a convention for how a file
 hands over an INSTANCE (export a built one, or export a factory).

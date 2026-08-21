@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { RapidModule } from '../RapidModule.ts';
+import type { RapidModule } from '../../modules/RapidModule.ts';
 import type { RapidModuleEventMap } from './EventMap.ts';
 
 /** Concrete zero-arg module classes of a namespace → their instances. */

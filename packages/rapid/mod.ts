@@ -31,6 +31,8 @@ export {
   Module,
   type ModuleDecoratorOptions,
   moduleMetaOf,
+  type ModuleMountOptions,
+  On,
   paging,
   param,
   PATCH,
@@ -41,8 +43,20 @@ export {
   type RouteDecoratorOptions,
   SOCKET,
   type SocketDecoratorOptions,
+  Use,
 } from './decorators/mod.ts';
 export { RAPID_ERROR_CODES, RapidError } from './errors/mod.ts';
+export {
+  event,
+  EventContext,
+  initModules,
+  InvokeContext,
+  ModuleRuntime,
+  RapidModule,
+  type RapidModuleLifecycle,
+  Reply,
+  reply,
+} from './modules/mod.ts';
 export {
   cors,
   type CorsOptions,
@@ -104,4 +118,24 @@ export type {
   RapidSOCKETHandler,
   RapidSOCKETMiddleware,
   RapidUploadedFile,
+} from './types/mod.ts';
+export type {
+  RapidModuleClass,
+  RapidModuleContext,
+  RapidModuleEventMap,
+  RapidModuleEventPayload,
+  RapidModuleEventsOf,
+  RapidModuleInitOptions,
+  RapidModuleInitResult,
+  RapidModuleInstances,
+  RapidModuleInstancesOf,
+  RapidModuleInvokeMiddleware,
+  RapidModuleInvokeResult,
+  RapidModuleInvokeResultOf,
+  RapidModuleInvokeSeed,
+  RapidModuleMethodDecorator,
+  RapidModuleMethodKeys,
+  RapidModulePayload,
+  RapidModulePayloadOf,
+  RapidModuleSources,
 } from './types/mod.ts';

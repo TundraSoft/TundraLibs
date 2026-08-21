@@ -18,7 +18,8 @@ export type RapidModuleMeta = {
    * messages) and future OpenAPI tagging. Purely a label; does not
    * affect routing.
    */
-  name: string;
+  /** Absent for a `RapidModule` subclass — its `name` field is canonical. */
+  name?: string;
   /**
    * Joined onto every SOCKET command and JOB name declared in the
    * class, `{namespace}.{command|name}` — sockets/jobs are otherwise

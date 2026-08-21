@@ -10,7 +10,7 @@
  */
 
 import type { StatusCode } from '@tundralibs/compat/http';
-import type { RapidModuleInvokeResult } from './types/mod.ts';
+import type { RapidModuleInvokeResult } from '../types/mod.ts';
 
 /** The envelope `invoke` resolves to. Construct with {@link reply}. */
 export class Reply<C = unknown> implements RapidModuleInvokeResult<C> {

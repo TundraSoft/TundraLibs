@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { Reply } from '../reply.ts';
+import type { Reply } from '../../modules/reply.ts';
 import type { RapidModuleInvokeResult } from './InvokeResult.ts';
 
 /** Envelope type for a method whose return type is `R`. */

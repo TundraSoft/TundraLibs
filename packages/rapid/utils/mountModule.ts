@@ -18,6 +18,7 @@
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import { decorationsOf, moduleMetaOf } from '../decorators/mod.ts';
+import { RapidModule } from '../modules/RapidModule.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
   RapidBinder,
@@ -282,10 +283,26 @@ export function mountModule<S extends RapidContextState>(
 ): void {
   const ctor = (instance as { constructor: object }).constructor;
   const meta = moduleMetaOf(ctor);
-  const prefix = meta?.prefix ?? '';
-  const namespace = meta?.namespace;
-  const moduleVersion = meta?.version;
   const ctorName = (ctor as { name?: string }).name ?? '(anonymous)';
+  // A RapidModule's identity lives on its fields; @Module may only add
+  // prefix/version. Declaring name/namespace in both places is an error,
+  // not an override — one source of truth.
+  const isModule = instance instanceof RapidModule;
+  if (
+    isModule && meta !== undefined &&
+    (meta.name !== undefined || meta.namespace !== undefined)
+  ) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `${ctorName} is a RapidModule — its name/namespace come ` +
+        `from the class fields; @Module on it takes only { prefix, version }`,
+      details: { class: ctorName, meta },
+    });
+  }
+  const prefix = meta?.prefix ?? '';
+  const namespace = isModule
+    ? (instance as RapidModule).namespace
+    : meta?.namespace;
+  const moduleVersion = meta?.version;
 
   const seen = new Set<string>();
   let mounted = 0;
@@ -293,7 +310,10 @@ export function mountModule<S extends RapidContextState>(
   while (proto !== null && proto !== Object.prototype) {
     for (const name of Object.getOwnPropertyNames(proto)) {
       if (name === 'constructor' || seen.has(name)) continue;
-      const fn = (proto as Record<string, unknown>)[name];
+      // Descriptor, not `proto[name]`: reading an ACCESSOR through the
+      // prototype would run its getter with `this = proto` (RapidModule's
+      // `log`/`config` throw "used before initialized" that way).
+      const fn = Object.getOwnPropertyDescriptor(proto, name)?.value;
       if (typeof fn !== 'function') continue;
       const decorations = decorationsOf(fn);
       if (decorations === undefined) continue;
@@ -340,4 +360,24 @@ export function mountModule<S extends RapidContextState>(
       details: { class: ctorName },
     });
   }
+}
+
+/**
+ * Does this instance carry any route/socket/job decoration on its
+ * prototype chain? `app.modules()` mounts only the instances that do —
+ * an event-only or invoke-only module has nothing for a transport.
+ */
+export function hasDecorations(instance: object): boolean {
+  let proto: object | null = Object.getPrototypeOf(instance);
+  while (proto !== null && proto !== Object.prototype) {
+    for (const name of Object.getOwnPropertyNames(proto)) {
+      if (name === 'constructor') continue;
+      const fn = Object.getOwnPropertyDescriptor(proto, name)?.value;
+      if (typeof fn === 'function' && decorationsOf(fn) !== undefined) {
+        return true;
+      }
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  return false;
 }

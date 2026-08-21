@@ -1,7 +1,7 @@
 /**
  * @fileoverview {@link RapidModulePayload} — the phantom marker a module
  * uses to DECLARE an event and its payload type in one place:
- * `readonly events = { PostCreated: payload<{ id: string }>() }`.
+ * `readonly events = { PostCreated: event<{ id: string }>() }`.
  *
  * @module
  */

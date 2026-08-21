@@ -2,7 +2,7 @@
  * @fileoverview The event bus — `@tundralibs/utils` `Events` as the
  * ENGINE (listener storage, snapshot-per-emission, per-listener
  * isolation) under a thin publish/subscribe facade — plus the name
- * grammar every event must satisfy and the `payload()` marker modules
+ * grammar every event must satisfy and the `event()` marker modules
  * declare events with.
  *
  * @module
@@ -10,7 +10,7 @@
 
 import type { Slogger } from '@tundralibs/slogger';
 import { Events } from '@tundralibs/utils';
-import type { RapidModulePayload } from './types/mod.ts';
+import type { RapidModulePayload } from '../types/mod.ts';
 
 /** `namespace` segment: `posts`, `user-admin`. */
 export const NAMESPACE_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -23,11 +23,11 @@ export const EVENT_NAME_PATTERN =
 const PAYLOAD: RapidModulePayload<unknown> = Object.freeze({});
 
 /**
- * Declare an event's payload type on a module:
- * `const EVENTS = { PostCreated: payload<{ id: string }>() }`. Pure type
+ * Declare an event and its payload type on a module:
+ * `const EVENTS = { PostCreated: event<{ id: string }>() }`. Pure type
  * carrier — one shared frozen object at runtime.
  */
-export function payload<T>(): RapidModulePayload<T> {
+export function event<T>(): RapidModulePayload<T> {
   return PAYLOAD as RapidModulePayload<T>;
 }
 

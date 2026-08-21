@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { Slogger } from '@tundralibs/slogger';
+import type { ScopedSlogger } from '@tundralibs/slogger';
 import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
 import type { ModuleRuntime } from './ModuleRuntime.ts';
@@ -21,11 +21,11 @@ import type {
   RapidModuleInvokeResultOf,
   RapidModuleMethodKeys,
   RapidModulePayloadOf,
-} from './types/mod.ts';
+} from '../types/mod.ts';
 
 /** What the runtime attaches to a mounted module. @internal */
 export type ModuleAttachment = {
-  log: Slogger;
+  log: ScopedSlogger;
   config: ConfigType;
   runtime: ModuleRuntime;
   /** leaf event name → fully-qualified name, resolved once at mount. */
@@ -90,7 +90,7 @@ type AnyFn = (...args: any[]) => unknown;
 
 /**
  * @typeParam E - The module's event map. Declare it once as a const and
- *   pass `typeof`: `const EVENTS = { PostCreated: payload<{ id: string }>() };`
+ *   pass `typeof`: `const EVENTS = { PostCreated: event<{ id: string }>() };`
  *   `class Posts extends RapidModule<typeof EVENTS> { protected readonly
  *   events = EVENTS; … }`. Modules that emit nothing omit it — and a
  *   non-empty `events` WITHOUT the generic is a compile error at the field
@@ -112,7 +112,7 @@ export abstract class RapidModule<
   protected abstract readonly events: E;
 
   /** The host's logger — request-correlated inside an invocation, plain outside. */
-  protected get log(): Slogger {
+  protected get log(): ScopedSlogger {
     return attachmentOf(this, 'log').log;
   }
 

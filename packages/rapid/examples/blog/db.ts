@@ -2,7 +2,7 @@
  * Database wiring: a norm `Norm` over local SQLite, and the Migrator that
  * OWNS the DDL (never hand-write SQL — snapshot the registry and apply it;
  * norm creates the tables, foreign keys and indexes). Returns the
- * connected `Norm` instance — the modules pull it via `inject('Norm')`
+ * connected `Norm` instance — the modules pull it via `inject(NORM)`
  * and derive their own schema handle with `norm.use(BlogSchema)` (a
  * scoped view over the same pool).
  *

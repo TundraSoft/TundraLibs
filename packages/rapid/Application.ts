@@ -16,7 +16,17 @@ import { parseSchedule } from '@tundralibs/cronus';
 import { RapidError } from './errors/mod.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
-import { buildExporter, buildState, mountModule } from './utils/mod.ts';
+import {
+  buildExporter,
+  buildState,
+  hasDecorations,
+  mountModule,
+} from './utils/mod.ts';
+import {
+  initModules,
+  type ModuleRuntime,
+  type RapidModule,
+} from './modules/mod.ts';
 import type {
   RapidApplicationEvents,
   RapidApplicationFactoryOptions,
@@ -28,6 +38,9 @@ import type {
   RapidHTTPMiddleware,
   RapidJobEntry,
   RapidMiddleware,
+  RapidModuleEventMap,
+  RapidModuleInitResult,
+  RapidModuleSources,
   RapidRouteEntry,
   RapidSocketEntry,
   RapidSOCKETHandler,
@@ -90,6 +103,7 @@ export class Application<S extends RapidContextState = RapidContextState>
 
   private __http?: HTTPTransport<S>;
   private __jobTransport?: JOBTransport<S>;
+  private __moduleRuntime?: ModuleRuntime;
   /**
    * The upload temp dir THIS instance created (`uploads.path` left
    * unset) — `undefined` when the caller supplied their own path, which
@@ -483,6 +497,60 @@ export class Application<S extends RapidContextState = RapidContextState>
     return this;
   }
 
+  /**
+   * Boot the module system ON this app: `initModules` with the app's
+   * logger, config and mode, then every resulting instance that carries
+   * route/socket/job decorations is mounted exactly as {@link module}
+   * would. Modules get `this.log` (scoped `module: 'ns:Name'`),
+   * `this.config`, typed `emit`, guarded `invoke`; events published while
+   * a request is in flight inherit its requestId. Call ONCE, before
+   * `start()`/`fetch()`, with every namespace; `stop()` disposes the
+   * runtime (reverse init order).
+   *
+   * @throws {RapidError} RAPID_CONFIG on a second call, and whatever
+   *   `initModules`/`module()` throw (then the runtime is disposed).
+   */
+  public async modules<
+    const M extends readonly object[],
+    I extends Record<string, RapidModule<RapidModuleEventMap>> = Record<
+      never,
+      RapidModule<RapidModuleEventMap>
+    >,
+  >(sources: RapidModuleSources<M, I>): Promise<RapidModuleInitResult<M, I>> {
+    if (this.__moduleRuntime !== undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'app.modules() boots the module system once — pass every namespace in that one call',
+      });
+    }
+    const result = await initModules(
+      { log: this.log, config: this.config, mode: this.mode },
+      sources,
+    );
+    try {
+      for (const instance of result.runtime.modules) {
+        if (hasDecorations(instance)) mountModule<S>(this, instance);
+      }
+    } catch (error) {
+      await result.runtime.dispose();
+      throw error;
+    }
+    this.__moduleRuntime = result.runtime;
+    return result;
+  }
+
+  /** The module runtime booted by {@link modules}; `undefined` before. */
+  public get moduleRuntime(): ModuleRuntime | undefined {
+    return this.__moduleRuntime;
+  }
+
+  private async __disposeModules(): Promise<void> {
+    const runtime = this.__moduleRuntime;
+    if (runtime === undefined) return;
+    this.__moduleRuntime = undefined;
+    await runtime.dispose();
+  }
+
   /** `true` between a successful start() and stop(). */
   public get running(): boolean {
     return this.__started;
@@ -665,7 +733,10 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (this.__ownedUploadPath !== undefined) {
       await remove(this.__ownedUploadPath).catch(() => {});
     }
-    if (!this.__started) return this;
+    if (!this.__started) {
+      await this.__disposeModules(); // booted via modules() + fetch(), never listened
+      return this;
+    }
     const deadline = this.option('shutdownTimeout')!;
     let timer: number | { unref?: () => void } | undefined;
     if (deadline > 0) {
@@ -695,6 +766,12 @@ export class Application<S extends RapidContextState = RapidContextState>
       }
       try {
         await http?.stop();
+      } catch (error) {
+        failures.push(error);
+      }
+      // Modules go LAST: in-flight requests may still invoke them.
+      try {
+        await this.__disposeModules();
       } catch (error) {
         failures.push(error);
       }

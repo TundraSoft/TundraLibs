@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { RapidModule } from '../RapidModule.ts';
+import type { RapidModule } from '../../modules/RapidModule.ts';
 
 /** `M extends RapidModule<E>` → `E`. */
 export type RapidModuleEventsOf<M> = M extends RapidModule<infer E> ? E

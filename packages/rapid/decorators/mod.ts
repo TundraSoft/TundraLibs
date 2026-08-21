@@ -25,7 +25,13 @@ export {
   type RouteDecoratorOptions,
 } from './http.ts';
 export { JOB, type JobDecoratorOptions } from './job.ts';
-export { Module, type ModuleDecoratorOptions } from './module.ts';
+export {
+  Module,
+  type ModuleDecoratorOptions,
+  type ModuleMountOptions,
+} from './module.ts';
+export { On } from './on.ts';
+export { Use } from './use.ts';
 export {
   decorationsOf,
   moduleMetaOf,

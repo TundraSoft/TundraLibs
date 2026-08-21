@@ -7,19 +7,21 @@
  *   public/            static assets (index.html + style.css) served as-is
  *   models/            norm entities (one per file) + the Blog schema
  *   db.ts              Norm + SQLite + the Migrator that owns the DDL
- *   di.ts              doctor: register the Norm + logger singletons
- *   modules/Posts.ts   HTTP + JOB module (own file) — inject()s its deps,
- *                      owns its data actions on norm (no repository hop)
- *   modules/CommentsSocket.ts   SOCKET-only module (own file)
+ *   di.ts              doctor: stock the Norm instance under a typed label
+ *   modules/BlogModule.ts   the project's RapidModule base (db via doctor)
+ *   modules/Posts.ts   HTTP + JOB module, publishes PostCreated/PostDeleted
+ *   modules/CommentsSocket.ts   SOCKET-only module; invoke()s Posts.get
+ *   modules/Audit.ts   event-only module — subscribes, logs, no transport
+ *   modules/mod.ts     the static barrel app.modules() boots from
  *   schemas.ts         guardian request schemas
  *   validated.ts       GuardianError → RapidError bridge
  *   types.ts           domain types
  *   main.ts            boot: open db → register deps → mount modules
  *
- * The modules take NO constructor args — they pull `Norm` and the logger
- * with `inject()` field initializers, so boot just registers those two
- * singletons and hands rAPId the module INSTANCES. rAPId never constructs
- * a module; doctor supplies what the module asks for as it constructs.
+ * The modules take NO constructor args — `BlogModule` pulls `Norm` with an
+ * `inject()` field initializer, so boot stocks that one label and hands
+ * `app.modules()` the barrel: it constructs each module, wires events,
+ * mounts the decorated routes/commands/jobs, and `stop()` disposes them.
  *
  * Run (from the repo root):
  *
@@ -49,8 +51,8 @@
  *   -d '{"author":"Ada","body":"Nice post!"}' | jq
  * ```
  *
- * Websocket (same port, rpc protocol on /ws) — `@Module`'s namespace
- * ("comments") joins onto the bare command name:
+ * Websocket (same port, rpc protocol on /ws) — the module's `namespace`
+ * field ("comments") joins onto the bare command name:
  *
  * ```ts ignore
  * const ws = new Client({ url: 'ws://localhost:3100/ws' });
@@ -79,8 +81,7 @@ import {
 } from '../../middlewares/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
-import { Posts } from './modules/Posts.ts';
-import { CommentsSocket } from './modules/CommentsSocket.ts';
+import * as blog from './modules/mod.ts';
 
 // ── app + database ────────────────────────────────────────────────────
 const database = await openBlogDatabase();
@@ -109,13 +110,13 @@ app.use(
 // and module-API routes coexist.
 app.get('/', (ctx) => ctx.redirect('/public/'));
 
-// Register the two singletons the modules inject(), THEN construct the
-// modules — the inject() field initializers resolve during `new`, so the
-// tokens must be bound first. rAPId only receives the instances.
-registerBlogServices(database.norm, app.log);
-app.module(new Posts(), new CommentsSocket());
-
+// Stock the label the modules inject(), THEN boot them — the inject()
+// field initializers resolve during construction, so the label must be
+// bound first. app.modules() constructs, wires events, mounts routes.
+registerBlogServices(database.norm);
+const { modules } = await app.modules({ modules: [blog] });
 await app.start();
 app.log.info(
   `blog example listening — try: curl -s localhost:${app.port}/posts | jq`,
+  { modules: Object.keys(modules) },
 );

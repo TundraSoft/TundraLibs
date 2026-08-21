@@ -24,7 +24,7 @@ import { ulid } from '@tundralibs/id';
 import type { Slogger } from '@tundralibs/slogger';
 import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
-import { middlewareOf, onEventsOf } from './decorators.ts';
+import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
 import { EventContext } from './EventContext.ts';
 import {
   type EventSubscriber,
@@ -48,7 +48,7 @@ import type {
   RapidModuleInvokeResultOf,
   RapidModuleInvokeSeed,
   RapidModuleMethodKeys,
-} from './types/mod.ts';
+} from '../types/mod.ts';
 
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => unknown;
@@ -227,7 +227,7 @@ export class ModuleRuntime {
     }
     if (events === null || typeof events !== 'object') {
       throw new RapidError('RAPID_CONFIG', {
-        message: `${ctorName}.events must be an object of payload() markers`,
+        message: `${ctorName}.events must be an object of event() markers`,
         details: { module: ctorName },
       });
     }
@@ -309,7 +309,10 @@ export class ModuleRuntime {
     // Everything validated — now commit (declarations + attachment).
     for (const full of Object.values(qualified)) this.__declared.add(full);
     _attach(instance, {
-      log: this.log,
+      // A scoped VIEW of the host logger: every line this module emits
+      // carries `module: 'namespace:Name'`; correlation still arrives via
+      // the host's contextProvider. One closure per module, not per call.
+      log: this.log.scope({ module: key }),
       config: this.config,
       runtime: this,
       qualified: Object.freeze(qualified),
