@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.6...cacher-v1.0.7) (2026-08-21)
+
+
+### Refactoring
+
+* **cacher:** route timer unref through compat and align Workers support ([#508](https://github.com/TundraSoft/TundraLibs/issues/508)) ([e345e2c](https://github.com/TundraSoft/TundraLibs/commit/e345e2c11425444588beae5050362f4e9d448052))
+
 ## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.5...cacher-v1.0.6) (2026-08-19)
 
 
