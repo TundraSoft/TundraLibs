@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/cacher",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "description": "Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines",
   "license": "MIT",
