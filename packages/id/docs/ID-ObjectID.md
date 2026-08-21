@@ -5,6 +5,8 @@ MongoDB-**inspired** mixed-radix identifiers with embedded timestamp, machine, p
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Table of Contents
 
@@ -66,6 +68,10 @@ is **not** a uniform hex value.
 | Counter      | 6      | Incrementing counter, **decimal** (zero-padded)    | `000001`   |
 
 **Total Length**: 26 characters
+
+> On runtimes that expose no process identifier (Cloudflare Workers, browsers),
+> the Process ID component falls back to `0000`; the random Worker ID keeps IDs
+> distinct within a process and the Machine ID distinguishes instances.
 
 ## API Reference
 
@@ -473,8 +479,8 @@ Define machine IDs at application startup:
 ```typescript
 import { ObjectID } from '@tundralibs/id';
 
-// Load from environment or config
-const MACHINE_ID = Deno.env.get('MACHINE_ID') || 'default';
+// Load from your environment or config (any runtime)
+declare const MACHINE_ID: string;
 const generateId = ObjectID(0, MACHINE_ID);
 
 export { generateId };

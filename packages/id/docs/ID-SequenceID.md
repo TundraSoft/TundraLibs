@@ -5,6 +5,8 @@ Database-friendly sequential 64-bit integer ID generator for distributed systems
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 ![Size: 64-bit Integer](https://img.shields.io/badge/size-64--bit%20integer-blue)
 
 ## Table of Contents
@@ -578,7 +580,7 @@ SequenceID mirrors MariaDB's `UUID_SHORT()` bit layout exactly:
 | Aspect           | SequenceID                       | MariaDB UUID_SHORT()            |
 | ---------------- | -------------------------------- | ------------------------------- |
 | Output Type      | 64-bit bigint                    | 64-bit unsigned bigint          |
-| Server ID        | `process.pid % 256` (8 bits)     | `server_id` config (8 bits)     |
+| Server ID        | `getProcessId() % 256` (8 bits)  | `server_id` config (8 bits)     |
 | Timestamp        | Startup time, seconds (32 bits)  | `server_startup_time` (32 bits) |
 | Counter          | 24-bit, per-generator            | 24-bit, per-server              |
 | Uniqueness model | Per-generator (caller singleton) | Per-server (DB coordinates)     |
@@ -589,8 +591,8 @@ SequenceID mirrors MariaDB's `UUID_SHORT()` bit layout exactly:
 
 1. **Counter scope**: MariaDB shares a single counter across the whole server; SequenceID's counter lives in the generator closure. Multiple `sequenceID()` instances in one process do **not** share state — they will produce identical IDs if created in the same startup-second. Treat each `sequenceID()` as a singleton per logical sequence.
 2. **Client-side generation**: no database query needed.
-3. **Process-based server ID**: uses `process.pid % 256` instead of a configured `server_id`. Cluster operators are responsible for ensuring PIDs don't collide modulo 256 across nodes (or for accepting the collision probability).
-4. **Runtime agnostic**: works in Deno, Bun, Node.
+3. **Process-based server ID**: uses `getProcessId() % 256` instead of a configured `server_id`. Cluster operators are responsible for ensuring PIDs don't collide modulo 256 across nodes (or for accepting the collision probability).
+4. **Runtime agnostic**: works on Deno, Bun, Node, Cloudflare Workers, and browsers — the process-derived server ID falls back to `0` where no PID is exposed (Workers, browsers).
 
 **When to use SequenceID over UUID_SHORT():**
 
