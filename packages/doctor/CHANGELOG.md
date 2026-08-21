@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.2.0...doctor-v1.3.0) (2026-08-21)
+
+
+### Features
+
+* **doctor:** retire VialRegistry and the build codegen — labels supersede them ([#488](https://github.com/TundraSoft/TundraLibs/issues/488)) ([d564b57](https://github.com/TundraSoft/TundraLibs/commit/d564b575d203eecf0677816b274c90062862bd3d))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.1.1...doctor-v1.2.0) (2026-08-21)
 
 
