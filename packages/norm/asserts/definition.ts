@@ -12,8 +12,7 @@
  * @since 1.0.0
  */
 
-import type { ColumnSpec } from '../definition/Column.ts';
-import { hashSourceOf } from '../definition/Column.ts';
+import { type ColumnSpec, hashSourceOf } from '../definition/Column.ts';
 import type { EmittedForeignKey } from '../definition/entity.ts';
 import type { AnyDefinition } from '../definition/schema.ts';
 import { type DefinitionIssue, NormDefinitionError } from '../errors/mod.ts';
@@ -317,7 +316,13 @@ export function definitionIssues(def: AnyDefinition): DefinitionIssue[] {
   return issues;
 }
 
-/** Throwing wrapper over {@linkcode definitionIssues}. */
+/**
+ * Throwing wrapper over {@linkcode definitionIssues}.
+ *
+ * @throws {@link NormDefinitionError} When `def` violates any definition rule
+ *   (columns, primary/foreign keys, indexes, scope, hooks) — the thrown
+ *   error's `context.issues` carries every aggregated issue.
+ */
 export function assertDefinition(def: AnyDefinition): void {
   const issues = definitionIssues(def);
   if (issues.length > 0) throw new NormDefinitionError({ issues });

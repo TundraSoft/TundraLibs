@@ -49,8 +49,11 @@ import {
 } from './crypto.ts';
 import type { Executor } from './executor.ts';
 import { assertRegistry } from './asserts/registry.ts';
-import { NormCryptoError, NormDefinitionError } from './errors/mod.ts';
-import type { DefinitionIssue } from './errors/mod.ts';
+import {
+  type DefinitionIssue,
+  NormCryptoError,
+  NormDefinitionError,
+} from './errors/mod.ts';
 
 /** The operation descriptor a {@link Witness} receives. */
 export type WitnessInfo = {

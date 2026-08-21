@@ -220,6 +220,11 @@ function effectivePoolMax(engine: AnySQLEngine): number {
 /**
  * Adapter for SQL engines (Postgres / MariaDB / SQLite). Owns the
  * `q.type` → engine-method dispatch in exactly one place.
+ *
+ * @throws {@link NormUnsupportedError} From the returned executor's
+ *   `withAdvisoryLock` when the engine reports no advisory-lock capability.
+ * @throws {@link NormAdvisoryLockError} From the returned executor's
+ *   `withAdvisoryLock` when the lock is not acquired within `timeoutMs`.
  */
 export function sqlExecutor(engine: AnySQLEngine): Executor {
   // Capabilities and dialect are read from the ENGINE (self-describing),
@@ -460,6 +465,10 @@ export function sqlExecutor(engine: AnySQLEngine): Executor {
  * Adapter for MongoDB. Honest about its limits: no transactions, and a
  * transaction-scoped call throws instead of silently executing outside
  * the transaction.
+ *
+ * @throws {@link NormUnsupportedError} From the returned executor whenever a
+ *   transaction-scoped call, `raw` SQL, or an advisory lock is requested —
+ *   Mongo supports none of these.
  */
 export function mongoExecutor(engine: MongoEngine): Executor {
   const unsupported = () =>
@@ -563,6 +572,10 @@ export function mongoExecutor(engine: MongoEngine): Executor {
  * Scope an executor to one open transaction: every `execute()` carries
  * the transaction id, and `transaction()` throws — nested transactions
  * are rejected structurally (nesting goes through {@link Session.savepoint}).
+ *
+ * @throws {@link NormUnsupportedError} From the returned executor on a nested
+ *   transaction, an advisory lock, or any call carrying a transaction id
+ *   different from the one bound here.
  */
 export function bindTx(executor: Executor, txId: string): Executor {
   return {

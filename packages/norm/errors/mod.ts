@@ -10,25 +10,25 @@ export type { NormErrorCode } from './NormErrorCodes.ts';
 export {
   type AdvisoryLockErrorMeta,
   NormAdvisoryLockError,
-} from './AdvisoryLockError.ts';
-export { type CryptoErrorMeta, NormCryptoError } from './CryptoError.ts';
+} from './NormAdvisoryLockError.ts';
+export { type CryptoErrorMeta, NormCryptoError } from './NormCryptoError.ts';
 export {
   type DefinitionErrorMeta,
   type DefinitionIssue,
   NormDefinitionError,
-} from './DefinitionError.ts';
-export { type HookErrorMeta, NormHookError } from './HookError.ts';
+} from './NormDefinitionError.ts';
+export { type HookErrorMeta, NormHookError } from './NormHookError.ts';
 export {
   type MigrationErrorMeta,
   NormMigrationError,
-} from './MigrationError.ts';
-export { NormQueryError, type QueryErrorMeta } from './QueryError.ts';
+} from './NormMigrationError.ts';
+export { NormQueryError, type QueryErrorMeta } from './NormQueryError.ts';
 export {
   NormUnsupportedError,
   type UnsupportedErrorMeta,
-} from './UnsupportedError.ts';
+} from './NormUnsupportedError.ts';
 export {
   NormValidationError,
   type ValidationErrorMeta,
   type ValidationIssue,
-} from './ValidationError.ts';
+} from './NormValidationError.ts';

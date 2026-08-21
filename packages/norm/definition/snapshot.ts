@@ -33,7 +33,7 @@ import type { ColumnSpec } from './Column.ts';
 import {
   entitiesOf,
   type RegistryInput as SnapshotInput,
-} from './registry-view.ts';
+} from './registryView.ts';
 
 /** One column as migrations see it. */
 export type ColumnSnapshot = {
