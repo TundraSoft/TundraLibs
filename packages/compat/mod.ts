@@ -195,6 +195,7 @@ export {
   type Runtime,
   type Signal,
   totalmem,
+  unrefTimer,
   uptime,
 } from './runtime.ts';
 export {
