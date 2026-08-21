@@ -428,6 +428,24 @@ const wrapFileError = (
       );
   }
 };
+
+/**
+ * Throw the "filesystem unavailable" error for `operation`. The tail every
+ * file operation reaches only on a runtime with no filesystem (Workers,
+ * browser, unknown) — factored out so the message lives in one place.
+ *
+ * @throws {@link UnsupportedRuntimeError} Always.
+ * @internal
+ */
+// deno-coverage-ignore-start
+function __unsupportedFs(operation: string): never {
+  throw new UnsupportedRuntimeError(
+    operation,
+    RUNTIME,
+    'filesystem operations are unavailable in this runtime',
+  );
+}
+// deno-coverage-ignore-stop
 //#endregion Path Validation
 
 //#region File existence checks
@@ -480,11 +498,7 @@ export const pathExists: (path: string) => Promise<boolean> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'pathExists',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('pathExists');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileInvalidPath) {
@@ -540,11 +554,7 @@ export const pathExistsSync: (path: string) => boolean = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'pathExistsSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('pathExistsSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileInvalidPath) {
@@ -605,11 +615,7 @@ export const isFile: (path: string) => Promise<boolean> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'isFile',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('isFile');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileInvalidPath) {
@@ -670,11 +676,7 @@ export const isFileSync: (path: string) => boolean = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'isFileSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('isFileSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileInvalidPath) {
@@ -735,11 +737,7 @@ export const isDirectory: (path: string) => Promise<boolean> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'isDirectory',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('isDirectory');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileInvalidPath) {
@@ -812,11 +810,7 @@ export const isDirectorySync: (path: string) => boolean = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'isDirectorySync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('isDirectorySync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileInvalidPath) {
@@ -921,11 +915,7 @@ export const stat: (path: string) => Promise<FileInfo> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'stat',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('stat');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -990,11 +980,7 @@ export const statSync: (path: string) => FileInfo = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'statSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('statSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1052,11 +1038,7 @@ export const readFile: (path: string) => Promise<Uint8Array> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'readFile',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('readFile');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1098,11 +1080,7 @@ export const readFileSync: (path: string) => Uint8Array = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'readFileSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('readFileSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1145,11 +1123,7 @@ export const readTextFile: (path: string) => Promise<string> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'readTextFile',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('readTextFile');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1190,11 +1164,7 @@ export const readTextFileSync: (path: string) => string = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'readTextFileSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('readTextFileSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1355,11 +1325,7 @@ export const writeFile: (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'writeFile',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('writeFile');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -1433,11 +1399,7 @@ export const writeFileSync: (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'writeFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('writeFileSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -1516,11 +1478,7 @@ export const writeTextFile: (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'writeTextFile',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('writeTextFile');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -1593,11 +1551,7 @@ export const writeTextFileSync: (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'writeTextFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('writeTextFileSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -1727,11 +1681,7 @@ export const deleteFile: (path: string) => Promise<void> = async (
       await nodeFs.promises.unlink(path);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'deleteFile',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('deleteFile');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -1768,11 +1718,7 @@ export const deleteFileSync: (path: string) => void = (path: string): void => {
       nodeFs.unlinkSync(path);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'deleteFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('deleteFileSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -1826,11 +1772,7 @@ export const ensureFile: (
         });
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'ensureFile',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('ensureFile');
         // deno-coverage-ignore-stop
       }
     } catch (error) {
@@ -1935,11 +1877,7 @@ export const ensureFileSync: (
         });
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'ensureFileSync',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('ensureFileSync');
         // deno-coverage-ignore-stop
       }
     } catch (error) {
@@ -2035,11 +1973,7 @@ export const copyFile: (src: string, dest: string) => Promise<void> = async (
       await nodeFs.promises.copyFile(src, dest);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'copyFile',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('copyFile');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2081,11 +2015,7 @@ export const copyFileSync: (src: string, dest: string) => void = (
       nodeFs.copyFileSync(src, dest);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'copyFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('copyFileSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2127,11 +2057,7 @@ export const moveFile: (src: string, dest: string) => Promise<void> = async (
       await nodeFs.promises.rename(src, dest);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'moveFile',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('moveFile');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2173,11 +2099,7 @@ export const moveFileSync: (src: string, dest: string) => void = (
       nodeFs.renameSync(src, dest);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'moveFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('moveFileSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2221,11 +2143,7 @@ export const renameFile: (filePath: string, newName: string) => Promise<void> =
         await nodeFs.promises.rename(filePath, newPath);
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'renameFile',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('renameFile');
         // deno-coverage-ignore-stop
       }
     } catch (error) {
@@ -2271,11 +2189,7 @@ export const renameFileSync: (filePath: string, newName: string) => void = (
       nodeFs.renameSync(filePath, newPath);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'renameFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('renameFileSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2316,11 +2230,7 @@ export const realPath: (path: string) => Promise<string> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'realPath',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('realPath');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2360,11 +2270,7 @@ export const realPathSync: (path: string) => string = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'realPathSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('realPathSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2617,11 +2523,7 @@ export const readDir: (
       yield* readDirNode(dirPath, filter);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'readDir',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('readDir');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2680,11 +2582,7 @@ export const readDirSync: (
       yield* readDirSyncNode(dirPath, filter);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'readDirSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('readDirSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2734,11 +2632,7 @@ export const removeDir: (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'removeDir',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('removeDir');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2785,11 +2679,7 @@ export const removeDirSync: (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'removeDirSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('removeDirSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2840,11 +2730,7 @@ export const makeDir: (
       });
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'makeDir',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('makeDir');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -2891,11 +2777,7 @@ export const makeDirSync: (
       nodeFs.mkdirSync(dirPath, { recursive: opts.recursive, mode: opts.mode });
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'makeDirSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('makeDirSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3033,11 +2915,7 @@ export const copyDir: (
       await copyDirNode(src, dest, opts);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'copyDir',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('copyDir');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3134,11 +3012,7 @@ export const copyDirSync: (
       copyDirSyncNode(src, dest, opts);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'copyDirSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('copyDirSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3226,11 +3100,7 @@ export const moveDir: (src: string, dest: string) => Promise<void> = async (
       await nodeFs.promises.rename(src, dest);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'moveDir',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('moveDir');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3272,11 +3142,7 @@ export const moveDirSync: (src: string, dest: string) => void = (
       nodeFs.renameSync(src, dest);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'moveDirSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('moveDirSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3320,11 +3186,7 @@ export const renameDir: (dirPath: string, newName: string) => Promise<void> =
         await nodeFs.promises.rename(dirPath, newPath);
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'renameDir',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('renameDir');
         // deno-coverage-ignore-stop
       }
     } catch (error) {
@@ -3370,11 +3232,7 @@ export const renameDirSync: (dirPath: string, newName: string) => void = (
       nodeFs.renameSync(dirPath, newPath);
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'renameDirSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('renameDirSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3509,11 +3367,7 @@ export const remove: (path: string) => Promise<void> = async (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'remove',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('remove');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3557,11 +3411,7 @@ export const removeSync: (path: string) => void = (
       }
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'removeSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('removeSync');
       // deno-coverage-ignore-stop
     }
   } catch (error) {
@@ -3622,11 +3472,7 @@ export const move: (src: string, dest: string) => Promise<void> = async (
         await nodeFs.promises.rename(src, dest);
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'move',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('move');
         // deno-coverage-ignore-stop
       }
       return;
@@ -3709,11 +3555,7 @@ export const moveSync: (src: string, dest: string) => void = (
         nodeFs.renameSync(src, dest);
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'moveSync',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('moveSync');
         // deno-coverage-ignore-stop
       }
       return;
@@ -3788,11 +3630,7 @@ export const makeTempFile: (options?: TempOptions) => Promise<string> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'makeTempFile',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('makeTempFile');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -3845,11 +3683,7 @@ export const makeTempFileSync: (options?: TempOptions) => string = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'makeTempFileSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('makeTempFileSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -3901,11 +3735,7 @@ export const makeTempDir: (options?: TempOptions) => Promise<string> = async (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'makeTempDir',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('makeTempDir');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -3958,11 +3788,7 @@ export const makeTempDirSync: (options?: TempOptions) => string = (
     }
 
     // deno-coverage-ignore-start
-    throw new UnsupportedRuntimeError(
-      'makeTempDirSync',
-      RUNTIME,
-      'filesystem operations are unavailable in this runtime',
-    );
+    return __unsupportedFs('makeTempDirSync');
     // deno-coverage-ignore-stop
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -4291,11 +4117,7 @@ class FileHandle {
         /* c8 ignore start */
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'write',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('write');
         // deno-coverage-ignore-stop
       }
       /* c8 ignore stop */
@@ -4339,11 +4161,7 @@ class FileHandle {
         /* c8 ignore start */
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'writeSync',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('writeSync');
         // deno-coverage-ignore-stop
       }
       /* c8 ignore stop */
@@ -4399,11 +4217,7 @@ class FileHandle {
         /* c8 ignore start */
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'sync',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('sync');
         // deno-coverage-ignore-stop
       }
       /* c8 ignore stop */
@@ -4445,11 +4259,7 @@ class FileHandle {
         /* c8 ignore start */
       } else {
         // deno-coverage-ignore-start
-        throw new UnsupportedRuntimeError(
-          'syncSync',
-          RUNTIME,
-          'filesystem operations are unavailable in this runtime',
-        );
+        return __unsupportedFs('syncSync');
         // deno-coverage-ignore-stop
       }
       /* c8 ignore stop */
@@ -4673,11 +4483,7 @@ export const openFile: (
       /* c8 ignore start */
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'openFile',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('openFile');
       // deno-coverage-ignore-stop
     }
     /* c8 ignore stop */
@@ -4824,11 +4630,7 @@ export const openFileSync: (
       /* c8 ignore start */
     } else {
       // deno-coverage-ignore-start
-      throw new UnsupportedRuntimeError(
-        'openFileSync',
-        RUNTIME,
-        'filesystem operations are unavailable in this runtime',
-      );
+      return __unsupportedFs('openFileSync');
       // deno-coverage-ignore-stop
     }
     /* c8 ignore stop */
