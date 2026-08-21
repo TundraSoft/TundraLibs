@@ -275,12 +275,27 @@ store-injection is the one breaking change and must land before release.
   (the stored file's `type` is now server-derived from the validated
   extension, not the client's unverified `value.type`). The comprehensive
   resolver the static-serving item needs is now in place.
-- **CLI — project scaffolder + upgrade.** A `create`-style initializer,
-  Fresh-flavoured: `deno run -Ar jsr:@tundralibs/rapid/init` lays down a
-  new project's folder structure (app entry, config, a sample module,
-  tasks), and an `upgrade` command bumps the rapid version / migrates
-  scaffolding. This is a scaffolding tool, NOT a route inspector — the
-  live wired-surface view lives in the dashboard item below.
+- **CLI — scaffolder, `modules` barrel generator, build, health.** A
+  Fresh-flavoured `deno run -Ar jsr:@tundralibs/rapid/init` lays down a
+  new project (app entry, config, a sample module, tasks) and `upgrade`
+  bumps the rapid version / migrates scaffolding. Plus:
+  - **`modules` — generate `modules/mod.ts`.** The barrel is the ONE
+    module-loading input rapid supports at runtime (see the DI items
+    below: `initModules({ modules: [ns] })` takes static namespaces so the
+    graph stays bundler-/Workers-safe and typed). The generator does the
+    filesystem work at build time: walk the folder with include/exclude
+    globs (skip tests/benches/`_`-prefixed/dot files/fixtures), import each
+    candidate to confirm it exports a decorated module class, emit sorted
+    `export { X } from './X.ts'` lines under a "generated — do not edit"
+    header, idempotent; `--check` fails CI when the barrel is stale (same
+    pattern as the repo's own `workspace:sync --check`). UNTIL THIS EXISTS
+    the barrel is hand-written (two lines in the blog example).
+  - **`build`** — bundle/compile the app for its deploy target (Deno
+    Deploy, Workers via a fetch adapter, a Node bundle), regenerating the
+    barrel first.
+  - **`health`** — hit a running app's `healthCheck` path (+ metrics) from
+    the terminal; a CI/ops smoke.
+    Not a route inspector — the live wired-surface view is the dashboard.
 - **Live dev dashboard (TUI).** When the app runs directly in
   `DEVELOPMENT`, replace the plain log spew with a live terminal
   dashboard: an ASCII rAPId banner; a header strip (host:port, total
@@ -291,6 +306,10 @@ store-injection is the one breaking change and must land before release.
   the full stream) so the window stays legible. `PRODUCTION` keeps plain
   structured (JSON-line) logs — no TUI. Consumes the metrics item's live
   feed and the decorator registry for the counts.
+  In DEVELOPMENT it also WATCHES the modules folder and regenerates the
+  `modules/mod.ts` barrel on change (the CLI `modules` generator, wired to
+  a watcher), so "drop a file in `modules/`" stays live without a runtime
+  directory walker.
 - **Metrics collection.** First-class request/invocation metrics
   (counts, latency histograms, in-flight, status classes) per transport.
   WIRE, don't reinvent: compat's `WebServer` already tracks
@@ -306,30 +325,47 @@ store-injection is the one breaking change and must land before release.
   publish/subscribe frames + a pluggable `PubSubAdapter` for cross-process
   fan-out). Needed for any server-initiated broadcast (e.g. a "new
   comment" fan-out to subscribers).
-- **DI capability — register app-provided service instances cleanly.**
-  A real capability, not example polish: an app needs to hand ready-built
-  instances (a composed `norm.use(schema)` handle, the Application's
-  logger, config, cache, …) to modules via `inject()`, and any of them is
-  OPTIONAL (an app may not use norm; may not want the Application's
-  Slogger). Today doctor registers CLASSES (`prescribe(Class, {factory})`
-  with a marker class for a value token) — this smooths that into a
-  first-class "register THIS instance under this token" path. Also the
-  norm angle: compose `norm.use(schema)` ONCE and inject the ready handle
-  (not the `Norm` instance + per-module `use()`, which recompiles the
-  registry each call). Likely a small `@tundralibs/doctor` addition, not
-  rapid-only.
-- **Standard base module — canonical module authoring pattern.** An
-  (opt-in) abstract class modules extend that standardizes how a module
-  is written and wired: the shared injected dependencies exposed via
-  `protected` accessors — the db handle, a **request-scoped logger
-  inherited from the Application** (not a doctor singleton), config, and
-  common helpers — so every module is authored the same way instead of
-  re-declaring `inject()` fields. Grew out of the `_scratch` module
-  experiments. Opt-in: rapid still accepts any instance with decorated
-  methods, so the base is a convenience/standard, not a requirement —
-  keep the decorated methods on the subclass and verify metadata-only
-  decorators still register through inheritance (they key on the method
-  function).
+- **DI capability — `label` + `stock` in doctor. LOCKED, IN PROGRESS**
+  (branch `feat/doctor-stock-labels`, own worktree — one package per
+  branch). Register ready-made VALUES under typed labels with no
+  `declare module` augmentation: `const Db = label<BlogDb>('Db')` →
+  `Doctor.stock(Db, norm.use(BlogSchema))` → `inject(Db)` (typed). Value
+  form = implicitly SINGLETON; factory form `stock(L, { mode, factory })`
+  gets all three modes via the existing engine (SCOPED = explicit scope
+  name + `discharge`, NOT an ambient per-request scope; async factories
+  unsupported by design — await, then stock). Also `inject(Class)`,
+  `Doctor.has()`, `revoke(label)`, a duplicate-name guard. Compose
+  `norm.use(schema)` ONCE at boot and stock the handle (no per-module
+  `use()` recompiles). Labels are the primitive; a central registry is a
+  userland pattern over them.
+- **Standard base module + `initModules`. LOCKED, BUILDING (rapid).**
+  - `RapidModule` — opt-in abstract base exposing `protected log`
+    (the Application's Slogger: request-correlated inside a rapid
+    invocation via ambient, plain outside) and `protected config`. State
+    lives in a rapid-side **WeakMap side table** (like the decoration
+    registry) — nothing stored on the instance, and NO `app` handle
+    (modules must not reach the framework's control surface). Not
+    attached → throw `RAPID_CONFIG`; **never a silent fallback logger**
+    (it would be a second, divergent logging config). Apps extend it with
+    their own deps: `abstract class BaseModule extends RapidModule {
+    protected db = inject(Db) }`.
+  - `initModules(context, { modules: [ns | instance] })` — the ONE
+    bootstrap; `app.modules(...)` calls it then mounts; `app.module(
+    ...instances)` stays as the sync typed path. `context` is either a
+    ready `{ config, log }` or plain application options, in which case
+    rapid builds config + the Slogger through the SAME builder
+    `Application`'s constructor uses (factored, not duplicated) — full
+    parity for standalone/test initialization. Sources are STATIC
+    NAMESPACES (the `modules/mod.ts` barrel) or instances — no runtime
+    path walking (that's the CLI generator), so it is identical on
+    Workers. Scans exports for decorated classes, skips abstract/
+    undecorated ones, **constructs with zero args** (the one amendment to
+    "rapid never calls `new`": zero-arg construction of a discovered
+    module class only — anything needing ctor args is passed as an
+    instance; `Class.length > 0` → `RAPID_CONFIG`). Returns a record
+    keyed by EXPORT name, typed via a mapped type over the namespace
+    (abstract + non-zero-arg classes filtered at the type level too), so
+    `const { Posts } = await initModules(...)` is fully typed.
 - **Testing helper (`@tundralibs/rapid/testing`).** First-class module/
   route testing without a socket or a bound port: register fakes for the
   injected services and drive a module method or a route through the
