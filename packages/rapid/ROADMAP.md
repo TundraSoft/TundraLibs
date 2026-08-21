@@ -494,10 +494,45 @@ store-injection is the one breaking change and must land before release.
     and a nullable `app.cluster` slot the cluster module fills. Ship both
     in 1.0 (forward-compatible); the master/worker modules + gateway are
     the post-1.0 build.
-  - **Fleet-management surface** (the master's feature set — registry,
-    control actions [drain / trigger-job / reload / rotate cron-leader],
-    version & build inventory + drift, a minimal web UI over the Simple UI
-    module): capability list under research.
+  - **Capability map (survey 2026-08-22 — most of it composes).**
+    `@tundralibs/rpc` already supplies the whole worker↔manager channel —
+    `Server`/`Client`, `channel` + `publish` fan-out, `connections` (live
+    fleet), the `upgrade` auth hook, auto-reconnect — and because the
+    master IS the coordinator we skip leader-election / atomic-lease /
+    presence entirely (cacher has no `NX`/scan; we don't need it).
+    **COMPOSE** = exists today, **BUILD** = new:
+    - Channel + auth — **COMPOSE** (rpc `upgrade` + `crypt` HMAC/JWT +
+      `pact` bitmask per command).
+    - Registration / heartbeat / presence — **COMPOSE** (rpc
+      `onOpen`/`onClose`/`connections` + a cronus heartbeat); package it.
+    - Cron-leader designation + `onlyIfCronLeader()` middleware +
+      `ClusterSnapshot` collation & broadcast — **BUILD** (small; no lease).
+    - Telemetry gateway — worker log-tail push = **BUILD** a ~30-line
+      `AbstractHandler` → rpc `Client.publish` handler (slogger's
+      `HTTPHandler` proves the bounded drop-queue; `MemoryHandler` is the
+      local ring); manager ingest → transform (redact/sample/dedup) →
+      fan-out = **BUILD** the pipeline, forwarding **COMPOSES**
+      (`HTTPHandler`/`TCPHandler`/`restler` as sink functions).
+    - Fleet `/metrics` — **BUILD** a small aggregator (`metro-man.collect`
+      `('PROMETHEUS')` gives the text; rapid's `metrics` getter is
+      serialize-safe). Traces → **direct to the OTLP collector**, never the
+      manager (**COMPOSE**, `tracer` OTLP).
+    - Control actions (drain / trigger-job / reload-config /
+      rotate-leader) + version & drift inventory + health rollup —
+      **BUILD** (rpc commands; `cronus.trigger`, rapid `triggerJob` /
+      `healthCheck`).
+    - Views — `/cluster` JSON + the fleet TUI (the frozen console reading
+      `app.cluster`) + a minimal web UI (`serveStatic` / `ctx.html` + the
+      Simple UI module) — **BUILD** (assembly, no new framework).
+  - **Forward capabilities (later):** drain-aware rolling deploys,
+    fleet-wide cron pause / remote trigger, config & feature-flag
+    broadcast, alerting webhooks (dedup + fleet context + `restler`), a TUI
+    `reqId` → trace jump (ids already flow via `ambient` / `tracer`), and —
+    out of scope now — multi-manager HA via rpc's Redis `PubSubAdapter`.
+  - **Net new build surface (everything else composes):** the two core
+    seams (`app.instanceId`, `app.cluster`), the WS log-tail handler + the
+    manager pipeline, a `/metrics` aggregator, designation +
+    `onlyIfCronLeader`, and the views.
   - **Rejected:** worker-side leader election / peer mesh, cacher-lease,
     lockfile / unix-socket coordination — the static master removes the
     need. Route sharing stays out of scope.
