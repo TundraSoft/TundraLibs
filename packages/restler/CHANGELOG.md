@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.5...restler-v1.1.6) (2026-08-21)
+
+
+### Refactoring
+
+* **restler:** one exported type per file ([#496](https://github.com/TundraSoft/TundraLibs/issues/496)) ([a108b0a](https://github.com/TundraSoft/TundraLibs/commit/a108b0ae77367cb84e5b022c9cdfa1f2f425afd9))
+
 ## [1.1.5](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.4...restler-v1.1.5) (2026-08-19)
 
 
