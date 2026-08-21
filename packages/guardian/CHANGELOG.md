@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.3.0...guardian-v1.3.1) (2026-08-21)
+
+
+### Documentation
+
+* **guardian:** document Workers/browser support and neutralize Deno-only examples ([#501](https://github.com/TundraSoft/TundraLibs/issues/501)) ([3309a2a](https://github.com/TundraSoft/TundraLibs/commit/3309a2ad2ebeeaaf9c719e0992981f20cc379fda))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.2.0...guardian-v1.3.0) (2026-08-20)
 
 

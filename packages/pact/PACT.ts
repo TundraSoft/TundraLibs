@@ -32,7 +32,7 @@
  */
 
 import { fetch as compatFetch } from '@tundralibs/compat/fetch';
-import { isDeno } from '@tundralibs/compat/runtime';
+import { unrefTimer } from '@tundralibs/compat/runtime';
 import { hash, hkdf } from '@tundralibs/crypt';
 import {
   decodeJWT as cryptDecodeJWT,
@@ -49,7 +49,7 @@ import { nanoID } from '@tundralibs/id';
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import { Groups } from './Groups.ts';
 import { Permissions } from './Permissions.ts';
-import { OAuthClient } from './oauth/OAuthClient.ts';
+import { OAuthClient } from './oauth/mod.ts';
 import { PactDefinitionError, PactTokenError } from './errors/mod.ts';
 import type {
   AuthorizationUrlOptions,
@@ -976,13 +976,10 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
         } catch { /* swallow listener errors on the detached timer path */ }
       });
     }, interval);
-    // Never hold the process open: Node/Bun timer handles expose unref();
-    // Deno's handle is a plain number, so use Deno.unrefTimer instead.
-    (timer as unknown as { unref?: () => void }).unref?.();
-    if (isDeno) {
-      (globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
-        .Deno?.unrefTimer?.(timer as unknown as number);
-    }
+    // Never hold the process open. compat's `unrefTimer` handles the split
+    // between Node/Bun handles (which expose `.unref()`) and Deno's numeric
+    // handle (unref'd via `Deno.unrefTimer`), and no-ops where neither exists.
+    unrefTimer(timer);
     this.__syncTimer = timer;
   }
 
