@@ -7,7 +7,7 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { Doctor, inject } from './mod.ts';
+import { Doctor, inject, label } from './mod.ts';
 
 class Config {
   readonly appName = 'demo';
@@ -17,11 +17,15 @@ class Session {
   readonly id = crypto.randomUUID();
 }
 
+type BlogDb = { repo(name: string): string };
+const Db = label<BlogDb>('Db');
+
 // Stand in for the generated registry so `inject('Config')` is typed.
 declare module './mod.ts' {
   interface VialRegistry {
     Config: Config;
     Session: Session;
+    Db: BlogDb; // a stocked label, reachable by string once declared here
   }
 }
 
@@ -56,6 +60,48 @@ describe('inject / dispenseByName', () => {
     Doctor.prescribe(Config, 'SINGLETON');
     Doctor.reset();
     asserts.assertThrows(() => Doctor.dispenseByName('Config'));
+  });
+
+  describe('by label and by class', () => {
+    it('inject(label) returns the stocked value, typed by the label', () => {
+      Doctor.reset();
+      const db: BlogDb = { repo: (name) => `repo:${name}` };
+      Doctor.stock(Db, db);
+      class Posts {
+        db = inject(Db);
+      }
+      const posts = new Posts();
+      asserts.assertStrictEquals(posts.db, db);
+      asserts.assertEquals(posts.db.repo('posts'), 'repo:posts'); // typed access
+    });
+
+    it('inject(Class) returns the registered instance, typed as the class', () => {
+      Doctor.reset();
+      Doctor.prescribe(Config, 'SINGLETON');
+      const cfg = inject(Config);
+      asserts.assertEquals(cfg.appName, 'demo'); // typed access
+      asserts.assertStrictEquals(cfg, Doctor.dispense(Config));
+    });
+
+    it('inject(string) reaches a stocked label through the name index', () => {
+      Doctor.reset();
+      const db: BlogDb = { repo: (name) => name };
+      Doctor.stock(Db, db);
+      asserts.assertStrictEquals(inject('Db'), db);
+    });
+
+    it('inject(label) is typed by the label, not unknown', () => {
+      Doctor.reset();
+      Doctor.stock(label<number>('n'), 1);
+      // @ts-expect-error — a number label never yields a string
+      const wrong: string = inject(label<number>('n'));
+      asserts.assertEquals<unknown>(wrong, 1);
+    });
+
+    it('throws UnregisteredVialError for an unstocked label', () => {
+      Doctor.reset();
+      asserts.assertThrows(() => inject(label('Nope')));
+    });
   });
 
   describe('injection idioms', () => {

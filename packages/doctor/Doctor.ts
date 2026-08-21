@@ -1,7 +1,7 @@
 /**
- * @fileoverview The Injector — process-wide registry for vials, plus
- * the singleton `Doctor` instance every decorator and consumer
- * talks to.
+ * @fileoverview The Injector — process-wide registry for vials and
+ * stocked labels, plus the singleton `Doctor` instance every decorator
+ * and consumer talks to.
  *
  * @module
  */
@@ -14,15 +14,48 @@ import {
   ScopeRequiredError,
   UnregisteredVialError,
 } from './errors/mod.ts';
-import type { Vial, VialModes, VialOptions } from './types/mod.ts';
+import type {
+  Label,
+  StockOptions,
+  Vial,
+  VialModes,
+  VialOptions,
+} from './types/mod.ts';
 
 /**
- * Internal — one registration record per registered class.
+ * Internal — one registration record per registered class or label.
+ * `factory` always exists: {@link Injector.prescribe} wraps a bare
+ * `new` for classes registered without one, so the lifecycle engine
+ * never has to know which kind of key it is serving.
  */
 type Registration = {
   mode: VialModes;
-  factory?: () => unknown;
+  factory: () => unknown;
 };
+
+/**
+ * Internal — what the registry is keyed by: a class (by identity) or
+ * a label (by its name, so two `label()` calls with the same name
+ * address the same entry).
+ */
+type Key = Vial | string;
+
+const VIAL_MODES: ReadonlySet<string> = new Set([
+  'SINGLETON',
+  'SCOPED',
+  'TRANSIENT',
+]);
+
+/**
+ * Distinguish the factory form of {@link Injector.stock} from a plain
+ * value: an object carrying a valid `mode` and a function `factory`.
+ */
+function isStockOptions(value: unknown): value is StockOptions {
+  return typeof value === 'object' && value !== null &&
+    'mode' in value && typeof value.mode === 'string' &&
+    VIAL_MODES.has(value.mode) &&
+    'factory' in value && typeof value.factory === 'function';
+}
 
 /**
  * The ambient **operation scope** stack. Every Doctor operation
@@ -57,12 +90,13 @@ export function _ambientScope(): string | undefined {
 
 /**
  * Process-wide dependency-injection registry. Holds the registration
- * record per class, the singleton instance cache, and the per-scope
- * instance maps that back SCOPED resolution.
+ * record per class or label, the singleton instance cache, and the
+ * per-scope instance maps that back SCOPED resolution.
  *
- * Storage is keyed by the constructor identity (the class itself),
- * not by `constructor.name`, so two classes that happen to share a
- * name never collide.
+ * Classes are keyed by constructor identity (the class itself), not by
+ * `constructor.name`, so two classes that happen to share a name never
+ * collide. Labels ({@link stock}) are keyed by **name** — that is what
+ * makes `stock(label<Db>('Db'), db)` and `inject('Db')` meet.
  *
  * Injection happens **during construction**: `inject()` field
  * initializers and constructor default parameters pull their own
@@ -75,21 +109,23 @@ export function _ambientScope(): string | undefined {
  */
 @Singleton
 class Injector {
-  /** Registered vials keyed by class identity. */
-  private readonly __services = new Map<Vial, Registration>();
+  /** Registrations — classes keyed by identity, labels by name. */
+  private readonly __services = new Map<Key, Registration>();
   /**
-   * Class name → class, the index behind {@link dispenseByName}. Lets
-   * {@link inject} resolve a vial by its token (the class name) without
-   * importing the class. Last registration of a given name wins.
+   * Name → key, the index behind {@link dispenseByName}. A class is
+   * indexed under its class name, a label under its own name, so
+   * {@link inject} can resolve either by token without importing
+   * anything. Among classes the last registration of a given name
+   * wins; a label holds its name exclusively (see {@link stock}).
    */
-  private readonly __byName = new Map<string, Vial>();
-  /** Cached SINGLETON instances keyed by class identity. */
-  private readonly __singletonInstances = new Map<Vial, unknown>();
-  /** Scope-name → (class → instance). */
-  private readonly __scopes = new Map<string, Map<Vial, unknown>>();
+  private readonly __byName = new Map<string, Key>();
+  /** Cached SINGLETON instances. */
+  private readonly __singletonInstances = new Map<Key, unknown>();
+  /** Scope-name → (key → instance). */
+  private readonly __scopes = new Map<string, Map<Key, unknown>>();
   /**
-   * Vials whose resolution is currently in flight. Re-entering
-   * {@link dispense} for a type already present here means the
+   * Keys whose resolution is currently in flight. Re-entering
+   * {@link dispense} for a key already present here means the
    * dependency graph has a cycle that resolution cannot break, so a
    * {@link CircularDependencyError} is thrown instead of recursing
    * until the stack overflows.
@@ -102,7 +138,7 @@ class Injector {
    * (`get b() { return this.__b ??= inject('B'); }`), which defers
    * its resolution until first access, after both instances exist.
    */
-  private readonly __resolving = new Set<Vial>();
+  private readonly __resolving = new Set<Key>();
 
   /**
    * Register a class with the given lifecycle. Short form takes the
@@ -116,7 +152,7 @@ class Injector {
    * @param modeOrOptions - Either a mode literal or a {@link VialOptions}.
    *
    * @throws {@link DuplicateVialError} When `type` is already
-   *   registered.
+   *   registered, or a label is already stocked under its class name.
    */
   public prescribe(type: Vial, mode: VialModes): void;
   public prescribe(type: Vial, options: VialOptions): void;
@@ -130,30 +166,108 @@ class Injector {
         { vialName: type.name },
       );
     }
-    const reg: Registration = typeof modeOrOptions === 'string'
-      ? { mode: modeOrOptions }
-      : { mode: modeOrOptions.mode, factory: modeOrOptions.factory };
-    this.__services.set(type, reg);
+    if (typeof this.__byName.get(type.name) === 'string') {
+      throw new DuplicateVialError(
+        `Vial '${type.name}' collides with the label stocked under that name`,
+        { vialName: type.name },
+      );
+    }
+    const mode = typeof modeOrOptions === 'string'
+      ? modeOrOptions
+      : modeOrOptions.mode;
+    const factory = typeof modeOrOptions === 'string'
+      ? undefined
+      : modeOrOptions.factory;
+    this.__services.set(type, {
+      mode,
+      factory: factory ?? (() => Reflect.construct(type, [])),
+    });
     this.__byName.set(type.name, type);
   }
 
   /**
-   * Revoke the registration for `type`, also dropping any cached
-   * SINGLETON instance and per-scope entries. Returns `true` when
-   * a registration was actually removed.
+   * Stock a ready-made value — or a labelled factory with a lifecycle —
+   * under a {@link Label} (or bare name), so `inject(label)` and
+   * `inject('name')` can hand it out. A vial is made to order from a
+   * class; a stocked item arrives already built.
+   *
+   * **Value form** — `stock(label, value)` hands out that very value on
+   * every dispense: SINGLETON by nature. A function is a value here
+   * too — it is returned as-is, never called.
+   *
+   * **Factory form** — `stock(label, { mode, factory })` runs `factory`
+   * through the same lifecycle engine as classes: once and cached for
+   * SINGLETON, once per scope name for SCOPED (dropped by
+   * {@link discharge}), on every dispense for TRANSIENT. A value whose
+   * own shape is `{ mode, factory }` — a valid mode and a function — is
+   * taken as this form.
+   *
+   * Labels are keyed by **name**: `stock(label<Db>('Db'), db)`,
+   * `inject('Db')` and {@link dispenseByName} all address the same
+   * entry. Factories are synchronous by design (injection runs inside
+   * field initializers): `await` asynchronous setup first, then stock
+   * the result.
+   *
+   * @param labelOrName - The label, or its bare name, to stock under.
+   * @param valueOrOptions - The value itself, or {@link StockOptions}.
+   *
+   * @throws {@link DuplicateVialError} When the name is already taken —
+   *   by an earlier `stock`, or by a prescribed class of that name.
    */
-  public revoke(type: Vial): boolean {
-    const removed = this.__services.delete(type);
-    this.__singletonInstances.delete(type);
-    for (const scopeMap of this.__scopes.values()) scopeMap.delete(type);
-    // Only drop the name entry if it still points at this class — a
-    // later same-named registration may have overwritten it.
-    if (this.__byName.get(type.name) === type) this.__byName.delete(type.name);
+  public stock<T>(labelOrName: Label<T> | string, value: T): void;
+  public stock<T>(
+    labelOrName: Label<T> | string,
+    options: StockOptions<T>,
+  ): void;
+  public stock<T>(
+    labelOrName: Label<T> | string,
+    valueOrOptions: T | StockOptions<T>,
+  ): void {
+    const name = this.__nameOf(labelOrName);
+    const holder = this.__byName.get(name);
+    if (holder !== undefined) {
+      throw new DuplicateVialError(
+        typeof holder === 'string'
+          ? `Label '${name}' is already stocked`
+          : `Label '${name}' collides with the vial prescribed under that name`,
+        { vialName: name },
+      );
+    }
+    const reg: Registration = isStockOptions(valueOrOptions)
+      ? { mode: valueOrOptions.mode, factory: valueOrOptions.factory }
+      : { mode: 'SINGLETON', factory: () => valueOrOptions };
+    this.__services.set(name, reg);
+    this.__byName.set(name, name);
+  }
+
+  /**
+   * Revoke the registration behind `target` — a class (by identity),
+   * a label, or a bare name (whatever {@link dispenseByName} would
+   * resolve it to) — also dropping any cached SINGLETON instance and
+   * per-scope entries. Returns `true` when a registration was actually
+   * removed.
+   *
+   * This is how a test swaps in a fake without {@link reset}:
+   * `Doctor.revoke(Db); Doctor.stock(Db, fakeDb);`.
+   */
+  public revoke(target: Vial | Label | string): boolean {
+    const key = typeof target === 'function'
+      ? target
+      : this.__byName.get(this.__nameOf(target));
+    if (key === undefined) return false;
+    const removed = this.__services.delete(key);
+    this.__singletonInstances.delete(key);
+    for (const scopeMap of this.__scopes.values()) scopeMap.delete(key);
+    // Only drop the name entry if it still points at this key — a
+    // later same-named class registration may have overwritten it.
+    const name = this.__nameOf(key);
+    if (this.__byName.get(name) === key) this.__byName.delete(name);
     return removed;
   }
 
   /**
-   * Hand out an instance of a registered vial, honouring its mode.
+   * Hand out an instance of a registered vial — or the item stocked
+   * under a label — honouring its mode.
    *
    * The instance wires itself while constructing: its `inject()`
    * field initializers and constructor default parameters resolve
@@ -171,125 +285,50 @@ class Injector {
    * dependency under unique per-request scope names does not leak one
    * scope per failed request.
    *
-   * @param type - The vial class to resolve.
-   * @param scope - Scope name. Required for SCOPED vials; ignored
+   * @param vialOrLabel - The vial class, or the {@link Label}, to
+   *   resolve.
+   * @param scope - Scope name. Required for SCOPED entries; ignored
    *   for SINGLETON; becomes the ambient fallback for the
    *   dependencies of whatever this call constructs.
    *
-   * @throws {@link UnregisteredVialError} When `type` was never
-   *   registered.
-   * @throws {@link ScopeRequiredError} When `type` is SCOPED and
+   * @throws {@link UnregisteredVialError} When `vialOrLabel` was never
+   *   registered / stocked.
+   * @throws {@link ScopeRequiredError} When the entry is SCOPED and
    *   no `scope` was provided.
-   * @throws {@link CircularDependencyError} When resolving `type`
+   * @throws {@link CircularDependencyError} When resolving the entry
    *   re-enters its own (still-in-flight) resolution — e.g. two
    *   eager `inject()` initializers that point at each other, or a
    *   TRANSIENT vial that depends on itself, directly or
    *   transitively.
    */
   public dispense<T = unknown>(
-    type: Vial<T>,
+    vialOrLabel: Vial<T> | Label<T>,
     scope?: string,
   ): T {
-    return this.__run(scope, () => this.__dispense<T>(type, scope));
-  }
-
-  private __dispense<T = unknown>(
-    type: Vial<T>,
-    scope?: string,
-  ): T {
-    const reg = this.__services.get(type);
-    if (!reg) {
-      throw new UnregisteredVialError(
-        `No service registered for ${type.name}`,
-        { vialName: type.name },
-      );
-    }
-
-    switch (reg.mode) {
-      case 'SINGLETON': {
-        // `has`, not `!== undefined`: a factory may legitimately
-        // produce a falsy instance, and that result must still cache.
-        if (this.__singletonInstances.has(type)) {
-          return this.__singletonInstances.get(type) as T;
-        }
-        this.__guardCycle(type);
-        this.__resolving.add(type);
-        try {
-          // Construction IS injection: by the time this returns, the
-          // instance's eager doses have resolved. Cache only on
-          // success, so a failed construction retries next time.
-          const instance = this.__instantiate<T>(type, reg);
-          this.__singletonInstances.set(type, instance);
-          return instance;
-        } finally {
-          this.__resolving.delete(type);
-        }
-      }
-      case 'SCOPED': {
-        if (!scope) {
-          throw new ScopeRequiredError(
-            `Vial '${type.name}' is SCOPED and requires a scope name`,
-            { vialName: type.name },
-          );
-        }
-        let scopeMap = this.__scopes.get(scope);
-        // The map has to be reachable from `__scopes` before
-        // construction so the {@link __run} frame that created this
-        // scope can drop it on failure — including this map, whether
-        // it is left empty or still holds healthy SCOPED siblings —
-        // no matter how deeply that frame is nested inside other
-        // operations.
-        if (!scopeMap) {
-          scopeMap = new Map();
-          this.__scopes.set(scope, scopeMap);
-        }
-        // `has`, not `!== undefined` — see the SINGLETON case.
-        if (scopeMap.has(type)) return scopeMap.get(type) as T;
-        this.__guardCycle(type);
-        this.__resolving.add(type);
-        try {
-          const instance = this.__instantiate<T>(type, reg);
-          scopeMap.set(type, instance);
-          return instance;
-        } finally {
-          this.__resolving.delete(type);
-        }
-      }
-      case 'TRANSIENT': {
-        // TRANSIENT instances are never cached, so a cycle through
-        // one can never terminate — detect it and throw rather than
-        // overflowing the stack.
-        this.__guardCycle(type);
-        this.__resolving.add(type);
-        try {
-          return this.__instantiate<T>(type, reg);
-        } finally {
-          this.__resolving.delete(type);
-        }
-      }
-    }
+    return this.__dispenseKey<T>(this.__keyOf(vialOrLabel), scope);
   }
 
   /**
-   * Resolve a registered vial by its **name** (the class name), the
-   * token {@link inject} uses. Backs `inject('ClassName')` so consumers
-   * can resolve a dependency without importing its class.
+   * Resolve a registered entry by its **name** — a class name, or a
+   * label's name — the token {@link inject} uses. Backs
+   * `inject('Token')` so consumers can resolve a dependency without
+   * importing its class or label.
    *
-   * @param name - The registered class's name.
+   * @param name - The registered class's name, or the label's name.
    * @param scope - Scope name, forwarded to {@link dispense}.
    *
-   * @throws {@link UnregisteredVialError} When no vial is registered
+   * @throws {@link UnregisteredVialError} When nothing is registered
    *   under `name`.
    */
   public dispenseByName<T = unknown>(name: string, scope?: string): T {
-    const type = this.__byName.get(name);
-    if (!type) {
+    const key = this.__byName.get(name);
+    if (key === undefined) {
       throw new UnregisteredVialError(
         `No service registered under the name '${name}'`,
         { vialName: name },
       );
     }
-    return this.dispense(type, scope) as T;
+    return this.__dispenseKey<T>(key, scope);
   }
 
   /**
@@ -319,24 +358,23 @@ class Injector {
   public resolve<T>(type: Vial<T>, scope?: string): T {
     return this.__run(scope, () => {
       const reg = this.__services.get(type);
-      return reg?.factory
-        ? reg.factory() as T
-        : Reflect.construct(type, []) as T;
+      return reg ? reg.factory() as T : Reflect.construct(type, []) as T;
     });
   }
 
   /**
-   * Boot-time preflight: eagerly dispense every registered SINGLETON
-   * so that a missing dependency or a throwing factory fails **now**,
-   * loudly, instead of on first use deep inside a request. The
-   * intended counterweight to lazy `inject()` getters, whose
-   * failures otherwise surface only at first access.
+   * Boot-time preflight: eagerly dispense every registered SINGLETON —
+   * prescribed classes and stocked labels alike — so that a missing
+   * dependency or a throwing factory fails **now**, loudly, instead of
+   * on first use deep inside a request. The intended counterweight to
+   * lazy `inject()` getters, whose failures otherwise surface only at
+   * first access.
    *
-   * SCOPED and TRANSIENT vials cannot be preflighted — the one has no
-   * scope to resolve under yet, the other has no cache for the check
-   * to warm — so they are skipped.
+   * SCOPED and TRANSIENT entries cannot be preflighted — the one has
+   * no scope to resolve under yet, the other has no cache for the
+   * check to warm — so they are skipped.
    *
-   * @returns The number of SINGLETON vials dispensed.
+   * @returns The number of SINGLETON entries dispensed.
    *
    * @throws Whatever the first failing dispense throws
    *   ({@link UnregisteredVialError}, {@link CircularDependencyError},
@@ -344,9 +382,9 @@ class Injector {
    */
   public checkup(): number {
     let checked = 0;
-    for (const [type, reg] of this.__services) {
+    for (const [key, reg] of this.__services) {
       if (reg.mode !== 'SINGLETON') continue;
-      this.dispense(type);
+      this.__dispenseKey(key);
       checked++;
     }
     return checked;
@@ -354,20 +392,21 @@ class Injector {
 
   /**
    * Drop every instance stored under `scope`. Returns `true` when a
-   * scope was actually removed. Vial registrations are untouched.
+   * scope was actually removed. Registrations are untouched.
    */
   public discharge(scope: string): boolean {
     return this.__scopes.delete(scope);
   }
 
-  /** Drop every scope — vial registrations are untouched. */
+  /** Drop every scope — registrations are untouched. */
   public dischargeAll(): void {
     this.__scopes.clear();
   }
 
   /**
-   * Drop every registration, every singleton instance, and every
-   * scope. Intended for test isolation between unrelated cases.
+   * Drop every registration (classes and labels), every singleton
+   * instance, and every scope. Intended for test isolation between
+   * unrelated cases.
    */
   public reset(): void {
     this.__services.clear();
@@ -383,6 +422,18 @@ class Injector {
   /** Whether a vial is currently registered for `type`. */
   public knows(type: Vial): boolean {
     return this.__services.has(type);
+  }
+
+  /**
+   * Whether something can be dispensed for `target` — a class
+   * registered by identity, or a label / bare name present in the
+   * name index. The existence check for optional services:
+   * `Doctor.has(Db) ? inject(Db) : undefined`.
+   */
+  public has(target: Vial | Label | string): boolean {
+    return typeof target === 'function'
+      ? this.__services.has(target)
+      : this.__byName.has(this.__nameOf(target));
   }
 
   /**
@@ -428,35 +479,126 @@ class Injector {
   }
 
   /**
-   * Construct a bare instance of `type`, honouring its `factory` if
-   * one was registered. The instance injects itself while
-   * constructing (`inject()` field initializers and constructor
-   * default parameters); there is no separate injection step.
+   * {@link dispense} over an internal key — the one entry point
+   * {@link dispense}, {@link dispenseByName} and {@link checkup} share.
    *
    * @internal
    */
-  private __instantiate<T>(type: Vial<T>, reg: Registration): T {
-    return reg.factory ? reg.factory() as T : Reflect.construct(type, []) as T;
+  private __dispenseKey<T>(key: Key, scope?: string): T {
+    return this.__run(scope, () => this.__dispense<T>(key, scope));
+  }
+
+  private __dispense<T>(key: Key, scope?: string): T {
+    const reg = this.__services.get(key);
+    const name = this.__nameOf(key);
+    if (!reg) {
+      throw new UnregisteredVialError(
+        typeof key === 'string'
+          ? `Nothing stocked under label '${key}'`
+          : `No service registered for ${name}`,
+        { vialName: name },
+      );
+    }
+
+    switch (reg.mode) {
+      case 'SINGLETON': {
+        // `has`, not `!== undefined`: a factory may legitimately
+        // produce a falsy instance, and that result must still cache.
+        if (this.__singletonInstances.has(key)) {
+          return this.__singletonInstances.get(key) as T;
+        }
+        this.__guardCycle(key);
+        this.__resolving.add(key);
+        try {
+          // Construction IS injection: by the time this returns, the
+          // instance's eager doses have resolved. Cache only on
+          // success, so a failed construction retries next time.
+          const instance = reg.factory() as T;
+          this.__singletonInstances.set(key, instance);
+          return instance;
+        } finally {
+          this.__resolving.delete(key);
+        }
+      }
+      case 'SCOPED': {
+        if (!scope) {
+          throw new ScopeRequiredError(
+            `${this.__describe(key)} is SCOPED and requires a scope name`,
+            { vialName: name },
+          );
+        }
+        let scopeMap = this.__scopes.get(scope);
+        // The map has to be reachable from `__scopes` before
+        // construction so the {@link __run} frame that created this
+        // scope can drop it on failure — including this map, whether
+        // it is left empty or still holds healthy SCOPED siblings —
+        // no matter how deeply that frame is nested inside other
+        // operations.
+        if (!scopeMap) {
+          scopeMap = new Map();
+          this.__scopes.set(scope, scopeMap);
+        }
+        // `has`, not `!== undefined` — see the SINGLETON case.
+        if (scopeMap.has(key)) return scopeMap.get(key) as T;
+        this.__guardCycle(key);
+        this.__resolving.add(key);
+        try {
+          const instance = reg.factory() as T;
+          scopeMap.set(key, instance);
+          return instance;
+        } finally {
+          this.__resolving.delete(key);
+        }
+      }
+      case 'TRANSIENT': {
+        // TRANSIENT instances are never cached, so a cycle through
+        // one can never terminate — detect it and throw rather than
+        // overflowing the stack.
+        this.__guardCycle(key);
+        this.__resolving.add(key);
+        try {
+          return reg.factory() as T;
+        } finally {
+          this.__resolving.delete(key);
+        }
+      }
+    }
   }
 
   /**
-   * Throw if `type` is already being resolved further up the call
+   * Throw if `key` is already being resolved further up the call
    * stack — for SINGLETON / SCOPED that can only happen while the
    * instance is still constructing (it caches immediately after),
    * and for TRANSIENT it always means an unbreakable cycle.
    *
    * @internal
    *
-   * @throws {@link CircularDependencyError} When `type` is currently
+   * @throws {@link CircularDependencyError} When `key` is currently
    *   in flight.
    */
-  private __guardCycle(type: Vial): void {
-    if (this.__resolving.has(type)) {
+  private __guardCycle(key: Key): void {
+    if (this.__resolving.has(key)) {
+      const name = this.__nameOf(key);
       throw new CircularDependencyError(
-        `Circular dependency detected while resolving '${type.name}'`,
-        { vialName: type.name },
+        `Circular dependency detected while resolving '${name}'`,
+        { vialName: name },
       );
     }
+  }
+
+  /** The registry key for a class (itself) or a label (its name). */
+  private __keyOf(vialOrLabel: Vial | Label): Key {
+    return typeof vialOrLabel === 'function' ? vialOrLabel : vialOrLabel.name;
+  }
+
+  /** The display / index name of a key or label. */
+  private __nameOf(keyOrLabel: Key | Label): string {
+    return typeof keyOrLabel === 'string' ? keyOrLabel : keyOrLabel.name;
+  }
+
+  /** `Vial 'X'` or `Label 'X'`, for error messages. */
+  private __describe(key: Key): string {
+    return typeof key === 'string' ? `Label '${key}'` : `Vial '${key.name}'`;
   }
 }
 
