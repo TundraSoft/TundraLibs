@@ -5,6 +5,8 @@ AES and RSA encryption and decryption using the Web Crypto API.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Table of Contents
 
@@ -20,16 +22,16 @@ The Encrypt module provides symmetric (AES) and asymmetric (RSA) encryption for 
 
 ### Features
 
-| Feature         | Bun | Deno | Node.js |
-| --------------- | --- | ---- | ------- |
-| AES-GCM         | ✅  | ✅   | ✅      |
-| AES-CBC         | ✅  | ✅   | ✅      |
-| AES-CTR         | ✅  | ✅   | ✅      |
-| RSA-OAEP        | ✅  | ✅   | ✅      |
-| 128/192/256-bit | ✅  | ✅   | ✅      |
-| Binary data     | ✅  | ✅   | ✅      |
-| PBKDF2          | ✅  | ✅   | ✅      |
-| HKDF (RFC 5869) | ✅  | ✅   | ✅      |
+| Feature         | Bun | Deno | Node.js | Workers | Browser |
+| --------------- | --- | ---- | ------- | ------- | ------- |
+| AES-GCM         | ✅  | ✅   | ✅      | ✅      | ✅      |
+| AES-CBC         | ✅  | ✅   | ✅      | ✅      | ✅      |
+| AES-CTR         | ✅  | ✅   | ✅      | ✅      | ✅      |
+| RSA-OAEP        | ✅  | ✅   | ✅      | ✅      | ✅      |
+| 128/192/256-bit | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Binary data     | ✅  | ✅   | ✅      | ✅      | ✅      |
+| PBKDF2          | ✅  | ✅   | ✅      | ✅      | ✅      |
+| HKDF (RFC 5869) | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 

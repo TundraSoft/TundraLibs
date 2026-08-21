@@ -22,8 +22,7 @@ import {
   type JWTIssueOptions,
   type JWTPayload,
 } from './types/mod.ts';
-import { signEC, signHMAC, signRSA } from '../sign/mod.ts';
-import type { SigningKey } from '../sign/mod.ts';
+import { signEC, signHMAC, type SigningKey, signRSA } from '../sign/mod.ts';
 import {
   algorithmCurve,
   algorithmFamily,

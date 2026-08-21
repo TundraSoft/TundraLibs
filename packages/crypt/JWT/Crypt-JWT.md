@@ -5,6 +5,8 @@ JSON Web Token creation, verification, decoding, and refresh.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -12,18 +14,18 @@ JWT implementation supporting HMAC, RSA and ECDSA signing algorithms.
 
 ### Features
 
-| Feature              | Bun | Deno | Node.js |
-| -------------------- | --- | ---- | ------- |
-| HS256                | ✅  | ✅   | ✅      |
-| HS512                | ✅  | ✅   | ✅      |
-| RS256                | ✅  | ✅   | ✅      |
-| RS512                | ✅  | ✅   | ✅      |
-| PS256                | ✅  | ✅   | ✅      |
-| ES256                | ✅  | ✅   | ✅      |
-| ES384 / ES512        | ✅  | ✅   | ✅      |
-| Claims               | ✅  | ✅   | ✅      |
-| RFC 9068 `at+jwt`    | ✅  | ✅   | ✅      |
-| `CryptoKey` / JWK in | ✅  | ✅   | ✅      |
+| Feature              | Bun | Deno | Node.js | Workers | Browser |
+| -------------------- | --- | ---- | ------- | ------- | ------- |
+| HS256                | ✅  | ✅   | ✅      | ✅      | ✅      |
+| HS512                | ✅  | ✅   | ✅      | ✅      | ✅      |
+| RS256                | ✅  | ✅   | ✅      | ✅      | ✅      |
+| RS512                | ✅  | ✅   | ✅      | ✅      | ✅      |
+| PS256                | ✅  | ✅   | ✅      | ✅      | ✅      |
+| ES256                | ✅  | ✅   | ✅      | ✅      | ✅      |
+| ES384 / ES512        | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Claims               | ✅  | ✅   | ✅      | ✅      | ✅      |
+| RFC 9068 `at+jwt`    | ✅  | ✅   | ✅      | ✅      | ✅      |
+| `CryptoKey` / JWK in | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ### Algorithms
 
