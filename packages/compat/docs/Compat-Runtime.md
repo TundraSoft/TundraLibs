@@ -298,6 +298,27 @@ if (configMissing) {
 exit(0);
 ```
 
+#### `unrefTimer()`
+
+`unref` a timer handle so it does not, on its own, keep the process
+alive. Node and Bun return a timer object with `.unref()`; Deno returns
+a numeric id unref'd via `Deno.unrefTimer`; on browsers and Cloudflare
+Workers it is a safe no-op. Pass the return of `setTimeout` /
+`setInterval` straight through.
+
+```typescript ignore
+function unrefTimer(handle: unknown): void;
+```
+
+**Example:**
+
+```typescript
+import { unrefTimer } from '@tundralibs/compat/runtime';
+
+const timer = setInterval(() => {}, 60_000);
+unrefTimer(timer); // a background tick that won't hold the process open
+```
+
 > ⚠ Pending I/O is discarded. Prefer letting the event loop drain
 > naturally — reach for `exit` only when you need an explicit status
 > code (CLI tools, soak scripts, fatal-error paths).
