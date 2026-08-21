@@ -381,6 +381,21 @@ store-injection is the one breaking change and must land before release.
   (which already knows `.toOpenAPI()` / `.toJSONSchema()`) — the binders
   were designed as "the OpenAPI raw material." Needs the assembler +
   serving surface, plus a policy for error/response shapes.
+- ✅ **Fetch adapter — DONE 2026-08-21.** `Application.fetch(request,
+  info?)` serves one `Request` → `Response` with no listener: same
+  routes/middleware/context/disclosure as `start()`; `HTTPTransport` split
+  into `prepare()` (routes → router, onions composed once, idempotent) +
+  `listen()`, with `handle(request, remoteAddress)` public. HTTP only —
+  registered socket commands make `fetch()` throw RAPID_CONFIG; jobs are
+  not scheduled (Workers Cron Triggers → `triggerJob`); `address`/`port`/
+  `metrics` stay unset; `start()` after `fetch()` reuses the prepared
+  routes. Unlocks in-process tests without ports, `Deno.serve`/`Bun.serve`
+  embedding, and Cloudflare Workers. MEASURED on workerd (wrangler 4.125):
+  every rapid subpath loads and the module system runs end-to-end.
+  REMAINING for Workers HTTP (waits on the compat PR adding
+  `isWorkers`/`isBrowser` + explicit `UnsupportedRuntimeError`s): skip the
+  upload temp dir on Workers/browser and reject uploads with a clear error
+  (no filesystem there — `serveStatic`/`ctx.serve`/FileHandler likewise).
 - **Auth — DECIDED 2026-08-21: no "auth handoff" in rapid core.** Ship a
   first-party `pact`-backed middleware in the catalog, store-injection
   shaped like `rateLimit`: the caller passes the functions that verify a
@@ -425,5 +440,6 @@ store-injection is the one breaking change and must land before release.
 
 - Browser as a rAPId LISTENER surface — permanently out of scope (no
   server socket). (Distinct from the post-1.0 "Simple UI module", which
-  SERVES a UI to browsers.) Workers support is a preserved option via the
-  transport seam, not a target.
+  SERVES a UI to browsers.) Cloudflare Workers is a best-effort HTTP-only
+  target via `app.fetch()` (see "Fetch adapter" under 1.0.0): no
+  filesystem, no socket commands, jobs through Cron Triggers.

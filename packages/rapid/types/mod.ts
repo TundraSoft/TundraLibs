@@ -11,6 +11,7 @@
 export type { RapidApplicationEvents } from './application/Events.ts';
 export type { RapidApplicationExporterConfig } from './application/ExporterConfig.ts';
 export type { RapidApplicationFactoryOptions } from './application/FactoryOptions.ts';
+export type { RapidApplicationFetchInfo } from './application/FetchInfo.ts';
 export type { RapidApplicationJobMetrics } from './application/JobMetrics.ts';
 export type { RapidApplicationJobsOptions } from './application/JobsOptions.ts';
 export type { RapidApplicationOptions } from './application/Options.ts';

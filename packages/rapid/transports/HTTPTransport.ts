@@ -66,6 +66,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   >();
   /** Composed onion for an unmatched request (global middleware only). */
   private __composedNoMatch?: ComposedHTTPChain<S>;
+  private __prepared = false;
 
   public get address(): string | null {
     return this.__server?.address ?? null;
@@ -91,9 +92,12 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
    * @throws {RapidError} RAPID_CONFIG when a route collides or is
    *   malformed (radrouter's duplicate/conflict detection, wrapped).
    */
-  public async start(): Promise<void> {
-    const server = this._app.option('server')!;
-
+  /**
+   * Routes → router, every onion composed ONCE. Idempotent, and the
+   * only prerequisite of {@link handle} — a listener is optional.
+   */
+  public prepare(): void {
+    if (this.__prepared) return;
     // Routes registered on the app → the router. Collisions are
     // radrouter's loud errors, wrapped into our taxonomy. Each route's
     // onion (app middleware + its own) is composed ONCE here, keyed by
@@ -132,7 +136,13 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     this.__composedNoMatch = compose<S, HTTPContext<S>>(
       [...this._app.middlewares] as unknown as readonly ComposedHTTPChain<S>[],
     );
+    this.__prepared = true;
+  }
 
+  /** Open the listener (TCP or UNIX) and serve through {@link handle}. */
+  public async listen(): Promise<void> {
+    this.prepare();
+    const server = this._app.option('server')!;
     // Websocket commands mount the rpc server INTO this listener (one
     // server, one port, one TLS config) — only when commands exist.
     const websocket = this._app.socketCommands.length > 0
@@ -144,7 +154,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         mode: 'UNIX',
         unixSocketPath: server.unixSocketPath,
         metrics: server.metrics,
-        handler: (request, info) => this.__handle(request, info.remoteAddress),
+        handler: (request, info) => this.handle(request, info.remoteAddress),
         websocket,
       })
       : new WebServer(this._app.option('name'), {
@@ -153,10 +163,14 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         hostname: server.hostname,
         tls: server.tls,
         metrics: server.metrics,
-        handler: (request, info) => this.__handle(request, info.remoteAddress),
+        handler: (request, info) => this.handle(request, info.remoteAddress),
         websocket,
       });
     await this.__server.start();
+  }
+
+  public start(): Promise<void> {
+    return this.listen();
   }
 
   /**
@@ -263,10 +277,21 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     if (server !== undefined) await server.stop(false);
   }
 
-  private __handle(
+  /**
+   * The fetch handler: one `Request` in, one `Response` out, no socket
+   * involved. {@link listen} feeds it from the WebServer;
+   * `Application.fetch()` feeds it directly (Workers, `Deno.serve`,
+   * `Bun.serve`, in-process tests). Requires {@link prepare}.
+   */
+  public handle(
     request: Request,
     remoteAddress: string | null,
   ): Response | Promise<Response> {
+    if (!this.__prepared) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'HTTPTransport.handle() called before prepare()',
+      });
+    }
     const serverOptions = this._app.option('server')!;
     const method = request.method.trim().toUpperCase() as HTTPMethod;
     // `new URL(...).pathname` — NOT a raw substring scan: it also

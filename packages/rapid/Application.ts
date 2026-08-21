@@ -20,6 +20,7 @@ import { buildExporter, buildState, mountModule } from './utils/mod.ts';
 import type {
   RapidApplicationEvents,
   RapidApplicationFactoryOptions,
+  RapidApplicationFetchInfo,
   RapidApplicationJobMetrics,
   RapidApplicationOptions,
   RapidContextState,
@@ -529,6 +530,32 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * Boot-time invariants shared by {@link start} and {@link fetch}.
+   * @throws {RapidError} RAPID_CONFIG on an unsafe option combination.
+   */
+  private __assertBootConfig(): void {
+    if (this.option('stateMode') === 'SHARE') {
+      const candidates: RapidMiddleware[] = [
+        ...this.__middleware,
+        ...this.__routes.flatMap((r) =>
+          r.middlewares as unknown as RapidMiddleware[]
+        ),
+        ...[...this.__socketCommands.values()].flatMap((c) =>
+          c.middlewares as unknown as RapidMiddleware[]
+        ),
+      ];
+      const offender = candidates.find(middlewareUsesStateKey);
+      if (offender !== undefined) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            "stateMode: 'SHARE' is incompatible with a stateKey-writing middleware (responseTimer/requestId) — every invocation would read and write the SAME state object, corrupting per-invocation values (duration, correlation id) under concurrency",
+          details: { stateMode: 'SHARE' },
+        });
+      }
+    }
+  }
+
+  /**
    * Boot the ENABLED transports: HTTP unless `server.enabled` is
    * false; jobs when any are registered and `jobs.enabled` is not
    * false. Emits `start`; a boot failure emits `error`, tears down,
@@ -548,25 +575,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       // middleware can be registered, not just app.use(): a
       // route-scoped or socket-command-scoped chain is an equally
       // normal, documented way to reach this hazard.
-      if (this.option('stateMode') === 'SHARE') {
-        const candidates: RapidMiddleware[] = [
-          ...this.__middleware,
-          ...this.__routes.flatMap((r) =>
-            r.middlewares as unknown as RapidMiddleware[]
-          ),
-          ...[...this.__socketCommands.values()].flatMap((c) =>
-            c.middlewares as unknown as RapidMiddleware[]
-          ),
-        ];
-        const offender = candidates.find(middlewareUsesStateKey);
-        if (offender !== undefined) {
-          throw new RapidError('RAPID_CONFIG', {
-            message:
-              "stateMode: 'SHARE' is incompatible with a stateKey-writing middleware (responseTimer/requestId) — every invocation would read and write the SAME state object, corrupting per-invocation values (duration, correlation id) under concurrency",
-            details: { stateMode: 'SHARE' },
-          });
-        }
-      }
+      this.__assertBootConfig();
       if (this.option('server')!.enabled !== false) {
         // NOTE: a boot-time "socket commands are unguarded" warning
         // lived here and was REMOVED (adversarial review R2-H3). It
@@ -579,7 +588,9 @@ export class Application<S extends RapidContextState = RapidContextState>
         // Coverage checking needs to know which middleware is
         // security-relevant; that belongs to the auth-context design
         // round, not to a heuristic over transport scope.
-        this.__http = new HTTPTransport(this);
+        // `??=`: a transport prepared by fetch() is reused, not rebuilt —
+        // its routes are already in the router.
+        this.__http ??= new HTTPTransport(this);
         await this.__http.start();
       }
       if (this.__jobs.size > 0 && this.option('jobs')!.enabled !== false) {
@@ -599,6 +610,47 @@ export class Application<S extends RapidContextState = RapidContextState>
       this.__started = false;
       throw err;
     }
+  }
+
+  /**
+   * Serve ONE request without a listener — the fetch-handler form that
+   * Cloudflare Workers, `Deno.serve`, `Bun.serve` and in-process tests
+   * speak. Same routes, middleware, context and disclosure as
+   * {@link start}; only the socket's owner differs. HTTP only: socket
+   * commands need a listener (RAPID_CONFIG on the first call), jobs are
+   * not scheduled (use {@link triggerJob} from a cron trigger), and
+   * `address`/`port`/`metrics` stay `null`/`undefined`. Routes are read
+   * on the first call — register them before, as with `start()`. A later
+   * `start()` reuses the prepared routes.
+   *
+   * @example
+   * ```ts ignore
+   * export default { fetch: (request: Request) => app.fetch(request) };
+   * ```
+   * @throws {RapidError} RAPID_CONFIG when socket commands are registered
+   *   or a boot invariant fails (same checks as `start()`).
+   */
+  public fetch(
+    request: Request,
+    info?: RapidApplicationFetchInfo,
+  ): Response | Promise<Response> {
+    const http = this.__http ?? this.__prepareFetch();
+    return http.handle(request, info?.remoteAddress ?? null);
+  }
+
+  private __prepareFetch(): HTTPTransport<S> {
+    if (this.__socketCommands.size > 0) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'fetch() serves HTTP only — socket commands need a listening server; use start()',
+        details: { socketCommands: [...this.__socketCommands.keys()] },
+      });
+    }
+    this.__assertBootConfig();
+    const http = new HTTPTransport<S>(this);
+    http.prepare();
+    this.__http = http;
+    return http;
   }
 
   /**
