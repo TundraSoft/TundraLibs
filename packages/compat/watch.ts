@@ -26,6 +26,8 @@
 
 import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
 import { loadBuiltin } from './_runtime-globals.ts';
+import { assertBuiltin } from './_guards.ts';
+import { UnsupportedRuntimeError } from './Error.ts';
 import { resolve } from './path.ts';
 
 // Resolved synchronously (see {@link loadBuiltin}); a top-level
@@ -283,7 +285,7 @@ class NodeWatcher extends BaseWatcher {
  * @returns A {@link Watcher} that yields events
  *
  * @throws {RangeError} When `paths` is empty
- * @throws {Error} When the runtime is unknown (no fs watching available)
+ * @throws {UnsupportedRuntimeError} When the runtime has no fs watching backend
  *
  * @example Watch a directory recursively
  * ```ts
@@ -311,7 +313,14 @@ export const watch = (
   if (isDeno) return DenoWatcher.start(list, options);
   /* c8 ignore stop */
   /* c8 ignore start */
-  if (isBun || isNode) return new NodeWatcher(list, options);
+  if (isBun || isNode) {
+    assertBuiltin(nodeFs, 'node:fs', 'watch');
+    return new NodeWatcher(list, options);
+  }
   /* c8 ignore stop */
-  throw new Error(`watch() is not supported in ${RUNTIME} runtime`);
+  throw new UnsupportedRuntimeError(
+    'watch',
+    RUNTIME,
+    'file watching is unavailable in this runtime',
+  );
 };

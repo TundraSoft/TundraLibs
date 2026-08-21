@@ -18,6 +18,7 @@
  */
 import { isBun, isDeno, isNode } from './runtime.ts';
 import { loadBuiltin } from './_runtime-globals.ts';
+import { assertBuiltin } from './_guards.ts';
 import { ConnectionTimeoutError, UnsupportedRuntimeError } from './Error.ts';
 import type { TLSOptions, ValidatedTLS } from './common.ts';
 import { combineSignals, validateTLS } from './common.ts';
@@ -653,6 +654,8 @@ export async function listen(options: ListenOptions): Promise<Listener> {
 
   /* c8 ignore start */
   if (isBun || isNode) {
+    assertBuiltin(nodeNet, 'node:net', 'listen');
+    assertBuiltin(nodeTls, 'node:tls', 'listen');
     // For both Bun and Node.js, use Node.js-compatible API
     // Bun's Bun.listen() doesn't easily support the accept() pattern
     // Using Node.js API provides consistency and works well
@@ -1204,6 +1207,8 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
 
   /* c8 ignore start */
   if (isBun || isNode) {
+    assertBuiltin(nodeNet, 'node:net', 'connect');
+    assertBuiltin(nodeTls, 'node:tls', 'connect');
     // Both Bun and Node.js use Node.js-compatible socket API
     return new Promise((resolve, reject) => {
       // Check if already aborted
@@ -1455,6 +1460,7 @@ export async function upgradeTls(
 
   /* c8 ignore start */
   if (isBun || isNode) {
+    assertBuiltin(nodeTls, 'node:tls', 'upgradeTls');
     return await new Promise((resolve, reject) => {
       const tlsOptions: Record<string, unknown> = {
         socket: raw,

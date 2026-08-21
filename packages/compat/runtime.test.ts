@@ -4,15 +4,18 @@ import {
   type Architecture,
   cpus,
   cwd,
+  detectRuntime,
   freemem,
   getArch,
   getEnv,
   getOS,
   getProcessId,
   getRuntime,
+  isBrowser,
   isBun,
   isDeno,
   isNode,
+  isWorkers,
   memoryUsage,
   onError,
   onExit,
@@ -52,7 +55,8 @@ describe({
       });
 
       it('should have at most one runtime flag true', () => {
-        const trueCount = [isDeno, isBun, isNode].filter(Boolean).length;
+        const trueCount = [isDeno, isBun, isNode, isWorkers, isBrowser]
+          .filter(Boolean).length;
         asserts.assert(trueCount <= 1, 'Multiple runtime flags are true');
         // It's okay to have zero (UNKNOWN) or one flag true
       });
@@ -61,6 +65,80 @@ describe({
         asserts.assert(!(RUNTIME === 'DENO' && !isDeno), 'DENO mismatch');
         asserts.assert(!(RUNTIME === 'BUN' && !isBun), 'BUN mismatch');
         asserts.assert(!(RUNTIME === 'NODE' && !isNode), 'NODE mismatch');
+        asserts.assert(
+          !(RUNTIME === 'WORKERS' && !isWorkers),
+          'WORKERS mismatch',
+        );
+        asserts.assert(
+          !(RUNTIME === 'BROWSER' && !isBrowser),
+          'BROWSER mismatch',
+        );
+      });
+    });
+
+    describe('detectRuntime()', () => {
+      it('detects Deno from a Deno global', () => {
+        asserts.assertEquals(detectRuntime({ Deno: {} }), 'DENO');
+      });
+
+      it('detects Bun from a Bun global', () => {
+        asserts.assertEquals(detectRuntime({ Bun: {} }), 'BUN');
+      });
+
+      it('detects Cloudflare Workers by navigator.userAgent, before Node', () => {
+        asserts.assertEquals(
+          detectRuntime({
+            navigator: { userAgent: 'Cloudflare-Workers' },
+            process: { versions: { node: '22.14.0' } },
+          }),
+          'WORKERS',
+        );
+      });
+
+      it('detects Node from process.versions.node', () => {
+        asserts.assertEquals(
+          detectRuntime({ process: { versions: { node: '26.0.0' } } }),
+          'NODE',
+        );
+      });
+
+      it('detects a browser from document', () => {
+        asserts.assertEquals(detectRuntime({ document: {} }), 'BROWSER');
+      });
+
+      it('detects a web/service worker from its global scope', () => {
+        asserts.assertEquals(
+          detectRuntime({ WorkerGlobalScope: class {} }),
+          'BROWSER',
+        );
+        asserts.assertEquals(
+          detectRuntime({ importScripts: () => {} }),
+          'BROWSER',
+        );
+      });
+
+      it('returns UNKNOWN when nothing matches', () => {
+        asserts.assertEquals(detectRuntime({}), 'UNKNOWN');
+      });
+
+      it('prefers Deno over a Node-shaped process', () => {
+        asserts.assertEquals(
+          detectRuntime({
+            Deno: {},
+            process: { versions: { node: '22.0.0' } },
+          }),
+          'DENO',
+        );
+      });
+
+      it('keeps jsdom-under-Node as NODE, not BROWSER', () => {
+        asserts.assertEquals(
+          detectRuntime({
+            document: {},
+            process: { versions: { node: '22.0.0' } },
+          }),
+          'NODE',
+        );
       });
     });
 
@@ -116,7 +194,14 @@ describe({
     describe('getRuntime()', () => {
       it('should return valid runtime type', () => {
         const runtime = getRuntime();
-        const validRuntimes = ['DENO', 'BUN', 'NODE', 'UNKNOWN'];
+        const validRuntimes = [
+          'DENO',
+          'BUN',
+          'NODE',
+          'WORKERS',
+          'BROWSER',
+          'UNKNOWN',
+        ];
         asserts.assert(
           validRuntimes.includes(runtime),
           `Invalid runtime: ${runtime}`,
@@ -175,7 +260,14 @@ describe({
 
     describe('RUNTIME constant', () => {
       it('should be valid runtime type', () => {
-        const validRuntimes = ['DENO', 'BUN', 'NODE', 'UNKNOWN'];
+        const validRuntimes = [
+          'DENO',
+          'BUN',
+          'NODE',
+          'WORKERS',
+          'BROWSER',
+          'UNKNOWN',
+        ];
         asserts.assert(
           validRuntimes.includes(RUNTIME),
           `Invalid RUNTIME: ${RUNTIME}`,
@@ -183,7 +275,7 @@ describe({
       });
 
       it('should not be UNKNOWN in known runtimes', () => {
-        if (isDeno || isBun || isNode) {
+        if (isDeno || isBun || isNode || isWorkers || isBrowser) {
           asserts.assert(
             RUNTIME !== 'UNKNOWN',
             'RUNTIME should not be UNKNOWN when runtime flag is set',

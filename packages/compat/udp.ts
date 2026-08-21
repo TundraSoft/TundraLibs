@@ -25,7 +25,7 @@
  * sock.close();
  * ```
  */
-import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
+import { isBun, isDeno, isNode, isWorkers, RUNTIME } from './runtime.ts';
 import { UnsupportedRuntimeError } from './Error.ts';
 import { Bun, loadBuiltin } from './_runtime-globals.ts';
 
@@ -67,26 +67,6 @@ export function assertDatagramBackend(
     );
   }
 }
-
-/** How workerd identifies itself. Cloudflare's documented detection. */
-const WORKERD_USER_AGENT = 'Cloudflare-Workers';
-
-/**
- * Whether we are on workerd. `nodejs_compat` gives it
- * `process.versions.node`, so {@link isNode} is true there and the Node
- * branch below would be taken — but the `node:dgram` it gets back is a
- * stand-in that accepts `bind()` and never calls back, so the bind
- * `await` never settles. Workers have no UDP at all, and a hang is the
- * worst possible failure inside a request, so this is checked first.
- *
- * Deliberately local to this module: the udp backend is the only place
- * the misclassification bites today, and teaching `getRuntime()` about
- * workerd would re-route every other module that branches on the
- * runtime.
- */
-const onWorkerd = (): boolean =>
-  (globalThis as { navigator?: { userAgent?: string } }).navigator
-    ?.userAgent === WORKERD_USER_AGENT;
 
 /**
  * Open UDP socket abstraction.
@@ -145,10 +125,11 @@ export async function udpSocket(
   const port = options.port ?? 0;
 
   /* c8 ignore start */
-  // Before anything else — see {@link onWorkerd}. workerd passes the
-  // `isNode` test and then swallows the bind callback, so without this
-  // the call never settles and burns the whole request.
-  if (onWorkerd()) {
+  // Workers have no UDP at all — reject explicitly rather than let the
+  // Node path build a socket whose bind callback never fires and hangs
+  // the whole request. (Before the runtime detector learned about
+  // workerd this had to be a local `navigator.userAgent` check.)
+  if (isWorkers) {
     throw new UnsupportedRuntimeError(
       'udpSocket',
       RUNTIME,

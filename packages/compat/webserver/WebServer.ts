@@ -90,6 +90,7 @@ import {
   ServerPermissionError,
 } from './Error.ts';
 import { UnsupportedRuntimeError } from '../Error.ts';
+import { assertBuiltin } from '../_guards.ts';
 import { hasPermissionSync } from '../permissions.ts';
 // Local aliases for runtime-only types — see _runtime-globals.ts. Using
 // `any` decouples us from Deno's lib types (no clash on the consumer
@@ -112,6 +113,14 @@ const nodeHttps: typeof import('node:https') = loadBuiltin(
   'node:https',
   isNode,
 );
+
+// Runtimes that can actually host a port-listening HTTP server. Used to
+// skip the constructor's filesystem-touching option validation (UNIX
+// socket / file-based TLS existence checks) on runtimes that cannot run
+// a server at all — construction stays throw-free there, and `start()`
+// raises the explicit UnsupportedRuntimeError instead.
+const CAN_HOST_SERVER: boolean = RUNTIME === 'DENO' || RUNTIME === 'BUN' ||
+  RUNTIME === 'NODE';
 
 /**
  * `ws` is the de-facto Node WebSocket implementation; pure-JS, no native
@@ -966,6 +975,11 @@ export class WebServer<T = unknown> {
       this._emit('onStart', this.name, this.mode);
     } catch (error) {
       this._state = 'STOPPED';
+      // A runtime that cannot host a server (Workers, browser, unknown)
+      // surfaces as itself — parity with file.ts — so callers can branch
+      // on `instanceof UnsupportedRuntimeError` rather than digging a
+      // wrapped cause out of a ServerError.
+      if (error instanceof UnsupportedRuntimeError) throw error;
       const e = this.__wrapServerError(error, 'start', 'Failed to start');
       this._emit('onError', this.name, e);
       throw e;
@@ -2180,6 +2194,8 @@ export class WebServer<T = unknown> {
       | InstanceType<typeof nodeHttp.Server>
       | InstanceType<typeof nodeHttps.Server>;
 
+    assertBuiltin(nodeHttp, 'node:http', 'WebServer.start');
+
     const validated = this.__resolveTLS();
     if (validated) {
       const httpsOptions: Record<string, unknown> = {
@@ -2187,6 +2203,7 @@ export class WebServer<T = unknown> {
         key: validated.key,
       };
       if (validated.ca) httpsOptions.ca = validated.ca;
+      assertBuiltin(nodeHttps, 'node:https', 'WebServer.start');
       server = nodeHttps.createServer(httpsOptions, processNodeRequest);
     } else {
       // Create HTTP server
@@ -2514,9 +2531,9 @@ export class WebServer<T = unknown> {
         };
       default:
         throw new UnsupportedRuntimeError(
-          'server',
+          'WebServer.start',
           RUNTIME,
-          'http server not supported',
+          'a port-listening HTTP server is unavailable in this runtime',
         );
     }
   }
@@ -2707,9 +2724,12 @@ export class WebServer<T = unknown> {
           'a non-empty string',
         );
       }
-      // Validate that the directory for the unix socket exists
+      // Validate that the directory for the unix socket exists. Skipped
+      // on runtimes that cannot host a server — the filesystem is
+      // unavailable there and `start()` throws the clear error instead,
+      // so construction stays throw-free (see {@link CAN_HOST_SERVER}).
       const dirPath = path.dirname(options.unixSocketPath);
-      if (!pathExistsSync(dirPath)) {
+      if (CAN_HOST_SERVER && !pathExistsSync(dirPath)) {
         throw new ServerConfigurationError(
           this.mode,
           'unixSocketPath',
@@ -2823,7 +2843,7 @@ export class WebServer<T = unknown> {
         // Basic existence check for constructor validation
         if (
           typeof tlsOptions.certFile !== 'string' ||
-          !isFileSync(tlsOptions.certFile)
+          (CAN_HOST_SERVER && !isFileSync(tlsOptions.certFile))
         ) {
           throw new ServerConfigurationError(
             this.mode,
@@ -2834,7 +2854,7 @@ export class WebServer<T = unknown> {
         }
         if (
           typeof tlsOptions.keyFile !== 'string' ||
-          !isFileSync(tlsOptions.keyFile)
+          (CAN_HOST_SERVER && !isFileSync(tlsOptions.keyFile))
         ) {
           throw new ServerConfigurationError(
             this.mode,
@@ -2846,7 +2866,7 @@ export class WebServer<T = unknown> {
         if (tlsOptions.caFile) {
           if (
             typeof tlsOptions.caFile !== 'string' ||
-            !isFileSync(tlsOptions.caFile)
+            (CAN_HOST_SERVER && !isFileSync(tlsOptions.caFile))
           ) {
             throw new ServerConfigurationError(
               this.mode,

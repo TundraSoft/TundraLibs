@@ -1,9 +1,9 @@
 /**
  * @fileoverview Cross-runtime detection and environment utilities.
  *
- * Detects the current JavaScript runtime (Deno, Bun, Node.js) and operating
- * system. Provides utilities for environment variables, working directory,
- * and process information.
+ * Detects the current JavaScript runtime (Deno, Bun, Node.js, Cloudflare
+ * Workers, browsers) and operating system. Provides utilities for
+ * environment variables, working directory, and process information.
  *
  * @module
  *
@@ -19,8 +19,18 @@
 
 import { loadBuiltin } from './_runtime-globals.ts';
 
-/** Detected JavaScript runtime. `'UNKNOWN'` covers browsers and workerd. */
-export type Runtime = 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN';
+/**
+ * Detected JavaScript runtime. `'WORKERS'` is Cloudflare Workers
+ * (workerd); `'BROWSER'` is a browser or web/service worker;
+ * `'UNKNOWN'` is anything else.
+ */
+export type Runtime =
+  | 'DENO'
+  | 'BUN'
+  | 'NODE'
+  | 'WORKERS'
+  | 'BROWSER'
+  | 'UNKNOWN';
 
 /** Host operating system, normalised across runtimes. */
 export type OperatingSystem = 'WINDOWS' | 'LINUX' | 'DARWIN' | 'UNKNOWN';
@@ -36,25 +46,94 @@ export type Architecture = 'X64' | 'ARM64' | 'X86' | 'ARM' | 'UNKNOWN';
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
 
-/** Whether the `Deno` global is present. Evaluated once at import time. */
-export const isDeno: boolean = g.Deno !== undefined;
-
-/** Whether the `Bun` global is present. Evaluated once at import time. */
-export const isBun: boolean = g.Bun !== undefined;
+/** How workerd identifies itself — Cloudflare's documented signal. */
+const WORKERD_USER_AGENT = 'Cloudflare-Workers';
 
 /**
- * Whether this is genuine Node — Bun and Deno both expose
- * `process.versions.node`, so those are excluded explicitly.
+ * Detect the JavaScript runtime from a set of globals. Pure and
+ * side-effect-free: pass a fake `globals` object to unit-test any
+ * outcome without the real runtime.
+ *
+ * Probe order is deliberate — `DENO → BUN → WORKERS → NODE → BROWSER →
+ * UNKNOWN`:
+ *
+ * - Deno and Bun both expose `process.versions.node`, so they are ruled
+ *   out first.
+ * - workerd under `nodejs_compat` also exposes `process.versions.node`,
+ *   but identifies via `navigator.userAgent`, so it is caught before the
+ *   Node test — otherwise it would masquerade as Node and dereference
+ *   builtins it lacks.
+ * - a jsdom-under-Node environment carries both `document` and
+ *   `process.versions.node`; the Node test wins over BROWSER there,
+ *   keeping it `'NODE'`.
  */
-export const isNode: boolean = g.process?.versions?.node !== undefined &&
-  g.Bun === undefined && g.Deno === undefined;
+export function detectRuntime(globals: object = globalThis): Runtime {
+  const gg = globals as {
+    Deno?: unknown;
+    Bun?: unknown;
+    navigator?: { userAgent?: string };
+    process?: { versions?: { node?: unknown } };
+    document?: unknown;
+    WorkerGlobalScope?: unknown;
+    importScripts?: unknown;
+  };
+  if (gg.Deno !== undefined) return 'DENO';
+  if (gg.Bun !== undefined) return 'BUN';
+  if (gg.navigator?.userAgent === WORKERD_USER_AGENT) return 'WORKERS';
+  if (gg.process?.versions?.node !== undefined) return 'NODE';
+  if (
+    typeof gg.document !== 'undefined' ||
+    gg.WorkerGlobalScope !== undefined ||
+    typeof gg.importScripts === 'function'
+  ) {
+    return 'BROWSER';
+  }
+  return 'UNKNOWN';
+}
 
-// `node:os` resolves on all three runtimes — Deno provides it through its
-// Node.js compat layer. Loaded synchronously (see {@link loadBuiltin}) so
-// `cpus()`, `totalmem()`, `freemem()`, and `uptime()` share a single backend
-// with no per-runtime branching. Stays `undefined` on unrecognized runtimes
-// (browsers, etc.) — they have no `getBuiltinModule` — so the helpers can
-// return safe fallbacks.
+/** Detect the current runtime (see {@link detectRuntime}). */
+export function getRuntime(): Runtime {
+  return detectRuntime(g);
+}
+
+/** Cached {@link getRuntime}, evaluated once at import time. */
+export const RUNTIME: Runtime = getRuntime();
+
+/** Whether the current runtime is Deno. */
+export const isDeno: boolean = RUNTIME === 'DENO';
+
+/** Whether the current runtime is Bun. */
+export const isBun: boolean = RUNTIME === 'BUN';
+
+/**
+ * Whether this is **genuine** Node. Deno, Bun and Cloudflare Workers all
+ * expose `process.versions.node`, so all three are excluded — on workerd
+ * this is `false`, and the Node-gated builtin loads (`node:fs`,
+ * `node:http`, …) stay `undefined`, surfacing as an
+ * `UnsupportedRuntimeError` at call time rather than a raw `TypeError`
+ * on a missing builtin.
+ */
+export const isNode: boolean = RUNTIME === 'NODE';
+
+/**
+ * Whether the current runtime is Cloudflare Workers (workerd), detected
+ * via `navigator.userAgent === 'Cloudflare-Workers'`.
+ */
+export const isWorkers: boolean = RUNTIME === 'WORKERS';
+
+/**
+ * Whether the current runtime is a browser or a web/service worker — no
+ * Deno/Bun/workerd and no `process.versions.node`, plus a `document` or
+ * a worker global scope.
+ */
+export const isBrowser: boolean = RUNTIME === 'BROWSER';
+
+// `node:os` resolves on all three server runtimes — Deno provides it
+// through its Node.js compat layer. Loaded synchronously (see
+// {@link loadBuiltin}) so `cpus()`, `totalmem()`, `freemem()`, and
+// `uptime()` share a single backend with no per-runtime branching. Stays
+// `undefined` on runtimes without `getBuiltinModule` (browsers, workerd)
+// so the helpers return safe fallbacks.
 const nodeOs: typeof import('node:os') = loadBuiltin('node:os');
 
 // #region Runtime helpers
@@ -71,26 +150,6 @@ export function getProcessId(): number | undefined {
 
 /** Cached {@link getProcessId}. */
 export const PID: number | undefined = getProcessId();
-
-/**
- * Detect the current runtime. Probes in order: `globalThis.Deno`,
- * `globalThis.Bun`, then `process.versions.node` (excluding Deno/Bun).
- */
-export function getRuntime(): Runtime {
-  /* c8 ignore start */
-  if (isDeno) return 'DENO';
-  /* c8 ignore stop */
-  /* c8 ignore start */
-  if (isBun) return 'BUN';
-  /* c8 ignore stop */
-  /* c8 ignore start */
-  if (isNode) return 'NODE';
-  /* c8 ignore stop */
-  return 'UNKNOWN';
-}
-
-/** Cached {@link getRuntime}. */
-export const RUNTIME: Runtime = getRuntime();
 
 /**
  * Detect the host OS, folding `win32`/`windows` together. Returns
@@ -160,6 +219,13 @@ export const getEnv = (): Record<string, string> => {
     /* c8 ignore stop */
     /* c8 ignore start */
     if (isNode) __env__ = g.process.env;
+    /* c8 ignore stop */
+    /* c8 ignore start */
+    // workerd populates `process.env` under `nodejs_compat`; use it when
+    // it is a real object, otherwise fall through to the empty default.
+    if (isWorkers && g.process?.env && typeof g.process.env === 'object') {
+      __env__ = g.process.env;
+    }
     /* c8 ignore stop */
     __env__ ??= {};
   }

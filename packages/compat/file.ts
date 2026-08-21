@@ -18,8 +18,9 @@
  */
 
 import { Bun, loadBuiltin } from './_runtime-globals.ts';
-import { isBun, isDeno, isNode, OS } from './runtime.ts';
-import { CompatError } from './Error.ts';
+import { isBun, isDeno, isNode, OS, RUNTIME } from './runtime.ts';
+import { CompatError, UnsupportedRuntimeError } from './Error.ts';
+import { assertBuiltin } from './_guards.ts';
 import * as path from './path.ts';
 
 /** Node.js modules, loaded synchronously for Bun/Node environments */
@@ -371,7 +372,10 @@ const wrapFileError = (
   error: unknown,
   path: string,
   operation: string,
-): FileOperationError => {
+): FileOperationError | UnsupportedRuntimeError => {
+  if (error instanceof UnsupportedRuntimeError) {
+    return error;
+  }
   if (error instanceof FileOperationError) {
     return error;
   }
@@ -465,12 +469,17 @@ export const pathExists: (path: string) => Promise<boolean> = async (
         throw wrapFileError(error, path, 'pathExists');
       }
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'pathExists');
       return await nodeFs.promises.access(path, nodeFs.constants.F_OK)
         .then(() => true)
         .catch(() => false);
     }
 
-    return false;
+    throw new UnsupportedRuntimeError(
+      'pathExists',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileInvalidPath) {
       throw error;
@@ -513,6 +522,7 @@ export const pathExistsSync: (path: string) => boolean = (
         throw wrapFileError(error, path, 'pathExistsSync');
       }
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'pathExistsSync');
       try {
         nodeFs.accessSync(path, nodeFs.constants.F_OK);
         return true;
@@ -521,7 +531,11 @@ export const pathExistsSync: (path: string) => boolean = (
       }
     }
 
-    return false;
+    throw new UnsupportedRuntimeError(
+      'pathExistsSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileInvalidPath) {
       throw error;
@@ -566,6 +580,7 @@ export const isFile: (path: string) => Promise<boolean> = async (
         throw wrapFileError(error, path, 'isFile');
       }
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'isFile');
       try {
         const stat = await nodeFs.promises.stat(path);
         return stat.isFile();
@@ -577,7 +592,11 @@ export const isFile: (path: string) => Promise<boolean> = async (
       }
     }
 
-    return false;
+    throw new UnsupportedRuntimeError(
+      'isFile',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileInvalidPath) {
       throw error;
@@ -622,6 +641,7 @@ export const isFileSync: (path: string) => boolean = (
         throw wrapFileError(error, path, 'isFileSync');
       }
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'isFileSync');
       try {
         const stat = nodeFs.statSync(path);
         return stat.isFile();
@@ -633,7 +653,11 @@ export const isFileSync: (path: string) => boolean = (
       }
     }
 
-    return false;
+    throw new UnsupportedRuntimeError(
+      'isFileSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileInvalidPath) {
       throw error;
@@ -678,6 +702,7 @@ export const isDirectory: (path: string) => Promise<boolean> = async (
         throw wrapFileError(error, path, 'isDirectory');
       }
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'isDirectory');
       try {
         const stat = await nodeFs.promises.stat(path);
         return stat.isDirectory();
@@ -689,7 +714,11 @@ export const isDirectory: (path: string) => Promise<boolean> = async (
       }
     }
 
-    return false;
+    throw new UnsupportedRuntimeError(
+      'isDirectory',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileInvalidPath) {
       throw error;
@@ -746,6 +775,7 @@ export const isDirectorySync: (path: string) => boolean = (
         throw wrapFileError(error, path, 'isDirectorySync');
       }
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'isDirectorySync');
       try {
         const stat = nodeFs.statSync(path);
         return stat.isDirectory();
@@ -757,7 +787,11 @@ export const isDirectorySync: (path: string) => boolean = (
       }
     }
 
-    return false;
+    throw new UnsupportedRuntimeError(
+      'isDirectorySync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileInvalidPath) {
       throw error;
@@ -842,6 +876,7 @@ export const stat: (path: string) => Promise<FileInfo> = async (
         gid: info.gid ?? null,
       };
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'stat');
       const info = await nodeFs.promises.stat(path);
       return {
         isFile: info.isFile(),
@@ -857,7 +892,11 @@ export const stat: (path: string) => Promise<FileInfo> = async (
       };
     }
 
-    throw new FileOperationError('Unsupported runtime', path, 'stat');
+    throw new UnsupportedRuntimeError(
+      'stat',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -902,6 +941,7 @@ export const statSync: (path: string) => FileInfo = (
         gid: info.gid ?? null,
       };
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'statSync');
       const info = nodeFs.statSync(path);
       return {
         isFile: info.isFile(),
@@ -917,7 +957,11 @@ export const statSync: (path: string) => FileInfo = (
       };
     }
 
-    throw new FileOperationError('Unsupported runtime', path, 'statSync');
+    throw new UnsupportedRuntimeError(
+      'statSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -966,11 +1010,16 @@ export const readFile: (path: string) => Promise<Uint8Array> = async (
     } else if (isBun) {
       return await Bun.file(path).bytes();
     } else if (isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'readFile');
       const buffer = await nodeFs.promises.readFile(path);
       return new Uint8Array(buffer);
     }
 
-    throw new FileOperationError('Unsupported runtime', path, 'readFile');
+    throw new UnsupportedRuntimeError(
+      'readFile',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -1003,11 +1052,16 @@ export const readFileSync: (path: string) => Uint8Array = (
     if (isDeno) {
       return Deno.readFileSync(path);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'readFileSync');
       const buffer = nodeFs.readFileSync(path);
       return new Uint8Array(buffer);
     }
 
-    throw new FileOperationError('Unsupported runtime', path, 'readFileSync');
+    throw new UnsupportedRuntimeError(
+      'readFileSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -1042,10 +1096,15 @@ export const readTextFile: (path: string) => Promise<string> = async (
     } else if (isBun) {
       return await Bun.file(path).text();
     } else if (isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'readTextFile');
       return await nodeFs.promises.readFile(path, 'utf-8');
     }
 
-    throw new FileOperationError('Unsupported runtime', path, 'readTextFile');
+    throw new UnsupportedRuntimeError(
+      'readTextFile',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -1078,13 +1137,14 @@ export const readTextFileSync: (path: string) => string = (
     if (isDeno) {
       return Deno.readTextFileSync(path);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'readTextFileSync');
       return nodeFs.readFileSync(path, 'utf-8');
     }
 
-    throw new FileOperationError(
-      'Unsupported runtime',
-      path,
+    throw new UnsupportedRuntimeError(
       'readTextFileSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
     );
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1219,6 +1279,7 @@ export const writeFile: (
         mode: opts.mode,
       });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'writeFile');
       // Build POSIX open flags numerically so behaviour matches Deno's
       // Deno.writeFile({append,create}) exactly. The old string-flag
       // mapping used 'r+' for the create:false case, which opens WITHOUT
@@ -1241,7 +1302,11 @@ export const writeFile: (
         await handle.close();
       }
     } else {
-      throw new FileOperationError('Unsupported runtime', path, 'writeFile');
+      throw new UnsupportedRuntimeError(
+        'writeFile',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1287,6 +1352,7 @@ export const writeFileSync: (
         mode: opts.mode,
       });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'writeFileSync');
       // Build POSIX open flags numerically so behaviour matches Deno's
       // Deno.writeFile({append,create}) exactly. The old string-flag
       // mapping used 'r+' for the create:false case, which opens WITHOUT
@@ -1310,10 +1376,10 @@ export const writeFileSync: (
         nodeFs.closeSync(fd);
       }
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        path,
+      throw new UnsupportedRuntimeError(
         'writeFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -1366,6 +1432,7 @@ export const writeTextFile: (
         mode: opts.mode,
       });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'writeTextFile');
       // Build POSIX open flags numerically so behaviour matches Deno's
       // Deno.writeFile({append,create}) exactly. The old string-flag
       // mapping used 'r+' for the create:false case, which opens WITHOUT
@@ -1388,10 +1455,10 @@ export const writeTextFile: (
         await handle.close();
       }
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        path,
+      throw new UnsupportedRuntimeError(
         'writeTextFile',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -1437,6 +1504,7 @@ export const writeTextFileSync: (
         mode: opts.mode,
       });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'writeTextFileSync');
       // Build POSIX open flags numerically so behaviour matches Deno's
       // Deno.writeFile({append,create}) exactly. The old string-flag
       // mapping used 'r+' for the create:false case, which opens WITHOUT
@@ -1460,10 +1528,10 @@ export const writeTextFileSync: (
         nodeFs.closeSync(fd);
       }
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        path,
+      throw new UnsupportedRuntimeError(
         'writeTextFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -1587,9 +1655,14 @@ export const deleteFile: (path: string) => Promise<void> = async (
     if (isDeno) {
       await Deno.remove(path);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'deleteFile');
       await nodeFs.promises.unlink(path);
     } else {
-      throw new FileOperationError('Unsupported runtime', path, 'deleteFile');
+      throw new UnsupportedRuntimeError(
+        'deleteFile',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1619,12 +1692,13 @@ export const deleteFileSync: (path: string) => void = (path: string): void => {
     if (isDeno) {
       Deno.removeSync(path);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'deleteFileSync');
       nodeFs.unlinkSync(path);
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        path,
+      throw new UnsupportedRuntimeError(
         'deleteFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -1669,15 +1743,16 @@ export const ensureFile: (
           mode: options?.mode,
         });
       } else if (isBun || isNode) {
+        assertBuiltin(nodeFs, 'node:fs', 'ensureFile');
         await nodeFs.promises.writeFile(filePath, new Uint8Array(0), {
           flag: 'wx', // Exclusive creation - fails if file exists
           mode: options?.mode,
         });
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          filePath,
+        throw new UnsupportedRuntimeError(
           'ensureFile',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
     } catch (error) {
@@ -1720,6 +1795,7 @@ export const ensureFile: (
             mode: options?.mode,
           });
         } else if (isBun || isNode) {
+          assertBuiltin(nodeFs, 'node:fs', 'ensureFile');
           await nodeFs.promises.writeFile(filePath, new Uint8Array(0), {
             flag: 'wx',
             mode: options?.mode,
@@ -1770,15 +1846,16 @@ export const ensureFileSync: (
           mode: options?.mode,
         });
       } else if (isBun || isNode) {
+        assertBuiltin(nodeFs, 'node:fs', 'ensureFileSync');
         nodeFs.writeFileSync(filePath, new Uint8Array(0), {
           flag: 'wx', // Exclusive creation - fails if file exists
           mode: options?.mode,
         });
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          filePath,
+        throw new UnsupportedRuntimeError(
           'ensureFileSync',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
     } catch (error) {
@@ -1821,6 +1898,7 @@ export const ensureFileSync: (
             mode: options?.mode,
           });
         } else if (isBun || isNode) {
+          assertBuiltin(nodeFs, 'node:fs', 'ensureFileSync');
           nodeFs.writeFileSync(filePath, new Uint8Array(0), {
             flag: 'wx',
             mode: options?.mode,
@@ -1865,9 +1943,14 @@ export const copyFile: (src: string, dest: string) => Promise<void> = async (
     if (isDeno) {
       await Deno.copyFile(src, dest);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'copyFile');
       await nodeFs.promises.copyFile(src, dest);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'copyFile');
+      throw new UnsupportedRuntimeError(
+        'copyFile',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1902,9 +1985,14 @@ export const copyFileSync: (src: string, dest: string) => void = (
     if (isDeno) {
       Deno.copyFileSync(src, dest);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'copyFileSync');
       nodeFs.copyFileSync(src, dest);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'copyFileSync');
+      throw new UnsupportedRuntimeError(
+        'copyFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1939,9 +2027,14 @@ export const moveFile: (src: string, dest: string) => Promise<void> = async (
     if (isDeno) {
       await Deno.rename(src, dest);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'moveFile');
       await nodeFs.promises.rename(src, dest);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'moveFile');
+      throw new UnsupportedRuntimeError(
+        'moveFile',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -1976,9 +2069,14 @@ export const moveFileSync: (src: string, dest: string) => void = (
     if (isDeno) {
       Deno.renameSync(src, dest);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'moveFileSync');
       nodeFs.renameSync(src, dest);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'moveFileSync');
+      throw new UnsupportedRuntimeError(
+        'moveFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2015,12 +2113,13 @@ export const renameFile: (filePath: string, newName: string) => Promise<void> =
       if (isDeno) {
         await Deno.rename(filePath, newPath);
       } else if (isBun || isNode) {
+        assertBuiltin(nodeFs, 'node:fs', 'renameFile');
         await nodeFs.promises.rename(filePath, newPath);
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          filePath,
+        throw new UnsupportedRuntimeError(
           'renameFile',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
     } catch (error) {
@@ -2060,12 +2159,13 @@ export const renameFileSync: (filePath: string, newName: string) => void = (
     if (isDeno) {
       Deno.renameSync(filePath, newPath);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'renameFileSync');
       nodeFs.renameSync(filePath, newPath);
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        filePath,
+      throw new UnsupportedRuntimeError(
         'renameFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -2099,10 +2199,15 @@ export const realPath: (path: string) => Promise<string> = async (
     if (isDeno) {
       return await Deno.realPath(targetPath);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'realPath');
       return await nodeFs.promises.realpath(targetPath);
     }
 
-    throw new FileOperationError('Unsupported runtime', targetPath, 'realPath');
+    throw new UnsupportedRuntimeError(
+      'realPath',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -2134,13 +2239,14 @@ export const realPathSync: (path: string) => string = (
     if (isDeno) {
       return Deno.realPathSync(targetPath);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'realPathSync');
       return nodeFs.realpathSync(targetPath);
     }
 
-    throw new FileOperationError(
-      'Unsupported runtime',
-      targetPath,
+    throw new UnsupportedRuntimeError(
       'realPathSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
     );
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2387,9 +2493,14 @@ export const readDir: (
     if (isDeno) {
       yield* readDirDeno(dirPath, filter);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'readDir');
       yield* readDirNode(dirPath, filter);
     } else {
-      throw new FileOperationError('Unsupported runtime', dirPath, 'readDir');
+      throw new UnsupportedRuntimeError(
+        'readDir',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2441,12 +2552,13 @@ export const readDirSync: (
     if (isDeno) {
       yield* readDirSyncDeno(dirPath, filter);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'readDirSync');
       yield* readDirSyncNode(dirPath, filter);
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        dirPath,
+      throw new UnsupportedRuntimeError(
         'readDirSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -2486,13 +2598,18 @@ export const removeDir: (
     if (isDeno) {
       await Deno.remove(dirPath, { recursive: opts.recursive });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'removeDir');
       if (opts.recursive) {
         await nodeFs.promises.rm(dirPath, { recursive: true, force: false });
       } else {
         await nodeFs.promises.rmdir(dirPath);
       }
     } else {
-      throw new FileOperationError('Unsupported runtime', dirPath, 'removeDir');
+      throw new UnsupportedRuntimeError(
+        'removeDir',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2528,16 +2645,17 @@ export const removeDirSync: (
     if (isDeno) {
       Deno.removeSync(dirPath, { recursive: opts.recursive });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'removeDirSync');
       if (opts.recursive) {
         nodeFs.rmSync(dirPath, { recursive: true, force: false });
       } else {
         nodeFs.rmdirSync(dirPath);
       }
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        dirPath,
+      throw new UnsupportedRuntimeError(
         'removeDirSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -2579,12 +2697,17 @@ export const makeDir: (
     if (isDeno) {
       await Deno.mkdir(dirPath, { recursive: opts.recursive, mode: opts.mode });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'makeDir');
       await nodeFs.promises.mkdir(dirPath, {
         recursive: opts.recursive,
         mode: opts.mode,
       });
     } else {
-      throw new FileOperationError('Unsupported runtime', dirPath, 'makeDir');
+      throw new UnsupportedRuntimeError(
+        'makeDir',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2624,12 +2747,13 @@ export const makeDirSync: (
     if (isDeno) {
       Deno.mkdirSync(dirPath, { recursive: opts.recursive, mode: opts.mode });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'makeDirSync');
       nodeFs.mkdirSync(dirPath, { recursive: opts.recursive, mode: opts.mode });
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        dirPath,
+      throw new UnsupportedRuntimeError(
         'makeDirSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -2761,9 +2885,14 @@ export const copyDir: (
     if (isDeno) {
       await copyDirDeno(src, dest, opts);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'copyDir');
       await copyDirNode(src, dest, opts);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'copyDir');
+      throw new UnsupportedRuntimeError(
+        'copyDir',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2853,9 +2982,14 @@ export const copyDirSync: (
     if (isDeno) {
       copyDirSyncDeno(src, dest, opts);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'copyDirSync');
       copyDirSyncNode(src, dest, opts);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'copyDirSync');
+      throw new UnsupportedRuntimeError(
+        'copyDirSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2936,9 +3070,14 @@ export const moveDir: (src: string, dest: string) => Promise<void> = async (
     if (isDeno) {
       await Deno.rename(src, dest);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'moveDir');
       await nodeFs.promises.rename(src, dest);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'moveDir');
+      throw new UnsupportedRuntimeError(
+        'moveDir',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -2973,9 +3112,14 @@ export const moveDirSync: (src: string, dest: string) => void = (
     if (isDeno) {
       Deno.renameSync(src, dest);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'moveDirSync');
       nodeFs.renameSync(src, dest);
     } else {
-      throw new FileOperationError('Unsupported runtime', src, 'moveDirSync');
+      throw new UnsupportedRuntimeError(
+        'moveDirSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -3012,12 +3156,13 @@ export const renameDir: (dirPath: string, newName: string) => Promise<void> =
       if (isDeno) {
         await Deno.rename(dirPath, newPath);
       } else if (isBun || isNode) {
+        assertBuiltin(nodeFs, 'node:fs', 'renameDir');
         await nodeFs.promises.rename(dirPath, newPath);
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          dirPath,
+        throw new UnsupportedRuntimeError(
           'renameDir',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
     } catch (error) {
@@ -3057,12 +3202,13 @@ export const renameDirSync: (dirPath: string, newName: string) => void = (
     if (isDeno) {
       Deno.renameSync(dirPath, newPath);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'renameDirSync');
       nodeFs.renameSync(dirPath, newPath);
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        dirPath,
+      throw new UnsupportedRuntimeError(
         'renameDirSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -3186,6 +3332,7 @@ export const remove: (path: string) => Promise<void> = async (
     if (isDeno) {
       await Deno.remove(targetPath, { recursive: true });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'remove');
       const stats = await nodeFs.promises.stat(targetPath);
       if (stats.isDirectory()) {
         await nodeFs.promises.rm(targetPath, { recursive: true, force: false });
@@ -3193,7 +3340,11 @@ export const remove: (path: string) => Promise<void> = async (
         await nodeFs.promises.unlink(targetPath);
       }
     } else {
-      throw new FileOperationError('Unsupported runtime', targetPath, 'remove');
+      throw new UnsupportedRuntimeError(
+        'remove',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
   } catch (error) {
     if (error instanceof FileOperationError) {
@@ -3225,6 +3376,7 @@ export const removeSync: (path: string) => void = (
     if (isDeno) {
       Deno.removeSync(targetPath, { recursive: true });
     } else if (isBun || isNode) {
+      assertBuiltin(nodeFs, 'node:fs', 'removeSync');
       const stats = nodeFs.statSync(targetPath);
       if (stats.isDirectory()) {
         nodeFs.rmSync(targetPath, { recursive: true, force: false });
@@ -3232,10 +3384,10 @@ export const removeSync: (path: string) => void = (
         nodeFs.unlinkSync(targetPath);
       }
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        targetPath,
+      throw new UnsupportedRuntimeError(
         'removeSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
   } catch (error) {
@@ -3290,9 +3442,14 @@ export const move: (src: string, dest: string) => Promise<void> = async (
       if (isDeno) {
         await Deno.rename(src, dest);
       } else if (isBun || isNode) {
+        assertBuiltin(nodeFs, 'node:fs', 'move');
         await nodeFs.promises.rename(src, dest);
       } else {
-        throw new FileOperationError('Unsupported runtime', src, 'move');
+        throw new UnsupportedRuntimeError(
+          'move',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
+        );
       }
       return;
     } catch (error) {
@@ -3368,9 +3525,14 @@ export const moveSync: (src: string, dest: string) => void = (
       if (isDeno) {
         Deno.renameSync(src, dest);
       } else if (isBun || isNode) {
+        assertBuiltin(nodeFs, 'node:fs', 'moveSync');
         nodeFs.renameSync(src, dest);
       } else {
-        throw new FileOperationError('Unsupported runtime', src, 'moveSync');
+        throw new UnsupportedRuntimeError(
+          'moveSync',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
+        );
       }
       return;
     } catch (error) {
@@ -3424,6 +3586,8 @@ export const makeTempFile: (options?: TempOptions) => Promise<string> = async (
     if (isDeno) {
       return await Deno.makeTempFile(opts);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeOs, 'node:os', 'makeTempFile');
+      assertBuiltin(nodeFs, 'node:fs', 'makeTempFile');
       const tmpdir = opts.dir ?? nodeOs.tmpdir();
       const prefix = opts.prefix ?? '';
       const suffix = opts.suffix ?? '';
@@ -3437,7 +3601,11 @@ export const makeTempFile: (options?: TempOptions) => Promise<string> = async (
       return tempPath;
     }
 
-    throw new FileOperationError('Unsupported runtime', '', 'makeTempFile');
+    throw new UnsupportedRuntimeError(
+      'makeTempFile',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -3468,6 +3636,8 @@ export const makeTempFileSync: (options?: TempOptions) => string = (
     if (isDeno) {
       return Deno.makeTempFileSync(opts);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeOs, 'node:os', 'makeTempFileSync');
+      assertBuiltin(nodeFs, 'node:fs', 'makeTempFileSync');
       const { tmpdir } = nodeOs;
       const tempdir = opts.dir ?? tmpdir();
       const prefix = opts.prefix ?? '';
@@ -3482,7 +3652,11 @@ export const makeTempFileSync: (options?: TempOptions) => string = (
       return tempPath;
     }
 
-    throw new FileOperationError('Unsupported runtime', '', 'makeTempFileSync');
+    throw new UnsupportedRuntimeError(
+      'makeTempFileSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -3513,6 +3687,8 @@ export const makeTempDir: (options?: TempOptions) => Promise<string> = async (
     if (isDeno) {
       return await Deno.makeTempDir(opts);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeOs, 'node:os', 'makeTempDir');
+      assertBuiltin(nodeFs, 'node:fs', 'makeTempDir');
       const tmpdir = opts.dir ?? nodeOs.tmpdir();
       const prefix = opts.prefix ?? '';
       const suffix = opts.suffix ?? '';
@@ -3526,7 +3702,11 @@ export const makeTempDir: (options?: TempOptions) => Promise<string> = async (
       return tempPath;
     }
 
-    throw new FileOperationError('Unsupported runtime', '', 'makeTempDir');
+    throw new UnsupportedRuntimeError(
+      'makeTempDir',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -3557,6 +3737,8 @@ export const makeTempDirSync: (options?: TempOptions) => string = (
     if (isDeno) {
       return Deno.makeTempDirSync(opts);
     } else if (isBun || isNode) {
+      assertBuiltin(nodeOs, 'node:os', 'makeTempDirSync');
+      assertBuiltin(nodeFs, 'node:fs', 'makeTempDirSync');
       const { tmpdir } = nodeOs;
       const tempdir = opts.dir ?? tmpdir();
       const prefix = opts.prefix ?? '';
@@ -3571,7 +3753,11 @@ export const makeTempDirSync: (options?: TempOptions) => string = (
       return tempPath;
     }
 
-    throw new FileOperationError('Unsupported runtime', '', 'makeTempDirSync');
+    throw new UnsupportedRuntimeError(
+      'makeTempDirSync',
+      RUNTIME,
+      'filesystem operations are unavailable in this runtime',
+    );
   } catch (error) {
     if (error instanceof FileOperationError) {
       throw error;
@@ -3876,6 +4062,7 @@ class FileHandle {
         return bytesWritten ?? 0;
       } else if (isBun) {
         /* c8 ignore stop */
+        assertBuiltin(nodeFs, 'node:fs', 'write');
         return new Promise((resolve, reject) => {
           nodeFs.write(
             this.__handle as number,
@@ -3895,10 +4082,10 @@ class FileHandle {
         return result.bytesWritten;
         /* c8 ignore start */
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          this.__path,
+        throw new UnsupportedRuntimeError(
           'write',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
       /* c8 ignore stop */
@@ -3935,13 +4122,14 @@ class FileHandle {
         return (this.__handle as DenoFsFile).writeSync(data);
       } else if (isBun || isNode) {
         /* c8 ignore stop */
+        assertBuiltin(nodeFs, 'node:fs', 'writeSync');
         return nodeFs.writeSync(this.__handle as number, data, 0, data.length);
         /* c8 ignore start */
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          this.__path,
+        throw new UnsupportedRuntimeError(
           'writeSync',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
       /* c8 ignore stop */
@@ -3982,6 +4170,7 @@ class FileHandle {
         await (this.__handle as DenoFsFile).sync();
       } else if (isBun) {
         /* c8 ignore stop */
+        assertBuiltin(nodeFs, 'node:fs', 'sync');
         return new Promise((resolve, reject) => {
           nodeFs.fsync(this.__handle as number, (err) => {
             if (err) reject(err);
@@ -3993,10 +4182,10 @@ class FileHandle {
         await (this.__handle as NodeFsHandle).sync();
         /* c8 ignore start */
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          this.__path,
+        throw new UnsupportedRuntimeError(
           'sync',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
       /* c8 ignore stop */
@@ -4031,13 +4220,14 @@ class FileHandle {
         (this.__handle as DenoFsFile).syncSync();
       } else if (isBun || isNode) {
         /* c8 ignore stop */
+        assertBuiltin(nodeFs, 'node:fs', 'syncSync');
         nodeFs.fsyncSync(this.__handle as number);
         /* c8 ignore start */
       } else {
-        throw new FileOperationError(
-          'Unsupported runtime',
-          this.__path,
+        throw new UnsupportedRuntimeError(
           'syncSync',
+          RUNTIME,
+          'filesystem operations are unavailable in this runtime',
         );
       }
       /* c8 ignore stop */
@@ -4073,6 +4263,7 @@ class FileHandle {
         (this.__handle as DenoFsFile).close();
       } else if (isBun) {
         /* c8 ignore stop */
+        assertBuiltin(nodeFs, 'node:fs', 'close');
         nodeFs.closeSync(this.__handle as number);
       } else if (isNode) {
         // For Node.js async FileHandle, close it without waiting
@@ -4205,6 +4396,7 @@ export const openFile: (
       };
     } else if (isBun || isNode) {
       /* c8 ignore stop */
+      assertBuiltin(nodeFs, 'node:fs', 'openFile');
       // Build POSIX open flags numerically so behaviour matches Deno's
       // Deno.open({read,write,append,create,truncate}) exactly. The old
       // string-flag mapping used 'w'/'w+' for create-without-truncate,
@@ -4254,7 +4446,11 @@ export const openFile: (
       };
       /* c8 ignore start */
     } else {
-      throw new FileOperationError('Unsupported runtime', filePath, 'openFile');
+      throw new UnsupportedRuntimeError(
+        'openFile',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
+      );
     }
     /* c8 ignore stop */
   } catch (error) {
@@ -4367,6 +4563,7 @@ export const openFileSync: (
       };
     } else if (isBun || isNode) {
       /* c8 ignore stop */
+      assertBuiltin(nodeFs, 'node:fs', 'openFileSync');
       // Build POSIX open flags numerically so behaviour matches Deno's
       // Deno.open({read,write,append,create,truncate}) exactly. The old
       // string-flag mapping used 'w'/'w+' for create-without-truncate,
@@ -4396,10 +4593,10 @@ export const openFileSync: (
       };
       /* c8 ignore start */
     } else {
-      throw new FileOperationError(
-        'Unsupported runtime',
-        filePath,
+      throw new UnsupportedRuntimeError(
         'openFileSync',
+        RUNTIME,
+        'filesystem operations are unavailable in this runtime',
       );
     }
     /* c8 ignore stop */

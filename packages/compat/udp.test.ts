@@ -175,8 +175,8 @@ console.log(JSON.stringify({
 
         asserts.assertEquals(
           result.runtime,
-          'NODE',
-          'workerd looks like Node to the detector — that is the trap this guards',
+          'WORKERS',
+          'the detector now identifies workerd as WORKERS, not Node',
         );
         asserts.assertNotEquals(
           result.outcome,

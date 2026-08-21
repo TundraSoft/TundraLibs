@@ -55,7 +55,7 @@ export const args = (): string[] => {
   if (isDeno) return [...g.Deno.args];
   /* c8 ignore stop */
   /* c8 ignore start */
-  if (isBun || isNode) return g.process.argv.slice(2);
+  if (isBun || isNode) return g.process.argv?.slice(2) ?? [];
   /* c8 ignore stop */
   return [];
 };
