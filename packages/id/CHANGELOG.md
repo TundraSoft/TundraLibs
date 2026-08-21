@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/id-v1.1.0...id-v1.1.1) (2026-08-20)
+
+
+### Performance
+
+* **id:** batch per-call CSPRNG draws in cuid and cuid2 ([844b3ba](https://github.com/TundraSoft/TundraLibs/commit/844b3ba71355c8272da918110dec924c62659f94))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.7...id-v1.1.0) (2026-08-20)
 
 

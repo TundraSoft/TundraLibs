@@ -22,10 +22,10 @@ Error classes thrown by `@tundralibs/doctor`.
 Error
 └── BaseError                          // from @tundralibs/utils
     └── DoctorError                    // package base
-        ├── UnregisteredVialError       // inject()/dispense → nothing registered
-        ├── ScopeRequiredError          // SCOPED vial resolved without a scope
+        ├── UnregisteredVialError       // inject()/dispense → nothing registered or stocked
+        ├── ScopeRequiredError          // SCOPED entry resolved without a scope
         ├── CircularDependencyError     // unbreakable dependency cycle
-        └── DuplicateVialError          // same class registered twice
+        └── DuplicateVialError          // same class, or same name, registered twice
 ```
 
 Every error in this package derives from `DoctorError`, which in
@@ -53,7 +53,8 @@ try {
 
 Thrown by `Doctor.dispense` / `Doctor.dispenseByName` (and therefore
 by any `inject()` initializer during construction) when no `@Vial`
-decorator or `prescribe` call has registered the requested class.
+decorator or `prescribe` call has registered the requested class — or
+nothing is stocked under the requested label.
 
 ```typescript ignore
 import { UnregisteredVialError } from '@tundralibs/doctor';
@@ -69,11 +70,12 @@ try {
 
 **Context:**
 
-- `vialName: string` — Constructor name of the missing vial.
+- `vialName: string` — Constructor name of the missing vial, or the
+  label's name.
 
 ## ScopeRequiredError
 
-Thrown by `Doctor.dispense` when a SCOPED vial needs to be
+Thrown by `Doctor.dispense` when a SCOPED vial or label needs to be
 instantiated but no scope was provided — explicitly, or through the
 ambient scope of the driving `Doctor.resolve` / `Doctor.dispense`
 operation. A plain `new` of a class whose `inject()` field targets a
@@ -141,7 +143,12 @@ neither side does (Scenario 5).
 ## DuplicateVialError
 
 Thrown by `Doctor.prescribe` (and the `@Vial` decorator that
-wraps it) when the same class is being registered a second time.
+wraps it) when the same class is being registered a second time, or
+when the class name is already held by a stocked label; and by
+`Doctor.stock` when the name is already taken — by an earlier `stock`
+or by a prescribed class — or the class token is itself already
+registered. Two distinct classes sharing a name do not throw in
+`prescribe` (the last registration wins the name); `stock` refuses it.
 
 ```typescript ignore
 import { DuplicateVialError } from '@tundralibs/doctor';
@@ -155,12 +162,13 @@ try {
     console.log(e.context.vialName); // 'Logger'
   }
 }
+Doctor.stock('Logger', {}); // throws too: the name is the class's
 ```
 
 **Context:**
 
-- `vialName: string` — Constructor name of the already-registered
-  class.
+- `vialName: string` — The contested name: the class's constructor
+  name, or the label's name.
 
 ## Matching strategy
 

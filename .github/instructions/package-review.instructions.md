@@ -32,6 +32,10 @@ invents a bug is worse than one that misses it, because someone acts on it.
   diff alone.
 - State a **failure scenario**: concrete inputs/state → wrong output/crash. If
   you cannot, it is not a finding.
+- **Try to refute it.** Before writing a finding, construct the case that it is
+  *not* a bug — the guard, precondition, invariant, or caller contract that
+  would make the code correct — and read those, not just the diff. If you
+  cannot disprove that case, drop the finding or downgrade it to low-confidence.
 - Prefer **few high-confidence findings** over many speculative ones. Mark
   confidence when unsure; drop it if you cannot substantiate it.
 
@@ -42,10 +46,13 @@ invents a bug is worse than one that misses it, because someone acts on it.
    handles/connections), broken error propagation.
 2. **Security** — input validation (path traversal, injection, malformed
    input), data/secret exposure, permission bypass, resource-exhaustion DoS,
-   weak crypto or key handling.
+   weak crypto or key handling. Treat every external input — call args, file
+   contents, network bytes, env — as hostile; the failure scenario is the
+   malicious one.
 3. **API / usability** — inconsistent patterns for similar operations, unclear
    or inconsistent throw-vs-return, missing async/sync variant, footgun
-   ergonomics, weak type safety where a compile-time guarantee is possible.
+   ergonomics, weak type safety where a compile-time guarantee is possible,
+   error messages that do not name the offending value or how to fix it.
 4. **Performance** — an actual complexity or allocation problem with a plausible
    real-world impact (O(n²) on unbounded input, redundant work in a hot path,
    missing streaming for large data). Not micro-optimizations.
@@ -60,6 +67,12 @@ invents a bug is worse than one that misses it, because someone acts on it.
   capabilities and stale prose the same as code bugs.
 - **Cross-runtime.** Any direct use of a Deno/Bun/Node-only global instead of
   `@tundralibs/compat` breaks a runtime silently.
+- **Side-effect-free imports / barrel hygiene.** Importing a package must not
+  run side effects at module load — it should at least *load* on Workers and
+  the browser — and a barrel must not re-export net-pullers that force
+  consumers to bundle transports/drivers they never imported. Failure scenario:
+  `import { X }` transitively pulls in `Y`, so the package fails to load on
+  Workers or bloats the consumer's bundle.
 - **Consumer resolution.** A doc example importing a sibling `@tundralibs/*`
   package without telling the reader to install it fails for consumers.
 - **Conventions** (see [CONVENTIONS.md](../../CONVENTIONS.md)): privacy `__`/`_`
