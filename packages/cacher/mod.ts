@@ -15,7 +15,7 @@
 
 // Core classes — canonical implementation files.
 export { AbstractEngine } from './AbstractEngine.ts';
-export { Cacher, type EngineConstructor } from './Cacher.ts';
+export { Cacher } from './Cacher.ts';
 
 // Concrete engines — re-exported through the engines/ barrel.
 export { MemCacher, MemoryCacher, RedisCacher } from './engines/mod.ts';
@@ -40,4 +40,5 @@ export type {
   CacherOptions,
   CacheValue,
   CacheValueOptions,
+  EngineConstructor,
 } from './types/mod.ts';

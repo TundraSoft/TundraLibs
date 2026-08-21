@@ -235,12 +235,15 @@ pulls an HTTP client into a CLI or worker that only creates spans. Wrap it in
 import { BatchSpanProcessor, Tracer } from '@tundralibs/tracer';
 import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
 
+// Read from wherever your runtime keeps secrets (Deno.env, process.env, …).
+declare const otlpKey: string;
+
 const tracer = new Tracer({
   serviceName: 'orders',
   exporter: new BatchSpanProcessor(
     new OTLPExporter({
       baseURL: 'http://localhost:4318', // collector root, not the signal path
-      headers: { 'x-api-key': Deno.env.get('OTLP_KEY') ?? '' },
+      headers: { 'x-api-key': otlpKey },
       // Export failures are silent by design — this is how you see them.
       onExportError: (err) => console.error('otlp export failed', err),
     }),

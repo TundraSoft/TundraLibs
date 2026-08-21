@@ -10,8 +10,7 @@
  */
 
 import { BaseError } from '@tundralibs/utils';
-import type { JWTHeader } from '../types/JWTHeader.ts';
-import type { JWTPayload } from '../types/JWTPayload.ts';
+import type { JWTHeader, JWTPayload } from '../types/mod.ts';
 import { type JWTErrorCode, JWTErrorCodes } from './JWTErrorCodes.ts';
 
 /**

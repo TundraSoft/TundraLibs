@@ -31,8 +31,10 @@ export type {
   CounterOptions,
   GaugeOptions,
   HistogramOptions,
+  HistogramSeries,
   MetricOptions,
   MetricOutput,
   MetricType,
   SummaryOptions,
+  SummarySeries,
 } from './types/mod.ts';

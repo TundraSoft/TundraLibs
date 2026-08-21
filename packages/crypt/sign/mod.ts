@@ -28,5 +28,5 @@ export type {
 } from './types/mod.ts';
 export { verifyEC, verifyHMAC, verifyRSA } from './verify.ts';
 export type { DigestAlgorithms } from '../digest/mod.ts';
-export { describeKey } from './keys.ts';
+export { describeKey, importSigningKey } from './keys.ts';
 export type { KeyFamily, KeyShape } from './keys.ts';

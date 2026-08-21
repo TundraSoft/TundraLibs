@@ -5,6 +5,8 @@ Cryptographic key pair generation, random secrets, and BIP39 mnemonics.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -12,13 +14,13 @@ Secure generation of cryptographic keys, random secrets, and mnemonic phrases.
 
 ### Features
 
-| Feature         | Bun | Deno | Node.js |
-| --------------- | --- | ---- | ------- |
-| RSA key pairs   | ✅  | ✅   | ✅      |
-| EC key pairs    | ✅  | ✅   | ✅      |
-| Random secrets  | ✅  | ✅   | ✅      |
-| BIP39 mnemonics | ✅  | ✅   | ✅      |
-| PEM/JWK export  | ✅  | ✅   | ✅      |
+| Feature         | Bun | Deno | Node.js | Workers | Browser |
+| --------------- | --- | ---- | ------- | ------- | ------- |
+| RSA key pairs   | ✅  | ✅   | ✅      | ✅      | ✅      |
+| EC key pairs    | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Random secrets  | ✅  | ✅   | ✅      | ✅      | ✅      |
+| BIP39 mnemonics | ✅  | ✅   | ✅      | ✅      | ✅      |
+| PEM/JWK export  | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 

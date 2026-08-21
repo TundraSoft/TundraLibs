@@ -20,7 +20,7 @@
 import { encodeHex } from '@std/encoding';
 import type { AESOptions, RSAOptions } from './types/mod.ts';
 import { deriveMacSecret, derivePBKDF2Key, SALT_BYTES } from './kdf.ts';
-import { signHMAC } from '../sign/sign.ts';
+import { signHMAC } from '../sign/mod.ts';
 
 /**
  * GCM nonce length in bytes. 96 bits is the length NIST SP 800-38D specifies

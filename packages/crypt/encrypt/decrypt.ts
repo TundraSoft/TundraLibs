@@ -22,7 +22,7 @@
 import { decodeHex } from '@std/encoding';
 import type { AESOptions, RSAOptions } from './types/mod.ts';
 import { deriveMacSecret, derivePBKDF2Key } from './kdf.ts';
-import { verifyHMAC } from '../sign/verify.ts';
+import { verifyHMAC } from '../sign/mod.ts';
 
 /**
  * Parses a PEM-formatted private key string to extract the raw key data.

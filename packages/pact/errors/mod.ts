@@ -5,8 +5,8 @@
  */
 
 export { PactError, type PactErrorMeta } from './Base.ts';
-export { PactDefinitionError } from './DefinitionError.ts';
-export { PactDeniedError } from './DeniedError.ts';
-export { PactTokenError } from './TokenError.ts';
-export { PactOAuthError } from './OAuthError.ts';
+export { PactDefinitionError } from './PactDefinitionError.ts';
+export { PactDeniedError } from './PactDeniedError.ts';
+export { PactTokenError } from './PactTokenError.ts';
+export { PactOAuthError } from './PactOAuthError.ts';
 export { type PactErrorCode, PactErrorCodes } from './PactErrorCodes.ts';

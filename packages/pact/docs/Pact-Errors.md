@@ -8,6 +8,8 @@ a stateless kernel.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Table of Contents
 
@@ -261,7 +263,7 @@ declare const revocationStore: { record(jti: string): void };
 const pact = new PACT({
   bits: { READ: 1n, EDIT: 2n },
   modules: { Post: ['READ', 'EDIT'] },
-  secret: process.env.PACT_SECRET!,
+  secret: 'a-256-bit-shared-secret-for-hs256!', // load from your env store
   // audit every denial; persist every revoked jti to your own store
   _ondenied: (module, permission) => audit.log('denied', module, permission),
   _onrevoked: (claims) => revocationStore.record(String(claims.jti)),

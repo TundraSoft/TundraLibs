@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.6...ambient-v0.2.7) (2026-08-21)
+
+
+### Documentation
+
+* **ambient:** correct the stale ROADMAP ALS note and document Workers support ([#498](https://github.com/TundraSoft/TundraLibs/issues/498)) ([ba19264](https://github.com/TundraSoft/TundraLibs/commit/ba192645e6c7060958513c742e3753f33c7468ff))
+
 ## [0.2.6](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.5...ambient-v0.2.6) (2026-08-18)
 
 

@@ -35,7 +35,7 @@ const LABEL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  * Internal storage shape — labels are kept alongside the value so we
  * never have to parse the canonical key string back into a record.
  */
-export type SeriesEntry<T> = {
+type SeriesEntry<T> = {
   labels: Record<string, string>;
   data: T;
 };

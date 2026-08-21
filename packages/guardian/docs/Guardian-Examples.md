@@ -2,6 +2,12 @@
 
 Real-world patterns. Each example is self-contained and runnable.
 
+![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
+![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
 ## Table of Contents
 
 - [HTTP request body validation](#http-request-body-validation)
@@ -89,7 +95,8 @@ const Env = Guardian.object({
   DEBUG: Guardian.boolean().optional(false),
 });
 
-const config = Env.parse(Deno.env.toObject());
+declare const env: Record<string, string>;
+const config = Env.parse(env);
 // PORT='3000' → config.port: 3000
 // DEBUG='yes' → config.DEBUG: true
 // LOG_LEVEL='debug' → config.LOG_LEVEL: 'DEBUG'  (canonical case)
@@ -121,9 +128,8 @@ const Config = Guardian.object({
   retryPolicy: RetryPolicy.optional(),
 });
 
-const config = Config.parse(
-  JSON.parse(await Deno.readTextFile('./config.json')),
-);
+declare const contents: string;
+const config = Config.parse(JSON.parse(contents));
 ```
 
 ## Database row → domain object

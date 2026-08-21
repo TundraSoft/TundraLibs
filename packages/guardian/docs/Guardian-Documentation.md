@@ -2,6 +2,12 @@
 
 Every guardian can emit machine-readable documentation. Useful for API docs, UI form generation, cross-language codegen, and anywhere else you want a schema description without writing it twice.
 
+![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
+![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
 ## Table of Contents
 
 - [`.toOpenAPI()` — OpenAPI 3.0 fragment](#toopenapi)
