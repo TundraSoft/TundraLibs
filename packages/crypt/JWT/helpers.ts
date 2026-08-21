@@ -15,8 +15,7 @@ import type {
   JWTVerifyOptions,
 } from './types/mod.ts';
 import { JWTError } from './errors/mod.ts';
-import { describeKey } from '../sign/mod.ts';
-import type { ECCurve, SigningKey } from '../sign/mod.ts';
+import { describeKey, type ECCurve, type SigningKey } from '../sign/mod.ts';
 import {
   decodeBase64,
   decodeBase64Url,
