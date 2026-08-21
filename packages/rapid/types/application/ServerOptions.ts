@@ -99,9 +99,25 @@ export type RapidApplicationServerOptions = {
    * individual routes declared a `version`.
    */
   versioning?: {
-    /** @default 'x-api-version' */
-    header?: string;
-    /** Version to use when the header is absent — NOT a fallback for an unrecognized one. */
+    /**
+     * Where the API version is carried:
+     * - `'header'` — a request header (`identifier` = the header name);
+     * - `'accept'` — an `Accept` media-type vendor tag (`identifier` = the
+     *   vendor, matching `application/vnd.<identifier>.<version>+…`);
+     * - `'path'` — a leading path segment (`identifier` = a regex whose
+     *   first capture group is the version; the matched prefix is stripped
+     *   before routing).
+     *
+     * @default 'header'
+     */
+    mode?: 'header' | 'accept' | 'path';
+    /**
+     * Customises the active `mode`: the header name (`header`), the vendor
+     * tag (`accept`), or a capture regex (`path`).
+     * @default 'x-api-version' (header) · '' (accept) · '^/(v[0-9]+)' (path)
+     */
+    identifier?: string;
+    /** Version used when the request carries none — NOT a fallback for an unrecognized one. */
     default?: string;
   };
 };

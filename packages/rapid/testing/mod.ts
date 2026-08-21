@@ -1,0 +1,152 @@
+/**
+ * @fileoverview `@tundralibs/rapid/testing` — the test harness. Re-exports
+ * compat/test's lifecycle so a test file imports everything from here, and
+ * adds `harness()` (boot the module system with fakes, restored on
+ * dispose) and `client()` (drive routes through `app.fetch`, no port).
+ *
+ * @example
+ * ```ts ignore
+ * import { afterAll, beforeAll, describe, it, harness, client } from '@tundralibs/rapid/testing';
+ * ```
+ * @module
+ */
+
+import { Doctor, type Label, type VialClass } from '@tundralibs/doctor';
+import { initModules } from '../modules/mod.ts';
+import type {
+  RapidModuleEventMap,
+  RapidModuleInitOptions,
+  RapidModuleInitResult,
+  RapidModuleSources,
+} from '../types/mod.ts';
+import type { RapidModule } from '../modules/mod.ts';
+import type { Application } from '../Application.ts';
+import type { ModuleRuntime } from '../modules/mod.ts';
+
+export {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  it,
+  test,
+} from '@tundralibs/compat/test';
+
+/** A doctor stub — a `[token, value]` pair, restored (revoked) on dispose. */
+export type Stub = readonly [VialClass | Label | string, unknown];
+
+/** Options for {@link harness}. */
+export type HarnessOptions<
+  M extends readonly object[],
+  I extends Record<string, RapidModule<RapidModuleEventMap>> = Record<
+    never,
+    RapidModule<RapidModuleEventMap>
+  >,
+> = RapidModuleSources<M, I> & {
+  /** Boot context; defaults to a quiet in-memory logger. */
+  context?: RapidModuleInitOptions;
+  /** Fakes stocked in doctor before boot, revoked on dispose. */
+  stub?: readonly Stub[];
+};
+
+/** What {@link harness} returns — the booted modules plus test conveniences. */
+export type Harness<
+  M extends readonly object[],
+  I extends Record<string, RapidModule<RapidModuleEventMap>>,
+> = RapidModuleInitResult<M, I> & {
+  /** `runtime.invoke`, bound. */
+  invoke: ModuleRuntime['invoke'];
+  /** Dispose the runtime and revoke every stub. */
+  dispose(): Promise<void>;
+  [Symbol.asyncDispose](): Promise<void>;
+};
+
+/**
+ * Boot the module system for a test: stock the fakes, run `initModules`,
+ * and hand back `{ modules, runtime, invoke, dispose }`. Call in
+ * `beforeAll` and `dispose()` in `afterAll`, or `await using`. `dispose`
+ * revokes every stub so the process-wide doctor stays clean between tests.
+ */
+export async function harness<
+  const M extends readonly object[],
+  I extends Record<string, RapidModule<RapidModuleEventMap>> = Record<
+    never,
+    RapidModule<RapidModuleEventMap>
+  >,
+>(options: HarnessOptions<M, I>): Promise<Harness<M, I>> {
+  const stubbed: (VialClass | Label | string)[] = [];
+  for (const [token, value] of options.stub ?? []) {
+    if (Doctor.has(token)) Doctor.revoke(token);
+    // deno-lint-ignore no-explicit-any
+    Doctor.stock(token as any, value as any);
+    stubbed.push(token);
+  }
+  const result = await initModules(
+    options.context ?? { name: 'rapid-test', logger: { handlers: [] } },
+    {
+      modules: options.modules,
+      ...(options.instances ? { instances: options.instances } : {}),
+    } as RapidModuleSources<M, I>,
+  );
+  const dispose = async (): Promise<void> => {
+    await result.runtime.dispose();
+    for (const token of stubbed) Doctor.revoke(token);
+  };
+  return {
+    ...result,
+    invoke: result.runtime.invoke.bind(result.runtime),
+    dispose,
+    [Symbol.asyncDispose]: dispose,
+  };
+}
+
+/** A parsed response: `status`, the auto-decoded `body`, and `headers`. */
+export type TestResponse = {
+  status: number;
+  headers: Headers;
+  body: unknown;
+};
+
+/** Per-call options for a {@link client} request. */
+export type ClientOptions = {
+  body?: unknown;
+  headers?: Record<string, string>;
+  query?: Record<string, string>;
+};
+
+type ClientMethod = (
+  path: string,
+  options?: ClientOptions,
+) => Promise<TestResponse>;
+
+/** A route client over `app.fetch` — no port, JSON in/out, parsed responses. */
+export function client(app: Application): Record<
+  'get' | 'post' | 'put' | 'patch' | 'delete',
+  ClientMethod
+> {
+  const call = (method: string): ClientMethod => async (path, options = {}) => {
+    const url = new URL(path, 'http://rapid.test');
+    for (const [k, v] of Object.entries(options.query ?? {})) {
+      url.searchParams.set(k, v);
+    }
+    const init: RequestInit = { method };
+    const headers: Record<string, string> = { ...options.headers };
+    if (options.body !== undefined) {
+      init.body = JSON.stringify(options.body);
+      headers['content-type'] ??= 'application/json';
+    }
+    if (Object.keys(headers).length > 0) init.headers = headers;
+    const res = await app.fetch(new Request(url, init));
+    const ct = res.headers.get('content-type') ?? '';
+    const body = ct.includes('json') ? await res.json() : await res.text();
+    return { status: res.status, headers: res.headers, body };
+  };
+  return {
+    get: call('GET'),
+    post: call('POST'),
+    put: call('PUT'),
+    patch: call('PATCH'),
+    delete: call('DELETE'),
+  };
+}

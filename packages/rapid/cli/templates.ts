@@ -38,7 +38,8 @@ server:
   port: 3000
   hostname: localhost
   versioning:
-    header: x-api-version
+    mode: header
+    identifier: x-api-version
     default: v1
 logger:
   level: INFO

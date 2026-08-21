@@ -1,5 +1,6 @@
 import type { StatusCode } from '@tundralibs/compat/http';
 import type { ServerMetrics } from '@tundralibs/compat/webserver';
+import type { Meter } from '../utils/Meter.ts';
 import type { Slogger } from '@tundralibs/slogger';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
@@ -145,6 +146,11 @@ export abstract class Context<
    */
   public get metrics(): ServerMetrics | undefined {
     return this.app.metrics;
+  }
+
+  /** The metrics recorder ({@link Application.meter}); `undefined` when off. */
+  public get meter(): Meter | undefined {
+    return this.app.meter;
   }
 
   /** Live WebSocket connection metrics — see {@link Application.socketMetrics}. */

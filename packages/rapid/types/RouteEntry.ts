@@ -9,6 +9,7 @@ import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { RapidHTTPHandler } from './HTTPHandler.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
 import type { RapidContextState } from './context/State.ts';
+import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
 
 /** A registered route — stored by the app, consumed by HTTPTransport. */
 export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
@@ -25,4 +26,6 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
    * unversioned.
    */
   version?: string;
+  /** OpenAPI metadata (decorated routes only); read by the assembler. */
+  openapi?: RapidRouteOpenApi;
 };

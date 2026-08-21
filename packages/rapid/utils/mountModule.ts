@@ -19,6 +19,7 @@
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import { decorationsOf, moduleMetaOf } from '../decorators/mod.ts';
 import { RapidModule } from '../modules/RapidModule.ts';
+import type { RapidRouteOpenApi } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
   RapidBinder,
@@ -46,7 +47,7 @@ export type ModuleMountTarget<S extends RapidContextState> = {
   route(
     method: HTTPMethod,
     path: string,
-    options: { version?: string },
+    options: { version?: string; openapi?: RapidRouteOpenApi },
     handler: RapidHTTPHandler<S>,
   ): unknown;
   socket(command: string, handler: RapidSOCKETHandler<S>): unknown;
@@ -219,13 +220,19 @@ function registerDecoration<S extends RapidContextState>(
       // default; either may be absent (an unversioned route).
       const version = decoration.version ?? moduleVersion;
       const invoker = buildInvoker<S>(fn, decoration.binds, instance, label);
-      if (version !== undefined) {
-        target.route(decoration.method, prefix + decoration.path, {
-          version,
-        }, invoker);
-      } else {
-        target.route(decoration.method, prefix + decoration.path, invoker);
-      }
+      const openapi: RapidRouteOpenApi = {
+        binds: decoration.binds,
+        ...(decoration.description !== undefined
+          ? { description: decoration.description }
+          : {}),
+        ...(decoration.response !== undefined
+          ? { response: decoration.response }
+          : {}),
+      };
+      target.route(decoration.method, prefix + decoration.path, {
+        ...(version !== undefined ? { version } : {}),
+        openapi,
+      }, invoker);
       break;
     }
     case 'SOCKET':

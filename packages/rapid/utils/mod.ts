@@ -44,3 +44,10 @@ export {
 } from './resolveClientAddress.ts';
 export { serializeResponse } from './serializeResponse.ts';
 export { type SocketErrorEnvelope, socketOutcome } from './socketOutcome.ts';
+export { resolveVersion, type VersioningConfig } from './resolveVersion.ts';
+export { Meter, type MeterSample } from './Meter.ts';
+export {
+  buildOpenApi,
+  type OpenApiInfo,
+  type OpenApiServer,
+} from './buildOpenApi.ts';

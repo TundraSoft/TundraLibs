@@ -173,22 +173,22 @@ gate — see the wiki/DESIGN.md for the "how it works" side.
   OWN normalization (`__normalizePath` collapses `/+` and trims a
   trailing slash), so a bare string join needs no bespoke path-join
   helper.
-- **DELIBERATELY DEFERRED, not built this pass** (each is additive on
-  top of the mount mechanism, not a prerequisite for it):
-  - **Versioning** (`@Module({ version })` / `@GET(path, { version })`
-    unlocking radrouter's version dimension) — a distinct unit of work
-    (new `server.versioning` config, a request-side version-header
-    read, threading a version param through `route()`/radrouter's
-    `addRoute`/`find`). No `version` option exists on `@Module`/`@GET`
-    today — adding a silently-ignored option would be worse than not
-    having one.
+- Deferred from the mount pass, each additive on top of it — status now:
+  - ✅ **Versioning — DONE 2026-08-22.** `server.versioning` is a single
+    `{ mode: 'header'|'accept'|'path', identifier?, default? }`;
+    `resolveVersion()` reads the inbound version (path mode strips the
+    segment so router/static/OpenAPI see a clean path) and `route()`
+    threads a `version` through to radrouter's `addRoute`/`find`.
+    `@Module({ version })` sets a module default, `@GET(path, { version })`
+    overrides per route.
   - **Opt-in error-registry extension** (modules extending rapid's
     error codes) — plain throws already become a generic 500 via the
     existing disclosure envelope; no new mechanism was needed to ship
-    the mount tier.
-  - **Auth-context handoff** — still undesigned; the binder tier makes
-    no assumption about `state.principal` (nothing added references
-    it).
+    the mount tier. Still deferred.
+  - ✅ **Auth-context handoff — DONE 2026-08-22.** `ctx.auth` (set-once,
+    read-only bag) rides the invoke seed; `authenticate`/`authorize`/
+    `permission`/`jwt` are optional catalog middleware, and `login()` is
+    an endpoint. pact is a type-only import throughout — zero runtime dep.
 - 218 test steps (198 pre-modules + 20 new: `decorators/module.test.ts`,
   `Application.module.test.ts`, plus `assertClassContext`/module-meta
   coverage folded into `decorators/registry.test.ts`); Deno/Bun/node+tsx
@@ -346,7 +346,12 @@ store-injection is the one breaking change and must land before release.
     `modules/mod.ts` barrel on change (the CLI `modules` generator, wired to
     a watcher), so "drop a file in `modules/`" stays live without a runtime
     directory walker.
-- **Metrics collection.** First-class request/invocation metrics
+- ✅ **Metrics collection — DONE 2026-08-22.** A metro-man `Meter`
+  (`app.meter` / `ctx.meter`, opt-in via `server.metrics`) records per
+  invocation in the shared cycle — a counter, a latency histogram, an
+  in-flight gauge, an error counter — labelled `{transport, action,
+  statusClass}`; zero cost when off. The `metrics()` endpoint serves
+  `collect('PROMETHEUS'|'JSON')`. First-class request/invocation metrics
   (counts, latency histograms, in-flight, status classes) per transport.
   WIRE, don't reinvent: compat's `WebServer` already tracks
   `requests.active/total/peakActive` and `metro-man` owns metrics — this
@@ -396,14 +401,23 @@ store-injection is the one breaking change and must land before release.
   doctor-injected Norm, Posts events, CommentsSocket → `invoke(Posts,
   'get')`, event-only Audit, static barrel). Pending: auth credentials
   slot riding the invoke seed (see Auth below).
-- **Testing helper (`@tundralibs/rapid/testing`).** First-class module/
+- ✅ **Testing helper (`@tundralibs/rapid/testing`) — DONE 2026-08-22.**
+  Re-exports compat/test's lifecycle + `harness()` (stub fakes via doctor,
+  boot initModules, restore on dispose — `await using` or `beforeAll`/
+  `afterAll`) + `client(app)` (drive routes over `app.fetch`, parsed
+  responses). First-class module/
   route testing without a socket or a bound port: register fakes for the
   injected services and drive a module method or a route through the
   invocation cycle directly, asserting on the `RapidContextResponse`.
   Makes the "modules are unit-testable in isolation" story a shipped
   utility instead of hand-rolled per app (the blog example's fake-Norm
   test is the pattern to generalize).
-- **OpenAPI documentation — automatic + exposed.** Generate an OpenAPI
+- ✅ **OpenAPI documentation — DONE 2026-08-22.** `buildOpenApi` assembles
+  a 3.0.3 doc from `app.routes` + metadata carried on the route entry at
+  mount (`toOpenAPI` schemas, descriptions, path params; one shared
+  `RapidError` envelope component with the `RAPID_*` codes). The
+  `openapi()` endpoint serves it (cached per version; `?version=` selects;
+  `expose` gates by mode; JSON only — mount your own Swagger). Generate an OpenAPI
   spec straight from the decorator registry and serve it (e.g.
   `/openapi.json` + a docs UI). The raw material already exists: routes/
   methods/versions from the registry, path/query/payload params from the

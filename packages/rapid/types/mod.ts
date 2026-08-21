@@ -48,6 +48,7 @@ export type { RapidMiddleware } from './Middleware.ts';
 export type { RapidSOCKETHandler } from './SOCKETHandler.ts';
 export type { RapidSOCKETMiddleware } from './SOCKETMiddleware.ts';
 export type { RapidRouteEntry } from './RouteEntry.ts';
+export type { RapidRouteOpenApi } from './RouteOpenApi.ts';
 export type { RapidSocketEntry } from './SocketEntry.ts';
 export type { RapidModuleClass } from './module/Class.ts';
 export type { RapidModuleContext } from './module/Context.ts';

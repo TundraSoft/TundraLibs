@@ -3,6 +3,7 @@ import { SpanKind } from '@tundralibs/tracer';
 import type { Application } from '../Application.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import type { Meter } from '../utils/Meter.ts';
 import type { RapidContextState } from '../types/mod.ts';
 
 /**
@@ -51,7 +52,61 @@ export abstract class Transport<
    * their post-invoke logging isn't ambient-correlated today, and
    * this doesn't change that) simply omit it.
    */
+  /**
+   * The invocation cycle, bracketed by metrics when `server.metrics` is
+   * on: in-flight up, run, in-flight down + count + latency. Off → the
+   * inner call directly, no allocation.
+   */
   protected _invoke<C extends Context<S, unknown>, R = void>(
+    ctx: C,
+    chain: (ctx: C, next: () => void | Promise<void>) => void | Promise<void>,
+    dispatch: () => void | Promise<void>,
+    parent?: unknown,
+    attributes?: Record<string, string | number | boolean>,
+    finalize?: () => R | Promise<R>,
+  ): R | Promise<R> {
+    const meter: Meter | undefined = this._app.meter;
+    if (meter === undefined) {
+      return this.__runInvoke(
+        ctx,
+        chain,
+        dispatch,
+        parent,
+        attributes,
+        finalize,
+      );
+    }
+    const transport = ctx.type;
+    const start = meter.begin(transport);
+    const close = (): void =>
+      meter.end({ transport, action: ctx.action, status: ctx.status, start });
+    const result = this.__runInvoke<C, R>(
+      ctx,
+      chain,
+      dispatch,
+      parent,
+      attributes,
+      finalize,
+    );
+    if (
+      result !== undefined && typeof (result as Promise<R>).then === 'function'
+    ) {
+      return (result as Promise<R>).then(
+        (r) => {
+          close();
+          return r;
+        },
+        (e) => {
+          close();
+          throw e;
+        },
+      );
+    }
+    close();
+    return result;
+  }
+
+  private __runInvoke<C extends Context<S, unknown>, R = void>(
     ctx: C,
     chain: (ctx: C, next: () => void | Promise<void>) => void | Promise<void>,
     dispatch: () => void | Promise<void>,

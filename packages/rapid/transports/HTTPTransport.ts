@@ -11,7 +11,7 @@ import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { compose, socketOutcome } from '../utils/mod.ts';
+import { compose, resolveVersion, socketOutcome } from '../utils/mod.ts';
 import type {
   RapidChannelOptions,
   RapidContextResponse,
@@ -343,13 +343,17 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // Bun/Node) delivers `request.url` UN-normalized, so scanning it
     // would route `/a/../b` differently per runtime. The query is still
     // parsed only lazily, when a handler reads `ctx.args`.
-    const pathname = new URL(request.url).pathname;
-    // Absent header → undefined, resolved by the router's own
-    // exact → defaultVersion → unversioned fallback (constructor
-    // option below) — NOT re-defaulted here, so an unrecognized
-    // version is a genuine miss rather than silently coerced.
-    const version = request.headers.get(serverOptions.versioning!.header!) ??
-      undefined;
+    const rawPathname = new URL(request.url).pathname;
+    // Version + the pathname to route on, per the configured mode
+    // (header/accept/path). `path` mode strips the version segment so the
+    // router (and static/OpenAPI) see a clean path. Absent version →
+    // undefined, resolved by the router's own exact → defaultVersion →
+    // unversioned fallback — NOT re-defaulted here.
+    const { version, pathname } = resolveVersion(
+      request.headers,
+      rawPathname,
+      serverOptions.versioning!,
+    );
     const match = this.__router.find(method, pathname, version);
     const entry = match?.middlewares[0];
 

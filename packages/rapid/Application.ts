@@ -21,6 +21,7 @@ import {
   buildExporter,
   buildState,
   hasDecorations,
+  Meter,
   mountModule,
 } from './utils/mod.ts';
 import {
@@ -45,6 +46,7 @@ import type {
   RapidModuleInitResult,
   RapidModuleSources,
   RapidRouteEntry,
+  RapidRouteOpenApi,
   RapidSocketEntry,
   RapidSOCKETHandler,
   RapidSOCKETMiddleware,
@@ -110,6 +112,7 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __http?: HTTPTransport<S>;
   private __jobTransport?: JOBTransport<S>;
   private __moduleRuntime?: ModuleRuntime;
+  private readonly __meter?: Meter;
   /**
    * The upload temp dir THIS instance created (`uploads.path` left
    * unset) — `undefined` when the caller supplied their own path, which
@@ -189,7 +192,7 @@ export class Application<S extends RapidContextState = RapidContextState>
             ...options.server?.query,
           },
           versioning: {
-            header: 'x-api-version',
+            mode: 'header',
             ...options.server?.versioning,
           },
         },
@@ -223,6 +226,9 @@ export class Application<S extends RapidContextState = RapidContextState>
       throw error;
     }
     this.__ownedUploadPath = ownedUploadPath;
+    // Metrics are opt-in — a Meter exists only when server.metrics is on,
+    // so the invoke cycle pays nothing otherwise.
+    if (this.option('server')?.metrics === true) this.__meter = new Meter();
     this._state = defaultState ?? ({} as S);
     this.config = config ?? Config({});
 
@@ -438,7 +444,7 @@ export class Application<S extends RapidContextState = RapidContextState>
   public route(
     method: HTTPMethod,
     path: string,
-    options: { version?: string },
+    options: { version?: string; openapi?: RapidRouteOpenApi },
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
   public route(
@@ -454,9 +460,10 @@ export class Application<S extends RapidContextState = RapidContextState>
     }
     const hasOptions = args.length > 0 && typeof args[0] === 'object' &&
       args[0] !== null;
-    const version = hasOptions
-      ? (args[0] as { version?: string }).version
-      : undefined;
+    const opts = hasOptions
+      ? (args[0] as { version?: string; openapi?: RapidRouteOpenApi })
+      : {};
+    const version = opts.version;
     const chain = (hasOptions ? args.slice(1) : args) as [
       ...RapidHTTPMiddleware[],
       RapidHTTPHandler<S>,
@@ -473,6 +480,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       middlewares: chain.slice(0, -1) as RapidHTTPMiddleware[],
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
       ...(version !== undefined ? { version } : {}),
+      ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
     });
     return this;
   }
@@ -652,6 +660,15 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   public get metrics(): ServerMetrics | undefined {
     return this.__http?.metrics;
+  }
+
+  /**
+   * The metro-man metrics recorder — per-transport counters, a latency
+   * histogram, and in-flight — or `undefined` when `server.metrics` is
+   * off. The `metrics()` endpoint serves `meter.collect(...)`.
+   */
+  public get meter(): Meter | undefined {
+    return this.__meter;
   }
 
   /**

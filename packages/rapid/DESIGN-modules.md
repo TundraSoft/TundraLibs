@@ -161,13 +161,17 @@ So `/users/:id:` v1 and v2 are the SAME path with two handlers — not
 two paths. rAPId therefore has to answer one question radrouter cannot:
 **where does an inbound request declare its version?**
 
-Proposed: a configurable header, because a `/v1/...` path prefix would
-bypass the version dimension entirely and just be two paths.
+Shipped: a single `mode` selects where the version is read — `header` (a
+named request header), `accept` (a `vnd.<id>.<ver>+json` media type), or
+`path` (the first URL segment, which rapid then STRIPS so the router,
+static files and OpenAPI all see the clean path — it maps onto the version
+dimension rather than degrading into two separate paths).
 
 ```yaml
 server:
   versioning:
-    header: x-api-version # default; `accept-version` also common
+    mode: header # header | accept | path
+    identifier: x-api-version # header name / accept `vnd.<id>.` / path segment
     default: '1' # → RadRouter's defaultVersion
 ```
 
