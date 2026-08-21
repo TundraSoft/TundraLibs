@@ -25,8 +25,7 @@
  */
 
 import { connect } from '@tundralibs/compat/net';
-import { PgConnection } from '../postgres/PgConnection.ts';
-import { PgServerError } from '../postgres/PgServerError.ts';
+import { PgConnection, PgServerError } from '../postgres/mod.ts';
 
 /** Connection target for the Postgres the proxy fronts. */
 export type NeonPgProxyConfig = {

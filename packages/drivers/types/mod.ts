@@ -23,10 +23,8 @@ export type { MemcachedEngineEvents } from './MemcachedEngineEvents.ts';
 export type { MongoEngineEvents } from './MongoEngineEvents.ts';
 export type { QueryEngineEvents } from './QueryEngineEvents.ts';
 export type { RedisEngineEvents } from './RedisEngineEvents.ts';
-export type {
-  SQLDialect,
-  SQLEngineCapabilities,
-} from './SQLEngineCapabilities.ts';
+export type { SQLDialect } from './SQLDialect.ts';
+export type { SQLEngineCapabilities } from './SQLEngineCapabilities.ts';
 export type { SQLEngineEvents } from './SQLEngineEvents.ts';
 export type { SQLEngineOptions } from './SQLEngineOptions.ts';
 export type { TransactionScope } from './TransactionScope.ts';

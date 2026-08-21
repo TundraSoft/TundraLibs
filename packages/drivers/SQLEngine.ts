@@ -252,7 +252,7 @@ export abstract class SQLConnectionEngine<
       // Claim the transaction's single connection for this one statement.
       // Overlapping statements on the same tx would protocol-error and could
       // release the shared client while a sibling is still awaiting it.
-      this.#claimTxConnection(tx, standardized.transactionId);
+      this.__claimTxConnection(tx, standardized.transactionId);
       txTurn = tx;
       client = tx.client;
     } else {
@@ -518,7 +518,7 @@ export abstract class SQLConnectionEngine<
   public async createSavepoint(transactionId: string): Promise<string> {
     const tx = this.__requireActiveTx(transactionId);
     const name = `sp_${++tx.spCounter}`;
-    await this.#onTxConnection(
+    await this.__onTxConnection(
       tx,
       transactionId,
       () => this._execute({ sql: `SAVEPOINT ${name}` }, tx.client),
@@ -543,7 +543,7 @@ export abstract class SQLConnectionEngine<
   ): Promise<void> {
     const tx = this.__requireActiveTx(transactionId);
     try {
-      await this.#onTxConnection(
+      await this.__onTxConnection(
         tx,
         transactionId,
         () => this._execute({ sql: `RELEASE SAVEPOINT ${name}` }, tx.client),
@@ -576,7 +576,7 @@ export abstract class SQLConnectionEngine<
   ): Promise<void> {
     const tx = this.__requireActiveTx(transactionId);
     try {
-      await this.#onTxConnection(
+      await this.__onTxConnection(
         tx,
         transactionId,
         () =>
@@ -611,7 +611,7 @@ export abstract class SQLConnectionEngine<
    * corruption) or release the shared client while a sibling is in flight.
    * The caller must clear `busy` in a `finally`.
    */
-  #claimTxConnection(tx: TxRecord<T>, transactionId: string): void {
+  private __claimTxConnection(tx: TxRecord<T>, transactionId: string): void {
     if (tx.busy) {
       throw new EngineError('TRANSACTION_OPERATION_ERROR', {
         instanceId: this.instanceId,
@@ -628,12 +628,12 @@ export abstract class SQLConnectionEngine<
 
   /** Run one wire op on a transaction's connection under the single-in-flight
    * guard, always clearing `busy` afterwards. */
-  async #onTxConnection<R>(
+  private async __onTxConnection<R>(
     tx: TxRecord<T>,
     transactionId: string,
     op: () => Promise<R>,
   ): Promise<R> {
-    this.#claimTxConnection(tx, transactionId);
+    this.__claimTxConnection(tx, transactionId);
     try {
       return await op();
     } finally {
@@ -706,13 +706,13 @@ export abstract class SQLConnectionEngine<
     arg2?: EngineTransactionOptions,
   ): Promise<unknown> {
     if (typeof arg1 === 'function') {
-      return this.#runInTransaction(arg1, arg2);
+      return this.__runInTransaction(arg1, arg2);
     }
-    return this.#transactionHandle(arg1);
+    return this.__transactionHandle(arg1);
   }
 
   /** The manual-handle body (the `@internal` overload). */
-  async #transactionHandle(options?: EngineTransactionOptions) {
+  private async __transactionHandle(options?: EngineTransactionOptions) {
     const id = await this.beginTransaction(options);
     return {
       id,
@@ -726,14 +726,14 @@ export abstract class SQLConnectionEngine<
 
   /** Callback transaction: BEGIN → fn → COMMIT/ROLLBACK, always
    * releasing the connection. */
-  async #runInTransaction<T>(
+  private async __runInTransaction<T>(
     fn: (tx: TransactionScope) => Promise<T>,
     options?: EngineTransactionOptions,
   ): Promise<T> {
     const id = await this.beginTransaction(options);
     let result: T;
     try {
-      result = await fn(this.#scope(id));
+      result = await fn(this.__scope(id));
     } catch (err) {
       // Roll back on any failure; a rollback error must not mask the
       // caller's original error.
@@ -769,19 +769,19 @@ export abstract class SQLConnectionEngine<
   /** Callback savepoint: SAVEPOINT → fn → RELEASE / ROLLBACK-TO+RELEASE.
    * The engine's savepoint-aware auto-rollback already unwinds a failed
    * SQL statement to `name`, so on a JS throw this is what unwinds it. */
-  async #runInSavepoint<T>(
+  private async __runInSavepoint<T>(
     txId: string,
     fn: (tx: TransactionScope) => Promise<T>,
   ): Promise<T> {
     const name = await this.createSavepoint(txId);
     let result: T;
     try {
-      result = await fn(this.#scope(txId));
+      result = await fn(this.__scope(txId));
     } catch (err) {
       try {
         await this.rollbackToSavepoint(txId, name);
       } catch { /* the engine may have already unwound it */ }
-      await this.#safeReleaseSavepoint(txId, name);
+      await this.__safeReleaseSavepoint(txId, name);
       throw err;
     }
     // Swallow a RELEASE failure on the success path too: the nested block's
@@ -789,14 +789,17 @@ export abstract class SQLConnectionEngine<
     // outer commit/rollback drops the savepoint regardless. A benign RELEASE
     // hiccup must never turn a fully successful block into a thrown error
     // (which would escalate to rolling back the entire outer transaction).
-    await this.#safeReleaseSavepoint(txId, name);
+    await this.__safeReleaseSavepoint(txId, name);
     return result;
   }
 
   /** RELEASE a savepoint, swallowing any failure — the pending outer
    * commit/rollback folds/drops it regardless, so a cleanup hiccup here can
    * never turn a succeeded block into a throw. */
-  async #safeReleaseSavepoint(txId: string, name: string): Promise<void> {
+  private async __safeReleaseSavepoint(
+    txId: string,
+    name: string,
+  ): Promise<void> {
     try {
       await this.releaseSavepoint(txId, name);
     } catch { /* benign — released by the outer commit/rollback */ }
@@ -804,7 +807,7 @@ export abstract class SQLConnectionEngine<
 
   /** A {@link TransactionScope} bound to `id` — `execute` runs on the
    * transaction's connection, `transaction` opens a nested savepoint. */
-  #scope(id: string): TransactionScope {
+  private __scope(id: string): TransactionScope {
     // Pin the scope to the exact transaction instance it was opened for.
     // A scope leaked past its callback must fail closed — with a generated
     // id the record is simply gone, but with a reused `options.name` the id
@@ -836,7 +839,7 @@ export abstract class SQLConnectionEngine<
         fn: (tx: TransactionScope) => Promise<T>,
       ): Promise<T> => {
         assertLive();
-        return await this.#runInSavepoint(id, fn);
+        return await this.__runInSavepoint(id, fn);
       },
     };
   }
@@ -1404,7 +1407,7 @@ export abstract class SQLConnectionEngine<
       if (!tx || tx.state !== 'ACTIVE') return;
       tx.state = 'TIMEOUT';
       // A statement may still be in flight on this transaction's single
-      // reserved connection (`busy` is set by `#claimTxConnection` and held
+      // reserved connection (`busy` is set by `__claimTxConnection` and held
       // across the `await` of `_execute`). If so, the timer must NOT touch
       // the wire or the pool:
       //   1. Writing ROLLBACK onto the same socket the in-flight query is
@@ -1497,7 +1500,7 @@ export abstract class SQLConnectionEngine<
  * (`ConnectionEngine` vs `SQLConnectionEngine`) they can share no base class,
  * so the divergence-prone lifecycle logic is instead single-sourced in
  * `poolLifecycle.ts` and both classes delegate to it (`connect` here just
- * calls `poolConnect(this._host)`); `disconnect` additionally rolls back
+ * calls `poolConnect(this.__host)`); `disconnect` additionally rolls back
  * active transactions first. See that module for the rationale.
  *
  * @template T - Native client / connection resource type held by the pool.
@@ -1529,7 +1532,7 @@ export abstract class SQLEngine<
    * `ping` logic is single-sourced there, shared byte-for-byte with
    * {@link PooledConnectionEngine}.
    */
-  private readonly _host: PooledHost<T> = this as unknown as PooledHost<T>;
+  private readonly __host: PooledHost<T> = this as unknown as PooledHost<T>;
 
   //#endregion Pool
 
@@ -1567,7 +1570,7 @@ export abstract class SQLEngine<
 
   /** Snapshot of pool statistics. */
   public override get poolStats(): EnginePoolStats {
-    return poolStatsSnapshot(this._host);
+    return poolStatsSnapshot(this.__host);
   }
 
   /**
@@ -1584,7 +1587,7 @@ export abstract class SQLEngine<
    * @emits connectionFailed - On connection failure
    */
   public override connect(): Promise<void> {
-    return poolConnect(this._host);
+    return poolConnect(this.__host);
   }
 
   /**
@@ -1603,7 +1606,7 @@ export abstract class SQLEngine<
    */
   public override async disconnect(): Promise<void> {
     await this.rollbackAllTransactions();
-    return poolDisconnect(this._host);
+    return poolDisconnect(this.__host);
   }
 
   /**
@@ -1613,7 +1616,7 @@ export abstract class SQLEngine<
    * ping itself fails — callers can poll without try/catch ceremony.
    */
   public override ping(): Promise<boolean> {
-    return poolPing(this._host);
+    return poolPing(this.__host);
   }
 
   //#endregion Public API

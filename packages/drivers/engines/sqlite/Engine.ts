@@ -136,7 +136,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
    * Resolved schema directory (`<path>/<name>/`). `null` in `':memory:'`
    * mode. Set on first `_createResource()` call.
    */
-  #schemaDir: string | null = null;
+  private __schemaDir: string | null = null;
 
   /**
    * Per-connection prepared-statement cache. Keyed by `SqliteDb` (the
@@ -147,7 +147,8 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
    * `_destroyResource`), cache overflow (LRU evict), and cache
    * invalidation (after any DDL/ATTACH/DETACH passes through).
    */
-  #preparedCache: WeakMap<SqliteDb, Map<string, SqliteStmt>> = new WeakMap();
+  private __preparedCache: WeakMap<SqliteDb, Map<string, SqliteStmt>> =
+    new WeakMap();
 
   /**
    * Validates options; the database file is neither created nor opened until
@@ -169,7 +170,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
    * Useful for tests and tooling that need to inspect or clean up files.
    */
   public get schemaDir(): string | null {
-    return this.#schemaDir;
+    return this.__schemaDir;
   }
 
   //#region BaseEngine hooks
@@ -209,7 +210,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     if (this._getOption('create') !== false) {
       await makeDir(dir, { recursive: true });
     }
-    this.#schemaDir = dir;
+    this.__schemaDir = dir;
     const mainDb = join(dir, 'main.db');
     const db = await this._openDatabase(mainDb, {
       readonly: this._getOption('readonly'),
@@ -255,7 +256,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     // Finalize cached prepared statements before closing the handle —
     // some bindings (notably better-sqlite3) leak file descriptors if
     // the underlying database is closed while statements are live.
-    this.#dropCache(db);
+    this.__dropCache(db);
     try {
       db.close();
     } catch {
@@ -282,7 +283,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   protected override _standardizeQuery(query: EngineQuery): EngineQuery {
     const standardized = super._standardizeQuery(query);
     if (
-      this.#schemaDir && /^\s*ATTACH\s+DATABASE\s+'/i.test(standardized.sql)
+      this.__schemaDir && /^\s*ATTACH\s+DATABASE\s+'/i.test(standardized.sql)
     ) {
       // Cheap rewrite: replace the first single-quoted string in the
       // statement with its absolute form when it's a bare filename. We
@@ -295,7 +296,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
             // Already absolute or otherwise qualified — leave it alone.
             return _match;
           }
-          return `ATTACH DATABASE '${join(this.#schemaDir!, file)}'`;
+          return `ATTACH DATABASE '${join(this.__schemaDir!, file)}'`;
         },
       );
       return { ...standardized, sql: newSql };
@@ -312,13 +313,13 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     query: EngineQuery,
     client: SqliteDb,
   ): Promise<{ data: R[]; count: number }> {
-    const result = await this.#runQuery<R>(query, client);
+    const result = await this.__runQuery<R>(query, client);
 
     // Schema-lifecycle bookkeeping: when the user just DETACHed a
     // schema, unlink the underlying file so DROP_SCHEMA is a complete
     // round-trip. Cheap substring gate first so the regex doesn't run on
     // every query — the translator emits uppercase `DETACH DATABASE`.
-    if (this.#schemaDir && query.sql.includes('DETACH')) {
+    if (this.__schemaDir && query.sql.includes('DETACH')) {
       const detachMatch =
         /^\s*DETACH\s+DATABASE\s+(?:"([^"]+)"|`([^`]+)`|([A-Za-z_]\w*))/i
           .exec(query.sql);
@@ -326,7 +327,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
         const schemaName = detachMatch[1] ?? detachMatch[2] ?? detachMatch[3];
         if (schemaName && schemaName.toLowerCase() !== 'main') {
           try {
-            await remove(join(this.#schemaDir, `${schemaName}.db`));
+            await remove(join(this.__schemaDir, `${schemaName}.db`));
           } catch {
             // Best effort — file might not exist if the schema was
             // attached from outside the directory.
@@ -338,7 +339,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     return result;
   }
 
-  #runQuery<R extends Record<string, unknown>>(
+  private __runQuery<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: SqliteDb,
   ): Promise<{ data: R[]; count: number }> {
@@ -348,7 +349,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
         if (_isDml(query.sql)) {
           // Cacheable path: borrow from the per-connection LRU. The
           // statement stays cached, no finalize.
-          const stmt = this.#getOrPrepare(client, query.sql);
+          const stmt = this.__getOrPrepare(client, query.sql);
           if (_isSelect(query.sql)) {
             const rows = stmt.all(args) as R[];
             resolve({ data: rows, count: rows.length });
@@ -375,7 +376,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
           // Savepoint open/release don't mutate the schema — keep the
           // prepared-statement cache so nested transactions don't thrash
           // it on the single shared connection.
-          if (!_isCacheSafeSavepoint(query.sql)) this.#dropCache(client);
+          if (!_isCacheSafeSavepoint(query.sql)) this.__dropCache(client);
         }
       } catch (e) {
         reject(e);
@@ -388,11 +389,11 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
    * touch on hit by deleting + reinserting (Map preserves insertion
    * order, so the first key is always the oldest).
    */
-  #getOrPrepare(db: SqliteDb, sql: string): SqliteStmt {
-    let cache = this.#preparedCache.get(db);
+  private __getOrPrepare(db: SqliteDb, sql: string): SqliteStmt {
+    let cache = this.__preparedCache.get(db);
     if (!cache) {
       cache = new Map();
-      this.#preparedCache.set(db, cache);
+      this.__preparedCache.set(db, cache);
     }
     const cached = cache.get(sql);
     if (cached) {
@@ -416,8 +417,8 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   }
 
   /** Finalize and drop every cached statement for this connection. */
-  #dropCache(db: SqliteDb): void {
-    const cache = this.#preparedCache.get(db);
+  private __dropCache(db: SqliteDb): void {
+    const cache = this.__preparedCache.get(db);
     if (!cache) return;
     for (const stmt of cache.values()) {
       try {

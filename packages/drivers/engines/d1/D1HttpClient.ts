@@ -45,8 +45,7 @@
  * @module
  */
 
-import { RESTler } from '@tundralibs/restler';
-import type { RESTlerOptions } from '@tundralibs/restler';
+import { RESTler, type RESTlerOptions } from '@tundralibs/restler';
 import { DriverError } from '../../errors/mod.ts';
 import { D1HttpError } from './D1HttpError.ts';
 import type {
