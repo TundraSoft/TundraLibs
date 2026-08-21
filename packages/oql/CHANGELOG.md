@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.1.0...oql-v1.1.1) (2026-08-21)
+
+
+### Refactoring
+
+* **oql:** align with repo conventions ([f6c77f0](https://github.com/TundraSoft/TundraLibs/commit/f6c77f0d24c00b28825cb526da9bbd9f6bf0cec6))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.5...oql-v1.1.0) (2026-08-19)
 
 
