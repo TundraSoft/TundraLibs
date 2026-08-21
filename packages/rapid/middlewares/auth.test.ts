@@ -5,7 +5,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { authenticate, authorize, permission } from './auth.ts';
+import { authenticate, authorize, jwt, permission } from './auth.ts';
 import { initModules, RapidModule, Use } from '../modules/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 
@@ -140,5 +140,28 @@ describe('rapid.middlewares.auth', () => {
     });
     asserts.assertEquals(ok.status, 200);
     await runtime.dispose();
+  });
+  it('jwt(pact) turns a PACT.verifyJWT into a verify hook — valid → auth, invalid → anonymous', async () => {
+    // A stand-in PACT: any token but "bad" verifies to its claims.
+    const pact = {
+      verifyJWT: (token: string) =>
+        token === 'bad'
+          ? Promise.reject(new Error('invalid'))
+          : Promise.resolve({ id: token, role: 'member' }),
+    };
+    const app = make();
+    app.use(authenticate({ verify: jwt(pact) }));
+    app.get('/me', (ctx) => ({ content: { auth: ctx.auth ?? null } }));
+    const ok = await (await app.fetch(
+      new Request('http://app/me', { headers: { authorization: 'Bearer u1' } }),
+    )).json();
+    asserts.assertEquals(ok.auth, { id: 'u1', role: 'member' });
+    const bad = await (await app.fetch(
+      new Request('http://app/me', {
+        headers: { authorization: 'Bearer bad' },
+      }),
+    )).json();
+    asserts.assertEquals(bad.auth, null); // failed verify → anonymous, not a 500
+    await app.stop();
   });
 });

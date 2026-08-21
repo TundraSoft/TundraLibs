@@ -5,9 +5,11 @@
  * `rateLimit`). `authenticate` identifies (fills the bag, never rejects);
  * `authorize` enforces (401 anonymous, 403 denied). Both read/write the
  * same `ctx.auth`, so writing your own instead is a drop-in. The
- * {@link permission} helper turns a `@tundralibs/pact` check into an
- * `authorize` predicate — pact is a type-only import here, so using it
- * adds no runtime dependency unless you pass a `Permissions` instance.
+ * The {@link jwt} and {@link permission} helpers wire `@tundralibs/pact`
+ * in — `jwt(pact)` builds `authenticate`'s `verify` from a PACT instance's
+ * JWT layer, `permission(perms, …)` builds an `authorize` check from its
+ * bitmask grants. Both take pact as a type-only import, so using them adds
+ * no runtime dependency unless you pass the pact object in.
  *
  * @module
  */
@@ -118,4 +120,33 @@ export function permission(
 ): (auth: AuthBag) => boolean {
   return (auth) =>
     perms.has(module, perm, (auth[grantsKey] as Record<string, bigint>) ?? {});
+}
+
+/**
+ * A minimal PACT-facade shape — enough to verify a token without a
+ * runtime dependency on pact (type-only). Your app constructs the real
+ * `PACT` and passes it in.
+ */
+type PactAuthLike = {
+  verifyJWT(token: string): Promise<Record<string, unknown>>;
+};
+
+/**
+ * Build {@link authenticate}'s `verify` from a pact `PACT` instance:
+ * `authenticate({ verify: jwt(pact) })`. Verifies the bearer token via
+ * pact's JWT layer and returns the claims as the auth bag; a token that
+ * fails verification (bad signature, expired, revoked) yields `null`, so
+ * the request stays anonymous rather than erroring — `authenticate` never
+ * rejects. pact is imported by YOUR app and passed as `pact`.
+ */
+export function jwt(
+  pact: PactAuthLike,
+): (token: string) => Promise<AuthBag | null> {
+  return async (token) => {
+    try {
+      return await pact.verifyJWT(token);
+    } catch {
+      return null;
+    }
+  };
 }

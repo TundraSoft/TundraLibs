@@ -12,6 +12,7 @@ export {
   authenticate,
   type AuthenticateOptions,
   authorize,
+  jwt,
   permission,
 } from './auth.ts';
 export { compress, type CompressOptions } from './compress.ts';
