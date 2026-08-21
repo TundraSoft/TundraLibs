@@ -296,20 +296,51 @@ store-injection is the one breaking change and must land before release.
   - **`health`** — hit a running app's `healthCheck` path (+ metrics) from
     the terminal; a CI/ops smoke.
     Not a route inspector — the live wired-surface view is the dashboard.
-- **Live dev dashboard (TUI).** When the app runs directly in
-  `DEVELOPMENT`, replace the plain log spew with a live terminal
-  dashboard: an ASCII rAPId banner; a header strip (host:port, total
-  routes, total crons, total open socket connections); a live metrics
-  strip below it (throughput, latency, in-flight, status classes); a live
-  activity window (current/recent API calls with time-taken); and a
-  bottom log pane showing only the last ~10–20 lines (a rolling tail, not
-  the full stream) so the window stays legible. `PRODUCTION` keeps plain
-  structured (JSON-line) logs — no TUI. Consumes the metrics item's live
-  feed and the decorator registry for the counts.
-  In DEVELOPMENT it also WATCHES the modules folder and regenerates the
-  `modules/mod.ts` barrel on change (the CLI `modules` generator, wired to
-  a watcher), so "drop a file in `modules/`" stays live without a runtime
-  directory walker.
+- **Dev console (TUI). 🎨 DESIGN FROZEN 2026-08-22; build pending.** A
+  full-screen alternate-buffer terminal console that replaces the plain
+  log spew when the app runs on a TTY. Frozen spec (mockup + runnable
+  preview exist):
+  - **Regions, each backed by an existing getter** (the renderer invents
+    no data): ASCII-Shadow `RAPID` banner + bind line (`app.mode` /
+    `app.address` / `app.port` / `RUNTIME` / `app.instanceId`);
+    registered totals (`app.routes` / `socketCommands` /
+    `jobMetrics.total` / `moduleRuntime.modules` / `middlewares` /
+    `declaredEvents`); an **HTTP-metrics KPI grid** — dim label over
+    bright value — (`app.metrics`: in-flight / peak / total / avg &
+    min–max latency + a 2xx/3xx/4xx/5xx status-class bar; `socketMetrics`);
+    scheduled jobs (`jobMetrics.jobs[]` / `CronusJobInfo`); a rolling
+    **request stream** (the one region needing a small finalize-tap ring
+    buffer: action / status / latency / reqId); and a **log tail** (last
+    ~N slogger lines, module-scoped).
+  - **Layout** capped at ~120 cols and **centred** in wider terminals
+    (balanced margins, never full-bleed — long rows stay scannable);
+    borders clip-or-pad to exact width at any size.
+  - **Four behaviours, gated on `isatty`:** DEV + TTY → on by default;
+    PROD + TTY → opt-in via `--console`; no-TTY / piped / CI → plain logs;
+    `--no-console` forces plain anywhere. It **tees** — the full
+    structured stream still reaches the real handlers; the log pane is a
+    view, never a sink.
+  - **Keys:** `r` / `l` / `j` expand a pane to full height (+ filter),
+    `esc` home, `p` pause repaint, `q` quit + restore.
+  - **Cluster-aware for free:** the console reads `app.cluster ??
+    app.metrics`, so a solo node shows its own metrics and any node in a
+    cluster (worker or master) shows the **fleet** view — no layout
+    change (see Distributed deployment). `app.cluster` is the single
+    small core seam.
+  - **Built on compat, not from scratch:** `isTTY`, `consoleSize` (polled
+    per frame → resize handled, no SIGWINCH), the cross-runtime
+    `WritableLike` stdout, raw-mode stdin, and slogger's `@std/fmt/colors`.
+    The three missing primitives — alternate-screen escapes, a keypress
+    reader, size-polling — land in `compat/cli` (spinner/progress gain
+    them too).
+  - **Still open (5 build calls):** core vs CLI home · latency
+    avg/min/max now vs percentiles in compat first · the request-stream
+    hook (in-core ring buffer) · repaint cadence (hybrid ~250ms + event
+    append) · zero-dep renderer on compat.
+    In DEVELOPMENT it also WATCHES the modules folder and regenerates the
+    `modules/mod.ts` barrel on change (the CLI `modules` generator, wired to
+    a watcher), so "drop a file in `modules/`" stays live without a runtime
+    directory walker.
 - **Metrics collection.** First-class request/invocation metrics
   (counts, latency histograms, in-flight, status classes) per transport.
   WIRE, don't reinvent: compat's `WebServer` already tracks
@@ -421,12 +452,55 @@ store-injection is the one breaking change and must land before release.
   bodies as a first-class response shape — the simpler realtime path
   alongside WebSocket pub/sub; compat's `WebServer` already streams, so
   mostly a response-shape surface.
-- **Distributed deployment & management.** Exactly-once / leader-elected
-  cron across replicas (`jobs.enabled` is per-replica today, so a job
-  fires N× on N replicas), multi-server / cluster coordination (the
-  Coordinator seam; peers-WS vs cacher-lease via a `cluster.url` scheme),
-  and the fleet-management surface around it. The cross-replica lease is
-  the mechanism for exactly-once cron.
+- **Distributed deployment & management. 🧭 ARCHITECTURE CONVERGED
+  2026-08-22 — supersedes the parked peer-mesh / cacher-lease Coordinator.**
+  A **master + workers** model, deliberately built as modules, middleware
+  and routes — **one small core seam only** (`app.cluster`); everything
+  else is app-level.
+  - **Roles.** A single, **app-agnostic MASTER** (control-plane — never
+    serves external traffic; ships as a generic ready-to-run manager, not
+    your app in another mode) and N **WORKERS** (data-plane — the full
+    app). Workers dial the master over WS on boot, register, and send
+    pings + periodic stat summaries + a sampled log tail. Authed control
+    channel (shared secret on the WS upgrade) — required.
+  - **Exactly-once cron by elected worker.** The master designates one
+    worker as cron-leader (deterministic: lowest instance-ULID; re-elect
+    on drop). Leadership is **sticky through a master outage** — the
+    designated worker keeps firing if the master is down; the master
+    reassigns on return. Enforced by an **`onlyIfCronLeader()` job
+    middleware** reusing rapid's skipped-by-middleware outcome: every
+    worker schedules the same cron, only the leader's fires execute. No
+    core change; the master never needs the business routes or job
+    definitions.
+  - **Telemetry gateway (opt-in per stream).** Workers stream logs (and
+    optionally metrics/traces) over WS; the master consumes → transforms
+    (filter / sample / **redact secrets+PII** / dedup / enrich with fleet
+    context) → fans out to pluggable sinks configured once on the master
+    (store-injection shape). **Must be async, buffered, drop-safe, with
+    worker-side replay-on-reconnect — never in the request path.** A
+    master or sink outage never blocks or (within buffer bounds) loses
+    traffic; you lose forwarding + the view until it returns. Defaults per
+    stream: logs → gateway; metrics → gateway-aggregate (one fleet
+    `/metrics`) or direct scrape; traces → direct to the OTLP collector;
+    coordination (membership / cron / snapshot) → always the master.
+    **Principle:** the master may relay _telemetry_ as an opt-in gateway,
+    but never the _request_ path, and the relay is buffered + drop-safe.
+  - **Fleet view.** The master collates a `ClusterSnapshot { seq, at,
+    leader, members: InstanceInfo[] }` from worker pushes (disregarding
+    its own stats) and broadcasts it back, so any node holds the cluster
+    picture. The dev console reads `app.cluster` → master and workers on a
+    TTY show the **fleet**; solo shows itself.
+  - **The one core seam:** `app.instanceId` (ULID minted at boot — 1.0)
+    and a nullable `app.cluster` slot the cluster module fills. Ship both
+    in 1.0 (forward-compatible); the master/worker modules + gateway are
+    the post-1.0 build.
+  - **Fleet-management surface** (the master's feature set — registry,
+    control actions [drain / trigger-job / reload / rotate cron-leader],
+    version & build inventory + drift, a minimal web UI over the Simple UI
+    module): capability list under research.
+  - **Rejected:** worker-side leader election / peer mesh, cacher-lease,
+    lockfile / unix-socket coordination — the static master removes the
+    need. Route sharing stays out of scope.
 - **Simple UI module.** A deliberately MINIMAL client-side UI helper,
   served from the static layer — enough to make AJAX calls and wire basic
   interactions. NOT a React/Vite-class framework: no reactive state, no
