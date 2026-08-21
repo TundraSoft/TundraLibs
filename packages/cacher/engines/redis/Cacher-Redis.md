@@ -5,6 +5,14 @@ Redis-backed distributed cache engine.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
+
+> **Runtime note:** `RedisCacher` needs a reachable TCP target. That works
+> on Cloudflare Workers (sockets go through `cloudflare:sockets` under
+> `nodejs_compat`, when the target is reachable under Cloudflare's outbound
+> policy) but not in a plain browser, which has no raw TCP. The class
+> imports fine everywhere — only `connect()` requires the socket.
 
 ## Overview
 

@@ -1,5 +1,9 @@
 import { Options } from '@tundralibs/utils';
-import { CacherOptions, CacheValue, CacheValueOptions } from './types/mod.ts';
+import type {
+  CacherOptions,
+  CacheValue,
+  CacheValueOptions,
+} from './types/mod.ts';
 
 import { CacherEngineError } from './errors/mod.ts';
 

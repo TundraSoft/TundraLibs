@@ -5,6 +5,8 @@ A flexible caching library with support for Memory, Redis, and Memcached engines
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -12,19 +14,21 @@ The Cacher package provides a unified caching abstraction that works with multip
 
 ## Browser / Worker compatibility
 
-`@tundralibs/cacher` is a server-side cache abstraction. The built-in
-Redis and Memcached engines need a real TCP connection to a cache
-server — meaningless in a browser or a standard Worker, though only at
-**connect time**: `RedisCacher`/`MemCacher` import
-`@tundralibs/drivers`' TCP-based engines, but those load lazily rather
-than at module top level, so merely importing `@tundralibs/cacher`
-(the `MemoryCacher` you'd actually want at the edge included) doesn't
-throw or fail to bundle — trying to _connect_ a Redis/Memcached engine
-is what breaks. No Browser/Workers badge regardless: the package's own
-`mod.ts` re-exports `MemCacher`/`RedisCacher` alongside `MemoryCacher`
-with no isolated subpath, so there's no way to import "just the
-edge-safe part" and have a bundler prove it by tree-shaking the rest
-away.
+The `MEMORY` engine is process-local and works on every runtime — Deno,
+Bun, Node, Cloudflare Workers and the browser. The `REDIS` and
+`MEMCACHED` engines need a reachable TCP target: that works on **Workers**
+(their sockets go through `@tundralibs/drivers`, which uses
+`cloudflare:sockets` under `nodejs_compat` — the target must be reachable
+under Cloudflare's outbound policy) but **not in a plain browser**, which
+has no raw TCP.
+
+`RedisCacher`/`MemCacher` statically import their `@tundralibs/drivers`
+engines at module top level, so importing `@tundralibs/cacher` never
+throws or fails to bundle anywhere — the driver classes load fine; it is
+only the socket that a target lacks. The connection is deferred to
+`connect()`, so a browser bundle that only ever touches `MemoryCacher`
+runs fine and a Redis/Memcached engine fails only if you actually try to
+`connect()` it.
 
 ## Modules
 

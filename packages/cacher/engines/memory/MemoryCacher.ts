@@ -1,3 +1,4 @@
+import { unrefTimer } from '@tundralibs/compat/runtime';
 import { type PrivateObject, privateObject } from '@tundralibs/utils';
 import { AbstractEngine } from '../../AbstractEngine.ts';
 import type { CacheValue } from '../../types/mod.ts';
@@ -213,18 +214,10 @@ export class MemoryCacher extends AbstractEngine<MemoryCacherOptions> {
     // serverless job that sets a key and finishes its work must be able to
     // exit without waiting out the TTL (default 300s, up to ~24.8 days). The
     // lazy absolute-deadline checks in _get/_has keep eviction correct even
-    // when the timer never fires. Node/Bun and modern Deno return a timer
-    // object exposing `.unref()`; older Deno returns a bare numeric handle that
-    // is unref'd via `Deno.unrefTimer`.
-    const handle = timer as unknown as { unref?: () => void };
-    if (typeof handle.unref === 'function') {
-      handle.unref();
-    } else {
-      const deno = (globalThis as {
-        Deno?: { unrefTimer?: (id: number) => void };
-      }).Deno;
-      deno?.unrefTimer?.(timer as unknown as number);
-    }
+    // when the timer never fires. compat's unrefTimer smooths over the
+    // per-runtime unref primitive (`.unref()` vs `Deno.unrefTimer`) and
+    // no-ops where none exists.
+    unrefTimer(timer);
     this._expiryTimers.set(key, timer);
   }
   //#endregion Protected methods
