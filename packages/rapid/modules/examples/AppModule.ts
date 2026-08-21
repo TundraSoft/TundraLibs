@@ -7,12 +7,14 @@
  * @module
  */
 import { inject } from '@tundralibs/doctor';
-import { RapidModule } from '../mod.ts';
+import { RapidModule, type RapidModuleEventMap } from '../mod.ts';
 import { Mailer } from './services/Mailer.ts';
 import { PostStore } from './services/PostStore.ts';
 import { UserStore } from './services/UserStore.ts';
 
-export abstract class AppModule extends RapidModule {
+export abstract class AppModule<
+  E extends RapidModuleEventMap = Record<never, never>,
+> extends RapidModule<E> {
   protected readonly users = inject(UserStore);
   protected readonly posts = inject(PostStore);
   protected readonly mailer = inject(Mailer);

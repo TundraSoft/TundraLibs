@@ -8,11 +8,12 @@
  */
 
 import type { RapidModule } from '../RapidModule.ts';
+import type { RapidModuleEventMap } from './EventMap.ts';
 
 /** The module sources for one `initModules` call. */
 export type RapidModuleSources<
   M extends readonly object[],
-  I extends Record<string, RapidModule>,
+  I extends Record<string, RapidModule<RapidModuleEventMap>>,
 > = {
   /** Namespace objects; every export that is a concrete module class is constructed. */
   modules: M;

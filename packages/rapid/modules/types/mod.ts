@@ -19,4 +19,7 @@ export type { RapidModuleInvokeSeed } from './InvokeSeed.ts';
 export type { RapidModulePayload } from './Payload.ts';
 export type { RapidModulePayloadOf } from './PayloadOf.ts';
 export type { RapidModuleSources } from './Sources.ts';
-export type { RapidModuleEventPayload } from './EventPayload.ts';
+export type {
+  RapidModuleEventPayload,
+  RapidModuleEventsOf,
+} from './EventPayload.ts';

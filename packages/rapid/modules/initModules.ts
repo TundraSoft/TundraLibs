@@ -21,13 +21,14 @@ import { ModuleRuntime } from './ModuleRuntime.ts';
 import { RapidModule } from './RapidModule.ts';
 import type {
   RapidModuleContext,
+  RapidModuleEventMap,
   RapidModuleInitOptions,
   RapidModuleInitResult,
   RapidModuleInstances,
   RapidModuleSources,
 } from './types/mod.ts';
 
-type ModuleCtor = new () => RapidModule;
+type ModuleCtor = new () => RapidModule<RapidModuleEventMap>;
 
 /** A concrete (constructible) RapidModule subclass — what a namespace export must be to mount. */
 const isModuleClass = (value: unknown): value is ModuleCtor =>
@@ -42,7 +43,9 @@ const isModuleClass = (value: unknown): value is ModuleCtor =>
  * @throws {RapidError} RAPID_CONFIG when the class needs constructor
  *   arguments — pass an instance via `sources.instances` instead.
  */
-const resolveInstance = (ctor: ModuleCtor): RapidModule => {
+const resolveInstance = (
+  ctor: ModuleCtor,
+): RapidModule<RapidModuleEventMap> => {
   if (Doctor.has(ctor)) return Doctor.dispense(ctor);
   if (ctor.length > 0) {
     throw new RapidError('RAPID_CONFIG', {
@@ -96,7 +99,10 @@ const isContext = (
  */
 export async function initModules<
   const M extends readonly object[],
-  I extends Record<string, RapidModule> = Record<never, RapidModule>,
+  I extends Record<string, RapidModule<RapidModuleEventMap>> = Record<
+    never,
+    RapidModule<RapidModuleEventMap>
+  >,
 >(
   context: RapidModuleContext | RapidModuleInitOptions,
   sources: RapidModuleSources<M, I>,
@@ -104,8 +110,8 @@ export async function initModules<
   const runtime = new ModuleRuntime(
     isContext(context) ? context : buildModuleContext(context),
   );
-  const record: Record<string, RapidModule> = {};
-  const seen = new Map<ModuleCtor, RapidModule>();
+  const record: Record<string, RapidModule<RapidModuleEventMap>> = {};
+  const seen = new Map<ModuleCtor, RapidModule<RapidModuleEventMap>>();
   for (const namespace of sources.modules) {
     for (const [exportName, value] of Object.entries(namespace)) {
       if (!isModuleClass(value)) continue;

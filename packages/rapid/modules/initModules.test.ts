@@ -15,6 +15,7 @@ import {
   On,
   payload,
   RapidModule,
+  type RapidModuleEventMap,
   type RapidModuleInvokeMiddleware,
   Use,
 } from './mod.ts';
@@ -31,12 +32,14 @@ const requireAdmin: RapidModuleInvokeMiddleware = (ctx, next) => {
   return next();
 };
 
-abstract class Base extends RapidModule {}
+abstract class Base<E extends RapidModuleEventMap = Record<never, never>>
+  extends RapidModule<E> {}
 
-class Alpha extends Base {
+const ALPHA_EVENTS = { Pinged: payload<{ n: number }>() };
+class Alpha extends Base<typeof ALPHA_EVENTS> {
   readonly name = 'Alpha';
   readonly namespace = 'alpha';
-  readonly events = { Pinged: payload<{ n: number }>() };
+  protected readonly events = ALPHA_EVENTS;
   readonly inits: string[] = [];
   ping(n: number): Promise<void> {
     return this.emit('Pinged', { n });
@@ -62,7 +65,7 @@ class Alpha extends Base {
 class Beta extends Base {
   readonly name = 'Beta';
   readonly namespace = 'beta';
-  readonly events = {};
+  protected readonly events = {};
   received: { n: number; requestId: string }[] = [];
   @On('alpha:Alpha:Pinged')
   onPing(p: { n: number }, ctx: EventContext) {
@@ -197,7 +200,7 @@ describe('rapid.modules', () => {
     class Thrower extends RapidModule {
       readonly name = 'Thrower';
       readonly namespace = 'thrower';
-      readonly events = {};
+      protected readonly events = {};
       fail() {
         throw new RapidError('RAPID_NOT_FOUND', { details: { id: 'x' } });
       }
@@ -216,7 +219,7 @@ describe('rapid.modules', () => {
     class Orphan extends RapidModule {
       readonly name = 'Orphan';
       readonly namespace = 'orphan';
-      readonly events = {};
+      protected readonly events = {};
       @On('alpha:Alpha:Nope')
       h() {}
     }
@@ -259,7 +262,7 @@ describe('rapid.modules', () => {
     class NeedsArgs extends RapidModule {
       readonly name = 'NeedsArgs';
       readonly namespace = 'needs';
-      readonly events = {};
+      protected readonly events = {};
       constructor(public dep: number) {
         super();
       }

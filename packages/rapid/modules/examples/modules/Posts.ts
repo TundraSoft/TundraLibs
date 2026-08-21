@@ -9,14 +9,16 @@ import { AppModule } from '../AppModule.ts';
 import { requireAuth, requireRole } from '../middleware.ts';
 import type { Post } from '../services/PostStore.ts';
 
-export class Posts extends AppModule {
+const EVENTS = {
+  PostCreated: payload<{ id: string; authorId: string; title: string }>(),
+  PostPublished: payload<{ id: string; title: string }>(),
+  PostRemoved: payload<{ id: string }>(),
+};
+
+export class Posts extends AppModule<typeof EVENTS> {
   readonly name = 'Posts';
   readonly namespace = 'posts';
-  readonly events = {
-    PostCreated: payload<{ id: string; authorId: string; title: string }>(),
-    PostPublished: payload<{ id: string; title: string }>(),
-    PostRemoved: payload<{ id: string }>(),
-  };
+  protected readonly events = EVENTS;
 
   create(authorId: string, title: string): Post {
     if (!this.users.exists(authorId)) { // ① plain call into a shared service

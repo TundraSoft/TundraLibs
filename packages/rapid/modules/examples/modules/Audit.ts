@@ -16,7 +16,7 @@ export type AuditEntry = { event: string; requestId: string };
 export class Audit extends AppModule {
   readonly name = 'Audit';
   readonly namespace = 'audit';
-  readonly events = {};
+  protected readonly events = {};
   readonly entries: AuditEntry[] = [];
 
   @On(

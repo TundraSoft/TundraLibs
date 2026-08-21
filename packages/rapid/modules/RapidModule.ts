@@ -97,17 +97,26 @@ export type ModuleMethodKeys<T> =
 /** A module class reference (abstract bases allowed as a TYPE target). */
 export type ModuleClass<T> = abstract new (...args: never[]) => T;
 
-export abstract class RapidModule {
+/**
+ * @typeParam E - The module's event map — declare it once as a const and
+ *   pass `typeof`: `const EVENTS = { PostCreated: payload<{ id: string }>() };`
+ *   `class Posts extends RapidModule<typeof EVENTS> { protected readonly
+ *   events = EVENTS; … }`. Modules that emit nothing omit it.
+ */
+export abstract class RapidModule<
+  E extends RapidModuleEventMap = Record<never, never>,
+> {
   /** `PascalCase` identity, unique within its namespace: `Posts`. */
   public abstract readonly name: string;
   /** `kebab-case` grouping: `posts`. Events qualify as `namespace:Name:Event`. */
   public abstract readonly namespace: string;
   /**
-   * The events this module EMITS, declared with {@link payload}:
-   * `{ PostCreated: payload<{ id: string }>() }`. The runtime validates
-   * every `@On` subscriber against the union of mounted declarations.
+   * The events this module EMITS, declared with {@link payload}. Protected:
+   * it is the module's own declaration, not API. The runtime reads it at
+   * mount and validates every `@On` subscriber against the union of
+   * mounted declarations.
    */
-  public abstract readonly events: RapidModuleEventMap;
+  protected abstract readonly events: E;
 
   /** The host's logger — request-correlated inside an invocation, plain outside. */
   protected get log(): Slogger {
@@ -128,14 +137,10 @@ export abstract class RapidModule {
    * @throws {RapidError} RAPID_CONFIG when `event` is not declared in
    *   this module's `events`, or the module is not initialized.
    */
-  protected emit<E extends RapidModuleEventMap, K extends keyof E & string>(
-    this: RapidModule & { readonly events: E },
+  protected emit<K extends keyof E & string>(
     event: K,
     payload: RapidModulePayloadOf<E[K]>,
   ): Promise<void> {
-    // `this` is typed via the parameter (that is what lets `E` infer from
-    // the subclass's declared `events`), so the attachment is read through
-    // the module-level helper rather than a private member.
     const attachment = attachmentOf(this, 'emit');
     const qualified = attachment.qualified[event];
     if (qualified === undefined) {
@@ -157,7 +162,10 @@ export abstract class RapidModule {
    * @throws {RapidError} RAPID_CONFIG when the target is not mounted in
    *   this runtime or has no such method, or this module is not initialized.
    */
-  protected invoke<T extends RapidModule, K extends ModuleMethodKeys<T>>(
+  protected invoke<
+    T extends RapidModule<RapidModuleEventMap>,
+    K extends ModuleMethodKeys<T>,
+  >(
     target: ModuleClass<T>,
     method: K,
     args: Parameters<Extract<T[K], AnyFn>>,

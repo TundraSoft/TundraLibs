@@ -21,6 +21,6 @@ deno test -A packages/rapid/modules/                     # core + example tests
 | `modules/mod.ts`           | the hand-written barrel — the one input `initModules` takes (typed, Workers-safe)                   |
 | `testing.ts` + `*.test.ts` | the standard test shape: fresh services (`revoke` + `prescribe`), fake Mailer via `stock`           |
 
-Rules the example embodies: `namespace:Module:EventName` names · events declared **on the publisher** · an
+Rules the example embodies: `namespace:Module:EventName` names · events declared **on the publisher** (`const EVENTS = {…}` + `extends AppModule<typeof EVENTS>`, `protected`) · an
 event carries **correlation only, never authority** (auth ⇒ `invoke`, not an event) · plain calls run no
 middleware · `stock` the async roots, `@Vial` everything downstream.

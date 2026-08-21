@@ -15,7 +15,7 @@ import type { Users } from './Users.ts';
 export class Notifications extends AppModule {
   readonly name = 'Notifications';
   readonly namespace = 'notify';
-  readonly events = {};
+  protected readonly events = {};
 
   @On('users:Users:UserRegistered')
   welcome({ email }: RapidModuleEventPayload<Users, 'UserRegistered'>) {

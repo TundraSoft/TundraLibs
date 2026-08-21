@@ -18,10 +18,11 @@ import {
 
 const pass: RapidModuleInvokeMiddleware = (_ctx, next) => next();
 
-class Emitter extends RapidModule {
+const EMITTER_EVENTS = { Tick: payload<{ n: number }>() };
+class Emitter extends RapidModule<typeof EMITTER_EVENTS> {
   readonly name = 'Emitter';
   readonly namespace = 'bench';
-  readonly events = { Tick: payload<{ n: number }>() };
+  protected readonly events = EMITTER_EVENTS;
   plain(n: number): number {
     return n + 1;
   }
@@ -33,10 +34,11 @@ class Emitter extends RapidModule {
     return this.emit('Tick', { n });
   }
 }
-class Silent extends RapidModule {
+const SILENT_EVENTS = { Nothing: payload<number>() };
+class Silent extends RapidModule<typeof SILENT_EVENTS> {
   readonly name = 'Silent';
   readonly namespace = 'silent';
-  readonly events = { Nothing: payload<number>() };
+  protected readonly events = SILENT_EVENTS;
   nothing(): Promise<void> {
     return this.emit('Nothing', 1);
   }
@@ -44,7 +46,7 @@ class Silent extends RapidModule {
 class Listener extends RapidModule {
   readonly name = 'Listener';
   readonly namespace = 'listen';
-  readonly events = {};
+  protected readonly events = {};
   count = 0;
   @On('bench:Emitter:Tick')
   a() {

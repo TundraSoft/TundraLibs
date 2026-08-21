@@ -9,11 +9,15 @@
  */
 
 import type { RapidModule } from '../RapidModule.ts';
+import type { RapidModuleEventMap } from './EventMap.ts';
 
 /** Concrete zero-arg module classes of a namespace → their instances. */
 export type RapidModuleInstancesOf<NS> = {
-  [K in keyof NS as NS[K] extends new () => RapidModule ? K : never]:
-    NS[K] extends new () => infer I ? I : never;
+  [
+    K in keyof NS as NS[K] extends new () => RapidModule<RapidModuleEventMap>
+      ? K
+      : never
+  ]: NS[K] extends new () => infer I ? I : never;
 };
 
 type UnionToIntersection<U> =
@@ -23,5 +27,5 @@ type UnionToIntersection<U> =
 /** Merged instances across all namespaces, plus the caller-keyed instances. */
 export type RapidModuleInstances<
   M extends readonly object[],
-  I extends Record<string, RapidModule>,
+  I extends Record<string, RapidModule<RapidModuleEventMap>>,
 > = UnionToIntersection<RapidModuleInstancesOf<M[number]>> & I;

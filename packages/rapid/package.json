@@ -23,6 +23,7 @@
     "@tundralibs/ambient": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/cronus": "workspace:*",
+    "@tundralibs/doctor": "workspace:*",
     "@tundralibs/id": "workspace:*",
     "@tundralibs/radrouter": "workspace:*",
     "@tundralibs/rpc": "workspace:*",

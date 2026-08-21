@@ -17,12 +17,14 @@ export type Comment = {
   body: string;
 };
 
-export class Comments extends AppModule {
+const EVENTS = {
+  CommentAdded: payload<{ postId: string; author: string; body: string }>(),
+};
+
+export class Comments extends AppModule<typeof EVENTS> {
   readonly name = 'Comments';
   readonly namespace = 'comments';
-  readonly events = {
-    CommentAdded: payload<{ postId: string; author: string; body: string }>(),
-  };
+  protected readonly events = EVENTS;
   private __rows: Comment[] = [];
   private __seq = 0;
 

@@ -13,7 +13,7 @@ import type { Posts } from './Posts.ts';
 export class Search extends AppModule {
   readonly name = 'Search';
   readonly namespace = 'search';
-  readonly events = {};
+  protected readonly events = {};
   private readonly __index = new Map<string, string>();
   private readonly __audit = inject(Audit);
 

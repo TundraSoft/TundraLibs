@@ -37,6 +37,7 @@ import {
 } from './RapidModule.ts';
 import type {
   RapidModuleContext,
+  RapidModuleEventMap,
   RapidModuleInvokeMiddleware,
   RapidModuleInvokeResult,
   RapidModuleInvokeSeed,
@@ -51,7 +52,7 @@ type Chain = (
 type MethodEntry = { fn: AnyFn; chain: Chain | undefined };
 type Subscription = { fn: AnyFn; events: readonly string[]; label: string };
 type Mounted = {
-  instance: RapidModule;
+  instance: RapidModule<RapidModuleEventMap>;
   /** `namespace:Name`. */
   key: string;
   methods: Map<string, MethodEntry>;
@@ -134,7 +135,7 @@ export class ModuleRuntime {
   }
 
   /** Mounted module instances, in mount order. */
-  public get modules(): readonly RapidModule[] {
+  public get modules(): readonly RapidModule<RapidModuleEventMap>[] {
     return this.__order.map((m) => m.instance);
   }
 
@@ -156,7 +157,7 @@ export class ModuleRuntime {
    *   like this), the class or `namespace:Name` is already mounted, or
    *   the runtime is already finalized.
    */
-  public mount(instance: RapidModule): void {
+  public mount(instance: RapidModule<RapidModuleEventMap>): void {
     if (this.__finalized) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -176,7 +177,9 @@ export class ModuleRuntime {
         details: { module: ctorName },
       });
     }
-    const { name, namespace, events } = instance;
+    const { name, namespace } = instance;
+    // `events` is protected on the base — the runtime is its one reader.
+    const events = (instance as unknown as { events: unknown }).events;
     if (typeof name !== 'string' || !NAME_PATTERN.test(name)) {
       throw new RapidError('RAPID_CONFIG', {
         message: `${ctorName}.name must be PascalCase (got ${
@@ -320,7 +323,10 @@ export class ModuleRuntime {
    *   has no method `method`. (Failures INSIDE the invocation never throw —
    *   they are disclosed as the envelope.)
    */
-  public invoke<T extends RapidModule, K extends ModuleMethodKeys<T>>(
+  public invoke<
+    T extends RapidModule<RapidModuleEventMap>,
+    K extends ModuleMethodKeys<T>,
+  >(
     target: ModuleClass<T>,
     method: K,
     args: Parameters<Extract<T[K], AnyFn>>,
@@ -400,7 +406,7 @@ export class ModuleRuntime {
 
   /** One subscriber's delivery wrapper: a fresh EventContext through the cycle. */
   private __subscriber(
-    instance: RapidModule,
+    instance: RapidModule<RapidModuleEventMap>,
     fn: AnyFn,
     event: string,
   ): EventSubscriber {

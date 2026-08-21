@@ -9,12 +9,14 @@ import { AppModule } from '../AppModule.ts';
 import { requireAuth, requireRole } from '../middleware.ts';
 import type { Role, User } from '../services/UserStore.ts';
 
-export class Users extends AppModule {
+const EVENTS = {
+  UserRegistered: payload<{ id: string; email: string }>(),
+};
+
+export class Users extends AppModule<typeof EVENTS> {
   readonly name = 'Users';
   readonly namespace = 'users';
-  readonly events = {
-    UserRegistered: payload<{ id: string; email: string }>(),
-  };
+  protected readonly events = EVENTS;
 
   /** Fire-and-forget: the caller doesn't wait for welcome mail / audit. */
   register(email: string): User {
