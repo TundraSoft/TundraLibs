@@ -2,6 +2,12 @@
 
 Per-type guardian reference. Every validator listed here is a method on the relevant guardian type and returns the same guardian for chaining.
 
+![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
+![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
 ## Table of Contents
 
 - [Coercion rules](#coercion-rules)
