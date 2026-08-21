@@ -19,8 +19,13 @@ a second rulebook — the standards live in one place and are not restated here.
 
 Load-bearing reminders while you code (each expanded in the sources above):
 
-- **Cross-runtime always.** Never touch a Deno/Bun/Node-only global directly —
-  go through `@tundralibs/compat`, or you break a runtime silently.
+- **Cross-runtime always.** Targets are Deno, Bun, Node, Cloudflare Workers,
+  and the browser — code must run on all five unless the package documents
+  otherwise. Never touch a runtime-only global directly — go through
+  `@tundralibs/compat`, or you break a runtime silently. A capability a target
+  lacks (fs, sockets, a listening server) must degrade to a clear
+  `UnsupportedRuntimeError`, never a raw `TypeError`; feature-detect with
+  `isWorkers` / `isBrowser` / `RUNTIME` from `@tundralibs/compat/runtime`.
 - **Verify, don't assert.** Check a symbol/default/behavior in source before
   relying on it. Confident-but-wrong is this repo's recurring failure mode.
 - **No slop.** Minimal diffs; no speculative abstractions, no filler comments,
