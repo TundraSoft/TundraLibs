@@ -83,16 +83,16 @@ class RequestId {
 
 ## See in context
 
-The [web-app example](../examples/web-app/) shows each lifecycle
-plus the factory hook:
+The [order-service example](../examples/order-service/) shows each
+lifecycle plus the factory hook:
 
-- [`Logger.ts`](../examples/web-app/Logger.ts) —
+- [`Logger.ts`](../examples/order-service/Logger.ts) —
   `@Vial('SINGLETON')` with an `inject()` field dependency
-- [`Database.ts`](../examples/web-app/Database.ts) —
+- [`Connection.ts`](../examples/order-service/Connection.ts) —
   `@Vial('SCOPED')`
-- [`UserRepository.ts`](../examples/web-app/UserRepository.ts) —
+- [`OrderRepository.ts`](../examples/order-service/OrderRepository.ts) —
   `@Vial('TRANSIENT')`
-- [`registry.ts`](../examples/web-app/registry.ts) —
+- [`wiring.ts`](../examples/order-service/wiring.ts) —
   `Doctor.prescribe(Class, { mode, factory })` for a class that
   needs constructor arguments
 

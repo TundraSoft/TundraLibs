@@ -1,8 +1,7 @@
 # inject
 
-Resolve a dependency by a typed **label**, by the **class** itself, or by
-its **token — the class name** — so a consumer never has to import the
-dependency class. `inject` is Doctor's ONE injection primitive: used as a
+Resolve a dependency by a typed **label**, by the **class** itself, or —
+untyped — by its **name**. `inject` is Doctor's ONE injection primitive: used as a
 field initializer or constructor default parameter it wires an instance
 while it constructs; used inside a getter it injects lazily.
 
@@ -14,37 +13,37 @@ while it constructs; used inside a getter it injects lazily.
 
 ```typescript ignore
 inject<T>(target: Vial<T> | Label<T>, scope?: string): T;
-inject<K extends keyof VialRegistry>(token: K, scope?: string): VialRegistry[K];
+inject(token: string, scope?: string): unknown;
 ```
 
 - `inject(Db)` — `Db` a label from `label<BlogDb>('Db')` — returns what
-  [`Doctor.stock`](Doctor-Stock.md) put under it, typed `BlogDb`. No
-  registry needed: the label carries the type.
+  [`Doctor.stock`](Doctor-Stock.md) put under it, typed `BlogDb`. The label
+  carries the type; nothing else is needed.
 - `inject(Config)` — the class — returns the registered instance,
   honouring its lifecycle, typed `Config`. A class is a value that
   carries its own type.
 - `inject('Config')` returns the same instance `Doctor.dispense(Config)`
-  would, keyed by the class name rather than the class object. The
-  return type is taken from [`VialRegistry`](#vialregistry), so a
-  mistyped token is a compile error — never `unknown`.
+  would, keyed by the class name (or a label's name) rather than the
+  object — typed `unknown`. The escape hatch for dynamic wiring; see
+  [String tokens](#string-tokens).
 
 ## The three idioms
 
 ```typescript ignore
 class Handler {
   // EAGER — field initializer: resolves while `new` runs.
-  logger = inject('Logger');
+  logger = inject(Logger);
 
   // EAGER — constructor default parameter: same timing, and a test
   // can pass a double explicitly (new Handler(fakeDb)).
-  constructor(private db = inject('Db')) {}
+  constructor(private db = inject(Db)) {}
 
   // LAZY — memoizing getter: resolves on first access. Use it to
   // break a dependency cycle, register a vial after construction,
   // or keep the dependency out of JSON.stringify/spread.
   private __audit?: Audit;
   get audit(): Audit {
-    return this.__audit ??= inject('Audit', 'jobs');
+    return this.__audit ??= inject(Audit, 'jobs');
   }
 }
 ```
@@ -63,7 +62,7 @@ argument of the driving `Doctor.dispense` / `Doctor.resolve` call:
 
 ```typescript ignore
 class Handler {
-  db = inject('Db'); // SCOPED, no scope named here
+  db = inject(Db); // SCOPED, no scope named here
 }
 
 Doctor.resolve(Handler, 'req-7'); // db resolves under 'req-7'
@@ -79,25 +78,14 @@ explicitly in lazy getters for SCOPED dependencies (as `'jobs'` above
 does), and call `Doctor.checkup()` at startup so missing
 registrations still fail at boot.
 
-## VialRegistry
+## String tokens
 
-`VialRegistry` is the token → type map `inject` is typed against. It ships
-**empty**; you populate it by augmenting the module — either with
-[`@tundralibs/doctor/build`](Doctor-Build.md) or by hand:
-
-```typescript ignore
-declare module '@tundralibs/doctor' {
-  interface VialRegistry {
-    Config: import('./Config.ts').Config;
-  }
-}
-```
-
-Until the registry has an entry for a token, `inject('That')` is rejected at
-compile time (`keyof VialRegistry` is `never`) — generate or declare the
-augmentation first. A stocked label's name works the same way: declare
-`Db: BlogDb` here to reach it as `inject('Db')`, or skip the registry and
-write `inject(Db)`.
+`inject('Name')` resolves by **name** — a prescribed class's name or a
+stocked label's — and returns `unknown`: you assert the type. Two uses earn
+it: a token that only exists at runtime (read from configuration), and a
+lazy getter that must not value-import the class on the other side of a
+cycle. For everything else, `inject(Class)` or a [label](Doctor-Stock.md) is
+typed and immune to minification.
 
 ## Doctor.dispenseByName
 
@@ -138,8 +126,6 @@ The string token **is** the class name, so:
 
 ## See also
 
-- [build](Doctor-Build.md) — generate the `VialRegistry` from your `@Vial`
-  classes
 - [@Vial](Doctor-Vial.md) — registers the classes `inject` resolves
 - [stock](Doctor-Stock.md) — typed labels for ready-made values and labelled
   factories

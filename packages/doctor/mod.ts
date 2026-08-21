@@ -11,7 +11,7 @@
  */
 
 export { Doctor } from './Doctor.ts';
-export { inject, type VialRegistry } from './inject.ts';
+export { inject } from './inject.ts';
 export { label } from './label.ts';
 export { Vial, type VialDecorator } from './decorators/mod.ts';
 
