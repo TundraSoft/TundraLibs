@@ -12,14 +12,17 @@ no build flags.
 
 ## Overview
 
-Doctor is a small DI container built around two primitives:
+Doctor is a small DI container built around three primitives:
 
 - `@Vial(mode)` — class decorator that registers a class under a
   lifecycle (`SINGLETON`, `SCOPED`, or `TRANSIENT`).
-- `inject('Token')` — typed, import-free resolution by class-name
-  token. Used as a **field initializer** or **constructor default
-  parameter**, it wires an instance while it constructs — that IS the
-  injection mechanism, there is no separate injection step.
+- `label` + `Doctor.stock` — register a **ready-made value** (or a
+  labelled factory) under a typed label, no class required.
+- `inject(target)` — typed resolution by label, by class, or by
+  import-free class-name token. Used as a **field initializer** or
+  **constructor default parameter**, it wires an instance while it
+  constructs — that IS the injection mechanism, there is no separate
+  injection step.
 
 ```typescript
 import { inject, Vial } from '@tundralibs/doctor';
@@ -310,16 +313,75 @@ The token is the class name, so names must be unique and survive minification.
 See [inject](docs/Doctor-Inject.md) and [build](docs/Doctor-Build.md) for the
 full API and caveats.
 
+## Ready-made values — `label` + `stock`
+
+Not everything is a class Doctor can `new`: a connected database, a
+parsed config object, a client built by an `await`. Stock such a value
+under a typed **label** and `inject` it — typed, with no `VialRegistry`
+augmentation:
+
+```typescript
+import { Doctor, inject, label } from '@tundralibs/doctor';
+
+type BlogDb = { repo(name: string): unknown };
+declare const db: BlogDb;
+
+export const Db = label<BlogDb>('Db'); // a typed label: name + contents
+Doctor.stock(Db, db); // stock a ready-made value under it
+
+class Posts {
+  db = inject(Db); // typed as BlogDb, no module augmentation
+}
+```
+
+A stocked value is handed out as-is on every dispense — a singleton by
+nature (a function is a value too: returned, never called). For a
+non-class thing that needs a lifecycle, stock a **factory** and pick a
+mode; it runs through the same engine as class vials:
+
+```typescript
+import { Doctor, label } from '@tundralibs/doctor';
+
+type Conn = { query(sql: string): unknown };
+declare function connect(): Conn;
+
+export const Db = label<Conn>('Db');
+Doctor.stock(Db, { mode: 'SCOPED', factory: () => connect() });
+// Doctor.dispense(Db, 'req-7') connects once per scope; discharge('req-7') drops it
+```
+
+| Form                              | Lifecycle                                          |
+| --------------------------------- | -------------------------------------------------- |
+| `stock(label, value)`             | SINGLETON by nature — the same object every time   |
+| `stock(label, { mode, factory })` | `SINGLETON` / `SCOPED` / `TRANSIENT`, as for vials |
+
+Labels are keyed by **name**: `inject('Db')` and
+`Doctor.dispenseByName('Db')` reach the same entry (the string form is
+typed only once `Db` is in `VialRegistry`). `Doctor.has(Db)` checks for
+an optional service; `Doctor.revoke(Db)` drops one — caches included —
+so a test can stock a fake in its place without `reset()`.
+
+Two caveats, both by design:
+
+- **No async factories.** Injection runs inside field initializers,
+  which are synchronous. `await` the setup, then stock the result.
+- **SCOPED means an explicit scope name** plus `Doctor.discharge(scope)`
+  when you are done — the scope a `Doctor.resolve(Handler, scope)`
+  operation carries, not an ambient per-request context.
+
+Full API in [stock](docs/Doctor-Stock.md).
+
 ## Modules
 
 | Module       | Description                                                  | Documentation                            |
 | ------------ | ------------------------------------------------------------ | ---------------------------------------- |
 | `Doctor`     | Process-wide injector (register, dispense, resolve, checkup) | This page                                |
-| `inject`     | Resolve a vial by token (class name), import-free            | [Doctor-Inject](docs/Doctor-Inject.md)   |
+| `inject`     | Resolve by label, by class, or by token (class name)         | [Doctor-Inject](docs/Doctor-Inject.md)   |
+| `stock`      | Typed labels for ready-made values and labelled factories    | [Doctor-Stock](docs/Doctor-Stock.md)     |
 | `@Vial`      | Class decorator — registers the class                        | [Doctor-Vial](docs/Doctor-Vial.md)       |
 | `./build`    | Codegen (Deno-only) — `VialRegistry` from `@Vial` classes    | [Doctor-Build](docs/Doctor-Build.md)     |
 | `./errors`   | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](errors/Doctor-Errors.md) |
-| `./types`    | `Vial`, `VialModes`, `VialOptions`                           | —                                        |
+| `./types`    | `Vial`, `VialModes`, `VialOptions`, `Label`, `StockOptions`  | —                                        |
 | `./examples` | Runnable multi-file examples                                 | [examples/](examples/)                   |
 
 ## Examples
@@ -355,7 +417,8 @@ for walkthroughs and expected output.
 
 ## Related Documentation
 
-- [inject](docs/Doctor-Inject.md) — resolve a vial by token, import-free
+- [inject](docs/Doctor-Inject.md) — resolve by label, by class, or by token
+- [stock](docs/Doctor-Stock.md) — typed labels for ready-made values and labelled factories
 - [build](docs/Doctor-Build.md) — generate the `VialRegistry` from `@Vial` classes
 - [@Vial](docs/Doctor-Vial.md) — registration decorator
 - [Errors](errors/Doctor-Errors.md) — error classes and matching strategies
