@@ -34,13 +34,4 @@ describe('label', () => {
     Doctor.stock(Db, impl);
     asserts.assertEquals(inject(Db).q(), 1);
   });
-
-  it('should refuse a class in place of a label, at compile time and at runtime', () => {
-    Doctor.reset();
-    asserts.assertThrows(
-      // @ts-expect-error — a class is not a label: prescribe it instead
-      () => Doctor.stock(class Db {}, {}),
-      TypeError,
-    );
-  });
 });

@@ -353,7 +353,14 @@ Doctor.stock(Db, { mode: 'SCOPED', factory: () => connect() });
 | Form                              | Lifecycle                                          |
 | --------------------------------- | -------------------------------------------------- |
 | `stock(label, value)`             | SINGLETON by nature — the same object every time   |
+| `stock(Class, instance)`          | SINGLETON by nature — under the class token        |
 | `stock(label, { mode, factory })` | `SINGLETON` / `SCOPED` / `TRANSIENT`, as for vials |
+
+A class can be the token too: `Doctor.stock(Db, instance)` puts a ready
+instance under the class itself, so `inject(Db)` and `inject('Db')` hand
+it out. After `Doctor.revoke(Db)`, that is how a test replaces a `@Vial`
+singleton with a fake — one entry, caches included — instead of
+`Doctor.reset()`, which wipes the whole process-wide registry.
 
 Labels are keyed by **name**: `inject('Db')` and
 `Doctor.dispenseByName('Db')` reach the same entry (the string form is

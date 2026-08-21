@@ -186,14 +186,23 @@ class Injector {
   }
 
   /**
-   * Stock a ready-made value — or a labelled factory with a lifecycle —
-   * under a {@link Label} (or bare name), so `inject(label)` and
+   * Stock something ready-made — a value under a {@link Label} or bare
+   * name, a ready instance under its class, or a labelled factory with
+   * a lifecycle — so `inject(label)`, `inject(Class)` and
    * `inject('name')` can hand it out. A vial is made to order from a
    * class; a stocked item arrives already built.
    *
    * **Value form** — `stock(label, value)` hands out that very value on
    * every dispense: SINGLETON by nature. A function is a value here
    * too — it is returned as-is, never called.
+   *
+   * **Class form** — `stock(Class, instance)` puts a ready instance under
+   * the class itself, as if `Class` had been prescribed SINGLETON and
+   * already built: `inject(Class)`, `inject('Class')` and
+   * {@link dispense} all hand out that instance. Value only — a class
+   * that needs a factory is `prescribe(Class, { mode, factory })`. This
+   * is how a test replaces a `@Vial` singleton with a fake:
+   * `Doctor.revoke(Db); Doctor.stock(Db, fakeDb);`.
    *
    * **Factory form** — `stock(label, { mode, factory })` runs `factory`
    * through the same lifecycle engine as classes: once and cached for
@@ -202,38 +211,53 @@ class Injector {
    * own shape is `{ mode, factory }` — a valid mode and a function — is
    * taken as this form.
    *
-   * Labels are keyed by **name**: `stock(label<Db>('Db'), db)`,
+   * Stocked entries are keyed by **name**: `stock(label<Db>('Db'), db)`,
    * `inject('Db')` and {@link dispenseByName} all address the same
-   * entry. Factories are synchronous by design (injection runs inside
-   * field initializers): `await` asynchronous setup first, then stock
-   * the result.
+   * entry, and a name is held exclusively — the class form refuses a
+   * name another class or label holds, where `prescribe` would let the
+   * last class win. Factories are synchronous by design (injection runs
+   * inside field initializers): `await` asynchronous setup first, then
+   * stock the result.
    *
-   * @param labelOrName - The label, or its bare name, to stock under.
+   * @param target - The class, the label, or its bare name, to stock
+   *   under.
    * @param valueOrOptions - The value itself, or {@link StockOptions}.
    *
    * @throws {@link DuplicateVialError} When the name is already taken —
-   *   by an earlier `stock`, or by a prescribed class of that name.
-   * @throws {TypeError} When a class is passed where a label or name is
-   *   expected (TypeScript rejects this; the guard is for JavaScript
-   *   callers) — `prescribe` the class instead.
+   *   by an earlier `stock`, or by a prescribed class of that name — or,
+   *   in the class form, when the class itself is already registered.
    */
+  public stock<T>(type: Vial<T>, value: NoInfer<T>): void;
   public stock<T>(labelOrName: Label<T> | string, value: NoInfer<T>): void;
   public stock<T>(
     labelOrName: Label<T> | string,
     options: StockOptions<NoInfer<T>>,
   ): void;
   public stock<T>(
-    labelOrName: Label<T> | string,
+    target: Vial<T> | Label<T> | string,
     valueOrOptions: T | StockOptions<T>,
   ): void {
-    if (typeof labelOrName === 'function') {
-      throw new TypeError(
-        `stock() takes a label or a name, not a class — prescribe '${
-          (labelOrName as Vial).name
-        }' instead`,
-      );
+    if (typeof target === 'function') {
+      if (this.__services.has(target)) {
+        throw new DuplicateVialError(
+          `Vial '${target.name}' is already registered — revoke it first`,
+          { vialName: target.name },
+        );
+      }
+      if (this.__byName.has(target.name)) {
+        throw new DuplicateVialError(
+          `Vial '${target.name}' collides with the entry registered under that name`,
+          { vialName: target.name },
+        );
+      }
+      this.__services.set(target, {
+        mode: 'SINGLETON',
+        factory: () => valueOrOptions,
+      });
+      this.__byName.set(target.name, target);
+      return;
     }
-    const name = this.__nameOf(labelOrName);
+    const name = this.__nameOf(target);
     const holder = this.__byName.get(name);
     if (holder !== undefined) {
       throw new DuplicateVialError(
@@ -257,8 +281,10 @@ class Injector {
    * per-scope entries. Returns `true` when a registration was actually
    * removed.
    *
-   * This is how a test swaps in a fake without {@link reset}:
-   * `Doctor.revoke(Db); Doctor.stock(Db, fakeDb);` (`Db` a label).
+   * This is how a test swaps in a fake without {@link reset}, which
+   * would wipe the whole process-wide registry:
+   * `Doctor.revoke(Db); Doctor.stock(Db, fakeDb);` — `Db` a label or
+   * a class.
    */
   public revoke(target: Vial | Label | string): boolean {
     const key = typeof target === 'function'

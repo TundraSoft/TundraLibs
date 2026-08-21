@@ -146,8 +146,9 @@ Thrown by `Doctor.prescribe` (and the `@Vial` decorator that
 wraps it) when the same class is being registered a second time, or
 when the class name is already held by a stocked label; and by
 `Doctor.stock` when the name is already taken — by an earlier `stock`
-or by a prescribed class. Two distinct classes sharing a name do not
-throw (the last registration wins the name).
+or by a prescribed class — or the class token is itself already
+registered. Two distinct classes sharing a name do not throw in
+`prescribe` (the last registration wins the name); `stock` refuses it.
 
 ```typescript ignore
 import { DuplicateVialError } from '@tundralibs/doctor';

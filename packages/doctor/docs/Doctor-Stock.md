@@ -14,6 +14,7 @@ no `VialRegistry` augmentation. A vial is made to order from a class
 ```typescript ignore
 label<T>(name: string): Label<T>;
 
+Doctor.stock<T>(type: Vial<T>, value: T): void;
 Doctor.stock<T>(labelOrName: Label<T> | string, value: T): void;
 Doctor.stock<T>(labelOrName: Label<T> | string, options: StockOptions<T>): void;
 
@@ -25,8 +26,8 @@ Doctor.dispense<T>(vialOrLabel: Vial<T> | Label<T>, scope?: string): T;
 ```
 
 `Label<T>` is `{ readonly name: string }` with a phantom `T`: the name
-is the registry key, `T` exists only at compile time. A class — which
-also carries a `.name` — is deliberately not a `Label`; `prescribe` it.
+is the registry key, `T` exists only at compile time. A class is not a
+`Label` — it has its own [form](#class-form), keyed by identity.
 `StockOptions<T>` is `{ mode: VialModes; factory: () => T }`.
 
 ## Value form
@@ -49,6 +50,38 @@ The value is handed out as-is on every dispense — SINGLETON by nature.
 A function is a value too: `stock(Hook, () => {})` returns the function,
 it never calls it. The value is pinned to the label's type at compile
 time: `stock(label<number>('n'), 'str')` does not compile.
+
+## Class form
+
+`stock(Class, instance)` puts a ready instance under the class itself —
+as if `Class` had been prescribed SINGLETON and already built — so
+`inject(Class)`, `inject('Class')` and `Doctor.dispense(Class)` all hand
+it out. Value only: a class that needs a factory is
+`prescribe(Class, { mode, factory })`.
+
+```typescript
+import { Doctor, inject, Vial } from '@tundralibs/doctor';
+
+@Vial('SINGLETON')
+class Db {
+  query(sql: string): unknown[] {
+    return [sql];
+  }
+}
+
+// In a test: swap the real singleton for a fake, leaving everything else.
+Doctor.revoke(Db);
+Doctor.stock(Db, { query: () => [] });
+
+class Posts {
+  db = inject(Db); // the fake, typed as Db
+}
+```
+
+The class must not be registered and its name must be free —
+`stock(Db, fake)` on a live `@Vial` class throws `DuplicateVialError`,
+so `revoke(Db)` first. Unlike `prescribe`, whose same-named classes are
+last-wins, the class form refuses a name any other class or label holds.
 
 ## Factory form
 
@@ -121,12 +154,22 @@ Doctor.stock(Db, fakeDb); // a test double, no reset() needed
 bare name revokes whatever `dispenseByName` would resolve it to.
 `reset()` clears stocked entries along with everything else.
 
+### Testing: `revoke` + `stock`, not `reset`
+
+`Doctor.reset()` wipes the whole process-wide registry — every `@Vial`
+class and stocked label in the process, not just the ones your test
+cares about — so a test that calls it has to rebuild the world.
+`Doctor.revoke(X)` followed by `Doctor.stock(X, fake)` replaces one
+entry, caches included, and leaves everything else standing. Reach for
+`reset()` only between unrelated suites; inside a suite, swap what you
+need with `revoke` + `stock`.
+
 ## Throws
 
 - [`DuplicateVialError`](../errors/Doctor-Errors.md#duplicatevialerror) —
   from `stock` when the name is already taken by an earlier `stock` or a
-  prescribed class; from `prescribe` / `@Vial` when the class name is
-  held by a label.
+  prescribed class, or the class token is itself already registered; from
+  `prescribe` / `@Vial` when the class name is held by a label.
 - [`UnregisteredVialError`](../errors/Doctor-Errors.md#unregisteredvialerror) —
   from `inject(label)` / `Doctor.dispense(label)` when nothing is stocked
   under it.

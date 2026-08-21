@@ -606,6 +606,62 @@ describe('Doctor', () => {
       );
     });
 
+    it('should stock a ready instance under a class token, reachable by class and by name', () => {
+      Doctor.reset();
+      const logger = new DLogger();
+      Doctor.stock(DLogger, logger);
+      asserts.assertStrictEquals(Doctor.dispense(DLogger), logger);
+      asserts.assertStrictEquals(Doctor.dispenseByName('DLogger'), logger);
+      asserts.assertStrictEquals(inject('DLogger'), logger);
+      asserts.assertEquals(Doctor.has(DLogger), true);
+      asserts.assertEquals(Doctor.knows(DLogger), true);
+    });
+
+    it('should override a @Vial singleton with a fake via revoke + stock', () => {
+      Doctor.reset();
+      @Vial('SINGLETON')
+      class Clock {
+        tick = 1;
+        now(): number {
+          return this.tick;
+        }
+      }
+      const real = Doctor.dispense(Clock);
+      const fake = { tick: 0, now: () => 0 };
+      // A live registration is refused: revoke it first.
+      asserts.assertThrows(() => Doctor.stock(Clock, fake), DuplicateVialError);
+      asserts.assertEquals(Doctor.revoke(Clock), true);
+      Doctor.stock(Clock, fake);
+      asserts.assertStrictEquals(Doctor.dispense(Clock), fake);
+      asserts.assert(Doctor.dispense(Clock) !== real);
+      asserts.assertEquals(inject(Clock).now(), 0);
+      asserts.assertStrictEquals(Doctor.dispenseByName('Clock'), fake);
+    });
+
+    it('should pin a class-token instance to the class type at compile time', () => {
+      Doctor.reset();
+      class Counter {
+        n = 0;
+      }
+      // @ts-expect-error — 42 is not a Counter
+      Doctor.stock(Counter, 42);
+      Doctor.revoke(Counter);
+      Doctor.stock(Counter, { n: 7 }); // a structural fake is fine
+      asserts.assertEquals(inject(Counter).n, 7);
+    });
+
+    it('should refuse a class token whose name another entry holds', () => {
+      Doctor.reset();
+      const A = class Same {};
+      Doctor.stock('Same', {});
+      asserts.assertThrows(() => Doctor.stock(A, new A()), DuplicateVialError);
+      Doctor.reset();
+      const B = class Same {};
+      Doctor.prescribe(B, 'SINGLETON');
+      // Stricter than prescribe's class-vs-class last-wins.
+      asserts.assertThrows(() => Doctor.stock(A, new A()), DuplicateVialError);
+    });
+
     it('should keep a value whose shape only resembles the factory form as a value', () => {
       Doctor.reset();
       const theme = { mode: 'dark', factory: () => 'x' }; // not a vial mode
