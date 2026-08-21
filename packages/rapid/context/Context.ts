@@ -89,6 +89,15 @@ export abstract class Context<
   }
 
   /**
+   * Server-initiated push to subscribers of `channel` — the same
+   * {@link Application.publish}, reachable from a handler/middleware.
+   * Fire-and-forget; a no-op when nobody is subscribed.
+   */
+  public publish(channel: string, data: unknown): Promise<void> {
+    return this.app.publish(channel, data);
+  }
+
+  /**
    * The INTERPRETED outcome status — 200 until something sets one.
    * Distinct from `response?.status`, which is `null` whenever the
    * content is null: a middleware that sets `{ status: 401, content:

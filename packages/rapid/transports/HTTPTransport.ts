@@ -5,13 +5,15 @@ import {
   type WebSocketHandler,
 } from '@tundralibs/compat/webserver';
 import { ulid } from '@tundralibs/id';
-import { Server as RpcServer } from '@tundralibs/rpc';
+import { type ChannelOptions, Server as RpcServer } from '@tundralibs/rpc';
 import { RadRouter } from '@tundralibs/radrouter';
 import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
+import type { SOCKETConnection } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { compose, socketOutcome } from '../utils/mod.ts';
 import type {
+  RapidChannelOptions,
   RapidContextResponse,
   RapidContextState,
   RapidRouteEntry,
@@ -66,6 +68,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   >();
   /** Composed onion for an unmatched request (global middleware only). */
   private __composedNoMatch?: ComposedHTTPChain<S>;
+  private __rpc?: RpcServer<SocketData>;
   private __prepared = false;
 
   public get address(): string | null {
@@ -145,9 +148,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     const server = this._app.option('server')!;
     // Websocket commands mount the rpc server INTO this listener (one
     // server, one port, one TLS config) — only when commands exist.
-    const websocket = this._app.socketCommands.length > 0
-      ? this.__buildSocket(server.socketPath ?? '/ws')
-      : undefined;
+    const websocket =
+      this._app.socketCommands.length > 0 || this._app.channels.size > 0
+        ? this.__buildSocket(server.socketPath ?? '/ws')
+        : undefined;
 
     this.__server = server.unixSocketPath !== undefined
       ? new WebServer(this._app.option('name'), {
@@ -264,12 +268,52 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         return outcome.content;
       });
     }
+    // Pub/sub channels declared via app.channel() — adapt each rapid
+    // ChannelOptions to rpc's (mapping the connection's SocketData to a
+    // SOCKETConnection). Clients subscribe over this same /ws socket.
+    for (const [name, opts] of this._app.channels) {
+      rpc.channel(name, this.__adaptChannel(opts));
+    }
+    this.__rpc = rpc;
     return rpc.handlers();
+  }
+
+  /** Map a rapid {@link RapidChannelOptions} onto rpc's channel hooks. */
+  private __adaptChannel(
+    opts: RapidChannelOptions,
+  ): ChannelOptions<SocketData> {
+    const conn = (data: SocketData | undefined): SOCKETConnection => ({
+      id: data?.connectionId ?? 'unknown',
+      query: data?.query ?? {},
+      headers: data?.headers ?? new Headers(),
+    });
+    return {
+      ...(opts.authorize
+        ? { authorize: (c) => opts.authorize!(conn(c.ws.data)) }
+        : {}),
+      ...(opts.onSubscribe
+        ? { onSubscribe: (c) => opts.onSubscribe!(conn(c.ws.data)) }
+        : {}),
+      ...(opts.onUnsubscribe
+        ? { onUnsubscribe: (c) => opts.onUnsubscribe!(conn(c.ws.data)) }
+        : {}),
+    };
+  }
+
+  /** Declare a channel on the live rpc server (post-start app.channel()). */
+  public declareChannel(name: string, opts: RapidChannelOptions): void {
+    this.__rpc?.channel(name, this.__adaptChannel(opts));
+  }
+
+  /** Server-initiated publish; no-op until the socket listener is up. */
+  public publish(channel: string, data: unknown): Promise<void> {
+    return this.__rpc?.publish(channel, data) ?? Promise.resolve();
   }
 
   public async stop(): Promise<void> {
     const server = this.__server;
     this.__server = undefined;
+    this.__rpc = undefined;
     // Force-close (graceful=false): a mounted websocket is a long-lived
     // connection that never drains, so Bun's graceful stop would hang on
     // it forever (Deno's shutdown() already force-collapses). The app's

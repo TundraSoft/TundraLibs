@@ -347,15 +347,15 @@ store-injection is the one breaking change and must land before release.
   `requests.active/total/peakActive` and `metro-man` owns metrics — this
   is a clean rapid surface over the existing counters, ambient-correlated
   like logs/traces, and the live feed the dashboard renders.
-- **WebSocket pub/sub — server-initiated push.** The SOCKET transport
-  wraps `@tundralibs/rpc`'s `Server` but exposes NONE of its pub/sub
-  (verified by grep: no publish/subscribe/broadcast/channel surface). A
-  module can only reply to the command that invoked it — it cannot push
-  to other connected clients. Add an `app.publish()`/`ctx.publish()`
-  surface wired to the underlying rpc instance (rpc already has
-  publish/subscribe frames + a pluggable `PubSubAdapter` for cross-process
-  fan-out). Needed for any server-initiated broadcast (e.g. a "new
-  comment" fan-out to subscribers).
+- ✅ **WebSocket pub/sub — server-initiated push. DONE 2026-08-22.**
+  `app.channel(name, { authorize?, onSubscribe?, onUnsubscribe? })` declares
+  a channel clients subscribe to over the same `/ws` socket; `app.publish
+  (channel, data)` / `ctx.publish(...)` push to subscribers (cross-process
+  when an rpc `PubSubAdapter` is configured). A channel alone mounts the
+  socket listener even with no `socket()` commands. Wired straight onto
+  `@tundralibs/rpc`'s `channel`/`publish`/adapter (rapid adapts the hooks to
+  its `SOCKETConnection`); `authorize` gates subscription. The fan-out
+  primitive the cluster manager needs, and any "new comment" broadcast.
 - **DI capability — `label` + `stock` in doctor. LOCKED, IN PROGRESS**
   (branch `feat/doctor-stock-labels`, own worktree — one package per
   branch). Register ready-made VALUES under typed labels with no
@@ -490,10 +490,11 @@ store-injection is the one breaking change and must land before release.
     its own stats) and broadcasts it back, so any node holds the cluster
     picture. The dev console reads `app.cluster` → master and workers on a
     TTY show the **fleet**; solo shows itself.
-  - **The one core seam:** `app.instanceId` (ULID minted at boot — 1.0)
-    and a nullable `app.cluster` slot the cluster module fills. Ship both
-    in 1.0 (forward-compatible); the master/worker modules + gateway are
-    the post-1.0 build.
+  - **The one core seam — ✅ SHIPPED 2026-08-22.** `app.instanceId` (ULID
+    minted at boot) and a nullable `app.cluster` slot (`setCluster()` for
+    the module to fill, `cluster` getter the console reads) are in now,
+    forward-compatible; the master/worker modules + gateway are the
+    post-1.0 build.
   - **Capability map (survey 2026-08-22 — most of it composes).**
     `@tundralibs/rpc` already supplies the whole worker↔manager channel —
     `Server`/`Client`, `channel` + `publish` fan-out, `connections` (live

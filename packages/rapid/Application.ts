@@ -34,6 +34,8 @@ import type {
   RapidApplicationFetchInfo,
   RapidApplicationJobMetrics,
   RapidApplicationOptions,
+  RapidChannelOptions,
+  RapidClusterSnapshot,
   RapidContextState,
   RapidHTTPHandler,
   RapidHTTPMiddleware,
@@ -102,6 +104,9 @@ export class Application<S extends RapidContextState = RapidContextState>
   /** Registered jobs, keyed by name. */
   private readonly __jobs = new Map<string, RapidJobEntry<S>>();
 
+  private readonly __instanceId: string = ulid();
+  private __cluster?: RapidClusterSnapshot;
+  private readonly __channels = new Map<string, RapidChannelOptions>();
   private __http?: HTTPTransport<S>;
   private __jobTransport?: JOBTransport<S>;
   private __moduleRuntime?: ModuleRuntime;
@@ -285,6 +290,73 @@ export class Application<S extends RapidContextState = RapidContextState>
   /** The app-level universal middleware, in order (read-only view). */
   public get middlewares(): readonly RapidMiddleware[] {
     return this.__middleware;
+  }
+
+  /**
+   * This process's stable id — a ULID minted once at construction.
+   * Every node reports it (cluster registration, the console banner);
+   * distinct from the per-request id ({@link newRequestId}).
+   */
+  public get instanceId(): string {
+    return this.__instanceId;
+  }
+
+  /**
+   * The current cluster snapshot, or `undefined` on a solo node. Filled
+   * by the cluster module (post-1.0) via {@link setCluster}; the dev
+   * console reads `cluster ?? metrics`, so any node in a cluster shows the
+   * fleet and a solo node shows itself — with no other change.
+   */
+  public get cluster(): RapidClusterSnapshot | undefined {
+    return this.__cluster;
+  }
+
+  /** Feed (or clear) the cluster snapshot — the cluster module's seam. */
+  public setCluster(snapshot: RapidClusterSnapshot | undefined): void {
+    this.__cluster = snapshot;
+  }
+
+  /** Declared pub/sub channels (read by the transport at listen). */
+  public get channels(): ReadonlyMap<string, RapidChannelOptions> {
+    return this.__channels;
+  }
+
+  /**
+   * Declare a WebSocket pub/sub channel clients may subscribe to. Server
+   * code then pushes to subscribers with {@link publish} / `ctx.publish`.
+   * `options.authorize` gates who may subscribe (open when omitted).
+   * Declaring one makes the app mount its socket listener even with no
+   * `socket()` commands.
+   *
+   * @throws {RapidError} RAPID_CONFIG when the channel name is empty or
+   *   already declared.
+   */
+  public channel(name: string, options: RapidChannelOptions = {}): this {
+    if (name.trim() === '') {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'channel name must be a non-empty string',
+      });
+    }
+    if (this.__channels.has(name)) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `channel '${name}' is already declared`,
+        details: { name },
+      });
+    }
+    this.__channels.set(name, options);
+    // Declared after start()? Register it on the live rpc server too.
+    this.__http?.declareChannel(name, options);
+    return this;
+  }
+
+  /**
+   * Server-initiated push to every subscriber of `channel` (across
+   * processes when a cross-process pub/sub adapter is configured). A
+   * no-op before the socket listener is up or when nobody subscribes —
+   * pub/sub is fire-and-forget.
+   */
+  public publish(channel: string, data: unknown): Promise<void> {
+    return this.__http?.publish(channel, data) ?? Promise.resolve();
   }
 
   /** The registered routes (read-only view). */

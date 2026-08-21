@@ -19,6 +19,9 @@ export type { RapidApplicationPagingOptions } from './application/PagingOptions.
 export type { RapidApplicationQueryOptions } from './application/QueryOptions.ts';
 export type { RapidApplicationServerOptions } from './application/ServerOptions.ts';
 export type { RapidApplicationUploadOptions } from './application/UploadOptions.ts';
+export type { RapidChannelOptions } from './ChannelOptions.ts';
+export type { RapidClusterMember } from './cluster/Member.ts';
+export type { RapidClusterSnapshot } from './cluster/Snapshot.ts';
 export type { RapidBinder, RapidBinderSource } from './Binder.ts';
 export type { RapidBinds } from './Binds.ts';
 export type { RapidDecoration } from './Decoration.ts';
