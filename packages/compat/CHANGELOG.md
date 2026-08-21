@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.2.0...compat-v2.3.0) (2026-08-21)
+
+
+### Features
+
+* **compat:** add unrefTimer helper for cross-runtime timer unref ([#495](https://github.com/TundraSoft/TundraLibs/issues/495)) ([0f4b10e](https://github.com/TundraSoft/TundraLibs/commit/0f4b10eb0736aa091d6e62ba420bf235808facb7))
+
 ## [2.2.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.1.1...compat-v2.2.0) (2026-08-21)
 
 
