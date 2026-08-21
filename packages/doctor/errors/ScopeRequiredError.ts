@@ -15,9 +15,9 @@ export type ScopeRequiredContext = {
 };
 
 /**
- * Thrown by `Doctor.dispense` (and transitively by
- * `Doctor.inoculate` / `Doctor.resolve`) when a SCOPED vial
- * needs to be instantiated but no scope was supplied.
+ * Thrown by `Doctor.dispense` (and so by any `inject()` running
+ * during construction, or under `Doctor.resolve`) when a SCOPED vial
+ * or label needs to be instantiated but no scope was supplied.
  *
  * SCOPED vials require a caller-controlled lifetime — the
  * registry refuses to invent one on the caller's behalf.

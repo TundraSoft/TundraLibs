@@ -3,7 +3,7 @@
  *
  * Injection is construction-time (`inject()` field initializers and
  * constructor default parameters) — no metadata emission — so unlike
- * the 1.x suite these tests run on Deno, Bun, AND Node.
+ * the 1.0.x suite these tests run on Deno, Bun, AND Node.
  *
  * @module
  */

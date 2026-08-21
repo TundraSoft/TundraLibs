@@ -64,12 +64,12 @@ the last class's initializer silently replaces everyone else's.
 `inject()` initializers are plain expressions, immune by construction,
 and shorter anyway.
 
-## Migrating from 1.x
+## Migrating from 1.0.x
 
-Doctor 2.0 drops the legacy-decorator machinery — `experimentalDecorators`,
+Doctor 1.1 drops the legacy-decorator machinery — `experimentalDecorators`,
 `emitDecoratorMetadata`, and `reflect-metadata` — entirely:
 
-| 1.x                                              | 2.0                                                                                           |
+| 1.0.x                                            | 1.1+                                                                                          |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | `@Dose() logger!: Logger`                        | `logger = inject('Logger')`                                                                   |
 | `@Inoculate()` on the class                      | nothing — `inject()` fields wire themselves on `new`                                          |
@@ -124,8 +124,8 @@ ON; make sure the legacy flag is not turned on:
 | **Node** — `tsc` / `ts-node`    | ✅    |
 | **Node + `tsx`, esbuild, Vite** | ✅    |
 
-(1.x required `emitDecoratorMetadata`, which tsx/esbuild can never
-emit — that row was a ❌. 2.0 removes the requirement.)
+(1.0.x required `emitDecoratorMetadata`, which tsx/esbuild can never
+emit — that row was a ❌. 1.1 removes the requirement.)
 
 ### Bundling for the browser or a Worker (esbuild/Wrangler/Vite)
 
