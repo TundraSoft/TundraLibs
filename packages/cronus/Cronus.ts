@@ -31,6 +31,7 @@
  * ```
  */
 
+import { unrefTimer } from '@tundralibs/compat/runtime';
 import { Events } from '@tundralibs/utils';
 import {
   CronusError,
@@ -81,16 +82,6 @@ type CronusJob = {
    */
   lastLocalFire: string | null;
 };
-
-/** `unref` a timer where the runtime supports it (no-op elsewhere). */
-function unrefTimer(handle: TimerHandle): void {
-  if (typeof handle === 'number') {
-    (globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
-      .Deno?.unrefTimer?.(handle);
-  } else {
-    handle.unref?.();
-  }
-}
 
 /**
  * The scheduler. Register jobs with {@link Cronus.add}, then

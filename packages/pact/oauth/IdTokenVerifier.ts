@@ -42,7 +42,11 @@
 
 import { decodeJWT, JWTError, verifyJWT } from '@tundralibs/crypt/JWT';
 import { PactOAuthError } from '../errors/mod.ts';
-import type { IdTokenVerificationPolicy } from '../types/mod.ts';
+import type {
+  IdTokenContext,
+  IdTokenVerificationPolicy,
+  IdTokenVerifierOptions,
+} from '../types/mod.ts';
 
 /** `fetch` supplier — late-bound so the facade's test seam stays live. */
 type FetchRef = () => typeof globalThis.fetch;
@@ -94,39 +98,6 @@ type RemoteJWK = {
 
 /** The decoded header of an `id_token` (`typ` is optional — see fileoverview). */
 type IdTokenHeader = { alg?: unknown; kid?: unknown };
-
-/** Per-call verification context resolved by {@link OAuthClient}. */
-export type IdTokenContext = {
-  /**
-   * The provider's JWKS endpoint (preset constant, or `jwks_uri` from the
-   * OIDC discovery document). Absent when the provider publishes none.
-   */
-  jwksUri?: string;
-  /**
-   * Expected `iss`. For `oidc` this is the **configured** issuer, not the
-   * one echoed by the discovery document — validating a token against an
-   * issuer the document supplied would be circular.
-   */
-  issuer?: string;
-  /** Expected `aud` — the instance's `clientId`. */
-  audience: string;
-  /** Expected `nonce`, when the caller supplied one. */
-  nonce?: string;
-};
-
-/** Construction options for {@link IdTokenVerifier}. */
-export type IdTokenVerifierOptions = {
-  /** Availability policy — see {@link IdTokenVerificationPolicy}. */
-  policy?: IdTokenVerificationPolicy;
-  /** JWKS cache lifetime in ms. @default 3600000 */
-  ttl?: number;
-  /**
-   * Called when verification degraded to decode-only under `'preferred'`.
-   * The facade turns this into the `idTokenUnverified` event so operators can
-   * alert on silent downgrades.
-   */
-  onDegraded?: (reason: string) => void;
-};
 
 /**
  * Verifies `id_token`s against a provider's JWKS, with a TTL cache and

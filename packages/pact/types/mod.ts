@@ -7,7 +7,9 @@
 export type { AuthorizationUrlOptions } from './AuthorizationUrlOptions.ts';
 export type { CallbackParams } from './CallbackParams.ts';
 export type { GroupResolver } from './GroupResolver.ts';
+export type { IdTokenContext } from './IdTokenContext.ts';
 export type { IdTokenVerificationPolicy } from './IdTokenVerificationPolicy.ts';
+export type { IdTokenVerifierOptions } from './IdTokenVerifierOptions.ts';
 export type { LoginStrategy } from './LoginStrategy.ts';
 export type { OAuthProfile } from './OAuthProfile.ts';
 export type { OAuthProviderConfig } from './OAuthProviderConfig.ts';

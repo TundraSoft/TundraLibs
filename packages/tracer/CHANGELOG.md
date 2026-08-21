@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.6.0...tracer-v0.6.1) (2026-08-21)
+
+
+### Documentation
+
+* **tracer:** document Workers support and neutralize Deno-only examples ([#504](https://github.com/TundraSoft/TundraLibs/issues/504)) ([4db3876](https://github.com/TundraSoft/TundraLibs/commit/4db3876e79f6fc7fb0156e1b0f54a8eb0062319a))
+
 ## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.6...tracer-v0.6.0) (2026-08-20)
 
 

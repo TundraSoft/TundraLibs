@@ -6,15 +6,17 @@ Node.js.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
-No Browser/Workers badge: the code is plain `setTimeout` and imports
-nothing server-only, so it would bundle and run without error, but a
-minute-resolution scheduler is only meaningful in a **long-lived
-process** — a browser tab can be closed anytime, and a standard
-Cloudflare Worker has no background execution between requests at all
-(only a Durable Object's Alarms API persists timers across
-invocations, which is a different scheduling model than Cronus's
-in-process tick loop). Deploy it on a real long-lived process instead.
+Cronus runs on all five targets — it is plain `setTimeout` with no
+server-only imports, so it loads and ticks on Deno, Bun, Node.js,
+Cloudflare Workers, and the browser alike. A minute-resolution
+scheduler is **most useful on a long-lived process**, though: it only
+earns its keep where something keeps the process alive between ticks. A
+browser tab can close at any time, and a standard Cloudflare Worker has
+no background execution between requests — a Durable Object's Alarms
+API is a different scheduling model. Reach for it on a server.
 
 ## Overview
 
@@ -34,8 +36,8 @@ consequences:
 Jobs never overlap themselves: while a job's action is running, matching
 ticks are skipped — a job scheduled every minute that takes five minutes
 to run resumes on the sixth minute. The package is dependency-light: it
-imports only `@tundralibs/utils` (base error and event classes);
-`@tundralibs/compat` is used for cross-runtime tests only.
+imports `@tundralibs/utils` (base error and event classes) and
+`@tundralibs/compat` (cross-runtime timer `unref`).
 
 ## Modules
 
