@@ -51,6 +51,7 @@ export {
   type RapidErrorCode,
   type RapidErrorMeta,
 } from './errors/mod.ts';
+export { validated } from './utils/validated.ts';
 export {
   event,
   EventContext,

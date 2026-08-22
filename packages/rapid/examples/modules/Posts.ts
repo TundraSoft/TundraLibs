@@ -38,7 +38,7 @@ import {
   PostSummary,
   UpdatePostBody,
 } from '../schemas.ts';
-import { validated } from '../validated.ts';
+import { validated } from '../../mod.ts';
 import { BlogModule } from './BlogModule.ts';
 
 /** A stored posts row as norm hands it back (tags is JSON text). */

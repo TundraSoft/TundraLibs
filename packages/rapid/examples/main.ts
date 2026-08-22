@@ -13,8 +13,7 @@
  *   modules/CommentsSocket.ts   SOCKET-only module; invoke()s Posts.get
  *   modules/Audit.ts   event-only module — subscribes, logs, no transport
  *   modules/mod.ts     the static barrel app.modules() boots from
- *   schemas.ts         guardian request schemas
- *   validated.ts       GuardianError → RapidError bridge
+ *   schemas.ts         guardian request schemas (validated() bridges 400s)
  *   auth.ts            a stand-in for pact — login service + token verify
  *   types.ts           domain types
  *   main.ts            boot: open db → mount endpoints + modules

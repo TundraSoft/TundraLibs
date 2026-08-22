@@ -167,7 +167,7 @@ larger build. Each has a recommendation. Post-review decisions: **G6** (openapi
 default) and **G11** (root publish globs) fixed; **G8** (cron double-fire)
 acknowledged as covered by the cluster design.
 
-**G1 — Validation → 400 wiring (HIGH).** A thrown `GuardianError` from a bound
+**G1 — Validation → 400 wiring (HIGH). ✅ RESOLVED 2026-08-22 (BOTH).** A thrown `GuardianError` from a bound
 validator maps to `RAPID_UNHANDLED`/**500**, not 400 — so a malformed body
 500s out of the box. The bridge (`validated()`) exists only in
 `examples/validated.ts` and isn't exported. _Recommend:_ export a `validated()`

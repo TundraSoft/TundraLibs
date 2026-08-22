@@ -11,7 +11,7 @@
 import { payload, SOCKET } from '../../decorators/mod.ts';
 import type { RapidContextResponse } from '../../types/mod.ts';
 import { CreateCommentViaSocketBody } from '../schemas.ts';
-import { validated } from '../validated.ts';
+import { validated } from '../../mod.ts';
 import { BlogModule } from './BlogModule.ts';
 import { Posts } from './Posts.ts';
 

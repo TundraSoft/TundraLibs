@@ -202,6 +202,40 @@ The richer `RapidModule` tier adds a lifecycle, a scoped logger, typed
 `app.modules({ modules: [...] })` (before `start()`/`fetch()`); `stop()` disposes
 it in reverse order. See `examples/` for a full module-based app.
 
+## Validation
+
+A bound validator (`bind: [payload(schema.parse)]`) that **throws** turns the
+request into a **400** — but only if rapid can tell the throw is a _validation_
+failure, not a server bug. The rule, in order of precedence:
+
+1. **You throw a `RapidError` yourself** → used verbatim (full control over code
+   / status / detail).
+2. **A `@tundralibs/guardian` failure** → **automatic 400** (`RAPID_VALIDATION_FAILED`,
+   with a client-safe message per failing field). Guardian is this repo's
+   validator, recognized structurally — no wrapper, no import needed.
+3. **Any other throw** (zod, a hand-written `parse`, …) → an opaque **500** by
+   default. Wrap the validator in **`validated()`** to opt its throws into a 400:
+
+```ts ignore
+import { validated } from '@tundralibs/rapid';
+import { z } from 'zod'; // any validator with a .parse
+
+const Body = z.object({ email: z.string().email() });
+
+class Users {
+  // guardian: no wrapper needed — a failure is already a 400.
+  // zod / custom: wrap in validated() or an unexpected throw is a 500.
+  @POST('/', { bind: [payload(validated(Body))] })
+  create(body: unknown): RapidContextResponse {
+    return { content: body };
+  }
+}
+```
+
+> The asymmetry is deliberate: guardian is first-class, everything else is
+> explicit. If you validate **server-side** data with guardian and a failure
+> should _not_ be a client 400, catch it and throw your own error.
+
 ## Endpoints
 
 Ready-made handlers you mount where you like — nothing is auto-registered:

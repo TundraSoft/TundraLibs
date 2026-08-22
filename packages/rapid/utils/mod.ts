@@ -16,6 +16,7 @@ export {
   serializeCookie,
 } from './cookies.ts';
 export { mimeTypeFor } from './mimeTypeFor.ts';
+export { validated } from './validated.ts';
 export {
   hasDecorations,
   type ModuleMountTarget,
