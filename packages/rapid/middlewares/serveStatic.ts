@@ -7,7 +7,7 @@
  * @module
  */
 
-import { readFile } from '@tundralibs/compat/file';
+import { readFile, realPath } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
 import { mimeTypeFor } from '../utils/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
@@ -38,8 +38,13 @@ export type ServeStaticOptions = {
 
 /**
  * Serve static files from `options.root`. Register with `app.use(...)`.
- * Path traversal is blocked: the resolved file must stay inside `root`
- * (encoded `..` included), otherwise the request falls through.
+ * Path traversal is blocked two ways: a LEXICAL guard (the joined path must
+ * stay inside `root`, encoded `..` included) AND a SYMLINK guard — the file
+ * is `realPath`-resolved and must stay inside the RESOLVED root, so a
+ * symlink under `root` pointing elsewhere can't leak an out-of-tree file.
+ * Comparing against the resolved root keeps a consistently symlinked tree
+ * (e.g. a `public → releases/vN` deploy) working; only an escaping symlink
+ * is denied. Either failure falls through (`next()`).
  *
  * v1 reads whole files into memory and does no ETag/conditional/range
  * handling — those are the static-serving ROADMAP follow-ups.
@@ -51,6 +56,10 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
   const cacheControl = options.maxAge === undefined
     ? undefined
     : `public, max-age=${Math.floor(options.maxAge)}`;
+  // The resolved root, computed once (lazily — `root` may not exist at
+  // construction). If it can't resolve, fall back to the lexical root; no
+  // file will resolve under a non-existent root anyway.
+  let realRoot: string | undefined;
 
   const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP') return next();
@@ -73,24 +82,43 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
       rel += index;
     }
 
-    // Traversal guard: `join` collapses `..`; the result must be inside
+    // Lexical guard: `join` collapses `..`; the result must be inside
     // `root` (or be `root` itself).
     const filePath = path.join(root, rel);
     if (filePath !== root && !filePath.startsWith(root + path.SEPARATOR)) {
       return next();
     }
 
+    // Symlink guard: resolve the real path and require it inside the
+    // RESOLVED root. `realPath` throws for a missing path (→ next). Done
+    // BEFORE readFile so a symlink's target is never read.
+    let real: string;
+    try {
+      real = await realPath(filePath);
+    } catch {
+      return next(); // missing / unreadable
+    }
+    if (realRoot === undefined) {
+      try {
+        realRoot = await realPath(root);
+      } catch {
+        realRoot = root;
+      }
+    }
+    if (real !== realRoot && !real.startsWith(realRoot + path.SEPARATOR)) {
+      return next(); // escapes the resolved root — deny without leaking
+    }
+
     let bytes: Uint8Array;
     try {
-      bytes = await readFile(filePath);
+      bytes = await readFile(real);
     } catch {
-      // Missing / directory / unreadable → not ours; let routing (or the
-      // 404) handle it.
+      // Directory / unreadable → not ours; let routing (or the 404) handle it.
       return next();
     }
 
     const headers: Record<string, string> = {
-      'content-type': mimeTypeFor(filePath),
+      'content-type': mimeTypeFor(real),
     };
     if (cacheControl !== undefined) headers['cache-control'] = cacheControl;
     ctx.response = { content: bytes, headers };

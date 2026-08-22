@@ -11,6 +11,7 @@ import {
   removeDir,
   writeTextFile,
 } from '@tundralibs/compat/file';
+import { symlinkSync } from 'node:fs'; // cross-runtime (Deno/Bun/Node); compat has no symlink creator
 import { Application } from '../Application.ts';
 import { serveStatic } from './serveStatic.ts';
 import { middlewareScope } from './scope.ts';
@@ -123,6 +124,40 @@ describe('rapid.serveStatic (live)', () => {
       asserts.assertEquals(await file.text(), 'body{color:red}');
     } finally {
       await app2.stop();
+    }
+  });
+
+  it('blocks a symlink under root that ESCAPES it, but serves an in-tree symlink', async () => {
+    const rootDir = await makeTempDir({ prefix: 'rapid-static-sym-' });
+    const outside = await makeTempDir({ prefix: 'rapid-static-out-' });
+    await writeTextFile(`${outside}/secret.txt`, 'TOP-SECRET');
+    await writeTextFile(`${rootDir}/ok.txt`, 'public');
+    // Escaping symlink INSIDE root → points out of the tree.
+    symlinkSync(`${outside}/secret.txt`, `${rootDir}/evil.txt`);
+    // In-tree symlink → points to a file that stays inside root.
+    symlinkSync(`${rootDir}/ok.txt`, `${rootDir}/alias.txt`);
+
+    const app = new Application({
+      name: 'static-sym',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    app.use(serveStatic({ root: rootDir, prefix: '/s' }));
+    await app.start();
+    try {
+      const u = `http://127.0.0.1:${app.port}`;
+      // Escaping symlink → denied (falls through → 404); the secret is NOT served.
+      const leak = await fetch(`${u}/s/evil.txt`);
+      const leakBody = await leak.text();
+      asserts.assertEquals(leak.status, 404);
+      asserts.assert(!leakBody.includes('TOP-SECRET'), 'secret leaked!');
+      // In-tree symlink → served normally.
+      const alias = await fetch(`${u}/s/alias.txt`);
+      asserts.assertEquals(alias.status, 200);
+      asserts.assertEquals(await alias.text(), 'public');
+    } finally {
+      await app.stop();
+      await removeDir(rootDir, { recursive: true });
+      await removeDir(outside, { recursive: true });
     }
   });
 
