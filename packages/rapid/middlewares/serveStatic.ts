@@ -7,11 +7,26 @@
  * @module
  */
 
-import { readFile, realPath } from '@tundralibs/compat/file';
+import {
+  type FileInfo,
+  readFile,
+  realPath,
+  stat,
+} from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
 import { mimeTypeFor } from '../utils/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
+
+/** Strip a weak-validator prefix for RFC 7232 weak comparison. */
+const stripWeak = (tag: string): string => tag.trim().replace(/^W\//, '');
+
+/** Whether an `If-None-Match` header matches `etag` (weak comparison). */
+const ifNoneMatch = (header: string, etag: string): boolean => {
+  if (header.trim() === '*') return true;
+  const target = stripWeak(etag);
+  return header.split(',').some((t) => stripWeak(t) === target);
+};
 
 /** Options for {@link serveStatic}. */
 export type ServeStaticOptions = {
@@ -46,8 +61,10 @@ export type ServeStaticOptions = {
  * (e.g. a `public → releases/vN` deploy) working; only an escaping symlink
  * is denied. Either failure falls through (`next()`).
  *
- * v1 reads whole files into memory and does no ETag/conditional/range
- * handling — those are the static-serving ROADMAP follow-ups.
+ * Emits a weak `ETag` (size + mtime) and `Last-Modified`, and answers a
+ * matching `If-None-Match` with `304` WITHOUT reading the file. Still reads
+ * whole files into memory and does no `Range` handling — that follow-up waits
+ * on the streaming response model.
  */
 export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
   const root = path.resolve(options.root);
@@ -109,6 +126,32 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
       return next(); // escapes the resolved root — deny without leaking
     }
 
+    // Metadata for conditional serving: a WEAK ETag from size + mtime, so an
+    // unchanged file answers 304 without ever reading the bytes.
+    let info: FileInfo;
+    try {
+      info = await stat(real);
+    } catch {
+      return next();
+    }
+    if (!info.isFile) return next(); // directory / special → not ours
+
+    const mtimeMs = info.mtime?.getTime() ?? 0;
+    const etag = `W/"${info.size.toString(16)}-${mtimeMs.toString(16)}"`;
+    const headers: Record<string, string> = {
+      'content-type': mimeTypeFor(real),
+      etag,
+    };
+    if (mtimeMs > 0) headers['last-modified'] = new Date(mtimeMs).toUTCString();
+    if (cacheControl !== undefined) headers['cache-control'] = cacheControl;
+
+    // Conditional request: If-None-Match (weak) → 304, no read.
+    const inm = ctx.headers.get('if-none-match');
+    if (inm !== null && ifNoneMatch(inm, etag)) {
+      ctx.response = { status: 304, content: '', headers };
+      return;
+    }
+
     let bytes: Uint8Array;
     try {
       bytes = await readFile(real);
@@ -116,11 +159,6 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
       // Directory / unreadable → not ours; let routing (or the 404) handle it.
       return next();
     }
-
-    const headers: Record<string, string> = {
-      'content-type': mimeTypeFor(real),
-    };
-    if (cacheControl !== undefined) headers['cache-control'] = cacheControl;
     ctx.response = { content: bytes, headers };
     // Served — do NOT call next(): short-circuit the chain.
   };

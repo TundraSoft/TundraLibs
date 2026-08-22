@@ -85,8 +85,9 @@ decision attached in the review doc.
 
 **P1 — important**
 
-- **Static hardening** — ETag / If-None-Match / Range for `serveStatic`
-  (Range depends on the streaming response model).
+- **Static hardening — `Range`** for `serveStatic` (`206`/`Accept-Ranges`);
+  depends on the streaming response model. ETag / If-None-Match / Last-Modified
+  already shipped.
 - **Content negotiation** — `Accept` parsing / `ctx.format`.
 - **Cron exactly-once under N replicas** (gated). The scheduler is per-process;
   N replicas fire every `@JOB` N times. Ship the `onlyIfCronLeader()` gate (see

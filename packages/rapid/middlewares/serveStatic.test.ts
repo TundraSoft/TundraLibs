@@ -63,6 +63,24 @@ describe('rapid.serveStatic (live)', () => {
     asserts.assertEquals(await r.text(), 'body{color:red}');
   });
 
+  it('emits a weak ETag and answers a matching If-None-Match with 304', async () => {
+    const r1 = await fetch(`${url}/s/app.css`);
+    const etag = r1.headers.get('etag');
+    await r1.text();
+    asserts.assert(
+      etag?.startsWith('W/"'),
+      `expected a weak ETag, got ${etag}`,
+    );
+    asserts.assert(r1.headers.get('last-modified'), 'expected Last-Modified');
+
+    const r2 = await fetch(`${url}/s/app.css`, {
+      headers: { 'if-none-match': etag! },
+    });
+    asserts.assertEquals(r2.status, 304);
+    asserts.assertEquals(await r2.text(), ''); // 304 carries no body
+    asserts.assertEquals(r2.headers.get('etag'), etag); // still advertised
+  });
+
   it('falls through for a missing file (404) and leaves routes working', async () => {
     const miss = await fetch(`${url}/s/nope.txt`);
     asserts.assertEquals(miss.status, 404);
