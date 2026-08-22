@@ -1381,4 +1381,128 @@ describe('radrouter.RadRouter', () => {
     asserts.assertExists(hit);
     asserts.assertEquals(hit.params.v, 'beta');
   });
+
+  // ---------- allowedMethods ----------
+
+  // Every HTTP method allowedMethods can report, so the consistency helper
+  // probes the same surface the implementation loops over.
+  const ALL_METHODS: HTTPMethod[] = [
+    'GET',
+    'POST',
+    'PUT',
+    'DELETE',
+    'PATCH',
+    'HEAD',
+    'OPTIONS',
+    'TRACE',
+    'CONNECT',
+  ];
+
+  // The correctness contract, asserted directly: for a given path/version,
+  // a method is in allowedMethods iff find(method, path, version) matches.
+  const assertAllowedMatchesFind = (
+    router: RadRouter<TestMW>,
+    path: string,
+    version?: string,
+  ): void => {
+    const allowed = router.allowedMethods(path, version);
+    for (const method of ALL_METHODS) {
+      const inArray = allowed.includes(method);
+      const found = router.find(method, path, version) !== undefined;
+      asserts.assertEquals(
+        inArray,
+        found,
+        `allowedMethods vs find disagree for ${method} "${path}" ` +
+          `version=${version}: inArray=${inArray}, find-match=${found}`,
+      );
+    }
+  };
+
+  it('allowedMethods - static path returns exactly the registered methods', () => {
+    const router = new RadRouter<TestMW>();
+    router.get('/resource', [middleware1]);
+    router.post('/resource', [middleware2]);
+    router.delete('/resource', [middleware3]);
+
+    const allowed = router.allowedMethods('/resource');
+    asserts.assertEquals([...allowed].sort(), ['DELETE', 'GET', 'POST']);
+    // No unregistered method leaks in.
+    asserts.assertEquals(allowed.includes('PUT'), false);
+    // Consistency with find for the whole method surface.
+    assertAllowedMatchesFind(router, '/resource');
+  });
+
+  it('allowedMethods - unknown path returns an empty array', () => {
+    const router = new RadRouter<TestMW>();
+    router.get('/resource', [middleware1]);
+
+    asserts.assertEquals(router.allowedMethods('/nonexistent'), []);
+    // Does not throw and stays consistent with find (which also misses).
+    assertAllowedMatchesFind(router, '/nonexistent');
+  });
+
+  it('allowedMethods - param path matches a concrete request path', () => {
+    const router = new RadRouter<TestMW>();
+    router.get('/users/:id:', [middleware1]);
+    router.put('/users/:id:', [middleware2]);
+
+    const allowed = router.allowedMethods('/users/42');
+    asserts.assertEquals([...allowed].sort(), ['GET', 'PUT']);
+    assertAllowedMatchesFind(router, '/users/42');
+  });
+
+  it('allowedMethods - version resolution mirrors find', () => {
+    const router = new RadRouter<TestMW>();
+    router.get('/x', [middleware1], 'v1');
+    router.post('/x', [middleware2], 'v2');
+
+    // v1: GET(v1) resolves, POST is v2-only with no defaultVersion → excluded.
+    asserts.assertEquals(router.allowedMethods('/x', 'v1'), ['GET']);
+    // v2: symmetric — only POST(v2) resolves.
+    asserts.assertEquals(router.allowedMethods('/x', 'v2'), ['POST']);
+    // No version requested and no unversioned slot → nothing resolves.
+    asserts.assertEquals(router.allowedMethods('/x'), []);
+
+    for (const version of [undefined, 'v1', 'v2', 'v3']) {
+      assertAllowedMatchesFind(router, '/x', version);
+    }
+  });
+
+  it('allowedMethods - defaultVersion fallback mirrors find', () => {
+    const router = new RadRouter<TestMW>({ defaultVersion: 'v1' });
+    router.get('/y', [middleware1], 'v1');
+    router.post('/y', [middleware2], 'v2');
+
+    // Requesting v2: GET falls back to defaultVersion v1, POST hits exact v2.
+    asserts.assertEquals([...router.allowedMethods('/y', 'v2')].sort(), [
+      'GET',
+      'POST',
+    ]);
+    for (const version of [undefined, 'v1', 'v2', 'v3']) {
+      assertAllowedMatchesFind(router, '/y', version);
+    }
+  });
+
+  it('allowedMethods - wildcard (greedy-suffix) route matches', () => {
+    const router = new RadRouter<TestMW>();
+    router.get('/files/:path:-*', [middleware1]);
+    router.delete('/files/:path:-*', [middleware2]);
+
+    const allowed = router.allowedMethods('/files/a/b/c.txt');
+    asserts.assertEquals([...allowed].sort(), ['DELETE', 'GET']);
+    assertAllowedMatchesFind(router, '/files/a/b/c.txt');
+  });
+
+  it('allowedMethods - backtracks across nodes like find', () => {
+    // A static leaf and a param leaf both answer the same concrete path on
+    // different methods; find seats each on its own node, so allowedMethods
+    // must report the union — the single-walk trap this method avoids.
+    const router = new RadRouter<TestMW>();
+    router.get('/users/me', [middleware1]);
+    router.post('/users/:id:', [middleware2]);
+
+    const allowed = router.allowedMethods('/users/me');
+    asserts.assertEquals([...allowed].sort(), ['GET', 'POST']);
+    assertAllowedMatchesFind(router, '/users/me');
+  });
 });
