@@ -43,6 +43,23 @@ fetch adapter is also verified on Cloudflare workerd):
 - **CLI** (`./cli`) — `init` / `upgrade` / `modules` / `health`.
 - **Cluster seam** — `app.instanceId` (boot ULID) + a nullable `app.cluster`
   slot; the master/worker implementation is post-1.0.
+- **Review hardening (2026-08-22)** — the straightforward/unblocked fixes from
+  the adversarial review, shipped one cross-package dependency at a time
+  (radrouter 1.2.0, doctor 1.4.0 + 1.5.0, compat 2.4.0):
+  - HTTP method correctness — auto-HEAD (`server.autoHead`, default on), 405 +
+    `Allow` and generic OPTIONS (`server.methodNotAllowed`) off radrouter's
+    `allowedMethods`.
+  - Validation → 400 — a guardian failure is recognized structurally;
+    `validated()` exported to opt other validators' throws into a 400.
+  - Graceful drain — `app.stop()` drains in-flight requests up to
+    `shutdownTimeout` (compat 2.4.0 `WebServer.stop(true, timeout)`), then
+    force-closes; exit backstop at `1.1×`.
+  - `app.onError()` — central disclosure-envelope override hook.
+  - Per-app DI — `app.container` (a child of the global doctor), request-scoped
+    `inject()` (resolves against the app even after an `await`), harness stubs
+    isolated to a fresh child container.
+  - `serveStatic` realpath symlink guard; Context transport-leak removed
+    (`ctx.metrics`/`socketMetrics` off the base); publish-exclude hygiene.
 
 ## Open decisions
 
@@ -57,30 +74,14 @@ fetch adapter is also verified on Cloudflare workerd):
 
 ## Pending — from the 2026-08-22 adversarial review
 
-Missing functionality and gated fixes surfaced by the full-package review.
-"Gated" items have a recommended fix in the review doc and await a product
-decision; everything else is a straightforward build.
-
-**P0 — targeted for 1.0**
-
-- **HTTP method correctness — auto HEAD, 405, generic OPTIONS.** A HEAD to a
-  GET route 404s; a wrong method 404s (not 405); OPTIONS is answered only for
-  CORS preflight. Transport semantics; belongs in `HTTPTransport.handle` +
-  a radrouter method-set query.
-- **Validation → 400 wiring** (gated). A thrown `GuardianError` from a bound
-  validator currently maps to `RAPID_UNHANDLED`/500, not 400 — a malformed
-  body 500s out of the box. Export a `validated()` bridge (today only in
-  `examples/validated.ts`), or teach `RapidError.from` to recognize
-  `GuardianError`.
+What remains after the review-hardening pass — the shipped fixes (auto-HEAD /
+405 / OPTIONS, validation→400, graceful drain, `app.onError`, per-app DI,
+serveStatic symlink guard, Context transport-leak) are under
+**Shipped → Review hardening (2026-08-22)**. "Gated" items had a product
+decision attached in the review doc.
 
 **P1 — important**
 
-- **Graceful request drain on shutdown** (gated). `stop()` force-closes HTTP;
-  drain in-flight up to `shutdownTimeout`, force-close only the never-draining
-  socket. Verify the compat `WebServer.stop(graceful)` contract first.
-- **Per-request error hook** (gated). An `app.onError(handler)` to customize
-  the disclosure envelope / remap statuses centrally (cf. NestJS exception
-  filters, Fastify `setErrorHandler`).
 - **Sessions + CSRF** catalog middleware, on the store-injection shape.
 - **Static hardening** — ETag / If-None-Match / Range for `serveStatic`
   (Range depends on the streaming response model).
@@ -96,18 +97,35 @@ decision; everything else is a straightforward build.
   and idioms pre-configured. New template files in `cli/templates.ts` + a
   dispatch entry in `cli/mod.ts`.
 
-**P2 / smaller (mostly gated)**
+**Module HTTP ergonomics** — declarative parity with the imperative `ctx`
+(HTTP-context-only)
 
-- **Context base transport-leak** — move `ctx.metrics`/`ctx.socketMetrics`/
-  `ctx.publish` off the base `Context` onto `HTTPContext`/`SOCKETContext`
-  (breaking; a `JOBContext` shouldn't carry HTTP-server surface).
-- **`serveStatic` symlink escape** — a `realpath` re-check (adds a stat/request)
-  or document that `root` must contain no untrusted symlinks.
-- **Module/DI isolation** — the `app.modules()` path resolves through the
-  process-global doctor; document the constraint or scope a container per
-  runtime (pending doctor 2.0).
+The imperative handler already reaches these through `ctx` (`ctx.cookies` /
+`ctx.setCookie`, `ctx.redirect`, `ctx.serve`); the DECLARATIVE module path —
+binders in, the reply envelope out — does not yet. Input binders extend
+`decorators/binders.ts`; the outputs need HTTP-specific keys on the reply
+envelope, which `RapidContextResponse` already anticipates ("a future
+transport-specific key widens the override's parameter type … visible exactly
+to transport-bound middleware").
+
+- **`cookie(name)` binder** — bind an inbound cookie to a method param (mirrors
+  `header()`), read from the HTTP context's parsed `cookies`.
+- **`auth()` binder** — bind the per-invocation `ctx.auth` bag to a method
+  param, so a module method takes typed auth info without touching `ctx`.
+- **Reply set-cookie** — set cookies from a module return with proper
+  encoding/signing (today only a raw `Set-Cookie` string via `headers`); bring
+  `ctx.setCookie`'s ergonomics to the reply envelope.
+- **Reply redirect** — redirect from a module return (today only a manual
+  `status: 302` + a `location` header); bring `ctx.redirect` to the envelope.
+- **Reply streaming / file download** — a module reply that streams or serves a
+  file (today reply `content` is `string | Record | Uint8Array` only). Mirrors
+  `ctx.serve`; depends on the streaming response model (Post-1.0).
+
+**P2 / smaller**
+
 - **Streaming / SSE response model** — the one large structural change; unblocks
-  SSE, Range, zero-copy static, proxy passthrough. Already post-1.0 (below).
+  SSE, Range, zero-copy static, proxy passthrough, and the module reply-stream
+  above. Already post-1.0 (below).
 - Trailing-slash request policy; brotli in `compress`; `coerceComparable`
   hex/exp numeric coercion made consistent with `parsePaging`.
 
