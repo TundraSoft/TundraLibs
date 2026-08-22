@@ -313,71 +313,95 @@ the type-checker already proves.
   can throw — document only real throws. No marketing sections, no restating
   what the type already says.
 
-## TundraLibs packages you may reach for (the shapes)
+## Which TundraLibs package for which job
 
+The package names are not self-describing — look the NEED up here first.
 All publish to JSR under \`@tundralibs/*\` and run on every runtime. Verify a
-signature in the package README before using it — do not guess.
+signature in the package README (or https://jsr.io/@tundralibs/<pkg>) before
+using it — do not guess.
 
-- **guardian** — validation at API boundaries. Build a schema, \`parse\` it:
+| Need                                                      | Package                                                |
+| --------------------------------------------------------- | ------------------------------------------------------ |
+| Validate input / define a schema                          | \`@tundralibs/guardian\`                                 |
+| Authentication (JWT, API keys, HMAC signing), permissions | \`@tundralibs/pact\`                                     |
+| Database models / ORM                                     | \`@tundralibs/norm\` (+ \`drivers\` for the engine)        |
+| Hand-built typed query → SQL                              | \`@tundralibs/oql\`                                      |
+| Cache (memory / Redis / Memcached)                        | \`@tundralibs/cacher\`                                   |
+| Generate ids (nanoid / ulid / sequence)                   | \`@tundralibs/id\`                                       |
+| Hash, encrypt, sign, password hashing                     | \`@tundralibs/crypt\`                                    |
+| Call an upstream REST API                                 | \`@tundralibs/restler\`                                  |
+| Logging                                                   | \`@tundralibs/slogger\` (via \`app.log\`)                  |
+| Cron / scheduled jobs                                     | \`@tundralibs/cronus\` (via \`@JOB\`)                      |
+| Dependency injection                                      | \`@tundralibs/doctor\` (\`inject()\`, \`app.container\`)     |
+| Distributed tracing                                       | \`@tundralibs/tracer\` (the \`tracer\` option)             |
+| A runtime-only global (fs, env, process, fetch)           | \`@tundralibs/compat\` — never the global                |
+| Error base class, config loading, memoize, IP helpers     | \`@tundralibs/utils\`                                    |
+| HTTP router                                               | \`@tundralibs/radrouter\` (rapid already uses it)        |
+
+### The shapes
+
+- **Validation — \`@tundralibs/guardian\`.** Build a schema, \`parse\` it:
   \`Guardian.object({ id: Guardian.number().integer().positive(), email:
   Guardian.string().email(), role: Guardian.enum(['admin','user']) })\`;
   \`type User = Guardian.infer<typeof UserSchema>\`; \`UserSchema.parse(input)\`
   throws, \`safeParse\` returns \`[err, value]\`. In rapid a guardian failure is
   automatically a 400 — bind it with \`payload(UserSchema.parse)\`.
-- **radrouter** — the router rapid already uses; you normally don't touch it.
-  Its grammar is why params are \`/users/:id:\`. Constructor options rapid
-  passes through: \`caseSensitive\`, \`ignoreTrailingSlash\`.
-- **norm** — the ORM. \`Entity('users', { id: Column.uuid(), email:
+- **Auth — \`@tundralibs/pact\`.** Bitmask authorization + JWT + API keys.
+  \`new PACT({ bits: { READ: 1n, EDIT: 2n }, modules: { Post: ['READ','EDIT'] },
+  groupResolver, secret, issuer, expiry })\`. rapid's \`jwt(pact)\` builds an
+  \`authenticate\` verify and \`permission(pact, 'Post', 'EDIT')\` an \`authorize\`
+  check; the result lands in \`ctx.auth\` (read-only, set once per request).
+  API keys: \`generateAPIKey()\` → \`{ id, secret, secretHash }\` (persist id +
+  hash ONLY, show the secret once), \`verifyAPIKey(secret, hash)\`. HMAC over
+  any content: \`pact.sign(content, key?)\` / \`pact.verify(content, sig, key?)\`.
+- **ORM — \`@tundralibs/norm\`.** \`Entity('users', { id: Column.uuid(), email:
   Column.varchar(255).encrypt().hash() }, { pk: ['id'] })\` → \`Schema('Identity',
   { Users })\` → \`new Norm({ engine, secret })\` → \`norm.use(Identity)\` →
   \`db.repo('Users').insert({...})\` / \`.find(...)\`. Engines come from a
   separate install, \`@tundralibs/drivers\` (e.g. \`SQLiteEngine\`,
   \`PostgresEngine\`). Pick \`--norm\` on init to get a wired \`db.ts\`.
-- **oql** — the typed query object norm translates to SQL; use it directly
-  only for hand-built queries: \`const q: Query<'SELECT', User> = { type:
-  'SELECT', table: 'users', columns: [...], projection: {...} }\`, then a
-  translator (\`PostgresTranslator\`) renders it. Reach for \`norm\` first.
-- **pact** — auth: bitmask authorization + JWT. \`new PACT({ bits: { READ: 1n,
-  EDIT: 2n }, modules: { Post: ['READ','EDIT'] }, groupResolver, secret,
-  issuer, expiry })\`. rapid's \`jwt(pact)\` builds an \`authenticate\` verify and
-  \`permission(pact, 'Post', 'EDIT')\` an \`authorize\` check; the result lands in
-  \`ctx.auth\` (read-only, set once per request).
-- **cacher** — caching with swappable backends. \`const cache = Cacher.create(
-  'MEMORY', 'my-cache', { defaultExpiry: 300 })\` (or \`'REDIS'\`, \`'MEMCACHED'\`);
-  \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`, \`has\`, \`delete\`,
-  \`clear\`. Same API across backends, so start in-memory and switch by config.
-  rapid's \`rateLimit()\`/\`session()\` take any \`{ get, set }\` store — a cacher
-  instance fits.
-- **id** — id generation. \`nanoID()\` (21-char URL-safe; \`nanoID(10, NUMBERS)\`
-  for length/alphabet), \`ulid()\` (sortable), \`sequenceID()\` (a FACTORY:
-  \`const seq = sequenceID(); seq()\` → a bigint, counter-based, crypto-free),
-  \`ObjectID()\` (also a factory). rapid mints request ids with \`sequenceID\`
-  by default — set \`Application.requestIdGenerator\` to change.
-- **crypt** — primitives, by subpath. Hashing: \`await sha256(data)\` /
-  \`digest(data, { algorithm: 'SHA-384' })\` from \`@tundralibs/crypt/digest\`.
-  Encryption: \`encryptAES(text, key, { mode: 'GCM', keyLength: 256 })\` /
-  \`decryptAES\` from \`@tundralibs/crypt/encrypt\`; also \`pbkdf2Hash\`/
-  \`pbkdf2Verify\` (passwords) and \`hkdf\`. Signing: \`signHMAC\`/\`verifyHMAC\`,
-  JWT sign/verify. Passwords: hash with pbkdf2, never store plaintext.
-- **restler** — a typed REST-client base. Subclass it, set \`vendor\`, pass
-  \`{ baseURL }\` to \`super\`, and expose methods built on
+- **Typed queries — \`@tundralibs/oql\`.** The query object norm translates to
+  SQL; use it directly only for hand-built queries: \`const q: Query<'SELECT',
+  User> = { type: 'SELECT', table: 'users', columns: [...], projection: {...}
+  }\`, then a translator (\`PostgresTranslator\`) renders it. Reach for \`norm\`
+  first.
+- **Caching — \`@tundralibs/cacher\`.** Swappable backends: \`const cache =
+  Cacher.create('MEMORY', 'my-cache', { defaultExpiry: 300 })\` (or \`'REDIS'\`,
+  \`'MEMCACHED'\`); \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`,
+  \`has\`, \`delete\`, \`clear\`. Same API across backends, so start in-memory and
+  switch by config. rapid's \`rateLimit()\`/\`session()\` take any \`{ get, set }\`
+  store — a cacher instance fits.
+- **Ids — \`@tundralibs/id\`.** \`nanoID()\` (21-char URL-safe; \`nanoID(10,
+  NUMBERS)\` for length/alphabet), \`ulid()\` (sortable), \`sequenceID()\` (a
+  FACTORY: \`const seq = sequenceID(); seq()\` → a bigint, counter-based,
+  crypto-free), \`ObjectID()\` (also a factory). rapid mints request ids with
+  \`sequenceID\` by default — set \`Application.requestIdGenerator\` to change.
+- **Crypto — \`@tundralibs/crypt\`.** Primitives, by subpath. Hashing: \`await
+  sha256(data)\` / \`digest(data, { algorithm: 'SHA-384' })\` from
+  \`@tundralibs/crypt/digest\`. Encryption: \`encryptAES(text, key, { mode:
+  'GCM', keyLength: 256 })\` / \`decryptAES\` from \`@tundralibs/crypt/encrypt\`;
+  also \`pbkdf2Hash\`/\`pbkdf2Verify\` (passwords) and \`hkdf\`. Signing:
+  \`signHMAC\`/\`verifyHMAC\`, JWT sign/verify. Passwords: hash with pbkdf2,
+  never store plaintext.
+- **REST client — \`@tundralibs/restler\`.** A typed client base. Subclass it,
+  set \`vendor\`, pass \`{ baseURL }\` to \`super\`, and expose methods built on
   \`this._makeRequest<T>({ path, method, contentType: 'JSON', payload })\`.
   Put each upstream API in its own class under e.g. \`clients/\`.
-- **utils** — the foundation. \`BaseError<Meta>\` (extend it for app errors —
-  context-carrying, chainable); \`loadConfig({ path })\` → \`config.get<T>('a.b')\`
-  (what rapid's \`Application.initialize('./configs')\` uses); \`memoize(fn,
-  ttlMs)\`, \`throttle(fn, ms)\`, \`once(fn)\`; \`@Singleton\`; \`Options\` (the
-  options+events base class); network helpers (\`isPublicIP\`, \`isInSubnet\`,
-  \`getFreePort\`); \`envArgs\` (.env + Docker secrets).
-- **slogger** — the logger behind \`app.log\`; reach for it directly only
-  outside the app. \`new Slogger({ appName, level: SyslogSeverities.INFO,
-  handlers: [{ name: 'console', type: 'ConsoleHandler', level, formatter:
-  'standard' }] })\`; \`logger.info('msg', { ...context })\`. Inside a handler
-  or module use \`app.log\` / \`this.log\` — they carry the request id for you.
-- Also: \`cronus\` (cron — rapid's \`@JOB\` schedules), \`doctor\` (DI —
-  \`inject()\`, \`app.container\`), \`tracer\` (OTLP tracing, opt-in via the
-  \`tracer\` option), \`compat\` (the runtime shim — use it instead of any
-  runtime-only global).
+- **Foundation — \`@tundralibs/utils\`.** \`BaseError<Meta>\` (extend it for app
+  errors — context-carrying, chainable); \`loadConfig({ path })\` →
+  \`config.get<T>('a.b')\` (what rapid's \`Application.initialize('./configs')\`
+  uses); \`memoize(fn, ttlMs)\`, \`throttle(fn, ms)\`, \`once(fn)\`; \`@Singleton\`;
+  \`Options\` (the options+events base class); network helpers (\`isPublicIP\`,
+  \`isInSubnet\`, \`getFreePort\`); \`envArgs\` (.env + Docker secrets).
+- **Logging — \`@tundralibs/slogger\`.** The logger behind \`app.log\`; reach
+  for it directly only outside the app. \`new Slogger({ appName, level:
+  SyslogSeverities.INFO, handlers: [{ name: 'console', type:
+  'ConsoleHandler', level, formatter: 'standard' }] })\`;
+  \`logger.info('msg', { ...context })\`. Inside a handler or module use
+  \`app.log\` / \`this.log\` — they carry the request id for you.
+- **Router — \`@tundralibs/radrouter\`.** Already inside rapid; you normally
+  don't touch it. Its grammar is why params are \`/users/:id:\`. Constructor
+  options rapid passes through: \`caseSensitive\`, \`ignoreTrailingSlash\`.
 
 ## Rules
 

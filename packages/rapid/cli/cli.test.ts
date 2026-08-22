@@ -243,6 +243,21 @@ describe('rapid.cli init scaffold', () => {
       !agents.includes('deno task'),
       'bun project must not show deno commands',
     );
+    // Package lookup is NEED-first (the names aren't self-describing): a table
+    // row maps the job to the full specifier, and each shape leads with the job.
+    asserts.assertMatch(
+      agents,
+      /\| Validate input[^|]*\| `@tundralibs\/guardian`/,
+    );
+    asserts.assertMatch(agents, /\| Authentication[^|]*\| `@tundralibs\/pact`/);
+    asserts.assertStringIncludes(
+      agents,
+      '**Validation — `@tundralibs/guardian`.**',
+    );
+    asserts.assert(
+      !agents.includes('- **guardian** —'),
+      'shapes must lead with the job, not the bare package name',
+    );
 
     // No module system → no Modules section; deno → deno commands; --ai off → no files.
     const plain = scaffold(
