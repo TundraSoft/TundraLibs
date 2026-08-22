@@ -90,6 +90,13 @@ Core and the current capability set are built and green on Deno / Bun / Node
   their own `secret` options. The sign/verify helpers live in `utils/cookies`.
   The reply-cookie apply is SYNC-THROUGH — only a signed cookie yields a
   promise, so the plain-request hot path stays promise-free.
+- **Reply envelope output side complete (2026-08-22)** — with `cookies` and
+  the new `redirect` key (string → 302, `{ url, permanent }` → 301, `location`
+  set, precedence over `status`), the Module HTTP ergonomics item is done:
+  input binders (`cookie`/`auth`/`session`) in, cookies/redirect/stream out.
+  Transport rule, documented: both keys are HTTP-only and SILENTLY IGNORED on
+  JOB/SOCKET (a redirect never becomes a 3xx there), so a multi-transport
+  method returns them without branching.
 
 ## Backlog
 
@@ -99,12 +106,6 @@ sequencing fact, not a deferral.
 
 ### Request / response & HTTP
 
-- **Module HTTP ergonomics — reply envelope (output side).** The INPUT binders
-  shipped (`cookie`/`auth`/`session`); the reply envelope is the OUTPUT half,
-  which `RapidContextResponse` already anticipates ("a future transport-specific
-  key widens the override's parameter type").
-  - **Reply redirect** — redirect from a module return (today a manual
-    `status: 302` + a `location` header).
 - **`serveStatic` Range/206** (`Accept-Ranges`) — `fileStream` already takes an
   inclusive byte range; what's left is the `Range` header parse, the `206` /
   `Content-Range` response, and `416` on an unsatisfiable range.

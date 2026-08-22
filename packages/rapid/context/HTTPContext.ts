@@ -401,13 +401,19 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /**
    * Build a redirect response: `302 Found` by default, `301 Moved
    * Permanently` when `permanent` is true. Return it from a handler
-   * (`return ctx.redirect('/login')`).
+   * (`return ctx.redirect('/login')`). Equivalent to returning
+   * `{ content: '', redirect: { url, permanent } }` — the reply key is the
+   * transport-blind form a module method can use without `ctx`.
    */
   public redirect(url: string, permanent = false): RapidContextResponse {
+    // Fully formed (status + location inline) so the object is correct when
+    // read directly, AND carries the `redirect` key so the setter derives the
+    // same values — idempotent either way.
     return {
       status: permanent ? 301 : 302,
       content: '',
       headers: { location: url },
+      redirect: { url, permanent },
     };
   }
 
@@ -510,6 +516,15 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       return;
     }
     if (response.status !== undefined) this._status = response.status;
+    // The reply `redirect` key wins over `status`: 302 (or 301 when
+    // permanent) + a `location` header. Interpreted ONLY here — JOB/SOCKET
+    // never see it, so it can't become a 3xx there.
+    if (response.redirect !== undefined) {
+      const r = response.redirect;
+      const url = typeof r === 'string' ? r : r.url;
+      this._status = typeof r !== 'string' && r.permanent === true ? 301 : 302;
+      this._headers.set('location', url);
+    }
     if (response.headers !== undefined) {
       const entries = response.headers instanceof Headers
         ? response.headers.entries()

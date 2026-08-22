@@ -427,12 +427,20 @@ app.get('/prefs', async (ctx) => {
   return { content: { theme: (await ctx.signedCookie('theme')) ?? null } };
 });
 
-// A handler may also RETURN cookies — plain or signed — on the reply itself.
+// A handler may also RETURN cookies — plain or signed — and a redirect on
+// the reply itself: a string → 302, `{ url, permanent: true }` → 301.
 app.get('/login', () => ({
-  content: { ok: true },
+  content: '',
   cookies: [{ name: 'sid', value: 'abc', options: { signed: true } }],
+  redirect: '/dashboard',
 }));
 ```
+
+The reply `cookies` and `redirect` keys are **HTTP-only**: the HTTP context
+consumes them, and a job or socket reply **silently ignores** them (a job has
+no cookies, and a redirect never becomes a 3xx there). So a module method
+decorated for several transports can return them without branching on the
+transport.
 
 `session()` — store-backed, per-client state across requests, keyed by a
 signed id cookie with a rolling idle TTL and a hard absolute cap; call

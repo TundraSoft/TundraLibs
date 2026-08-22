@@ -40,13 +40,22 @@ export type RapidContextResponse = {
   headers?: Record<string, string> | Headers;
   /**
    * Cookies to set, with proper encoding (and HMAC signing via the app
-   * `secret` when `options.signed`). HTTP-only: consumed by the HTTP context
-   * and ignored on JOB/SOCKET, so a method decorated for several transports
-   * may return one harmlessly. Prefer this over a raw `Set-Cookie` header.
+   * `secret` when `options.signed`). HTTP-ONLY: consumed by the HTTP context
+   * and SILENTLY IGNORED on JOB/SOCKET (a job has no cookies), so a method
+   * decorated for several transports may return one harmlessly. Prefer this
+   * over a raw `Set-Cookie` header.
    */
   cookies?: ReadonlyArray<{
     name: string;
     value: string;
     options?: CookieOptions;
   }>;
+  /**
+   * Redirect the client: a URL string → `302 Found`; `{ url, permanent }` →
+   * `301 Moved Permanently` when `permanent`. Sets `location` and takes
+   * precedence over `status` (the body is sent empty). HTTP-ONLY: SILENTLY
+   * IGNORED on JOB/SOCKET — it never becomes a 3xx there (which those
+   * transports reject), so a shared method may return one harmlessly.
+   */
+  redirect?: string | { url: string; permanent?: boolean };
 };
