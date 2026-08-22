@@ -12,7 +12,10 @@ import { requestId } from './requestId.ts';
 
 describe('rapid.middlewares.requestId', () => {
   it('stamps additional HTTP headers with the core-minted id', async () => {
-    const app = new Application({ name: 'rid', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rid',
+      server: { port: 0 },
+    });
     app.use(requestId({ headers: ['x-correlation-id'] }));
     app.get('/r', () => ({ content: 'ok' }));
     await app.start();
@@ -29,7 +32,10 @@ describe('rapid.middlewares.requestId', () => {
   });
 
   it('copies the id into ctx.state for downstream code', async () => {
-    const app = new Application({ name: 'rids', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'rids',
+      server: { enabled: false },
+    });
     let seen: unknown;
     app.use(requestId({ stateKey: 'rid' }));
     app.use(async (ctx, next) => {
@@ -42,7 +48,10 @@ describe('rapid.middlewares.requestId', () => {
   });
 
   it('socketEcho adds requestId to object envelopes, never clobbers', async () => {
-    const app = new Application({ name: 'ride', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'ride',
+      server: { enabled: false },
+    });
     const make = () =>
       new SOCKETContext(app, {
         connection: { id: 'c1', query: {}, headers: new Headers() },
@@ -80,7 +89,10 @@ describe('rapid.middlewares.requestId', () => {
     // `[1,2,3]` is typeof 'object', is not a Uint8Array, and has no
     // 'requestId' key — so it passed every guard and became
     // {"0":1,"1":2,"2":3,requestId}, destroying the reply's shape.
-    const app = new Application({ name: 'rida', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'rida',
+      server: { enabled: false },
+    });
     const ctx = new SOCKETContext(app, {
       connection: { id: 'c1', query: {}, headers: new Headers() },
       command: 'list',

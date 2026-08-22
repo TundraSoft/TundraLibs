@@ -8,7 +8,7 @@ import { Application } from '../Application.ts';
 import { healthCheck } from './healthCheck.ts';
 
 const run = async (mw: ReturnType<typeof healthCheck>, path: string) => {
-  const app = new Application({
+  const app = await Application.initialize({
     name: 'health',
     server: { port: 0, hostname: '127.0.0.1' },
   });

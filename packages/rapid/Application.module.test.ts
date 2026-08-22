@@ -41,7 +41,10 @@ describe('rapid.Application.module', () => {
       }
     }
 
-    const app = new Application({ name: 'mod-prefix', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'mod-prefix',
+      server: { port: 0 },
+    });
     app.module(new Users());
     await app.start();
     try {
@@ -73,7 +76,10 @@ describe('rapid.Application.module', () => {
         return { content: 'ok' };
       }
     }
-    const app = new Application({ name: 'mod-bare', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'mod-bare',
+      server: { port: 0 },
+    });
     app.module(new Bare());
     await app.start();
     try {
@@ -121,7 +127,10 @@ describe('rapid.Application.module', () => {
       }
     }
 
-    const app = new Application({ name: 'mod-binders', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'mod-binders',
+      server: { port: 0 },
+    });
     app.module(new Reports());
     await app.start();
     try {
@@ -165,7 +174,7 @@ describe('rapid.Application.module', () => {
     }
   });
 
-  it('connection() bound off @SOCKET is rejected at MOUNT time, not first request', () => {
+  it('connection() bound off @SOCKET is rejected at MOUNT time, not first request', async () => {
     class Bad {
       @GET('/x', { bind: [connection()] })
       // deno-lint-ignore no-explicit-any
@@ -173,7 +182,7 @@ describe('rapid.Application.module', () => {
         return { content: 'unreachable' };
       }
     }
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'mod-badbind',
       server: { enabled: false },
     });
@@ -192,7 +201,7 @@ describe('rapid.Application.module', () => {
         return 'not an envelope'; // missing { content }
       }
     }
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'mod-badreply',
       server: { port: 0 },
     });
@@ -206,13 +215,13 @@ describe('rapid.Application.module', () => {
     }
   });
 
-  it('zero decorated methods anywhere on the instance is a mount-time error', () => {
+  it('zero decorated methods anywhere on the instance is a mount-time error', async () => {
     class Empty {
       plain(): string {
         return 'not a route';
       }
     }
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'mod-empty',
       server: { enabled: false },
     });
@@ -234,7 +243,10 @@ describe('rapid.Application.module', () => {
     class Derived extends Base {
       public readonly label = 'derived';
     }
-    const app = new Application({ name: 'mod-inherit', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'mod-inherit',
+      server: { port: 0 },
+    });
     app.module(new Derived());
     await app.start();
     try {
@@ -245,7 +257,7 @@ describe('rapid.Application.module', () => {
     }
   });
 
-  it('a subclass overriding a decorated method WITHOUT re-decorating is rejected loudly', () => {
+  it('a subclass overriding a decorated method WITHOUT re-decorating is rejected loudly', async () => {
     class Base {
       @GET('/x')
       handler(): RapidContextResponse {
@@ -257,7 +269,7 @@ describe('rapid.Application.module', () => {
         return { content: 'override' };
       }
     }
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'mod-override-bad',
       server: { enabled: false },
     });
@@ -281,7 +293,7 @@ describe('rapid.Application.module', () => {
         return { content: 'fixed' };
       }
     }
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'mod-override-fixed',
       server: { port: 0 },
     });
@@ -295,7 +307,7 @@ describe('rapid.Application.module', () => {
     }
   });
 
-  it('module() reuses the plain core: a duplicate socket command across TWO module() calls throws', () => {
+  it('module() reuses the plain core: a duplicate socket command across TWO module() calls throws', async () => {
     class A {
       @SOCKET('dup')
       a(): RapidContextResponse {
@@ -308,7 +320,7 @@ describe('rapid.Application.module', () => {
         return { content: 'b' };
       }
     }
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'mod-dup',
       server: { enabled: false },
     });
@@ -333,7 +345,10 @@ describe('rapid.Application.module', () => {
         return { content: 'dogs' };
       }
     }
-    const app = new Application({ name: 'mod-multi', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'mod-multi',
+      server: { port: 0 },
+    });
     app.module(new Cats(), new Dogs());
     await app.start();
     try {

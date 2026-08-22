@@ -77,7 +77,7 @@ const compatWs = asRunning(
 // --- rAPId: a transport whose router is populated like start(), wrapped
 //     in a WebServer whose handler IS __handle (the real per-request
 //     stack a rAPId consumer pays) ---
-const app = new Application({ name: 'bench', mode: 'PRODUCTION' });
+const app = await Application.initialize({ name: 'bench', mode: 'PRODUCTION' });
 app.get('/', () => ({ content: { ok: true } }));
 app.get('/users/:id:', (ctx) => ({ content: { id: ctx.args.params.id } }));
 

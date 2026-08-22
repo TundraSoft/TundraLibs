@@ -28,7 +28,7 @@ describe('rapid.serveStatic (live)', () => {
     await writeTextFile(`${base}/pub/app.css`, 'body{color:red}');
     await writeTextFile(`${base}/secret.txt`, 'TOP-SECRET'); // OUTSIDE root
 
-    app = new Application({
+    app = await Application.initialize({
       name: 'static',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -123,7 +123,7 @@ describe('rapid.serveStatic (live)', () => {
   });
 
   it('index:false does not serve a directory request', async () => {
-    const app2 = new Application({
+    const app2 = await Application.initialize({
       name: 'static-noindex',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -155,7 +155,7 @@ describe('rapid.serveStatic (live)', () => {
     // In-tree symlink → points to a file that stays inside root.
     symlinkSync(`${rootDir}/ok.txt`, `${rootDir}/alias.txt`);
 
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'static-sym',
       server: { port: 0, hostname: '127.0.0.1' },
     });

@@ -8,8 +8,8 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from './Application.ts';
 
-const make = (methodNotAllowed: boolean, autoHead = false) => {
-  const app = new Application({
+const make = async (methodNotAllowed: boolean, autoHead = false) => {
+  const app = await Application.initialize({
     name: 'mna',
     server: { port: 0, hostname: '127.0.0.1', methodNotAllowed, autoHead },
   });
@@ -20,7 +20,7 @@ const make = (methodNotAllowed: boolean, autoHead = false) => {
 
 describe('rapid.Application methodNotAllowed', () => {
   it('on: a wrong method → 405 + Allow (path exists under other methods)', async () => {
-    const app = make(true); // autoHead off → deterministic Allow
+    const app = await make(true); // autoHead off → deterministic Allow
     const res = await app.fetch(
       new Request('http://app/thing', { method: 'DELETE' }),
     );
@@ -38,7 +38,7 @@ describe('rapid.Application methodNotAllowed', () => {
   });
 
   it('on: generic OPTIONS → 204 + Allow', async () => {
-    const app = make(true);
+    const app = await make(true);
     const res = await app.fetch(
       new Request('http://app/thing', { method: 'OPTIONS' }),
     );
@@ -48,7 +48,7 @@ describe('rapid.Application methodNotAllowed', () => {
   });
 
   it('on: an unknown path is still 404 (not 405)', async () => {
-    const app = make(true);
+    const app = await make(true);
     const res = await app.fetch(
       new Request('http://app/nope', { method: 'DELETE' }),
     );
@@ -58,7 +58,7 @@ describe('rapid.Application methodNotAllowed', () => {
   });
 
   it('off (default): a wrong method → 404, hiding the path', async () => {
-    const app = make(false);
+    const app = await make(false);
     const res = await app.fetch(
       new Request('http://app/thing', { method: 'DELETE' }),
     );
@@ -68,7 +68,7 @@ describe('rapid.Application methodNotAllowed', () => {
   });
 
   it('Allow reflects the synthesized HEAD when autoHead is on', async () => {
-    const app = make(true, true); // methodNotAllowed + autoHead
+    const app = await make(true, true); // methodNotAllowed + autoHead
     const res = await app.fetch(
       new Request('http://app/thing', { method: 'DELETE' }),
     );

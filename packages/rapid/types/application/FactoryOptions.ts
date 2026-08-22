@@ -1,6 +1,6 @@
 /**
  * @fileoverview {@link RapidApplicationFactoryOptions} — config-loading options for
- * the `rapid()` async factory.
+ * the `Application.initialize()` factory.
  *
  * @module
  */

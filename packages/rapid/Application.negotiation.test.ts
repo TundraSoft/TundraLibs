@@ -9,7 +9,7 @@ import { Application } from './Application.ts';
 
 describe('rapid.Application ctx.accepts()', () => {
   it('negotiates the response type from the Accept header', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'neg',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },

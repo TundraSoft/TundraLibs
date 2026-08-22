@@ -4,7 +4,7 @@
 import { Application } from '../Application.ts';
 import { Client } from '../../rpc/Client.ts';
 
-const app = new Application({
+const app = await Application.initialize({
   name: 'explore',
   mode: 'DEVELOPMENT',
   server: { port: 4010 },

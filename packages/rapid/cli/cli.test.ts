@@ -177,7 +177,7 @@ describe('rapid.cli init scaffold', () => {
 
 describe('rapid.cli health', () => {
   it('reports 0 for a healthy app, 1 for a bad path', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'cli-health',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },

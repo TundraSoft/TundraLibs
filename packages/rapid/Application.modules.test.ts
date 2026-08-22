@@ -12,7 +12,7 @@ import { RapidError } from './errors/mod.ts';
 import { event, type EventContext, RapidModule } from './modules/mod.ts';
 
 const make = (name: string) =>
-  new Application({
+  Application.initialize({
     name,
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -49,7 +49,7 @@ class Audit extends RapidModule {
 
 describe('rapid.Application.modules', () => {
   it("boots the runtime on the app, mounts decorated routes, and a request's id flows into module events", async () => {
-    const app = make('mods-boot');
+    const app = await make('mods-boot');
     const { modules, runtime } = await app.modules({
       modules: [{ Users, Audit }],
     });
@@ -64,7 +64,7 @@ describe('rapid.Application.modules', () => {
   });
 
   it('module log lines carry the module identity (scoped view of the app logger)', async () => {
-    const app = make('mods-log');
+    const app = await make('mods-log');
     const lines: Record<string, unknown>[] = [];
     (app.log as unknown as {
       log: (l: number, m: string, c?: Record<string, unknown>) => void;
@@ -92,7 +92,7 @@ describe('rapid.Application.modules', () => {
         return { content: 'x' };
       }
     }
-    const app = make('mods-identity');
+    const app = await make('mods-identity');
     const err = await asserts.assertRejects(
       () => app.modules({ modules: [{ Twice }] }),
       RapidError,
@@ -106,7 +106,7 @@ describe('rapid.Application.modules', () => {
   });
 
   it('event-only modules mount without decorations; a second modules() call is refused', async () => {
-    const app = make('mods-twice');
+    const app = await make('mods-twice');
     await app.modules({ modules: [{ Users, Audit }] }); // Audit has no routes — still mounted in the runtime
     const err = await asserts.assertRejects(
       () => app.modules({ modules: [{ Users }] }),
@@ -117,7 +117,7 @@ describe('rapid.Application.modules', () => {
   });
 
   it('stop() disposes the runtime — after start(), and for a fetch-only app that never listened', async () => {
-    const started = make('mods-stop-started');
+    const started = await make('mods-stop-started');
     const a = await started.modules({ modules: [{ Users, Audit }] });
     await started.start();
     await started.stop();
@@ -125,7 +125,7 @@ describe('rapid.Application.modules', () => {
     asserts.assert(a.modules.Audit.disposed);
     asserts.assertEquals(started.moduleRuntime, undefined);
 
-    const fetchOnly = make('mods-stop-fetch');
+    const fetchOnly = await make('mods-stop-fetch');
     const b = await fetchOnly.modules({ modules: [{ Users, Audit }] });
     await fetchOnly.fetch(new Request('http://app/users/2'));
     await fetchOnly.stop();

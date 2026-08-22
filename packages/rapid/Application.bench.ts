@@ -21,7 +21,7 @@ import { serializeResponse } from './utils/mod.ts';
 import type { RapidRouteEntry } from './types/mod.ts';
 
 // One app, two routes — the same minimal shape the server bench uses.
-const app = new Application({ name: 'bench', mode: 'PRODUCTION' });
+const app = await Application.initialize({ name: 'bench', mode: 'PRODUCTION' });
 app.get('/', () => ({ content: { ok: true } }));
 app.get('/users/:id:', (ctx) => ({ content: { id: ctx.args.params.id } }));
 

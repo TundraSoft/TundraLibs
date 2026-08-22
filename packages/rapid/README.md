@@ -42,13 +42,15 @@ npx jsr add @tundralibs/rapid
 
 ## Quick start
 
-Construct an `Application` directly (no config files needed), register a couple
-of routes, and start the listener:
+`Application.initialize()` is the **only** way to make an app — the constructor
+is private, so an app is always built the same way and can never silently skip
+its config. It's async (config loading is), and takes either plain options or a
+config directory. Register a couple of routes and start the listener:
 
 ```ts
 import { Application } from '@tundralibs/rapid';
 
-const app = new Application({ name: 'hello' });
+const app = await Application.initialize({ name: 'hello' });
 
 // A handler either RETURNS the response payload or sets `ctx.response`.
 app.get('/', () => ({ content: { message: 'hello world' } }));
@@ -58,10 +60,10 @@ await app.start();
 console.log(`listening on ${app.address}`);
 ```
 
-`new Application(options)` is the programmatic/test entry point. In production,
-prefer the config-driven factory `rapid()`: point it at a directory of config
-files and the set named `Application` (`Application.yaml`/`.json`/…) becomes the
-application options. Every other set (a database config, your own app settings)
+Passing plain options is the **programmatic** shape (tests, scripts) — nothing
+is read from disk. In production, hand `initialize` a **config directory**
+instead: the set named `Application` (`Application.yaml`/`.json`/…) becomes the
+application options, and every other set (a database config, your own settings)
 stays readable via `app.config`.
 
 Given `configs/Application.yaml`:
@@ -79,10 +81,10 @@ shutdownTimeout: 10000
 ```
 
 ```ts
-import { rapid } from '@tundralibs/rapid';
+import { Application } from '@tundralibs/rapid';
 
 // String form: load ./configs, with .env interpolation on by default.
-const app = await rapid('./configs');
+const app = await Application.initialize('./configs');
 app.config.get<string>('database.host'); // any other set, as loaded
 await app.start();
 ```
@@ -91,9 +93,9 @@ The object form takes finer control — a different env source and a different
 application file name:
 
 ```ts
-import { rapid } from '@tundralibs/rapid';
+import { Application } from '@tundralibs/rapid';
 
-const app = await rapid({
+const app = await Application.initialize({
   path: './configs',
   env: '.env.production', // true | false | a path (default: true)
   applicationSet: 'Api', // read Api.yaml instead of Application.yaml
@@ -101,8 +103,8 @@ const app = await rapid({
 await app.start();
 ```
 
-Either way you get the same `Application`, so everything below applies whether
-you constructed it directly or loaded it from config.
+Either shape yields the same `Application`, so everything below applies whether
+you passed options or loaded from config.
 
 `name` is required (it is also the logging `appName`, max 30 chars). Common
 options: `mode` (`'DEVELOPMENT'` | `'PRODUCTION'`, default `'PRODUCTION'` —
@@ -125,7 +127,7 @@ version is resolved on `server.versioning`, then tag routes with a `version`:
 ```ts
 import { Application } from '@tundralibs/rapid';
 
-const app = new Application({
+const app = await Application.initialize({
   name: 'api',
   server: {
     // mode: 'header' | 'accept' | 'path'
@@ -165,7 +167,7 @@ import {
   secureHeaders,
 } from '@tundralibs/rapid';
 
-const app = new Application({ name: 'api' });
+const app = await Application.initialize({ name: 'api' });
 
 app.use(
   requestLogger(),
@@ -190,7 +192,7 @@ elsewhere), while `guardHTTP` / `guardSOCKET` / `guardJOB` run it there and
 import { Application } from '@tundralibs/rapid';
 import { guardHTTP, timeout } from '@tundralibs/rapid';
 
-const app = new Application({ name: 'api' });
+const app = await Application.initialize({ name: 'api' });
 app.use(guardHTTP(timeout(5000)));
 ```
 
@@ -213,7 +215,7 @@ class Users {
   }
 }
 
-const app = new Application({ name: 'demo' });
+const app = await Application.initialize({ name: 'demo' });
 app.module(new Users());
 ```
 
@@ -250,7 +252,7 @@ import { inject, label } from '@tundralibs/doctor';
 
 const Clock = label<{ now(): string }>('Clock');
 
-const app = new Application({ name: 'di-demo' });
+const app = await Application.initialize({ name: 'di-demo' });
 app.container.stock(Clock, { now: () => new Date().toISOString() });
 
 // Resolves against app.container, not the process-wide Doctor.
@@ -304,7 +306,10 @@ Ready-made handlers you mount where you like — nothing is auto-registered:
 import { Application } from '@tundralibs/rapid';
 import { health, metrics, openapi } from '@tundralibs/rapid/endpoints';
 
-const app = new Application({ name: 'api', server: { metrics: true } });
+const app = await Application.initialize({
+  name: 'api',
+  server: { metrics: true },
+});
 
 app.get('/healthz', health({ check: () => Promise.resolve() }));
 app.get('/metrics', metrics()); // 503 unless server.metrics is on
@@ -337,7 +342,7 @@ enforces (401 when `ctx.auth` is absent, 403 when `check` returns falsy):
 import { Application } from '@tundralibs/rapid';
 import { authenticate, authorize } from '@tundralibs/rapid';
 
-const app = new Application({ name: 'api' });
+const app = await Application.initialize({ name: 'api' });
 
 app.use(
   authenticate({
@@ -385,7 +390,10 @@ exit.
 import { Application } from '@tundralibs/rapid';
 
 // Give in-flight requests up to 10s to finish on stop(), then force-close.
-const app = new Application({ name: 'api', shutdownTimeout: 10_000 });
+const app = await Application.initialize({
+  name: 'api',
+  shutdownTimeout: 10_000,
+});
 ```
 
 Call `stop()` from your platform's termination signal (a `SIGTERM` handler on
@@ -402,7 +410,7 @@ module system with stubbed dependencies.
 import { Application } from '@tundralibs/rapid';
 import { client } from '@tundralibs/rapid/testing';
 
-const app = new Application({ name: 'test', mode: 'DEVELOPMENT' });
+const app = await Application.initialize({ name: 'test', mode: 'DEVELOPMENT' });
 app.get('/ping', () => ({ content: { ok: true } }));
 
 const api = client(app);

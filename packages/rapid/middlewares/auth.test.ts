@@ -10,7 +10,7 @@ import { initModules, RapidModule, Use } from '../modules/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 
 const make = () =>
-  new Application({
+  Application.initialize({
     name: 'auth-test',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -23,7 +23,7 @@ const verify = (token: string) =>
 
 describe('rapid.middlewares.auth', () => {
   it('authenticate fills ctx.auth from a bearer token; anonymous flows through', async () => {
-    const app = make();
+    const app = await make();
     app.use(authenticate({ verify }));
     app.get('/me', (ctx) => ({ content: { auth: ctx.auth ?? null } }));
     const ok = await (await app.fetch(
@@ -38,7 +38,7 @@ describe('rapid.middlewares.auth', () => {
   });
 
   it('authorize: 401 anonymous, 200 authenticated, 403 when the check fails', async () => {
-    const app = make();
+    const app = await make();
     app.use(
       authenticate({
         verify: (t) => t === 'ada' ? { id: 'ada', grants: { Post: 3n } } : null,
@@ -75,7 +75,7 @@ describe('rapid.middlewares.auth', () => {
     const low = { headers: { authorization: 'Bearer ada' } };
     await app.stop();
     // separate app with a denying check
-    const app2 = make();
+    const app2 = await make();
     app2.use(authenticate({ verify }));
     app2.get(
       '/edit',
@@ -90,7 +90,7 @@ describe('rapid.middlewares.auth', () => {
   });
 
   it('setAuth is once-only', async () => {
-    const app = make();
+    const app = await make();
     app.use(authenticate({ verify }));
     app.use((ctx, next) => {
       // a second write is refused
@@ -149,7 +149,7 @@ describe('rapid.middlewares.auth', () => {
           ? Promise.reject(new Error('invalid'))
           : Promise.resolve({ id: token, role: 'member' }),
     };
-    const app = make();
+    const app = await make();
     app.use(authenticate({ verify: jwt(pact) }));
     app.get('/me', (ctx) => ({ content: { auth: ctx.auth ?? null } }));
     const ok = await (await app.fetch(

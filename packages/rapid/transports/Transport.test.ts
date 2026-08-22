@@ -52,8 +52,8 @@ const newCtx = (app: Application) =>
 const passthrough = (_c: unknown, next: () => void | Promise<void>) => next();
 
 describe('rapid.Transport._invoke', () => {
-  it('R1: a sync onion + sync finalize returns SYNCHRONOUSLY (no promise)', () => {
-    const app = new Application({ name: 't', mode: 'PRODUCTION' });
+  it('R1: a sync onion + sync finalize returns SYNCHRONOUSLY (no promise)', async () => {
+    const app = await Application.initialize({ name: 't', mode: 'PRODUCTION' });
     const t = new TestTransport(app);
     let handlerRan = false;
     const out = t.run(
@@ -73,7 +73,7 @@ describe('rapid.Transport._invoke', () => {
   });
 
   it('an async handler still returns a promise (resolves to finalize)', async () => {
-    const app = new Application({ name: 't', mode: 'PRODUCTION' });
+    const app = await Application.initialize({ name: 't', mode: 'PRODUCTION' });
     const t = new TestTransport(app);
     const out = t.run(
       newCtx(app),
@@ -85,8 +85,8 @@ describe('rapid.Transport._invoke', () => {
     asserts.assertEquals(await out, 'FINALIZED');
   });
 
-  it('ambient correlation is active inside the onion AND finalize', () => {
-    const app = new Application({ name: 't', mode: 'PRODUCTION' });
+  it('ambient correlation is active inside the onion AND finalize', async () => {
+    const app = await Application.initialize({ name: 't', mode: 'PRODUCTION' });
     const t = new TestTransport(app);
     let inOnion: string | undefined;
     let inFinalize: string | undefined;
@@ -105,8 +105,8 @@ describe('rapid.Transport._invoke', () => {
     asserts.assertEquals(inFinalize, 'req-fixed');
   });
 
-  it('a SYNC throw is disclosed onto ctx.response; finalize still runs', () => {
-    const app = new Application({ name: 't', mode: 'PRODUCTION' });
+  it('a SYNC throw is disclosed onto ctx.response; finalize still runs', async () => {
+    const app = await Application.initialize({ name: 't', mode: 'PRODUCTION' });
     const t = new TestTransport(app);
     const ctx = newCtx(app);
     let finalizeRan = false;
@@ -138,7 +138,7 @@ describe('rapid.Transport._invoke — tracer span path', () => {
   // SAME catch. None of that runs on the untraced fast path.
   it('records a SERVER span per invocation; an in-span throw still discloses a 500', async () => {
     const exporter = new MemoryExporter();
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'tr',
       server: { port: 0 },
       tracer: { exporter },
@@ -175,7 +175,7 @@ describe('rapid.Transport._invoke — tracer span path', () => {
 
   it('extracts an inbound traceparent so the span joins the caller trace', async () => {
     const exporter = new MemoryExporter();
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'tr2',
       server: { port: 0 },
       tracer: { exporter },
@@ -205,7 +205,7 @@ describe('rapid.Transport._invoke — async metrics bracket', () => {
   // dark. Async handlers exercise both. `app.fetch` runs headless — the
   // Meter exists from construction (server.metrics), no listener needed.
   it('closes the metric on an async success AND counts an async 5xx', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'am',
       server: { port: 0, hostname: '127.0.0.1', metrics: true },
       logger: { handlers: [] },
@@ -256,7 +256,7 @@ describe('rapid.HTTPTransport — finalization + prepare guard', () => {
     // The HTTP and JOB early-respond() paths are covered; the SOCKET
     // finalization catch (respond() throwing RAPID_RESPONSE_INVALID the
     // second time, mapped to the rpc error envelope) is not.
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'sockfin',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
@@ -284,8 +284,8 @@ describe('rapid.HTTPTransport — finalization + prepare guard', () => {
     }
   });
 
-  it('handle() before prepare() is a loud RAPID_CONFIG, not a null-deref', () => {
-    const app = new Application({
+  it('handle() before prepare() is a loud RAPID_CONFIG, not a null-deref', async () => {
+    const app = await Application.initialize({
       name: 'hp',
       server: { enabled: false },
       logger: { handlers: [] },

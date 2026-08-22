@@ -18,7 +18,7 @@ describe('rapid.Application graceful drain', () => {
     const entered = new Promise<void>((r) => {
       markEntered = r;
     });
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'drain-test',
       // A generous window: the drain finishes in ~150ms, well under it, so
       // the unref'd exit backstop (armed at 1.1x, cleared on completion)

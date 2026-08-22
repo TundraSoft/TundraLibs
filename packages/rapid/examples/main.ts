@@ -87,7 +87,7 @@
  * @module
  */
 
-import { rapid } from '../mod.ts';
+import { Application } from '../mod.ts';
 import {
   authenticate,
   authorize,
@@ -109,7 +109,7 @@ import * as blog from './modules/mod.ts';
 const database = await openBlogDatabase();
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await rapid(configDir, {});
+const app = await Application.initialize(configDir, {});
 
 app.use(
   requestLogger(),

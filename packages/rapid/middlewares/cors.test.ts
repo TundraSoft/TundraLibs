@@ -9,7 +9,10 @@ import { Application } from '../Application.ts';
 import { cors, type CorsOptions } from './cors.ts';
 
 const spin = async (options?: CorsOptions) => {
-  const app = new Application({ name: 'cors', server: { port: 0 } });
+  const app = await Application.initialize({
+    name: 'cors',
+    server: { port: 0 },
+  });
   app.use(cors(options));
   app.get('/r', () => ({ content: 'ok' }));
   app.get('/boom', () => {
@@ -228,7 +231,10 @@ describe('rapid.middlewares.cors', () => {
   });
 
   it('appends origin to a pre-existing Vary without clobbering it', async () => {
-    const app = new Application({ name: 'cors-vary', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'cors-vary',
+      server: { port: 0 },
+    });
     // A middleware BEFORE cors stamps the app's own Vary; cors must append,
     // not replace, so the shared cache still keys on both.
     app.use((ctx, next) => {
@@ -254,7 +260,10 @@ describe('rapid.middlewares.cors', () => {
   });
 
   it('does not duplicate origin when Vary already lists it', async () => {
-    const app = new Application({ name: 'cors-vary2', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'cors-vary2',
+      server: { port: 0 },
+    });
     // A prior middleware already listed origin (any casing) → cors leaves
     // the Vary untouched (no dup).
     app.use((ctx, next) => {

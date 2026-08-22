@@ -21,7 +21,10 @@ describe('rapid.middlewares.timeout', () => {
   });
 
   it('a slow HTTP handler becomes a 504 RAPID_TIMEOUT', async () => {
-    const app = new Application({ name: 'to', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'to',
+      server: { port: 0 },
+    });
     app.use(timeout(20));
     app.get('/slow', async () => {
       await sleep(120);
@@ -49,7 +52,10 @@ describe('rapid.middlewares.timeout', () => {
     // The still-running work must reach ctx.detach(), which is what
     // lets JOBTransport keep cronus's overlap guard held — otherwise
     // every tick starts another copy of a wedged handler.
-    const app = new Application({ name: 'det', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'det',
+      server: { enabled: false },
+    });
     const ctx = new JOBContext(app, {
       job: 'j',
       tick: { scheduledAt: new Date(), firedAt: new Date(), count: 1 },
@@ -72,7 +78,10 @@ describe('rapid.middlewares.timeout', () => {
   });
 
   it('R2-M1: settleDetached absorbs a REJECTING abandoned promise', async () => {
-    const app = new Application({ name: 'det2', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'det2',
+      server: { enabled: false },
+    });
     const ctx = new JOBContext(app, {
       job: 'j',
       tick: { scheduledAt: new Date(), firedAt: new Date(), count: 1 },
@@ -90,7 +99,10 @@ describe('rapid.middlewares.timeout', () => {
   });
 
   it('a wedged job surfaces as a 504 outcome instead of silence', async () => {
-    const app = new Application({ name: 'toj', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'toj',
+      server: { enabled: false },
+    });
     app.use(timeout(20));
     app.job('stuck', '0 6 * * *', async () => {
       await sleep(120);

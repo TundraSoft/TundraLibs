@@ -9,7 +9,7 @@
  */
 import { Application, csrf, getSession, session } from '../mod.ts';
 
-const app = new Application({
+const app = await Application.initialize({
   name: 'sessions-example',
   mode: 'DEVELOPMENT',
   server: { port: 0, hostname: '127.0.0.1' },

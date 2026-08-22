@@ -75,9 +75,19 @@ const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 let __containerProviderInstalled = false;
 
 /**
- * The rAPId application class. Construct directly for programmatic /
- * test use (no config files needed); use the {@link rapid} factory for
- * the config-driven shape (options loaded from the `Application` set).
+ * The brand {@link Application.initialize} hands the private constructor.
+ * A direct `new Application(...)` (a JS consumer reaching past the private
+ * modifier) lacks it and is rejected — so `initialize` is the single,
+ * runtime-enforced way in.
+ */
+const INIT_BRAND: unique symbol = Symbol('rapid.application.init');
+
+/**
+ * The rAPId application class. The constructor is PRIVATE — build every app
+ * through the async {@link Application.initialize} factory, which takes either
+ * plain options (programmatic) or a config directory (config-driven, sourcing
+ * options from the `Application` set). This makes construction uniform and
+ * un-skippable, so an app never silently misses its config.
  */
 export class Application<S extends RapidContextState = RapidContextState>
   extends Options<RapidApplicationOptions, RapidApplicationEvents> {
@@ -155,23 +165,99 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * The ONE way to make an `Application` — the constructor is private, so
+   * every app is built correctly here (and cannot silently skip config).
+   * Two shapes:
+   *
+   * - **Config-driven** — a directory path (or {@link RapidApplicationFactoryOptions}
+   *   with a `path`): loads the config directory (env-interpolated), sources
+   *   {@link RapidApplicationOptions} from the `Application` set, and carries the
+   *   FULL config so every other set stays readable via `app.config`.
+   * - **Programmatic** — plain {@link RapidApplicationOptions}: used verbatim, no
+   *   files read (`app.config` is empty). The entry for tests/scripts.
+   *
+   * Always async (config loading is), so `await` it in both shapes.
+   *
+   * @param source - A config-directory path, factory options (`{ path, env,
+   *   applicationSet }`), or plain application options.
+   * @param defaultState - The state template (runtime DATA; `S` infers from it).
+   * @throws {@link RapidError} RAPID_CONFIG on a bad config file or cross-key
+   *   validation failure (surfaced by the constructor).
+   *
+   * @example
+   * ```ts ignore
+   * const prod = await Application.initialize('./configs'); // reads Application.yaml + siblings
+   * const test = await Application.initialize({ name: 'test', mode: 'DEVELOPMENT' });
+   * ```
+   */
+  public static async initialize<
+    S extends RapidContextState = RapidContextState,
+  >(
+    source:
+      | string
+      | RapidApplicationFactoryOptions
+      | EventOptionKeys<RapidApplicationOptions, RapidApplicationEvents>,
+    defaultState?: S,
+  ): Promise<Application<S>> {
+    // Config-driven: a path string, or factory options carrying a `path`.
+    if (typeof source === 'string' || 'path' in source) {
+      const factoryOptions: RapidApplicationFactoryOptions =
+        typeof source === 'string' ? { path: source, env: true } : source;
+      const { applicationSet = 'Application', ...loadOptions } = factoryOptions;
+      const loaded = await loadConfig(loadOptions);
+      // loadConfig lowercases set names (Application.yaml → 'application').
+      const setName = applicationSet.toLowerCase();
+      const fromFile = loaded.has(setName)
+        ? loaded.get<Partial<RapidApplicationOptions>>(setName)
+        : {};
+      // The constructor validates — a bad Application file fails as loudly as
+      // bad code-supplied options.
+      return new Application<S>(
+        INIT_BRAND,
+        fromFile as EventOptionKeys<
+          RapidApplicationOptions,
+          RapidApplicationEvents
+        >,
+        defaultState,
+        loaded,
+      );
+    }
+    // Programmatic: plain options, no files read (config stays empty).
+    return new Application<S>(INIT_BRAND, source, defaultState);
+  }
+
+  /**
+   * PRIVATE — construct via {@link Application.initialize} (see its
+   * doc). The `brand` gate makes that funnel enforceable at runtime too,
+   * not just at compile time: a JS consumer reaching past the private
+   * modifier still lacks the brand and is rejected.
+   *
+   * @param brand - The internal init brand; only `initialize` holds it.
    * @param options - Application options (serializable — the factory
    *   sources these from the `Application` config set; group defaults
    *   are filled here, so partial groups are fine).
    * @param defaultState - The state template — runtime DATA, not
    *   config (may hold functions/instances), hence a separate argument.
    *   `S` infers from it.
-   * @param config - The loaded configuration; the factory passes the
+   * @param config - The loaded configuration; `initialize` passes the
    *   full `loadConfig` result. Defaults to an empty config.
-   * @throws {RapidError} RAPID_CONFIG when cross-key validation fails
+   * @throws {RapidError} RAPID_CONFIG when constructed without the brand
+   *   (i.e. not via `initialize`), or when cross-key validation fails
    *   (bad name/port/socket combination, invalid paging/query caps).
    */
-  constructor(
+  private constructor(
+    brand: symbol,
     options: EventOptionKeys<RapidApplicationOptions, RapidApplicationEvents>,
     defaultState?: S,
     config?: ConfigType,
   ) {
     super();
+    if (brand !== INIT_BRAND) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'Application must be created via Application.initialize(), not `new Application()`',
+      });
+    }
     // Teach doctor's inject() to resolve against the app container that
     // the in-flight request pinned on its ambient bag. One provider
     // serves every app (it reads per-request state), so install it once.
@@ -1088,46 +1174,4 @@ export class Application<S extends RapidContextState = RapidContextState>
       });
     }
   }
-}
-
-/**
- * The config-driven entry point: loads the config directory (with env
- * interpolation), sources {@link RapidApplicationOptions} from the `Application`
- * set, and constructs a {@link Application} carrying the full config — every
- * other set stays readable via `app.config`.
- *
- * ```typescript
- * const app = await rapid('./configs', { count: 0 });
- * app.config.get('Database.host'); // the other sets, as-is
- * ```
- *
- * @param config - The config directory path, or full factory options.
- * @param defaultState - The state template (see {@link Application}).
- */
-export async function rapid<S extends RapidContextState = RapidContextState>(
-  config: string | RapidApplicationFactoryOptions,
-  defaultState?: S,
-): Promise<Application<S>> {
-  const factoryOptions: RapidApplicationFactoryOptions =
-    typeof config === 'string' ? { path: config, env: true } : config;
-  const { applicationSet = 'Application', ...loadOptions } = factoryOptions;
-  const loaded = await loadConfig(loadOptions);
-  // loadConfig lowercases set names (Application.yaml → 'application').
-  const setName = applicationSet.toLowerCase();
-  const fromFile = loaded.has(setName)
-    ? loaded.get<Partial<RapidApplicationOptions>>(setName)
-    : {};
-  return new Application<S>(
-    // The Application constructor validates — a bad Application file fails
-    // as loudly as bad code-supplied options. Event listeners register
-    // post-construction (`app.on(...)`); custom exporter INSTANCES use
-    // the code-composition path (`new Application(...)`) — everything else,
-    // including declarative tracing, is file-able.
-    fromFile as EventOptionKeys<
-      RapidApplicationOptions,
-      RapidApplicationEvents
-    >,
-    defaultState,
-    loaded,
-  );
 }

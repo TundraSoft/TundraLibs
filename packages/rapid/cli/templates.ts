@@ -45,10 +45,10 @@ logger:
   level: INFO
 `;
 
-const MAIN_PLAIN = `import { rapid } from '@tundralibs/rapid';
+const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await rapid(configDir);
+const app = await Application.initialize(configDir);
 
 app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));
 
@@ -56,11 +56,11 @@ await app.start();
 app.log.info(\`{{name}} listening on \${app.address}\`);
 `;
 
-const MAIN_MODULES = `import { rapid } from '@tundralibs/rapid';
+const MAIN_MODULES = `import { Application } from '@tundralibs/rapid';
 import * as modules from './modules/mod.ts';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await rapid(configDir);
+const app = await Application.initialize(configDir);
 
 // Boot the module system — every RapidModule exported from modules/mod.ts.
 await app.modules({ modules: [modules] });

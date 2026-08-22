@@ -11,7 +11,7 @@
  * real exporter at construction; `OTLP` is auto-wrapped in a
  * `BatchSpanProcessor` (unbatched OTLP is one HTTP round-trip per
  * span). An actual `SpanExporter` instance is also accepted — the
- * code-composition path (`new Application(...)`) for custom exporters.
+ * code-composition path (`await Application.initialize(...)`) for custom exporters.
  */
 export type RapidApplicationExporterConfig =
   | { type: 'CONSOLE' }

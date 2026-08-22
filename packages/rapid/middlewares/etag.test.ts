@@ -12,7 +12,7 @@ describe('rapid.middlewares.etag', () => {
   let app: Application;
   let base = '';
   beforeAll(async () => {
-    app = new Application({
+    app = await Application.initialize({
       name: 'etag',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -115,7 +115,7 @@ describe('rapid.middlewares.etag', () => {
     // etag OUTSIDE compress: compress encodes the body and stamps
     // content-encoding on the way out, so etag must NOT hash the
     // compressed bytes.
-    const enc = new Application({
+    const enc = await Application.initialize({
       name: 'etag-enc',
       server: { port: 0, hostname: '127.0.0.1' },
     });

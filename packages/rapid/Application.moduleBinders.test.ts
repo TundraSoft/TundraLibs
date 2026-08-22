@@ -32,7 +32,7 @@ class Binders {
 }
 
 const make = () =>
-  new Application({
+  Application.initialize({
     name: 'binders',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -40,7 +40,7 @@ const make = () =>
 
 describe('rapid module binders (cookie / auth / session)', () => {
   it('cookie() binds an inbound cookie to a method param', async () => {
-    const app = make();
+    const app = await make();
     app.module(new Binders());
     const r = await app.fetch(
       new Request('http://app/cookie', { headers: { cookie: 'theme=dark' } }),
@@ -52,7 +52,7 @@ describe('rapid module binders (cookie / auth / session)', () => {
   });
 
   it('auth() binds the ctx.auth bag set by an upstream middleware', async () => {
-    const app = make();
+    const app = await make();
     app.use((ctx, next) => {
       if (ctx.type === 'HTTP') ctx.setAuth({ userId: 'u1' });
       return next();
@@ -63,7 +63,7 @@ describe('rapid module binders (cookie / auth / session)', () => {
   });
 
   it('session() binds the request session', async () => {
-    const app = make();
+    const app = await make();
     app.use(sessionMw({ secret: 's3cr3t', secure: false }));
     app.module(new Binders());
     const r = await app.fetch(new Request('http://app/session'));

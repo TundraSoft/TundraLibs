@@ -14,8 +14,8 @@ import { Application } from './Application.ts';
 type Greeter = { hi(): string };
 const GREETER = label<Greeter>('AppGreeter');
 
-const makeApp = (word: string) => {
-  const app = new Application({
+const makeApp = async (word: string) => {
+  const app = await Application.initialize({
     name: `container-${word}`,
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -31,8 +31,8 @@ const makeApp = (word: string) => {
 
 describe('rapid.Application per-app container', () => {
   it('routes a handler’s inject() to the app handling the request — two apps stay isolated', async () => {
-    const a = makeApp('alpha');
-    const b = makeApp('beta');
+    const a = await makeApp('alpha');
+    const b = await makeApp('beta');
     const [ra, rb] = await Promise.all([
       a.fetch(new Request('http://app/hi')),
       b.fetch(new Request('http://app/hi')),
@@ -42,14 +42,14 @@ describe('rapid.Application per-app container', () => {
   });
 
   it('resolves the app container even when inject() runs after an await', async () => {
-    const a = makeApp('gamma');
+    const a = await makeApp('gamma');
     const res = await a.fetch(new Request('http://app/hi-async'));
     asserts.assertEquals((await res.json()).word, 'gamma');
   });
 
-  it('gives each app a distinct child; a stock never leaks to a sibling or the global', () => {
-    const a = makeApp('one');
-    const b = makeApp('two');
+  it('gives each app a distinct child; a stock never leaks to a sibling or the global', async () => {
+    const a = await makeApp('one');
+    const b = await makeApp('two');
     asserts.assert(a.container !== b.container);
     asserts.assertEquals(a.container.dispense(GREETER).hi(), 'one');
     asserts.assertEquals(b.container.dispense(GREETER).hi(), 'two');

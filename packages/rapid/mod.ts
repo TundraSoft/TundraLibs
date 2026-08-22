@@ -8,7 +8,7 @@
  * @module
  */
 
-export { Application, rapid } from './Application.ts';
+export { Application } from './Application.ts';
 export {
   Context,
   HTTPContext,

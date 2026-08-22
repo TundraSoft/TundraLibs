@@ -19,7 +19,10 @@ describe('rapid.middlewares.rateLimit', () => {
   });
 
   it('over-budget HTTP requests get 429 + the full header set', async () => {
-    const app = new Application({ name: 'rlim', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rlim',
+      server: { port: 0 },
+    });
     app.use(rateLimit({ max: 2, windowMs: 60_000 }));
     app.get('/r', () => ({ content: 'ok' }));
     await app.start();
@@ -42,7 +45,10 @@ describe('rapid.middlewares.rateLimit', () => {
   });
 
   it('a custom key partitions budgets; null exempts', async () => {
-    const app = new Application({ name: 'rlk', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rlk',
+      server: { port: 0 },
+    });
     app.use(rateLimit({
       max: 1,
       key: (ctx) => ctx.type === 'HTTP' ? ctx.headers.get('x-tenant') : null,
@@ -62,7 +68,10 @@ describe('rapid.middlewares.rateLimit', () => {
   });
 
   it('jobs are exempt by default — schedulers never rate limit', async () => {
-    const app = new Application({ name: 'rlj', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'rlj',
+      server: { enabled: false },
+    });
     app.use(rateLimit({ max: 1 }));
     app.job('j', '0 6 * * *', () => ({ content: 'ran' }));
     for (let i = 0; i < 4; i++) {
@@ -95,7 +104,10 @@ describe('rapid.middlewares.rateLimit', () => {
         return Promise.resolve();
       },
     };
-    const app = new Application({ name: 'rl-store', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rl-store',
+      server: { port: 0 },
+    });
     app.use(rateLimit({ max: 1, windowMs: 10_000, store, key: () => 'k' }));
     app.get('/', () => ({ content: {} }));
     await app.start();

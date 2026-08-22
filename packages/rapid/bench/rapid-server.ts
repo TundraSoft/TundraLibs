@@ -5,7 +5,7 @@
 // cross-runtime story is itself part of what's being measured.
 import { Application } from '../Application.ts';
 
-const app = new Application({
+const app = await Application.initialize({
   name: 'bench',
   mode: 'PRODUCTION',
   server: { port: 4001 },

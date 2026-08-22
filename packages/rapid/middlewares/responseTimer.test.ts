@@ -10,7 +10,10 @@ import { responseTimer } from './responseTimer.ts';
 
 describe('rapid.middlewares.responseTimer', () => {
   it('stamps x-response-time on HTTP responses', async () => {
-    const app = new Application({ name: 'rt', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rt',
+      server: { port: 0 },
+    });
     app.use(responseTimer());
     app.get('/t', () => ({ content: 'ok' }));
     await app.start();
@@ -24,7 +27,10 @@ describe('rapid.middlewares.responseTimer', () => {
   });
 
   it('a custom header name and the error path both work', async () => {
-    const app = new Application({ name: 'rte', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rte',
+      server: { port: 0 },
+    });
     app.use(responseTimer({ header: 'x-took' }));
     app.get('/boom', () => {
       throw new Error('kaboom');
@@ -42,7 +48,10 @@ describe('rapid.middlewares.responseTimer', () => {
   });
 
   it('stateKey exposes milliseconds to OUTER middleware on any transport', async () => {
-    const app = new Application({ name: 'rtj', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'rtj',
+      server: { enabled: false },
+    });
     let seen: unknown = 'never-set';
     // Probe OUTSIDE the timer: it reads state after the timer's finally.
     app.use(async (ctx, next) => {

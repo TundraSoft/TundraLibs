@@ -11,7 +11,7 @@ import { RapidError } from './errors/mod.ts';
 import { responseTimer } from './middlewares/mod.ts';
 
 const make = (name: string, extra: Record<string, unknown> = {}) =>
-  new Application({
+  Application.initialize({
     name,
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -21,7 +21,7 @@ const make = (name: string, extra: Record<string, unknown> = {}) =>
 
 describe('rapid.Application.fetch', () => {
   it('serves routes, middleware and 404s from a Request — no port, no start()', async () => {
-    const app = make('fetch-basic');
+    const app = await make('fetch-basic');
     app.use((ctx, next) => {
       if (ctx.type === 'HTTP') ctx.setHeader('x-mw', 'ran');
       return next();
@@ -48,7 +48,7 @@ describe('rapid.Application.fetch', () => {
   });
 
   it('a sync handler yields a Response synchronously (no promise on the hot path)', async () => {
-    const app = make('fetch-sync');
+    const app = await make('fetch-sync');
     app.get('/s', () => ({ content: 'sync' }));
     const r = app.fetch(new Request('http://app/s'));
     asserts.assert(r instanceof Response);
@@ -57,7 +57,7 @@ describe('rapid.Application.fetch', () => {
   });
 
   it('info.remoteAddress reaches ctx.remoteAddress (public IPs only, per resolveClientAddress); absent → empty', async () => {
-    const app = make('fetch-addr');
+    const app = await make('fetch-addr');
     app.get('/ip', (ctx) => ({
       content: { address: ctx.remoteAddress, chain: [...ctx.remoteAddrList] },
     }));
@@ -84,8 +84,8 @@ describe('rapid.Application.fetch', () => {
     await app.stop();
   });
 
-  it('registered socket commands make fetch() refuse with RAPID_CONFIG — HTTP only', () => {
-    const app = make('fetch-socket');
+  it('registered socket commands make fetch() refuse with RAPID_CONFIG — HTTP only', async () => {
+    const app = await make('fetch-socket');
     app.socket('ping', () => {});
     const err = asserts.assertThrows(
       () => app.fetch(new Request('http://app/')),
@@ -95,8 +95,8 @@ describe('rapid.Application.fetch', () => {
     asserts.assertStringIncludes(err.message, 'socket commands');
   });
 
-  it("shares start()'s boot invariants: SHARE state + a stateKey middleware is refused", () => {
-    const app = make('fetch-share', { stateMode: 'SHARE' });
+  it("shares start()'s boot invariants: SHARE state + a stateKey middleware is refused", async () => {
+    const app = await make('fetch-share', { stateMode: 'SHARE' });
     app.use(responseTimer({ stateKey: 'duration' }));
     const err = asserts.assertThrows(
       () => app.fetch(new Request('http://app/')),
@@ -107,7 +107,7 @@ describe('rapid.Application.fetch', () => {
   });
 
   it('fetch() then start(): the prepared routes are reused on the listener, not re-registered', async () => {
-    const app = make('fetch-then-start');
+    const app = await make('fetch-then-start');
     app.get('/x', () => ({ content: { ok: true } }));
     asserts.assertEquals(
       (await app.fetch(new Request('http://app/x'))).status,
@@ -127,7 +127,7 @@ describe('rapid.Application.fetch', () => {
   });
 
   it('jobs are not scheduled by fetch(); triggerJob still runs the onion', async () => {
-    const app = make('fetch-jobs');
+    const app = await make('fetch-jobs');
     let ran = 0;
     app.job('tick', '0 6 * * *', () => {
       ran++;

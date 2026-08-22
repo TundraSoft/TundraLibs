@@ -19,7 +19,10 @@ import {
 
 describe('rapid.middlewares.scope', () => {
   it('onlyHTTP runs on HTTP and SKIPS jobs (chain continues)', async () => {
-    const app = new Application({ name: 'sc1', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'sc1',
+      server: { port: 0 },
+    });
     const ran: string[] = [];
     app.use(onlyHTTP(async (ctx, next) => {
       ran.push(`http:${ctx.method}`);
@@ -41,7 +44,10 @@ describe('rapid.middlewares.scope', () => {
   });
 
   it('guardHTTP REJECTS a job invocation (fail-closed)', async () => {
-    const app = new Application({ name: 'sc2', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'sc2',
+      server: { enabled: false },
+    });
     app.use(guardHTTP(async (_ctx, next) => {
       await next();
     }));
@@ -56,7 +62,10 @@ describe('rapid.middlewares.scope', () => {
   });
 
   it('onlyJOB gates the other direction', async () => {
-    const app = new Application({ name: 'sc3', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'sc3',
+      server: { port: 0 },
+    });
     let jobRuns = 0;
     app.use(onlyJOB(async (_ctx, next) => {
       jobRuns++;
@@ -85,7 +94,10 @@ describe('rapid.middlewares.scope', () => {
   });
 
   it('guardSOCKET REJECTS a job invocation (fail-closed); wrapped never runs', async () => {
-    const app = new Application({ name: 'sc4', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'sc4',
+      server: { enabled: false },
+    });
     let wrappedRan = false;
     app.use(guardSOCKET(async (_ctx, next) => {
       wrappedRan = true;
@@ -103,7 +115,7 @@ describe('rapid.middlewares.scope', () => {
   });
 
   it('guardSOCKET REJECTS an HTTP invocation with a 403', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'sc5',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -121,7 +133,7 @@ describe('rapid.middlewares.scope', () => {
   });
 
   it('guardJOB REJECTS an HTTP invocation with a 403 (fail-closed)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'sc6',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -140,7 +152,7 @@ describe('rapid.middlewares.scope', () => {
   });
 
   it('onlySOCKET SKIPS HTTP and JOB (chain continues) and RUNS on SOCKET', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'sc7',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -197,7 +209,10 @@ describe('rapid.middlewares.scope', () => {
     // coverage checking belongs to the auth-context design round, which
     // will know which middleware is security-relevant. This test pins
     // the removal so it cannot creep back as a heuristic.
-    const app = new Application({ name: 'scw', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'scw',
+      server: { port: 0 },
+    });
     const warnings: string[] = [];
     (app.log as unknown as Record<string, unknown>)['warn'] = (
       msg: string,

@@ -16,7 +16,7 @@ const drain = async (r: Response) => {
 
 describe('rapid.Application metrics', () => {
   it('counts requests + status classes + latency when enabled', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'metrics-on',
       server: { port: 0, hostname: '127.0.0.1', metrics: true },
     });
@@ -43,7 +43,7 @@ describe('rapid.Application metrics', () => {
     // The metro-man Meter labels by `action`; an unmatched request's action
     // is the raw (attacker-controlled) path. Distinct 404 URLs must NOT each
     // mint a new time-series — they collapse to `<METHOD> <unmatched>`.
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'meter-cardinality',
       server: { port: 0, hostname: '127.0.0.1', metrics: true },
     });
@@ -61,7 +61,7 @@ describe('rapid.Application metrics', () => {
   });
 
   it('stays zeroed (no collection) when not enabled', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'metrics-off',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -75,13 +75,16 @@ describe('rapid.Application metrics', () => {
     }
   });
 
-  it('is undefined before the listener is up', () => {
-    const app = new Application({ name: 'metrics-cold', server: { port: 0 } });
+  it('is undefined before the listener is up', async () => {
+    const app = await Application.initialize({
+      name: 'metrics-cold',
+      server: { port: 0 },
+    });
     asserts.assertEquals(app.metrics, undefined);
   });
 
   it('jobMetrics reports registered jobs + snapshots (not gated on metrics)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'jobmetrics',
       server: { port: 0, hostname: '127.0.0.1' }, // metrics OFF
     });
@@ -100,7 +103,7 @@ describe('rapid.Application metrics', () => {
   });
 
   it('socketMetrics reports websocket connection counters', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'sockmetrics',
       server: { port: 0, hostname: '127.0.0.1', metrics: true },
     });
@@ -121,7 +124,7 @@ describe('rapid.Application metrics', () => {
   });
 
   it('context exposes meter + jobMetrics; server counters come from ctx.app (not mirrored on ctx)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'ctxmetrics',
       server: { port: 0, hostname: '127.0.0.1', metrics: true },
     });

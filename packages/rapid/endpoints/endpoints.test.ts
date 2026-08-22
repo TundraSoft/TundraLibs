@@ -10,7 +10,7 @@ import { health, login, metrics, openapi } from './mod.ts';
 import { buildOpenApi } from '../utils/mod.ts';
 
 const make = (metricsOn = false) =>
-  new Application({
+  Application.initialize({
     name: 'endpoints-test',
     mode: 'DEVELOPMENT',
     server: { port: 0, hostname: '127.0.0.1', metrics: metricsOn },
@@ -20,7 +20,7 @@ const make = (metricsOn = false) =>
 
 describe('rapid.endpoints', () => {
   it('metrics(): 503 when off; Prometheus text once server.metrics records traffic', async () => {
-    const off = make(false);
+    const off = await make(false);
     off.get('/metrics', metrics());
     asserts.assertEquals(
       (await off.fetch(new Request('http://app/metrics'))).status,
@@ -28,7 +28,7 @@ describe('rapid.endpoints', () => {
     );
     await off.stop();
 
-    const on = make(true);
+    const on = await make(true);
     on.get('/hello', () => ({ content: 'hi' }));
     on.get('/metrics', metrics());
     await on.fetch(new Request('http://app/hello')); // record one request
@@ -45,7 +45,7 @@ describe('rapid.endpoints', () => {
   });
 
   it('metrics({ format: json }) returns the JSON collection', async () => {
-    const app = make(true);
+    const app = await make(true);
     app.get('/x', () => ({ content: 'x' }));
     app.get('/metrics', metrics({ format: 'json' }));
     await app.fetch(new Request('http://app/x'));
@@ -56,7 +56,7 @@ describe('rapid.endpoints', () => {
   });
 
   it('health(): 200 ok with the instance id; 503 when the check throws', async () => {
-    const app = make();
+    const app = await make();
     app.get('/healthz', health());
     app.get(
       '/ready',
@@ -89,7 +89,7 @@ describe('rapid.endpoints', () => {
             : null,
         ),
     };
-    const app = make();
+    const app = await make();
     app.post('/login', login({ pact }));
     const ok = await app.fetch(
       new Request('http://app/login', {
@@ -151,7 +151,7 @@ describe('rapid.endpoints', () => {
   });
 
   it('openapi() endpoint serves the doc; expose gates by mode', async () => {
-    const app = make();
+    const app = await make();
     app.get('/posts', () => ({ content: { rows: [] } }));
     app.get(
       '/openapi.json',
@@ -171,7 +171,7 @@ describe('rapid.endpoints', () => {
   });
 
   it('openapi(): ?version filters per version, plain serves all, cache-hit is byte-identical', async () => {
-    const app = make();
+    const app = await make();
     app.route('GET', '/v1/thing', { version: 'v1' }, () => ({ content: {} }));
     app.route('GET', '/v2/thing', { version: 'v2' }, () => ({ content: {} }));
     app.get('/openapi.json', openapi());

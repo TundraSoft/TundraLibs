@@ -11,8 +11,8 @@ import { csrf } from './csrf.ts';
 
 const SECRET = 'csrf-test-secret';
 
-const makeApp = () => {
-  const app = new Application({
+const makeApp = async () => {
+  const app = await Application.initialize({
     name: 'csrf',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -28,13 +28,13 @@ const tokenFrom = (res: Response): string | undefined =>
 
 describe('rapid csrf()', () => {
   it('issues a signed token cookie on a safe request', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const r = await app.fetch(new Request('http://app/form'));
     asserts.assert(tokenFrom(r), 'a GET should issue a csrf cookie');
   });
 
   it('rejects a state-changing request with no token (403)', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const r = await app.fetch(
       new Request('http://app/submit', { method: 'POST' }),
     );
@@ -43,7 +43,7 @@ describe('rapid csrf()', () => {
   });
 
   it('accepts a POST mirroring the cookie token into the header', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const token = tokenFrom(await app.fetch(new Request('http://app/form')))!;
     const r = await app.fetch(
       new Request('http://app/submit', {
@@ -56,7 +56,7 @@ describe('rapid csrf()', () => {
   });
 
   it('rejects a forged/unsigned token (403)', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const r = await app.fetch(
       new Request('http://app/submit', {
         method: 'POST',

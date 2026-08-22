@@ -9,7 +9,7 @@ import { Application } from '../Application.ts';
 import { secureHeaders, type SecureHeadersOptions } from './secureHeaders.ts';
 
 const spin = async (options?: SecureHeadersOptions) => {
-  const app = new Application({ name: 'sh', server: { port: 0 } });
+  const app = await Application.initialize({ name: 'sh', server: { port: 0 } });
   app.use(secureHeaders(options));
   app.get('/r', () => ({ content: 'ok' }));
   app.get('/boom', () => {

@@ -10,7 +10,9 @@ project memory. Last updated **2026-08-22**, after the full adversarial review
 Core + the 1.0 capability set are built and green on Deno / Bun / Node (the
 fetch adapter is also verified on Cloudflare workerd):
 
-- **Core** — `rapid()` / `Application`; the single `Transport._invoke` spine
+- **Core** — `Application.initialize()` (the single async factory; private
+  constructor + runtime brand, config-driven or programmatic); the single
+  `Transport._invoke` spine
   (ambient correlation, optional tracer, the middleware onion, error
   disclosure, and metrics, with a sync-through fast path); `Application.fetch()`
   (no listener / Workers); HTTP + WebSocket(RPC) + cron transports.

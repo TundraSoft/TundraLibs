@@ -9,7 +9,10 @@ import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { HTTPContext } from './HTTPContext.ts';
 
-const app = new Application({ name: 'serve-test', server: { port: 0 } });
+const app = await Application.initialize({
+  name: 'serve-test',
+  server: { port: 0 },
+});
 const ctx = () =>
   new HTTPContext(app, {
     request: new Request('http://localhost/'),

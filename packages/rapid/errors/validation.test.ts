@@ -97,7 +97,7 @@ describe('rapid.errors validation → 400', () => {
   });
 
   it('end-to-end: a handler throwing a guardian-shaped error 400s (not 500s)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'g1',
       server: { port: 0, hostname: '127.0.0.1' },
     });

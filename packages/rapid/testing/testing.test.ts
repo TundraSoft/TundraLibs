@@ -54,7 +54,7 @@ describe('rapid/testing harness', () => {
 
 describe('rapid/testing client', () => {
   it('drives routes over app.fetch with parsed responses', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'client-test',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },

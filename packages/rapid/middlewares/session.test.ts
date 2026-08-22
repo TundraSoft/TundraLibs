@@ -11,8 +11,8 @@ import { getSession, session } from './session.ts';
 
 const SECRET = 'test-secret-please-change';
 
-const makeApp = () => {
-  const app = new Application({
+const makeApp = async () => {
+  const app = await Application.initialize({
     name: 'sess',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
@@ -45,7 +45,7 @@ const sidFrom = (res: Response): string | undefined =>
 
 describe('rapid session()', () => {
   it('persists data across requests via the signed cookie', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const r1 = await app.fetch(
       new Request('http://app/hit', { method: 'POST' }),
     );
@@ -62,14 +62,14 @@ describe('rapid session()', () => {
   });
 
   it('does not set a cookie for a read-only request with no session', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const r = await app.fetch(new Request('http://app/read'));
     asserts.assertEquals((await r.json()).hits, 0);
     asserts.assertEquals(r.headers.get('set-cookie'), null);
   });
 
   it('regenerate() rotates the id, keeps the data, evicts the old id', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const sid1 = sidFrom(
       await app.fetch(new Request('http://app/hit', { method: 'POST' })),
     )!;
@@ -95,7 +95,7 @@ describe('rapid session()', () => {
   });
 
   it('destroy() clears the session', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const sid = sidFrom(
       await app.fetch(new Request('http://app/hit', { method: 'POST' })),
     )!;
@@ -113,7 +113,7 @@ describe('rapid session()', () => {
   });
 
   it('rejects a tampered id (bad signature) as no session', async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const r = await app.fetch(
       new Request('http://app/read', {
         headers: { cookie: 'sid=forged.bad' }, // malformed sig must not 500

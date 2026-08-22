@@ -41,7 +41,10 @@ describe('rapid.Application', () => {
 
   describe('lifecycle (U2/B3)', () => {
     it('triggerJob() before start() cannot brick the server', async () => {
-      const app = new Application({ name: 'a', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'a',
+        server: { port: 0 },
+      });
       app.job('j', '0 6 * * *', () => ({ content: 'ran' }));
       app.get('/', () => ({ content: 'hi' }));
       const outcome = await app.triggerJob('j'); // throwaway transport
@@ -53,7 +56,10 @@ describe('rapid.Application', () => {
     });
 
     it('start/stop are idempotent and event-symmetric, even bootless', async () => {
-      const app = new Application({ name: 'b', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'b',
+        server: { enabled: false },
+      });
       let starts = 0;
       let stops = 0;
       app.on('start', () => starts++);
@@ -69,7 +75,10 @@ describe('rapid.Application', () => {
     });
 
     it('restart works after a clean stop', async () => {
-      const app = new Application({ name: 'c', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'c',
+        server: { port: 0 },
+      });
       app.get('/', () => ({ content: 'x' }));
       await app.start();
       const first = app.port;
@@ -85,7 +94,7 @@ describe('rapid.Application', () => {
 
   describe("job handlers see the app's typed state, like HTTP/SOCKET (B11 gap)", () => {
     it('ctx.state in a job handler is the declared S, not the untyped base bag', async () => {
-      const app = new Application<{ counter: number }>(
+      const app = await Application.initialize<{ counter: number }>(
         { name: 'typed-jobs', server: { enabled: false } },
         { counter: 0 },
       );
@@ -107,7 +116,7 @@ describe('rapid.Application', () => {
   describe('upload temp dir ownership (resource leak)', () => {
     it('a caller-supplied uploads.path is never removed by stop()', async () => {
       const own = makeTempDirSync({ prefix: 'rapid-m-owned-' });
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'owned-path',
         server: { enabled: false },
         uploads: { path: own },
@@ -118,7 +127,7 @@ describe('rapid.Application', () => {
     });
 
     it('an auto-created uploads dir is removed by stop() even when never started', async () => {
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'auto-path',
         server: { enabled: false },
       });
@@ -143,7 +152,10 @@ describe('rapid.Application', () => {
       // Grammar is radrouter's to enforce — its MalformedPathError
       // names the segment and every legal form; rapid wraps it as
       // RAPID_CONFIG at boot.
-      const app = new Application({ name: 'rg', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'rg',
+        server: { port: 0 },
+      });
       app.get('/users/:id', () => ({ content: 'x' }));
       const err = await asserts.assertRejects(
         () => app.start(),
@@ -158,7 +170,7 @@ describe('rapid.Application', () => {
   describe('stateMode SHARE vs. a stateKey-writing middleware', () => {
     it('fails LOUDLY at start() rather than corrupting state under concurrency', async () => {
       const { responseTimer } = await import('./middlewares/mod.ts');
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'share-conflict',
         server: { port: 0 },
         stateMode: 'SHARE',
@@ -176,7 +188,7 @@ describe('rapid.Application', () => {
 
     it('requestId({stateKey}) is caught the same way', async () => {
       const { requestId } = await import('./middlewares/mod.ts');
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'share-conflict-2',
         server: { port: 0 },
         stateMode: 'SHARE',
@@ -188,7 +200,10 @@ describe('rapid.Application', () => {
 
     it('a stateKey-writing middleware boots fine under CLONE/PROTOTYPE (the default)', async () => {
       const { responseTimer } = await import('./middlewares/mod.ts');
-      const app = new Application({ name: 'share-ok', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'share-ok',
+        server: { port: 0 },
+      });
       app.use(responseTimer({ stateKey: 'tookMs' }));
       app.get('/x', () => ({ content: 'ok' }));
       await app.start();
@@ -200,7 +215,7 @@ describe('rapid.Application', () => {
     });
 
     it('SHARE with NO stateKey-writing middleware boots fine', async () => {
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'share-no-conflict',
         server: { port: 0 },
         stateMode: 'SHARE',
@@ -224,18 +239,18 @@ describe('rapid.Application', () => {
         './middlewares/mod.ts'
       );
       const shareApp = () =>
-        new Application({
+        Application.initialize({
           name: 'share-wrapped',
           server: { port: 0 },
           stateMode: 'SHARE',
         });
 
-      const wrappedByOnly = shareApp();
+      const wrappedByOnly = await shareApp();
       wrappedByOnly.use(onlyHTTP(responseTimer({ stateKey: 'tookMs' })));
       wrappedByOnly.get('/x', () => ({ content: 'ok' }));
       await asserts.assertRejects(() => wrappedByOnly.start(), RapidError);
 
-      const wrappedByGuard = shareApp();
+      const wrappedByGuard = await shareApp();
       wrappedByGuard.use(guardHTTP(responseTimer({ stateKey: 'tookMs' })));
       wrappedByGuard.get('/x', () => ({ content: 'ok' }));
       await asserts.assertRejects(() => wrappedByGuard.start(), RapidError);
@@ -247,7 +262,7 @@ describe('rapid.Application', () => {
       configure: (app: Application) => void,
       trustProxy: boolean | number = false,
     ) => {
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'h',
         server: { port: 0, trustProxy },
       });
@@ -295,7 +310,10 @@ describe('rapid.Application', () => {
       // the cap must count bytes actually read. Driven at the context
       // level — a lying/absent content-length is a malformed frame the
       // network clients handle inconsistently across runtimes.
-      const app = new Application({ name: 'u6', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'u6',
+        server: { enabled: false },
+      });
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
           const chunk = new Uint8Array(256 * 1024); // 256 KB
@@ -384,7 +402,10 @@ describe('rapid.Application', () => {
 
   describe('context contract: body-only override preserves status', () => {
     it('holds on JOB outcomes too (not just HTTP/SOCKET)', async () => {
-      const app = new Application({ name: 'jc', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'jc',
+        server: { enabled: false },
+      });
       app.job('j', '0 6 * * *', (ctx) => {
         ctx.response = { status: 500, content: { failed: true } };
         ctx.response = { content: { failed: true, enriched: true } }; // body-only
@@ -396,7 +417,10 @@ describe('rapid.Application', () => {
 
   describe('route versioning (a dimension separate from path)', () => {
     it('the same path resolves a DIFFERENT handler per x-api-version', async () => {
-      const app = new Application({ name: 'ver', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'ver',
+        server: { port: 0 },
+      });
       app.route('GET', '/x', { version: 'v1' }, () => ({ content: 'v1' }));
       app.route('GET', '/x', { version: 'v2' }, () => ({ content: 'v2' }));
       await app.start();
@@ -415,7 +439,7 @@ describe('rapid.Application', () => {
     });
 
     it('an unversioned request falls back to server.versioning.default, then 404s with neither', async () => {
-      const withDefault = new Application({
+      const withDefault = await Application.initialize({
         name: 'ver-default',
         server: { port: 0, versioning: { default: 'v1' } },
       });
@@ -433,7 +457,7 @@ describe('rapid.Application', () => {
         await withDefault.stop();
       }
 
-      const noDefault = new Application({
+      const noDefault = await Application.initialize({
         name: 'ver-404',
         server: { port: 0 },
       });
@@ -450,7 +474,10 @@ describe('rapid.Application', () => {
     });
 
     it('an unversioned route is unaffected by versioning entirely', async () => {
-      const app = new Application({ name: 'ver-none', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'ver-none',
+        server: { port: 0 },
+      });
       app.get('/plain', () => ({ content: 'ok' })); // no version option
       await app.start();
       try {
@@ -465,15 +492,18 @@ describe('rapid.Application', () => {
   });
 
   describe('websocket commands (rpc mounted on the HTTP listener)', () => {
-    it('registration validates: duplicates and empty commands are loud', () => {
-      const app = new Application({ name: 'w', server: { enabled: false } });
+    it('registration validates: duplicates and empty commands are loud', async () => {
+      const app = await Application.initialize({
+        name: 'w',
+        server: { enabled: false },
+      });
       app.socket('a', () => {});
       asserts.assertThrows(() => app.socket('a', () => {}), RapidError);
       asserts.assertThrows(() => app.socket('  ', () => {}), RapidError);
     });
 
     it('dispatches commands through the shared cycle, same port as HTTP', async () => {
-      const app = new Application(
+      const app = await Application.initialize(
         { name: 'w2', server: { port: 0 }, stateMode: 'SHARE' },
         { visits: 7 },
       );
@@ -523,7 +553,10 @@ describe('rapid.Application', () => {
 
   describe('ctx.args — one shape on every transport (Phase B)', () => {
     it('HTTP: route params + parsed query + dual-source paging', async () => {
-      const app = new Application({ name: 'args', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'args',
+        server: { port: 0 },
+      });
       app.get('/items/:id:', (ctx) => ({
         content: { args: ctx.args, action: ctx.action },
       }));
@@ -551,7 +584,7 @@ describe('rapid.Application', () => {
     });
 
     it('HTTP: a query over the structural caps is a 400, lazily', async () => {
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'caps',
         server: { port: 0, query: { maxFilters: 1 } },
       });
@@ -574,7 +607,10 @@ describe('rapid.Application', () => {
     });
 
     it('SOCKET: params = frame payload; connection is envelope', async () => {
-      const app = new Application({ name: 'sargs', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'sargs',
+        server: { port: 0 },
+      });
       app.socket('inspect', (ctx) => ({
         content: {
           action: ctx.action,
@@ -617,7 +653,10 @@ describe('rapid.Application', () => {
     });
 
     it('SOCKET: a non-object payload is rejected for EVERY command', async () => {
-      const app = new Application({ name: 'sval', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'sval',
+        server: { port: 0 },
+      });
       // This handler never reads args — the contract must hold anyway.
       app.socket('blind', () => ({ content: 'ran' }));
       await app.start();
@@ -648,7 +687,7 @@ describe('rapid.Application', () => {
     });
 
     it('JOB: registration defaults ⊕ trigger overrides', async () => {
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'jargs',
         server: { enabled: false },
       });
@@ -678,8 +717,11 @@ describe('rapid.Application', () => {
   });
 
   describe('R2 LOW sweep: context immutability + status truth', () => {
-    it('L4: args.params is FROZEN, so the Readonly type is real', () => {
-      const app = new Application({ name: 'l4', server: { enabled: false } });
+    it('L4: args.params is FROZEN, so the Readonly type is real', async () => {
+      const app = await Application.initialize({
+        name: 'l4',
+        server: { enabled: false },
+      });
       const ctx = new SOCKETContext(app, {
         connection: { id: 'c', query: {}, headers: new Headers() },
         command: 'x',
@@ -692,13 +734,13 @@ describe('rapid.Application', () => {
       asserts.assertEquals(ctx.args.params['a'], 1);
     });
 
-    it('L4 follow-up: freezing args.params does NOT also freeze ctx.payload (they were the same object)', () => {
+    it('L4 follow-up: freezing args.params does NOT also freeze ctx.payload (they were the same object)', async () => {
       // args.params used to alias ctx.__framePayload directly — freezing
       // one froze both, even though ctx.payload is documented VERBATIM,
       // typed unknown, with no Readonly promise. A handler mutating
       // ctx.payload (a reasonable thing to do given its type) got a
       // TypeError purely as a side effect of an UNRELATED freeze.
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'l4-alias',
         server: { enabled: false },
       });
@@ -715,12 +757,12 @@ describe('rapid.Application', () => {
       asserts.assertEquals((ctx.payload as Record<string, unknown>)['b'], 2);
     });
 
-    it('L4 follow-up: query/paging are frozen too, not just params', () => {
+    it('L4 follow-up: query/paging are frozen too, not just params', async () => {
       // The original L4 fix only froze args.params — a middleware
       // mutating args.query.filters/sorting or args.paging silently
       // changed what every LATER middleware in the same chain saw
       // (args is memoized per-instance), despite the Readonly type.
-      const httpApp = new Application({
+      const httpApp = await Application.initialize({
         name: 'l4-http',
         server: { enabled: false },
       });
@@ -733,7 +775,7 @@ describe('rapid.Application', () => {
       asserts.assertEquals(Object.isFrozen(httpCtx.args.query.sorting), true);
       asserts.assertEquals(Object.isFrozen(httpCtx.args.paging), true);
 
-      const jobApp = new Application({
+      const jobApp = await Application.initialize({
         name: 'l4-job',
         server: { enabled: false },
       });
@@ -745,7 +787,7 @@ describe('rapid.Application', () => {
       asserts.assertEquals(Object.isFrozen(jobCtx.args.query.sorting), true);
       asserts.assertEquals(Object.isFrozen(jobCtx.args.paging), true);
 
-      const socketApp = new Application({
+      const socketApp = await Application.initialize({
         name: 'l4-socket',
         server: { enabled: false },
       });
@@ -759,8 +801,11 @@ describe('rapid.Application', () => {
       asserts.assertEquals(Object.isFrozen(socketCtx.args.paging), true);
     });
 
-    it('L10: exotic objects are rejected as socket params', () => {
-      const app = new Application({ name: 'l10', server: { enabled: false } });
+    it('L10: exotic objects are rejected as socket params', async () => {
+      const app = await Application.initialize({
+        name: 'l10',
+        server: { enabled: false },
+      });
       for (const payload of [new Date(), new Map(), [1, 2]]) {
         const ctx = new SOCKETContext(app, {
           connection: { id: 'c', query: {}, headers: new Headers() },
@@ -782,8 +827,11 @@ describe('rapid.Application', () => {
       asserts.assertEquals(ok.args.params['a'], 1);
     });
 
-    it('L7: the response getter hands out a headers COPY', () => {
-      const app = new Application({ name: 'l7', server: { enabled: false } });
+    it('L7: the response getter hands out a headers COPY', async () => {
+      const app = await Application.initialize({
+        name: 'l7',
+        server: { enabled: false },
+      });
       const ctx = new HTTPContext(app, {
         request: new Request('http://x/'),
         remoteAddress: '',
@@ -794,8 +842,11 @@ describe('rapid.Application', () => {
       asserts.assertEquals(ctx.responseHeaders.get('x-sneaky'), null);
     });
 
-    it('L5: ctx.status is the wire truth even when content is null', () => {
-      const app = new Application({ name: 'l5', server: { enabled: false } });
+    it('L5: ctx.status is the wire truth even when content is null', async () => {
+      const app = await Application.initialize({
+        name: 'l5',
+        server: { enabled: false },
+      });
       const ctx = new HTTPContext(app, {
         request: new Request('http://x/'),
         remoteAddress: '',
@@ -811,7 +862,7 @@ describe('rapid.Application', () => {
   describe('R2-M7: upload cleanup vs an in-flight parse', () => {
     it('cleanup() awaits a started-but-unawaited parse, so no temp file is orphaned', async () => {
       const uploads = makeTempDirSync({ prefix: 'rapid-m7-' });
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'm7',
         server: { enabled: false },
         uploads: { path: uploads, allowedExtensions: ['.txt'], maxSize: 1024 },
@@ -852,7 +903,10 @@ describe('rapid.Application', () => {
       });
 
     it('HTTP: parse-once — every access shares ONE parse', async () => {
-      const app = new Application({ name: 'p1', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'p1',
+        server: { enabled: false },
+      });
       const ctx = new HTTPContext(app, {
         request: request('{"a":1}'),
         remoteAddress: '',
@@ -866,7 +920,10 @@ describe('rapid.Application', () => {
     });
 
     it('HTTP: a parse FAILURE replays — never a second stream read', async () => {
-      const app = new Application({ name: 'p2', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'p2',
+        server: { enabled: false },
+      });
       const ctx = new HTTPContext(app, {
         request: request('{bad json'),
         remoteAddress: '',
@@ -884,8 +941,11 @@ describe('rapid.Application', () => {
       );
     });
 
-    it('HTTP: files is a defensive copy, empty before any parse', () => {
-      const app = new Application({ name: 'p3', server: { enabled: false } });
+    it('HTTP: files is a defensive copy, empty before any parse', async () => {
+      const app = await Application.initialize({
+        name: 'p3',
+        server: { enabled: false },
+      });
       const ctx = new HTTPContext(app, {
         request: request('{}'),
         remoteAddress: '',
@@ -899,7 +959,10 @@ describe('rapid.Application', () => {
     it('await ctx.payload is uniform across transports', async () => {
       // SOCKET: synchronous frame value — await passes it through.
       // (Round-tripped in the websocket suite; here the JOB base case.)
-      const app = new Application({ name: 'p4', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'p4',
+        server: { enabled: false },
+      });
       app.job('j', '0 6 * * *', async (ctx) => ({
         content: { payload: (await ctx.payload) === undefined },
       }));
@@ -913,7 +976,10 @@ describe('rapid.Application', () => {
 
   describe('universal middleware engine (Phase C)', () => {
     it('ONE use() registration runs on HTTP, SOCKET, and JOB', async () => {
-      const app = new Application({ name: 'um', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'um',
+        server: { port: 0 },
+      });
       const seen: string[] = [];
       app.use(async (ctx, next) => {
         seen.push(`${ctx.type}:${ctx.action}`);
@@ -940,7 +1006,10 @@ describe('rapid.Application', () => {
     });
 
     it('a middleware short-circuiting a JOB is a loud, distinct outcome', async () => {
-      const app = new Application({ name: 'ums', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'ums',
+        server: { enabled: false },
+      });
       const warns: Record<string, unknown>[] = [];
       (app.log as unknown as Record<string, unknown>)['warn'] = (
         msg: string,
@@ -970,8 +1039,11 @@ describe('rapid.Application', () => {
       asserts.assertEquals(warns[0]!['job'], 'nightly');
     });
 
-    it('a 3xx status is rejected AT SET TIME off-HTTP', () => {
-      const app = new Application({ name: 'um3', server: { enabled: false } });
+    it('a 3xx status is rejected AT SET TIME off-HTTP', async () => {
+      const app = await Application.initialize({
+        name: 'um3',
+        server: { enabled: false },
+      });
       const job = new JOBContext(app, {
         job: 'j',
         tick: { scheduledAt: new Date(), firedAt: new Date(), count: 1 },
@@ -1001,7 +1073,10 @@ describe('rapid.Application', () => {
     });
 
     it('per-COMMAND socket chains compose after the universal chain', async () => {
-      const app = new Application({ name: 'umc', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'umc',
+        server: { port: 0 },
+      });
       const order: string[] = [];
       app.use(async (_ctx, next) => {
         order.push('universal');
@@ -1044,7 +1119,10 @@ describe('rapid.Application', () => {
     });
 
     it('R2-M2: a handler 4xx reaches a socket client with body AND code', async () => {
-      const app = new Application({ name: 'sm2', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'sm2',
+        server: { port: 0 },
+      });
       app.socket('create', (ctx) => {
         // A handler-authored error: not a framework disclosure payload.
         ctx.response = { status: 422, content: { fields: { email: 'taken' } } };
@@ -1080,7 +1158,10 @@ describe('rapid.Application', () => {
 
     it('an early respond() surfaces as a uniform 500, never silence', async () => {
       // HTTP: the finalize guard turns it into a disclosure 500.
-      const app = new Application({ name: 'umr', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'umr',
+        server: { port: 0 },
+      });
       app.use(async (ctx, next) => {
         if (ctx.type === 'HTTP') ctx.respond(); // the forbidden move
         await next();
@@ -1094,7 +1175,7 @@ describe('rapid.Application', () => {
         await r.text();
         // JOB parity: a mid-chain respond() yields a 500 OUTCOME (no
         // path-dependent rejection from triggerJob).
-        const appJ = new Application({
+        const appJ = await Application.initialize({
           name: 'umrj',
           server: { enabled: false },
         });
@@ -1115,7 +1196,10 @@ describe('rapid.Application', () => {
     });
 
     it('route-scoped middleware still compose AFTER the universal chain', async () => {
-      const app = new Application({ name: 'umo', server: { port: 0 } });
+      const app = await Application.initialize({
+        name: 'umo',
+        server: { port: 0 },
+      });
       const order: string[] = [];
       app.use(async (_ctx, next) => {
         order.push('universal');
@@ -1137,7 +1221,10 @@ describe('rapid.Application', () => {
 
   describe('triggerJob / fetch / newRequestId guards', () => {
     it('triggerJob() for an unregistered name rejects with RAPID_CONFIG', async () => {
-      const app = new Application({ name: 'tj', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'tj',
+        server: { enabled: false },
+      });
       const err = await asserts.assertRejects(
         () => app.triggerJob('does-not-exist'),
         RapidError,
@@ -1146,10 +1233,13 @@ describe('rapid.Application', () => {
       asserts.assertEquals(err.code, 'RAPID_CONFIG');
     });
 
-    it('fetch() with socket commands throws RAPID_CONFIG synchronously', () => {
+    it('fetch() with socket commands throws RAPID_CONFIG synchronously', async () => {
       // fetch has no socket owner; the guard fires on the first call
       // (before any listener), SYNCHRONOUSLY out of __prepareFetch.
-      const app = new Application({ name: 'f', server: { enabled: false } });
+      const app = await Application.initialize({
+        name: 'f',
+        server: { enabled: false },
+      });
       app.socket('cmd', () => ({ content: 'x' }));
       const err = asserts.assertThrows(
         () => app.fetch(new Request('http://x/')),
@@ -1159,8 +1249,11 @@ describe('rapid.Application', () => {
       asserts.assertEquals(err.code, 'RAPID_CONFIG');
     });
 
-    it('newRequestId adopts a safe inbound id and rejects unsafe ones', () => {
-      const app = new Application({ name: 'ri', server: { enabled: false } });
+    it('newRequestId adopts a safe inbound id and rejects unsafe ones', async () => {
+      const app = await Application.initialize({
+        name: 'ri',
+        server: { enabled: false },
+      });
       // Safe charset within the 64-char cap → adopted verbatim (trusted edge).
       asserts.assertEquals(app.newRequestId('abc_1.2-3'), 'abc_1.2-3');
       // Illegal characters → a fresh ULID, never the tainted value.
@@ -1177,7 +1270,7 @@ describe('rapid.Application', () => {
       // nothing awaits detached work, so detach() itself must swallow the
       // rejection. If that regressed, the test runner would flag an
       // unhandled rejection from the line below.
-      const app = new Application({
+      const app = await Application.initialize({
         name: 'detach',
         server: { port: 0, hostname: '127.0.0.1' },
       });

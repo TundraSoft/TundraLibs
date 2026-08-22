@@ -11,7 +11,7 @@ import { RapidError } from './errors/mod.ts';
 
 describe('rapid.Application onError', () => {
   it('overrides the disclosure envelope (status + body)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'oe',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -31,7 +31,7 @@ describe('rapid.Application onError', () => {
   });
 
   it('fires for a framework 404 too (every disclosed error)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'oe-404',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -46,7 +46,7 @@ describe('rapid.Application onError', () => {
   });
 
   it('returning nothing keeps the DEFAULT envelope', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'oe-passthrough',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -60,7 +60,7 @@ describe('rapid.Application onError', () => {
   });
 
   it('a THROWING hook never breaks disclosure — falls back to default', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'oe-throws',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] }, // silence the logged hook error

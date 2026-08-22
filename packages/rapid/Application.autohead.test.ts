@@ -15,7 +15,7 @@ const GET_LEN = String(
 
 describe('rapid.Application autoHead', () => {
   it('default: HEAD to a GET route → 200, GET headers + content-length, empty body', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'ah-on',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -30,7 +30,7 @@ describe('rapid.Application autoHead', () => {
   });
 
   it('off: HEAD to a GET-only route is unmatched (404)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'ah-off',
       server: { port: 0, hostname: '127.0.0.1', autoHead: false },
     });
@@ -43,7 +43,7 @@ describe('rapid.Application autoHead', () => {
   });
 
   it('an explicit HEAD route wins over the synthesized one', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'ah-explicit',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -61,7 +61,7 @@ describe('rapid.Application autoHead', () => {
   });
 
   it('a GET with no matching path still 404s on HEAD (no phantom routes)', async () => {
-    const app = new Application({
+    const app = await Application.initialize({
       name: 'ah-none',
       server: { port: 0, hostname: '127.0.0.1' },
     });

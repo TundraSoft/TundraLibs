@@ -16,7 +16,7 @@ describe('rapid.middlewares.compress', () => {
   let base = '';
   const big = 'x'.repeat(5000);
   beforeAll(async () => {
-    app = new Application({
+    app = await Application.initialize({
       name: 'compress',
       server: { port: 0, hostname: '127.0.0.1' },
     });
@@ -132,7 +132,7 @@ describe('rapid.middlewares.compress', () => {
     // cors() reflects the origin and appends `Vary: Origin`; compress must
     // MERGE Accept-Encoding into it, not replace it — a shared cache keyed
     // on only one would serve one origin/encoding its wrong variant.
-    const app2 = new Application({
+    const app2 = await Application.initialize({
       name: 'compress-vary',
       server: { port: 0, hostname: '127.0.0.1' },
     });

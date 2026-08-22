@@ -29,7 +29,10 @@ const access = (lines: Line[]) => lines.filter((l) => l.msg === 'access');
 
 describe('rapid.middlewares.requestLogger', () => {
   it('logs info on success, warn on 4xx, error on 5xx — HTTP', async () => {
-    const app = new Application({ name: 'rl', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rl',
+      server: { port: 0 },
+    });
     const lines = capture(app);
     app.use(requestLogger());
     app.get('/ok', () => ({ content: 'fine' }));
@@ -63,7 +66,10 @@ describe('rapid.middlewares.requestLogger', () => {
   });
 
   it('a 404 logs warn with matched=false (attacker-controlled action)', async () => {
-    const app = new Application({ name: 'rl4', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rl4',
+      server: { port: 0 },
+    });
     const lines = capture(app);
     app.use(requestLogger());
     app.get('/known', () => ({ content: 'x' }));
@@ -81,7 +87,10 @@ describe('rapid.middlewares.requestLogger', () => {
   });
 
   it('logs job firings through the same registration', async () => {
-    const app = new Application({ name: 'rlj', server: { enabled: false } });
+    const app = await Application.initialize({
+      name: 'rlj',
+      server: { enabled: false },
+    });
     const lines = capture(app);
     app.use(requestLogger());
     app.job('tick', '0 6 * * *', () => ({ content: 'ran' }));
@@ -95,7 +104,10 @@ describe('rapid.middlewares.requestLogger', () => {
   });
 
   it('the skip predicate suppresses the line, not the invocation', async () => {
-    const app = new Application({ name: 'rls', server: { port: 0 } });
+    const app = await Application.initialize({
+      name: 'rls',
+      server: { port: 0 },
+    });
     const lines = capture(app);
     app.use(requestLogger({ skip: (ctx) => ctx.action === 'GET /health' }));
     app.get('/health', () => ({ content: 'ok' }));
