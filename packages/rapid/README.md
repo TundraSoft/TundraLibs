@@ -575,6 +575,38 @@ capabilities:
   `app.triggerJob(name)`), and file uploads degrade gracefully: they are rejected
   with a typed `RAPID_UPLOADS_UNAVAILABLE` (501) rather than crashing.
 
+## CLI
+
+`rapid init` scaffolds a project. The **runtime is asked first** — it's a
+project-wide choice, not a container detail: it decides the primary config
+file (one, never both), the dev/start/test commands, and the deploy artifact.
+
+```bash
+deno run -A jsr:@tundralibs/rapid/cli init my-api --runtime bun --docker --github
+```
+
+| `--runtime` | config         | deploy artifact                              |
+| ----------- | -------------- | -------------------------------------------- |
+| `deno`      | `deno.json`    | `Dockerfile` on `tundrasoft/deno` (opt-in)   |
+| `bun`       | `package.json` | `Dockerfile` on `tundrasoft/bun` (opt-in)    |
+| `node`      | `package.json` | `Dockerfile` on `tundrasoft/node` (opt-in)   |
+| `workers`   | `package.json` | `wrangler.toml` + `worker.ts` (no container) |
+
+`--docker` writes a Dockerfile for the org `tundrasoft/<runtime>` images —
+Alpine + s6-overlay, running as the unprivileged `tundra` user. Those images
+start the app from an **ENV contract** (`TASK=start` on Deno, with `ALLOW_*`
+mapped to `--allow-*` flags; `SCRIPT=start` on Bun/Node), so the generated
+Dockerfile deliberately has no `CMD`/`ENTRYPOINT`. `--github` (opt-in) adds a
+`.github/workflows/ci.yml` that runs fmt/lint/check/test on the chosen runtime.
+`--module` / `--norm` add the module system and a `norm` model; `--yes`
+accepts every default non-interactively. A `.gitignore` is written; `git init`
+is left to you.
+
+The other commands: `upgrade` bumps every `@tundralibs/*` dependency to its
+latest release, `modules [dir]` (re)generates the modules barrel (`--check`
+fails CI when it's stale), and `health [url]` hits a running app's health path
+(exit 0 on 2xx).
+
 ## Examples & docs
 
 A full module-based blog API (posts + nested comments over `@tundralibs/norm`,

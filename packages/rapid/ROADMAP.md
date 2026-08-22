@@ -47,7 +47,19 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `inject()`), used by the module system.
 - **Testing** (`./testing`) — `harness()` (stub via doctor, boot, restore) +
   `client()` (drive routes over `app.fetch`).
-- **CLI** (`./cli`) — `init` / `upgrade` / `modules` / `health`.
+- **CLI** (`./cli`) — `init` / `upgrade` / `modules` / `health`. **`init`
+  redesigned (2026-08-23):** the runtime (`deno|bun|node|workers`) is asked
+  FIRST and shapes everything — exactly ONE primary config file (`deno.json`
+  vs `package.json`; previously both were always written, so every project was
+  Deno-shaped with a Node file bolted on), runtime-specific dev/start/test
+  commands, and the deploy artifact. `--docker` now matches the org
+  `tundrasoft/*` images' actual S6 contract (`ENV TASK=`/`SCRIPT=`, no
+  `CMD`/`ENTRYPOINT`, `tundra` user, pinned major tag — the old template's
+  `CMD ["deno task start"]` bypassed the supervisor, the user drop, and the
+  permission mapping). `workers` gets `wrangler.toml` + `worker.ts`, never a
+  Dockerfile. `--git` removed (it only ran `git init`, the CLI's sole
+  subprocess — `git.ts` deleted); `--github` (opt-in) adds a runtime-correct
+  CI workflow instead.
 - **Cluster seam** — `app.instanceId` (boot ULID) + a nullable `app.cluster`
   slot; the master/worker implementation is in the backlog (Scaling & ops).
 - **Review hardening (2026-08-22)** — the straightforward/unblocked fixes from

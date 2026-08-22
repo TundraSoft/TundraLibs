@@ -66,30 +66,56 @@ describe('rapid.cli modules generator', () => {
 });
 
 describe('rapid.cli init scaffold', () => {
-  it('scaffold() maps files by the toggles', () => {
+  it('scaffold() maps files by the toggles — ONE config file, by runtime', () => {
     const full = scaffold(
-      { name: 'demo', module: true, norm: true, docker: true, runtime: 'bun' },
+      {
+        name: 'demo',
+        module: true,
+        norm: true,
+        runtime: 'bun',
+        docker: true,
+        github: true,
+      },
       '1.2.3',
     );
     for (
       const f of [
         'main.ts',
         'configs/Application.yaml',
-        'deno.json',
         'package.json',
         'modules/Greeter.ts',
         'models/mod.ts',
         'db.ts',
         'Dockerfile',
         '.dockerignore',
+        '.github/workflows/ci.yml',
       ]
     ) {
       asserts.assert(f in full, `missing ${f}`);
     }
-    asserts.assertStringIncludes(full['Dockerfile']!, 'tundrasoft/bun');
+    // A bun project is NOT a deno project: no deno.json alongside.
+    asserts.assert(
+      !('deno.json' in full),
+      'bun scaffold must not emit deno.json',
+    );
+    asserts.assertStringIncludes(full['Dockerfile']!, 'FROM tundrasoft/bun:');
+    // S6-image contract: the app is started from ENV, never a CMD/ENTRYPOINT.
+    asserts.assertStringIncludes(full['Dockerfile']!, 'ENV SCRIPT=start');
+    asserts.assert(
+      !/^(CMD|ENTRYPOINT)/m.test(full['Dockerfile']!),
+      'no CMD/ENTRYPOINT',
+    );
     asserts.assertStringIncludes(
-      full['deno.json']!,
-      '@tundralibs/rapid@^1.2.3',
+      full['package.json']!,
+      '"dev": "bun --watch main.ts"',
+    );
+    asserts.assertStringIncludes(
+      full['package.json']!,
+      'tundralibs__rapid@^1.2.3',
+    );
+    asserts.assertStringIncludes(
+      full['.github/workflows/ci.yml']!,
+      'oven-sh/setup-bun',
     );
     asserts.assertStringIncludes(full['main.ts']!, 'app.modules');
 
@@ -98,14 +124,85 @@ describe('rapid.cli init scaffold', () => {
         name: 'bare',
         module: false,
         norm: false,
-        docker: false,
         runtime: 'deno',
+        docker: false,
+        github: false,
       },
       '1.0.0',
     );
+    asserts.assert('deno.json' in minimal);
+    asserts.assert(
+      !('package.json' in minimal),
+      'deno scaffold must not emit package.json',
+    );
     asserts.assert(!('modules/Greeter.ts' in minimal));
     asserts.assert(!('Dockerfile' in minimal));
+    asserts.assert(!('.github/workflows/ci.yml' in minimal));
+    asserts.assertStringIncludes(
+      minimal['deno.json']!,
+      '@tundralibs/rapid@^1.0.0',
+    );
     asserts.assertStringIncludes(minimal['main.ts']!, "app.get('/'");
+  });
+
+  it('scaffold() for deno Docker sets the TASK + ALLOW_* env contract', () => {
+    const f = scaffold(
+      {
+        name: 'd',
+        module: false,
+        norm: false,
+        runtime: 'deno',
+        docker: true,
+        github: true,
+      },
+      '1.0.0',
+    );
+    asserts.assertStringIncludes(f['Dockerfile']!, 'FROM tundrasoft/deno:');
+    asserts.assertStringIncludes(f['Dockerfile']!, 'TASK=start');
+    asserts.assertStringIncludes(f['Dockerfile']!, 'ALLOW_NET=1');
+    asserts.assertStringIncludes(
+      f['.github/workflows/ci.yml']!,
+      'denoland/setup-deno',
+    );
+    asserts.assertStringIncludes(
+      f['.github/workflows/ci.yml']!,
+      'deno test -A',
+    );
+  });
+
+  it('scaffold() for workers emits wrangler.toml + worker.ts, never a Dockerfile', () => {
+    const f = scaffold(
+      {
+        name: 'edge',
+        module: true,
+        norm: false,
+        runtime: 'workers',
+        docker: true,
+        github: true,
+      },
+      '1.0.0',
+    );
+    asserts.assert('wrangler.toml' in f);
+    asserts.assert('worker.ts' in f);
+    asserts.assert(!('main.ts' in f), 'workers uses worker.ts, not main.ts');
+    asserts.assert(
+      !('Dockerfile' in f),
+      'no container for workers, even with docker:true',
+    );
+    asserts.assertStringIncludes(
+      f['worker.ts']!,
+      'fetch: (request: Request) => app.fetch(request)',
+    );
+    asserts.assertStringIncludes(
+      f['worker.ts']!,
+      'app.modules({ modules: [modules] })',
+    );
+    asserts.assertStringIncludes(f['wrangler.toml']!, 'name = "edge"');
+    asserts.assertStringIncludes(f['package.json']!, '"wrangler"');
+    asserts.assertStringIncludes(
+      f['.github/workflows/ci.yml']!,
+      'wrangler deploy --dry-run',
+    );
   });
 
   it('initCommand writes the project tree under a base dir (no cwd juggling)', async () => {
@@ -116,8 +213,8 @@ describe('rapid.cli init scaffold', () => {
           _: ['sample'],
           module: true,
           norm: false,
+          runtime: 'deno',
           docker: false,
-          git: false,
           yes: true,
         },
         base,
@@ -137,7 +234,7 @@ describe('rapid.cli init scaffold', () => {
   it('initCommand refuses to overwrite an existing project', async () => {
     const base = await makeTempDir({ prefix: 'rapid-init-dup-' });
     try {
-      const args = { _: ['twice'], git: false, yes: true };
+      const args = { _: ['twice'], yes: true };
       asserts.assertEquals(await initCommand(args, base), 0);
       // Second run into the same base with the same name hits the guard.
       asserts.assertEquals(await initCommand(args, base), 1);
@@ -150,7 +247,7 @@ describe('rapid.cli init scaffold', () => {
     const base = await makeTempDir({ prefix: 'rapid-init-esc-' });
     try {
       asserts.assertEquals(
-        await initCommand({ _: ['../escape'], git: false, yes: true }, base),
+        await initCommand({ _: ['../escape'], yes: true }, base),
         1,
       );
       // The guard fires before any write — base stays empty of the escape.
@@ -166,7 +263,7 @@ describe('rapid.cli init scaffold', () => {
       // A bare `""` positional skips the default and, unguarded, makes `root`
       // empty → writes at `/`. The guard must reject it.
       asserts.assertEquals(
-        await initCommand({ _: [''], git: false, yes: true }, base),
+        await initCommand({ _: [''], yes: true }, base),
         1,
       );
     } finally {

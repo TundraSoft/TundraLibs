@@ -13,9 +13,18 @@ export type ScaffoldAnswers = {
   name: string;
   module: boolean;
   norm: boolean;
+  /**
+   * The project's runtime — a PROJECT-WIDE choice made first: it decides
+   * which config file is primary (`deno.json` vs `package.json`), the
+   * install/dev/start/test commands, and the deploy artifact. `workers`
+   * (Cloudflare) serves via `app.fetch` and gets `wrangler.toml` instead of
+   * a Dockerfile.
+   */
+  runtime: 'deno' | 'bun' | 'node' | 'workers';
+  /** A Dockerfile on the org `tundrasoft/<runtime>` image (deno/bun/node only). */
   docker: boolean;
-  /** Container base runtime — one of the org `tundrasoft/*` images. */
-  runtime: 'deno' | 'bun' | 'node';
+  /** A GitHub Actions CI workflow (fmt / lint / check / test on the chosen runtime). */
+  github: boolean;
 };
 
 /** Replace every `{{key}}` in `tpl` from `vars`. */
@@ -144,18 +153,15 @@ const PACKAGE_JSON = `{
   "name": "{{name}}",
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx --watch main.ts",
-    "start": "node --import tsx main.ts",
-    "modules": "node --import tsx node_modules/@tundralibs/rapid/cli/mod.ts modules ./modules",
-    "upgrade": "node --import tsx node_modules/@tundralibs/rapid/cli/mod.ts upgrade",
-    "test": "node --import tsx --test"
+    "dev": "{{devCmd}}",
+    "start": "{{startCmd}}",
+    "modules": "{{runTs}} node_modules/@tundralibs/rapid/cli/mod.ts modules ./modules",
+    "upgrade": "{{runTs}} node_modules/@tundralibs/rapid/cli/mod.ts upgrade",
+    "test": "{{testCmd}}"
   },
   "dependencies": {
     "@tundralibs/rapid": "npm:@jsr/tundralibs__rapid@^{{rapidVersion}}"
-  },
-  "devDependencies": {
-    "tsx": "^4"
-  }
+  }{{devDeps}}
 }
 `;
 
@@ -166,7 +172,7 @@ A [rAPId](https://jsr.io/@tundralibs/rapid) application.
 ## Run
 
 \`\`\`bash
-deno task dev      # or: bun run dev / npm run dev
+{{runHint}}
 \`\`\`
 
 ## Tasks
@@ -176,13 +182,17 @@ deno task dev      # or: bun run dev / npm run dev
 - \`upgrade\` — bump \`@tundralibs/*\` to the latest release
 `;
 
-const DOCKERFILE = `FROM tundrasoft/{{runtime}}:latest
+const DOCKERFILE =
+  `# Built on the org image: Alpine + s6-overlay, runs as the unprivileged
+# \`tundra\` user, and starts the app from the ENV contract below — the image's
+# own s6 service runs it, so there is deliberately NO CMD / ENTRYPOINT here.
+FROM tundrasoft/{{runtime}}:{{imageTag}}
 
-WORKDIR /app
-COPY . .
+COPY --chown=tundra:tundra . /app
 
-EXPOSE 3000
-CMD ["{{dockerCmd}}"]
+# {{runtimeEnvDoc}}
+{{runtimeEnv}}
+EXPOSE {{port}}
 `;
 
 const DOCKERIGNORE = `node_modules
@@ -193,37 +203,145 @@ const DOCKERIGNORE = `node_modules
 .env
 `;
 
+const WRANGLER_TOML = `name = "{{name}}"
+main = "worker.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+`;
+
+const WORKER_TS =
+  `// Cloudflare Workers entry: no listening socket, so the app serves through
+// its fetch handler. Jobs are not scheduled here — fire them from a Cron
+// Trigger via app.triggerJob(); socket commands need a listener.
+import { Application } from '@tundralibs/rapid';
+{{workerModulesImport}}
+const app = await Application.initialize({ name: '{{name}}' });
+{{workerSetup}}
+export default { fetch: (request: Request) => app.fetch(request) };
+`;
+
+const CI_WORKFLOW = `name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+{{ciSetup}}
+{{ciSteps}}
+`;
+
 // ── assembly ────────────────────────────────────────────────────────────
 
-const DOCKER_CMD: Record<ScaffoldAnswers['runtime'], string> = {
-  deno: 'deno task start',
-  bun: 'bun run start',
-  node: 'npm run start',
-};
+/**
+ * Everything that differs per runtime, in one table. `workers` has no Docker
+ * row (no container) — it gets `wrangler.toml` + `worker.ts` instead.
+ */
+const RUNTIME = {
+  deno: {
+    configFile: 'deno.json',
+    runHint: 'deno task dev',
+    imageTag: '2',
+    // The tundrasoft/deno image runs `deno task $TASK` under s6 as `tundra`.
+    runtimeEnvDoc:
+      'TASK selects the deno task the image runs; ALLOW_* map to --allow-* flags.',
+    runtimeEnv:
+      'ENV TASK=start \\\n    ALLOW_NET=1 \\\n    ALLOW_READ=/app \\\n    ALLOW_ENV=1',
+    ciSetup:
+      '      - uses: denoland/setup-deno@v2\n        with:\n          deno-version: v2.x',
+    ciSteps:
+      '      - run: deno fmt --check\n      - run: deno lint\n      - run: deno check main.ts\n      - run: deno test -A',
+  },
+  bun: {
+    configFile: 'package.json',
+    runHint: 'bun run dev',
+    imageTag: '1',
+    runtimeEnvDoc: 'SCRIPT selects the package.json script the image runs.',
+    runtimeEnv: 'ENV SCRIPT=start',
+    devCmd: 'bun --watch main.ts',
+    startCmd: 'bun main.ts',
+    runTs: 'bun',
+    testCmd: 'bun test',
+    devDeps: '',
+    ciSetup: '      - uses: oven-sh/setup-bun@v2',
+    ciSteps: '      - run: bun install\n      - run: bun test',
+  },
+  node: {
+    configFile: 'package.json',
+    runHint: 'npm run dev',
+    imageTag: '22',
+    runtimeEnvDoc: 'SCRIPT selects the package.json script the image runs.',
+    runtimeEnv: 'ENV SCRIPT=start',
+    devCmd: 'node --import tsx --watch main.ts',
+    startCmd: 'node --import tsx main.ts',
+    runTs: 'node --import tsx',
+    testCmd: 'node --import tsx --test',
+    devDeps: ',\n  "devDependencies": {\n    "tsx": "^4"\n  }',
+    ciSetup:
+      '      - uses: actions/setup-node@v4\n        with:\n          node-version: 22',
+    ciSteps: '      - run: npm ci\n      - run: npm test',
+  },
+  workers: {
+    configFile: 'package.json',
+    runHint: 'npx wrangler dev',
+    devCmd: 'wrangler dev',
+    startCmd: 'wrangler deploy',
+    runTs: 'node --import tsx',
+    testCmd: 'node --import tsx --test',
+    devDeps:
+      ',\n  "devDependencies": {\n    "tsx": "^4",\n    "wrangler": "^4"\n  }',
+    ciSetup:
+      '      - uses: actions/setup-node@v4\n        with:\n          node-version: 22',
+    ciSteps:
+      '      - run: npm ci\n      - run: npm test\n      - run: npx wrangler deploy --dry-run',
+  },
+} as const;
 
 /**
  * Build the `{ relativePath: contents }` map for a scaffold. `rapidVersion`
  * is the version `rapid init` resolved for the new project's dependency.
+ * The runtime decides the primary config file (never both), the run
+ * commands, and the deploy artifact.
  */
 export function scaffold(
   answers: ScaffoldAnswers,
   rapidVersion: string,
 ): Record<string, string> {
-  const vars = {
+  const rt = RUNTIME[answers.runtime];
+  const vars: Record<string, string> = {
     name: answers.name,
     rapidVersion,
     runtime: answers.runtime,
-    dockerCmd: DOCKER_CMD[answers.runtime],
+    port: '3000',
+    ...rt,
+    workerModulesImport: answers.module
+      ? "import * as modules from './modules/mod.ts';"
+      : '',
+    workerSetup: answers.module
+      ? 'await app.modules({ modules: [modules] });'
+      : "app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));",
   };
   const put = (tpl: string) => render(tpl, vars);
   const files: Record<string, string> = {
     '.gitignore': GITIGNORE,
     'README.md': put(README),
     'configs/Application.yaml': put(APPLICATION_YAML),
-    'deno.json': put(DENO_JSON),
-    'package.json': put(PACKAGE_JSON),
-    'main.ts': put(answers.module ? MAIN_MODULES : MAIN_PLAIN),
   };
+  // ONE primary config file, by runtime — not both.
+  if (answers.runtime === 'deno') files['deno.json'] = put(DENO_JSON);
+  else files['package.json'] = put(PACKAGE_JSON);
+
+  if (answers.runtime === 'workers') {
+    files['wrangler.toml'] = put(WRANGLER_TOML);
+    files['worker.ts'] = render(put(WORKER_TS), vars); // second pass: {{name}} inside workerSetup
+  } else {
+    files['main.ts'] = put(answers.module ? MAIN_MODULES : MAIN_PLAIN);
+  }
   if (answers.module) {
     files['modules/Greeter.ts'] = MODULE_SAMPLE;
     files['modules/mod.ts'] = MODULES_BARREL;
@@ -233,9 +351,12 @@ export function scaffold(
     files['models/mod.ts'] = MODELS_BARREL;
     files['db.ts'] = DB;
   }
-  if (answers.docker) {
+  if (answers.docker && answers.runtime !== 'workers') {
     files['Dockerfile'] = put(DOCKERFILE);
     files['.dockerignore'] = DOCKERIGNORE;
+  }
+  if (answers.github) {
+    files['.github/workflows/ci.yml'] = put(CI_WORKFLOW);
   }
   return files;
 }
