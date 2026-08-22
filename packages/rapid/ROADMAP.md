@@ -122,6 +122,19 @@ Core and the current capability set are built and green on Deno / Bun / Node
   degrade via `__unsupportedFs`. rapid deleted its copy; `ctx.serve()`,
   `serveStatic`, and Range/206 now run on the shared primitive — verified on
   all three runtimes.
+- **Request-id generator (2026-08-23)** — the benchmark profile showed the
+  per-request ULID mint at ~7.7% of CPU: a CSPRNG for a correlation id that
+  never needed one. The default is now a shared `sequenceID()` (crypto-free,
+  monotonic per process, ~10x cheaper: 53 vs 513 ns/op). The process-wide
+  static `Application.requestIdGenerator` getter/setter lets the user choose
+  (`ulid` for sortability, `nanoID`, their own); the setter BLIND-CALLS the
+  candidate and rejects a non-function, a throw, or any output that is not a
+  safe non-empty string (the same charset/length guard as inbound ids — a
+  raw `sequenceID()` returning `bigint` is caught here). `instanceId` stays a
+  ULID (a boot identity, minted once). **Ambient opt-out closed by decision**:
+  `ambient.run` measured at 0.4% of CPU, and the bag is load-bearing for
+  per-app DI isolation, event/invoke correlation, and log correlation — an
+  opt-out would break all three for negligible gain.
 
 ## Backlog
 

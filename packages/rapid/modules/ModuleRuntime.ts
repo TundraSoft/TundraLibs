@@ -20,8 +20,8 @@
  */
 
 import { ambient } from '@tundralibs/ambient';
+import { Application } from '../Application.ts';
 import type { DoctorContainer } from '@tundralibs/doctor';
-import { ulid } from '@tundralibs/id';
 import type { Slogger } from '@tundralibs/slogger';
 import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
@@ -454,7 +454,8 @@ export class ModuleRuntime {
     const bag = ambient.get();
     const ctx = new InvokeContext({
       requestId: seed?.requestId ?? parent?.requestId ??
-        (bag?.requestId as string | undefined) ?? ulid(),
+        (bag?.requestId as string | undefined) ??
+        Application.requestIdGenerator(),
       action: `invoke ${mounted.key}.${method}`,
       // A shallow copy: the callee may add keys for ITS invocation without
       // rewriting the caller's bag. An EVENT parent contributes nothing.
@@ -521,7 +522,8 @@ export class ModuleRuntime {
       });
     }
     const requestId = currentOf()?.requestId ??
-      (ambient.get()?.requestId as string | undefined) ?? ulid();
+      (ambient.get()?.requestId as string | undefined) ??
+      Application.requestIdGenerator();
     const settled = this.__events.publish(event, payload, requestId);
     if (settled !== RapidEvents.RESOLVED) {
       this.__pending.add(settled);

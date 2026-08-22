@@ -12,7 +12,7 @@ import {
 } from '@tundralibs/utils';
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { ServerMetrics } from '@tundralibs/compat/webserver';
-import { ulid } from '@tundralibs/id';
+import { sequenceID, ulid } from '@tundralibs/id';
 import { parseSchedule } from '@tundralibs/cronus';
 import {
   Doctor,
@@ -62,9 +62,25 @@ import type {
 /**
  * Adopted correlation ids are ATTACKER-CONTROLLED: cap the length and
  * restrict the charset (log-injection guard). Anything failing this is
- * discarded and a fresh id is minted instead.
+ * discarded and a fresh id is minted instead. The SAME guard is applied to
+ * the output of a user-supplied {@link Application.requestIdGenerator},
+ * since a minted id is echoed as a response header and written to logs.
  */
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
+
+/**
+ * The default request-id generator: ONE shared `sequenceID()` instance per
+ * process, so the counter is monotonic across the whole app. Crypto-free
+ * and ~10x cheaper than a ULID (a correlation id never needed a CSPRNG);
+ * the format `server_id·startup_time·counter` even identifies the minting
+ * instance. The factory returns bigints — stringified here, which is also
+ * why the setter validates that a generator's output IS a string.
+ */
+const defaultSequence = sequenceID();
+const DEFAULT_REQUEST_ID_GENERATOR = (): string => String(defaultSequence());
+
+/** The process-wide generator — see {@link Application.requestIdGenerator}. */
+let requestIdGenerator: () => string = DEFAULT_REQUEST_ID_GENERATOR;
 
 /**
  * Installed once (first `Application`), never per instance: one global
@@ -162,6 +178,62 @@ export class Application<S extends RapidContextState = RapidContextState>
 
   get mode(): 'DEVELOPMENT' | 'PRODUCTION' {
     return this.option('mode') ?? 'PRODUCTION';
+  }
+
+  /**
+   * The request-id generator every app in this process mints correlation
+   * ids with (static: the id is a process-wide concern, shared by every
+   * `Application`). Defaults to a shared `sequenceID()` — crypto-free,
+   * monotonic, ~10x cheaper than a ULID. Swap it for sortable ULIDs, nanoIDs,
+   * or your own scheme:
+   *
+   * ```ts ignore
+   * import { ulid } from '@tundralibs/id';
+   * Application.requestIdGenerator = ulid;
+   * ```
+   *
+   * The setter BLIND-CALLS the generator once and validates the result, so
+   * a misconfigured generator fails at assignment, not on the first
+   * request: the output must be a string, non-empty, and pass the same
+   * charset/length guard applied to inbound ids (the id is echoed as a
+   * header and logged). Read by {@link newRequestId} and by the module
+   * runtime's fallback mints.
+   *
+   * @throws {RapidError} RAPID_CONFIG when `fn` is not a function, throws
+   *   when called, or returns something other than a safe non-empty string.
+   */
+  public static get requestIdGenerator(): () => string {
+    return requestIdGenerator;
+  }
+
+  public static set requestIdGenerator(fn: () => string) {
+    if (typeof fn !== 'function') {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'requestIdGenerator must be a function returning a string',
+        details: { key: 'requestIdGenerator' },
+      });
+    }
+    let sample: unknown;
+    try {
+      sample = fn();
+    } catch (cause) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'requestIdGenerator threw when called',
+        details: { key: 'requestIdGenerator' },
+        cause: cause instanceof Error ? cause : undefined,
+      });
+    }
+    if (typeof sample !== 'string' || !SAFE_REQUEST_ID.test(sample)) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'requestIdGenerator must return a non-empty string of at most 64 chars from [A-Za-z0-9._-]',
+        details: {
+          key: 'requestIdGenerator',
+          sample: typeof sample === 'string' ? sample : typeof sample,
+        },
+      });
+    }
+    requestIdGenerator = fn;
   }
 
   /**
@@ -390,14 +462,14 @@ export class Application<S extends RapidContextState = RapidContextState>
   /**
    * The correlation-id POLICY, in one place: a validated inbound value
    * is adopted (trusted-edge reuse); anything unsafe or absent mints a
-   * fresh ULID. Transports source the inbound candidate (they know
-   * their transport); contexts only carry the result.
+   * fresh id via {@link requestIdGenerator}. Transports source the inbound
+   * candidate (they know their transport); contexts only carry the result.
    */
   public newRequestId(inbound?: string | null): string {
     const candidate = inbound?.trim();
     return candidate !== undefined && SAFE_REQUEST_ID.test(candidate)
       ? candidate
-      : ulid();
+      : requestIdGenerator();
   }
 
   /**

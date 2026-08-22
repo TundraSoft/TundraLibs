@@ -460,6 +460,20 @@ A signing feature used without a configured `secret` fails loudly with
   `appName` is your `name`; the framework owns the context provider so every log
   line carries the per-request correlation id (via `@tundralibs/ambient`).
   Default level is `INFO` in production, `DEBUG` in development.
+- **The correlation id is yours to shape.** A validated inbound `x-request-id`
+  is adopted; otherwise one is minted by the process-wide
+  `Application.requestIdGenerator` — by default a crypto-free, monotonic
+  `sequenceID` (a correlation id never needed a CSPRNG, and this is ~10× cheaper
+  than a ULID). Set it once to choose a different scheme; the setter calls the
+  generator and rejects it at assignment unless it returns a safe non-empty
+  string:
+
+  ```ts
+  import { Application } from '@tundralibs/rapid';
+  import { ulid } from '@tundralibs/id';
+
+  Application.requestIdGenerator = ulid; // sortable ids instead of sequential
+  ```
 - **Tracing is opt-in.** Pass a `tracer` option and rAPId emits a SERVER span per
   request (honouring an inbound `traceparent`), propagates on outbound calls, and
   composes trace ids onto every log line. Read it via `app.tracer`.
