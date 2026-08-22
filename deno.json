@@ -98,12 +98,11 @@
   ],
   "publish": {
     "exclude": [
-      "**/REVIEW*.md",
+      "**/REVIEW.md",
       "**/TODO.md",
       "**/todo.md",
       "**/PROPOSED*.md",
-      "**/DESIGN*.md",
-      "**/ROADMAP.md",
+      "**/DESIGN.md",
       "**/SCRATCH*.md",
       "**/*.test.ts",
       "**/*.bench.ts",

@@ -15,5 +15,14 @@
     "./testing": "./testing/mod.ts",
     "./types": "./types/mod.ts"
   },
-  "imports": {}
+  "imports": {},
+  "publish": {
+    "exclude": [
+      "REVIEW.md",
+      "REVIEW-2.md",
+      "DESIGN.md",
+      "DESIGN-modules.md",
+      "ROADMAP.md"
+    ]
+  }
 }
