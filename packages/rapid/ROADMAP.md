@@ -59,7 +59,17 @@ Core and the current capability set are built and green on Deno / Bun / Node
   permission mapping). `workers` gets `wrangler.toml` + `worker.ts`, never a
   Dockerfile. `--git` removed (it only ran `git init`, the CLI's sole
   subprocess — `git.ts` deleted); `--github` (opt-in) adds a runtime-correct
-  CI workflow instead.
+  CI workflow instead. **`--ai` (on by default, 2026-08-23):** AI-assistant
+  instructions as ONE real `AGENTS.md` + two thin pointers (`CLAUDE.md`,
+  `.github/copilot-instructions.md`) — mirroring how this monorepo wires them,
+  so every tool resolves to a single source. Rendered for the project (runtime
+  commands, module layout), stating rapid's verified API, the org
+  CONVENTIONS.md fitted to an app (naming, `__`/`_` privacy, errors, barrels,
+  JSDoc — library-only rules omitted), and the verified shape of eleven
+  `@tundralibs/*` packages (guardian, radrouter, norm, oql, pact, cacher, id,
+  crypt, restler, utils, slogger). Not built: a `rapid ai` REGENERATE
+  subcommand — it would have to merge into a guide the user has since edited,
+  a real design question; open follow-on if wanted.
 - **Cluster seam** — `app.instanceId` (boot ULID) + a nullable `app.cluster`
   slot; the master/worker implementation is in the backlog (Scaling & ops).
 - **Review hardening (2026-08-22)** — the straightforward/unblocked fixes from
@@ -158,12 +168,6 @@ sequencing fact, not a deferral.
 
 - **CLI `build`** — a scaffolded deno task wrapping `deno compile` / the
   fetch-adapter bundle, rather than a heavy CLI command.
-- **AI-agent instructions in the CLI** — `rapid init` scaffolds rapid-specific
-  assistant guidance (`CLAUDE.md` / `AGENTS.md` /
-  `.github/copilot-instructions.md`), and/or a `rapid ai` subcommand to
-  (re)generate them, so an AI-assisted project starts with rapid's conventions,
-  API surface, and idioms pre-configured. New `cli/templates.ts` files + a
-  `cli/mod.ts` dispatch entry.
 - **Dev console (TUI). 🎨 design frozen 2026-08-22; build pending.** A
   full-screen alternate-buffer terminal console that replaces plain log spew on
   a TTY. Regions each back onto an existing getter (banner + bind line;

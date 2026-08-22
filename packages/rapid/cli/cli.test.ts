@@ -75,6 +75,7 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'bun',
         docker: true,
         github: true,
+        ai: false,
       },
       '1.2.3',
     );
@@ -127,6 +128,7 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: false,
         github: false,
+        ai: false,
       },
       '1.0.0',
     );
@@ -154,6 +156,7 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: true,
         github: true,
+        ai: false,
       },
       '1.0.0',
     );
@@ -182,6 +185,7 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'node',
         docker: true,
         github: true,
+        ai: false,
       },
       '1.0.0',
     );
@@ -196,6 +200,80 @@ describe('rapid.cli init scaffold', () => {
     );
   });
 
+  it('scaffold() --ai emits ONE AGENTS.md source + two pointers, runtime- and module-aware', () => {
+    const f = scaffold(
+      {
+        name: 'aiapp',
+        module: true,
+        norm: false,
+        runtime: 'bun',
+        docker: false,
+        github: false,
+        ai: true,
+      },
+      '1.0.0',
+    );
+    for (
+      const p of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']
+    ) {
+      asserts.assert(p in f, `missing ${p}`);
+    }
+    const agents = f['AGENTS.md']!;
+    // Single source: the pointers name AGENTS.md and carry no duplicated guidance.
+    asserts.assertStringIncludes(f['CLAUDE.md']!, 'AGENTS.md');
+    asserts.assertStringIncludes(
+      f['.github/copilot-instructions.md']!,
+      '/AGENTS.md',
+    );
+    asserts.assert(
+      !f['CLAUDE.md']!.includes('colon-wrapped'),
+      'pointer must not duplicate the guide',
+    );
+    // True for THIS project: its runtime commands, its name, its module layout.
+    asserts.assertStringIncludes(agents, 'running on **bun**');
+    asserts.assertStringIncludes(agents, 'bun run dev');
+    asserts.assertStringIncludes(agents, '# aiapp');
+    asserts.assertStringIncludes(agents, '## Modules');
+    asserts.assertStringIncludes(agents, 'modules/Greeter.ts');
+    // And rapid's real API facts, not generic advice.
+    asserts.assertStringIncludes(agents, '/users/:id:');
+    asserts.assertStringIncludes(agents, 'Application.initialize');
+    asserts.assertStringIncludes(agents, 'validated()');
+    asserts.assert(
+      !agents.includes('deno task'),
+      'bun project must not show deno commands',
+    );
+
+    // No module system → no Modules section; deno → deno commands; --ai off → no files.
+    const plain = scaffold(
+      {
+        name: 'p',
+        module: false,
+        norm: false,
+        runtime: 'deno',
+        docker: false,
+        github: false,
+        ai: true,
+      },
+      '1.0.0',
+    );
+    asserts.assert(!plain['AGENTS.md']!.includes('## Modules'));
+    asserts.assertStringIncludes(plain['AGENTS.md']!, 'deno task test');
+    const off = scaffold(
+      {
+        name: 'o',
+        module: true,
+        norm: false,
+        runtime: 'deno',
+        docker: false,
+        github: false,
+        ai: false,
+      },
+      '1.0.0',
+    );
+    asserts.assert(!('AGENTS.md' in off) && !('CLAUDE.md' in off));
+  });
+
   it('scaffold() for workers emits wrangler.toml + worker.ts, never a Dockerfile', () => {
     const f = scaffold(
       {
@@ -205,6 +283,7 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'workers',
         docker: true,
         github: true,
+        ai: false,
       },
       '1.0.0',
     );

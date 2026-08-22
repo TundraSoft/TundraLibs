@@ -25,6 +25,13 @@ export type ScaffoldAnswers = {
   docker: boolean;
   /** A GitHub Actions CI workflow (fmt / lint / check / test on the chosen runtime). */
   github: boolean;
+  /**
+   * AI-assistant instructions: one real `AGENTS.md` (rapid's conventions,
+   * this project's runtime commands and layout) plus thin pointers
+   * `CLAUDE.md` and `.github/copilot-instructions.md`, so Claude Code,
+   * Cursor, Codex and Copilot all resolve to ONE source and never drift.
+   */
+  ai: boolean;
 };
 
 /** Replace every `{{key}}` in `tpl` from `vars`. */
@@ -236,6 +243,169 @@ jobs:
 {{ciSteps}}
 `;
 
+const AGENTS_MD = `# {{name}} — agent guide
+
+A [rAPId](https://jsr.io/@tundralibs/rapid) application running on **{{runtime}}**.
+This file is the always-on baseline for any AI working in this repo. It is read
+by Claude Code (via \`CLAUDE.md\`), Cursor and Codex (via \`AGENTS.md\`), and GitHub
+Copilot (via \`.github/copilot-instructions.md\`) — all three resolve here.
+
+## Commands
+
+\`\`\`bash
+{{aiCommands}}
+\`\`\`
+
+Run the relevant ones before you consider a change done.
+
+## How this app is built
+
+- **One entry point.** \`Application.initialize(source)\` is the ONLY way to make
+  an app (the constructor is private). \`main.ts\` passes the \`configs/\` directory,
+  so \`configs/Application.yaml\` supplies the options and every other config
+  set stays readable via \`app.config\`. Never construct \`new Application()\`.
+- **Routes are radrouter-native.** Path params are COLON-WRAPPED: \`/users/:id:\`,
+  never express-style \`:id\`. The five verb helpers (\`app.get\`/\`post\`/\`put\`/
+  \`patch\`/\`delete\`) take optional route-scoped middleware, then the handler last.
+- **A handler returns the reply.** Return \`{ content, status?, headers? }\`
+  (\`content\` is a string, a plain object → JSON, a \`Uint8Array\`, or a
+  \`ReadableStream\` / async iterable to stream). For HTTP replies you may also
+  return \`cookies: [...]\` and \`redirect: '/path'\`; both are silently ignored
+  on JOB/SOCKET transports.
+- **Middleware is universal.** \`app.use(mw)\` runs on HTTP requests, socket
+  frames AND job firings. Narrow with \`ctx.type\` or the \`onlyHTTP\` /
+  \`guardHTTP\` scope helpers (\`guard*\` fails closed — use it for auth).
+- **Errors:** throw a \`RapidError(code)\` for a known condition — the code maps
+  to the HTTP status and a client-safe message. An unknown throw is an opaque
+  500 by design. A \`@tundralibs/guardian\` validation failure is automatically
+  a 400; wrap any OTHER validator in \`validated()\` to get the same.
+- **Secrets:** the app \`secret\` option (≥ 32 chars, from the environment —
+  never committed) is the one HMAC key for signed cookies, \`session()\` and
+  \`csrf()\`.
+{{aiModules}}
+## Testing
+
+Use \`@tundralibs/rapid/testing\`: \`client(app)\` drives routes through
+\`app.fetch\` with no port (\`await api.get('/path')\` → \`{ status, body }\`);
+\`harness({ modules, stub })\` boots the module system with fakes stocked into
+an isolated DI container. A test must be able to FAIL — never assert something
+the type-checker already proves.
+
+## Coding conventions (the org standard, fitted to an app)
+
+- **Naming.** Classes are \`PascalCase\`; a file exporting one class/error/type
+  is named after it (\`Greeter.ts\`); helper/utility files are \`camelCase\`;
+  folders are lowercase or \`kebab-case\`. A test mirrors its subject:
+  \`Greeter.test.ts\`. Module-level constants are \`UPPER_SNAKE_CASE\`.
+- **Privacy by prefix, not \`#\`.** \`__name\` = private to the class, \`_name\` =
+  protected / internal. Never use JS \`#\` private fields (they break
+  subclassing and the framework's metadata-only decorators).
+- **Errors.** Put app errors under \`errors/\`, one class per scenario,
+  extending a single base (rapid's \`RapidError\` with a registered code maps
+  straight onto an HTTP status). A helper that DETECTS a condition throws the
+  typed error; a helper that merely RUNS caller code lets errors propagate
+  unwrapped.
+- **Imports.** Cross-folder imports go through the folder's \`mod.ts\` barrel;
+  same-folder siblings import directly. One import statement per module
+  (merge value and type imports).
+- **JSDoc.** Every exported symbol gets a brief first line. \`{@link}\` any
+  non-built-in type in prose; \`@throws {@link ErrorType}\` on every method that
+  can throw — document only real throws. No marketing sections, no restating
+  what the type already says.
+
+## TundraLibs packages you may reach for (the shapes)
+
+All publish to JSR under \`@tundralibs/*\` and run on every runtime. Verify a
+signature in the package README before using it — do not guess.
+
+- **guardian** — validation at API boundaries. Build a schema, \`parse\` it:
+  \`Guardian.object({ id: Guardian.number().integer().positive(), email:
+  Guardian.string().email(), role: Guardian.enum(['admin','user']) })\`;
+  \`type User = Guardian.infer<typeof UserSchema>\`; \`UserSchema.parse(input)\`
+  throws, \`safeParse\` returns \`[err, value]\`. In rapid a guardian failure is
+  automatically a 400 — bind it with \`payload(UserSchema.parse)\`.
+- **radrouter** — the router rapid already uses; you normally don't touch it.
+  Its grammar is why params are \`/users/:id:\`. Constructor options rapid
+  passes through: \`caseSensitive\`, \`ignoreTrailingSlash\`.
+- **norm** — the ORM. \`Entity('users', { id: Column.uuid(), email:
+  Column.varchar(255).encrypt().hash() }, { pk: ['id'] })\` → \`Schema('Identity',
+  { Users })\` → \`new Norm({ engine, secret })\` → \`norm.use(Identity)\` →
+  \`db.repo('Users').insert({...})\` / \`.find(...)\`. Engines come from a
+  separate install, \`@tundralibs/drivers\` (e.g. \`SQLiteEngine\`,
+  \`PostgresEngine\`). Pick \`--norm\` on init to get a wired \`db.ts\`.
+- **oql** — the typed query object norm translates to SQL; use it directly
+  only for hand-built queries: \`const q: Query<'SELECT', User> = { type:
+  'SELECT', table: 'users', columns: [...], projection: {...} }\`, then a
+  translator (\`PostgresTranslator\`) renders it. Reach for \`norm\` first.
+- **pact** — auth: bitmask authorization + JWT. \`new PACT({ bits: { READ: 1n,
+  EDIT: 2n }, modules: { Post: ['READ','EDIT'] }, groupResolver, secret,
+  issuer, expiry })\`. rapid's \`jwt(pact)\` builds an \`authenticate\` verify and
+  \`permission(pact, 'Post', 'EDIT')\` an \`authorize\` check; the result lands in
+  \`ctx.auth\` (read-only, set once per request).
+- **cacher** — caching with swappable backends. \`const cache = Cacher.create(
+  'MEMORY', 'my-cache', { defaultExpiry: 300 })\` (or \`'REDIS'\`, \`'MEMCACHED'\`);
+  \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`, \`has\`, \`delete\`,
+  \`clear\`. Same API across backends, so start in-memory and switch by config.
+  rapid's \`rateLimit()\`/\`session()\` take any \`{ get, set }\` store — a cacher
+  instance fits.
+- **id** — id generation. \`nanoID()\` (21-char URL-safe; \`nanoID(10, NUMBERS)\`
+  for length/alphabet), \`ulid()\` (sortable), \`sequenceID()\` (a FACTORY:
+  \`const seq = sequenceID(); seq()\` → a bigint, counter-based, crypto-free),
+  \`ObjectID()\` (also a factory). rapid mints request ids with \`sequenceID\`
+  by default — set \`Application.requestIdGenerator\` to change.
+- **crypt** — primitives, by subpath. Hashing: \`await sha256(data)\` /
+  \`digest(data, { algorithm: 'SHA-384' })\` from \`@tundralibs/crypt/digest\`.
+  Encryption: \`encryptAES(text, key, { mode: 'GCM', keyLength: 256 })\` /
+  \`decryptAES\` from \`@tundralibs/crypt/encrypt\`; also \`pbkdf2Hash\`/
+  \`pbkdf2Verify\` (passwords) and \`hkdf\`. Signing: \`signHMAC\`/\`verifyHMAC\`,
+  JWT sign/verify. Passwords: hash with pbkdf2, never store plaintext.
+- **restler** — a typed REST-client base. Subclass it, set \`vendor\`, pass
+  \`{ baseURL }\` to \`super\`, and expose methods built on
+  \`this._makeRequest<T>({ path, method, contentType: 'JSON', payload })\`.
+  Put each upstream API in its own class under e.g. \`clients/\`.
+- **utils** — the foundation. \`BaseError<Meta>\` (extend it for app errors —
+  context-carrying, chainable); \`loadConfig({ path })\` → \`config.get<T>('a.b')\`
+  (what rapid's \`Application.initialize('./configs')\` uses); \`memoize(fn,
+  ttlMs)\`, \`throttle(fn, ms)\`, \`once(fn)\`; \`@Singleton\`; \`Options\` (the
+  options+events base class); network helpers (\`isPublicIP\`, \`isInSubnet\`,
+  \`getFreePort\`); \`envArgs\` (.env + Docker secrets).
+- **slogger** — the logger behind \`app.log\`; reach for it directly only
+  outside the app. \`new Slogger({ appName, level: SyslogSeverities.INFO,
+  handlers: [{ name: 'console', type: 'ConsoleHandler', level, formatter:
+  'standard' }] })\`; \`logger.info('msg', { ...context })\`. Inside a handler
+  or module use \`app.log\` / \`this.log\` — they carry the request id for you.
+- Also: \`cronus\` (cron — rapid's \`@JOB\` schedules), \`doctor\` (DI —
+  \`inject()\`, \`app.container\`), \`tracer\` (OTLP tracing, opt-in via the
+  \`tracer\` option), \`compat\` (the runtime shim — use it instead of any
+  runtime-only global).
+
+## Rules
+
+- Verify, don't assert: check a symbol or behaviour in source / the rapid docs
+  before relying on it.
+- Minimal diffs. No speculative abstractions, no filler comments, no restating
+  what the types already say.
+- Keep every runtime working: use \`@tundralibs/compat\` for filesystem /
+  process / runtime access rather than a runtime-only global.
+- Docs and config examples must be true — a wrong example is a bug.
+`;
+
+const CLAUDE_MD = `# {{name}}
+
+The project guide for any AI working here lives in [\`AGENTS.md\`](./AGENTS.md) —
+commands, how the app is built, testing, and the rules. Read it first. This
+file exists so Claude Code finds it; do not duplicate content here.
+`;
+
+const COPILOT_MD = `# GitHub Copilot instructions
+
+The project guide for any AI working in this codebase lives in
+[\`/AGENTS.md\`](../AGENTS.md) — commands, how the app is built, testing, and
+the rules. Read it first. Do not duplicate content here: this file is a
+pointer so every tool (Copilot, Claude Code, Cursor, Codex) resolves to the
+same single source.
+`;
+
 // ── assembly ────────────────────────────────────────────────────────────
 
 /**
@@ -256,6 +426,8 @@ const RUNTIME = {
       '      - uses: denoland/setup-deno@v2\n        with:\n          deno-version: v2.x',
     ciSteps:
       '      - run: deno fmt --check\n      - run: deno lint\n      - run: deno check main.ts\n      - run: deno test -A',
+    aiCommands:
+      'deno task dev        # run with reload\ndeno task test       # deno test -A\ndeno fmt && deno lint && deno check main.ts\ndeno task modules    # regenerate modules/mod.ts after adding a module',
   },
   bun: {
     configFile: 'package.json',
@@ -270,6 +442,8 @@ const RUNTIME = {
     devDeps: '',
     ciSetup: '      - uses: oven-sh/setup-bun@v2',
     ciSteps: '      - run: bun install\n      - run: bun test',
+    aiCommands:
+      'bun install\nbun run dev          # run with reload\nbun test\nbun run modules      # regenerate modules/mod.ts after adding a module',
   },
   node: {
     configFile: 'package.json',
@@ -285,6 +459,8 @@ const RUNTIME = {
     ciSetup:
       '      - uses: actions/setup-node@v4\n        with:\n          node-version: 24',
     ciSteps: '      - run: npm ci\n      - run: npm test',
+    aiCommands:
+      'npm install\nnpm run dev          # run with reload (tsx --watch)\nnpm test\nnpm run modules      # regenerate modules/mod.ts after adding a module',
   },
   workers: {
     configFile: 'package.json',
@@ -325,6 +501,22 @@ export function scaffold(
     workerSetup: answers.module
       ? 'await app.modules({ modules: [modules] });'
       : "app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));",
+    aiModules: answers.module
+      ? `
+## Modules (this project uses the module system)
+
+- A module is a class extending \`RapidModule\` in \`modules/\`, declaring
+  \`name\`, \`namespace\` and \`events\`; \`modules/mod.ts\` is a GENERATED barrel
+  (\`rapid modules\`) — never edit it by hand, regenerate it after adding a module.
+- Route methods are decorated (\`@GET('/path/:id:')\`, \`@POST\`, …, from
+  \`@tundralibs/rapid/decorators\`). Decorators are metadata-only and never
+  wrap the method, so a module unit-tests with \`new Greeter().hello('x')\` and
+  no server. Bind arguments with \`bind: [param('id'), payload(validate)]\`.
+- A module method returns the same \`{ content }\` reply shape as a handler.
+  Declared events are emitted with \`this.emit('Name', payload)\`; \`this.log\`
+  is a scoped logger. See \`modules/Greeter.ts\`.
+`
+      : '',
   };
   const put = (tpl: string) => render(tpl, vars);
   const files: Record<string, string> = {
@@ -357,6 +549,12 @@ export function scaffold(
   }
   if (answers.github) {
     files['.github/workflows/ci.yml'] = put(CI_WORKFLOW);
+  }
+  if (answers.ai) {
+    // ONE source (AGENTS.md) + two pointers — mirrors how tools resolve them.
+    files['AGENTS.md'] = render(put(AGENTS_MD), vars); // 2nd pass: {{name}} inside aiModules
+    files['CLAUDE.md'] = put(CLAUDE_MD);
+    files['.github/copilot-instructions.md'] = put(COPILOT_MD);
   }
   return files;
 }

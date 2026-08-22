@@ -17,7 +17,7 @@ import { healthCommand } from './commands/health.ts';
 
 const HELP = `rapid <command>
 
-  init [name] [--runtime deno|bun|node|workers] [--module] [--norm] [--docker] [--github] [--yes]
+  init [name] [--runtime deno|bun|node|workers] [--module] [--norm] [--docker] [--github] [--ai] [--yes]
         scaffold a new project (interactive unless --yes); runtime is asked first
   upgrade [--dir .]
         bump @tundralibs/* dependencies to their latest release

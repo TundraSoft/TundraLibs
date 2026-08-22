@@ -602,6 +602,17 @@ Dockerfile deliberately has no `CMD`/`ENTRYPOINT`. `--github` (opt-in) adds a
 accepts every default non-interactively. A `.gitignore` is written; `git init`
 is left to you.
 
+`--ai` (on by default) writes AI-assistant instructions so an agent building
+the project starts with rapid's conventions pre-loaded: **one** real guide,
+`AGENTS.md`, plus two thin pointers to it — `CLAUDE.md` (Claude Code) and
+`.github/copilot-instructions.md` (Copilot) — so every tool resolves to a
+single source that can't drift. The guide is rendered for _this_ project: its
+runtime's commands, its module layout if you chose `--module`, rapid's actual
+API (the `:id:` route grammar, the `{ content }` reply, `validated()`,
+`harness()`/`client()`), the org coding conventions fitted to an app, and the
+verified shape of each `@tundralibs/*` package an agent may reach for
+(guardian, norm, oql, pact, cacher, id, crypt, restler, utils, slogger, …).
+
 The other commands: `upgrade` bumps every `@tundralibs/*` dependency to its
 latest release, `modules [dir]` (re)generates the modules barrel (`--check`
 fails CI when it's stale), and `health [url]` hits a running app's health path

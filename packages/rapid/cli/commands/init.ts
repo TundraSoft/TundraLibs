@@ -99,6 +99,11 @@ export async function initCommand(
     'Add a GitHub Actions CI workflow?',
     false,
   );
+  const ai = await pick(
+    'ai',
+    'Add AI-assistant instructions (AGENTS.md / CLAUDE.md / Copilot)?',
+    true,
+  );
 
   const root = base === '.' ? name : `${base}/${name}`;
   if (await pathExists(root)) {
@@ -108,7 +113,7 @@ export async function initCommand(
 
   const rapidVersion = (await latestVersion('rapid')) ?? '1.0.0';
   const files = scaffold(
-    { name, module, norm, runtime, docker, github },
+    { name, module, norm, runtime, docker, github, ai },
     rapidVersion,
   );
 
