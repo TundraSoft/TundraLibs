@@ -13,6 +13,9 @@ export type RapidBinderSource =
   | 'query'
   | 'paging'
   | 'header'
+  | 'cookie'
+  | 'auth'
+  | 'session'
   | 'connection';
 
 /**

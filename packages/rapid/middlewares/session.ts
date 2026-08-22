@@ -12,7 +12,7 @@
 import { signHMAC, verifyHMAC } from '@tundralibs/crypt';
 import { ulid } from '@tundralibs/id';
 import type { Context } from '../context/mod.ts';
-import type { RapidMiddleware } from '../types/mod.ts';
+import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
 import { memoryStore, type Store } from './store.ts';
 
 /** Arbitrary per-client data held in a session. */
@@ -80,7 +80,9 @@ type WithSession = { [SESSION]?: RapidSession };
  * not installed (or the invoke is not HTTP). Stored on the per-request context
  * instance — never `ctx.state` (which is shared under `stateMode: 'SHARE'`).
  */
-export function getSession(ctx: Context): RapidSession | undefined {
+export function getSession<S extends RapidContextState = RapidContextState>(
+  ctx: Context<S>,
+): RapidSession | undefined {
   return (ctx as unknown as WithSession)[SESSION];
 }
 

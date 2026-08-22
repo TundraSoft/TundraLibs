@@ -23,6 +23,7 @@ import {
   moduleMetaOf,
 } from '../decorators/mod.ts';
 import { RapidModule } from '../modules/RapidModule.ts';
+import { getSession } from '../middlewares/session.ts';
 import type { RapidRouteOpenApi } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
@@ -101,6 +102,15 @@ async function extractBind<S extends RapidContextState>(
         : ctx.type === 'SOCKET'
         ? ctx.connection.headers.get(binder.name!)
         : null; // JOB has no header source.
+      break;
+    case 'cookie':
+      raw = ctx.type === 'HTTP' ? (ctx.cookies[binder.name!] ?? null) : null; // cookies are HTTP-only.
+      break;
+    case 'auth':
+      raw = ctx.auth; // base-context bag; any transport, undefined until set.
+      break;
+    case 'session':
+      raw = ctx.type === 'HTTP' ? getSession(ctx) : undefined; // HTTP-only.
       break;
     case 'connection':
       raw = (ctx as Extract<RapidContext<S>, { type: 'SOCKET' }>).connection;

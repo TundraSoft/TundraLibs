@@ -9,12 +9,15 @@
  */
 
 export {
+  auth,
   connection,
+  cookie,
   header,
   paging,
   param,
   payload,
   query,
+  session,
 } from './binders.ts';
 export {
   DELETE,

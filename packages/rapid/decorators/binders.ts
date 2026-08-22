@@ -19,6 +19,7 @@ import type {
   RapidContextQuery,
 } from '../types/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
+import type { RapidSession } from '../middlewares/session.ts';
 
 /**
  * Bind one invocation param (`ctx.args.params[name]`): a route param
@@ -95,6 +96,48 @@ export function header(
   validate?: (value: unknown) => unknown,
 ): RapidBinder<unknown> {
   return { source: 'header', name, validate };
+}
+
+/**
+ * Bind one inbound cookie (HTTP; `null` when absent or off-HTTP). Without
+ * a validator the parameter is PINNED to `string | null`. Mirrors
+ * {@link header} — read from the parsed request cookies.
+ */
+export function cookie(name: string): RapidBinder<string | null>;
+export function cookie<T>(
+  name: string,
+  validate: (value: unknown) => T | Promise<T>,
+): RapidBinder<T>;
+export function cookie(
+  name: string,
+  validate?: (value: unknown) => unknown,
+): RapidBinder<unknown> {
+  return { source: 'cookie', name, validate };
+}
+
+/**
+ * Bind the per-invocation auth bag (`ctx.auth`; `undefined` until an auth
+ * middleware sets it). Without a validator the parameter is PINNED to
+ * `Record<string, unknown> | undefined`; pass one to narrow to your typed
+ * principal (`auth(asUser)`).
+ */
+export function auth(): RapidBinder<Record<string, unknown> | undefined>;
+export function auth<T>(
+  validate: (value: unknown) => T | Promise<T>,
+): RapidBinder<T>;
+export function auth(
+  validate?: (value: unknown) => unknown,
+): RapidBinder<unknown> {
+  return { source: 'auth', validate };
+}
+
+/**
+ * Bind the request session (`getSession(ctx)`; `undefined` when the
+ * {@link session} middleware is not installed or off-HTTP). Read/write it
+ * in the method without touching `ctx`.
+ */
+export function session(): RapidBinder<RapidSession | undefined> {
+  return { source: 'session' };
 }
 
 /**

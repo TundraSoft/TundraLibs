@@ -25,9 +25,10 @@ fetch adapter is also verified on Cloudflare workerd):
   destroy, read via `getSession`), and **csrf** (stateless signed
   double-submit). `Store` gained an optional `delete`.
 - **Decorators + modules** — `@GET/@POST/@PUT/@PATCH/@DELETE/@SOCKET/@JOB`,
-  binders (`param`/`payload`/`query`/`paging`/`header`/`connection`), `@Module`,
-  `@On`/`@Use`, `RapidModule` + `initModules` + `app.modules()` (namespace scan,
-  doctor-constructed zero-arg modules, instance mounting).
+  binders (`param`/`payload`/`query`/`paging`/`header`/`cookie`/`auth`/
+  `session`/`connection`), `@Module`, `@On`/`@Use`, `RapidModule` +
+  `initModules` + `app.modules()` (namespace scan, doctor-constructed zero-arg
+  modules, instance mounting).
 - **Endpoints catalog** (`./endpoints`) — `health`, `metrics`, `openapi`,
   `login`.
 - **Request surface** — cookies, query/paging parsing with caps, body parsing
@@ -103,18 +104,15 @@ decision attached in the review doc.
 **Module HTTP ergonomics** — declarative parity with the imperative `ctx`
 (HTTP-context-only)
 
-The imperative handler already reaches these through `ctx` (`ctx.cookies` /
-`ctx.setCookie`, `ctx.redirect`, `ctx.serve`); the DECLARATIVE module path —
-binders in, the reply envelope out — does not yet. Input binders extend
-`decorators/binders.ts`; the outputs need HTTP-specific keys on the reply
-envelope, which `RapidContextResponse` already anticipates ("a future
-transport-specific key widens the override's parameter type … visible exactly
-to transport-bound middleware").
+The imperative handler reaches these through `ctx` (`ctx.cookies` /
+`ctx.setCookie`, `ctx.redirect`, `ctx.serve`). The DECLARATIVE module path is
+now half-covered: the INPUT binders shipped — `cookie(name)`, `auth()`, and
+`session()` (in `decorators/binders.ts`, extracted at mount). The OUTPUT side
+still needs HTTP-specific keys on the reply envelope, which
+`RapidContextResponse` already anticipates ("a future transport-specific key
+widens the override's parameter type … visible exactly to transport-bound
+middleware").
 
-- **`cookie(name)` binder** — bind an inbound cookie to a method param (mirrors
-  `header()`), read from the HTTP context's parsed `cookies`.
-- **`auth()` binder** — bind the per-invocation `ctx.auth` bag to a method
-  param, so a module method takes typed auth info without touching `ctx`.
 - **Reply set-cookie** — set cookies from a module return with proper
   encoding/signing (today only a raw `Set-Cookie` string via `headers`); bring
   `ctx.setCookie`'s ergonomics to the reply envelope.
