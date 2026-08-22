@@ -160,10 +160,12 @@ the default pattern also matched non-whole segments (`/v1abc` → `/abc`).
 
 ---
 
-## Gated — needs your decision (11 items)
+## Gated — needs your decision (11 items; G6/G8/G11 resolved 2026-08-22 → 8 open)
 
 These are correct-to-do but involve a product decision, a breaking change, or a
-larger build. Nothing here is fixed; each has a recommendation.
+larger build. Each has a recommendation. Post-review decisions: **G6** (openapi
+default) and **G11** (root publish globs) fixed; **G8** (cron double-fire)
+acknowledged as covered by the cluster design.
 
 **G1 — Validation → 400 wiring (HIGH).** A thrown `GuardianError` from a bound
 validator maps to `RAPID_UNHANDLED`/**500**, not 400 — so a malformed body
@@ -191,20 +193,21 @@ centrally (cf. NestJS exception filters / Fastify `setErrorHandler`).
 carries HTTP/websocket-server surface. _Recommend:_ move onto
 `HTTPContext`/`SOCKETContext` (a breaking API move — hence gated).
 
-**G6 — `openapi()` default `expose: 'ALL'` (LOW).** Ships the full spec
-(enumerating every route) to anonymous clients in PRODUCTION once mounted.
-_Recommend:_ default to `'DEVELOPMENT'` (secure-by-default) — a behavior change.
+**G6 — `openapi()` default `expose: 'ALL'` (LOW). ✅ RESOLVED 2026-08-22.**
+Was: shipped the full spec to anonymous clients in PRODUCTION once mounted.
+Default is now `'DEVELOPMENT'` (secure-by-default); pass `expose: 'ALL'` to
+serve everywhere (e.g. behind auth).
 
 **G7 — `serveStatic` symlink escape (LOW).** The traversal guard is lexical;
 a symlink _inside_ `root` pointing outside is followed. (Encoded/`..`/absolute
 are correctly blocked.) _Recommend:_ a `realpath` re-check (adds a stat per
 request) or document that `root` must contain no untrusted symlinks.
 
-**G8 — Cron jobs double-fire under N replicas (MED, scaling).** The scheduler
-is per-process; N replicas fire every `@JOB` N times. The designed fix
-(`onlyIfCronLeader` sticky-leader middleware) is on the cluster roadmap.
-_Recommend:_ ship the leader gate, or document the single-scheduler
-requirement loudly on `@JOB`.
+**G8 — Cron jobs double-fire under N replicas (MED, scaling). ✅ ACKNOWLEDGED —
+already covered by the cluster design.** The `onlyIfCronLeader` sticky-leader
+middleware in the converged master/worker plan (ROADMAP → Distributed
+deployment) is the intended fix; no separate action. Until that ships, running
+the scheduler on a single replica is the operating assumption.
 
 **G9 — Streaming / SSE response model (P2, structural).** `content` is
 `string | Record | Uint8Array` only — no `ReadableStream`. `serve()` and
@@ -219,12 +222,13 @@ post-1.0; flagged as the one large structural change on the horizon.
   _Recommend:_ document loudly, or scope a container per runtime (pending
   doctor 2.0).
 
-**G11 — Monorepo-wide: `ROADMAP.md` ships from other packages.** The rapid fix
-(G-scoped `publish.exclude`) doesn't help tracer/norm/drivers/ambient/oql/pact,
-which still ship their `ROADMAP.md` via the too-narrow root
-`publish.exclude` globs. _Recommend:_ broaden the ROOT `deno.json` globs to
-`**/REVIEW*.md`, `**/DESIGN*.md`, and decide whether `**/ROADMAP.md` should
-ship at all. (Left to you because it changes every package's tarball.)
+**G11 — Monorepo-wide: `ROADMAP.md` ships from other packages. ✅ RESOLVED
+2026-08-22.** The root `deno.json` `publish.exclude` globs are now
+`**/REVIEW*.md`, `**/DESIGN*.md`, and `**/ROADMAP.md`, so no package ships
+internal notes (verified: tracer's `ROADMAP.md` no longer in its tarball). The
+rapid-scoped package-level exclude was removed as redundant — the root globs
+are the single source. NOTE: this is a workspace-root change touching every
+package's publish set (intentional, per your go-ahead).
 
 Smaller gated/noted: decorator stacking-order has no runtime guard (silent
 route loss — documented only); `coerceComparable` accepts hex/exp numerics

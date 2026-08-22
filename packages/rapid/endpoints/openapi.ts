@@ -3,8 +3,9 @@
  * OpenAPI 3.0.3 document: `app.get('/openapi.json', openapi())`. The
  * document is built once per version and cached. `?version=v2` serves that
  * version's routes (header-versioned routes sharing a path can't coexist
- * in one document). `expose` gates which app modes serve it. JSON only —
- * point your own Swagger/Redoc route at this URL.
+ * in one document). `expose` gates which app modes serve it — DEVELOPMENT
+ * only by default, so the full route inventory isn't exposed anonymously in
+ * production. JSON only — point your own Swagger/Redoc route at this URL.
  *
  * @module
  */
@@ -19,13 +20,18 @@ import type { RapidHTTPHandler } from '../types/mod.ts';
 export type OpenApiOptions = {
   info?: OpenApiInfo;
   servers?: readonly OpenApiServer[];
-  /** Which app modes serve the spec. @default 'ALL' */
+  /**
+   * Which app modes serve the spec. Secure-by-default: DEVELOPMENT only, so
+   * mounting it doesn't leak the full route inventory to anonymous clients in
+   * production — set `'ALL'` to serve everywhere (e.g. behind auth).
+   * @default 'DEVELOPMENT'
+   */
   expose?: 'DEVELOPMENT' | 'PRODUCTION' | 'ALL';
 };
 
 /** An endpoint handler serving the assembled OpenAPI document. */
 export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
-  const expose = options.expose ?? 'ALL';
+  const expose = options.expose ?? 'DEVELOPMENT';
   const cache = new Map<string, Record<string, unknown>>();
   return (ctx) => {
     if (expose !== 'ALL' && expose !== ctx.app.mode) {
