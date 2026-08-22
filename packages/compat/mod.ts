@@ -116,6 +116,7 @@ export {
   type ReadDirOptions,
   readDirSync,
   readFile,
+  readFileStream,
   readFileSync,
   readJSONFile,
   readJSONFileSync,

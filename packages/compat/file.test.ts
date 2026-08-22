@@ -46,6 +46,7 @@ import {
   readDirSync,
   // File operations
   readFile,
+  readFileStream,
   readFileSync,
   readJSONFile,
   readJSONFileSync,
@@ -754,6 +755,66 @@ describe({
         await asserts.assertRejects(
           async () => await readFile(nonExistent),
           FileNotFound,
+        );
+      });
+    });
+
+    describe('readFileStream', () => {
+      const withFile = async (fn: (file: string) => Promise<void>) => {
+        const file = path.join(fixturesDir, 'stream-' + Date.now() + '.txt');
+        await writeTextFile(file, '0123456789');
+        try {
+          await fn(file);
+        } finally {
+          await deleteFile(file);
+        }
+      };
+      const drain = (s: ReadableStream<Uint8Array>) => new Response(s).text();
+
+      it('streams the whole file', async () => {
+        await withFile(async (file) => {
+          asserts.assertEquals(
+            await drain(await readFileStream(file)),
+            '0123456789',
+          );
+        });
+      });
+
+      it('streams an inclusive byte range', async () => {
+        await withFile(async (file) => {
+          asserts.assertEquals(
+            await drain(await readFileStream(file, { start: 2, end: 5 })),
+            '2345',
+          );
+        });
+      });
+
+      it('streams from start to EOF', async () => {
+        await withFile(async (file) => {
+          asserts.assertEquals(
+            await drain(await readFileStream(file, { start: 7 })),
+            '789',
+          );
+        });
+      });
+
+      it('rejects with FileNotFound for a missing path', async () => {
+        await asserts.assertRejects(
+          () =>
+            readFileStream(path.join(fixturesDir, 'no-stream-' + Date.now())),
+          FileNotFound,
+        );
+      });
+
+      it('rejects an invalid range before opening', async () => {
+        await asserts.assertRejects(
+          () =>
+            readFileStream(
+              path.join(fixturesDir, 'no-stream-' + Date.now()),
+              { start: 5, end: 2 },
+            ),
+          FileOperationError,
+          'invalid byte range',
         );
       });
     });
