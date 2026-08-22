@@ -1505,4 +1505,70 @@ describe('radrouter.RadRouter', () => {
     asserts.assertEquals([...allowed].sort(), ['GET', 'POST']);
     assertAllowedMatchesFind(router, '/users/me');
   });
+
+  // ---------- ignoreTrailingSlash ----------
+
+  it('ignoreTrailingSlash - default drops the slash at registration and lookup', () => {
+    const router = new RadRouter<TestMW>();
+    router.get('/users', [middleware1]);
+    router.get('/posts/', [middleware2]);
+
+    // A stray request slash reaches the slash-less registration …
+    asserts.assertExists(router.find('GET', '/users/'));
+    // … and a slash-ful registration answers the slash-less request.
+    asserts.assertExists(router.find('GET', '/posts'));
+  });
+
+  it('ignoreTrailingSlash:false - a slash-less route does not answer a slashed request', () => {
+    const router = new RadRouter<TestMW>({ ignoreTrailingSlash: false });
+    router.get('/users', [middleware1]);
+
+    asserts.assertExists(router.find('GET', '/users'));
+    asserts.assertEquals(router.find('GET', '/users/'), undefined);
+  });
+
+  it('ignoreTrailingSlash:false - a slashed route is stored with its slash and only answers it', () => {
+    const router = new RadRouter<TestMW>({ ignoreTrailingSlash: false });
+    router.get('/users/', [middleware1]);
+
+    asserts.assertExists(router.find('GET', '/users/'));
+    asserts.assertEquals(router.find('GET', '/users'), undefined);
+  });
+
+  it('ignoreTrailingSlash:false - /users and /users/ are distinct routes', () => {
+    const router = new RadRouter<TestMW>({ ignoreTrailingSlash: false });
+    // Under the default this second registration would throw
+    // DuplicateRouteError; here both must coexist on their own leaves.
+    router.get('/users', [middleware1]);
+    router.get('/users/', [middleware2]);
+
+    const bare = router.find('GET', '/users');
+    const slashed = router.find('GET', '/users/');
+    asserts.assertExists(bare);
+    asserts.assertExists(slashed);
+    asserts.assertStrictEquals(bare.middlewares[0], middleware1);
+    asserts.assertStrictEquals(slashed.middlewares[0], middleware2);
+    asserts.assertNotStrictEquals(bare.middlewares[0], slashed.middlewares[0]);
+  });
+
+  it('ignoreTrailingSlash - the root "/" matches in both modes', () => {
+    for (const ignoreTrailingSlash of [true, false]) {
+      const router = new RadRouter<TestMW>({ ignoreTrailingSlash });
+      router.get('/', [middleware1]);
+      asserts.assertExists(
+        router.find('GET', '/'),
+        `root miss with ignoreTrailingSlash=${ignoreTrailingSlash}`,
+      );
+    }
+  });
+
+  it('ignoreTrailingSlash:false - allowedMethods respects the slash like find', () => {
+    const router = new RadRouter<TestMW>({ ignoreTrailingSlash: false });
+    router.get('/users', [middleware1]);
+
+    asserts.assertEquals(router.allowedMethods('/users'), ['GET']);
+    asserts.assertEquals(router.allowedMethods('/users/'), []);
+    assertAllowedMatchesFind(router, '/users');
+    assertAllowedMatchesFind(router, '/users/');
+  });
 });

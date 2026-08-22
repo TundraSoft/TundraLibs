@@ -116,8 +116,9 @@ router.get('/files/:path:-*', [handler]);
 >
 > - **start with `/`** — a doubled slash after the mount:
 >   `/files//docs` → `{ path: '/docs' }`;
-> - **end with `/`** — a trailing slash (lookup strips only _one_):
->   `/files/a//` → `{ path: 'a/' }`;
+> - **end with `/`** — a trailing slash (lookup strips only _one_, and
+>   none under `ignoreTrailingSlash: false`): `/files/a//` →
+>   `{ path: 'a/' }`;
 > - **contain `//`** — interior doubled slashes are preserved;
 > - **decode to an absolute path** — a percent-encoded slash is decoded:
 >   `/files/%2Fetc%2Fpasswd` → `{ path: '/etc/passwd' }` (and `%2e%2e`
