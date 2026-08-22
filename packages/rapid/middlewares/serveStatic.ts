@@ -7,14 +7,9 @@
  * @module
  */
 
-import {
-  type FileInfo,
-  readFile,
-  realPath,
-  stat,
-} from '@tundralibs/compat/file';
+import { type FileInfo, realPath, stat } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
-import { mimeTypeFor } from '../utils/mod.ts';
+import { fileStream, mimeTypeFor } from '../utils/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -152,14 +147,18 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
       return;
     }
 
-    let bytes: Uint8Array;
+    // STREAM the file — never buffered. `content-length` comes from the stat
+    // (the transport can't infer it from a stream), so HEAD and clients see
+    // the real size.
+    headers['content-length'] = String(info.size);
+    let body: ReadableStream<Uint8Array>;
     try {
-      bytes = await readFile(real);
+      body = await fileStream(real);
     } catch {
-      // Directory / unreadable → not ours; let routing (or the 404) handle it.
+      // Unreadable → not ours; let routing (or the 404) handle it.
       return next();
     }
-    ctx.response = { content: bytes, headers };
+    ctx.response = { content: body, headers };
     // Served — do NOT call next(): short-circuit the chain.
   };
   return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });

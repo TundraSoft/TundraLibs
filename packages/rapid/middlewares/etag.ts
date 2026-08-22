@@ -11,6 +11,7 @@
  */
 
 import type { RapidContextResponse, RapidMiddleware } from '../types/mod.ts';
+import { isStreamBody } from '../utils/streams.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 const encoder = new TextEncoder();
@@ -53,6 +54,10 @@ export function etag(): RapidMiddleware {
     // Don't hash an already-encoded body (compression ran first) — the
     // tag would then vary by transfer encoding.
     if (ctx.responseHeaders.has('content-encoding')) return;
+    // A STREAM body cannot be content-hashed without buffering it, which
+    // would defeat streaming — skip. (File streams from serveStatic carry a
+    // cheap stat-based weak ETag already.)
+    if (isStreamBody(res.content)) return;
 
     const tag = await computeTag(bodyBytes(res.content));
     ctx.setHeader('etag', tag);

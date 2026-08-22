@@ -72,6 +72,15 @@ Core and the current capability set are built and green on Deno / Bun / Node
   the status-mapping code for a condition it detects; a helper that runs
   caller-supplied code propagates unwrapped to the disclosure boundary. Codified
   in CONVENTIONS.md.
+- **Streaming response model (2026-08-22)** — the keystone. `content` accepts a
+  `ReadableStream<Uint8Array>` or any async iterable (strings encoded), handed
+  to the client unbuffered; `ctx.sse(events)` frames Server-Sent Events;
+  `ctx.serve()` / `serveStatic` stream files (`fileStream`, incl. byte ranges)
+  with a stat-derived `content-length`; a module reply may be a stream. Stream
+  bodies are HTTP-only (JOB/SOCKET reject) and opaque to body middleware
+  (`etag` skips, `compress` pipes through `CompressionStream`). Added
+  `ctx.deleteHeader()` — `responseHeaders` is a defensive copy, so dropping a
+  now-wrong header needs a real mutator.
 
 ## Backlog
 
@@ -81,10 +90,6 @@ sequencing fact, not a deferral.
 
 ### Request / response & HTTP
 
-- **Streaming / SSE response model** — the keystone structural change. `content`
-  is `string | Record | Uint8Array` today; a stream-body model unblocks SSE,
-  `serveStatic` Range/206, zero-copy large-file static, proxy passthrough, and
-  the module reply-stream below.
 - **Module HTTP ergonomics — reply envelope (output side).** The INPUT binders
   shipped (`cookie`/`auth`/`session`); the reply envelope is the OUTPUT half,
   which `RapidContextResponse` already anticipates ("a future transport-specific
@@ -93,9 +98,9 @@ sequencing fact, not a deferral.
     encoding/signing (today only a raw `Set-Cookie` string via `headers`).
   - **Reply redirect** — redirect from a module return (today a manual
     `status: 302` + a `location` header).
-  - **Reply streaming / file download** — mirrors `ctx.serve`; needs the
-    streaming model above.
-- **`serveStatic` Range/206** (`Accept-Ranges`) — needs the streaming model.
+- **`serveStatic` Range/206** (`Accept-Ranges`) — `fileStream` already takes an
+  inclusive byte range; what's left is the `Range` header parse, the `206` /
+  `Content-Range` response, and `416` on an unsatisfiable range.
 - **Small:** trailing-slash request policy; brotli in `compress`;
   `coerceComparable` hex/exp coercion made consistent with `parsePaging`.
 

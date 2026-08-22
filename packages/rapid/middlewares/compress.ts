@@ -10,6 +10,7 @@
 
 import type { HTTPContext } from '../context/mod.ts';
 import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
+import { isStreamBody, toReadableStream } from '../utils/streams.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 /** Options for {@link compress}. */
@@ -95,9 +96,6 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
     if (encoding === null) return;
 
-    const { bytes, contentType } = bodyOf(ctx);
-    if (bytes.length < threshold || !isCompressible(contentType)) return;
-
     // MERGE into any existing Vary rather than replacing it — the response
     // setter overwrites per-key, so a bare `Vary: Accept-Encoding` would
     // drop `cors()`'s `Vary: Origin` and make a shared cache serve one
@@ -108,6 +106,38 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       : /\baccept-encoding\b/i.test(priorVary)
       ? priorVary
       : `${priorVary}, Accept-Encoding`;
+
+    // A STREAM body is compressed chunk-wise through CompressionStream —
+    // never buffered, so the threshold can't apply (length unknown) and any
+    // content-length is dropped (the encoded size is unknowable).
+    const streamBody = ctx.response.content;
+    if (isStreamBody(streamBody)) {
+      const contentType = ctx.responseHeaders.get('content-type') ??
+        'application/octet-stream';
+      if (!isCompressible(contentType)) return;
+      ctx.response = {
+        content: toReadableStream(streamBody).pipeThrough(
+          // CompressionStream's writable is typed BufferSource; a byte stream is one.
+          new CompressionStream(encoding) as unknown as ReadableWritablePair<
+            Uint8Array,
+            Uint8Array
+          >,
+        ),
+        headers: {
+          'content-type': contentType,
+          'content-encoding': encoding,
+          'vary': vary,
+        },
+      };
+      // The encoded size is unknowable — drop any content-length the handler
+      // set (chunked transfer). Must go through deleteHeader: responseHeaders
+      // is a defensive COPY, so deleting on it would silently do nothing.
+      ctx.deleteHeader('content-length');
+      return;
+    }
+
+    const { bytes, contentType } = bodyOf(ctx);
+    if (bytes.length < threshold || !isCompressible(contentType)) return;
 
     ctx.response = {
       content: await compressBytes(bytes, encoding),

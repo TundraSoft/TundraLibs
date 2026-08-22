@@ -24,6 +24,7 @@ import {
 } from '../decorators/mod.ts';
 import { RapidModule } from '../modules/RapidModule.ts';
 import { getSession } from '../middlewares/session.ts';
+import { isStreamBody } from './streams.ts';
 import type { RapidRouteOpenApi } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
@@ -161,12 +162,13 @@ function assertModuleReply(
   const content = (reply as RapidContextResponse).content;
   const validContent = typeof content === 'string' ||
     content instanceof Uint8Array ||
+    isStreamBody(content) ||
     (typeof content === 'object' && content !== null &&
       !Array.isArray(content));
   if (!validContent) {
     throw new RapidError('RAPID_RESPONSE_INVALID', {
       message:
-        `${label} response "content" must be a string, plain object, or Uint8Array`,
+        `${label} response "content" must be a string, plain object, Uint8Array, or a stream`,
       details: { label },
     });
   }

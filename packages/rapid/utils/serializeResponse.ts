@@ -8,6 +8,8 @@
 
 import type { StatusCode } from '@tundralibs/compat/http';
 import { RapidError } from '../errors/mod.ts';
+import type { RapidContextResponse } from '../types/mod.ts';
+import { isStreamBody, toReadableStream } from './streams.ts';
 
 /**
  * Statuses the Fetch standard defines as NULL-BODY: constructing a
@@ -40,6 +42,10 @@ const UNREPRESENTABLE_STATUSES: ReadonlySet<number> = new Set([101, 103]);
  * - NULL-BODY statuses (204, 205, and 304) carry no body and no
  *   content-type: the content is DROPPED rather than throwing, since
  *   the status is what the caller explicitly asked for.
+ * - a STREAM body (`ReadableStream` / async iterable) is handed to the
+ *   `Response` as-is — streamed, never buffered, so no `content-length` is
+ *   set (chunked transfer) and the content-type defaults to
+ *   `application/octet-stream`. On a HEAD the stream is cancelled, unread.
  *
  * `headers` is mutated in place (content-type defaulting) — pass the
  * live outbound headers.
@@ -52,7 +58,7 @@ const UNREPRESENTABLE_STATUSES: ReadonlySet<number> = new Set([101, 103]);
  *   see {@link UNREPRESENTABLE_STATUSES}.
  */
 export function serializeResponse(
-  content: string | Record<string, unknown> | Uint8Array | null,
+  content: RapidContextResponse['content'] | null,
   status: StatusCode,
   headers: Headers,
   head = false,
@@ -67,6 +73,22 @@ export function serializeResponse(
   if (content === null) {
     const emptyStatus = status === 200 ? 204 : status;
     return new Response(null, { status: emptyStatus, headers });
+  }
+
+  if (isStreamBody(content)) {
+    if (!headers.has('content-type')) {
+      headers.set('content-type', 'application/octet-stream');
+    }
+    const stream = toReadableStream(content);
+    if (NULL_BODY_STATUSES.has(status) || status === 304 || head) {
+      // Bodiless: release the source (a generator's `finally` runs) and
+      // send headers only. A stream has no knowable length, so HEAD carries
+      // no content-length — chunked semantics, same as the GET would.
+      void stream.cancel();
+      if (!head) headers.delete('content-type');
+      return new Response(null, { status, headers });
+    }
+    return new Response(stream, { status, headers });
   }
 
   let body: BodyInit;

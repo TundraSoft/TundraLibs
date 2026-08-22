@@ -298,6 +298,42 @@ class Users {
 > explicit. If you validate **server-side** data with guardian and a failure
 > should _not_ be a client 400, catch it and throw your own error.
 
+## Streaming responses
+
+A handler's `content` can be a string, a plain object (serialized as JSON), a
+`Uint8Array` — or a **stream**: a `ReadableStream<Uint8Array>` or any async
+iterable of chunks (strings are UTF-8 encoded). A stream body is handed to the
+client as-is, never buffered, so large files, server-sent events, and proxy
+passthrough don't hold the body in memory. `ctx.serve()` and `serveStatic`
+stream files this way (with a real `content-length` from the file's size).
+
+```ts
+import { Application } from '@tundralibs/rapid';
+
+const app = await Application.initialize({ name: 'stream' });
+
+// Any async iterable streams — a generator, a DB cursor, another fetch's body.
+app.get('/lines', () => ({
+  content: (async function* () {
+    for (let i = 0; i < 3; i++) yield `line ${i}\n`;
+  })(),
+  headers: { 'content-type': 'text/plain' },
+}));
+
+// Server-Sent Events: `ctx.sse()` frames each event and sets text/event-stream.
+app.get('/events', (ctx) =>
+  ctx.sse((async function* () {
+    yield { event: 'tick', data: { n: 1 } };
+    yield { event: 'tick', data: { n: 2 } };
+  })()));
+```
+
+A client disconnect cancels the stream, which returns the source iterator — so
+an `async function*`'s `finally` block runs and is the place to unsubscribe or
+release a cursor. Stream bodies are HTTP-only (a job or socket reply rejects
+one) and opaque to body-inspecting middleware: `etag` skips them (a content
+hash would need the whole body) and `compress` pipes them chunk-wise.
+
 ## Endpoints
 
 Ready-made handlers you mount where you like — nothing is auto-registered:

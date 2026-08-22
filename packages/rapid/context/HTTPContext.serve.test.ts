@@ -28,18 +28,19 @@ describe('rapid.HTTPContext.serve / .html', () => {
   });
   afterAll(() => removeDir(dir, { recursive: true }));
 
-  it('serve() reads the file with an extension-derived content-type', async () => {
+  it('serve() STREAMS the file with an extension-derived content-type + length', async () => {
     const res = await ctx().serve(`${dir}/page.html`);
     asserts.assertEquals(res.status, 200);
-    asserts.assert(res.content instanceof Uint8Array);
+    // The body is a stream (never buffered) — drain it to check the bytes.
+    asserts.assert(res.content instanceof ReadableStream);
     asserts.assertEquals(
-      new TextDecoder().decode(res.content as Uint8Array),
+      await new Response(res.content as ReadableStream<Uint8Array>).text(),
       '<h1>Hi</h1>',
     );
-    asserts.assertEquals(
-      (res.headers as Record<string, string>)['content-type'],
-      'text/html; charset=UTF-8',
-    );
+    const headers = res.headers as Record<string, string>;
+    asserts.assertEquals(headers['content-type'], 'text/html; charset=UTF-8');
+    // Size comes from the stat so clients/HEAD see a real content-length.
+    asserts.assertEquals(headers['content-length'], '11');
   });
 
   it('serve() honors contentType override + download attachment', async () => {

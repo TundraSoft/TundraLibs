@@ -46,6 +46,15 @@ export {
   type ResolvedClientAddress,
 } from './resolveClientAddress.ts';
 export { serializeResponse } from './serializeResponse.ts';
+export {
+  fileStream,
+  frameSseEvent,
+  isStreamBody,
+  type SseEvent,
+  sseStream,
+  type StreamBody,
+  toReadableStream,
+} from './streams.ts';
 export { type SocketErrorEnvelope, socketOutcome } from './socketOutcome.ts';
 export { resolveVersion, type VersioningConfig } from './resolveVersion.ts';
 export { Meter, type MeterSample } from './Meter.ts';

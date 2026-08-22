@@ -7,7 +7,7 @@ import type {
   RapidContextState,
 } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { pagingFromRecord, parsePaging } from '../utils/mod.ts';
+import { isStreamBody, pagingFromRecord, parsePaging } from '../utils/mod.ts';
 
 /**
  * Is `value` a PLAIN object — an object literal or null-prototype bag,
@@ -166,6 +166,12 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
       throw new RapidError('RAPID_RESPONSE_INVALID', {
         message: 'A 3xx status has no meaning on a socket frame',
         debug: { command: this.command, status: response.status },
+      });
+    }
+    if (response !== null && isStreamBody(response.content)) {
+      throw new RapidError('RAPID_RESPONSE_INVALID', {
+        message: 'A stream body has no meaning on a socket frame (HTTP-only)',
+        debug: { command: this.command },
       });
     }
     super.response = response;

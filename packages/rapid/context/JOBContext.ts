@@ -2,7 +2,7 @@ import type { StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { Context } from './Context.ts';
 import { RapidError } from '../errors/mod.ts';
-import { parsePaging } from '../utils/mod.ts';
+import { isStreamBody, parsePaging } from '../utils/mod.ts';
 import type {
   RapidContextArgs,
   RapidContextResponse,
@@ -101,6 +101,12 @@ export class JOBContext<S extends RapidContextState = RapidContextState>
       throw new RapidError('RAPID_RESPONSE_INVALID', {
         message: 'A 3xx status has no meaning on a background job',
         debug: { job: this.job, status: response.status },
+      });
+    }
+    if (response !== null && isStreamBody(response.content)) {
+      throw new RapidError('RAPID_RESPONSE_INVALID', {
+        message: 'A stream body has no meaning on a background job (HTTP-only)',
+        debug: { job: this.job },
       });
     }
     super.response = response;

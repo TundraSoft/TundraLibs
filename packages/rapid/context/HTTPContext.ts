@@ -9,12 +9,13 @@
  * @module
  */
 
-import { deleteFile, FileNotFound, readFile } from '@tundralibs/compat/file';
+import { deleteFile, FileNotFound, stat } from '@tundralibs/compat/file';
 import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
   type CookieOptions,
+  fileStream,
   mimeTypeFor,
   negotiate,
   pagingFromHeaders,
@@ -27,6 +28,8 @@ import {
   type ResolvedClientAddress,
   serializeCookie,
   serializeResponse,
+  type SseEvent,
+  sseStream,
 } from '../utils/mod.ts';
 import type {
   RapidContextArgs,
@@ -309,9 +312,12 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       download?: boolean | string;
     } = {},
   ): Promise<RapidContextResponse> {
-    let content: Uint8Array;
+    // Stat first (size → a correct content-length, and the 404 for a missing
+    // or non-file path), then STREAM the body — the file is never buffered.
+    let size: number;
+    let isFile: boolean;
     try {
-      content = await readFile(path);
+      ({ size, isFile } = await stat(path));
     } catch (error) {
       // A missing path is a 404; a real read failure (permissions, I/O)
       // propagates to the 500 disclosure path.
@@ -323,8 +329,14 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       }
       throw error;
     }
+    if (!isFile) {
+      // A directory / special file is not servable — a 404, not a read error.
+      throw new RapidError('RAPID_NOT_FOUND', { details: { path } });
+    }
+    const content = await fileStream(path);
     const headers: Record<string, string> = {
       'content-type': options.contentType ?? mimeTypeFor(path),
+      'content-length': String(size),
     };
     if (options.download !== undefined && options.download !== false) {
       const raw = typeof options.download === 'string'
@@ -337,6 +349,35 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       headers['content-disposition'] = `attachment; filename="${name}"`;
     }
     return { content, status: options.status ?? 200, headers };
+  }
+
+  /**
+   * Build a Server-Sent Events response: each event yielded by `events` is
+   * framed per the SSE spec and streamed (`text/event-stream`, no buffering,
+   * caching disabled). A client disconnect cancels the stream, which returns
+   * the source iterator so an `async function*`'s `finally` runs — the place
+   * to unsubscribe. Return it from a handler: `return ctx.sse(ticker())`.
+   *
+   * @example
+   * ```ts ignore
+   * app.get('/events', (ctx) =>
+   *   ctx.sse((async function* () {
+   *     for (let i = 0; i < 3; i++) {
+   *       yield { event: 'tick', data: { i } };
+   *       await new Promise((r) => setTimeout(r, 1000));
+   *     }
+   *   })()));
+   * ```
+   */
+  public sse(events: AsyncIterable<SseEvent>): RapidContextResponse {
+    return {
+      content: sseStream(events),
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      },
+    };
   }
 
   /**
@@ -457,6 +498,19 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   public setHeader(name: string, value: string): void {
     this._assertNotResponded();
     this._headers.set(name, value);
+  }
+
+  /**
+   * Remove an outbound header. Frozen after {@link respond}. The lever for a
+   * header that was correct when set but no longer applies — e.g. `compress`
+   * dropping a handler's `content-length` once the body is a stream whose
+   * encoded size is unknowable. A no-op when the header is absent.
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond}.
+   */
+  public deleteHeader(name: string): void {
+    this._assertNotResponded();
+    this._headers.delete(name);
   }
 
   /**
