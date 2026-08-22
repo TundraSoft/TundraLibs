@@ -8,15 +8,13 @@
  *
  * @module
  */
-import { signHMAC, verifyHMAC } from '@tundralibs/crypt';
 import { ulid } from '@tundralibs/id';
 import { RapidError } from '../errors/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
+import { signValue, verifySignedValue } from '../utils/cookies.ts';
 
-/** Options for {@link csrf}. */
+/** Options for {@link csrf}. The token is signed with the app `secret`. */
 export type CsrfOptions = {
-  /** HMAC key that signs the token (via `@tundralibs/crypt`). */
-  secret: string;
   /** Token cookie name (JS-readable so the app can echo it). @default 'csrf' */
   cookie?: string;
   /** Header the client echoes the token in. @default 'x-csrf-token' */
@@ -34,20 +32,12 @@ export type CsrfOptions = {
 /** Methods that never mutate — CSRF is not enforced on them. */
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-const issueToken = (secret: string): Promise<string> => {
-  const nonce = ulid();
-  return signHMAC(nonce, secret).then((mac) => `${nonce}.${mac}`);
-};
+const issueToken = (secret: string): Promise<string> =>
+  signValue(ulid(), secret);
 
-const verifyToken = async (token: string, secret: string): Promise<boolean> => {
-  const dot = token.lastIndexOf('.');
-  if (dot <= 0) return false;
-  try {
-    return await verifyHMAC(token.slice(0, dot), token.slice(dot + 1), secret);
-  } catch {
-    return false; // a malformed signature is invalid, never a 500
-  }
-};
+/** A token is valid iff its signature verifies (malformed → invalid, never a 500). */
+const verifyToken = async (token: string, secret: string): Promise<boolean> =>
+  (await verifySignedValue(token, secret)) !== undefined;
 
 /**
  * Stateless CSRF middleware (signed double-submit). Install after any body
@@ -60,7 +50,8 @@ const verifyToken = async (token: string, secret: string): Promise<boolean> => {
  *
  * @example
  * ```ts ignore
- * app.use(csrf({ secret: env.CSRF_SECRET }));
+ * // The token is signed with the app `secret` option — set that once.
+ * app.use(csrf());
  * // the client reads the `csrf` cookie and sends it back as `x-csrf-token`
  * ```
  */
@@ -73,9 +64,10 @@ export function csrf(options: CsrfOptions): RapidMiddleware {
     if (ctx.type !== 'HTTP') return await next();
 
     // Ensure the client holds a valid token to mirror back (issue once).
+    const secret = ctx.app.secret;
     let token = ctx.cookies[cookieName];
-    if (!token || !(await verifyToken(token, options.secret))) {
-      token = await issueToken(options.secret);
+    if (!token || !(await verifyToken(token, secret))) {
+      token = await issueToken(secret);
       ctx.setCookie(cookieName, token, {
         httpOnly: false, // the app's JS must read it to echo into the header
         secure: options.secure ?? true,
@@ -97,7 +89,7 @@ export function csrf(options: CsrfOptions): RapidMiddleware {
       if (
         sent === undefined ||
         sent !== token ||
-        !(await verifyToken(sent, options.secret))
+        !(await verifyToken(sent, secret))
       ) {
         throw new RapidError('RAPID_CSRF_INVALID', {
           message: 'CSRF token missing or invalid',

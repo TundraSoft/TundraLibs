@@ -6,6 +6,7 @@
  */
 
 import type { StatusCode } from '@tundralibs/compat/http';
+import type { CookieOptions } from '../../utils/cookies.ts';
 
 /**
  * The response payload — CLOSED over the known transport keys (no index
@@ -37,4 +38,15 @@ export type RapidContextResponse = {
   status?: StatusCode;
   /** Consumed by HTTP (merged per-key); ignored elsewhere. */
   headers?: Record<string, string> | Headers;
+  /**
+   * Cookies to set, with proper encoding (and HMAC signing via the app
+   * `secret` when `options.signed`). HTTP-only: consumed by the HTTP context
+   * and ignored on JOB/SOCKET, so a method decorated for several transports
+   * may return one harmlessly. Prefer this over a raw `Set-Cookie` header.
+   */
+  cookies?: ReadonlyArray<{
+    name: string;
+    value: string;
+    options?: CookieOptions;
+  }>;
 };

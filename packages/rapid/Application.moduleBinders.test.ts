@@ -34,6 +34,7 @@ class Binders {
 const make = () =>
   Application.initialize({
     name: 'binders',
+    secret: 'test-secret-0123456789-abcdefghijklmnop',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
   });
@@ -64,7 +65,7 @@ describe('rapid module binders (cookie / auth / session)', () => {
 
   it('session() binds the request session', async () => {
     const app = await make();
-    app.use(sessionMw({ secret: 's3cr3t', secure: false }));
+    app.use(sessionMw({ secure: false }));
     app.module(new Binders());
     const r = await app.fetch(new Request('http://app/session'));
     asserts.assertEquals((await r.json()).seen, 1);

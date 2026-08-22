@@ -14,6 +14,8 @@ export {
   type CookieOptions,
   parseCookies,
   serializeCookie,
+  signValue,
+  verifySignedValue,
 } from './cookies.ts';
 export { mimeTypeFor } from './mimeTypeFor.ts';
 export { negotiate } from './negotiate.ts';

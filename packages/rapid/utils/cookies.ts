@@ -5,6 +5,7 @@
  * @module
  */
 
+import { signHMAC, verifyHMAC } from '@tundralibs/crypt';
 import { RapidError } from '../errors/mod.ts';
 
 /** Attributes for an outbound cookie (`Set-Cookie`). */
@@ -21,6 +22,38 @@ export type CookieOptions = {
   /** Not readable from `document.cookie`. */
   httpOnly?: boolean;
   sameSite?: 'Strict' | 'Lax' | 'None';
+  /**
+   * Sign the value with the app `secret` (HMAC) so it is tamper-evident; read
+   * it back with `ctx.signedCookie(name)`, which verifies and returns
+   * `undefined` for a missing or forged signature. Wire form `value.sig`.
+   */
+  signed?: boolean;
+};
+
+/** Sign `value` with `secret`: the wire form is `value.<hmac>`. */
+export const signValue = (value: string, secret: string): Promise<string> =>
+  signHMAC(value, secret).then((mac) => `${value}.${mac}`);
+
+/**
+ * Verify a `value.<hmac>` wire form against `secret`: the bare value when the
+ * signature holds, else `undefined`. A missing, unsigned, or MALFORMED
+ * signature (crypt throws on bad encoding) is "not valid" — never a 500, since
+ * the input is attacker-controlled.
+ */
+export const verifySignedValue = async (
+  raw: string | undefined,
+  secret: string,
+): Promise<string | undefined> => {
+  if (!raw) return undefined;
+  const dot = raw.lastIndexOf('.');
+  if (dot <= 0) return undefined;
+  try {
+    return (await verifyHMAC(raw.slice(0, dot), raw.slice(dot + 1), secret))
+      ? raw.slice(0, dot)
+      : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 /**

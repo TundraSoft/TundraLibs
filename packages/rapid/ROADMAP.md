@@ -81,6 +81,15 @@ Core and the current capability set are built and green on Deno / Bun / Node
   (`etag` skips, `compress` pipes through `CompressionStream`). Added
   `ctx.deleteHeader()` — `responseHeaders` is a defensive copy, so dropping a
   now-wrong header needs a real mutator.
+- **Signed cookies + the app `secret` (2026-08-22)** — one `secret` option
+  (≥ 32 chars, validated at boot; `app.secret` throws `RAPID_CONFIG` when a
+  signing feature is used without it) is the HMAC key for everything that
+  signs: `ctx.setCookie(..., { signed })` / `ctx.signedCookie()` (verifies,
+  forged → `undefined`), the reply envelope's `cookies` key (plain or signed,
+  HTTP-only, ignored on JOB/SOCKET), and `session()` / `csrf()`, which dropped
+  their own `secret` options. The sign/verify helpers live in `utils/cookies`.
+  The reply-cookie apply is SYNC-THROUGH — only a signed cookie yields a
+  promise, so the plain-request hot path stays promise-free.
 
 ## Backlog
 
@@ -94,8 +103,6 @@ sequencing fact, not a deferral.
   shipped (`cookie`/`auth`/`session`); the reply envelope is the OUTPUT half,
   which `RapidContextResponse` already anticipates ("a future transport-specific
   key widens the override's parameter type").
-  - **Reply set-cookie** — set cookies from a module return with proper
-    encoding/signing (today only a raw `Set-Cookie` string via `headers`).
   - **Reply redirect** — redirect from a module return (today a manual
     `status: 302` + a `location` header).
 - **`serveStatic` Range/206** (`Accept-Ranges`) — `fileStream` already takes an

@@ -18,6 +18,15 @@ export type RapidApplicationOptions = {
    */
   name: string;
   /**
+   * The application's signing key — ONE secret, HMAC via `@tundralibs/crypt`,
+   * shared by everything that signs a cookie: `ctx.setCookie(..., { signed })`
+   * / the reply `cookies` key, `session()`'s id cookie, and `csrf()`'s token.
+   * Source it from the environment (`secret: ${APP_SECRET}` in the config
+   * file); never commit it. Required only when something signs — a boot
+   * error if a signing feature is used without it. Minimum 32 characters.
+   */
+  secret?: string;
+  /**
    * mode drives error disclosure and logging verbosity. DEVELOPMENT
    * renders true messages, details, debug data, and stacks; PRODUCTION
    * is the safe direction — 5xx collapse to opaque defaults, debug never

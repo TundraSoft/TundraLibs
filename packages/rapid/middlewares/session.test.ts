@@ -9,15 +9,14 @@ import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { getSession, session } from './session.ts';
 
-const SECRET = 'test-secret-please-change';
-
 const makeApp = async () => {
   const app = await Application.initialize({
     name: 'sess',
+    secret: 'test-secret-0123456789-abcdefghijklmnop',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
   });
-  app.use(session({ secret: SECRET, secure: false })); // http test → Secure off
+  app.use(session({ secure: false })); // http test → Secure off
   app.get(
     '/read',
     (ctx) => ({ content: { hits: getSession(ctx)!.get<number>('hits') ?? 0 } }),

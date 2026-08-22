@@ -11,6 +11,7 @@ import { Application, csrf, getSession, session } from '../mod.ts';
 
 const app = await Application.initialize({
   name: 'sessions-example',
+  secret: 'test-secret-0123456789-abcdefghijklmnop',
   mode: 'DEVELOPMENT',
   server: { port: 0, hostname: '127.0.0.1' },
   logger: { handlers: [] },
@@ -18,8 +19,8 @@ const app = await Application.initialize({
 
 // This demo talks http://app, so Secure is off. In production drop `secure`
 // (it defaults to true) and serve over HTTPS.
-app.use(session({ secret: 'demo-session-secret', secure: false }));
-app.use(csrf({ secret: 'demo-csrf-secret', secure: false }));
+app.use(session({ secure: false }));
+app.use(csrf({ secure: false }));
 
 app.get('/me', (ctx) => {
   const s = getSession(ctx)!;

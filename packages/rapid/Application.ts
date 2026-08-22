@@ -426,6 +426,26 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * The application signing key (the `secret` option) — the HMAC key behind
+   * signed cookies, `session()` ids, and `csrf()` tokens. Validated at boot
+   * (≥ 32 chars). Throws when absent: a signing feature that is USED without
+   * a configured secret is a misconfiguration, surfaced where it bites.
+   *
+   * @throws {RapidError} RAPID_CONFIG when no `secret` is configured.
+   */
+  public get secret(): string {
+    const secret = this.option('secret');
+    if (secret === undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'a signed cookie / session / CSRF token needs the application `secret` option (≥ 32 chars, e.g. `secret: ${APP_SECRET}` in Application.yaml)',
+        details: { key: 'secret' },
+      });
+    }
+    return secret;
+  }
+
+  /**
    * This app's DI container — a child of the global `Doctor` that reads
    * its registrations but keeps its own instances. Modules boot through
    * it, and it is pinned on each request's ambient context, so a handler
@@ -1105,6 +1125,18 @@ export class Application<S extends RapidContextState = RapidContextState>
         message:
           'name must be a non-empty string of at most 30 characters (it is also the logging appName)',
         details: { key: 'name', value: name },
+      });
+    }
+    // A present-but-weak signing key is worse than none: every signed cookie
+    // / session id / CSRF token would be forgeable. Refuse it loudly at boot.
+    const secret = this._getOption('secret');
+    if (
+      secret !== undefined && (typeof secret !== 'string' || secret.length < 32)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'secret must be a string of at least 32 characters (it is the HMAC key for signed cookies, sessions, and CSRF tokens)',
+        details: { key: 'secret' },
       });
     }
     const { port, hostname, unixSocketPath } = this._getOption('server') ?? {};

@@ -9,10 +9,10 @@
  *
  * @module
  */
-import { signHMAC, verifyHMAC } from '@tundralibs/crypt';
 import { ulid } from '@tundralibs/id';
 import type { Context } from '../context/mod.ts';
 import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
+import { signValue, verifySignedValue } from '../utils/cookies.ts';
 import { memoryStore, type Store } from './store.ts';
 
 /** Arbitrary per-client data held in a session. */
@@ -21,10 +21,8 @@ export type SessionData = Record<string, unknown>;
 /** The stored envelope — data plus the birth time for the absolute cap. */
 type SessionRecord = { data: SessionData; createdAt: number };
 
-/** Options for {@link session}. */
+/** Options for {@link session}. The id cookie is signed with the app `secret`. */
 export type SessionOptions = {
-  /** HMAC key that signs the session-id cookie (via `@tundralibs/crypt`). */
-  secret: string;
   /**
    * Record backend; defaults to {@link memoryStore}. Inject a redis/cacher
    * `Store` for multi-replica deployments (memory is per-process).
@@ -86,25 +84,6 @@ export function getSession<S extends RapidContextState = RapidContextState>(
   return (ctx as unknown as WithSession)[SESSION];
 }
 
-const signId = (id: string, secret: string): Promise<string> =>
-  signHMAC(id, secret).then((mac) => `${id}.${mac}`);
-
-const verifySignedId = async (
-  raw: string | undefined,
-  secret: string,
-): Promise<string | undefined> => {
-  if (!raw) return undefined;
-  const dot = raw.lastIndexOf('.');
-  if (dot <= 0) return undefined;
-  try {
-    return (await verifyHMAC(raw.slice(0, dot), raw.slice(dot + 1), secret))
-      ? raw.slice(0, dot)
-      : undefined;
-  } catch {
-    return undefined; // a malformed signature is no session, never a 500
-  }
-};
-
 /**
  * Store-backed session middleware. Install it once; read the session in a
  * handler with {@link getSession}. `stock()`-free — the backend is injected,
@@ -114,7 +93,8 @@ const verifySignedId = async (
  *
  * @example
  * ```ts ignore
- * app.use(session({ secret: env.SESSION_SECRET }));
+ * // The id cookie is signed with the app `secret` option — set that once.
+ * app.use(session());
  * app.post('/login', async (ctx) => {
  *   const s = getSession(ctx)!;
  *   s.regenerate();               // new id, keep any anonymous data
@@ -140,7 +120,8 @@ export function session(options: SessionOptions): RapidMiddleware {
     if (ctx.type !== 'HTTP') return await next();
 
     // 1. LOAD — verify the signed id, fetch + validate the record.
-    let id = await verifySignedId(ctx.cookies[name], options.secret);
+    const secret = ctx.app.secret;
+    let id = await verifySignedValue(ctx.cookies[name], secret);
     let data: SessionData = {};
     let createdAt = Date.now();
     if (id !== undefined) {
@@ -198,7 +179,7 @@ export function session(options: SessionOptions): RapidMiddleware {
       await store.set(id, { data, createdAt }, idleTtl);
       // Issue on a fresh/rotated id; re-issue to slide the rolling window.
       if (fresh || rolling) {
-        ctx.setCookie(name, await signId(id, options.secret), {
+        ctx.setCookie(name, await signValue(id, secret), {
           httpOnly: true,
           secure: options.secure ?? true,
           sameSite: options.sameSite ?? 'Lax',

@@ -9,15 +9,14 @@ import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { csrf } from './csrf.ts';
 
-const SECRET = 'csrf-test-secret';
-
 const makeApp = async () => {
   const app = await Application.initialize({
     name: 'csrf',
+    secret: 'test-secret-0123456789-abcdefghijklmnop',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
   });
-  app.use(csrf({ secret: SECRET, secure: false }));
+  app.use(csrf({ secure: false }));
   app.get('/form', () => ({ content: { ok: true } }));
   app.post('/submit', () => ({ content: { ok: true } }));
   return app;

@@ -28,8 +28,10 @@ import {
   type ResolvedClientAddress,
   serializeCookie,
   serializeResponse,
+  signValue,
   type SseEvent,
   sseStream,
+  verifySignedValue,
 } from '../utils/mod.ts';
 import type {
   RapidContextArgs,
@@ -106,6 +108,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   private __args: Readonly<RapidContextArgs> | undefined = undefined;
   /** Lazy parsed inbound cookies — see {@link cookies}. */
   private __cookies: Record<string, string> | undefined = undefined;
+  /** Reply `cookies` awaiting the async apply — see {@link _applyReplyCookies}. */
+  private __replyCookies: RapidContextResponse['cookies'] | undefined =
+    undefined;
   protected readonly _fileUploads: string[] = [];
   protected readonly _headers: Headers = new Headers();
 
@@ -425,8 +430,52 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     name: string,
     value: string,
     options: CookieOptions = {},
-  ): void {
+  ): void | Promise<void> {
+    if (options.signed === true) {
+      // Signing is async (HMAC) — await the returned promise. The secret is
+      // read up front so a missing one fails here, not inside the promise.
+      const secret = this.app.secret;
+      return signValue(value, secret).then((signed) => {
+        this.appendHeader('set-cookie', serializeCookie(name, signed, options));
+      });
+    }
     this.appendHeader('set-cookie', serializeCookie(name, value, options));
+  }
+
+  /**
+   * Read a cookie set with `{ signed: true }`: verifies the HMAC against the
+   * app `secret` and returns the bare value, or `undefined` when the cookie
+   * is missing, unsigned, or forged. Tamper-evident by construction — a
+   * client cannot alter the value without invalidating it.
+   *
+   * @throws {RapidError} RAPID_CONFIG when no app `secret` is configured.
+   */
+  public signedCookie(name: string): Promise<string | undefined> {
+    return verifySignedValue(this.cookies[name], this.app.secret);
+  }
+
+  /**
+   * Apply the reply `cookies` key captured by the response setter, just
+   * before the sync {@link respond}. SYNC-THROUGH: returns `undefined` when
+   * there is nothing pending (the common case) so the hot path stays
+   * promise-free; returns a promise only when a cookie must be signed
+   * (async HMAC). Idempotent: drains the pending list.
+   *
+   * @internal Called by the HTTP transport's finalize.
+   */
+  public _applyReplyCookies(): void | Promise<void> {
+    const pending = this.__replyCookies;
+    if (pending === undefined) return;
+    this.__replyCookies = undefined;
+    // Plain cookies apply synchronously; only a signed one yields a promise.
+    let chain: Promise<void> | undefined;
+    for (const c of pending) {
+      const r = this.setCookie(c.name, c.value, c.options);
+      if (r !== undefined) {
+        chain = chain === undefined ? r : chain.then(() => r);
+      }
+    }
+    return chain;
   }
 
   /**
@@ -472,6 +521,15 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
           this._headers.set(name, value);
         }
       }
+    }
+    // The reply `cookies` key is captured, not applied: a signed cookie needs
+    // an async HMAC, and this setter is sync. The transport's finalize awaits
+    // `_applyReplyCookies()` before respond(). Later assignments add to it.
+    if (response.cookies !== undefined && response.cookies.length > 0) {
+      this.__replyCookies = [
+        ...(this.__replyCookies ?? []),
+        ...response.cookies,
+      ];
     }
   }
 

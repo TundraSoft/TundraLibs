@@ -397,6 +397,52 @@ The `jwt(pact)` and `permission(perms, module, perm)` helpers build a `verify`
 and an `authorize` check from a `@tundralibs/pact` instance (again type-only —
 no runtime dependency until passed).
 
+## Cookies, sessions & CSRF
+
+One application `secret` (≥ 32 chars, HMAC via `@tundralibs/crypt`) backs
+everything that signs a cookie. Source it from the environment — never commit
+it — and set it once:
+
+```yaml
+# configs/Application.yaml
+name: my-api
+secret: ${APP_SECRET}
+```
+
+A **signed cookie** is tamper-evident: the client can read it but cannot alter
+it without invalidating the signature. Set one with `{ signed: true }` (async —
+`await` it) and read it back with `ctx.signedCookie()`, which returns the bare
+value or `undefined` for a missing or forged cookie:
+
+```ts
+import { Application } from '@tundralibs/rapid';
+
+const app = await Application.initialize({
+  name: 'api',
+  secret: 'replace-with-at-least-32-random-characters',
+});
+
+app.get('/prefs', async (ctx) => {
+  await ctx.setCookie('theme', 'dark', { signed: true, httpOnly: true });
+  return { content: { theme: (await ctx.signedCookie('theme')) ?? null } };
+});
+
+// A handler may also RETURN cookies — plain or signed — on the reply itself.
+app.get('/login', () => ({
+  content: { ok: true },
+  cookies: [{ name: 'sid', value: 'abc', options: { signed: true } }],
+}));
+```
+
+`session()` — store-backed, per-client state across requests, keyed by a
+signed id cookie with a rolling idle TTL and a hard absolute cap; call
+`regenerate()` on login (rotates the id, keeps the data) and `destroy()` on
+logout. `csrf()` — a stateless signed double-submit token; state-changing
+requests must echo the token cookie back in `x-csrf-token` (or a form field)
+or get a 403. Both sign with the app `secret`, so neither takes one of its own.
+A signing feature used without a configured `secret` fails loudly with
+`RAPID_CONFIG` rather than silently emitting an unsigned cookie.
+
 ## Observability
 
 - **Logging is always on.** `app.log` is a `@tundralibs/slogger` instance whose
