@@ -16,6 +16,7 @@ import { RapidError } from '../errors/mod.ts';
 import {
   type CookieOptions,
   mimeTypeFor,
+  negotiate,
   pagingFromHeaders,
   pagingFromQuery,
   parseBody,
@@ -108,6 +109,26 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /** The inbound request headers. */
   get headers(): Headers {
     return this.request.headers;
+  }
+
+  /**
+   * Content negotiation: given the media types this handler can produce, return
+   * the client's best match for the `Accept` header (by q-value; the
+   * most-specific `Accept` entry decides an offer's quality; ties resolve to
+   * the earliest offered = server preference), or `undefined` when the client
+   * accepts none. No `Accept` header → the first offered. Offers must be full
+   * `type/subtype` media types.
+   *
+   * @example
+   * ```ts ignore
+   * const type = ctx.accepts('application/json', 'text/html');
+   * return type === 'text/html'
+   *   ? { content: render(), headers: { 'content-type': 'text/html' } }
+   *   : { content: data };
+   * ```
+   */
+  accepts(...offered: string[]): string | undefined {
+    return negotiate(this.headers.get('accept'), offered);
   }
 
   /** The request method, uppercased and narrowed to the compat {@link HTTPMethod} union. */

@@ -32,7 +32,8 @@ fetch adapter is also verified on Cloudflare workerd):
   `login`.
 - **Request surface** — cookies, query/paging parsing with caps, body parsing
   (json/text/form/multipart) with size limits + an upload magic-byte gauntlet,
-  `ctx.serve()` file download, MIME resolution.
+  `ctx.serve()` file download, MIME resolution, content negotiation
+  (`ctx.accepts(...types)` over the `Accept` header).
 - **Auth seam** — `ctx.auth` (per-invocation, set-once, read-only bag) riding
   the module invoke seed.
 - **Observability** — slogger always-on, tracer opt-in (OTLP + propagation),
@@ -88,7 +89,6 @@ decision attached in the review doc.
 - **Static hardening — `Range`** for `serveStatic` (`206`/`Accept-Ranges`);
   depends on the streaming response model. ETag / If-None-Match / Last-Modified
   already shipped.
-- **Content negotiation** — `Accept` parsing / `ctx.format`.
 - **Cron exactly-once under N replicas** (gated). The scheduler is per-process;
   N replicas fire every `@JOB` N times. Ship the `onlyIfCronLeader()` gate (see
   Distributed deployment) or document the single-scheduler requirement loudly.
