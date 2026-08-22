@@ -190,6 +190,30 @@ app.module(new Users());
 (`param`, `query`, `payload`, `paging`, `header`, `connection`) type the method
 signature via the decorator's `bind` tuple.
 
+> [!WARNING]
+> **Decorator stacking order — a silent-failure gotcha.** rapid records a route
+> by the method's **function reference**. A third-party **wrapping** decorator
+> (one that returns a _replacement_ function — a timer, retry, cache) must sit
+> **below** the rapid decorator (closer to the method). TC39 applies decorators
+> bottom-up, so if a wrapper is on top it replaces the function rapid recorded,
+> and the route is **silently dropped — no error, just a missing route**:
+>
+> ```ts ignore
+> class Ok {
+>   @GET('/x') //   on top → records the installed (wrapped) fn ✅
+>   @Measure //     wrapper below
+>   handler() {}
+> }
+> class Broken {
+>   @Measure //     on top → its replacement is what gets installed…
+>   @GET('/x') //   …but rapid recorded the original, now unreachable → route lost ❌
+>   handler() {}
+> }
+> ```
+>
+> **Rule: rapid decorators go on top.** (Order is irrelevant if you stack only
+> rapid decorators — this bites only when a wrapping decorator is involved.)
+
 The richer `RapidModule` tier adds a lifecycle, a scoped logger, typed
 `emit`/`invoke`, and event wiring. Boot it **once** with
 `app.modules({ modules: [...] })` (before `start()`/`fetch()`); `stop()` disposes

@@ -6,6 +6,13 @@
  * mount. Paths are radrouter-NATIVE (`/users/:id:`); grammar is
  * enforced by radrouter itself at mount/start.
  *
+ * ⚠️ STACKING ORDER: because a decoration is keyed by the method's
+ * FUNCTION reference, a third-party WRAPPING decorator (one that returns
+ * a replacement function) must sit BELOW the rapid decorator (closer to
+ * the method) — otherwise the wrapper replaces the recorded function and
+ * the route is SILENTLY dropped. See `registry.ts` and the README
+ * "Decorator stacking order" warning.
+ *
  * COMPILE-TIME CONTRACT at the `@` site: the method must return the
  * {@link RapidModuleReply} envelope, and its parameters must match the
  * `bind` tuple (the tuple DRIVES the parameter types — arity overflow
