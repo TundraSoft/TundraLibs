@@ -30,6 +30,11 @@ type RouterOptions = {
    * RFC 3986 default; set to false for forgiving matching.
    */
   caseSensitive?: boolean;
+  /**
+   * Default true: `/users/` registers and matches as `/users`. Set to
+   * false to make the trailing slash significant.
+   */
+  ignoreTrailingSlash?: boolean;
 };
 ```
 

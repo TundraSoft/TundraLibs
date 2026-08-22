@@ -186,14 +186,24 @@ export class RadRouter<M = Middleware> {
   public readonly caseSensitive: boolean;
 
   /**
-   * Creates an empty router. Both settings are fixed for its lifetime.
+   * Whether a trailing slash is dropped at registration and lookup so
+   * `/users/` and `/users` are one route (the default). When false the
+   * slash is significant and the two are distinct routes. The root `/`
+   * is never altered either way.
+   */
+  public readonly ignoreTrailingSlash: boolean;
+
+  /**
+   * Creates an empty router. All settings are fixed for its lifetime.
    *
    * @param options - Optional {@link RouterOptions} controlling
-   *   case sensitivity and the configured default version.
+   *   case sensitivity, trailing-slash handling and the configured
+   *   default version.
    */
   constructor(options?: RouterOptions) {
     this.defaultVersion = options?.defaultVersion;
     this.caseSensitive = options?.caseSensitive ?? true;
+    this.ignoreTrailingSlash = options?.ignoreTrailingSlash ?? true;
   }
 
   /**
@@ -215,7 +225,8 @@ export class RadRouter<M = Middleware> {
    * Registration-time normalisation: case-folds the static text when
    * {@link RadRouter.caseSensitive} is off — leaving `:name:` tokens
    * alone so parameter names stay stable identifiers — then forces a
-   * leading `/` and strips a trailing one. `''` passes through
+   * leading `/` and, when {@link RadRouter.ignoreTrailingSlash} is on,
+   * strips a trailing one. `''` passes through
    * untouched so {@link RadRouter.__parsePath} can reject it with a
    * message that names the problem.
    *
@@ -251,7 +262,10 @@ export class RadRouter<M = Middleware> {
     if (!normalized.startsWith('/')) {
       normalized = '/' + normalized;
     }
-    if (normalized.length > 1 && normalized.endsWith('/')) {
+    if (
+      this.ignoreTrailingSlash && normalized.length > 1 &&
+      normalized.endsWith('/')
+    ) {
       normalized = normalized.slice(0, -1);
     }
 
@@ -273,7 +287,9 @@ export class RadRouter<M = Middleware> {
 
     let orig = path;
     if (!orig.startsWith('/')) orig = '/' + orig;
-    if (orig.length > 1 && orig.endsWith('/')) orig = orig.slice(0, -1);
+    if (this.ignoreTrailingSlash && orig.length > 1 && orig.endsWith('/')) {
+      orig = orig.slice(0, -1);
+    }
 
     const matchUrl = this.caseSensitive ? orig : foldCase(orig);
 
@@ -503,9 +519,10 @@ export class RadRouter<M = Middleware> {
 
   /**
    * Register a middleware chain for `method` + `path`, optionally
-   * versioned. Path normalisation merges duplicate slashes and
-   * strips a trailing slash; the registration is then walked into
-   * the trie, splitting nodes as needed.
+   * versioned. Path normalisation merges duplicate slashes and, when
+   * {@link RadRouter.ignoreTrailingSlash} is on, strips a trailing
+   * slash; the registration is then walked into the trie, splitting
+   * nodes as needed.
    *
    * @param method - HTTP method this chain handles. See
    *   {@link HTTPMethod}.

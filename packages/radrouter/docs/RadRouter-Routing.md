@@ -116,6 +116,13 @@ If you need lookups to forgive doubled slashes too, normalise the path
 before calling `router.find()`. The router itself stays strict so
 ambiguous registrations can't slip through.
 
+A **trailing** slash is a separate rule. By default
+(`ignoreTrailingSlash: true`) it is dropped at both registration and
+lookup, so `/api/users/` and `/api/users` are the same route at either
+stage. Pass `{ ignoreTrailingSlash: false }` to make it significant:
+`/api/users` and `/api/users/` then register as distinct routes and a
+request must match exactly. The root `/` is never altered either way.
+
 ---
 
 [← Back to RadRouter](../README.md)
