@@ -180,6 +180,27 @@ const data = await readFile('./image.png');
 console.log(data.length); // File size in bytes
 ```
 
+#### `readFileStream()`
+
+Opens a file as a `ReadableStream<Uint8Array>` without buffering it. `start`
+and `end` are inclusive byte offsets; either may be omitted.
+
+```typescript ignore
+async function readFileStream(
+  path: string,
+  options?: { start?: number; end?: number },
+): Promise<ReadableStream<Uint8Array>>;
+```
+
+**Example:**
+
+```typescript
+import { readFileStream } from '@tundralibs/compat/file';
+
+const body = await readFileStream('./video.mp4', { start: 0, end: 1023 });
+const response = new Response(body, { status: 206 });
+```
+
 #### `readTextFile()` / `readTextFileSync()`
 
 Reads a file as UTF-8 text.

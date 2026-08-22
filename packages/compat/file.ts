@@ -47,6 +47,10 @@ const nodeOs: typeof import('node:os') = loadBuiltin(
   'node:os',
   isBun || isNode,
 );
+const nodeStream: typeof import('node:stream') = loadBuiltin(
+  'node:stream',
+  isBun || isNode,
+);
 
 //#region Error Classes
 /**
@@ -1087,6 +1091,114 @@ export const readFileSync: (path: string) => Uint8Array = (
       throw error;
     }
     throw wrapFileError(error, path, 'readFileSync');
+  }
+};
+
+/**
+ * Truncate `stream` after `limit` bytes, cancelling the source once the
+ * limit is reached. Deno's `open` has no `end` offset, so a range read
+ * seeks to `start` and cuts the tail here.
+ *
+ * @internal
+ */
+function __limitStream(
+  stream: ReadableStream<Uint8Array>,
+  limit: number,
+): ReadableStream<Uint8Array> {
+  let remaining = limit;
+  return stream.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        const take = chunk.subarray(0, remaining);
+        remaining -= take.byteLength;
+        controller.enqueue(take);
+        if (remaining === 0) controller.terminate();
+      },
+    }),
+  );
+}
+
+/**
+ * Opens a file as a `ReadableStream<Uint8Array>` without buffering it.
+ *
+ * `start` and `end` are **inclusive** byte offsets for a range read: `start`
+ * alone streams to EOF, `end` alone streams from byte 0. Errors raised
+ * while the stream is being consumed (a read failure mid-file) surface on
+ * the stream itself, unwrapped — only the open is mapped to the error
+ * classes below.
+ *
+ * @param path - The path to the file to read
+ * @param options - Inclusive byte range to stream
+ * @returns Promise resolving to a stream of the file's bytes
+ * @throws {FileNotFound} If the file doesn't exist
+ * @throws {FileAccessDenied} If permission is denied
+ * @throws {FileOperationError} If `start`/`end` are not non-negative integers or `end < start`
+ * @throws {UnsupportedRuntimeError} On Workers / browser, where there is no filesystem
+ *
+ * @example
+ * ```ts
+ * // Serve bytes 0–1023 of a file without reading it all into memory.
+ * const body = await readFileStream('/path/to/video.mp4', { start: 0, end: 1023 });
+ * const response = new Response(body, { status: 206 });
+ * ```
+ */
+export const readFileStream: (
+  path: string,
+  options?: { start?: number; end?: number },
+) => Promise<ReadableStream<Uint8Array>> = async (
+  path: string,
+  options?: { start?: number; end?: number },
+): Promise<ReadableStream<Uint8Array>> => {
+  try {
+    validatePath(path, 'readFileStream');
+    const { start, end } = options ?? {};
+    // Validated before any open: Node/Bun's createReadStream throws
+    // synchronously on a bad range, which leaves the handle un-closable.
+    const valid = (n: number | undefined) =>
+      n === undefined || (Number.isInteger(n) && n >= 0);
+    if (
+      !valid(start) || !valid(end) ||
+      (start !== undefined && end !== undefined && end < start)
+    ) {
+      throw new FileOperationError(
+        `readFileStream failed: invalid byte range [${start}, ${end}]`,
+        path,
+        'readFileStream',
+      );
+    }
+
+    if (isDeno) {
+      const file = await Deno.open(path, { read: true });
+      if (start !== undefined) {
+        await file.seek(start, Deno.SeekMode.Start);
+      }
+      return end === undefined
+        ? file.readable
+        : __limitStream(file.readable, end - (start ?? 0) + 1);
+    } else if (isBun || isNode) {
+      // deno-coverage-ignore-start
+      assertBuiltin(nodeFs, 'node:fs', 'readFileStream');
+      assertBuiltin(nodeStream, 'node:stream', 'readFileStream');
+      // deno-coverage-ignore-stop
+      // Open first so a missing/forbidden path rejects here rather than
+      // erroring the stream later; the stream closes the handle on end.
+      const handle = await nodeFs.promises.open(path, 'r');
+      const range: { start?: number; end?: number } = {};
+      if (start !== undefined) range.start = start;
+      if (end !== undefined) range.end = end;
+      return nodeStream.Readable.toWeb(
+        handle.createReadStream(range),
+      ) as ReadableStream<Uint8Array>;
+    }
+
+    // deno-coverage-ignore-start
+    return __unsupportedFs('readFileStream');
+    // deno-coverage-ignore-stop
+  } catch (error) {
+    if (error instanceof FileOperationError) {
+      throw error;
+    }
+    throw wrapFileError(error, path, 'readFileStream');
   }
 };
 
