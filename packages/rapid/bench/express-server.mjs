@@ -2,6 +2,11 @@
 import express from 'express';
 
 const app = express();
+// Per-request correlation id (parity with rapid) — every real app has one.
+app.use((_req, res, next) => {
+  res.setHeader('x-request-id', crypto.randomUUID());
+  next();
+});
 app.get('/', (_req, res) => {
   res.json({ ok: true });
 });

@@ -1,5 +1,6 @@
-// Minimal oak server for benchmarking — same two routes as rapid-server.ts.
-import { Application, Router } from 'jsr:@oak/oak@^17';
+// oak server for Node/Bun (bare '@oak/oak' from node_modules). Same routes +
+// per-request correlation id as the others.
+import { Application, Router } from '@oak/oak';
 
 const router = new Router();
 router.get('/', (ctx) => {
@@ -10,7 +11,6 @@ router.get('/users/:id', (ctx) => {
 });
 
 const app = new Application();
-// Per-request correlation id (parity with rapid) — every real app has one.
 app.use(async (ctx, next) => {
   ctx.response.headers.set('x-request-id', crypto.randomUUID());
   await next();
