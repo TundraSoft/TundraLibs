@@ -28,6 +28,7 @@ export {
 } from './errors/mod.ts';
 
 export type {
+  DoctorContainer,
   Label,
   StockOptions,
   Vial as VialClass,

@@ -10,7 +10,7 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { Doctor, inject, label, Vial } from './mod.ts';
+import { Doctor, type DoctorContainer, inject, label, Vial } from './mod.ts';
 import {
   CircularDependencyError,
   DuplicateVialError,
@@ -737,6 +737,108 @@ describe('Doctor', () => {
         Doctor.dispense(Decorated),
         Doctor.dispense(Decorated),
       );
+    });
+  });
+
+  describe('Containers (createContainer)', () => {
+    it('should give each child its own singleton instance of a read-through @Vial class', () => {
+      Doctor.reset();
+      @Vial('SINGLETON')
+      class Widget {}
+      const c1: DoctorContainer = Doctor.createContainer();
+      const c2 = Doctor.createContainer();
+      const w1 = c1.dispense(Widget);
+      const w2 = c2.dispense(Widget);
+      asserts.assert(w1 instanceof Widget);
+      asserts.assert(w2 instanceof Widget);
+      asserts.assert(w1 !== w2); // distinct per container
+      asserts.assertStrictEquals(c1.dispense(Widget), w1); // cached within c1
+      // The global keeps its own instance, distinct from both children.
+      const wGlobal = Doctor.dispense(Widget);
+      asserts.assert(wGlobal !== w1 && wGlobal !== w2);
+    });
+
+    it('should let each child stock a label independently, leaving the global untouched', () => {
+      Doctor.reset();
+      const Svc = label<{ id: string }>('Svc');
+      const child1 = Doctor.createContainer();
+      const child2 = Doctor.createContainer();
+      child1.stock(Svc, { id: 'one' });
+      child2.stock(Svc, { id: 'two' });
+      asserts.assertEquals(child1.dispense(Svc).id, 'one');
+      asserts.assertEquals(child2.dispense(Svc).id, 'two');
+      // The global never saw either stock — no read-through for writes.
+      asserts.assertEquals(Doctor.has(Svc), false);
+      asserts.assertThrows(() => Doctor.dispense(Svc), UnregisteredVialError);
+    });
+
+    it('should resolve a child’s stocked dependency for inject() during child.dispense()', () => {
+      Doctor.reset();
+      const Greeting = label<string>('Greeting');
+      @Vial('SINGLETON')
+      class Greeter {
+        message = inject(Greeting); // no scope, no container of its own
+      }
+      const child1 = Doctor.createContainer();
+      const child2 = Doctor.createContainer();
+      child1.stock(Greeting, 'from child1');
+      child2.stock(Greeting, 'from child2');
+      // inject(Greeting) threads to whichever container is dispensing.
+      asserts.assertEquals(child1.dispense(Greeter).message, 'from child1');
+      asserts.assertEquals(child2.dispense(Greeter).message, 'from child2');
+      // The global has no Greeting, so dispensing Greeter there fails.
+      asserts.assertThrows(
+        () => Doctor.dispense(Greeter),
+        UnregisteredVialError,
+      );
+    });
+
+    it('should back a read-through SCOPED @Vial with each container’s own scope map', () => {
+      Doctor.reset();
+      @Vial('SCOPED')
+      class ReqCtx {}
+      const child = Doctor.createContainer();
+      const inChild = child.dispense(ReqCtx, 'r1');
+      asserts.assertStrictEquals(child.dispense(ReqCtx, 'r1'), inChild);
+      // The global's 'r1' scope is independent of the child's.
+      const inGlobal = Doctor.dispense(ReqCtx, 'r1');
+      asserts.assert(inGlobal !== inChild);
+      // Discharging the child's scope leaves the global's intact.
+      asserts.assertEquals(child.discharge('r1'), true);
+      asserts.assert(child.dispense(ReqCtx, 'r1') !== inChild);
+      asserts.assertStrictEquals(Doctor.dispense(ReqCtx, 'r1'), inGlobal);
+    });
+
+    it('should confine revoke to the child while has still reads through to the global', () => {
+      Doctor.reset();
+      @Vial('SINGLETON')
+      class Repo {}
+      const child = Doctor.createContainer();
+      asserts.assertEquals(child.has(Repo), true); // reads through
+      // Revoking a parent-only registration removes nothing in the child.
+      asserts.assertEquals(child.revoke(Repo), false);
+      // The global is untouched; the child still reads through and dispenses.
+      asserts.assertEquals(Doctor.has(Repo), true);
+      asserts.assert(child.dispense(Repo) instanceof Repo);
+      // A child's OWN override, by contrast, can be revoked.
+      const Token = label<number>('Token');
+      child.stock(Token, 7);
+      asserts.assertEquals(child.revoke(Token), true);
+      asserts.assertEquals(child.has(Token), false);
+      asserts.assertEquals(Doctor.has(Token), false);
+    });
+
+    it('should leave the global Doctor’s own behavior unchanged', () => {
+      Doctor.reset();
+      @Vial('SINGLETON')
+      class GlobalSvc {}
+      // Straight off the global: the same cached instance every time.
+      const g = Doctor.dispense(GlobalSvc);
+      asserts.assertStrictEquals(Doctor.dispense(GlobalSvc), g);
+      // A child resolving the same class does not disturb the global's cache.
+      const child = Doctor.createContainer();
+      asserts.assert(child.dispense(GlobalSvc) !== g);
+      asserts.assertStrictEquals(Doctor.dispense(GlobalSvc), g);
     });
   });
 });

@@ -1,12 +1,11 @@
 /**
- * @fileoverview The Injector — process-wide registry for vials and
- * stocked labels, plus the singleton `Doctor` instance every decorator
- * and consumer talks to.
+ * @fileoverview The Container — a registry for vials and stocked
+ * labels, plus the global `Doctor` instance every decorator and
+ * consumer talks to. `Doctor.createContainer()` mints child containers
+ * that read the global's registrations but keep their own instances.
  *
  * @module
  */
-
-import { Singleton } from '@tundralibs/utils/Singleton';
 
 import {
   CircularDependencyError,
@@ -15,6 +14,7 @@ import {
   UnregisteredVialError,
 } from './errors/mod.ts';
 import type {
+  DoctorContainer,
   Label,
   StockOptions,
   Vial,
@@ -89,9 +89,30 @@ export function _ambientScope(): string | undefined {
 }
 
 /**
- * Process-wide dependency-injection registry. Holds the registration
- * record per class or label, the singleton instance cache, and the
- * per-scope instance maps that back SCOPED resolution.
+ * The ambient **current container** stack, the sibling of
+ * {@link ambientScopes}. Every container operation pushes `this` for
+ * its duration, so an `inject()` running inside a container's
+ * `dispense` / `resolve` — a field initializer or constructor default
+ * of whatever is being built — resolves against **that** container
+ * rather than the global {@link Doctor}.
+ */
+const ambientContainers: DoctorContainer[] = [];
+
+/**
+ * Read the current ambient container (top of the stack), or `undefined`
+ * when no container operation is in flight — in which case `inject()`
+ * falls back to the global {@link Doctor}.
+ *
+ * @internal Consumed by `inject()`; not part of the public surface.
+ */
+export function _ambientContainer(): DoctorContainer | undefined {
+  return ambientContainers.at(-1);
+}
+
+/**
+ * A dependency-injection registry. Holds the registration record per
+ * class or label, the singleton instance cache, and the per-scope
+ * instance maps that back SCOPED resolution.
  *
  * Classes are keyed by constructor identity (the class itself), not by
  * `constructor.name`, so two classes that happen to share a name never
@@ -104,11 +125,26 @@ export function _ambientScope(): string | undefined {
  * `resolve` hand an instance back it is fully wired. There is no
  * post-construction injection step.
  *
- * Not exported directly — consumers reach the singleton through the
- * {@link Doctor} constant below.
+ * The global {@link Doctor} is a parentless container. A container from
+ * {@link createContainer} holds a reference to its parent and reads
+ * **registrations** through to it, while keeping its own singleton
+ * instances, scope maps, and stocked values — so a child resolves a
+ * parent's `@Vial` class as a distinct instance and can override any
+ * dependency with {@link stock} without touching the parent or its
+ * siblings.
+ *
+ * Not exported directly — consumers reach the global through the
+ * {@link Doctor} constant below and children through
+ * {@link createContainer}, both typed as {@link DoctorContainer}.
  */
-@Singleton
-class Injector {
+class Container implements DoctorContainer {
+  /**
+   * The parent to read registrations through to, or `undefined` for the
+   * global {@link Doctor}. Only registration lookups traverse it;
+   * instances, scopes, and stock stay local.
+   */
+  private readonly __parent?: Container;
+
   /** Registrations — classes keyed by identity, labels by name. */
   private readonly __services = new Map<Key, Registration>();
   /**
@@ -139,6 +175,27 @@ class Injector {
    * its resolution until first access, after both instances exist.
    */
   private readonly __resolving = new Set<Key>();
+
+  /**
+   * @param parent - The container to read registrations through to.
+   *   Omitted for the global {@link Doctor}; set by {@link createContainer}
+   *   for children.
+   */
+  constructor(parent?: Container) {
+    this.__parent = parent;
+  }
+
+  /**
+   * Mint a fresh **child** container whose parent is this one. The child
+   * reads this container's registrations — a `@Vial` class or stocked
+   * label resolvable here is resolvable in the child — but keeps its own
+   * singleton instances, scope maps, and stocked overrides, so two
+   * children get distinct instances of the same class and a child's
+   * {@link stock} never touches this container or its siblings.
+   */
+  public createContainer(): DoctorContainer {
+    return new Container(this);
+  }
 
   /**
    * Register a class with the given lifecycle. Short form takes the
@@ -345,7 +402,7 @@ class Injector {
     if (typeof vialOrLabel === 'function') {
       return this.__dispenseKey<T>(vialOrLabel, scope);
     }
-    const key = this.__byName.get(vialOrLabel.name);
+    const key = this.__findKey(vialOrLabel.name);
     if (key === undefined) {
       throw new UnregisteredVialError(
         `Nothing stocked under label '${vialOrLabel.name}'`,
@@ -368,7 +425,7 @@ class Injector {
    *   under `name`.
    */
   public dispenseByName<T = unknown>(name: string, scope?: string): T {
-    const key = this.__byName.get(name);
+    const key = this.__findKey(name);
     if (key === undefined) {
       throw new UnregisteredVialError(
         `No service registered under the name '${name}'`,
@@ -460,10 +517,11 @@ class Injector {
     this.__byName.clear();
     this.__singletonInstances.clear();
     this.__scopes.clear();
-    // Balanced push/pop keeps this empty in normal operation; clear
+    // Balanced push/pop keeps these empty in normal operation; clear
     // defensively anyway so a test that threw mid-operation cannot
-    // leak an ambient scope into the next case.
+    // leak an ambient scope or container into the next case.
     ambientScopes.length = 0;
+    ambientContainers.length = 0;
   }
 
   /** Whether a vial is currently registered for `type`. */
@@ -474,13 +532,15 @@ class Injector {
   /**
    * Whether something can be dispensed for `target` — a class
    * registered by identity, or a label / bare name present in the
-   * name index. The existence check for optional services:
+   * name index — checked in this container and, failing that, its
+   * parent. The existence check for optional services:
    * `Doctor.has(Db) ? inject(Db) : undefined`.
    */
   public has(target: Vial | Label | string): boolean {
-    return typeof target === 'function'
+    const here = typeof target === 'function'
       ? this.__services.has(target)
       : this.__byName.has(this.__nameOf(target));
+    return here || (this.__parent?.has(target) ?? false);
   }
 
   /**
@@ -514,6 +574,9 @@ class Injector {
   private __run<T>(scope: string | undefined, op: () => T): T {
     // We own `scope` iff it was absent when this frame began.
     const owned = scope !== undefined && !this.__scopes.has(scope);
+    // Push `this` too, so an `inject()` running during construction
+    // resolves against this container rather than the global Doctor.
+    ambientContainers.push(this);
     ambientScopes.push(scope);
     try {
       return op();
@@ -522,6 +585,7 @@ class Injector {
       throw err;
     } finally {
       ambientScopes.pop();
+      ambientContainers.pop();
     }
   }
 
@@ -536,7 +600,9 @@ class Injector {
   }
 
   private __dispense<T>(key: Key, scope?: string): T {
-    const reg = this.__services.get(key);
+    // Registration is read through to the parent, but every instance
+    // this switch builds caches into THIS container's maps.
+    const reg = this.__findRegistration(key);
     const name = this.__nameOf(key);
     // Only a class key can miss here: string keys always arrive via
     // the name index, which is kept in sync with the registrations.
@@ -633,6 +699,29 @@ class Injector {
     }
   }
 
+  /**
+   * Find the registration for `key` in this container, then walk up to
+   * the parent — the read-through that lets a child dispense a `@Vial`
+   * class registered into the global. `undefined` when no ancestor
+   * holds it.
+   *
+   * @internal
+   */
+  private __findRegistration(key: Key): Registration | undefined {
+    return this.__services.get(key) ?? this.__parent?.__findRegistration(key);
+  }
+
+  /**
+   * Resolve a name to its key via this container's name index, then the
+   * parent's — so a label or bare name registered into the global
+   * resolves from a child. `undefined` when no ancestor holds it.
+   *
+   * @internal
+   */
+  private __findKey(name: string): Key | undefined {
+    return this.__byName.get(name) ?? this.__parent?.__findKey(name);
+  }
+
   /** The display / index name of a key or label. */
   private __nameOf(keyOrLabel: Key | Label): string {
     return typeof keyOrLabel === 'string' ? keyOrLabel : keyOrLabel.name;
@@ -645,7 +734,10 @@ class Injector {
 }
 
 /**
- * The process-wide `Injector` instance — the `@Vial` decorator and
- * every `inject()` call route through this object.
+ * The global container — the `@Vial` decorator and every `inject()`
+ * call route through this object. It has no parent, so read-through is
+ * a no-op and its behavior is exactly a plain registry;
+ * {@link DoctorContainer.createContainer} mints children that read its
+ * registrations but hold their own instances.
  */
-export const Doctor: Injector = new Injector();
+export const Doctor: DoctorContainer = new Container();
