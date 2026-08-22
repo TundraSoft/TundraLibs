@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.2.0...radrouter-v1.3.0) (2026-08-22)
+
+
+### Features
+
+* **radrouter:** ignoreTrailingSlash option — make the trailing slash significant when false ([#533](https://github.com/TundraSoft/TundraLibs/issues/533)) ([1d27829](https://github.com/TundraSoft/TundraLibs/commit/1d27829b017b353f4ba90a2b9c41681b5eb46ada))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.1.0...radrouter-v1.2.0) (2026-08-22)
 
 
