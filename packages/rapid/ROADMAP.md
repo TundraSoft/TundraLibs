@@ -101,8 +101,6 @@ decision; everything else is a straightforward build.
 - **Context base transport-leak** — move `ctx.metrics`/`ctx.socketMetrics`/
   `ctx.publish` off the base `Context` onto `HTTPContext`/`SOCKETContext`
   (breaking; a `JOBContext` shouldn't carry HTTP-server surface).
-- **`openapi()` secure-by-default** — default `expose: 'DEVELOPMENT'` so the
-  full spec isn't served anonymously in production.
 - **`serveStatic` symlink escape** — a `realpath` re-check (adds a stat/request)
   or document that `root` must contain no untrusted symlinks.
 - **Module/DI isolation** — the `app.modules()` path resolves through the
@@ -112,13 +110,6 @@ decision; everything else is a straightforward build.
   SSE, Range, zero-copy static, proxy passthrough. Already post-1.0 (below).
 - Trailing-slash request policy; brotli in `compress`; `coerceComparable`
   hex/exp numeric coercion made consistent with `parsePaging`.
-
-**Monorepo-wide (not rapid-scoped)** — the root `deno.json` `publish.exclude`
-globs `**/REVIEW.md` / `**/DESIGN.md` miss the `-2` / `-modules` variants and
-omit `ROADMAP.md`, so tracer/norm/drivers/ambient/oql/pact still ship internal
-notes. Broaden to `**/REVIEW*.md` / `**/DESIGN*.md` and decide whether
-`ROADMAP.md` should ship. (rapid itself is already fixed via a package-level
-`publish.exclude`.)
 
 ## Pending 1.0 build items (pre-review)
 
