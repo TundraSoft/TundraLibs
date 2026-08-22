@@ -292,6 +292,27 @@ without breaking the rules. The `errors/` folder appears the
 moment you have a second distinct failure mode you'd want callers
 to branch on.
 
+### Error taxonomy in a request pipeline
+
+A helper that **detects** a condition whose response status it uniquely knows
+throws the framework error (`RapidError`, or a package's own `<Pkg>Error`) with
+the mapping code — never a generic `Error` the boundary must re-derive a status
+from (which defaults to 500 and discards what the helper knew). Example:
+`parseBody` throws `RapidError('RAPID_PAYLOAD_TOO_LARGE')` (413), not
+`new Error('too large')`.
+
+A helper that **runs caller-supplied code** (a middleware composer, an invoker)
+does the opposite: it does **not** wrap what flows through it. Those errors
+propagate to the disclosure boundary (`RapidError.from`), which classifies them
+— a guardian failure becomes a 400, anything else a 500. Wrapping them in a
+composer-invented code would mask a real 400 behind a 500. Such a helper throws
+the framework error only for a condition **it** detects (e.g. `next()` called
+more than once).
+
+Framework-internal helpers may couple to the framework's error type. A genuinely
+reusable/pure helper instead throws a typed error and lets the caller wrap at the
+boundary.
+
 ## Imports go through folder barrels
 
 Every project folder in a package — including internal-only ones
