@@ -57,7 +57,7 @@
 
 import { Bun, loadBuiltin } from '../_runtime-globals.ts';
 
-import { isNode, RUNTIME } from '../runtime.ts';
+import { isNode, RUNTIME, unrefTimer } from '../runtime.ts';
 import { isFileSync, pathExistsSync, removeSync } from '../file.ts';
 import * as path from '../path.ts';
 import {
@@ -180,7 +180,7 @@ type _BunWsData<T> = {
  */
 type _RuntimeAdapter = {
   start(): Promise<void>;
-  stop(graceful: boolean): Promise<void>;
+  stop(graceful: boolean, timeoutMs?: number): Promise<void>;
   ref(): void;
   unref(): void;
 };
@@ -997,8 +997,27 @@ export class WebServer<T = unknown> {
    * - `onClose` event fires when fully stopped
    * - Abort signal listener is removed if present
    *
-   * @param graceful - If true (default), waits for active connections to complete.
-   *                   If false, forcefully closes all connections immediately.
+   * Shutdown modes:
+   * - `graceful === false` — force-close every connection immediately.
+   * - `graceful === true`, no `timeoutMs` — drain in-flight requests, then
+   *   resolve. Idle keep-alive connections do not delay it, but a live
+   *   WebSocket can keep it open indefinitely (the caller's choice when no
+   *   deadline is given).
+   * - `graceful === true` + `timeoutMs` — drain in-flight requests for up to
+   *   `timeoutMs`, then force-close whatever remains (still-active requests
+   *   and WebSockets) so `stop` always resolves within ~`timeoutMs`.
+   *
+   * Deno exposes no force-close-all-connections primitive: when the deadline
+   * fires on Deno, `stop` resolves anyway but a wedged connection can outlive
+   * it. The process-exit backstop is then the caller's responsibility.
+   *
+   * @param graceful - If true (default), waits for in-flight requests to
+   *                   complete. If false, forcefully closes all connections
+   *                   immediately.
+   * @param timeoutMs - When `graceful` is true, the maximum time in
+   *                    milliseconds to wait for in-flight requests before
+   *                    force-closing the rest. Ignored when `graceful` is
+   *                    false. Omitted means drain without a deadline.
    *
    * @returns Promise that resolves when server has fully stopped
    *
@@ -1024,30 +1043,27 @@ export class WebServer<T = unknown> {
    * console.log('Server force stopped');
    * ```
    *
-   * @example With timeout
+   * @example Bounded graceful shutdown
    * ```typescript
    * declare const server: WebServer;
    *
-   * const stopTimeout = setTimeout(() => {
-   *   console.log('Stop taking too long, forcing...');
-   *   server.stop(false);
-   * }, 30000);
-   *
-   * await server.stop();
-   * clearTimeout(stopTimeout);
+   * // Drain in-flight requests, but force-close after 30s so stop always
+   * // resolves.
+   * await server.stop(true, 30_000);
+   * console.log('Server stopped (drained or forced at the deadline)');
    * ```
    *
    * @see {@link start} to start the server
    * @see {@link state} to check current state
    */
-  public stop(graceful = true): Promise<void> {
+  public stop(graceful = true, timeoutMs?: number): Promise<void> {
     if (this._state !== 'RUNNING') {
       throw new ServerNotRunningError(this.mode, 'stop');
     }
     this._state = 'STOPPING';
     let stopPromise: Promise<void>;
     try {
-      stopPromise = this.__adapter().stop(graceful);
+      stopPromise = this.__adapter().stop(graceful, timeoutMs);
       if (this.options.abortSignal && this.__abortListener) {
         this.options.abortSignal.removeEventListener(
           'abort',
@@ -2506,35 +2522,46 @@ export class WebServer<T = unknown> {
   private __buildAdapter(): _RuntimeAdapter {
     switch (RUNTIME) {
       case 'BUN':
+        // deno-coverage-ignore-start — Bun-only adapter, unreachable on the Deno lane
         return {
           start: () => this._startBunServer(),
-          stop: async (graceful: boolean) => {
+          stop: (graceful: boolean, timeoutMs?: number) => {
+            const handle = this._client as _BunServerHandle;
             // Bun's `stop(true)` is the force path; omitted/false is graceful.
-            await (this._client as _BunServerHandle).stop(
-              graceful ? undefined : true,
+            if (!graceful) return handle.stop(true);
+            if (timeoutMs === undefined) return handle.stop();
+            // Bounded: race the graceful drain against the deadline; on
+            // expiry force-close the rest via `stop(true)`.
+            return this.__stopWithDeadline(
+              handle.stop(),
+              timeoutMs,
+              () => {
+                handle.stop(true).catch(() => {});
+              },
             );
           },
           ref: () => (this._client as _BunServerHandle).ref(),
           unref: () => (this._client as _BunServerHandle).unref(),
         };
+        // deno-coverage-ignore-stop
       case 'DENO':
         return {
           start: () => this._startDenoServer(),
-          // Deno doesn't expose a force path — `shutdown()` is the only
-          // close primitive. Force and graceful collapse to the same call.
-          stop: async () => {
-            await (this._client as _DenoServerHandle).shutdown();
-          },
+          stop: (graceful: boolean, timeoutMs?: number) =>
+            this.__stopDenoServer(graceful, timeoutMs),
           ref: () => (this._client as _DenoServerHandle).ref(),
           unref: () => (this._client as _DenoServerHandle).unref(),
         };
       case 'NODE':
+        // deno-coverage-ignore-start — Node-only adapter, unreachable on the Deno lane
         return {
           start: () => this._startNodeServer(),
-          stop: (graceful: boolean) => this.__stopNodeServer(graceful),
+          stop: (graceful: boolean, timeoutMs?: number) =>
+            this.__stopNodeServer(graceful, timeoutMs),
           ref: () => this.__nodeClient().ref(),
           unref: () => this.__nodeClient().unref(),
         };
+        // deno-coverage-ignore-stop
       default:
         // deno-coverage-ignore-start
         throw new UnsupportedRuntimeError(
@@ -2662,19 +2689,147 @@ export class WebServer<T = unknown> {
   }
 
   /**
-   * Stops the Node `http`/`https` server. On force, terminates active
-   * connections first via `closeAllConnections()` then waits for the
-   * `close` callback. On graceful, just awaits `close`.
+   * Stops the Node `http`/`https` server.
+   *
+   * On force, terminates every connection via `closeAllConnections()`
+   * before awaiting the `close` callback. On graceful, first drops idle
+   * keep-alive sockets with `closeIdleConnections()` — without this
+   * `close()` hangs on them, Node's documented behavior — so `close()`
+   * only waits on connections with an in-flight request. When `timeoutMs`
+   * is given, an unref'd deadline force-closes whatever remains via
+   * `closeAllConnections()`, letting the `close` callback fire.
+   *
+   * @param graceful - Drain in-flight requests when true; force-close all
+   *                   connections immediately when false.
+   * @param timeoutMs - When graceful, force-close the remainder after this
+   *                    many milliseconds. Omitted means drain without a
+   *                    deadline.
    *
    * @private
    */
-  private __stopNodeServer(graceful: boolean): Promise<void> {
+  private __stopNodeServer(
+    graceful: boolean,
+    timeoutMs?: number,
+  ): Promise<void> {
+    // deno-coverage-ignore-start — Node-only path, unreachable on the Deno lane
     if (this._client === null || !isNode) return Promise.resolve();
     const client = this.__nodeClient();
-    if (!graceful) client.closeAllConnections();
+    if (!graceful) {
+      client.closeAllConnections();
+      return this.__nodeClose(client);
+    }
+    // Close idle keep-alives so `close()` only waits on active requests.
+    client.closeIdleConnections();
+    const closed = this.__nodeClose(client);
+    if (timeoutMs === undefined) return closed;
+    return this.__stopWithDeadline(
+      closed,
+      timeoutMs,
+      () => client.closeAllConnections(),
+    );
+    // deno-coverage-ignore-stop
+  }
+
+  /**
+   * Wraps Node's callback-style `server.close()` in a promise.
+   *
+   * @private
+   */
+  private __nodeClose(
+    client:
+      | InstanceType<typeof nodeHttp.Server>
+      | InstanceType<typeof nodeHttps.Server>,
+  ): Promise<void> {
+    // deno-coverage-ignore-start — Node-only path, unreachable on the Deno lane
     return new Promise<void>((resolve, reject) => {
       client.close((err?: Error) => (err ? reject(err) : resolve()));
     });
+    // deno-coverage-ignore-stop
+  }
+
+  /**
+   * Stops the Deno HTTP server.
+   *
+   * Deno exposes no force-close-all-connections primitive — `shutdown()`
+   * is the only close call — so force and untimed-graceful both collapse
+   * to `shutdown()` (its historical behavior). When `timeoutMs` is given,
+   * `shutdown()` is requested and the server's `finished` promise raced
+   * against an unref'd deadline; on expiry `stop` resolves anyway. Because
+   * there is no force primitive, a wedged Deno connection can outlive the
+   * deadline — the process-exit backstop is the caller's responsibility.
+   *
+   * @param graceful - Retained for signature parity; Deno has no force path.
+   * @param timeoutMs - When graceful, resolve after this many milliseconds
+   *                    even if the drain has not finished. Omitted means
+   *                    drain without a deadline.
+   *
+   * @private
+   */
+  private __stopDenoServer(
+    graceful: boolean,
+    timeoutMs?: number,
+  ): Promise<void> {
+    const handle = this._client as _DenoServerHandle;
+    if (!graceful || timeoutMs === undefined) return handle.shutdown();
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, timeoutMs);
+      unrefTimer(timer);
+      // `shutdown()` resolution mirrors `finished`; swallow its rejection so
+      // the raced `finished` handler below is the single settle path.
+      handle.shutdown().catch(() => {});
+      handle.finished.then(
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        // deno-coverage-ignore-start — `finished` rejects only on abnormal
+        // server close, not deterministically reproducible in a test.
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+        // deno-coverage-ignore-stop
+      );
+    });
+  }
+
+  /**
+   * Races a runtime `drain` promise against a `timeoutMs` deadline.
+   *
+   * When `drain` settles first its outcome is propagated and the timer
+   * cleared. When the deadline fires first, `onTimeout` runs the runtime's
+   * force-close and the returned promise then follows `drain` — which the
+   * force-close causes to settle. The timer is unref'd so it never keeps
+   * the process alive on its own.
+   *
+   * @param drain - The runtime's graceful-close promise.
+   * @param timeoutMs - Milliseconds to wait before force-closing.
+   * @param onTimeout - Runs the runtime's force-close on deadline expiry.
+   *
+   * @private
+   */
+  private __stopWithDeadline(
+    drain: Promise<void>,
+    timeoutMs: number,
+    onTimeout: () => void,
+  ): Promise<void> {
+    // deno-coverage-ignore-start — only the Bun/Node adapters call this; the
+    // Deno lane uses __stopDenoServer, so this is unreachable there.
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(onTimeout, timeoutMs);
+      unrefTimer(timer);
+      drain.then(
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
+    // deno-coverage-ignore-stop
   }
 
   /**
