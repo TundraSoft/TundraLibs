@@ -1,33 +1,32 @@
 /**
- * @fileoverview The decoration side-table: a `WeakMap` keyed by the
- * METHOD FUNCTION itself. Chosen over `context.metadata` /
- * `Symbol.metadata` deliberately — the symbol needs a polyfill (and an
- * import-order guarantee) on Bun and Node, while a side-table works on
- * every runtime unconditionally. A TC39 method decorator never sees
- * the class constructor, so the FUNCTION is the only stable key
- * available at decoration time; the module tier resolves
- * class → entries by walking the instance's prototype at mount.
+ * @fileoverview The decoration registry: each decorated CLASS carries its
+ * own record of what rapid's decorators declared, keyed by METHOD NAME, in
+ * the class's TC39 decorator-metadata object (`Class[Symbol.metadata]`,
+ * reached at decoration time as `context.metadata`).
  *
- * CAVEAT (documented contract): a third-party WRAPPING decorator —
- * one that RETURNS a replacement function — installs that replacement
- * on the prototype, and the replacement carries no metadata. Because
- * TC39 applies decorators bottom-up and feeds each result to the next,
- * a rAPId decorator must sit ABOVE any wrapper (further from the
- * method), so it records the function that actually lands:
+ * Why name-keyed metadata rather than a side-table keyed by the method
+ * FUNCTION: a third-party WRAPPING decorator (one that returns a
+ * replacement function) installs that replacement on the prototype. A
+ * function-keyed table would hold the ORIGINAL, now-unreachable function
+ * and the route would be silently lost unless the rapid decorator sat
+ * above the wrapper. Keyed by name, the mount tier binds whatever function
+ * is actually installed under that name — so decorator STACKING ORDER
+ * DOES NOT MATTER.
  *
- * ```typescript ignore
- * class Ok {
- *   @GET('/x')     // ← applied LAST: records the wrapper. Works.
- *   @Measure       // ← applied first: returns the replacement
- *   handler() {}
- * }
+ * `Symbol.metadata` is not yet a native well-known symbol on every
+ * runtime. It is polyfilled below, at module load, with the REGISTERED
+ * symbol `Symbol.for('Symbol.metadata')` — the same fallback the
+ * TypeScript/swc decorator emit uses, so the two always agree. Because
+ * every rapid decorator imports this module, and ES modules evaluate their
+ * imports before the importing module's body, the polyfill is guaranteed
+ * to run before any class that applies a rapid decorator is defined — no
+ * user action, no import order to get right. Idempotent (`??=`), so a
+ * native or earlier-polyfilled symbol is left alone. Should a transform
+ * ever apply standard decorators WITHOUT supplying `context.metadata`,
+ * the write side fails LOUDLY rather than silently dropping routes.
  *
- * class Broken {
- *   @Measure       // ← applied last: its replacement is installed
- *   @GET('/x')     // ← applied first: recorded the ORIGINAL, now
- *   handler() {}   //   unreachable — the route is silently lost
- * }
- * ```
+ * `@Module` (a CLASS decorator, which receives the constructor itself) keeps
+ * a plain WeakMap keyed by constructor — it has no stacking hazard.
  *
  * @module
  */
@@ -39,48 +38,133 @@ import type {
   RapidModuleMeta,
 } from '../types/mod.ts';
 
-/** The side-table. WeakMap: entries die with the class, no leaks. */
-const REGISTRY = new WeakMap<object, RapidDecoration[]>();
+// ── Symbol.metadata polyfill (load-time, idempotent) ──────────────────
+const SYMBOL = Symbol as unknown as { metadata?: symbol };
+SYMBOL.metadata ??= Symbol.for('Symbol.metadata');
+/** The decorator-metadata well-known symbol, native or polyfilled. */
+const METADATA: symbol = SYMBOL.metadata;
+
+/**
+ * rapid's slot on a class's decorator-metadata object. A REGISTERED symbol
+ * so two copies of this package in one process (duplicated install) still
+ * read each other's records.
+ */
+const RAPID_SLOT: symbol = Symbol.for('@tundralibs/rapid/decorations');
+
+/** Everything rapid's decorators declared for ONE method of ONE class. */
+type MethodRecord = {
+  decorations?: RapidDecoration[];
+  on?: string[];
+  use?: RapidModuleInvokeMiddleware[];
+};
+
+/** A class's OWN records, by method name. Null-prototype: names are data. */
+type Bucket = Record<PropertyKey, MethodRecord>;
 
 /**
  * `@Module`'s side-table, keyed by CONSTRUCTOR (a class decorator sees
- * the class, unlike a method decorator). Separate map from
- * {@link REGISTRY} — different key population (constructors vs method
- * functions) — kept as two WeakMaps rather than one keyed union so
- * each stays a plain, ungapped lookup.
+ * the class, unlike a method decorator).
  */
 const MODULES = new WeakMap<object, RapidModuleMeta>();
-/** `@On` subscriptions per handler method (module system). */
-const ON_EVENTS = new WeakMap<object, string[]>();
-/** `@Use` invoke-middleware per method, in EXECUTION order (module system). */
-const INVOKE_MIDDLEWARE = new WeakMap<object, RapidModuleInvokeMiddleware[]>();
 
 /**
- * Append one decoration for `method`. APPEND, never overwrite — the
- * same method may carry several decorations (multi-transport, route
- * aliases), and the same factory may legally be applied twice.
+ * The rapid bucket on `context.metadata`, created OWN on first write. A
+ * subclass's metadata object inherits from its superclass's (TC39), so a
+ * plain read would surface the PARENT's bucket — `Object.hasOwn` keeps
+ * each class's records separate (and stops a subclass's decorators from
+ * mutating the parent's).
+ *
+ * @throws {RapidError} RAPID_CONFIG when the transform supplied no
+ *   `context.metadata` — the one way records could otherwise vanish
+ *   silently.
  */
-export function recordDecoration(
-  method: object,
-  decoration: RapidDecoration,
-): void {
-  const entries = REGISTRY.get(method);
-  if (entries === undefined) {
-    REGISTRY.set(method, [decoration]);
-  } else {
-    entries.push(decoration);
+function bucketFor(
+  context: ClassMethodDecoratorContext,
+  decorator: string,
+): Bucket {
+  const meta = context.metadata as Record<symbol, unknown> | undefined;
+  if (meta === undefined || meta === null) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `@${decorator}: the decorator transform did not supply context.metadata, ` +
+        `so this decoration cannot be recorded. rapid requires TC39 standard decorators ` +
+        `WITH decorator metadata (TypeScript ≥ 5.2, or a transform with metadata support).`,
+      details: { decorator, name: String(context.name) },
+    });
   }
+  if (!Object.hasOwn(meta, RAPID_SLOT)) {
+    meta[RAPID_SLOT] = Object.create(null) as Bucket;
+  }
+  return meta[RAPID_SLOT] as Bucket;
+}
+
+/** The record for `context.name` in its class's own bucket, created on demand. */
+function recordFor(
+  context: ClassMethodDecoratorContext,
+  decorator: string,
+): MethodRecord {
+  const bucket = bucketFor(context, decorator);
+  return bucket[context.name] ??= {};
 }
 
 /**
- * Read a method's decorations (mount-time consumer). `undefined` for
- * an undecorated function — the prototype walk uses this to skip
- * plain methods.
+ * The class's OWN metadata object, or `undefined`. Identity-compared
+ * against the superclass's rather than `Object.hasOwn(ctor, …)` so it holds
+ * for any emit (defineProperty or assignment): a decorated class always
+ * gets a FRESH metadata object whose prototype is the parent's.
+ */
+function ownMetadata(ctor: object): Record<symbol, unknown> | undefined {
+  const meta = (ctor as Record<symbol, unknown>)[METADATA];
+  if (meta === undefined || meta === null) return undefined;
+  const parent = Object.getPrototypeOf(ctor) as
+    | Record<symbol, unknown>
+    | null;
+  if (parent !== null && parent[METADATA] === meta) return undefined;
+  return meta as Record<symbol, unknown>;
+}
+
+/** The class's OWN rapid bucket, or `undefined` when nothing was declared on it. */
+function ownBucket(ctor: object): Bucket | undefined {
+  const meta = ownMetadata(ctor);
+  if (meta === undefined || !Object.hasOwn(meta, RAPID_SLOT)) return undefined;
+  return meta[RAPID_SLOT] as Bucket;
+}
+
+/**
+ * Append one decoration for the decorated method. APPEND, never overwrite
+ * — the same method may carry several decorations (multi-transport, route
+ * aliases), and the same factory may legally be applied twice.
+ *
+ * @throws {RapidError} RAPID_CONFIG when `context.metadata` is missing.
+ */
+export function recordDecoration(
+  context: ClassMethodDecoratorContext,
+  decoration: RapidDecoration,
+): void {
+  const record = recordFor(context, decoration.kind);
+  (record.decorations ??= []).push(decoration);
+}
+
+/**
+ * The decorations a class DECLARED for one of its own methods (mount-time
+ * consumer; also public introspection). `undefined` when that class
+ * declared none under `name` — inherited declarations are the ancestor's,
+ * read by asking the ancestor.
  */
 export function decorationsOf(
-  method: object,
+  ctor: object,
+  name: PropertyKey,
 ): readonly RapidDecoration[] | undefined {
-  return REGISTRY.get(method);
+  return ownBucket(ctor)?.[name]?.decorations;
+}
+
+/**
+ * The method names a class declared ANY rapid decoration on (own records
+ * only). The mount tier iterates this per prototype level.
+ */
+export function decoratedNamesOf(ctor: object): readonly PropertyKey[] {
+  const bucket = ownBucket(ctor);
+  return bucket === undefined ? [] : Reflect.ownKeys(bucket);
 }
 
 /**
@@ -191,35 +275,45 @@ export function assertClassContext(
   }
 }
 
-/** Record `@On` events for a handler (appends; several `@On` may stack). */
-export function recordOn(method: object, events: readonly string[]): void {
-  const existing = ON_EVENTS.get(method);
-  if (existing === undefined) ON_EVENTS.set(method, [...events]);
-  else existing.push(...events);
+/**
+ * Record `@On` events for a handler (appends; several `@On` may stack).
+ *
+ * @throws {RapidError} RAPID_CONFIG when `context.metadata` is missing.
+ */
+export function recordOn(
+  context: ClassMethodDecoratorContext,
+  events: readonly string[],
+): void {
+  const record = recordFor(context, 'On');
+  (record.on ??= []).push(...events);
 }
 
-/** The events a handler subscribes to, or `undefined` when it has no `@On`. */
-export function onEventsOf(method: object): readonly string[] | undefined {
-  return ON_EVENTS.get(method);
+/** The events a class's handler subscribes to, or `undefined` when it has no `@On`. */
+export function onEventsOf(
+  ctor: object,
+  name: PropertyKey,
+): readonly string[] | undefined {
+  return ownBucket(ctor)?.[name]?.on;
 }
 
 /**
  * Record `@Use` middleware for a method. Decorators apply bottom-up, so
  * each call PREPENDS — the top-most `@Use` in source runs first.
+ *
+ * @throws {RapidError} RAPID_CONFIG when `context.metadata` is missing.
  */
 export function recordUse(
-  method: object,
+  context: ClassMethodDecoratorContext,
   middleware: readonly RapidModuleInvokeMiddleware[],
 ): void {
-  INVOKE_MIDDLEWARE.set(method, [
-    ...middleware,
-    ...(INVOKE_MIDDLEWARE.get(method) ?? []),
-  ]);
+  const record = recordFor(context, 'Use');
+  record.use = [...middleware, ...(record.use ?? [])];
 }
 
-/** A method's `@Use` chain in execution order, or `undefined` when bare. */
+/** A class method's `@Use` chain in execution order, or `undefined` when bare. */
 export function middlewareOf(
-  method: object,
+  ctor: object,
+  name: PropertyKey,
 ): readonly RapidModuleInvokeMiddleware[] | undefined {
-  return INVOKE_MIDDLEWARE.get(method);
+  return ownBucket(ctor)?.[name]?.use;
 }

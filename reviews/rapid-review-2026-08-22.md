@@ -230,8 +230,7 @@ rapid-scoped package-level exclude was removed as redundant — the root globs
 are the single source. NOTE: this is a workspace-root change touching every
 package's publish set (intentional, per your go-ahead).
 
-Smaller gated/noted: decorator stacking-order has no runtime guard (silent
-route loss — documented only); `coerceComparable` accepts hex/exp numerics
+Smaller gated/noted: decorator stacking-order footgun — ✅ RESOLVED 2026-08-22: the registry is now keyed by method NAME in the class's TC39 decorator metadata (`Symbol.metadata` polyfilled by rapid at load), so wrapping decorators may sit above or below rapid's; `coerceComparable` accepts hex/exp numerics
 (`?n=gt:0x1F`) inconsistently with `parsePaging`; decorator option-type naming
 skew (`RouteDecoratorOptions` vs `Job/SocketDecoratorOptions`);
 `Application.stop()` reaches `Deno`/`process` globals directly (guarded, no

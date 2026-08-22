@@ -19,7 +19,7 @@ describe('rapid.decorators.job', () => {
         return { content: 'done' };
       }
     }
-    const [entry] = decorationsOf(Nightly.prototype.run)!;
+    const [entry] = decorationsOf(Nightly, 'run')!;
     asserts.assertEquals(entry.kind, 'JOB');
     if (entry.kind === 'JOB') {
       asserts.assertEquals(entry.name, 'cleanup');

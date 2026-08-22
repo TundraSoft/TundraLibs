@@ -17,7 +17,11 @@
  */
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
-import { decorationsOf, moduleMetaOf } from '../decorators/mod.ts';
+import {
+  decoratedNamesOf,
+  decorationsOf,
+  moduleMetaOf,
+} from '../decorators/mod.ts';
 import { RapidModule } from '../modules/RapidModule.ts';
 import type { RapidRouteOpenApi } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
@@ -311,36 +315,41 @@ export function mountModule<S extends RapidContextState>(
     : meta?.namespace;
   const moduleVersion = meta?.version;
 
-  const seen = new Set<string>();
+  const seen = new Set<PropertyKey>();
   let mounted = 0;
   let proto: object | null = Object.getPrototypeOf(instance);
   while (proto !== null && proto !== Object.prototype) {
-    for (const name of Object.getOwnPropertyNames(proto)) {
-      if (name === 'constructor' || seen.has(name)) continue;
-      // Descriptor, not `proto[name]`: reading an ACCESSOR through the
-      // prototype would run its getter with `this = proto` (RapidModule's
-      // `log`/`config` throw "used before initialized" that way).
-      const fn = Object.getOwnPropertyDescriptor(proto, name)?.value;
-      if (typeof fn !== 'function') continue;
-      const decorations = decorationsOf(fn);
-      if (decorations === undefined) continue;
+    // The class that owns this prototype level — its OWN records are the
+    // decorations declared at this level (name-keyed; see registry.ts).
+    const level = Object.getOwnPropertyDescriptor(proto, 'constructor')
+      ?.value as object | undefined;
+    const names = level === undefined ? [] : decoratedNamesOf(level);
+    for (const name of names) {
+      if (seen.has(name)) continue;
+      const decorations = decorationsOf(level!, name);
+      if (decorations === undefined) continue; // @On/@Use only — not a mount
       seen.add(name);
 
-      const resolved = (instance as Record<string, unknown>)[name];
+      // The function INSTALLED under this name at this level — a wrapping
+      // decorator's replacement, if one was stacked — via the descriptor,
+      // not `proto[name]` (an accessor's getter would run with `this = proto`).
+      const fn = Object.getOwnPropertyDescriptor(proto, name)?.value;
+      const resolved = (instance as Record<PropertyKey, unknown>)[name];
       if (resolved !== fn) {
-        const declaredOn = (proto as { constructor?: { name?: string } })
-          .constructor?.name ?? '(anonymous)';
+        const declaredOn = (level as { name?: string } | undefined)?.name ??
+          '(anonymous)';
         throw new RapidError('RAPID_CONFIG', {
-          message: `${ctorName}.${name} overrides a method decorated on ` +
+          message:
+            `${ctorName}.${String(name)} overrides a method decorated on ` +
             `${declaredOn} without re-declaring its decorators — the ` +
             `base class's routes/commands/jobs are unreachable through ` +
             `this override. Either remove the override or re-apply the ` +
-            `same decorator(s) on ${ctorName}.prototype.${name}.`,
-          details: { class: ctorName, method: name, declaredOn },
+            `same decorator(s) on ${ctorName}.prototype.${String(name)}.`,
+          details: { class: ctorName, method: String(name), declaredOn },
         });
       }
 
-      const label = `${ctorName}.${name}`;
+      const label = `${ctorName}.${String(name)}`;
       for (const decoration of decorations) {
         registerDecoration(
           target,
@@ -377,11 +386,11 @@ export function mountModule<S extends RapidContextState>(
 export function hasDecorations(instance: object): boolean {
   let proto: object | null = Object.getPrototypeOf(instance);
   while (proto !== null && proto !== Object.prototype) {
-    for (const name of Object.getOwnPropertyNames(proto)) {
-      if (name === 'constructor') continue;
-      const fn = Object.getOwnPropertyDescriptor(proto, name)?.value;
-      if (typeof fn === 'function' && decorationsOf(fn) !== undefined) {
-        return true;
+    const level = Object.getOwnPropertyDescriptor(proto, 'constructor')
+      ?.value as object | undefined;
+    if (level !== undefined) {
+      for (const name of decoratedNamesOf(level)) {
+        if (decorationsOf(level, name) !== undefined) return true;
       }
     }
     proto = Object.getPrototypeOf(proto);

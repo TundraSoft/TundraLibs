@@ -48,11 +48,11 @@ export const SOCKET: {
   // deno-lint-ignore no-explicit-any
 ): any => {
   return (
-    target: object,
+    _target: object,
     context: ClassMethodDecoratorContext,
   ): void => {
     assertMethodContext(context, 'SOCKET');
-    recordDecoration(target, {
+    recordDecoration(context, {
       kind: 'SOCKET',
       command,
       binds: options.bind ?? [],

@@ -18,7 +18,7 @@ describe('rapid.decorators.socket', () => {
         return { content: { room, echoed: message } };
       }
     }
-    const [entry] = decorationsOf(Chat.prototype.send)!;
+    const [entry] = decorationsOf(Chat, 'send')!;
     asserts.assertEquals(entry.kind, 'SOCKET');
     asserts.assertEquals(
       entry.kind === 'SOCKET' ? entry.command : '',

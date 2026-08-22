@@ -33,6 +33,7 @@ export {
 export { On } from './on.ts';
 export { Use } from './use.ts';
 export {
+  decoratedNamesOf,
   decorationsOf,
   moduleMetaOf,
   recordDecoration,

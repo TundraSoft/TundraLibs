@@ -45,10 +45,13 @@ TEST, not just to claim.
 
 ## The three problems this has to solve
 
-1. **Iteration.** The decoration registry is a `WeakMap` keyed by the
-   method function — deliberately, because a TC39 method decorator
-   never sees the class. A `WeakMap` cannot be enumerated, so "cycle
-   through the registry at start()" is not directly possible.
+1. **Iteration.** A TC39 method decorator never sees the class, so a
+   decoration must be recorded somewhere the mount tier can later find
+   from an instance. (Originally a `WeakMap` keyed by the method
+   function; since 2026-08-22 it is the class's own decorator-metadata
+   object, `Class[Symbol.metadata]`, keyed by method NAME — which also
+   removed the wrapping-decorator stacking-order footgun, see
+   `registry.ts`.) Either way, nothing global is enumerated.
 2. **Instantiation.** A method decorator records a FUNCTION. Invoking
    it needs `instance.method(...)` — someone must call `new`, and
    method decorators cannot know the constructor.
@@ -81,9 +84,10 @@ three (`scratchpad/nsprobe`):
 So:
 
 ```ts ignore
-// registry.ts — two tiers, both weak, neither enumerated
-const DECORATIONS = new WeakMap<object, RapidDecoration[]>(); // method fn → routes/commands/jobs
-const MODULES = new WeakMap<object, RapidModuleMeta>(); // constructor → prefix/version/…
+// registry.ts — per-class records, nothing global enumerated
+Symbol.metadata ??= Symbol.for('Symbol.metadata'); // load-time, idempotent
+context.metadata[RAPID_SLOT][context.name] = { decorations, on, use }; // method decorators, OWN per class
+const MODULES = new WeakMap<object, RapidModuleMeta>(); // @Module: constructor → prefix/version/…
 ```
 
 ## The API
@@ -231,10 +235,11 @@ runtime import.)
 - **Decorated-then-overridden subclass method — RESOLVED: reject
   loudly**, not silent dedupe. Silently keeping the base's registration
   would bind a route to a method the instance no longer runs — the
-  same "silently lost" failure family `registry.ts`'s own
-  wrapping-decorator caveat already warns against. The algorithm (walk
-  the prototype chain top-down, compare each decorated ancestor
-  function against `instance[name]`'s actual resolution) is in
+  same "silently lost" failure family the old function-keyed registry's
+  wrapping-decorator caveat warned against (that caveat itself is gone
+  since the name-keyed registry, 2026-08-22). The algorithm (walk the
+  prototype chain top-down, compare the function installed at each
+  decorated level against `instance[name]`'s actual resolution) is in
   `utils/mountModule.ts`; both the reject case and the legitimate
   re-decorated-override case are test-covered.
 - **Error-registry extension — DEFERRED**, not built: plain throws

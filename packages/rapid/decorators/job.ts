@@ -69,9 +69,9 @@ export const JOB: {
       cause: cause instanceof Error ? cause : undefined,
     });
   }
-  return (target: object, context: ClassMethodDecoratorContext): void => {
+  return (_target: object, context: ClassMethodDecoratorContext): void => {
     assertMethodContext(context, 'JOB');
-    recordDecoration(target, {
+    recordDecoration(context, {
       kind: 'JOB',
       name,
       schedule,

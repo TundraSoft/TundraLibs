@@ -6,12 +6,10 @@
  * mount. Paths are radrouter-NATIVE (`/users/:id:`); grammar is
  * enforced by radrouter itself at mount/start.
  *
- * ⚠️ STACKING ORDER: because a decoration is keyed by the method's
- * FUNCTION reference, a third-party WRAPPING decorator (one that returns
- * a replacement function) must sit BELOW the rapid decorator (closer to
- * the method) — otherwise the wrapper replaces the recorded function and
- * the route is SILENTLY dropped. See `registry.ts` and the README
- * "Decorator stacking order" warning.
+ * Decorations are keyed by the method's NAME in the class's decorator
+ * metadata (see `registry.ts`), so stacking ORDER does not matter: a
+ * third-party wrapping decorator may sit above or below a rapid one — the
+ * mount tier binds whatever function is installed under that name.
  *
  * COMPILE-TIME CONTRACT at the `@` site: the method must return the
  * {@link RapidModuleReply} envelope, and its parameters must match the
@@ -95,9 +93,9 @@ function route<This, A extends readonly unknown[]>(
   path: string,
   options: RouteDecoratorOptions<A>,
 ): RouteDecorator<This, A> {
-  return (target, context): void => {
+  return (_target, context): void => {
     assertMethodContext(context, method);
-    recordDecoration(target, {
+    recordDecoration(context, {
       kind: 'HTTP',
       method,
       path,

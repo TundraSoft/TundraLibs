@@ -280,8 +280,16 @@ export class ModuleRuntime {
         }
         seen.add(methodName);
         const fn = descriptor.value as AnyFn;
-        const middleware = middlewareOf(fn);
-        const on = onEventsOf(fn);
+        // @On/@Use are keyed by CLASS + NAME (registry.ts), so they are
+        // found even when a wrapping decorator replaced the function.
+        const level = Object.getOwnPropertyDescriptor(proto, 'constructor')
+          ?.value as object | undefined;
+        const middleware = level === undefined
+          ? undefined
+          : middlewareOf(level, methodName);
+        const on = level === undefined
+          ? undefined
+          : onEventsOf(level, methodName);
         if (on !== undefined) {
           if (middleware !== undefined) {
             throw new RapidError('RAPID_CONFIG', {

@@ -58,10 +58,8 @@ assertEqual(missing.status, 404);
 // and just passes the plain argument itself, same as any other method.
 
 // --- 3. Decoration metadata is readable but inert without a mount ---
-// Requires grabbing the actual decorated function reference off the
-// prototype (metadata keys on the function object, per TC39 semantics).
-const proto = Object.getPrototypeOf(widgets) as Record<string, unknown>;
-const findDecorations = decorationsOf(proto.find as object);
+// Keyed by class + method NAME (the class's TC39 decorator metadata).
+const findDecorations = decorationsOf(Widgets, 'find');
 console.log('find() decorations:', JSON.stringify(findDecorations));
 assertEqual(findDecorations?.length, 1);
 assertEqual((findDecorations?.[0] as { kind: string }).kind, 'HTTP');

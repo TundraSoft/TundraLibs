@@ -23,8 +23,8 @@ import { assertMethodContext, recordUse } from './registry.ts';
 export function Use(
   ...middleware: RapidModuleInvokeMiddleware[]
 ): RapidModuleMethodDecorator {
-  return (target, context) => {
+  return (_target, context) => {
     assertMethodContext(context, 'Use');
-    recordUse(target, middleware);
+    recordUse(context, middleware);
   };
 }

@@ -110,8 +110,7 @@ decision; everything else is a straightforward build.
   runtime (pending doctor 2.0).
 - **Streaming / SSE response model** — the one large structural change; unblocks
   SSE, Range, zero-copy static, proxy passthrough. Already post-1.0 (below).
-- Trailing-slash request policy; brotli in `compress`; a decorator
-  stacking-order runtime guard (silent route loss today); `coerceComparable`
+- Trailing-slash request policy; brotli in `compress`; `coerceComparable`
   hex/exp numeric coercion made consistent with `parsePaging`.
 
 **Monorepo-wide (not rapid-scoped)** — the root `deno.json` `publish.exclude`

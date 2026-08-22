@@ -21,7 +21,7 @@ describe('rapid.decorators.http', () => {
         return { content: { id } };
       }
     }
-    const entries = decorationsOf(Users.prototype.find)!;
+    const entries = decorationsOf(Users, 'find')!;
     asserts.assertEquals(entries.length, 1);
     asserts.assertEquals(entries[0], {
       kind: 'HTTP',
@@ -47,7 +47,7 @@ describe('rapid.decorators.http', () => {
         return { content: { id } };
       }
     }
-    const entries = decorationsOf(Reports.prototype.fetch)!;
+    const entries = decorationsOf(Reports, 'fetch')!;
     // TC39: decorators APPLY bottom-up — recording order documents it.
     asserts.assertEquals(entries.map((e) => e.kind), [
       'JOB',
@@ -66,7 +66,7 @@ describe('rapid.decorators.http', () => {
         return { content: 'gone' };
       }
     }
-    const [entry] = decorationsOf(Things.prototype.clear)!;
+    const [entry] = decorationsOf(Things, 'clear')!;
     asserts.assertEquals(
       entry.kind === 'HTTP' ? entry.method : '',
       'DELETE',
@@ -121,7 +121,7 @@ describe('rapid.decorators.http', () => {
     // mount tier):
     asserts.assertEquals(new Contract().typed(2), { content: { n: 2 } });
     asserts.assertEquals(
-      decorationsOf(Contract.prototype.badReturn)!.length,
+      decorationsOf(Contract, 'badReturn')!.length,
       1,
     );
   });

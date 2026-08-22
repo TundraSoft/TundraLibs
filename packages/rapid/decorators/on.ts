@@ -37,8 +37,8 @@ export function On(...events: string[]): RapidModuleMethodDecorator {
       });
     }
   }
-  return (target, context) => {
+  return (_target, context) => {
     assertMethodContext(context, 'On');
-    recordOn(target, events);
+    recordOn(context, events);
   };
 }
