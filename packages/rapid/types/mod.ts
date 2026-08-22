@@ -25,6 +25,7 @@ export type { RapidClusterSnapshot } from './cluster/Snapshot.ts';
 export type { RapidBinder, RapidBinderSource } from './Binder.ts';
 export type { RapidBinds } from './Binds.ts';
 export type { RapidDecoration } from './Decoration.ts';
+export type { RapidErrorHandler } from './ErrorHandler.ts';
 export type { RapidModuleMeta } from './ModuleMeta.ts';
 export type { RapidModuleReply } from './ModuleReply.ts';
 export type { RapidContextArgs } from './context/Args.ts';

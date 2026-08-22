@@ -1,5 +1,4 @@
 import type { StatusCode } from '@tundralibs/compat/http';
-import type { ServerMetrics } from '@tundralibs/compat/webserver';
 import type { Meter } from '../utils/Meter.ts';
 import type { Slogger } from '@tundralibs/slogger';
 import type { Application } from '../Application.ts';
@@ -29,7 +28,7 @@ export abstract class Context<
   S extends RapidContextState = RapidContextState,
   R = unknown,
 > {
-  /** The owning application — config, publish, metrics, and the id factory flow through it. */
+  /** The owning application — config, publish, and the id factory flow through it. */
   public readonly app: Application<S>;
   /** The invocation's state bag, loaded from {@link Application.state}. */
   public state: S;
@@ -96,6 +95,12 @@ export abstract class Context<
    * Server-initiated push to subscribers of `channel` — the same
    * {@link Application.publish}, reachable from a handler/middleware.
    * Fire-and-forget; a no-op when nobody is subscribed.
+   *
+   * ON THE BASE CONTEXT BY DESIGN: fan-out is cross-transport. An HTTP
+   * handler publishing to socket subscribers (a POST that broadcasts a new
+   * comment) is the canonical pattern, and a cron JOB pushing an update is
+   * equally valid — so `publish` is available on every transport, unlike the
+   * HTTP-server counters, which moved off the base (read `ctx.app.metrics`).
    */
   public publish(channel: string, data: unknown): Promise<void> {
     return this.app.publish(channel, data);
@@ -140,25 +145,9 @@ export abstract class Context<
     return this._status;
   }
 
-  /**
-   * Live HTTP server metrics (request/status/latency + websocket
-   * counters) — the same object as {@link Application.metrics}, surfaced
-   * here so a middleware or handler can read or return them (e.g. a
-   * `/metrics` route) without reaching back to the app. `undefined`
-   * unless the HTTP listener is up and `server.metrics` is enabled.
-   */
-  public get metrics(): ServerMetrics | undefined {
-    return this.app.metrics;
-  }
-
   /** The metrics recorder ({@link Application.meter}); `undefined` when off. */
   public get meter(): Meter | undefined {
     return this.app.meter;
-  }
-
-  /** Live WebSocket connection metrics — see {@link Application.socketMetrics}. */
-  public get socketMetrics(): ServerMetrics['websocket'] | undefined {
-    return this.app.socketMetrics;
   }
 
   /** Live cron scheduler statistics — see {@link Application.jobMetrics}. */

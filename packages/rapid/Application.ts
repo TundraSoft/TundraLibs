@@ -38,6 +38,7 @@ import type {
   RapidChannelOptions,
   RapidClusterSnapshot,
   RapidContextState,
+  RapidErrorHandler,
   RapidHTTPHandler,
   RapidHTTPMiddleware,
   RapidJobEntry,
@@ -112,6 +113,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __http?: HTTPTransport<S>;
   private __jobTransport?: JOBTransport<S>;
   private __moduleRuntime?: ModuleRuntime;
+  /** The optional per-request error hook (see {@link onError}). */
+  private __onError?: RapidErrorHandler<S>;
   private readonly __meter?: Meter;
   /**
    * The upload temp dir THIS instance created (`uploads.path` left
@@ -689,6 +692,25 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   public get jobMetrics(): RapidApplicationJobMetrics | undefined {
     return this.__jobTransport?.metrics;
+  }
+
+  /**
+   * Register the per-request error hook: on any disclosed error (every
+   * transport), it runs during disclosure and MAY return a
+   * {@link RapidContextResponse} to override the default envelope — remap the
+   * status, add fields, theme the body — or return nothing to keep it. It
+   * must be SYNCHRONOUS (the disclosure path is sync-through) and never needs
+   * to throw (a throw is logged and the default envelope is used). One hook
+   * per app; the last call wins. See {@link RapidErrorHandler}.
+   */
+  public onError(handler: RapidErrorHandler<S>): this {
+    this.__onError = handler;
+    return this;
+  }
+
+  /** The registered {@link onError} hook, or `undefined` — read by the transport. */
+  public get errorHook(): RapidErrorHandler<S> | undefined {
+    return this.__onError;
   }
 
   /**

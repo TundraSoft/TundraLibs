@@ -132,6 +132,7 @@ export type {
   RapidContextState,
   RapidContextType,
   RapidDecoration,
+  RapidErrorHandler,
   RapidHTTPHandler,
   RapidHTTPMiddleware,
   RapidHTTPRequestBody,

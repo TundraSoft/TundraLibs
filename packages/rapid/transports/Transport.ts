@@ -4,7 +4,11 @@ import type { Application } from '../Application.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type { Meter } from '../utils/Meter.ts';
-import type { RapidContextState } from '../types/mod.ts';
+import type {
+  RapidContext,
+  RapidContextResponse,
+  RapidContextState,
+} from '../types/mod.ts';
 
 /**
  * The invariant slice of every invocation, whatever the trigger. The
@@ -165,17 +169,41 @@ export abstract class Transport<
           // The payload carries `requestId` so it appears in the BODY
           // too, consistent with the 404 shape (the header always has it).
           try {
-            const payload = err.payload(this._app.mode);
-            ctx.response = {
-              status: err.status,
-              content: typeof payload === 'object' && payload !== null
-                ? { ...payload, requestId: ctx.requestId }
-                : payload,
-            };
+            // app.onError may override the envelope. It runs in THIS ambient
+            // scope (its logs correlate). A hook that throws never breaks
+            // disclosure — it's logged and the default envelope is used.
+            let override: RapidContextResponse | void = undefined;
+            try {
+              override = this._app.errorHook?.(
+                err,
+                ctx as unknown as RapidContext<S>,
+              );
+            } catch (hookError) {
+              this._app.log.error(
+                'app.onError handler threw — using the default disclosure',
+                {
+                  requestId: ctx.requestId,
+                  error: hookError instanceof Error
+                    ? hookError.message
+                    : String(hookError),
+                },
+              );
+            }
+            if (override !== undefined && override !== null) {
+              ctx.response = override;
+            } else {
+              const payload = err.payload(this._app.mode);
+              ctx.response = {
+                status: err.status,
+                content: typeof payload === 'object' && payload !== null
+                  ? { ...payload, requestId: ctx.requestId }
+                  : payload,
+              };
+            }
           } catch {
             // The context was already finalized (a middleware called
-            // respond() early). The committed response stands; there is
-            // nothing to override. The failure is already logged above.
+            // respond() early), or the override was malformed. The committed
+            // response stands; the failure is already logged above.
           }
         };
         const finish = (): R | Promise<R> =>

@@ -120,7 +120,7 @@ describe('rapid.Application metrics', () => {
     }
   });
 
-  it('all three are reachable from the context (ctx.metrics / socketMetrics / jobMetrics)', async () => {
+  it('context exposes meter + jobMetrics; server counters come from ctx.app (not mirrored on ctx)', async () => {
     const app = new Application({
       name: 'ctxmetrics',
       server: { port: 0, hostname: '127.0.0.1', metrics: true },
@@ -128,16 +128,24 @@ describe('rapid.Application metrics', () => {
     app.job('j', '0 0 1 1 *', () => ({ content: 'ok' }));
     app.get('/peek', (ctx) => ({
       content: {
-        http: ctx.metrics !== undefined,
-        socket: ctx.socketMetrics !== undefined,
-        jobs: ctx.jobMetrics?.total ?? -1,
+        meter: ctx.meter !== undefined, // the metro-man recorder (kept on ctx)
+        jobs: ctx.jobMetrics?.total ?? -1, // cron stats (kept on ctx)
+        // Server HTTP/websocket counters moved OFF the context (G5) — reach
+        // them via the app, so a JOB context no longer carries HTTP surface.
+        http: ctx.app.metrics !== undefined,
+        socket: ctx.app.socketMetrics !== undefined,
       },
     }));
     await app.start();
     try {
       const body = await (await fetch(`http://127.0.0.1:${app.port}/peek`))
         .json();
-      asserts.assertEquals(body, { http: true, socket: true, jobs: 1 });
+      asserts.assertEquals(body, {
+        meter: true,
+        jobs: 1,
+        http: true,
+        socket: true,
+      });
     } finally {
       await app.stop();
     }
