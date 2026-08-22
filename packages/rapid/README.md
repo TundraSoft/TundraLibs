@@ -202,6 +202,34 @@ The richer `RapidModule` tier adds a lifecycle, a scoped logger, typed
 `app.modules({ modules: [...] })` (before `start()`/`fetch()`); `stop()` disposes
 it in reverse order. See `examples/` for a full module-based app.
 
+## Dependency injection
+
+Each `Application` owns `app.container` — a child of the global
+[`@tundralibs/doctor`](https://jsr.io/@tundralibs/doctor) `Doctor`. It reads the
+global's registrations but holds its own instances, so two apps in one process
+never share module instances. An `inject()` inside a handler resolves against
+**this** app's container — even after an `await`, because the container rides the
+request's async context. `stock()` an override to scope a fake or a per-app
+implementation to one app alone:
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { inject, label } from '@tundralibs/doctor';
+
+const Clock = label<{ now(): string }>('Clock');
+
+const app = new Application({ name: 'di-demo' });
+app.container.stock(Clock, { now: () => new Date().toISOString() });
+
+// Resolves against app.container, not the process-wide Doctor.
+app.get('/time', () => ({ content: { at: inject(Clock).now() } }));
+```
+
+Module classes registered as `@Vial` are dispensed from the container too — one
+instance per app, read-through to the global registration — and a plain
+`RapidModule` that calls `inject()` in a field initializer resolves against the
+same container when the module system boots.
+
 ## Validation
 
 A bound validator (`bind: [payload(schema.parse)]`) that **throws** turns the
@@ -310,12 +338,33 @@ no runtime dependency until passed).
   (`app.metrics`, `app.socketMetrics`); serve them with the `metrics()` endpoint.
   Cron statistics (`app.jobMetrics`) are tracked unconditionally.
 
+## Graceful shutdown
+
+`app.stop()` drains in-flight HTTP requests before closing. `shutdownTimeout`
+(default `25_000` ms) is the drain window: in-flight requests get up to that long
+to finish, then whatever is left is force-closed — WebSockets don't drain, so
+they are held to the deadline and then dropped. Jobs stop and the module runtime
+disposes (reverse init order) around the drain. A process-exit backstop fires a
+little past the window (`shutdownTimeout × 1.1`, unref'd) only if teardown itself
+wedges; `shutdownTimeout: 0` disables both — an immediate force-close with no
+exit.
+
+```ts
+import { Application } from '@tundralibs/rapid';
+
+// Give in-flight requests up to 10s to finish on stop(), then force-close.
+const app = new Application({ name: 'api', shutdownTimeout: 10_000 });
+```
+
+Call `stop()` from your platform's termination signal (a `SIGTERM` handler on
+Deno/Bun/Node) for zero-drop rolling deploys.
+
 ## Testing
 
 `@tundralibs/rapid/testing` re-exports the `@tundralibs/compat/test` lifecycle
 (`describe`/`it`/`beforeAll`/…) and adds `client()` — a JSON-in/out client that
 drives routes through `app.fetch` with no port — and `harness()`, which boots the
-module system with stubbed dependencies and restores them on dispose.
+module system with stubbed dependencies.
 
 ```ts
 import { Application } from '@tundralibs/rapid';
@@ -327,6 +376,36 @@ app.get('/ping', () => ({ content: { ok: true } }));
 const api = client(app);
 const res = await api.get('/ping');
 console.log(res.status, res.body);
+```
+
+`harness()` stocks each `stub` into a **fresh child container** per call — never
+the process-wide `Doctor` — so tests isolate by construction and cannot leak into
+one another; pass `container` to boot against an app's own `app.container`
+instead. `dispose()` (or `await using`) tears the runtime down.
+
+```ts
+import { RapidModule } from '@tundralibs/rapid/modules';
+import { harness } from '@tundralibs/rapid/testing';
+import { inject, label } from '@tundralibs/doctor';
+
+const Clock = label<{ now(): string }>('Clock');
+
+class Stamper extends RapidModule {
+  readonly name = 'Stamper';
+  readonly namespace = 'stamp';
+  protected readonly events = {};
+  private readonly clock = inject(Clock);
+  stamp(): { at: string } {
+    return { at: this.clock.now() };
+  }
+}
+
+const h = await harness({
+  modules: [{ Stamper }],
+  stub: [[Clock, { now: () => 'FROZEN' }]], // stocked into a fresh child
+});
+console.log(h.modules.Stamper.stamp()); // { at: 'FROZEN' }
+await h.dispose();
 ```
 
 ## Runtime support
