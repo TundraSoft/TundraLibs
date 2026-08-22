@@ -58,19 +58,51 @@ await app.start();
 console.log(`listening on ${app.address}`);
 ```
 
-`new Application(options)` is the programmatic/test entry point. The config-driven
-factory `rapid()` loads options from a config directory (env-interpolated) and
-returns the same `Application` — every other config set stays readable via
-`app.config`:
+`new Application(options)` is the programmatic/test entry point. In production,
+prefer the config-driven factory `rapid()`: point it at a directory of config
+files and the set named `Application` (`Application.yaml`/`.json`/…) becomes the
+application options. Every other set (a database config, your own app settings)
+stays readable via `app.config`.
 
-```ts ignore
+Given `configs/Application.yaml`:
+
+```yaml
+name: my-api
+mode: PRODUCTION
+server:
+  port: 8008
+  hostname: 0.0.0.0
+  # ${VAR} references are interpolated from the environment / .env
+  tls:
+    key: ${TLS_KEY_PATH}
+shutdownTimeout: 10000
+```
+
+```ts
 import { rapid } from '@tundralibs/rapid';
 
-// Reads ./configs/Application.{yaml,json,…} into the application options.
+// String form: load ./configs, with .env interpolation on by default.
 const app = await rapid('./configs');
-app.config.get('database.host'); // other sets, as loaded
+app.config.get<string>('database.host'); // any other set, as loaded
 await app.start();
 ```
+
+The object form takes finer control — a different env source and a different
+application file name:
+
+```ts
+import { rapid } from '@tundralibs/rapid';
+
+const app = await rapid({
+  path: './configs',
+  env: '.env.production', // true | false | a path (default: true)
+  applicationSet: 'Api', // read Api.yaml instead of Application.yaml
+});
+await app.start();
+```
+
+Either way you get the same `Application`, so everything below applies whether
+you constructed it directly or loaded it from config.
 
 `name` is required (it is also the logging `appName`, max 30 chars). Common
 options: `mode` (`'DEVELOPMENT'` | `'PRODUCTION'`, default `'PRODUCTION'` —
