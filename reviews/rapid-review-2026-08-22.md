@@ -37,6 +37,13 @@ correct with no regressions.
 gated **validation→400** gap (H2) means a malformed request body currently
 500s out of the box — the fix is small but is an API-surface decision.
 
+**UPDATE 2026-08-22 — every gated item is now dispositioned.** G1/G2/G3/G4/G5/
+G6/G7/G10/G11 are shipped; the cross-package dependencies were released to JSR
+one-at-a-time (radrouter 1.2.0, doctor 1.4.0 + 1.5.0, compat 2.4.0) and consumed
+by the rapid branch. Only **G8** (cron double-fire → cluster design) and **G9**
+(streaming/SSE) remain, both deferred to the roadmap by decision. See the Gated
+section for per-item detail.
+
 ---
 
 ## Fixed (no decision needed) — 29 items
@@ -160,12 +167,14 @@ the default pattern also matched non-whole segments (`/v1abc` → `/abc`).
 
 ---
 
-## Gated — needs your decision (11 items; G6/G8/G11 resolved 2026-08-22 → 8 open)
+## Gated — needs your decision (11 items; ALL dispositioned 2026-08-22 → only G8/G9 deferred)
 
 These are correct-to-do but involve a product decision, a breaking change, or a
-larger build. Each has a recommendation. Post-review decisions: **G6** (openapi
-default) and **G11** (root publish globs) fixed; **G8** (cron double-fire)
-acknowledged as covered by the cluster design.
+larger build. Each has a recommendation. **2026-08-22 outcome: every gated item
+is resolved or deliberately deferred.** G1/G2/G3/G4/G5/G6/G7/G10/G11 shipped
+(the cross-package ones — radrouter 1.2.0, doctor 1.4.0 + 1.5.0, compat 2.4.0 —
+released to JSR one-at-a-time then consumed by the rapid branch); **G8**
+(cron double-fire) and **G9** (streaming/SSE) are deferred to the roadmap.
 
 **G1 — Validation → 400 wiring (HIGH). ✅ RESOLVED 2026-08-22 (BOTH).** A thrown `GuardianError` from a bound
 validator maps to `RAPID_UNHANDLED`/**500**, not 400 — so a malformed body
@@ -174,34 +183,42 @@ validator maps to `RAPID_UNHANDLED`/**500**, not 400 — so a malformed body
 helper, or teach `RapidError.from` to recognize `GuardianError` → 400. (The
 "how" is the decision: a thin exported helper vs. a guardian-aware error map.)
 
-**G2 — Graceful request drain on shutdown (HIGH).** `stop()` force-closes HTTP
-(`server.stop(false)`) with no window for in-flight requests; a rolling deploy
-drops them as 502s. _Recommend:_ drain plain HTTP up to `shutdownTimeout`,
-keep force-close for the never-draining websocket. Verify the compat
-`WebServer.stop(graceful)` contract first.
+**G2 — Graceful request drain on shutdown (HIGH). ✅ RESOLVED 2026-08-22.**
+Shipped compat 2.4.0 `WebServer.stop(true, timeoutMs)` — a real bounded drain
+(Node `closeIdleConnections()` before `close()` fixes the idle-keepalive hang;
+Bun `stop()`/`stop(true)`; Deno races `finished`). rapid-side:
+`HTTPTransport.stop(drainMs)` → `server.stop(true, drainMs)` (else `stop(false)`
+when `shutdownTimeout` is 0); `shutdownTimeout` is now the graceful-drain window
+and the nuclear `process.exit` backstop moved to `ceil(shutdownTimeout*1.1)`, so
+the drain's force-close + module dispose finish first. Websockets are held to
+the deadline then force-closed. Test: `Application.drain.test.ts`.
 
-**G3 — Auto HEAD / 405 / generic OPTIONS (P0 for 1.0).** A HEAD to a GET route
-404s; a wrong method 404s instead of 405; OPTIONS is answered only for CORS
-preflight. These are transport semantics that belong in the adapter.
+**G3 — Auto HEAD / 405 / generic OPTIONS (P0 for 1.0). ✅ RESOLVED 2026-08-22.**
+Auto-HEAD (`server.autoHead`, default true — synthesizes a bodiless HEAD for
+every GET at boot, correct `content-length`); 405 + `Allow` and generic OPTIONS
+→ 204 (`server.methodNotAllowed`, default false — off keeps 404 to hide the
+path) computed from radrouter 1.2.0's new `allowedMethods(path, version)` on the
+miss path only. Tests: `Application.methodnotallowed.test.ts`.
 
-**G4 — Per-request error hook (MED).** The disclosure envelope is fixed inside
-`_invoke`; there's no `app.onError()` to customize the error body/status
-centrally (cf. NestJS exception filters / Fastify `setErrorHandler`).
+**G4 — Per-request error hook (MED). ✅ RESOLVED 2026-08-22.** `app.onError()`
+lets the app override the disclosure envelope centrally; the hook runs inside
+`disclose()` in the request's ambient scope, and a hook that throws falls back
+to the default envelope. New type `RapidErrorHandler<S>`.
 
-**G5 — Context base leaks transport concepts (MED).** `ctx.metrics`,
-`ctx.socketMetrics`, `ctx.publish` live on the base `Context`, so a `JOBContext`
-carries HTTP/websocket-server surface. _Recommend:_ move onto
-`HTTPContext`/`SOCKETContext` (a breaking API move — hence gated).
+**G5 — Context base leaks transport concepts (MED). ✅ RESOLVED 2026-08-22.**
+`ctx.metrics` / `ctx.socketMetrics` getters removed from the base `Context`
+(read app-level metrics via `ctx.app.metrics`); `ctx.meter`, `ctx.jobMetrics`,
+and `ctx.publish` (deliberately cross-transport) remain.
 
 **G6 — `openapi()` default `expose: 'ALL'` (LOW). ✅ RESOLVED 2026-08-22.**
 Was: shipped the full spec to anonymous clients in PRODUCTION once mounted.
 Default is now `'DEVELOPMENT'` (secure-by-default); pass `expose: 'ALL'` to
 serve everywhere (e.g. behind auth).
 
-**G7 — `serveStatic` symlink escape (LOW).** The traversal guard is lexical;
-a symlink _inside_ `root` pointing outside is followed. (Encoded/`..`/absolute
-are correctly blocked.) _Recommend:_ a `realpath` re-check (adds a stat per
-request) or document that `root` must contain no untrusted symlinks.
+**G7 — `serveStatic` symlink escape (LOW). ✅ RESOLVED 2026-08-22.** After the
+lexical guard, the resolved file path is re-checked with `realPath()` and must
+equal `root` or sit under `root + SEPARATOR`; a symlink inside `root` pointing
+outside now 404s. `root` itself is resolved once (lazily) and cached.
 
 **G8 — Cron jobs double-fire under N replicas (MED, scaling). ✅ ACKNOWLEDGED —
 already covered by the cluster design.** The `onlyIfCronLeader` sticky-leader
@@ -209,18 +226,24 @@ middleware in the converged master/worker plan (ROADMAP → Distributed
 deployment) is the intended fix; no separate action. Until that ships, running
 the scheduler on a single replica is the operating assumption.
 
-**G9 — Streaming / SSE response model (P2, structural).** `content` is
-`string | Record | Uint8Array` only — no `ReadableStream`. `serve()` and
-`serveStatic` read whole files into memory; no SSE, no Range. Already parked
-post-1.0; flagged as the one large structural change on the horizon.
+**G9 — Streaming / SSE response model (P2, structural). 🔵 DEFERRED.** `content`
+is `string | Record | Uint8Array` only — no `ReadableStream`. `serve()` and
+`serveStatic` read whole files into memory; no SSE, no Range. Parked post-1.0 by
+decision; the one large structural change on the horizon (roadmap).
 
-**G10 — Module/DI isolation via process-global doctor (MED).** `app.modules()`
-
-- the test harness resolve through the process-wide `Doctor`, so two apps /
-  parallel tests stocking the same token contend. The per-`Application`
-  isolation that holds for `app.module(instance)` does not hold for the DI path.
-  _Recommend:_ document loudly, or scope a container per runtime (pending
-  doctor 2.0).
+**G10 — Module/DI isolation via process-global doctor (MED). ✅ RESOLVED
+2026-08-22.** Shipped doctor 1.4.0 (`createContainer` — a child that reads the
+global's registrations but keeps its own instances) + doctor 1.5.0
+(`setContainerProvider`, an async-context seam because the sync ambient stack
+can't cross an `await`). rapid-side: each `Application` owns a child container
+(`app.container`); one global provider (installed once) reads the container off
+the request's ambient bag, where `Transport`/`ModuleRuntime` pin it
+non-enumerably, so a handler's `inject()` — even after an `await` — resolves
+against THAT app. `initModules` dispenses registered modules from the container
+and builds unregistered ones via `container.resolve()` (constructs under the
+container ambient). `harness()` now defaults to a fresh child and stocks stubs
+there, never touching the process-wide `Doctor`. Tests:
+`Application.container.test.ts`.
 
 **G11 — Monorepo-wide: `ROADMAP.md` ships from other packages. ✅ RESOLVED
 2026-08-22.** The root `deno.json` `publish.exclude` globs are now
