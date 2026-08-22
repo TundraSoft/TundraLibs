@@ -14,12 +14,18 @@ import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { ServerMetrics } from '@tundralibs/compat/webserver';
 import { ulid } from '@tundralibs/id';
 import { parseSchedule } from '@tundralibs/cronus';
+import {
+  Doctor,
+  type DoctorContainer,
+  setContainerProvider,
+} from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
 import {
   buildExporter,
   buildState,
+  currentContainer,
   hasDecorations,
   Meter,
   mountModule,
@@ -59,6 +65,14 @@ import type {
  * discarded and a fresh id is minted instead.
  */
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
+
+/**
+ * Installed once (first `Application`), never per instance: one global
+ * doctor provider reads the app container off the current request's
+ * ambient bag, so it serves EVERY app and request — a later app does not
+ * overwrite an earlier one's wiring.
+ */
+let __containerProviderInstalled = false;
 
 /**
  * The rAPId application class. Construct directly for programmatic /
@@ -113,6 +127,14 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __http?: HTTPTransport<S>;
   private __jobTransport?: JOBTransport<S>;
   private __moduleRuntime?: ModuleRuntime;
+  /**
+   * This app's DI container — a child of the global `Doctor` that reads
+   * its registrations but holds its own instances, so two apps in one
+   * process never share module instances. Pinned on each request's
+   * ambient bag (see {@link Application.container}) so a handler's
+   * `inject()` resolves here.
+   */
+  private readonly __container: DoctorContainer = Doctor.createContainer();
   /** The optional per-request error hook (see {@link onError}). */
   private __onError?: RapidErrorHandler<S>;
   private readonly __meter?: Meter;
@@ -150,6 +172,13 @@ export class Application<S extends RapidContextState = RapidContextState>
     config?: ConfigType,
   ) {
     super();
+    // Teach doctor's inject() to resolve against the app container that
+    // the in-flight request pinned on its ambient bag. One provider
+    // serves every app (it reads per-request state), so install it once.
+    if (!__containerProviderInstalled) {
+      setContainerProvider(currentContainer);
+      __containerProviderInstalled = true;
+    }
     // Created eagerly (regardless of whether the app ever registers an
     // upload route) only when the caller didn't supply their own path —
     // tracked so stop() can remove it, and so a constructor failure
@@ -308,6 +337,18 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   public get instanceId(): string {
     return this.__instanceId;
+  }
+
+  /**
+   * This app's DI container — a child of the global `Doctor` that reads
+   * its registrations but keeps its own instances. Modules boot through
+   * it, and it is pinned on each request's ambient context, so a handler
+   * calling `inject()` — even after an `await` — resolves against THIS
+   * app (not the process-wide `Doctor`). `stock()` an override here to
+   * scope a fake or a per-app implementation to this app alone.
+   */
+  public get container(): DoctorContainer {
+    return this.__container;
   }
 
   /**
@@ -614,6 +655,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     const result = await initModules(
       { log: this.log, config: this.config, mode: this.mode },
       sources,
+      this.__container,
     );
     try {
       for (const instance of result.runtime.modules) {

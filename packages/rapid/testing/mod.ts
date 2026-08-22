@@ -11,7 +11,12 @@
  * @module
  */
 
-import { Doctor, type Label, type VialClass } from '@tundralibs/doctor';
+import {
+  Doctor,
+  type DoctorContainer,
+  type Label,
+  type VialClass,
+} from '@tundralibs/doctor';
 import { initModules } from '../modules/mod.ts';
 import type {
   RapidModuleEventMap,
@@ -46,8 +51,15 @@ export type HarnessOptions<
 > = RapidModuleSources<M, I> & {
   /** Boot context; defaults to a quiet in-memory logger. */
   context?: RapidModuleInitOptions;
-  /** Fakes stocked in doctor before boot, revoked on dispose. */
+  /** Fakes stocked in the harness container before boot, revoked on dispose. */
   stub?: readonly Stub[];
+  /**
+   * Container the modules boot through and the stubs are stocked into.
+   * Defaults to a FRESH child of the global `Doctor`, so a test never
+   * touches (or leaks into) the process-wide registry. Pass an app's
+   * `container` to boot against exactly what that app would resolve.
+   */
+  container?: DoctorContainer;
 };
 
 /** What {@link harness} returns — the booted modules plus test conveniences. */
@@ -63,10 +75,14 @@ export type Harness<
 };
 
 /**
- * Boot the module system for a test: stock the fakes, run `initModules`,
- * and hand back `{ modules, runtime, invoke, dispose }`. Call in
- * `beforeAll` and `dispose()` in `afterAll`, or `await using`. `dispose`
- * revokes every stub so the process-wide doctor stays clean between tests.
+ * Boot the module system for a test: stock the fakes into an isolated
+ * container, run `initModules`, and hand back
+ * `{ modules, runtime, invoke, dispose }`. Call in `beforeAll` and
+ * `dispose()` in `afterAll`, or `await using`. Stubs land in a FRESH
+ * child of the global `Doctor` by default (pass `container` to override),
+ * so a test never mutates the process-wide registry and cannot leak into
+ * the next; `dispose` still revokes them, which matters only when you
+ * pass your own container.
  */
 export async function harness<
   const M extends readonly object[],
@@ -75,11 +91,12 @@ export async function harness<
     RapidModule<RapidModuleEventMap>
   >,
 >(options: HarnessOptions<M, I>): Promise<Harness<M, I>> {
+  const container = options.container ?? Doctor.createContainer();
   const stubbed: (VialClass | Label | string)[] = [];
   for (const [token, value] of options.stub ?? []) {
-    if (Doctor.has(token)) Doctor.revoke(token);
+    container.revoke(token); // clear any prior local override before re-stocking
     // deno-lint-ignore no-explicit-any
-    Doctor.stock(token as any, value as any);
+    container.stock(token as any, value as any);
     stubbed.push(token);
   }
   let result: RapidModuleInitResult<M, I>;
@@ -90,17 +107,18 @@ export async function harness<
         modules: options.modules,
         ...(options.instances ? { instances: options.instances } : {}),
       } as RapidModuleSources<M, I>,
+      container,
     );
   } catch (error) {
-    // Boot failure is a common thing a test exercises — revoke the stubs we
-    // stocked so they don't bleed into the process-wide Doctor for the next
-    // test (dispose() isn't returned on this path).
-    for (const token of stubbed) Doctor.revoke(token);
+    // Boot failure is a common thing a test exercises — revoke the stubs so a
+    // caller-supplied container is left as it was (dispose() isn't returned on
+    // this path; a defaulted container is discarded anyway).
+    for (const token of stubbed) container.revoke(token);
     throw error;
   }
   const dispose = async (): Promise<void> => {
     await result.runtime.dispose();
-    for (const token of stubbed) Doctor.revoke(token);
+    for (const token of stubbed) container.revoke(token);
   };
   return {
     ...result,

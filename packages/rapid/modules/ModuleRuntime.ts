@@ -20,11 +20,13 @@
  */
 
 import { ambient } from '@tundralibs/ambient';
+import type { DoctorContainer } from '@tundralibs/doctor';
 import { ulid } from '@tundralibs/id';
 import type { Slogger } from '@tundralibs/slogger';
 import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
 import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
+import { attachContainer } from '../utils/requestContainer.ts';
 import { EventContext } from './EventContext.ts';
 import {
   type EventSubscriber,
@@ -132,6 +134,7 @@ export class ModuleRuntime {
   private readonly __events: RapidEvents;
   private readonly __mode: 'DEVELOPMENT' | 'PRODUCTION';
   private readonly __ownsLog: boolean;
+  private readonly __container?: DoctorContainer;
   private readonly __mounted = new Map<object, Mounted>();
   private readonly __order: Mounted[] = [];
   private readonly __declared = new Set<string>();
@@ -144,12 +147,21 @@ export class ModuleRuntime {
    * @param context - The host context.
    * @param ownsLog - Whether the runtime BUILT `context.log` itself (the
    *   standalone path) and must `finalize()` it on dispose.
+   * @param container - The app's doctor container, pinned on each invoke's
+   *   ambient bag so a module method's `inject()` resolves against it.
+   *   Omitted (standalone / global) → invoke-time `inject()` falls back to
+   *   the global `Doctor`.
    */
-  constructor(context: RapidModuleContext, ownsLog = false) {
+  constructor(
+    context: RapidModuleContext,
+    ownsLog = false,
+    container?: DoctorContainer,
+  ) {
     this.log = context.log;
     this.config = context.config;
     this.__mode = context.mode ?? 'PRODUCTION';
     this.__ownsLog = ownsLog;
+    this.__container = container;
     this.__events = new RapidEvents(context.log);
   }
 
@@ -632,6 +644,10 @@ export class ModuleRuntime {
         configurable: true,
         writable: true,
       });
+      // Pin the app container so a module method's inject() resolves
+      // against it (ambient.child spreads only enumerable keys, so each
+      // invoke scope re-pins its own).
+      if (this.__container !== undefined) attachContainer(this.__container);
       const complete = (): R | Promise<R> => {
         const pending = holder.pending;
         if (pending !== undefined && !holder.settled) {

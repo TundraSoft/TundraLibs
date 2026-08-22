@@ -13,7 +13,7 @@
  */
 
 import { ambient } from '@tundralibs/ambient';
-import { Doctor } from '@tundralibs/doctor';
+import { Doctor, type DoctorContainer } from '@tundralibs/doctor';
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 import { Config } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
@@ -40,20 +40,25 @@ const isModuleClass = (value: unknown): value is ModuleCtor =>
   (value as { prototype?: unknown }).prototype instanceof RapidModule;
 
 /**
- * Resolve a module class to its ONE instance: dispensed from doctor when
- * the class is registered there (so a module another module `inject()`s
- * is the same object that gets mounted — register modules as
- * SINGLETON), else constructed with no arguments.
+ * Resolve a module class to its ONE instance: dispensed from the given
+ * `registry` (the app's container, else the global `Doctor`) when the
+ * class is registered there — so a module another module `inject()`s is
+ * the same object that gets mounted (register modules as SINGLETON), and
+ * an app's container yields its own instance — else constructed with no
+ * arguments.
  *
  * @throws {RapidError} RAPID_CONFIG when doctor cannot dispense it, or
  *   construction throws (a class needing constructor arguments — pass an
  *   instance via `sources.instances` — or an abstract base exported from
  *   the barrel whose field initializers fail).
  */
-const resolveInstance = (ctor: ModuleCtor): AnyModule => {
-  if (Doctor.has(ctor)) {
+const resolveInstance = (
+  ctor: ModuleCtor,
+  registry: DoctorContainer,
+): AnyModule => {
+  if (registry.has(ctor)) {
     try {
-      return Doctor.dispense(ctor);
+      return registry.dispense(ctor);
     } catch (cause) {
       throw new RapidError('RAPID_CONFIG', {
         message: `${ctor.name} is registered with doctor but could not be ` +
@@ -65,7 +70,11 @@ const resolveInstance = (ctor: ModuleCtor): AnyModule => {
     }
   }
   try {
-    return new ctor();
+    // resolve() constructs with no args (Reflect.construct) but does so
+    // with `registry` as the ambient container, so an `inject()` field
+    // initializer in an UNREGISTERED module resolves against the app's
+    // container (e.g. a harness stub) rather than the global Doctor.
+    return registry.resolve(ctor);
   } catch (cause) {
     throw new RapidError('RAPID_CONFIG', {
       message: `${ctor.name} could not be constructed (${reasonOf(cause)}) — ` +
@@ -117,6 +126,11 @@ const isContext = (
  * plus the runtime. On any failure the partially-built runtime is
  * disposed before the error propagates.
  *
+ * @param container - The app's doctor container. Module instances are
+ *   dispensed from it (read-through to the global registrations, own
+ *   instances) and it is pinned on each invoke's ambient bag so a module
+ *   method's `inject()` resolves against it. Omitted → the global
+ *   `Doctor`, the standalone default.
  * @throws {RapidError} RAPID_CONFIG for any resolve/mount/finalize
  *   validation failure, including an `instances` key that collides with a
  *   namespace export.
@@ -127,11 +141,14 @@ export async function initModules<
 >(
   context: RapidModuleContext | RapidModuleInitOptions,
   sources: RapidModuleSources<M, I>,
+  container?: DoctorContainer,
 ): Promise<RapidModuleInitResult<M, I>> {
+  const registry = container ?? Doctor;
   const ownsLog = !isContext(context);
   const runtime = new ModuleRuntime(
     ownsLog ? buildModuleContext(context) : context,
     ownsLog,
+    container,
   );
   try {
     const record: Record<string, AnyModule> = {};
@@ -152,7 +169,7 @@ export async function initModules<
         if (!isModuleClass(value)) continue;
         let instance = seen.get(value);
         if (instance === undefined) {
-          instance = resolveInstance(value);
+          instance = resolveInstance(value, registry);
           seen.set(value, instance);
           runtime.mount(instance);
         }

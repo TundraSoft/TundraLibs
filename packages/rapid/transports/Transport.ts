@@ -4,6 +4,7 @@ import type { Application } from '../Application.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type { Meter } from '../utils/Meter.ts';
+import { attachContainer } from '../utils/requestContainer.ts';
 import type {
   RapidContext,
   RapidContextResponse,
@@ -155,6 +156,9 @@ export abstract class Transport<
     return ambient.run(
       { requestId: ctx.requestId, action: ctx.action },
       (): R | Promise<R> => {
+        // Pin the app container so a handler's inject() — even after an
+        // await — resolves against THIS app, not the global Doctor.
+        attachContainer(this._app.container);
         // Turn any throw from the onion into the disclosure override —
         // legal right up to respond(); echo headers survive. Synchronous
         // (no await), so it runs on both the sync and async paths.
