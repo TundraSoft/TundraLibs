@@ -28,6 +28,8 @@ export const RAPID_ERROR_CODES = {
   RAPID_UNAUTHENTICATED: { status: 401, message: 'Authentication required' },
   /** Valid principal, insufficient grants (distinct from 401 by design). */
   RAPID_ACCESS_DENIED: { status: 403, message: 'Access denied' },
+  /** CSRF token missing, mismatched, or unsigned on a state-changing request. */
+  RAPID_CSRF_INVALID: { status: 403, message: 'CSRF token invalid' },
   /** No route/handler matched. */
   RAPID_NOT_FOUND: { status: 404, message: 'Not found' },
   /** The path matched but not for this method (see `server.methodNotAllowed`). */

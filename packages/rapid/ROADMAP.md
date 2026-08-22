@@ -20,7 +20,10 @@ fetch adapter is also verified on Cloudflare workerd):
 - **Middleware** — universal `use()`, scope helpers (`onlyHTTP`/`guardHTTP`/…),
   and the catalog: cors, secureHeaders, compress, etag, rateLimit (store-
   injection), requestId, requestLogger, responseTimer, serveStatic,
-  healthCheck, timeout, and auth (`authenticate`/`authorize`/`permission`/`jwt`).
+  healthCheck, timeout, auth (`authenticate`/`authorize`/`permission`/`jwt`),
+  **session** (store-injection, signed id, rolling + absolute TTL, regenerate /
+  destroy, read via `getSession`), and **csrf** (stateless signed
+  double-submit). `Store` gained an optional `delete`.
 - **Decorators + modules** — `@GET/@POST/@PUT/@PATCH/@DELETE/@SOCKET/@JOB`,
   binders (`param`/`payload`/`query`/`paging`/`header`/`connection`), `@Module`,
   `@On`/`@Use`, `RapidModule` + `initModules` + `app.modules()` (namespace scan,
@@ -82,7 +85,6 @@ decision attached in the review doc.
 
 **P1 — important**
 
-- **Sessions + CSRF** catalog middleware, on the store-injection shape.
 - **Static hardening** — ETag / If-None-Match / Range for `serveStatic`
   (Range depends on the streaming response model).
 - **Content negotiation** — `Accept` parsing / `ctx.format`.

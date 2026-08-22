@@ -17,6 +17,12 @@
 export type Store<V> = {
   get(key: string): (V | undefined) | Promise<V | undefined>;
   set(key: string, value: V, ttlMs?: number): void | Promise<void>;
+  /**
+   * Evict a key (a no-op when absent). Optional: `session()` uses it to drop
+   * a record on logout / id-rotation, falling back to a short-TTL overwrite
+   * when a store doesn't implement it. `memoryStore` provides it.
+   */
+  delete?(key: string): void | Promise<void>;
 };
 
 /** Amortised prune: sweep expired entries every N writes. */
@@ -53,6 +59,9 @@ export function memoryStore<V>(): Store<V> {
         value,
         expiresAt: ttlMs === undefined ? Infinity : Date.now() + ttlMs,
       });
+    },
+    delete(key: string): void {
+      entries.delete(key);
     },
   };
 }

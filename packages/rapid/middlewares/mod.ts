@@ -17,6 +17,7 @@ export {
 } from './auth.ts';
 export { compress, type CompressOptions } from './compress.ts';
 export { cors, type CorsOptions } from './cors.ts';
+export { csrf, type CsrfOptions } from './csrf.ts';
 export { etag } from './etag.ts';
 export { healthCheck, type HealthCheckOptions } from './healthCheck.ts';
 export { rateLimit, type RateLimitOptions } from './rateLimit.ts';
@@ -36,6 +37,13 @@ export {
 } from './scope.ts';
 export { secureHeaders, type SecureHeadersOptions } from './secureHeaders.ts';
 export { serveStatic, type ServeStaticOptions } from './serveStatic.ts';
+export {
+  getSession,
+  type RapidSession,
+  session,
+  type SessionData,
+  type SessionOptions,
+} from './session.ts';
 export {
   markStateKeyUser,
   MIDDLEWARE_STATE_KEY,
