@@ -49,7 +49,6 @@ export {
 } from './resolveClientAddress.ts';
 export { serializeResponse } from './serializeResponse.ts';
 export {
-  fileStream,
   frameSseEvent,
   isStreamBody,
   type SseEvent,

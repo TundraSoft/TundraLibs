@@ -75,7 +75,8 @@ Core and the current capability set are built and green on Deno / Bun / Node
 - **Streaming response model (2026-08-22)** — the keystone. `content` accepts a
   `ReadableStream<Uint8Array>` or any async iterable (strings encoded), handed
   to the client unbuffered; `ctx.sse(events)` frames Server-Sent Events;
-  `ctx.serve()` / `serveStatic` stream files (`fileStream`, incl. byte ranges)
+  `ctx.serve()` / `serveStatic` stream files (compat's `readFileStream`, incl.
+  byte ranges)
   with a stat-derived `content-length`; a module reply may be a stream. Stream
   bodies are HTTP-only (JOB/SOCKET reject) and opaque to body middleware
   (`etag` skips, `compress` pipes through `CompressionStream`). Added
@@ -109,20 +110,22 @@ Core and the current capability set are built and green on Deno / Bun / Node
   becoming 31 / 1000. **Brotli closed as infeasible**: `CompressionStream`
   rejects `'br'` on Deno, Bun and Node alike (verified); `node:zlib` would be
   runtime-divergent and a pure-JS encoder is a heavy dep — gzip stays.
+- **File streaming promoted to compat (2026-08-22)** — rapid's private
+  `fileStream` became `@tundralibs/compat` `readFileStream(path, { start?,
+  end? })` (compat 2.5.0): Deno via `Deno.open().readable`, Bun/Node via
+  `fs.promises.open` + `FileHandle.createReadStream` → `Readable.toWeb`
+  (opening first so a missing file rejects as `FileNotFound` at the call site
+  — the path form reports ENOENT asynchronously on the stream), a byte range
+  validated up front (a bad range otherwise leaks an fd), Workers/browser
+  degrade via `__unsupportedFs`. rapid deleted its copy; `ctx.serve()`,
+  `serveStatic`, and Range/206 now run on the shared primitive — verified on
+  all three runtimes.
 
 ## Backlog
 
 No 1.0-vs-later split — everything here is in scope. A few items note a real
 technical **dependency** (e.g. "needs the streaming model"); that is a
 sequencing fact, not a deferral.
-
-### Request / response & HTTP
-
-- **Consume compat's `readFileStream`.** rapid's `utils/streams.ts` carries
-  its own cross-runtime `fileStream` (Deno.open / createReadStream→toWeb).
-  The primitive is being promoted into `@tundralibs/compat`'s `file` module as
-  `readFileStream(path, { start, end })`; once that releases, delete rapid's
-  copy and import compat's — one implementation, shared by every package.
 
 ### Tooling & DX
 

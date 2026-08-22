@@ -8,7 +8,12 @@
  */
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
-import { makeTempDir, removeDir, writeTextFile } from '@tundralibs/compat/file';
+import {
+  makeTempDir,
+  readFileStream,
+  removeDir,
+  writeTextFile,
+} from '@tundralibs/compat/file';
 import { Application } from '../Application.ts';
 import { GET, Module } from '../decorators/mod.ts';
 import { compress } from '../middlewares/compress.ts';
@@ -16,7 +21,6 @@ import { etag } from '../middlewares/etag.ts';
 import type { RapidContextResponse } from '../types/mod.ts';
 import { serializeResponse } from './serializeResponse.ts';
 import {
-  fileStream,
   frameSseEvent,
   isStreamBody,
   sseStream,
@@ -115,17 +119,19 @@ describe('streaming response model', () => {
     asserts.assertEquals(cleaned, true);
   });
 
-  it('fileStream streams a whole file and an inclusive byte range', async () => {
+  it('compat readFileStream (consumed by serve/serveStatic) streams a whole file and a byte range', async () => {
     const dir = await makeTempDir({ prefix: 'rapid-fs-' });
     try {
       await writeTextFile(`${dir}/f.txt`, '0123456789');
       asserts.assertEquals(
-        await text(new Response(await fileStream(`${dir}/f.txt`))),
+        await text(new Response(await readFileStream(`${dir}/f.txt`))),
         '0123456789',
       );
       asserts.assertEquals(
         await text(
-          new Response(await fileStream(`${dir}/f.txt`, { start: 2, end: 5 })),
+          new Response(
+            await readFileStream(`${dir}/f.txt`, { start: 2, end: 5 }),
+          ),
         ),
         '2345',
       );

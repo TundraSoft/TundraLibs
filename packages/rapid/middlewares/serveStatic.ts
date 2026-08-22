@@ -7,9 +7,14 @@
  * @module
  */
 
-import { type FileInfo, realPath, stat } from '@tundralibs/compat/file';
+import {
+  type FileInfo,
+  readFileStream,
+  realPath,
+  stat,
+} from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
-import { fileStream, mimeTypeFor } from '../utils/mod.ts';
+import { mimeTypeFor } from '../utils/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -206,7 +211,7 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
     }
     let body: ReadableStream<Uint8Array>;
     try {
-      body = await fileStream(real, slice);
+      body = await readFileStream(real, slice);
     } catch {
       // Unreadable → not ours; let routing (or the 404) handle it.
       return next();

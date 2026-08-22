@@ -9,13 +9,17 @@
  * @module
  */
 
-import { deleteFile, FileNotFound, stat } from '@tundralibs/compat/file';
+import {
+  deleteFile,
+  FileNotFound,
+  readFileStream,
+  stat,
+} from '@tundralibs/compat/file';
 import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
   type CookieOptions,
-  fileStream,
   mimeTypeFor,
   negotiate,
   pagingFromHeaders,
@@ -338,7 +342,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       // A directory / special file is not servable — a 404, not a read error.
       throw new RapidError('RAPID_NOT_FOUND', { details: { path } });
     }
-    const content = await fileStream(path);
+    const content = await readFileStream(path);
     const headers: Record<string, string> = {
       'content-type': options.contentType ?? mimeTypeFor(path),
       'content-length': String(size),
