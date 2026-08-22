@@ -99,14 +99,49 @@ export function _ambientScope(): string | undefined {
 const ambientContainers: DoctorContainer[] = [];
 
 /**
- * Read the current ambient container (top of the stack), or `undefined`
- * when no container operation is in flight — in which case `inject()`
+ * An optional **async-context** container provider, installed by a host
+ * (e.g. an HTTP framework) via {@link setContainerProvider}. The sync
+ * {@link ambientContainers} stack only spans a single synchronous
+ * `dispense`/`resolve`, so it cannot carry a container across an
+ * `await`. A host that already owns a per-request async context
+ * (`AsyncLocalStorage`) installs a provider that reads the current
+ * container out of it, so `inject()` inside an async request handler —
+ * even after an `await` — resolves against that request's container.
+ * `undefined` (the default) means no host is integrated and `inject()`
  * falls back to the global {@link Doctor}.
+ */
+let containerProvider: (() => DoctorContainer | undefined) | undefined;
+
+/**
+ * Install (or clear, with `undefined`) the async-context container
+ * provider consulted by `inject()` when no synchronous container
+ * operation is in flight — see {@link containerProvider}. Intended for a
+ * single host framework to call ONCE at module load; the provider itself
+ * reads per-request state from the host's async context, so one provider
+ * serves every app and request. A later call replaces the previous one.
+ *
+ * @param provider - Returns the container for the current async context,
+ *   or `undefined` to fall through to the global `Doctor`. Pass
+ *   `undefined` to uninstall.
+ */
+export function setContainerProvider(
+  provider: (() => DoctorContainer | undefined) | undefined,
+): void {
+  containerProvider = provider;
+}
+
+/**
+ * Read the container `inject()` should resolve against: a synchronous
+ * container operation in flight (top of the {@link ambientContainers}
+ * stack — a `dispense`/`resolve` constructing right now) wins, since it
+ * is the tightest scope; otherwise the async-context
+ * {@link containerProvider}, if a host installed one; otherwise
+ * `undefined`, and `inject()` falls back to the global {@link Doctor}.
  *
  * @internal Consumed by `inject()`; not part of the public surface.
  */
 export function _ambientContainer(): DoctorContainer | undefined {
-  return ambientContainers.at(-1);
+  return ambientContainers.at(-1) ?? containerProvider?.();
 }
 
 /**
