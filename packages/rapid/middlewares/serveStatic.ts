@@ -16,6 +16,40 @@ import { MIDDLEWARE_SCOPE } from './scope.ts';
 /** Strip a weak-validator prefix for RFC 7232 weak comparison. */
 const stripWeak = (tag: string): string => tag.trim().replace(/^W\//, '');
 
+/**
+ * Parse a single-range `Range: bytes=start-end` header against a file of
+ * `size` bytes. Returns the INCLUSIVE byte slice to serve, `undefined` when
+ * there is no (or an unparseable / multi-range) header — serve the whole
+ * file with 200 — or `'unsatisfiable'` when the range lies wholly outside
+ * the file (→ 416). Forms: `a-b` (clamped to the file), `a-` (to EOF), `-n`
+ * (the last n bytes). Multi-range and non-byte units are ignored (200), the
+ * RFC-permitted lenient response.
+ */
+const parseRange = (
+  header: string | null,
+  size: number,
+): { start: number; end: number } | 'unsatisfiable' | undefined => {
+  if (header === null) return undefined;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (m === null || size === 0) return undefined;
+  const [, a, b] = m;
+  let start: number;
+  let end: number;
+  if (a === '' && b === '') return undefined;
+  if (a === '') {
+    // Suffix form `-n`: the last n bytes.
+    const n = Number(b);
+    if (n === 0) return 'unsatisfiable';
+    start = Math.max(0, size - n);
+    end = size - 1;
+  } else {
+    start = Number(a);
+    end = b === '' ? size - 1 : Math.min(Number(b), size - 1);
+  }
+  if (start >= size || start > end) return 'unsatisfiable';
+  return { start, end };
+};
+
 /** Whether an `If-None-Match` header matches `etag` (weak comparison). */
 const ifNoneMatch = (header: string, etag: string): boolean => {
   if (header.trim() === '*') return true;
@@ -147,18 +181,41 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
       return;
     }
 
-    // STREAM the file — never buffered. `content-length` comes from the stat
-    // (the transport can't infer it from a stream), so HEAD and clients see
-    // the real size.
-    headers['content-length'] = String(info.size);
+    // Range requests (RFC 7233, single byte range only). Advertised on every
+    // file response so clients know they may resume/seek.
+    headers['accept-ranges'] = 'bytes';
+    const range = parseRange(ctx.headers.get('range'), info.size);
+    if (range === 'unsatisfiable') {
+      // 416: the range lies entirely outside the file. Content-Range carries
+      // the real size (`bytes */size`) so the client can recover.
+      headers['content-range'] = `bytes */${info.size}`;
+      ctx.response = { status: 416, content: '', headers };
+      return;
+    }
+
+    // STREAM the file (or the requested slice) — never buffered.
+    // `content-length` comes from the stat / range, since the transport can't
+    // infer it from a stream; HEAD and clients see the real size.
+    const slice = range === undefined ? undefined : range;
+    headers['content-length'] = String(
+      slice === undefined ? info.size : slice.end - slice.start + 1,
+    );
+    if (slice !== undefined) {
+      headers['content-range'] =
+        `bytes ${slice.start}-${slice.end}/${info.size}`;
+    }
     let body: ReadableStream<Uint8Array>;
     try {
-      body = await fileStream(real);
+      body = await fileStream(real, slice);
     } catch {
       // Unreadable → not ours; let routing (or the 404) handle it.
       return next();
     }
-    ctx.response = { content: body, headers };
+    ctx.response = {
+      status: slice === undefined ? 200 : 206,
+      content: body,
+      headers,
+    };
     // Served — do NOT call next(): short-circuit the chain.
   };
   return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });

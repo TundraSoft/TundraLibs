@@ -54,6 +54,16 @@ describe('rapid.parseQueryFilters', () => {
     asserts.assertEquals(r.filters['c'], { $lte: 1.5 });
   });
 
+  it('coerces only PLAIN decimals — hex/exp/binary stay strings (consistent with parsePaging)', () => {
+    // `Number()` would turn these into 31 / 1000 / 3 — a silent, surprising
+    // comparison. They must remain the literal strings the client sent.
+    const r = parseQueryFilters(q('a=gt:0x1F&b=gt:1e3&c=gt:0b11&d=gt:-5'));
+    asserts.assertEquals(r.filters['a'], { $gt: '0x1F' });
+    asserts.assertEquals(r.filters['b'], { $gt: '1e3' });
+    asserts.assertEquals(r.filters['c'], { $gt: '0b11' });
+    asserts.assertEquals(r.filters['d'], { $gt: -5 }); // negatives are legit
+  });
+
   it('COLON FIX: the value is everything after the FIRST colon', () => {
     // The ancestral split(':', 2) silently discarded ':30' here.
     const r = parseQueryFilters(q('start=gte:2026-01-01T10:30'));

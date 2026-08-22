@@ -81,6 +81,45 @@ describe('rapid.serveStatic (live)', () => {
     asserts.assertEquals(r2.headers.get('etag'), etag); // still advertised
   });
 
+  it('serves a byte range as 206 with Content-Range (and advertises Accept-Ranges)', async () => {
+    // app.css = 'body{color:red}' (15 bytes). bytes=5-9 → 'color'.
+    const full = await fetch(`${url}/s/app.css`);
+    asserts.assertEquals(full.headers.get('accept-ranges'), 'bytes');
+    await full.text();
+
+    const r = await fetch(`${url}/s/app.css`, {
+      headers: { range: 'bytes=5-9' },
+    });
+    asserts.assertEquals(r.status, 206);
+    asserts.assertEquals(r.headers.get('content-range'), 'bytes 5-9/15');
+    // Not asserting content-length: rapid sets it ('5'), but Bun's HTTP
+    // server manages 206 framing itself and strips the explicit header on
+    // the wire (Deno/Node pass it through). The body length is what matters.
+    asserts.assertEquals(await r.text(), 'color');
+
+    // Open-ended `a-` reads to EOF; suffix `-n` reads the last n bytes.
+    const tail = await fetch(`${url}/s/app.css`, {
+      headers: { range: 'bytes=11-' },
+    });
+    asserts.assertEquals(tail.status, 206);
+    asserts.assertEquals(await tail.text(), 'red}');
+    const suffix = await fetch(`${url}/s/app.css`, {
+      headers: { range: 'bytes=-4' },
+    });
+    asserts.assertEquals(suffix.status, 206);
+    asserts.assertEquals(suffix.headers.get('content-range'), 'bytes 11-14/15');
+    asserts.assertEquals(await suffix.text(), 'red}');
+  });
+
+  it('an unsatisfiable range → 416 with the real size in Content-Range', async () => {
+    const r = await fetch(`${url}/s/app.css`, {
+      headers: { range: 'bytes=100-200' },
+    });
+    asserts.assertEquals(r.status, 416);
+    asserts.assertEquals(r.headers.get('content-range'), 'bytes */15');
+    await r.text();
+  });
+
   it('falls through for a missing file (404) and leaves routes working', async () => {
     const miss = await fetch(`${url}/s/nope.txt`);
     asserts.assertEquals(miss.status, 404);

@@ -305,7 +305,10 @@ A handler's `content` can be a string, a plain object (serialized as JSON), a
 iterable of chunks (strings are UTF-8 encoded). A stream body is handed to the
 client as-is, never buffered, so large files, server-sent events, and proxy
 passthrough don't hold the body in memory. `ctx.serve()` and `serveStatic`
-stream files this way (with a real `content-length` from the file's size).
+stream files this way (with a real `content-length` from the file's size), and
+`serveStatic` honours a single-range `Range: bytes=…` header — `206` with
+`Content-Range`, or `416` when the range lies outside the file — so clients
+can resume downloads and seek media.
 
 ```ts
 import { Application } from '@tundralibs/rapid';

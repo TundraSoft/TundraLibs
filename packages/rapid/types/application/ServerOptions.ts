@@ -92,6 +92,19 @@ export type RapidApplicationServerOptions = {
    */
   methodNotAllowed?: boolean;
   /**
+   * Whether a trailing slash on the request path is ignored when routing:
+   * `true` (default) normalises `/users/` to `/users` so a client's stray
+   * slash never 404s; the root `/` is never altered. `false` skips rapid's
+   * normalisation — but note the router (radrouter) is itself
+   * slash-insensitive, so `/users/` still matches `/users`; this only
+   * matters for `path`-mode versioning and static prefixes, which see the
+   * verbatim path. There is deliberately no "strict" mode: the router
+   * cannot distinguish the two, and an option that silently did nothing
+   * would be a lie.
+   * @default true
+   */
+  ignoreTrailingSlash?: boolean;
+  /**
    * Path that accepts websocket upgrades for `app.socket()` commands
    * (the socket shares the HTTP listener). Upgrades on other paths are
    * rejected and fall through to HTTP routing.

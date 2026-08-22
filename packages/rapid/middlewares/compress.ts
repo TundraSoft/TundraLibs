@@ -26,6 +26,15 @@ export type CompressOptions = {
 const encoder = new TextEncoder();
 const NO_BODY = new Set([204, 205, 304]);
 
+/**
+ * Why no brotli: the Web-standard `CompressionStream` — the only encoder
+ * available on every supported runtime — rejects `'br'` on Deno, Bun AND
+ * Node (verified: all three throw TypeError). Brotli would need `node:zlib`
+ * (Node/Bun only — a runtime-divergent result, which this package forbids)
+ * or a pure-JS encoder dependency. gzip is universally negotiated and within
+ * a few percent of brotli for API payloads, so it is deliberately omitted.
+ */
+
 /** Pick gzip (preferred) or deflate from `Accept-Encoding`, else null. The
  * `q=0` exclusion matches ONLY a true zero (`q=0`, `q=0.0`), not a high
  * priority like `q=0.9` — `(?![.\d])` stops `q=0` matching the `0` prefix. */

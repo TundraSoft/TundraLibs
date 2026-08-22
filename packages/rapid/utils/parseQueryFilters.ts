@@ -84,9 +84,18 @@ function splitList(
   return items;
 }
 
-/** `value` verbatim for $gt-family when numeric-looking, else raw. */
+/**
+ * A PLAIN decimal number — an optional sign, digits, an optional fraction.
+ * Deliberately NOT `Number()`'s grammar: that accepts `0x1F`, `0b11`, `1e3`,
+ * and `Infinity`, so `?n=gt:0x1F` would silently compare against 31. Same
+ * strictness as `parsePaging` (which additionally requires a positive int);
+ * filters legitimately compare negatives and decimals, so those are kept.
+ */
+const PLAIN_DECIMAL = /^-?\d+(?:\.\d+)?$/;
+
+/** `value` as a number for the $gt-family ONLY when it is a plain decimal, else the raw string. */
 function coerceComparable(value: string): string | number {
-  return value !== '' && !Number.isNaN(Number(value)) ? Number(value) : value;
+  return PLAIN_DECIMAL.test(value) ? Number(value) : value;
 }
 
 /** Parse one `field=value` into a filter, per the module grammar. */

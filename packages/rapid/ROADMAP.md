@@ -97,6 +97,18 @@ Core and the current capability set are built and green on Deno / Bun / Node
   Transport rule, documented: both keys are HTTP-only and SILENTLY IGNORED on
   JOB/SOCKET (a redirect never becomes a 3xx there), so a multi-transport
   method returns them without branching.
+- **`serveStatic` Range/206 + the small HTTP cleanups (2026-08-22)** —
+  single-range `Range: bytes=a-b` / `a-` / `-n` → `206` + `Content-Range`
+  (`416` + `bytes */size` when unsatisfiable; multi-range falls back to 200 per
+  RFC 7233), `Accept-Ranges: bytes` advertised on every file response.
+  `server.ignoreTrailingSlash` (default true) strips a stray trailing slash
+  before routing AND version resolution; no "strict" mode — radrouter is
+  slash-insensitive, so it could not be honoured. `coerceComparable` now
+  accepts only plain decimals (`-?\d+(\.\d+)?`), consistent with
+  `parsePaging`: `?n=gt:0x1F` / `1e3` stay strings instead of silently
+  becoming 31 / 1000. **Brotli closed as infeasible**: `CompressionStream`
+  rejects `'br'` on Deno, Bun and Node alike (verified); `node:zlib` would be
+  runtime-divergent and a pure-JS encoder is a heavy dep — gzip stays.
 
 ## Backlog
 
@@ -106,11 +118,11 @@ sequencing fact, not a deferral.
 
 ### Request / response & HTTP
 
-- **`serveStatic` Range/206** (`Accept-Ranges`) — `fileStream` already takes an
-  inclusive byte range; what's left is the `Range` header parse, the `206` /
-  `Content-Range` response, and `416` on an unsatisfiable range.
-- **Small:** trailing-slash request policy; brotli in `compress`;
-  `coerceComparable` hex/exp coercion made consistent with `parsePaging`.
+- **Consume compat's `readFileStream`.** rapid's `utils/streams.ts` carries
+  its own cross-runtime `fileStream` (Deno.open / createReadStream→toWeb).
+  The primitive is being promoted into `@tundralibs/compat`'s `file` module as
+  `readFileStream(path, { start, end })`; once that releases, delete rapid's
+  copy and import compat's — one implementation, shared by every package.
 
 ### Tooling & DX
 
