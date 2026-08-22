@@ -18,4 +18,13 @@ export type RouterOptions = {
    * preserve the request's original case regardless of this flag.
    */
   caseSensitive?: boolean;
+  /**
+   * When true (default), a trailing slash is not significant: `/users/`
+   * registers and matches as `/users`, so a client's stray slash never
+   * 404s (the convention of Express / Fastify / Hono). Set to false to
+   * make the slash significant — `/users` and `/users/` are then distinct
+   * routes and a request must match exactly. The root `/` is never
+   * altered either way.
+   */
+  ignoreTrailingSlash?: boolean;
 };
