@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { _ambientScope, Doctor } from './Doctor.ts';
+import { _ambientContainer, _ambientScope, Doctor } from './Doctor.ts';
 import type { Label, Vial } from './types/mod.ts';
 
 /**
@@ -20,8 +20,10 @@ import type { Label, Vial } from './types/mod.ts';
  *   dynamic wiring (a token read from config); returns `unknown`. Prefer a
  *   label: it is typed and survives minification.
  *
- * `scope` falls back to the ambient operation scope — the scope of the
- * `Doctor.dispense`/`Doctor.resolve` call currently constructing.
+ * Resolution runs against the ambient container — the one whose
+ * `dispense`/`resolve` is currently constructing — falling back to the
+ * global `Doctor` when no container operation is in flight. `scope`
+ * likewise falls back to that operation's ambient scope.
  *
  * @throws {UnregisteredVialError} When nothing is registered or stocked
  *   under the target.
@@ -36,8 +38,9 @@ export function inject(
   target: Vial | Label | string,
   scope?: string,
 ): unknown {
+  const container = _ambientContainer() ?? Doctor;
   const effective = scope ?? _ambientScope();
   return typeof target === 'string'
-    ? Doctor.dispenseByName(target, effective)
-    : Doctor.dispense(target, effective);
+    ? container.dispenseByName(target, effective)
+    : container.dispense(target, effective);
 }
