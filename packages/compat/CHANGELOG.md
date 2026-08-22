@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.4.0...compat-v2.5.0) (2026-08-22)
+
+
+### Features
+
+* **compat:** readFileStream — cross-runtime file read stream with byte ranges ([#531](https://github.com/TundraSoft/TundraLibs/issues/531)) ([559f43d](https://github.com/TundraSoft/TundraLibs/commit/559f43d3a847789263e40e01cf2c58b54770d83f))
+
 ## [2.4.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.3.0...compat-v2.4.0) (2026-08-22)
 
 
