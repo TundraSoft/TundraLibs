@@ -6,6 +6,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { compose } from './compose.ts';
+import { RapidError } from '../errors/mod.ts';
 // deno-lint-ignore no-explicit-any
 type Ctx = any;
 
@@ -38,12 +39,15 @@ describe('rapid.compose', () => {
         await next();
       },
     ]);
-    await asserts.assertRejects(
+    // compose's OWN detected bug → a RapidError (RAPID_UNHANDLED), unlike a
+    // middleware's own throw which propagates unwrapped (see below).
+    const err = await asserts.assertRejects(
       // compose's runner may return void | Promise<void>; assertRejects needs a PromiseLike
       () => Promise.resolve(run({}, () => Promise.resolve())),
-      Error,
+      RapidError,
       'next() called multiple times',
     );
+    asserts.assertEquals(err.code, 'RAPID_UNHANDLED');
   });
 
   it('a nullish middleware slot is SKIPPED (handler still runs)', async () => {

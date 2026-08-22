@@ -1,10 +1,11 @@
 /**
- * @fileoverview Cookie parsing + `Set-Cookie` serialization — the small,
- * dependency-free helpers behind `HTTPContext.cookies` / `setCookie` /
- * `deleteCookie`.
+ * @fileoverview Cookie parsing + `Set-Cookie` serialization — the small
+ * helpers behind `HTTPContext.cookies` / `setCookie` / `deleteCookie`.
  *
  * @module
  */
+
+import { RapidError } from '../errors/mod.ts';
 
 /** Attributes for an outbound cookie (`Set-Cookie`). */
 export type CookieOptions = {
@@ -53,9 +54,9 @@ export const parseCookies = (
  * Serialize one `Set-Cookie` header value. The value is
  * percent-encoded, so it can never inject `;`/CRLF into the header.
  *
- * @throws {Error} When `name` contains characters illegal in a cookie
- *   name (a separator/control char) — a programming error, surfaced
- *   loudly rather than emitting a broken header.
+ * @throws {@link RapidError} RAPID_RESPONSE_INVALID when `name` contains
+ *   characters illegal in a cookie name (a separator/control char) — a server
+ *   bug producing a broken header, surfaced loudly as a 500.
  */
 export const serializeCookie = (
   name: string,
@@ -63,7 +64,9 @@ export const serializeCookie = (
   options: CookieOptions = {},
 ): string => {
   if (!/^[\w!#$%&'*+.^`|~-]+$/.test(name)) {
-    throw new Error(`Invalid cookie name: ${JSON.stringify(name)}`);
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message: `Invalid cookie name: ${JSON.stringify(name)}`,
+    });
   }
   let cookie = `${name}=${encodeURIComponent(value)}`;
   if (options.maxAge !== undefined) {

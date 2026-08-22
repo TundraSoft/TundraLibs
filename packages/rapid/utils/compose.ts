@@ -7,6 +7,7 @@
  */
 import type { RapidContextState } from '../types/mod.ts';
 import type { Context } from '../context/mod.ts';
+import { RapidError } from '../errors/mod.ts';
 
 /**
  * The callable shape `compose` runs — structural, so BOTH universal
@@ -22,9 +23,13 @@ type ComposableMiddleware<C> = (
  * Compose an onion of middleware into a single `(ctx, next)` runner. A
  * nullish slot is SKIPPED (it never aborts the chain).
  *
- * @throws {Error} As a REJECTION of the runner's promise when one
- *   middleware calls `next()` more than once (a plain `Error` — the
- *   shared cycle wraps it into the RAPID_UNHANDLED disclosure path).
+ * A middleware's OWN throw propagates unwrapped to the disclosure boundary
+ * (`RapidError.from` classifies it — a guardian failure → 400, else 500);
+ * `compose` never re-codes what flows through it. The one error it raises
+ * itself is the `next()`-twice programmer bug below.
+ *
+ * @throws {@link RapidError} RAPID_UNHANDLED — rejects the runner's promise when
+ *   a middleware calls `next()` more than once (a server bug; surfaces as 500).
  */
 export const compose = <
   S extends RapidContextState,
@@ -48,7 +53,12 @@ export const compose = <
 
     const dispatch = async (i: number): Promise<void> => {
       if (i <= index) {
-        return Promise.reject(new Error('next() called multiple times'));
+        return Promise.reject(
+          new RapidError('RAPID_UNHANDLED', {
+            message: 'next() called multiple times — a middleware invoked ' +
+              'next() more than once',
+          }),
+        );
       }
       index = i;
       let fn:

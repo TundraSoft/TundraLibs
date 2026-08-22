@@ -5,6 +5,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { parseCookies, serializeCookie } from './cookies.ts';
+import { RapidError } from '../errors/mod.ts';
 
 describe('rapid.cookies', () => {
   it('parses a Cookie header (decoding values, skipping junk)', () => {
@@ -38,11 +39,12 @@ describe('rapid.cookies', () => {
   });
 
   it('rejects an illegal cookie name (no header injection)', () => {
-    asserts.assertThrows(
+    const err = asserts.assertThrows(
       () => serializeCookie('bad name', 'v'),
-      Error,
+      RapidError,
       'Invalid cookie name',
-    );
-    asserts.assertThrows(() => serializeCookie('a=b', 'v'), Error);
+    ) as RapidError;
+    asserts.assertEquals(err.code, 'RAPID_RESPONSE_INVALID');
+    asserts.assertThrows(() => serializeCookie('a=b', 'v'), RapidError);
   });
 });
