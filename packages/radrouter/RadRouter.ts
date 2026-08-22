@@ -29,6 +29,24 @@ const PARAM_NAME_PATTERN = /^[A-Za-z_]\w*$/;
 const PARAM_TOKEN_PATTERN = /:[A-Za-z_]\w*:/g;
 
 /**
+ * The full `@tundralibs/compat/http` {@link HTTPMethod} union as a
+ * concrete, stable-order list. {@link RadRouter.allowedMethods} probes
+ * these in this order, so its result is deterministic (declaration
+ * order) without callers needing to sort.
+ */
+const ALL_HTTP_METHODS: readonly HTTPMethod[] = [
+  'GET',
+  'POST',
+  'PUT',
+  'DELETE',
+  'PATCH',
+  'HEAD',
+  'OPTIONS',
+  'TRACE',
+  'CONNECT',
+];
+
+/**
  * Lowercase `s` for case-insensitive matching **without changing its
  * length**. `String.prototype.toLowerCase()` can expand a code point
  * (e.g. `İ` U+0130 → `i̇`, one UTF-16 unit becoming two); such an
@@ -1038,6 +1056,61 @@ export class RadRouter<M = Middleware> {
       middlewares: [...this.__globalMiddlewares, ...handler.middlewares],
       params,
     };
+  }
+
+  /**
+   * The HTTP methods registered for `path` at `version` — i.e. every
+   * method M for which {@link RadRouter.find}`(M, path, version)` would
+   * return a match, using the SAME version resolution as `find` (exact
+   * requested version → configured {@link RadRouter.defaultVersion} →
+   * unversioned slot). Returns an empty array when the path matches no
+   * route at all. For building a 405 `Allow` header and answering
+   * OPTIONS without probing each method separately.
+   *
+   * `path` is matched concretely, exactly as `find` matches it: a
+   * request path like `/users/5` resolves against `:name:`, suffix, and
+   * wildcard routes, not only literal registrations.
+   *
+   * Implementation: a method-loop over the same {@link RadRouter.__search}
+   * `find` uses, one probe per known {@link HTTPMethod}, rather than a
+   * single walk to one node. `find`'s backtracking resolves each method
+   * independently and can seat different methods on different nodes — a
+   * static `/users/me` (GET) and a `/users/:id:` (POST) both answer
+   * `/users/me` from distinct leaves — so reusing `__search` per method
+   * makes the result equal to `{ M | find(M, path, version) !==
+   * undefined }` by construction: the exact correctness contract, with
+   * the identical exact→defaultVersion→unversioned fallback.
+   *
+   * Never throws — an unknown path returns `[]`, mirroring `find`'s
+   * miss-is-`undefined` (not throwing) behaviour.
+   *
+   * @param path - Request path (with or without leading slash), matched
+   *   with the same strict slash semantics as {@link RadRouter.find}.
+   * @param version - Optional version label; see the fallback note above.
+   * @returns The matching methods in {@link HTTPMethod} declaration
+   *   order, or `[]` on a total miss.
+   */
+  public allowedMethods(path: string, version?: string): HTTPMethod[] {
+    const normalized = this.__normalizeForLookup(path);
+    if (!normalized) return [];
+
+    const methods: HTTPMethod[] = [];
+    for (const method of ALL_HTTP_METHODS) {
+      // Fresh null-proto params bag per probe, exactly as `find` does —
+      // `__search` mutates and backtrack-restores it in place.
+      const params: RouteParams = Object.create(null);
+      const handler = this.__search(
+        this.__root,
+        normalized.matchUrl,
+        normalized.origUrl,
+        0,
+        method,
+        version,
+        params,
+      );
+      if (handler) methods.push(method);
+    }
+    return methods;
   }
 
   // ---------- maintenance ----------
