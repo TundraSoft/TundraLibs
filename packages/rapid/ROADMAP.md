@@ -1,14 +1,14 @@
 # rAPId Roadmap
 
 Forward-looking build plan. Completed work is summarized under **Shipped**;
-everything below it is pending. Full build-history detail lives in git and the
-project memory. Last updated **2026-08-22**, after the full adversarial review
-(`reviews/rapid-review-2026-08-22.md`).
+everything below it is the **Backlog** — one pool, no 1.0-vs-later gate, all in
+scope and up for scheduling. Full build-history detail lives in git and the
+project memory. Last updated **2026-08-22**.
 
 ## Shipped
 
-Core + the 1.0 capability set are built and green on Deno / Bun / Node (the
-fetch adapter is also verified on Cloudflare workerd):
+Core and the current capability set are built and green on Deno / Bun / Node
+(the fetch adapter is also verified on Cloudflare workerd):
 
 - **Core** — `Application.initialize()` (the single async factory; private
   constructor + runtime brand, config-driven or programmatic); the single
@@ -49,7 +49,7 @@ fetch adapter is also verified on Cloudflare workerd):
   `client()` (drive routes over `app.fetch`).
 - **CLI** (`./cli`) — `init` / `upgrade` / `modules` / `health`.
 - **Cluster seam** — `app.instanceId` (boot ULID) + a nullable `app.cluster`
-  slot; the master/worker implementation is post-1.0.
+  slot; the master/worker implementation is in the backlog (Scaling & ops).
 - **Review hardening (2026-08-22)** — the straightforward/unblocked fixes from
   the adversarial review, shipped one cross-package dependency at a time
   (radrouter 1.2.0, doctor 1.4.0 + 1.5.0, compat 2.4.0):
@@ -65,77 +65,50 @@ fetch adapter is also verified on Cloudflare workerd):
   - Per-app DI — `app.container` (a child of the global doctor), request-scoped
     `inject()` (resolves against the app even after an `await`), harness stubs
     isolated to a fresh child container.
-  - `serveStatic` realpath symlink guard; Context transport-leak removed
-    (`ctx.metrics`/`socketMetrics` off the base); publish-exclude hygiene.
+  - `serveStatic` realpath symlink guard + weak `ETag` / `If-None-Match` /
+    `Last-Modified`; Context transport-leak removed (`ctx.metrics`/
+    `socketMetrics` off the base); publish-exclude hygiene.
+- **Error taxonomy (2026-08-22)** — `utils/` uniformly throws `RapidError` with
+  the status-mapping code for a condition it detects; a helper that runs
+  caller-supplied code propagates unwrapped to the disclosure boundary. Codified
+  in CONVENTIONS.md.
 
-## Open decisions
+## Backlog
 
-- **Should `utils/` throw `RapidError` or generic errors?** Today it is MIXED:
-  `parseBody`/`parseQueryFilters`/`buildExporter`/`mountModule` throw
-  `RapidError` (codes map straight onto response statuses), while `compose`
-  throws a plain `Error` the cycle launders into 500. The trade: framework
-  errors keep status/disclosure mapping and a stable code for callers, but
-  couple otherwise-pure functions to the taxonomy. Alternative: utils throw
-  plain/typed errors and the caller wraps at the boundary. Decide before the
-  docs freeze the `@throws` contracts.
+No 1.0-vs-later split — everything here is in scope. A few items note a real
+technical **dependency** (e.g. "needs the streaming model"); that is a
+sequencing fact, not a deferral.
 
-## Pending — from the 2026-08-22 adversarial review
+### Request / response & HTTP
 
-What remains after the review-hardening pass — the shipped fixes (auto-HEAD /
-405 / OPTIONS, validation→400, graceful drain, `app.onError`, per-app DI,
-serveStatic symlink guard, Context transport-leak) are under
-**Shipped → Review hardening (2026-08-22)**. "Gated" items had a product
-decision attached in the review doc.
+- **Streaming / SSE response model** — the keystone structural change. `content`
+  is `string | Record | Uint8Array` today; a stream-body model unblocks SSE,
+  `serveStatic` Range/206, zero-copy large-file static, proxy passthrough, and
+  the module reply-stream below.
+- **Module HTTP ergonomics — reply envelope (output side).** The INPUT binders
+  shipped (`cookie`/`auth`/`session`); the reply envelope is the OUTPUT half,
+  which `RapidContextResponse` already anticipates ("a future transport-specific
+  key widens the override's parameter type").
+  - **Reply set-cookie** — set cookies from a module return with proper
+    encoding/signing (today only a raw `Set-Cookie` string via `headers`).
+  - **Reply redirect** — redirect from a module return (today a manual
+    `status: 302` + a `location` header).
+  - **Reply streaming / file download** — mirrors `ctx.serve`; needs the
+    streaming model above.
+- **`serveStatic` Range/206** (`Accept-Ranges`) — needs the streaming model.
+- **Small:** trailing-slash request policy; brotli in `compress`;
+  `coerceComparable` hex/exp coercion made consistent with `parsePaging`.
 
-**P1 — important**
-
-- **Static hardening — `Range`** for `serveStatic` (`206`/`Accept-Ranges`);
-  depends on the streaming response model. ETag / If-None-Match / Last-Modified
-  already shipped.
-- **Cron exactly-once under N replicas** (gated). The scheduler is per-process;
-  N replicas fire every `@JOB` N times. Ship the `onlyIfCronLeader()` gate (see
-  Distributed deployment) or document the single-scheduler requirement loudly.
-- **AI agent instructions in the CLI.** `rapid init` scaffolds rapid-specific
-  AI-assistant guidance into the new project — a `CLAUDE.md` / `AGENTS.md` /
-  `.github/copilot-instructions.md` (mirroring how this monorepo wires them),
-  and/or a `rapid ai` subcommand to (re)generate them — so anyone building the
-  project with an AI assistant starts with rapid's conventions, API surface,
-  and idioms pre-configured. New template files in `cli/templates.ts` + a
-  dispatch entry in `cli/mod.ts`.
-
-**Module HTTP ergonomics** — declarative parity with the imperative `ctx`
-(HTTP-context-only)
-
-The imperative handler reaches these through `ctx` (`ctx.cookies` /
-`ctx.setCookie`, `ctx.redirect`, `ctx.serve`). The DECLARATIVE module path is
-now half-covered: the INPUT binders shipped — `cookie(name)`, `auth()`, and
-`session()` (in `decorators/binders.ts`, extracted at mount). The OUTPUT side
-still needs HTTP-specific keys on the reply envelope, which
-`RapidContextResponse` already anticipates ("a future transport-specific key
-widens the override's parameter type … visible exactly to transport-bound
-middleware").
-
-- **Reply set-cookie** — set cookies from a module return with proper
-  encoding/signing (today only a raw `Set-Cookie` string via `headers`); bring
-  `ctx.setCookie`'s ergonomics to the reply envelope.
-- **Reply redirect** — redirect from a module return (today only a manual
-  `status: 302` + a `location` header); bring `ctx.redirect` to the envelope.
-- **Reply streaming / file download** — a module reply that streams or serves a
-  file (today reply `content` is `string | Record | Uint8Array` only). Mirrors
-  `ctx.serve`; depends on the streaming response model (Post-1.0).
-
-**P2 / smaller**
-
-- **Streaming / SSE response model** — the one large structural change; unblocks
-  SSE, Range, zero-copy static, proxy passthrough, and the module reply-stream
-  above. Already post-1.0 (below).
-- Trailing-slash request policy; brotli in `compress`; `coerceComparable`
-  hex/exp numeric coercion made consistent with `parsePaging`.
-
-## Pending 1.0 build items (pre-review)
+### Tooling & DX
 
 - **CLI `build`** — a scaffolded deno task wrapping `deno compile` / the
   fetch-adapter bundle, rather than a heavy CLI command.
+- **AI-agent instructions in the CLI** — `rapid init` scaffolds rapid-specific
+  assistant guidance (`CLAUDE.md` / `AGENTS.md` /
+  `.github/copilot-instructions.md`), and/or a `rapid ai` subcommand to
+  (re)generate them, so an AI-assisted project starts with rapid's conventions,
+  API surface, and idioms pre-configured. New `cli/templates.ts` files + a
+  `cli/mod.ts` dispatch entry.
 - **Dev console (TUI). 🎨 design frozen 2026-08-22; build pending.** A
   full-screen alternate-buffer terminal console that replaces plain log spew on
   a TTY. Regions each back onto an existing getter (banner + bind line;
@@ -151,15 +124,12 @@ middleware").
   also watches `modules/` and regenerates the barrel on change. Open build
   calls: core-vs-CLI home, latency percentiles, the in-core request ring,
   repaint cadence, a zero-dep renderer.
-
-## Post-1.0.0
-
-- **Streaming / SSE responses.** A stream-body response model (SSE, Range,
-  large-file static, proxy passthrough); today `content` is
-  `string | Record | Uint8Array` and static reads whole files into memory.
-- **SDK generator (via RESTler).** A typed client SDK generated from the
+- **SDK generator (via RESTler)** — a typed client SDK generated from the
   OpenAPI/decorator metadata — one typed method per route, schemas reused.
   Downstream of OpenAPI; likely its own tool/package.
+
+### Scaling & ops
+
 - **Distributed deployment & management. 🧭 architecture converged 2026-08-22.**
   A **master + workers** model, built as modules/middleware/routes with **one
   small core seam** (`app.cluster`, already shipped):
@@ -170,7 +140,9 @@ middleware").
   - **Exactly-once cron** by a master-designated leader (lowest instance-ULID;
     sticky through a master outage), enforced by an `onlyIfCronLeader()` job
     middleware reusing the skipped-by-middleware outcome — every worker
-    schedules the cron, only the leader's fires run. No core change.
+    schedules the cron, only the leader's fires run. No core change. (Until this
+    ships, the scheduler is per-process: N replicas fire every `@JOB` N times —
+    run the scheduler on a single replica, or make jobs idempotent.)
   - **Telemetry gateway (opt-in per stream)** — workers stream logs (and
     optionally metrics/traces) to the master, which transforms
     (filter/sample/redact/dedup/enrich) and fans out to pluggable sinks.
@@ -188,13 +160,13 @@ middleware").
   - Later: drain-aware rolling deploys, fleet cron pause / remote trigger,
     config & feature-flag broadcast, alerting webhooks, a TUI `reqId`→trace
     jump, multi-master HA via rpc's Redis `PubSubAdapter`.
-- **Simple UI module.** A deliberately MINIMAL client-side UI helper served
+- **Simple UI module** — a deliberately MINIMAL client-side UI helper served
   from the static layer — enough for AJAX + basic wiring. Not a
   React/Vite-class framework.
 
 ## Parked
 
 - Browser as a rAPId **listener** surface — permanently out of scope (no server
-  socket). Distinct from the post-1.0 "Simple UI module", which SERVES a UI to
+  socket). Distinct from the **Simple UI module** above, which SERVES a UI to
   browsers. Cloudflare Workers is a best-effort HTTP-only target via
   `app.fetch()`: no filesystem, no socket commands, jobs via Cron Triggers.
