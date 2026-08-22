@@ -2522,6 +2522,7 @@ export class WebServer<T = unknown> {
   private __buildAdapter(): _RuntimeAdapter {
     switch (RUNTIME) {
       case 'BUN':
+        /* c8 ignore start */
         // deno-coverage-ignore-start — Bun-only adapter, unreachable on the Deno lane
         return {
           start: () => this._startBunServer(),
@@ -2544,6 +2545,7 @@ export class WebServer<T = unknown> {
           unref: () => (this._client as _BunServerHandle).unref(),
         };
         // deno-coverage-ignore-stop
+        /* c8 ignore stop */
       case 'DENO':
         return {
           start: () => this._startDenoServer(),
@@ -2553,6 +2555,7 @@ export class WebServer<T = unknown> {
           unref: () => (this._client as _DenoServerHandle).unref(),
         };
       case 'NODE':
+        /* c8 ignore start */
         // deno-coverage-ignore-start — Node-only adapter, unreachable on the Deno lane
         return {
           start: () => this._startNodeServer(),
@@ -2562,6 +2565,7 @@ export class WebServer<T = unknown> {
           unref: () => this.__nodeClient().unref(),
         };
         // deno-coverage-ignore-stop
+        /* c8 ignore stop */
       default:
         // deno-coverage-ignore-start
         throw new UnsupportedRuntimeError(
@@ -2707,11 +2711,12 @@ export class WebServer<T = unknown> {
    *
    * @private
    */
+  /* c8 ignore start */
+  // deno-coverage-ignore-start — Node-only path, unreachable on the Deno lane
   private __stopNodeServer(
     graceful: boolean,
     timeoutMs?: number,
   ): Promise<void> {
-    // deno-coverage-ignore-start — Node-only path, unreachable on the Deno lane
     if (this._client === null || !isNode) return Promise.resolve();
     const client = this.__nodeClient();
     if (!graceful) {
@@ -2727,25 +2732,28 @@ export class WebServer<T = unknown> {
       timeoutMs,
       () => client.closeAllConnections(),
     );
-    // deno-coverage-ignore-stop
   }
+  // deno-coverage-ignore-stop
+  /* c8 ignore stop */
 
   /**
    * Wraps Node's callback-style `server.close()` in a promise.
    *
    * @private
    */
+  /* c8 ignore start */
+  // deno-coverage-ignore-start — Node-only path, unreachable on the Deno lane
   private __nodeClose(
     client:
       | InstanceType<typeof nodeHttp.Server>
       | InstanceType<typeof nodeHttps.Server>,
   ): Promise<void> {
-    // deno-coverage-ignore-start — Node-only path, unreachable on the Deno lane
     return new Promise<void>((resolve, reject) => {
       client.close((err?: Error) => (err ? reject(err) : resolve()));
     });
-    // deno-coverage-ignore-stop
   }
+  // deno-coverage-ignore-stop
+  /* c8 ignore stop */
 
   /**
    * Stops the Deno HTTP server.
@@ -2782,6 +2790,7 @@ export class WebServer<T = unknown> {
           clearTimeout(timer);
           resolve();
         },
+        /* c8 ignore start */
         // deno-coverage-ignore-start — `finished` rejects only on abnormal
         // server close, not deterministically reproducible in a test.
         (err) => {
@@ -2789,6 +2798,7 @@ export class WebServer<T = unknown> {
           reject(err);
         },
         // deno-coverage-ignore-stop
+        /* c8 ignore stop */
       );
     });
   }
@@ -2808,13 +2818,14 @@ export class WebServer<T = unknown> {
    *
    * @private
    */
+  /* c8 ignore start */
+  // deno-coverage-ignore-start — only the Bun/Node adapters call this; the
+  // Deno lane uses __stopDenoServer, so this is unreachable there.
   private __stopWithDeadline(
     drain: Promise<void>,
     timeoutMs: number,
     onTimeout: () => void,
   ): Promise<void> {
-    // deno-coverage-ignore-start — only the Bun/Node adapters call this; the
-    // Deno lane uses __stopDenoServer, so this is unreachable there.
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(onTimeout, timeoutMs);
       unrefTimer(timer);
@@ -2829,8 +2840,9 @@ export class WebServer<T = unknown> {
         },
       );
     });
-    // deno-coverage-ignore-stop
   }
+  // deno-coverage-ignore-stop
+  /* c8 ignore stop */
 
   /**
    * Validates all server configuration options.
