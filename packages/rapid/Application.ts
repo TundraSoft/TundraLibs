@@ -880,8 +880,14 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
-   * Stop all transports. A force-exit deadline (`shutdownTimeout`,
-   * unref'd — it cannot hold the loop open) backstops a hung teardown.
+   * Stop all transports. `shutdownTimeout` is the graceful-drain window:
+   * the HTTP server drains in-flight requests for up to that long, then
+   * force-closes the rest (see {@link HTTPTransport.stop}). A nuclear
+   * process-exit backstop fires a little later — `shutdownTimeout` plus a
+   * 10% grace, unref'd so it cannot hold the loop open — to guarantee exit
+   * if the drain's own force-close or a later teardown step (jobs, module
+   * dispose) itself wedges. `shutdownTimeout: 0` disables both: the server
+   * force-closes immediately and no exit is armed.
    */
   public async stop(): Promise<this> {
     // The upload temp dir is created at CONSTRUCTION, not start() — an
@@ -895,14 +901,18 @@ export class Application<S extends RapidContextState = RapidContextState>
       await this.__disposeModules(); // booted via modules() + fetch(), never listened
       return this;
     }
-    const deadline = this.option('shutdownTimeout')!;
+    // The graceful-drain window handed to the HTTP transport; the nuclear
+    // exit is armed a 10% grace beyond it so the drain's force-close and the
+    // later teardown steps (jobs, module dispose) settle first in the normal
+    // case, and the exit only fires when teardown is genuinely wedged.
+    const drainMs = this.option('shutdownTimeout')!;
     let timer: number | { unref?: () => void } | undefined;
-    if (deadline > 0) {
+    if (drainMs > 0) {
       timer = setTimeout(() => {
         // deno-lint-ignore no-explicit-any
         const g = globalThis as any;
         g.Deno?.exit?.(1) ?? g.process?.exit?.(1);
-      }, deadline);
+      }, Math.ceil(drainMs * 1.1));
       if (typeof timer === 'number') {
         // deno-lint-ignore no-explicit-any
         (globalThis as any).Deno?.unrefTimer?.(timer);
@@ -923,7 +933,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         failures.push(error);
       }
       try {
-        await http?.stop();
+        await http?.stop(drainMs);
       } catch (error) {
         failures.push(error);
       }
