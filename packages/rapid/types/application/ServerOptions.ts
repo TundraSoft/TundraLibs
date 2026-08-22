@@ -78,10 +78,19 @@ export type RapidApplicationServerOptions = {
    * at boot: the synthesized `HEAD` reuses the `GET` handler + middleware
    * and the response is sent bodiless (headers + a correct `content-length`,
    * per HTTP semantics). An explicit `HEAD` route always wins. Off → a HEAD
-   * to a GET-only route is unmatched (404).
+   * to a GET-only route is unmatched (404, or 405 if `methodNotAllowed`).
    * @default true
    */
   autoHead?: boolean;
+  /**
+   * When a request's PATH matches a route but its METHOD doesn't, answer
+   * with `405 Method Not Allowed` + an `Allow` header (and answer a generic
+   * `OPTIONS` on that path with `204` + `Allow`) instead of `404`. Off →
+   * a wrong method is a plain `404`, which hides whether the path exists.
+   * The `Allow` list is computed from the router on the miss path only.
+   * @default false
+   */
+  methodNotAllowed?: boolean;
   /**
    * Path that accepts websocket upgrades for `app.socket()` commands
    * (the socket shares the HTTP listener). Upgrades on other paths are

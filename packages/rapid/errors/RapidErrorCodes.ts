@@ -30,6 +30,8 @@ export const RAPID_ERROR_CODES = {
   RAPID_ACCESS_DENIED: { status: 403, message: 'Access denied' },
   /** No route/handler matched. */
   RAPID_NOT_FOUND: { status: 404, message: 'Not found' },
+  /** The path matched but not for this method (see `server.methodNotAllowed`). */
+  RAPID_METHOD_NOT_ALLOWED: { status: 405, message: 'Method not allowed' },
   /** Request body over the configured limit. */
   RAPID_PAYLOAD_TOO_LARGE: { status: 413, message: 'Payload too large' },
   /** Content type (or file type) not accepted. */
