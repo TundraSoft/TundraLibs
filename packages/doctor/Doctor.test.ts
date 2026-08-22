@@ -10,7 +10,14 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { Doctor, type DoctorContainer, inject, label, Vial } from './mod.ts';
+import {
+  Doctor,
+  type DoctorContainer,
+  inject,
+  label,
+  setContainerProvider,
+  Vial,
+} from './mod.ts';
 import {
   CircularDependencyError,
   DuplicateVialError,
@@ -839,6 +846,81 @@ describe('Doctor', () => {
       const child = Doctor.createContainer();
       asserts.assert(child.dispense(GlobalSvc) !== g);
       asserts.assertStrictEquals(Doctor.dispense(GlobalSvc), g);
+    });
+  });
+
+  describe('setContainerProvider (async-context seam)', () => {
+    it('should resolve inject() against the provider’s container when no sync op is active', () => {
+      Doctor.reset();
+      const Token = label<string>('PToken');
+      const req = Doctor.createContainer();
+      req.stock(Token, 'from request container');
+      setContainerProvider(() => req);
+      try {
+        // No dispense/resolve in flight — inject() consults the provider.
+        asserts.assertEquals(inject(Token), 'from request container');
+        // The global never got the stock, so without the provider inject()
+        // would throw here instead.
+        asserts.assertEquals(Doctor.has(Token), false);
+      } finally {
+        setContainerProvider(undefined);
+      }
+    });
+
+    it('should survive an await — inject() after an await still hits the provider', async () => {
+      Doctor.reset();
+      const Token = label<number>('AToken');
+      const req = Doctor.createContainer();
+      req.stock(Token, 42);
+      setContainerProvider(() => req);
+      try {
+        await Promise.resolve();
+        // The synchronous ambient stack cannot span this await; the async
+        // provider is the only thing that can still name the container.
+        asserts.assertEquals(inject(Token), 42);
+      } finally {
+        setContainerProvider(undefined);
+      }
+    });
+
+    it('should let a synchronous container operation win over the provider', () => {
+      Doctor.reset();
+      const Greeting = label<string>('GToken');
+      @Vial('SINGLETON')
+      class Greeter {
+        message = inject(Greeting);
+      }
+      const dispensing = Doctor.createContainer();
+      dispensing.stock(Greeting, 'from dispensing container');
+      const other = Doctor.createContainer();
+      other.stock(Greeting, 'from provider container');
+      setContainerProvider(() => other);
+      try {
+        // Inside dispensing.dispense(Greeter) the sync stack (dispensing) is
+        // the tightest scope and wins over the async provider.
+        asserts.assertEquals(
+          dispensing.dispense(Greeter).message,
+          'from dispensing container',
+        );
+      } finally {
+        setContainerProvider(undefined);
+      }
+    });
+
+    it('should fall back to the global Doctor once the provider is cleared', () => {
+      Doctor.reset();
+      const Token = label<string>('CToken');
+      Doctor.stock(Token, 'from global');
+      const req = Doctor.createContainer();
+      req.stock(Token, 'from request');
+      setContainerProvider(() => req);
+      try {
+        asserts.assertEquals(inject(Token), 'from request');
+      } finally {
+        setContainerProvider(undefined);
+      }
+      // Cleared → inject() falls through to the global registration.
+      asserts.assertEquals(inject(Token), 'from global');
     });
   });
 });
