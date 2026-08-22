@@ -305,8 +305,10 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * from a handler — `return await ctx.serve('./public/index.html')` — or
    * assign it to {@link response}. `download` sends it as an attachment.
    *
-   * Reads the whole file into memory (no range/streaming yet — that's the
-   * static-serving roadmap item). A missing or non-file path is a 404.
+   * The body is STREAMED (compat `readFileStream`) — the file is never
+   * buffered; `content-length` comes from a stat. Range requests are the
+   * `serveStatic` middleware's job, not this method's. A missing or
+   * non-file path is a 404.
    *
    * @throws {RapidError} RAPID_NOT_FOUND when `path` is not an existing
    *   regular file.
