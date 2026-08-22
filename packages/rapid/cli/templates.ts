@@ -274,7 +274,7 @@ const RUNTIME = {
   node: {
     configFile: 'package.json',
     runHint: 'npm run dev',
-    imageTag: '22',
+    imageTag: '24',
     runtimeEnvDoc: 'SCRIPT selects the package.json script the image runs.',
     runtimeEnv: 'ENV SCRIPT=start',
     devCmd: 'node --import tsx --watch main.ts',
@@ -283,7 +283,7 @@ const RUNTIME = {
     testCmd: 'node --import tsx --test',
     devDeps: ',\n  "devDependencies": {\n    "tsx": "^4"\n  }',
     ciSetup:
-      '      - uses: actions/setup-node@v4\n        with:\n          node-version: 22',
+      '      - uses: actions/setup-node@v4\n        with:\n          node-version: 24',
     ciSteps: '      - run: npm ci\n      - run: npm test',
   },
   workers: {
@@ -296,7 +296,7 @@ const RUNTIME = {
     devDeps:
       ',\n  "devDependencies": {\n    "tsx": "^4",\n    "wrangler": "^4"\n  }',
     ciSetup:
-      '      - uses: actions/setup-node@v4\n        with:\n          node-version: 22',
+      '      - uses: actions/setup-node@v4\n        with:\n          node-version: 24',
     ciSteps:
       '      - run: npm ci\n      - run: npm test\n      - run: npx wrangler deploy --dry-run',
   },

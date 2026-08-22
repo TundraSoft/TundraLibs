@@ -170,6 +170,32 @@ describe('rapid.cli init scaffold', () => {
     );
   });
 
+  it('scaffold() for node pins the image major tundrasoft/node actually publishes', () => {
+    // tundrasoft/node builds the 5 newest LTS (all 24.x); only the newest gets
+    // the <major> tag, so `:22` will never exist — a Dockerfile pinning it
+    // would fail to pull. Pin 24, and keep setup-node in step.
+    const f = scaffold(
+      {
+        name: 'n',
+        module: false,
+        norm: false,
+        runtime: 'node',
+        docker: true,
+        github: true,
+      },
+      '1.0.0',
+    );
+    asserts.assertStringIncludes(f['Dockerfile']!, 'FROM tundrasoft/node:24');
+    asserts.assert(
+      !f['Dockerfile']!.includes('node:22'),
+      'the :22 tag is never published',
+    );
+    asserts.assertStringIncludes(
+      f['.github/workflows/ci.yml']!,
+      'node-version: 24',
+    );
+  });
+
   it('scaffold() for workers emits wrangler.toml + worker.ts, never a Dockerfile', () => {
     const f = scaffold(
       {
