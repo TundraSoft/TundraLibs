@@ -1291,6 +1291,215 @@ h87g/qBXJrxZ7o+w+KxL/Q==
     });
   });
 
+  describe('graceful drain', () => {
+    // Graceful stop with no deadline must wait for a request that is already
+    // being handled and let it finish with its real response.
+    it('drains an in-flight request on graceful stop (no timeout)', async () => {
+      const port = getNextPort();
+      let markEntered = () => {};
+      const entered = new Promise<void>((res) => {
+        markEntered = res;
+      });
+      activeServer = new WebServer('Test', {
+        mode: 'TCP',
+        port,
+        hostname: '127.0.0.1',
+        handler: async () => {
+          markEntered();
+          await delay(150);
+          return new Response('delayed-ok');
+        },
+      });
+
+      await activeServer.start();
+      await delay(100);
+
+      // Fire a request but do not await it yet.
+      const inflight = fetch(`http://127.0.0.1:${port}/`).then((r) => r.text());
+      // Deterministic: the handler has started, so the request is genuinely
+      // in-flight (its connection is active, not idle) when we stop.
+      await entered;
+
+      const t0 = Date.now();
+      const stopped = activeServer.stop(true);
+      const body = await inflight;
+      await stopped;
+      const elapsed = Date.now() - t0;
+      activeServer = null;
+
+      if (body !== 'delayed-ok') {
+        throw new Error(
+          `in-flight request should complete with its real response, got '${body}'`,
+        );
+      }
+      // A force-close would have returned in a few ms; draining waits out the
+      // remaining ~handler delay.
+      if (elapsed < 60) {
+        throw new Error(
+          `graceful stop resolved too early (${elapsed}ms); it did not drain`,
+        );
+      }
+    });
+
+    // A deadline must cap the wait: a request that never completes is
+    // force-closed at the deadline so stop still resolves.
+    it('bounded graceful stop honors the deadline when a request outlives it', async () => {
+      const port = getNextPort();
+      let markEntered = () => {};
+      const entered = new Promise<void>((res) => {
+        markEntered = res;
+      });
+      activeServer = new WebServer('Test', {
+        mode: 'TCP',
+        port,
+        hostname: '127.0.0.1',
+        // Never resolves — the request stays in-flight forever.
+        handler: () => {
+          markEntered();
+          return new Promise<Response>(() => {});
+        },
+      });
+
+      await activeServer.start();
+      await delay(100);
+
+      const conn = await connect({
+        port,
+        hostname: '127.0.0.1',
+        timeout: 2000,
+      });
+      await conn.write(
+        new TextEncoder().encode(
+          'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n',
+        ),
+      );
+      await entered; // the handler is now hung; the request is in-flight
+
+      const t0 = Date.now();
+      await activeServer.stop(true, 200);
+      const elapsed = Date.now() - t0;
+
+      // Release the client socket so a background (Deno) drain can finish and
+      // no connection leaks past the test.
+      conn.close();
+      await delay(200);
+      activeServer = null;
+
+      if (elapsed >= 2000) {
+        throw new Error(
+          `bounded stop did not honor the deadline (took ${elapsed}ms)`,
+        );
+      }
+    });
+
+    // A bounded stop with nothing outliving the deadline settles via the
+    // drain, not the timer — so it resolves well before the deadline.
+    it('bounded graceful stop resolves via the drain, not the deadline', async () => {
+      const port = getNextPort();
+      activeServer = new WebServer('Test', {
+        mode: 'TCP',
+        port,
+        hostname: '127.0.0.1',
+        handler: () => new Response('ok'),
+      });
+      await activeServer.start();
+      await delay(100);
+
+      // No in-flight request: the drain completes at once, so the large
+      // deadline never fires — its drain-resolve arm settles stop.
+      const t0 = Date.now();
+      await activeServer.stop(true, 10_000);
+      const elapsed = Date.now() - t0;
+      activeServer = null;
+
+      if (elapsed >= 10_000) {
+        throw new Error(
+          `bounded stop waited for the deadline (${elapsed}ms) instead of draining`,
+        );
+      }
+    });
+
+    // Force stop remains prompt and unchanged.
+    it('force stop resolves promptly', async () => {
+      const port = getNextPort();
+      activeServer = new WebServer('Test', {
+        mode: 'TCP',
+        port,
+        hostname: '127.0.0.1',
+        handler: () => new Response('OK'),
+      });
+
+      await activeServer.start();
+      await delay(100);
+
+      const t0 = Date.now();
+      await activeServer.stop(false);
+      const elapsed = Date.now() - t0;
+      activeServer = null;
+
+      if (elapsed > 1500) {
+        throw new Error(`force stop should return promptly, took ${elapsed}ms`);
+      }
+    });
+
+    // Regression: Node's `server.close()` hangs indefinitely on idle
+    // keep-alive sockets. Graceful stop must drop them via
+    // `closeIdleConnections()` and resolve.
+    it({
+      name: 'Node: an idle keep-alive connection does not hang graceful stop',
+      deno: false,
+      bun: false,
+      fn: async () => {
+        const port = getNextPort();
+        activeServer = new WebServer('Test', {
+          mode: 'TCP',
+          port,
+          hostname: '127.0.0.1',
+          handler: () => new Response('OK'),
+        });
+
+        await activeServer.start();
+        await delay(100);
+
+        // Complete one request, then leave the keep-alive socket open and
+        // idle (do NOT close it).
+        const conn = await connect({
+          port,
+          hostname: '127.0.0.1',
+          timeout: 2000,
+        });
+        await conn.write(
+          new TextEncoder().encode(
+            'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n',
+          ),
+        );
+        await conn.read(); // read the response; the connection is now idle
+        await delay(50);
+
+        // Bound the wait so a regression fails fast rather than hanging.
+        const stopped = activeServer.stop(true);
+        let guardId: ReturnType<typeof setTimeout> | undefined;
+        const guard = new Promise<'timeout'>((res) => {
+          guardId = setTimeout(() => res('timeout'), 3000);
+        });
+        const outcome = await Promise.race([
+          stopped.then(() => 'stopped' as const),
+          guard,
+        ]);
+        clearTimeout(guardId);
+
+        if (outcome === 'timeout') {
+          conn.close(); // unblock the regressed close() so nothing leaks
+          await stopped;
+          throw new Error('idle keep-alive hung graceful stop(true)');
+        }
+        conn.close();
+        await stopped;
+        activeServer = null;
+      },
+    });
+  });
+
   describe('abort signal', () => {
     it('should stop server when abort signal is triggered', async () => {
       const port = getNextPort();
