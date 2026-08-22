@@ -74,6 +74,15 @@ export type RapidApplicationServerOptions = {
    */
   metrics?: boolean;
   /**
+   * Auto-register a `HEAD` route for every `GET` route that lacks its own,
+   * at boot: the synthesized `HEAD` reuses the `GET` handler + middleware
+   * and the response is sent bodiless (headers + a correct `content-length`,
+   * per HTTP semantics). An explicit `HEAD` route always wins. Off → a HEAD
+   * to a GET-only route is unmatched (404).
+   * @default true
+   */
+  autoHead?: boolean;
+  /**
    * Path that accepts websocket upgrades for `app.socket()` commands
    * (the socket shares the HTTP listener). Upgrades on other paths are
    * rejected and fall through to HTTP routing.

@@ -44,6 +44,10 @@ const UNREPRESENTABLE_STATUSES: ReadonlySet<number> = new Set([101, 103]);
  * `headers` is mutated in place (content-type defaulting) — pass the
  * live outbound headers.
  *
+ * `head` (a HEAD request): the body is computed exactly as for GET — so
+ * the `content-type` and a correct `content-length` are set — then dropped,
+ * yielding a bodiless response with GET's headers, per HTTP semantics.
+ *
  * @throws {RapidError} RAPID_RESPONSE_INVALID for status 101 or 103 —
  *   see {@link UNREPRESENTABLE_STATUSES}.
  */
@@ -51,6 +55,7 @@ export function serializeResponse(
   content: string | Record<string, unknown> | Uint8Array | null,
   status: StatusCode,
   headers: Headers,
+  head = false,
 ): Response {
   if (UNREPRESENTABLE_STATUSES.has(status)) {
     throw new RapidError('RAPID_RESPONSE_INVALID', {
@@ -84,6 +89,15 @@ export function serializeResponse(
 
   if (NULL_BODY_STATUSES.has(status) || status === 304) {
     headers.delete('content-type');
+    return new Response(null, { status, headers });
+  }
+  if (head) {
+    // Same headers a GET would send — content-type (above) + the exact
+    // content-length — but no body. `body` is already the serialized form.
+    const length = typeof body === 'string'
+      ? new TextEncoder().encode(body).byteLength
+      : (body as Uint8Array).byteLength;
+    headers.set('content-length', String(length));
     return new Response(null, { status, headers });
   }
   return new Response(body, { status, headers });

@@ -486,6 +486,13 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   }
 
   protected _respond(): Response {
-    return serializeResponse(this._content, this._status, this._headers);
+    // A HEAD request sends GET's status + headers (incl. a correct
+    // content-length) with NO body — see serializeResponse's `head` arg.
+    return serializeResponse(
+      this._content,
+      this._status,
+      this._headers,
+      this.method === 'HEAD',
+    );
   }
 }
