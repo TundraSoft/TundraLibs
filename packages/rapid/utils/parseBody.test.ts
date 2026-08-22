@@ -7,7 +7,12 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { makeTempDirSync, readDir } from '@tundralibs/compat/file';
+import {
+  makeTempDirSync,
+  pathExists,
+  readDir,
+  readTextFile,
+} from '@tundralibs/compat/file';
 import { parseBody } from './parseBody.ts';
 import { RapidError } from '../errors/mod.ts';
 
@@ -197,5 +202,126 @@ describe('rapid.parseBody', () => {
     const left: string[] = [];
     for await (const entry of readDir(uploadDir)) left.push(entry.name);
     asserts.assertEquals(left, [], 'a rejected upload left an orphaned file');
+  });
+
+  it('a +json content-type is parsed as JSON', async () => {
+    const { value } = await parseBody(
+      req('{"ok":true}', 'application/vnd.api+json'),
+      opts(),
+    );
+    asserts.assertEquals(value, { ok: true });
+  });
+
+  it('an ACCEPTED file is written to disk and described by { name, path, type, size }', async () => {
+    const uploadDir = makeTempDirSync({ prefix: 'pb-ok-' });
+    const form = new FormData();
+    form.append('doc', new File(['hello world'], 'note.txt'));
+    const { value, files } = await parseBody(
+      new Request('http://x/', { method: 'POST', body: form }),
+      {
+        maxBodySize: 1_048_576,
+        uploads: {
+          maxSize: 10_485_760,
+          allowedExtensions: ['.txt'],
+          path: uploadDir,
+        },
+      },
+    );
+    asserts.assertEquals(files.length, 1);
+    const doc = (value as { doc: { name: string; path: string; size: number } })
+      .doc;
+    asserts.assertEquals(doc.name, 'note.txt');
+    asserts.assertEquals(doc.size, 11);
+    asserts.assertEquals(doc.path, files[0]);
+    // The bytes actually landed on disk under a server-minted name (not the
+    // client filename).
+    asserts.assert(await pathExists(files[0]!));
+    asserts.assert(!files[0]!.endsWith('note.txt'));
+    asserts.assertEquals(await readTextFile(files[0]!), 'hello world');
+  });
+
+  it('the fail-safe empty allow-list rejects EVERY file (RAPID_UNSUPPORTED_MEDIA)', async () => {
+    const form = new FormData();
+    form.append('doc', new File(['x'], 'a.txt'));
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(
+          new Request('http://x/', { method: 'POST', body: form }),
+          opts(),
+        ),
+      RapidError,
+    );
+    asserts.assertEquals(err.code, 'RAPID_UNSUPPORTED_MEDIA');
+  });
+
+  it('a file over the per-file maxSize → RAPID_PAYLOAD_TOO_LARGE (before the extension check)', async () => {
+    const form = new FormData();
+    form.append('doc', new File(['way too many bytes'], 'big.txt'));
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(new Request('http://x/', { method: 'POST', body: form }), {
+          maxBodySize: 1_048_576,
+          uploads: {
+            maxSize: 4,
+            allowedExtensions: ['.txt'],
+            path: makeTempDirSync({ prefix: 'pb-big-' }),
+          },
+        }),
+      RapidError,
+    );
+    asserts.assertEquals(err.code, 'RAPID_PAYLOAD_TOO_LARGE');
+  });
+
+  it('a file whose bytes contradict its extension → RAPID_UNSUPPORTED_MEDIA (magic-byte check)', async () => {
+    const form = new FormData();
+    // A `.png` carrying plain text, not the PNG signature.
+    form.append('img', new File(['not a real png'], 'fake.png'));
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(new Request('http://x/', { method: 'POST', body: form }), {
+          maxBodySize: 1_048_576,
+          uploads: {
+            maxSize: 10_485_760,
+            allowedExtensions: ['.png'],
+            path: makeTempDirSync({ prefix: 'pb-png-' }),
+          },
+        }),
+      RapidError,
+      'does not match',
+    );
+    asserts.assertEquals(err.code, 'RAPID_UNSUPPORTED_MEDIA');
+  });
+
+  it('a real PNG (valid magic bytes) with a .png allow-list is written', async () => {
+    const uploadDir = makeTempDirSync({ prefix: 'pb-realpng-' });
+    const png = new Uint8Array([
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a, // PNG signature
+      0x00,
+      0x01,
+      0x02,
+      0x03,
+    ]);
+    const form = new FormData();
+    form.append('img', new File([png], 'real.png'));
+    const { files } = await parseBody(
+      new Request('http://x/', { method: 'POST', body: form }),
+      {
+        maxBodySize: 1_048_576,
+        uploads: {
+          maxSize: 10_485_760,
+          allowedExtensions: ['.png'],
+          path: uploadDir,
+        },
+      },
+    );
+    asserts.assertEquals(files.length, 1);
+    asserts.assert(files[0]!.endsWith('.png'));
   });
 });
