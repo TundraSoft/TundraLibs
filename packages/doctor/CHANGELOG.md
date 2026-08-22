@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.4.0...doctor-v1.5.0) (2026-08-22)
+
+
+### Features
+
+* **doctor:** async-context container provider seam (setContainerProvider) ([#525](https://github.com/TundraSoft/TundraLibs/issues/525)) ([054dd6d](https://github.com/TundraSoft/TundraLibs/commit/054dd6d6bc02f969435d5ac110138640ff23b5dd))
+
 ## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.3.0...doctor-v1.4.0) (2026-08-22)
 
 
