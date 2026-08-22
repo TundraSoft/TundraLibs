@@ -92,15 +92,14 @@ export type RapidApplicationServerOptions = {
    */
   methodNotAllowed?: boolean;
   /**
-   * Whether a trailing slash on the request path is ignored when routing:
-   * `true` (default) normalises `/users/` to `/users` so a client's stray
-   * slash never 404s; the root `/` is never altered. `false` skips rapid's
-   * normalisation — but note the router (radrouter) is itself
-   * slash-insensitive, so `/users/` still matches `/users`; this only
-   * matters for `path`-mode versioning and static prefixes, which see the
-   * verbatim path. There is deliberately no "strict" mode: the router
-   * cannot distinguish the two, and an option that silently did nothing
-   * would be a lie.
+   * Whether a trailing slash on the request path is significant when
+   * routing. `true` (default): `/users/` and `/users` are the same route, so
+   * a client's stray slash never 404s. `false` (strict): the slash is
+   * significant — `/users` and `/users/` are DISTINCT routes and a request
+   * must match exactly (a `/users/` request against only `/users` → 404;
+   * the router stays a pure matcher, no redirect). Passed straight through
+   * to radrouter, which honours it on both registration and lookup. The
+   * root `/` is never altered either way.
    * @default true
    */
   ignoreTrailingSlash?: boolean;

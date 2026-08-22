@@ -42,4 +42,28 @@ describe('rapid.Application ignoreTrailingSlash', () => {
     asserts.assertEquals(r.status, 200);
     asserts.assertEquals((await r.json()).v, 'v1');
   });
+
+  it('strict (false): /users and /users/ are DISTINCT routes; a mismatch is a 404', async () => {
+    const app = await Application.initialize({
+      name: 'slash-strict',
+      server: { port: 0, hostname: '127.0.0.1', ignoreTrailingSlash: false },
+      logger: { handlers: [] },
+    });
+    app.get('/users', () => ({ content: { which: 'no-slash' } }));
+    app.get('/users/', () => ({ content: { which: 'slash' } }));
+    // Each form resolves to ITS OWN handler — they are genuinely distinct.
+    const a = await app.fetch(new Request('http://app/users'));
+    asserts.assertEquals((await a.json()).which, 'no-slash');
+    const b = await app.fetch(new Request('http://app/users/'));
+    asserts.assertEquals((await b.json()).which, 'slash');
+    // Only one form registered → the other is a plain 404 (no redirect).
+    const strict = await Application.initialize({
+      name: 'slash-strict-404',
+      server: { port: 0, hostname: '127.0.0.1', ignoreTrailingSlash: false },
+      logger: { handlers: [] },
+    });
+    strict.get('/items', () => ({ content: { ok: true } }));
+    asserts.assertEquals(await status(strict, '/items'), 200);
+    asserts.assertEquals(await status(strict, '/items/'), 404);
+  });
 });

@@ -103,8 +103,10 @@ Core and the current capability set are built and green on Deno / Bun / Node
   (`416` + `bytes */size` when unsatisfiable; multi-range falls back to 200 per
   RFC 7233), `Accept-Ranges: bytes` advertised on every file response.
   `server.ignoreTrailingSlash` (default true) strips a stray trailing slash
-  before routing AND version resolution; no "strict" mode — radrouter is
-  slash-insensitive, so it could not be honoured. `coerceComparable` now
+  before routing AND version resolution; `false` makes the slash significant
+  (distinct routes, exact match, 404 on a mismatch) — honoured by radrouter
+  itself via its new `ignoreTrailingSlash` option, passed through from rapid,
+  so strict mode is real on both registration and lookup. `coerceComparable` now
   accepts only plain decimals (`-?\d+(\.\d+)?`), consistent with
   `parsePaging`: `?n=gt:0x1F` / `1e3` stay strings instead of silently
   becoming 31 / 1000. **Brotli closed as infeasible**: `CompressionStream`
