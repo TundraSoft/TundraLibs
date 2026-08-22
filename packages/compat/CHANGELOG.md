@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.3.0...compat-v2.4.0) (2026-08-22)
+
+
+### Features
+
+* **compat:** bounded graceful drain on WebServer.stop (G2) ([#527](https://github.com/TundraSoft/TundraLibs/issues/527)) ([e20d7e9](https://github.com/TundraSoft/TundraLibs/commit/e20d7e90725d8c2a6269cc0c58474d94461dd9f7))
+
 ## [2.3.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.2.0...compat-v2.3.0) (2026-08-21)
 
 
