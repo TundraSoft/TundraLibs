@@ -1,12 +1,15 @@
 import { JWTError } from './errors/mod.ts';
 import type { JWTHeader, JWTPayload, JWTVerifyOptions } from './types/mod.ts';
 import { decodeBase64Url } from '@std/encoding';
-import { verifyEC, verifyHMAC, verifyRSA } from '../sign/mod.ts';
-import type { SigningKey } from '../sign/mod.ts';
 // Internal cross-module use: the JWT layer resolves the key itself so key
-// failures and signature failures stay distinguishable (see below). Not part
-// of the package's public surface.
-import { importSigningKey } from '../sign/keys.ts';
+// failures and signature failures stay distinguishable (see below).
+import {
+  importSigningKey,
+  type SigningKey,
+  verifyEC,
+  verifyHMAC,
+  verifyRSA,
+} from '../sign/mod.ts';
 import {
   algorithmCurve,
   algorithmFamily,

@@ -6,6 +6,7 @@ other's context.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
 
 ## Table of Contents
 
@@ -177,10 +178,14 @@ value, and is returned as-is.
 
 ## Runtime requirements
 
-`node:async_hooks` is a **runtime built-in** on Deno, Bun and Node ≥ 22 — it is
-not an npm dependency, which is why `dependencies` is empty and the requirement
-lives in `engines.node` instead. The guard in `createContext` turns the exotic
-ALS-less-runtime case into an immediate, actionable error.
+`node:async_hooks` is a **runtime built-in** on Deno, Bun, Node ≥ 22 and
+Cloudflare Workers (under `nodejs_compat`) — not an npm dependency, which is why
+`dependencies` is empty and the requirement lives in `engines.node` instead.
+Ambient resolves it lazily via `process.getBuiltinModule`, so importing the
+package is side-effect-free even where it is absent; the guard in
+`createContext` turns the ALS-less case into an immediate, actionable error at
+first use. A plain browser tab has no `AsyncLocalStorage`, so `run()` / `child()`
+throw there — there is no fallback.
 
 A future TC39 `AsyncContext` (a platform-native replacement for
 `async_hooks`) would be adopted inside `createContext.ts` — one file, no API

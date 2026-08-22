@@ -5,6 +5,8 @@ HMAC, RSA (PSS / PKCS#1 v1.5) and ECDSA digital signatures using the Web Crypto 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -12,15 +14,15 @@ Digital signature functions for message authentication and integrity verificatio
 
 ### Features
 
-| Feature               | Bun | Deno | Node.js |
-| --------------------- | --- | ---- | ------- |
-| HMAC-SHA-256          | ✅  | ✅   | ✅      |
-| HMAC-SHA-512          | ✅  | ✅   | ✅      |
-| RSA-PSS               | ✅  | ✅   | ✅      |
-| RSA-PKCS#1 v1.5       | ✅  | ✅   | ✅      |
-| ECDSA (P-256/384/521) | ✅  | ✅   | ✅      |
-| Binary data           | ✅  | ✅   | ✅      |
-| `CryptoKey` / JWK in  | ✅  | ✅   | ✅      |
+| Feature               | Bun | Deno | Node.js | Workers | Browser |
+| --------------------- | --- | ---- | ------- | ------- | ------- |
+| HMAC-SHA-256          | ✅  | ✅   | ✅      | ✅      | ✅      |
+| HMAC-SHA-512          | ✅  | ✅   | ✅      | ✅      | ✅      |
+| RSA-PSS               | ✅  | ✅   | ✅      | ✅      | ✅      |
+| RSA-PKCS#1 v1.5       | ✅  | ✅   | ✅      | ✅      | ✅      |
+| ECDSA (P-256/384/521) | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Binary data           | ✅  | ✅   | ✅      | ✅      | ✅      |
+| `CryptoKey` / JWK in  | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ### Key input
 

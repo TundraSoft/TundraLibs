@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.5](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.4...rpc-v1.1.5) (2026-08-21)
+
+
+### Refactoring
+
+* **rpc:** document Server throws and route pubsub through its barrel ([#497](https://github.com/TundraSoft/TundraLibs/issues/497)) ([bef215c](https://github.com/TundraSoft/TundraLibs/commit/bef215c82efeb8397775b494edfa7387491c25a0))
+
 ## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.3...rpc-v1.1.4) (2026-08-18)
 
 

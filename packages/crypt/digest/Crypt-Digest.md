@@ -5,6 +5,8 @@ Cryptographic hashing functions using the Web Crypto API.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Table of Contents
 
@@ -25,15 +27,15 @@ The Digest module provides cryptographic hash functions for creating fixed-size 
 
 ### Features
 
-| Feature         | Bun | Deno | Node.js |
-| --------------- | --- | ---- | ------- |
-| SHA-1           | ✅  | ✅   | ✅      |
-| SHA-256         | ✅  | ✅   | ✅      |
-| SHA-384         | ✅  | ✅   | ✅      |
-| SHA-512         | ✅  | ✅   | ✅      |
-| Hex encoding    | ✅  | ✅   | ✅      |
-| Base64 encoding | ✅  | ✅   | ✅      |
-| Binary input    | ✅  | ✅   | ✅      |
+| Feature         | Bun | Deno | Node.js | Workers | Browser |
+| --------------- | --- | ---- | ------- | ------- | ------- |
+| SHA-1           | ✅  | ✅   | ✅      | ✅      | ✅      |
+| SHA-256         | ✅  | ✅   | ✅      | ✅      | ✅      |
+| SHA-384         | ✅  | ✅   | ✅      | ✅      | ✅      |
+| SHA-512         | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Hex encoding    | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Base64 encoding | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Binary input    | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 

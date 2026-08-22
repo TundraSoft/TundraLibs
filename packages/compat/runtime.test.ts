@@ -26,6 +26,7 @@ import {
   RUNTIME,
   type Signal,
   totalmem,
+  unrefTimer,
   uptime,
 } from './runtime.ts';
 import * as asserts from '@std/asserts';
@@ -924,6 +925,31 @@ describe({
         if (isDeno) {
           asserts.assertStrictEquals(memoryUsage().arrayBuffers, 0);
         }
+      });
+    });
+
+    describe('unrefTimer()', () => {
+      it('calls .unref() on a Node/Bun-style timer handle', () => {
+        let called = false;
+        unrefTimer({
+          unref: () => {
+            called = true;
+          },
+        });
+        asserts.assert(called, 'unref() should have been called');
+      });
+
+      it('is a no-op for a handle with no unref primitive', () => {
+        // number without a Deno runtime, undefined, null → must not throw.
+        unrefTimer(undefined);
+        unrefTimer(null);
+        if (!isDeno) unrefTimer(12345);
+      });
+
+      it('unrefs a real timer without throwing', () => {
+        const t = setTimeout(() => {}, 60_000);
+        unrefTimer(t); // Deno: numeric id via Deno.unrefTimer; Node/Bun: .unref()
+        clearTimeout(t);
       });
     });
   },

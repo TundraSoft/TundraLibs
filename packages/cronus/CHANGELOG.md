@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.3...cronus-v1.0.4) (2026-08-21)
+
+
+### Refactoring
+
+* **cronus:** route timer unref through compat ([#507](https://github.com/TundraSoft/TundraLibs/issues/507)) ([56867c3](https://github.com/TundraSoft/TundraLibs/commit/56867c33b71dcc98d02cc1b6f136b27c21d3f99e))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.2...cronus-v1.0.3) (2026-08-18)
 
 

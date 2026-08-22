@@ -55,7 +55,8 @@ export type RandomNumberOptions = {
  * @param max - Maximum value (inclusive)
  * @returns A random integer between min and max (inclusive)
  *
- * @throws {Error} When min > max or values are not safe integers
+ * @throws {TypeError} When `min` or `max` is not a safe integer
+ * @throws {Error} When `min` is greater than `max`
  *
  * @example
  * ```typescript
@@ -97,6 +98,8 @@ export function randomInt(min: number, max: number): number {
  * @param precision - Number of decimal places (default: 16)
  * @returns A random float between min and max
  *
+ * @throws {Error} When `min` is not less than `max`
+ *
  * @example
  * ```typescript
  * const percent = randomFloat(0, 100);           // 0.0 to 99.999...
@@ -125,6 +128,9 @@ export function randomFloat(min: number, max: number, precision = 16): number {
  *
  * @param options - Configuration options for random generation
  * @returns A random number according to the specified options
+ *
+ * @throws {TypeError} When `min` or `max` is not a safe integer for integer generation
+ * @throws {Error} When `min` is greater than `max`, or not less than `max` in float mode
  *
  * @example
  * ```typescript

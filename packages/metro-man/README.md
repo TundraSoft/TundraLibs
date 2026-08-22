@@ -33,7 +33,7 @@ so it runs unchanged on Workers and in the browser; wiring the
 | `Gauge`     | Up/down value (set, inc, dec)                            | [MetroMan-Gauge](docs/MetroMan-Gauge.md)         |
 | `Histogram` | Bucketed distribution                                    | [MetroMan-Histogram](docs/MetroMan-Histogram.md) |
 | `Summary`   | Quantile-based distribution over a sliding window        | [MetroMan-Summary](docs/MetroMan-Summary.md)     |
-| `./errors`  | `MetroManError` plus `InvalidMetricOptionsError` etc.    | [MetroMan-Errors](errors/MetroMan-Errors.md)     |
+| `./errors`  | `MetroManError` plus `InvalidMetricOptionsError` etc.    | [MetroMan-Errors](docs/MetroMan-Errors.md)       |
 | `./types`   | `MetricOptions`, `MetricOutput`, per-metric option types | —                                                |
 
 ## Installation
@@ -275,7 +275,7 @@ scrapers reject.
 - [Gauge](docs/MetroMan-Gauge.md) — up/down value
 - [Histogram](docs/MetroMan-Histogram.md) — bucketed distribution
 - [Summary](docs/MetroMan-Summary.md) — quantile distribution with sliding window
-- [Errors](errors/MetroMan-Errors.md) — error classes and matching strategies
+- [Errors](docs/MetroMan-Errors.md) — error classes and matching strategies
 - [`@tundralibs/slogger`](../slogger/README.md) /
   [`@tundralibs/tracer`](../tracer/README.md) — the sibling observability
   pillars (logs / traces); event-emitting packages feed all three from the

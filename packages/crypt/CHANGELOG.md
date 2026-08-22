@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.1.0...crypt-v1.1.1) (2026-08-21)
+
+
+### Refactoring
+
+* **crypt:** tidy imports and document Workers/browser support ([#503](https://github.com/TundraSoft/TundraLibs/issues/503)) ([95a8302](https://github.com/TundraSoft/TundraLibs/commit/95a8302583e01bf3f72cbb5495c476eaa90597f9))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.5...crypt-v1.1.0) (2026-08-20)
 
 

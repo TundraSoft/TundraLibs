@@ -45,9 +45,19 @@ with zero dependencies.
 
 ## ALS-less runtimes
 
-The `node:async_hooks` import is static and unconditional. The hard requirement
-is enforced by a load-time guard in `createContext` that throws an actionable
-error, and declared via `engines.node >= 22` — never as a package dependency,
-since it is a runtime built-in. Runtimes without `AsyncLocalStorage` are
+`node:async_hooks` is never statically imported: the type comes in via
+`import type` (erased at compile time), and the `AsyncLocalStorage` constructor
+is resolved at runtime through `process.getBuiltinModule('node:async_hooks')` —
+an optional-chained property read. Merely _importing_ the package is therefore
+side-effect-free everywhere, browser bundles included, where the builtin is
+absent. Every supported runtime — Deno, Bun, Node >= 22 and Cloudflare Workers
+under `nodejs_compat` — exposes it, so there the constructor resolves eagerly,
+exactly as a static import would.
+
+The requirement is enforced at **call time**, not load time: the first
+`createContext()` (hence the first `ambient.run()` / `ambient.child()`) runs a
+guard that throws an actionable `TypeError` when nothing resolved. It is
+declared via `engines.node >= 22` — never as a package dependency, since it is a
+runtime built-in. A plain browser tab has no `AsyncLocalStorage` and is
 unsupported by design; a no-op degraded mode is not planned. The guard's throw
 path is tested via its injectable `candidate` parameter.

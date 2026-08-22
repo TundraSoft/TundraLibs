@@ -6,25 +6,10 @@
 
 import { BaseMetric } from './BaseMetric.ts';
 import { InvalidLabelError, InvalidMetricOptionsError } from './errors/mod.ts';
-import type { HistogramOptions } from './types/mod.ts';
+import type { HistogramOptions, HistogramSeries } from './types/mod.ts';
 
 const DEFAULT_BUCKETS: ReadonlyArray<number> = [1, 1.5, 2, 5, 10];
 const RESERVED_LABEL = 'le';
-
-/**
- * Per-series payload carried by a Histogram. `buckets` is ordered by
- * ascending upper bound (`le`) — a plain numeric-keyed record cannot
- * hold that order (JS lists integer keys before decimal keys), so an
- * ordered array keeps every output format in ascending-bound order.
- * `count` tracks every observation (including those above the largest
- * finite bucket) so `_count` and the `+Inf` bucket are correct even
- * when observations exceed the configured ladder.
- */
-export type HistogramSeries = {
-  buckets: Array<{ le: number; count: number }>;
-  sum: number;
-  count: number;
-};
 
 /**
  * Bucketed distribution of observed values. Each `observe(v)`

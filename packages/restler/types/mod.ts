@@ -11,12 +11,10 @@ export type { RESTlerContentType } from './RESTlerContentType.ts';
 export type { RESTlerContentTypePayload } from './RESTlerContentTypePayload.ts';
 export type { RESTlerEndpoint } from './RESTlerEndpoint.ts';
 export type { RESTlerEvents } from './RESTlerEvents.ts';
-export type {
-  RESTlerHeaderProvider,
-  RESTlerHooks,
-  Witness,
-  WitnessInfo,
-} from './RESTlerHooks.ts';
+export type { RESTlerHeaderProvider } from './RESTlerHeaderProvider.ts';
+export type { RESTlerHooks } from './RESTlerHooks.ts';
+export type { Witness } from './Witness.ts';
+export type { WitnessInfo } from './WitnessInfo.ts';
 export type { RESTlerMethod } from './RESTlerMethod.ts';
 export type { RESTlerMethodPayload } from './RESTlerMethodPayload.ts';
 export type { RESTlerOptions } from './RESTlerOptions.ts';

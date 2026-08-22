@@ -5,6 +5,8 @@ Time-based (TOTP) and HMAC-based (HOTP) one-time password generation.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -12,11 +14,11 @@ RFC-compliant OTP implementation for two-factor authentication.
 
 ### Features
 
-| Feature         | Bun | Deno | Node.js |
-| --------------- | --- | ---- | ------- |
-| TOTP (RFC 6238) | ✅  | ✅   | ✅      |
-| HOTP (RFC 4226) | ✅  | ✅   | ✅      |
-| Base32 secrets  | ✅  | ✅   | ✅      |
+| Feature         | Bun | Deno | Node.js | Workers | Browser |
+| --------------- | --- | ---- | ------- | ------- | ------- |
+| TOTP (RFC 6238) | ✅  | ✅   | ✅      | ✅      | ✅      |
+| HOTP (RFC 4226) | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Base32 secrets  | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 

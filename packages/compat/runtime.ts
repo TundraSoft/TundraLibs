@@ -377,6 +377,32 @@ export const exit = (code: number = 0): never => {
 };
 
 /**
+ * `unref` a timer handle so it does not, on its own, keep the process alive.
+ *
+ * Node and Bun return a timer object exposing `.unref()`; Deno's
+ * `setTimeout`/`setInterval` returns a bare numeric id, unref'd through
+ * `Deno.unrefTimer`. On browsers and Cloudflare Workers — where a numeric
+ * handle has no unref primitive — this is a safe no-op.
+ *
+ * Pass the opaque return of `setTimeout`/`setInterval` straight through; no
+ * cast needed.
+ *
+ * @param handle - The value returned by `setTimeout` / `setInterval`.
+ */
+export const unrefTimer = (handle: unknown): void => {
+  if (
+    handle !== null && typeof handle === 'object' &&
+    typeof (handle as { unref?: unknown }).unref === 'function'
+  ) {
+    (handle as { unref: () => void }).unref();
+    return;
+  }
+  if (isDeno && typeof handle === 'number') {
+    (g.Deno.unrefTimer as (id: number) => void)(handle);
+  }
+};
+
+/**
  * Logical CPU count (≥ 1). Prefers `os.availableParallelism()` so
  * cgroup quotas under Docker/K8s are respected; falls back to
  * `os.cpus().length` on older Node, `1` on unknown runtimes.

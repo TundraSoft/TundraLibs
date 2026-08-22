@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.1.0...radrouter-v1.2.0) (2026-08-22)
+
+
+### Features
+
+* **radrouter:** allowedMethods(path, version) — the methods registered for a path ([#520](https://github.com/TundraSoft/TundraLibs/issues/520)) ([b0d3c0a](https://github.com/TundraSoft/TundraLibs/commit/b0d3c0a44fc89b5371fa815753bc3ddb08739e00))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.5...radrouter-v1.1.0) (2026-08-20)
 
 
