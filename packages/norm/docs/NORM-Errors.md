@@ -143,10 +143,14 @@ All three are thrown as a plain `NormError`.
 | `INVALID_ENGINE_CONFIG` | `new Norm({...})` got both `engine` and `database`, neither, or a `database.dialect` NORM does not know.      | Pass exactly one of `engine` / `database`, and a supported dialect.                                                                     |
 | `ENGINE_NOT_REGISTERED` | `database.dialect` names a known dialect whose engine module was never imported (`context.dialect` names it). | Import `@tundralibs/norm/engines/<dialect>` — or the root `@tundralibs/norm` barrel, which registers all of them — before constructing. |
 
-`ENGINE_NOT_REGISTERED` is the one you meet on edge runtimes, where you
-deliberately import `@tundralibs/norm/core` plus a single engine module
-because the root barrel will not bundle there — see
-**[Choosing an entry point](../README.md#choosing-an-entry-point)**.
+`ENGINE_NOT_REGISTERED` is the one you meet most often on `sqlite` — the
+root barrel deliberately does not register it eagerly (a native binding
+on every runtime would make the barrel unbundlable for everyone else),
+so a bare `@tundralibs/norm` import still needs its own
+`import '@tundralibs/norm/engines/sqlite'` before constructing. It's
+also what you meet on an edge runtime if you import
+`@tundralibs/norm/core` without registering the engine you asked for —
+see **[Choosing an entry point](../README.md#choosing-an-entry-point)**.
 
 ## Definition and registry codes
 

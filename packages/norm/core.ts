@@ -9,7 +9,7 @@
  * the single `engines/<dialect>` module you actually use.
  *
  * ```ts ignore
- * import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
+ * import '@tundralibs/norm/engines/d1'; // or /neon, /turso, /postgres, /maria
  * import { Norm } from '@tundralibs/norm/core';
  *
  * const norm = new Norm({ database: { dialect: 'd1', accountId, databaseId, apiToken } });
