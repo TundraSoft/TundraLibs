@@ -1,8 +1,9 @@
 # rAPId UI module — design (2026-08-23)
 
-Status: **PROPOSED — awaiting decision.** Nothing here is built. Grounded in
-the real rapid source (every seam named below was verified to exist) and in
-the mechanism the standalone `rapid-ui-demo` prototype proved clickable. The
+Status: **DECIDED 2026-08-23 — build pending.** The four open questions were
+settled (see the final section); nothing is built yet. Grounded in the real
+rapid source (every seam named below was verified to exist) and in the
+mechanism the standalone `rapid-ui-demo` prototype proved clickable. The
 ROADMAP one-liner ("Simple UI module — a deliberately MINIMAL client-side UI
 helper … not a React/Vite-class framework") is the scope ceiling; this doc
 maps every aspect of delivering it.
@@ -10,12 +11,14 @@ maps every aspect of delivering it.
 ## The idea in one paragraph
 
 A route can name a **template**. The handler keeps returning plain
-JSON-shaped data — it never learns about HTML. **Content negotiation** (the
-`Accept` header, via the existing `ctx.accepts`) decides whether that data
-goes out as JSON or is run through the template as HTML. A tiny declarative
-**client runtime** fetches HTML fragments and swaps them into the page with
-`data-*` attributes, no inline handlers. Same route, same handler, same data —
-two representations.
+JSON-shaped data — it never learns about HTML. Two deterministic signals
+decide the representation: a `rapid-swap` request header (sent by our client
+runtime) means "render the template as a **fragment**"; otherwise the route's
+`prefer` says whether a plain request gets **JSON** (the default) or the
+layout-wrapped HTML **page**. The `Accept` header is not consulted. A tiny
+declarative **client runtime** fetches fragments and swaps them into the page
+with `data-*` attributes, no inline handlers. Same route, same handler, same
+data — two representations.
 
 ## The user's proposal, and the decision on it
 
@@ -30,10 +33,13 @@ two representations.
    string registry to maintain, nothing to resolve at boot, no filesystem scan
    (Workers-safe by construction), and the reference is typed. The demo used a
    string registry only because it faked the decorators as config objects.
-2. `Accept` decides **JSON vs HTML**; a second signal decides **fragment vs
-   full page**, because both of those are `text/html`. See D3 — this is the
-   one thing the demo's `includes('text/html')` could not express, and why a
-   browser navigating straight to a demo API route got a naked `<ul>`.
+2. "Based on content type" became **two deterministic signals, and `Accept`
+   is not consulted at all** (user's call, 2026-08-23): a `rapid-swap` request
+   header selects a fragment; the route's `prefer` selects JSON or a page for
+   everything else. A fragment and a page are both `text/html`, so `Accept`
+   could never have told them apart — the hole that gave the demo's
+   `includes('text/html')` a naked `<ul>` on a browser navigation — and
+   dropping it also removes q-value ambiguity and `Vary: Accept`. See D3.
 
 Everything else the user proposed stands as stated.
 
@@ -41,7 +47,7 @@ Everything else the user proposed stands as stated.
 
 | Seam                                                                                       | Where                                                                        | Used for                                                       |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `ctx.accepts(...offered)` over pure `negotiate(accept, offered)`                           | `context/HTTPContext.ts:142`, `utils/negotiate.ts`                           | JSON-vs-HTML choice (q-values, specificity, server order)      |
+| `ctx.accepts(...offered)` over pure `negotiate(accept, offered)`                           | `context/HTTPContext.ts:142`, `utils/negotiate.ts`                           | stays available to apps; the representer does NOT use it (D3)  |
 | `ctx.html(content, status?)`                                                               | `HTTPContext.ts`                                                             | the HTML reply shape (content-type `text/html; charset=UTF-8`) |
 | Reply envelope `{ content, status?, headers?, cookies?, redirect? }`                       | `types/context/Response.ts`                                                  | untouched by the representer except `content` + content-type   |
 | `serializeResponse(content, status, headers, head)`                                        | `utils/serializeResponse.ts`, called from `HTTPContext._respond`             | a string content + explicit content-type → correct wire body   |
@@ -91,10 +97,29 @@ export const UserList = template<UsersResult>((data) =>
   reading `undefined` fields. The mitigation is cheap and explicit: templates
   are pure, so `render(UserList.render(handlerResult, view))` in a unit test
   pins the pairing. (Revisit if TS makes this free later.)
-- `view` is a **read-only per-request bag** the representer builds —
-  `{ requestId, path, query, auth, csrfToken? }` — so a layout can render a
-  nav or a user menu without a template ever touching `ctx`. Templates take
-  it as an optional second parameter; most ignore it.
+- `view` is a **read-only, frozen, per-request bag** the representer builds
+  so a layout can render a nav without a template ever touching `ctx`. By
+  default it carries **only `{ requestId, path, query, csrfToken? }` — nothing
+  from the auth bag** (decided 2026-08-23). An app that wants identity in its
+  templates opts in with a **projection** that names exactly which fields
+  cross over:
+
+  ```ts ignore
+  app.ui({
+    layout: Shell,
+    view: (ctx) => ({
+      user: ctx.auth ? { name: ctx.auth.name as string } : undefined,
+    }),
+  });
+  ```
+
+  The projection's return is merged over the defaults (typed via
+  `RapidView<Extra>`), so templates see `view.user`. This is safe by
+  construction rather than by discipline: whatever an app's `authenticate`
+  wrote into `ctx.auth` (full JWT claims via `jwt(pact)`, possibly more) never
+  becomes reachable from every template and layout unless the app chose the
+  fields. Templates take `view` as an optional second parameter; most ignore
+  it.
 
 ### D2 — Rendering primitives: `html` / `raw` / `render` / `Html`
 
@@ -116,24 +141,41 @@ Exactly the demo's semantics, which it proved correct under an XSS payload:
   to await is a handler that returned too little. Streaming templates are out
   of scope for v1 (see "Deferred").
 
-### D3 — Two signals: `Accept` picks JSON vs HTML; a request header picks fragment vs page
+### D3 — Two deterministic signals; `Accept` is not consulted
 
-- **JSON vs HTML** — `ctx.accepts('application/json', 'text/html')`. Offered
-  order is server preference, so **no `Accept` or `*/*` → JSON**: an API
-  route stays API-first for `curl`, SDKs, and `fetch()` without headers. A
-  browser navigation (`text/html` first) gets HTML. A route can invert the
-  default with `template: { render: Page, prefer: 'html' }` for page-first
-  routes.
-- **Fragment vs full page** — both are `text/html`, so `Accept` cannot
-  distinguish them. The client runtime sends **`rapid-swap: 1`** on every
-  fetch it makes (the same idea as htmx's `HX-Request`). Present → the
-  template's output is the whole body (a fragment). Absent → it is wrapped in
-  the resolved **layout** (D4). No layout configured → the fragment is served
-  as-is; never an error.
-- The representer adds **`Vary: Accept, rapid-swap`** so an intermediary
-  cache never serves a fragment to a navigation or JSON to a browser.
+| Request                                        | Representation                             |
+| ---------------------------------------------- | ------------------------------------------ |
+| `rapid-swap: 1` present (our runtime)          | HTML **fragment** — always                 |
+| absent, resolved `prefer` = `'json'` (default) | **JSON** (the reply goes out unchanged)    |
+| absent, resolved `prefer` = `'html'`           | HTML **page** — wrapped in the layout (D4) |
+
+- **`rapid-swap`** is sent by the client runtime on every fetch it makes (the
+  same idea as htmx's `HX-Request`). Present → the template's output is the
+  whole body. Absent → `prefer` decides. No layout configured for a page →
+  the fragment is served as-is; never an error.
+- **`prefer`** is "what this route returns when it is _not_ a swap".
+  `'json'` = an API-first endpoint that also knows how to render a fragment;
+  `'html'` = the route _is_ a page. Resolution, most specific wins:
+  route (`template: { render, prefer }` / plain-API option) → app
+  (`app.ui({ prefer })`) → `'json'`. The app level exists so a pages-first
+  web app does not annotate every route; an API route inside it overrides
+  with `prefer: 'json'`. (No module level — `prefer` describes the route's
+  nature, not its grouping; add to `@Module` only if a real need appears.)
+- **`Accept` is ignored** by the representer (decided 2026-08-23). Why: a
+  fragment and a page are both `text/html`, so `Accept` never could choose
+  between them; removing it from the JSON-vs-HTML choice too makes the
+  outcome readable off the route's declaration, kills q-value / browser
+  `*/*` ambiguity, and needs no `Vary: Accept`. `ctx.accepts` remains for apps
+  that want `Accept`-driven behaviour by hand.
+- **What is given up, stated plainly:** a human typing an API route's URL
+  into the address bar sees JSON, not a rendered list — correct for an API
+  route. The case that matters is **progressive enhancement**: a form POST
+  with JavaScript disabled is a plain navigation, so it would get JSON; set
+  `prefer: 'html'` on that route and the no-JS path returns the page.
+- The representer adds **`Vary: rapid-swap`** so an intermediary cache never
+  serves a fragment to a navigation (or vice-versa).
 - `HEAD`, `etag`, `compress`, range — all operate on the produced body and
-  need no changes: the representer runs **before** them (D6).
+  need no changes: the representer runs **before** them (D5).
 
 ### D4 — Layout resolution: route → module → app
 
@@ -166,8 +208,9 @@ ctx.response = route.template !== undefined
 
 `represent()`:
 
-- does nothing when `Accept` negotiates to JSON, or when the reply carries
-  `redirect` (a redirect has no body to template — see D8);
+- does nothing when the representation resolves to JSON (no `rapid-swap` and
+  `prefer` = `'json'`, D3), or when the reply carries `redirect` (a redirect
+  has no body to template — see D8);
 - otherwise replaces **only `content`** with `render(layout?(template.render(content, view)))`
   and sets `content-type: text/html; charset=UTF-8` (merging, never
   clobbering, any headers the handler set); `status`, `cookies`, `redirect`
@@ -234,10 +277,12 @@ override. HTML errors hook **there**:
 - `app.ui({ errorTemplate })` — a `RapidTemplate<RapidErrorPayload>` receiving
   exactly `err.payload(app.mode)` plus `requestId` (the same disclosure rules
   as JSON: PRODUCTION collapses 5xx, never renders `debug`).
-- When `Accept` negotiates HTML and an `errorTemplate` is set, the error path
-  renders it (wrapped in the layout for a navigation, a fragment for a swap)
-  with the error's status preserved. Otherwise the JSON envelope is sent as
-  today.
+- When the representation resolves to HTML (a swap, or a non-swap whose
+  matched route resolved `prefer` = `'html'` — D3) and an `errorTemplate` is
+  set, the error path renders it (a fragment for a swap, layout-wrapped for a
+  page) with the error's status preserved. Otherwise the JSON envelope is
+  sent as today. An error on an unmatched route (404 before routing) has no
+  route `prefer`, so the app-level `prefer` decides.
 - Because this runs post-onion, `compress`/`etag` do not see error HTML — the
   same is already true of JSON error envelopes; nothing new is lost.
 - The **runtime** checks the response `content-type`: a non-HTML body (the
@@ -264,9 +309,11 @@ Behaviour (the demo's `swap.js`, hardened — about 80 lines, no dependencies):
 - Attributes: `data-action` (URL), `data-method` (default `get` for
   elements, `post` for forms), `data-target` (selector; default: the element
   itself), `data-swap` = `replace` (default) | `outer` | `append` | `prepend`.
-- Requests carry `Accept: text/html` and `rapid-swap: 1`. Forms send
-  `application/x-www-form-urlencoded` (rapid's `parseBody` already handles it
-  and normalises repeated fields to arrays).
+- Requests carry `rapid-swap: 1` — the only header the representer reads —
+  plus `Accept: text/html` as a courtesy to intermediaries and logs (not
+  consulted server-side). Forms send `application/x-www-form-urlencoded`
+  (rapid's `parseBody` already handles it and normalises repeated fields to
+  arrays).
 - **CSRF**: if a `csrf` cookie exists it is echoed as `x-csrf-token` —
   matching `csrf()`'s defaults with zero configuration. Both names are
   overridable via `data-` attributes on `<body>` for apps that renamed them.
@@ -293,7 +340,9 @@ export type {
 ```
 
 `app.ui(options)` is a small **app method** (like `app.modules()`), not a
-middleware: it stores the layout / errorTemplate / runtime path on the app
+middleware. `RapidUiOptions` = `{ layout?, prefer?: 'json' | 'html', view?,
+errorTemplate?, runtimePath? }` (defaults: no layout, `'json'`, no
+projection, no error template, `/__rapid/ui.js`). It stores these on the app
 and registers the runtime route. Types live one-per-file under `types/ui/`.
 The root barrel re-exports nothing from `ui/` — an API-only app pays nothing
 for it.
@@ -314,15 +363,20 @@ whatever the handler returned.
   D6 shows it).
 - `autoHead`, `etag`, `compress`, `responseTimer`, `requestLogger` need no
   change (D5). `serveStatic`'s Range/206 is for files, unaffected.
-- `session()` / `auth` bag reach templates only through `view` (D1); a
-  template cannot mutate them.
+- The `auth` bag / session reach templates **only** through the opt-in `view`
+  projection (D1) — never by default — and `view` is frozen, so a template
+  cannot mutate them.
 
 ### D14 — Testing
 
 - Templates: pure — `render(UserList.render(data, view))` and assert the
   string. No server.
-- Negotiation: `client().get('/users', { headers: { accept: 'text/html' } })`
-  vs no header; with and without `rapid-swap: 1`; the `Vary` header; `prefer`.
+- Representation: with vs without `rapid-swap: 1`; `prefer` at route and app
+  level (and route overriding app); `Vary: rapid-swap` present; and a
+  negative test that an `Accept: text/html` header alone does NOT change the
+  outcome (the decision is deterministic).
+- `view`: defaults carry no auth; the projection's fields appear; the bag is
+  frozen.
 - The representer's passthroughs: status / cookies preserved; stream content
   rejected; template on a `@JOB` ignored.
 - Errors: `errorTemplate` rendering with PRODUCTION disclosure; JSON when unset.
@@ -342,7 +396,8 @@ whatever the handler returned.
    `RapidRouteEntry.template`, plain-API options slot, `represent()` in
    `HTTPTransport`, `Vary`, stream rejection, JOB/SOCKET ignore (documented).
 3. **Layout, page vs fragment, `app.ui()`** — `RapidModuleMeta.layout`,
-   resolution order, `rapid-swap`, `view` bag, `prefer`.
+   resolution order, `rapid-swap`, the `view` bag + opt-in projection,
+   `prefer` at route and app level.
 4. **Runtime + redirect + errors + OpenAPI** — `UI_RUNTIME` + its route,
    `rapid-redirect`, `errorTemplate` in the error path, `rapid:error` /
    `rapid:swapped`, `buildOpenApi` media types.
@@ -365,13 +420,16 @@ Each step is independently shippable and tested on all three runtimes.
 - A `rapid ui` CLI scaffold (templates + layout + a first page) — after the
   mechanism ships.
 
-## Open questions for the decision
+## Decisions taken (user, 2026-08-23)
 
-1. Header names `rapid-swap` / `rapid-redirect` (vs `x-rapid-*`). Modern
-   guidance (RFC 6648) deprecates the `x-` prefix; proposed: no prefix.
-2. Runtime path `/__rapid/ui.js` (configurable) — acceptable default?
-3. Should `prefer: 'html'` be settable **app-wide** (`app.ui({ prefer })`) for
-   apps that are pages-first? Proposed: yes, route overrides app.
-4. `view.auth` exposes the whole auth bag to templates. Proposed: yes (it is
-   already app-shaped and read-only); an app that wants less shapes it in the
-   handler's data instead.
+1. Header names **`rapid-swap`** / **`rapid-redirect`** — no `x-` prefix (RFC
+   6648). And, going further: the representer **ignores `Accept`** entirely;
+   these two signals plus `prefer` are the whole decision (D3).
+2. Runtime default path **`/__rapid/ui.js`**, configurable via
+   `app.ui({ runtimePath })`.
+3. **`prefer` is settable app-wide** (`app.ui({ prefer })`), route overrides
+   app, default `'json'` (D3).
+4. **`view` exposes nothing from the auth bag by default**; identity reaches
+   templates only through an explicit `app.ui({ view })` projection naming
+   the fields (D1). Chosen over "expose the whole bag" because it is safe by
+   construction, not by discipline.

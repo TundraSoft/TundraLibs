@@ -284,12 +284,12 @@ item 1; items 2 and 3 are independent and rapid-only.
   - Later: drain-aware rolling deploys, fleet cron pause / remote trigger,
     config & feature-flag broadcast, alerting webhooks, a TUI `reqId`→trace
     jump, multi-master HA via rpc's Redis `PubSubAdapter`.
-- **Simple UI module. 🔍 design PROPOSED 2026-08-23 — see
-  [DESIGN-ui.md](DESIGN-ui.md); awaiting decision.** A route names a
+- **Simple UI module. 🔍 design DECIDED 2026-08-23 — see
+  [DESIGN-ui.md](DESIGN-ui.md); build pending.** A route names a
   **template by function** (`@GET('/users', { template: UserList })`); the
-  handler keeps returning JSON-shaped data; `Accept` (the existing
-  `ctx.accepts`) picks JSON vs HTML and a `rapid-swap` request header picks
-  fragment vs layout-wrapped page; a ~80-line `data-*` client runtime
+  handler keeps returning JSON-shaped data; a `rapid-swap` request header picks fragment vs not, and the route's
+  `prefer` (`json` default, app-wide settable) picks JSON vs layout-wrapped
+  page — `Accept` is NOT consulted (user decision); a ~80-line `data-*` client runtime
   (served from a string, Workers-safe) fetches and swaps fragments, auto-
   echoes the `csrf` cookie, and honours `rapid-redirect`. Auto-escaping
   `html`/`raw`/`render` primitives under a new `./ui` subpath; the
