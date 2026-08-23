@@ -15,7 +15,13 @@
  *
  * The root `@tundralibs/norm` barrel already imports this module.
  *
- * Pulls the MariaDB TCP wire stack — NOT edge-safe.
+ * Wraps the third-party `mariadb` npm driver (not a `compat/net`-based
+ * wire protocol like `postgres` — the driver manages its own sockets).
+ * That means it never goes through `compat`'s runtime guards at all, and
+ * it has been usable on Cloudflare Workers independently of anything
+ * `compat` does: confirmed connecting over real TCP there and reaching
+ * the actual MariaDB wire handshake. Needs Node globals the driver
+ * assumes are present (`process`, etc.) — absent in a browser.
  *
  * @since 1.2.0
  */

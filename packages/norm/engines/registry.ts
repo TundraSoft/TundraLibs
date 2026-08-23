@@ -31,8 +31,16 @@ import type { MongoEngine } from '@tundralibs/drivers/mongo';
  * listed here still has to be REGISTERED (by importing its
  * `engines/<dialect>.ts` module) before it can be constructed.
  *
- * `neon` (Postgres over HTTP), `turso` and `d1` (SQLite over HTTP) are
- * the fetch-only engines — the only ones that work on an edge runtime.
+ * Edge/Workers reach, by mechanism — three different reasons, not one:
+ * `neon`, `turso` and `d1` are fetch-only (HTTP, no sockets needed at
+ * all); `postgres` is TCP over `@tundralibs/compat/net`, which now has
+ * a real Workers backend (`cloudflare:sockets`); `maria` wraps the
+ * third-party `mariadb` driver directly, bypassing `compat` entirely,
+ * and has worked on Workers independently of any of this. `sqlite`
+ * needs a native binding on every runtime and is the one dialect the
+ * root barrel does not register eagerly (see `mod.ts`). `mongo`'s
+ * Workers behavior is unverified — treat it as unsupported until
+ * someone checks.
  */
 export type NormDialect =
   | 'postgres'

@@ -11,6 +11,13 @@ import type {
   EngineQueryResult,
   EngineTransactionOptions,
 } from '@tundralibs/drivers';
+// The barrel no longer eagerly registers `sqlite` (it is the one dialect
+// with a native binding on every runtime, so it stays out of the
+// bundle-safe default set — see `mod.ts`). This suite exercises it for
+// real (connect/query/disconnect), which no other dialect can do without
+// a live external database, so it registers it explicitly like any other
+// consumer would.
+import '@tundralibs/norm/engines/sqlite';
 import {
   Column,
   compileRuntime,

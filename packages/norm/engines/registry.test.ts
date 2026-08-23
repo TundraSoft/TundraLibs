@@ -122,17 +122,35 @@ describe('norm.engines.registry', () => {
     );
   });
 
-  it('the root barrel registers all seven dialects', async () => {
+  it('the root barrel registers six dialects, not sqlite', async () => {
     // The shared (statically imported) registry — importing the root
-    // barrel is exactly what an existing consumer does.
+    // barrel is exactly what an existing consumer does. `sqlite` is
+    // deliberately excluded (see `mod.ts`'s comment): it is the one
+    // dialect with a native binding on every runtime, so keeping it out
+    // of the barrel's eager imports is what keeps the barrel itself
+    // bundle-safe for edge/browser targets. The other six carry no such
+    // specifier and stay eagerly registered.
     await import('../mod.ts');
     for (const dialect of ALL_DIALECTS) {
+      if (dialect === 'sqlite') continue;
       asserts.assertEquals(
         typeof resolveEngineFactory(dialect),
         'function',
         `${dialect} should be registered by the root barrel`,
       );
     }
+  });
+
+  it('sqlite is registered only after its own explicit import', async () => {
+    // A fresh registry, not the barrel-polluted shared one — this test
+    // needs to observe sqlite's *absence* before its subpath is
+    // imported, which the shared registry (already touched by the test
+    // above and by Norm.test.ts) can no longer show.
+    const { resolveEngineFactory: resolve, registerEngine: register } =
+      await freshRegistry();
+    asserts.assertThrows(() => resolve('sqlite'), NormError);
+    register('sqlite', () => fakeEngine('SQLITE'));
+    asserts.assertEquals(typeof resolve('sqlite'), 'function');
   });
 
   it('registerEngine is exported for callers registering their own engine', () => {
