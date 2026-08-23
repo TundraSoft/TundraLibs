@@ -78,7 +78,6 @@ import type {
   ServerOptions,
   ServerState,
   ServerWebSocket,
-  UpgradeDecision,
   WebSocketData,
   WebSocketUpgradeContext,
 } from './types/mod.ts';
@@ -91,6 +90,7 @@ import {
 } from './Error.ts';
 import { UnsupportedRuntimeError } from '../Error.ts';
 import { assertBuiltin } from '../_guards.ts';
+import { type ResolvedUpgrade, resolveUpgrade } from './_resolveUpgrade.ts';
 import { hasPermissionSync } from '../permissions.ts';
 // Local aliases for runtime-only types — see _runtime-globals.ts. Using
 // `any` decouples us from Deno's lib types (no clash on the consumer
@@ -186,20 +186,13 @@ type _RuntimeAdapter = {
 };
 
 /**
- * Discriminated union returned by {@link WebServer._resolveUpgrade}.
- * Either the upgrade was rejected (caller falls through to HTTP) or
- * the resolved upgrade carries the user-supplied `T`, the chosen
- * subprotocol, optional response headers, and the upgrade context.
+ * Local alias for {@link ResolvedUpgrade}, shared with `websocket`'s
+ * request-driven `handleUpgrade` so both read an
+ * {@link UpgradeDecision} the same way. Kept as a name here because
+ * {@link WebServer._resolveUpgrade} is `protected` and subclasses
+ * reference it.
  */
-type _ResolvedUpgrade<T> =
-  | { accepted: false }
-  | {
-    accepted: true;
-    userData: T;
-    protocol: string;
-    extraHeaders: HeadersInit | undefined;
-    upgradeContext: WebSocketUpgradeContext;
-  };
+type _ResolvedUpgrade<T> = ResolvedUpgrade<T>;
 
 /**
  * Best-effort stringification of an unknown thrown value. Used to
@@ -1452,38 +1445,17 @@ export class WebServer<T = unknown> {
    *
    * @internal
    */
-  protected async _resolveUpgrade(
+  protected _resolveUpgrade(
     request: Request,
     remoteAddress: string | null,
     remotePort: number | null,
   ): Promise<_ResolvedUpgrade<T>> {
-    const wsHandler = this.options.websocket;
-    // Snapshot to a fresh Request: on Bun, `server.upgrade()`
-    // invalidates the original request's `url` after upgrade — the
-    // open handler then sees `ctx.request.url === ''`. Headers and
-    // method survive, but URL doesn't. Capturing into a new Request
-    // here gives users a stable object across runtimes.
-    const snapshotRequest = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-    });
-    const upgradeContext: WebSocketUpgradeContext = {
-      request: snapshotRequest,
+    return resolveUpgrade<T>(
+      request,
+      this.options.websocket?.upgrade,
       remoteAddress,
       remotePort,
-    };
-    const decision: UpgradeDecision<T> = wsHandler?.upgrade
-      ? await wsHandler.upgrade(request, { remoteAddress, remotePort })
-      : true;
-    if (decision === false) return { accepted: false };
-    const isObj = typeof decision === 'object' && decision !== null;
-    return {
-      accepted: true,
-      userData: isObj ? decision.data : (upgradeContext as unknown as T),
-      protocol: isObj ? (decision.protocol ?? '') : '',
-      extraHeaders: isObj ? decision.headers : undefined,
-      upgradeContext,
-    };
+    );
   }
 
   //#endregion Shared upgrade resolution

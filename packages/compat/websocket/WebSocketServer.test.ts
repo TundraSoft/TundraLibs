@@ -6,6 +6,7 @@
  */
 
 import { describe, it } from '../test.ts';
+import { join } from '../path.ts';
 import { WebSocketServer } from './WebSocketServer.ts';
 import { JsonCodec } from './codecs.ts';
 import type {
@@ -475,6 +476,369 @@ describe({
           'closed',
         );
       });
+    });
+  },
+});
+
+// =============================================================================
+// handleUpgrade — the listen-free path
+// =============================================================================
+
+describe({
+  name: 'compat.websocket.WebSocketServer.handleUpgrade',
+  fn: () => {
+    /** A request that actually looks like a WebSocket upgrade. */
+    const upgradeRequest = (url = 'http://localhost/ws') =>
+      new Request(url, {
+        headers: { upgrade: 'websocket', connection: 'Upgrade' },
+      });
+
+    // These three run before any runtime dispatch, so they hold
+    // everywhere — including the runtimes that cannot upgrade at all.
+    describe('request screening', () => {
+      it('answers 426 when the request is not an upgrade', async () => {
+        const wss = new WebSocketServer();
+        const res = await wss.handleUpgrade(new Request('http://localhost/'));
+        asserts.assertEquals(res.status, 426);
+        asserts.assertEquals(res.headers.get('upgrade'), 'websocket');
+      });
+
+      it('answers 403 and never opens when the hook refuses', async () => {
+        let opened = false;
+        const wss = new WebSocketServer({ upgrade: () => false });
+        wss.onOpen(() => {
+          opened = true;
+        });
+        const res = await wss.handleUpgrade(upgradeRequest());
+        asserts.assertEquals(res.status, 403);
+        asserts.assertEquals(
+          opened,
+          false,
+          'a refused upgrade must not reach the open handler',
+        );
+        asserts.assertEquals(wss.connections.length, 0);
+      });
+
+      it('passes the request and peer info to the upgrade hook', async () => {
+        let seen: { url: string; info: unknown } | null = null;
+        const wss = new WebSocketServer({
+          upgrade: (request, info) => {
+            seen = { url: request.url, info };
+            return false; // stop before the runtime dispatch
+          },
+        });
+        await wss.handleUpgrade(upgradeRequest('http://localhost/chat'), {
+          remoteAddress: '10.0.0.7',
+          remotePort: 4711,
+        });
+        asserts.assertEquals(seen!.url, 'http://localhost/chat');
+        asserts.assertEquals(seen!.info, {
+          remoteAddress: '10.0.0.7',
+          remotePort: 4711,
+        });
+      });
+
+      it('defaults peer info to null when the caller has none', async () => {
+        let seen: unknown = null;
+        const wss = new WebSocketServer({
+          upgrade: (_request, info) => {
+            seen = info;
+            return false;
+          },
+        });
+        await wss.handleUpgrade(upgradeRequest());
+        asserts.assertEquals(seen, {
+          remoteAddress: null,
+          remotePort: null,
+        });
+      });
+
+      it('rejects once the server is closed', async () => {
+        const wss = new WebSocketServer();
+        await wss.close();
+        await asserts.assertRejects(
+          () => wss.handleUpgrade(upgradeRequest()),
+          Error,
+          'closed',
+        );
+      });
+    });
+
+    it({
+      name: 'throws UnsupportedRuntimeError on Bun and Node',
+      // Bun's `server.upgrade()` needs the serve object and returns a
+      // boolean, and Node upgrades a raw socket — neither can answer
+      // with a Response, so the accept path must refuse loudly and
+      // point at the wire-ups that do work there.
+      deno: false,
+      fn: async () => {
+        const wss = new WebSocketServer();
+        const err = await asserts.assertRejects(
+          () => wss.handleUpgrade(upgradeRequest()),
+        );
+        asserts.assertEquals(
+          (err as Error).name,
+          'UnsupportedRuntimeError',
+          'must be the typed error, not a raw TypeError',
+        );
+        asserts.assertStringIncludes(
+          (err as Error).message,
+          'WebSocketServer.handleUpgrade',
+        );
+        asserts.assertStringIncludes((err as Error).message, 'handlers()');
+      },
+    });
+
+    it({
+      name: 'serves a real connection from inside Deno.serve',
+      // Deno is the one runtime where the whole path can run in-process:
+      // `Deno.upgradeWebSocket` takes the request and hands back the
+      // response, exactly the shape `handleUpgrade` exposes.
+      bun: false,
+      node: false,
+      fn: async () => {
+        const port = 9307;
+        const events: string[] = [];
+        const wss = new WebSocketServer<{ who: string }>({
+          upgrade: () => ({
+            data: { who: 'tester' },
+            headers: { 'x-upgraded-by': 'compat' },
+          }),
+        });
+        wss.use(async (ctx, next) => {
+          events.push(`middleware:${ctx.message}`);
+          await next();
+        });
+        wss.onOpen((ws) => {
+          events.push(
+            `open:${ws.data.who}:ping=${ws.ping()}:buffered=${ws.bufferedAmount}`,
+          );
+          ws.send('WELCOME');
+        });
+        wss.onMessage((ctx) => {
+          events.push(`message:${ctx.message}`);
+          events.push(`connections:${wss.connections.length}`);
+          ctx.ws.send(`ECHO:${ctx.message}`);
+        });
+        wss.onClose((_ws, code, reason) => {
+          events.push(`close:${code}:${reason}`);
+        });
+
+        const server = Deno.serve(
+          { port, hostname: '127.0.0.1', onListen: () => {} },
+          (request, info) =>
+            wss.handleUpgrade(request, {
+              remoteAddress: info.remoteAddr.transport === 'tcp'
+                ? info.remoteAddr.hostname
+                : null,
+            }),
+        );
+
+        const received: string[] = [];
+        try {
+          const client = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+          await new Promise<void>((resolve) => {
+            const bail = setTimeout(resolve, 5000);
+            client.onopen = () => client.send('PING');
+            client.onmessage = (event) => {
+              received.push(String(event.data));
+              if (received.length >= 2) client.close(1000, 'done');
+            };
+            client.onclose = () => {
+              clearTimeout(bail);
+              resolve();
+            };
+          });
+          // The close handler runs on the server's own turn.
+          await new Promise((r) => setTimeout(r, 100));
+        } finally {
+          await server.shutdown();
+        }
+
+        asserts.assertEquals(
+          received,
+          ['WELCOME', 'ECHO:PING'],
+          'the client must receive both the open-time send and the echo',
+        );
+        asserts.assertEquals(events, [
+          'open:tester:ping=false:buffered=0',
+          'middleware:PING',
+          'message:PING',
+          'connections:1',
+          'close:1000:done',
+        ]);
+        asserts.assertEquals(
+          wss.connections.length,
+          0,
+          'the connection must be untracked after close',
+        );
+      },
+    });
+
+    it({
+      name: 'drives the same dispatch on a simulated workerd',
+      // workerd's shape can't be built in-process — `runtime.ts` latches
+      // its globals at import time and this file imported it long ago —
+      // so it runs in a child with forged globals and a `WebSocketPair`
+      // stand-in. Same idiom as net.test.ts / file.test.ts. Deno-gated
+      // because it spawns with `Deno.Command`.
+      bun: false,
+      node: false,
+      fn: async () => {
+        const script = `// deno-lint-ignore-file no-explicit-any
+const g = globalThis as any;
+delete g.Deno;
+Object.defineProperty(g, 'process', {
+  value: { versions: { node: '22.11.0' }, getBuiltinModule: () => undefined },
+  configurable: true,
+});
+Object.defineProperty(g, 'navigator', {
+  value: { userAgent: 'Cloudflare-Workers' },
+  configurable: true,
+});
+
+// Stand-in for workerd's WebSocketPair: two linked browser-style ends.
+// Deliberately carries NO \`bufferedAmount\` — workerd doesn't implement
+// it, and the adapter has to cope.
+class FakePeer extends EventTarget {
+  readyState = 0;
+  protocol = '';
+  accepted = false;
+  peer!: FakePeer;
+  accept() {
+    this.accepted = true;
+    this.readyState = 1;
+  }
+  send(data: unknown) {
+    this.peer.dispatchEvent(new MessageEvent('message', { data }));
+  }
+  close(code = 1000, reason = '') {
+    this.readyState = 3;
+    this.dispatchEvent(new CloseEvent('close', { code, reason }));
+    this.peer.dispatchEvent(new CloseEvent('close', { code, reason }));
+  }
+}
+g.WebSocketPair = function () {
+  const client = new FakePeer();
+  const server = new FakePeer();
+  client.peer = server;
+  server.peer = client;
+  g.__pair = { client, server };
+  return { 0: client, 1: server };
+};
+
+const { RUNTIME } = await import('../runtime.ts');
+const { WebSocketServer } = await import('../websocket/WebSocketServer.ts');
+
+const events: string[] = [];
+const wss = new WebSocketServer<{ who: string }>({
+  upgrade: () => ({
+    data: { who: 'worker' },
+    headers: { 'x-upgraded-by': 'compat' },
+  }),
+});
+wss.use(async (ctx: any, next: any) => {
+  events.push('middleware:' + ctx.message);
+  await next();
+});
+wss.onOpen((ws: any) => {
+  events.push(
+    'open:' + ws.data.who + ':ping=' + ws.ping() +
+      ':buffered=' + ws.bufferedAmount + ':ready=' + ws.readyState,
+  );
+  ws.send('WELCOME');
+});
+wss.onMessage((ctx: any) => {
+  events.push('message:' + ctx.message);
+  events.push('connections:' + wss.connections.length);
+  ctx.ws.send('ECHO:' + ctx.message);
+});
+wss.onClose((_ws: any, code: number, reason: string) => {
+  events.push('close:' + code + ':' + reason);
+});
+
+const clientFrames: string[] = [];
+const response = await wss.handleUpgrade(
+  new Request('http://localhost/ws', {
+    headers: { upgrade: 'websocket', connection: 'Upgrade' },
+  }),
+  { remoteAddress: '10.1.2.3' },
+);
+g.__pair.client.addEventListener('message', (e: MessageEvent) => {
+  clientFrames.push(String(e.data));
+});
+
+g.__pair.client.send('PING');
+await new Promise((r) => setTimeout(r, 10));
+g.__pair.client.close(1001, 'going away');
+await new Promise((r) => setTimeout(r, 10));
+
+console.log(JSON.stringify({
+  runtime: RUNTIME,
+  status: response.status,
+  header: response.headers.get('x-upgraded-by'),
+  accepted: g.__pair.server.accepted,
+  events,
+  clientFrames,
+  connectionsAfterClose: wss.connections.length,
+}));
+`;
+        // `fixtures/` is git-ignored and excluded from fmt/lint/test.
+        const scriptPath = join(
+          import.meta.dirname!,
+          '..',
+          'fixtures',
+          `workers-ws-${crypto.randomUUID()}.ts`,
+        );
+        await Deno.writeTextFile(scriptPath, script);
+        let out;
+        try {
+          out = await new Deno.Command(Deno.execPath(), {
+            args: ['run', '--allow-read', scriptPath],
+            stdout: 'piped',
+            stderr: 'piped',
+          }).output();
+        } finally {
+          await Deno.remove(scriptPath);
+        }
+        const stderr = new TextDecoder().decode(out.stderr);
+        asserts.assertEquals(out.code, 0, `child process failed:\n${stderr}`);
+        const result = JSON.parse(new TextDecoder().decode(out.stdout));
+
+        asserts.assertEquals(result.runtime, 'WORKERS');
+        asserts.assertEquals(
+          result.status,
+          101,
+          'the upgrade response must be a 101',
+        );
+        asserts.assertEquals(
+          result.header,
+          'compat',
+          'headers from the upgrade decision must reach the response',
+        );
+        asserts.assertEquals(
+          result.accepted,
+          true,
+          'the server end must be accept()ed or no events ever fire',
+        );
+        // `open` runs before the response is returned — workerd gives the
+        // server end no open event, so the handler is called directly.
+        // `buffered=0` is the adapter coping with workerd having no
+        // `bufferedAmount` at all.
+        asserts.assertEquals(result.events, [
+          'open:worker:ping=false:buffered=0:ready=1',
+          'middleware:PING',
+          'message:PING',
+          'connections:1',
+          'close:1001:going away',
+        ]);
+        asserts.assertEquals(
+          result.clientFrames,
+          ['ECHO:PING'],
+          'the echo must reach the client end of the pair',
+        );
+        asserts.assertEquals(result.connectionsAfterClose, 0);
+      },
     });
   },
 });

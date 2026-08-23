@@ -2465,3 +2465,298 @@ describe({
     });
   },
 });
+
+// =============================================================================
+// Cloudflare Workers (simulated workerd)
+// =============================================================================
+
+describe({
+  name: 'compat.file - Cloudflare Workers',
+  // Deno-gated: these spawn a child with `Deno.Command`.
+  bun: false,
+  node: false,
+  fn: () => {
+    // The workerd shape can't be built in-process — `runtime.ts` and the
+    // `node:fs` load both resolve at import time and this file imported
+    // them long ago. So each case runs in a child that forges the globals
+    // workerd presents: no `Deno`, a `process` reporting a Node version,
+    // and a `getBuiltinModule` handing back the real built-ins (workerd's
+    // `nodejs_compat` resolves `node:fs`/`node:os`/`node:stream` too, as
+    // verified live). Same idiom as net.test.ts's Workers block.
+    const WORKERS_PRELUDE = `// deno-lint-ignore-file no-explicit-any
+const g = globalThis as any;
+const realDeno = g.Deno;
+const realProcess = g.process;
+delete g.Deno;
+Object.defineProperty(g, 'process', {
+  value: {
+    versions: { node: '22.11.0' },
+    // workerd's nodejs_compat resolves these, verified live on workerd.
+    getBuiltinModule: (id: string) => realProcess.getBuiltinModule(id),
+  },
+  configurable: true,
+});
+Object.defineProperty(g, 'navigator', {
+  value: { userAgent: 'Cloudflare-Workers' },
+  configurable: true,
+});
+
+const { RUNTIME } = await import('../runtime.ts');
+const file = await import('../file.ts');
+
+// Detection is latched at import time: RUNTIME, isDeno/isWorkers and the
+// node:fs handle are all resolved by the two imports above, and stay
+// resolved. Hand the globals back now so Deno's own node-compat shims —
+// which dereference \`Deno\` on every call — can service the I/O. The
+// branch under test is still the Workers one (isDeno stayed false); on
+// real workerd that backend is native and needs no such restoration.
+g.Deno = realDeno;
+Object.defineProperty(g, 'process', { value: realProcess, configurable: true });
+
+const out: Record<string, unknown> = { runtime: RUNTIME };
+const record = async (key: string, fn: () => unknown) => {
+  try {
+    out[key] = { ok: true, value: await fn() };
+  } catch (err) {
+    out[key] = {
+      ok: false,
+      name: (err as Error).name,
+      message: (err as Error).message,
+    };
+  }
+};
+`;
+
+    /** Runs `body` under the forged workerd environment; returns its `out`. */
+    // deno-lint-ignore no-explicit-any
+    const runAsWorkers = async (body: string): Promise<any> => {
+      const script = path.join(
+        fixturesDir,
+        `workers-file-${crypto.randomUUID()}.ts`,
+      );
+      await Deno.writeTextFile(
+        script,
+        `${WORKERS_PRELUDE}\n${body}\nconsole.log(JSON.stringify(out));\n`,
+      );
+      let result;
+      try {
+        result = await new Deno.Command(Deno.execPath(), {
+          args: [
+            'run',
+            '--allow-read',
+            '--allow-write',
+            '--allow-env',
+            // Deno's node:fs shim reads the process uid; a simulation
+            // artifact, not something workerd's native backend needs.
+            '--allow-sys',
+            script,
+          ],
+          stdout: 'piped',
+          stderr: 'piped',
+        }).output();
+      } finally {
+        await Deno.remove(script);
+      }
+      const stderr = new TextDecoder().decode(result.stderr);
+      asserts.assertEquals(result.code, 0, `child process failed:\n${stderr}`);
+      return JSON.parse(new TextDecoder().decode(result.stdout));
+    };
+
+    it('round-trips a file: write, read back three ways, stat, delete', async () => {
+      // The staging workflow this exists for: write scratch bytes, read
+      // them back, relay them on, clean up. A write-only Workers build
+      // would be useless for it, so every read path is exercised.
+      const target = path.join(
+        fixturesDir,
+        `workers-roundtrip-${crypto.randomUUID()}.bin`,
+      );
+      try {
+        const result = await runAsWorkers(`
+const target = ${JSON.stringify(target)};
+const payload = 'STAGED-UPLOAD';
+await record('write', () =>
+  file.writeFile(target, new TextEncoder().encode(payload)));
+await record('readFile', async () =>
+  new TextDecoder().decode(await file.readFile(target)));
+await record('readTextFile', () => file.readTextFile(target));
+await record('readFileStream', async () => {
+  const stream = await file.readFileStream(target);
+  const bytes: number[] = [];
+  for await (const chunk of stream) bytes.push(...Array.from(chunk));
+  return new TextDecoder().decode(new Uint8Array(bytes));
+});
+await record('stat', async () => (await file.stat(target)).size);
+await record('pathExists', () => file.pathExists(target));
+await record('deleteFile', () => file.deleteFile(target));
+await record('existsAfterDelete', () => file.pathExists(target));
+`);
+        asserts.assertEquals(result.runtime, 'WORKERS');
+        for (const key of ['write', 'readFile', 'readTextFile']) {
+          asserts.assertEquals(
+            result[key].ok,
+            true,
+            `${key} must work on Workers: ${result[key].name}: ${
+              result[key].message
+            }`,
+          );
+        }
+        asserts.assertEquals(result.readFile.value, 'STAGED-UPLOAD');
+        asserts.assertEquals(
+          result.readTextFile.value,
+          'STAGED-UPLOAD',
+          'readTextFile must return the staged content, not throw',
+        );
+        asserts.assertEquals(
+          result.readFileStream.ok,
+          true,
+          `readFileStream must work on Workers: ${result.readFileStream.message}`,
+        );
+        asserts.assertEquals(result.readFileStream.value, 'STAGED-UPLOAD');
+        asserts.assertEquals(result.stat.value, 13);
+        asserts.assertEquals(result.pathExists.value, true);
+        asserts.assertEquals(result.deleteFile.ok, true);
+        asserts.assertEquals(
+          result.existsAfterDelete.value,
+          false,
+          'a staging workflow cleans up after itself',
+        );
+      } finally {
+        if (await pathExists(target)) await deleteFile(target);
+      }
+    });
+
+    it('round-trips through the sync variants too', async () => {
+      const target = path.join(
+        fixturesDir,
+        `workers-sync-${crypto.randomUUID()}.bin`,
+      );
+      try {
+        const result = await runAsWorkers(`
+const target = ${JSON.stringify(target)};
+await record('writeFileSync', () =>
+  file.writeFileSync(target, new TextEncoder().encode('SYNC')));
+await record('readFileSync', () =>
+  new TextDecoder().decode(file.readFileSync(target)));
+await record('readTextFileSync', () => file.readTextFileSync(target));
+await record('statSync', () => file.statSync(target).size);
+await record('pathExistsSync', () => file.pathExistsSync(target));
+await record('deleteFileSync', () => file.deleteFileSync(target));
+await record('existsAfterDelete', () => file.pathExistsSync(target));
+`);
+        asserts.assertEquals(
+          result.writeFileSync.ok,
+          true,
+          `writeFileSync: ${result.writeFileSync.message}`,
+        );
+        asserts.assertEquals(result.readFileSync.value, 'SYNC');
+        asserts.assertEquals(result.readTextFileSync.value, 'SYNC');
+        asserts.assertEquals(result.statSync.value, 4);
+        asserts.assertEquals(result.pathExistsSync.value, true);
+        asserts.assertEquals(result.existsAfterDelete.value, false);
+      } finally {
+        if (await pathExists(target)) await deleteFile(target);
+      }
+    });
+
+    it('temp creators need allowEphemeral, then work', async () => {
+      // Group 2: unlike the ops above, these choose the location, so the
+      // ephemerality is invisible at the call site without the opt-in.
+      const result = await runAsWorkers(`
+await record('fileNoFlag', () => file.makeTempFile());
+await record('fileSyncNoFlag', () => file.makeTempFileSync());
+await record('dirNoFlag', () => file.makeTempDir());
+await record('dirSyncNoFlag', () => file.makeTempDirSync());
+await record('fileFlag', async () => {
+  const p = await file.makeTempFile({ allowEphemeral: true, suffix: '.bin' });
+  await file.writeFile(p, new TextEncoder().encode('EPHEMERAL'));
+  const back = await file.readTextFile(p);
+  await file.deleteFile(p);
+  return { back, gone: !(await file.pathExists(p)), endsWith: p.endsWith('.bin') };
+});
+await record('fileSyncFlag', () =>
+  file.makeTempFileSync({ allowEphemeral: true }));
+await record('dirFlag', () => file.makeTempDir({ allowEphemeral: true }));
+await record('dirSyncFlag', () => file.makeTempDirSync({ allowEphemeral: true }));
+`);
+      for (
+        const key of [
+          'fileNoFlag',
+          'fileSyncNoFlag',
+          'dirNoFlag',
+          'dirSyncNoFlag',
+        ]
+      ) {
+        asserts.assertEquals(
+          result[key].ok,
+          false,
+          `${key} must stay refused without the opt-in`,
+        );
+        asserts.assertEquals(result[key].name, 'UnsupportedRuntimeError');
+        asserts.assertStringIncludes(result[key].message, 'allowEphemeral');
+      }
+      asserts.assertEquals(
+        result.fileFlag.ok,
+        true,
+        `allowEphemeral must unlock makeTempFile: ${result.fileFlag.message}`,
+      );
+      asserts.assertEquals(result.fileFlag.value.back, 'EPHEMERAL');
+      asserts.assertEquals(result.fileFlag.value.gone, true);
+      asserts.assertEquals(
+        result.fileFlag.value.endsWith,
+        true,
+        'suffix must still be honoured',
+      );
+      for (const key of ['fileSyncFlag', 'dirFlag', 'dirSyncFlag']) {
+        asserts.assertEquals(
+          result[key].ok,
+          true,
+          `${key} must be unlocked by the opt-in: ${result[key].message}`,
+        );
+      }
+    });
+
+    it('leaves directory, copy/move and handle operations throwing', async () => {
+      // Regression pin: the path-based subset is all that opened up.
+      const result = await runAsWorkers(`
+const dir = ${JSON.stringify('fixturesDirPlaceholder')};
+await record('copyFile', () => file.copyFile(dir + '/a', dir + '/b'));
+await record('moveFile', () => file.moveFile(dir + '/a', dir + '/b'));
+await record('makeDir', () => file.makeDir(dir + '/sub'));
+await record('readDir', async () => {
+  const names = [];
+  for await (const e of file.readDir(dir)) names.push(e.name);
+  return names;
+});
+await record('ensureFile', () => file.ensureFile(dir + '/a'));
+await record('realPath', () => file.realPath(dir));
+await record('remove', () => file.remove(dir + '/a'));
+await record('openFile', () => file.openFile(dir + '/a'));
+await record('copyDir', () => file.copyDir(dir, dir + '/copy'));
+`.replace('fixturesDirPlaceholder', fixturesDir));
+      for (
+        const key of [
+          'copyFile',
+          'moveFile',
+          'makeDir',
+          'readDir',
+          'ensureFile',
+          'realPath',
+          'remove',
+          'openFile',
+          'copyDir',
+        ]
+      ) {
+        asserts.assertEquals(
+          result[key].ok,
+          false,
+          `${key} must still be unsupported on Workers`,
+        );
+        asserts.assertEquals(
+          result[key].name,
+          'UnsupportedRuntimeError',
+          `${key} threw ${result[key].name}: ${result[key].message}`,
+        );
+      }
+    });
+  },
+});
