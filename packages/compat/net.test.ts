@@ -10,6 +10,7 @@ import {
 } from './net.ts';
 import { ConnectionTimeoutError } from './Error.ts';
 import { RUNTIME } from './runtime.ts';
+import { join } from './path.ts';
 
 describe('compat.net', () => {
   describe('listen', () => {
@@ -1088,6 +1089,413 @@ describe('compat.net', () => {
         listener.close();
         if (RUNTIME === 'NODE') await new Promise((r) => setTimeout(r, 50));
       }
+    });
+  });
+
+  // ===========================================================================
+  // Cloudflare Workers (simulated workerd)
+  // ===========================================================================
+
+  describe('Cloudflare Workers outbound TCP', () => {
+    // The workerd shape can't be built in-process: `runtime.ts` reads its
+    // globals at import time and this file imported it long ago, and
+    // `cloudflare:sockets` exists only under workerd. So each case runs in
+    // a child that (a) forges the globals and (b) maps
+    // `cloudflare:sockets`, through an import map, onto a stub that dials
+    // for real with the `Deno` reference captured before the forgery.
+    // Same idiom as udp.test.ts's workerd-hang test; Deno-gated because it
+    // spawns with `Deno.Command`.
+
+    const WORKERS_SOCKETS_STUB = `// deno-lint-ignore-file no-explicit-any
+const denoRef = (globalThis as any).__workersFixtureDeno;
+
+export function connect(address: any, options: any = {}) {
+  const inbound = new TransformStream<Uint8Array, Uint8Array>();
+  const outbound = new TransformStream<Uint8Array, Uint8Array>();
+  let conn: any;
+  const opened = denoRef.connect({
+    hostname: address.hostname,
+    port: address.port,
+  }).then((c: any) => {
+    conn = c;
+    c.readable.pipeTo(inbound.writable).catch(() => {});
+    outbound.readable.pipeTo(c.writable).catch(() => {});
+    return {
+      remoteAddress: address.hostname + ':' + address.port,
+      localAddress: '127.0.0.1:0',
+    };
+  });
+  const socket: any = {
+    readable: inbound.readable,
+    writable: outbound.writable,
+    opened,
+    // workerd settles this on close; never settling is enough here — the
+    // wrapper only attaches a catch handler to it.
+    closed: new Promise<void>(() => {}),
+    secureTransport: options.secureTransport ?? 'off',
+    upgraded: false,
+    close: async () => {
+      await opened.catch(() => {});
+      try { conn?.close(); } catch { /* already gone */ }
+    },
+    startTls: (...args: unknown[]) => {
+      (globalThis as any).__startTlsCalls.push({
+        argCount: args.length,
+        secureTransport: socket.secureTransport,
+        readableLocked: socket.readable.locked,
+        writableLocked: socket.writable.locked,
+      });
+      // No handshake — what's under test is that startTls() was reached
+      // with the streams handed back. The upgraded socket keeps the same
+      // pipes, so the caller can still move bytes over it.
+      return { ...socket, upgraded: true, secureTransport: 'on' };
+    },
+  };
+  return socket;
+}
+`;
+
+    const WORKERS_PRELUDE = `// deno-lint-ignore-file no-explicit-any
+const g = globalThis as any;
+// The stub dials through the runtime we are about to hide.
+g.__workersFixtureDeno = g.Deno;
+g.__startTlsCalls = [];
+delete g.Deno;
+// workerd under nodejs_compat reports a Node version but hands compat no
+// usable built-ins; \`navigator.userAgent\` is what identifies it.
+Object.defineProperty(g, 'process', {
+  value: { versions: { node: '22.11.0' }, getBuiltinModule: () => undefined },
+  configurable: true,
+});
+Object.defineProperty(g, 'navigator', {
+  value: { userAgent: 'Cloudflare-Workers' },
+  configurable: true,
+});
+
+const { RUNTIME } = await import('../runtime.ts');
+const { connect, listen, upgradeTls } = await import('../net.ts');
+const out: Record<string, unknown> = { runtime: RUNTIME };
+const record = async (key: string, fn: () => Promise<unknown>) => {
+  try {
+    out[key] = { ok: true, value: await fn() };
+  } catch (err) {
+    out[key] = {
+      ok: false,
+      name: (err as Error).name,
+      message: (err as Error).message,
+    };
+  }
+};
+`;
+
+    /** Runs `body` under the forged workerd environment; returns its `out`. */
+    // deno-lint-ignore no-explicit-any
+    const runAsWorkers = async (body: string): Promise<any> => {
+      const dir = join(import.meta.dirname!, 'fixtures');
+      const id = crypto.randomUUID();
+      const stub = join(dir, `cf-sockets-${id}.ts`);
+      const map = join(dir, `cf-map-${id}.json`);
+      const script = join(dir, `cf-net-${id}.ts`);
+      // An `--import-map` replaces the config's, so carry compat's own
+      // imports (`@std/path`, reached through `path.ts`) across rather
+      // than pinning a version here that could drift from deno.json.
+      const config = JSON.parse(
+        await Deno.readTextFile(join(import.meta.dirname!, 'deno.json')),
+      );
+      await Deno.writeTextFile(stub, WORKERS_SOCKETS_STUB);
+      await Deno.writeTextFile(
+        map,
+        JSON.stringify({
+          imports: {
+            ...config.imports,
+            'cloudflare:sockets': `./cf-sockets-${id}.ts`,
+          },
+        }),
+      );
+      await Deno.writeTextFile(
+        script,
+        `${WORKERS_PRELUDE}\n${body}\n` +
+          `out.startTlsCalls = g.__startTlsCalls;\n` +
+          `console.log(JSON.stringify(out));\n` +
+          // Exit explicitly: the stub's pipes may still hold ops open.
+          `g.__workersFixtureDeno.exit(0);\n`,
+      );
+      let result;
+      try {
+        result = await new Deno.Command(Deno.execPath(), {
+          args: [
+            'run',
+            '--allow-read',
+            '--allow-net',
+            `--import-map=${map}`,
+            script,
+          ],
+          stdout: 'piped',
+          stderr: 'piped',
+        }).output();
+      } finally {
+        await Deno.remove(stub);
+        await Deno.remove(map);
+        await Deno.remove(script);
+      }
+      const stderr = new TextDecoder().decode(result.stderr);
+      asserts.assertEquals(
+        result.code,
+        0,
+        `child process failed:\n${stderr}`,
+      );
+      return JSON.parse(new TextDecoder().decode(result.stdout));
+    };
+
+    /**
+     * A listener that answers every line with `PONG:<line>` until the peer
+     * goes away, so a child can prove a round trip in either direction.
+     */
+    const echoServer = async (port: number) => {
+      const listener = await listen({ port, hostname: '127.0.0.1' });
+      const served = (async () => {
+        const conn = await listener.accept();
+        for (;;) {
+          const got = await conn.read();
+          if (!got) break;
+          await conn.write(`PONG:${new TextDecoder().decode(got)}`);
+        }
+        conn.close();
+      })().catch(() => {/* the child closing first is the normal ending */});
+      return {
+        close: async () => {
+          listener.close();
+          await served;
+        },
+      };
+    };
+
+    it({
+      name: 'connect() reaches a real TCP peer and round-trips bytes',
+      bun: false,
+      node: false,
+      fn: async () => {
+        const port = 9961;
+        const server = await echoServer(port);
+        try {
+          const result = await runAsWorkers(`
+await record('conn', async () => {
+  const conn = await connect({ hostname: '127.0.0.1', port: ${port} });
+  const wrote = await conn.write('PING');
+  const back = await conn.read();
+  const value = {
+    wrote,
+    read: back ? new TextDecoder().decode(back) : null,
+    remoteAddr: conn.remoteAddr,
+  };
+  conn.close();
+  return value;
+});
+`);
+          asserts.assertEquals(result.runtime, 'WORKERS');
+          asserts.assertEquals(
+            result.conn.ok,
+            true,
+            `connect() failed: ${result.conn.name}: ${result.conn.message}`,
+          );
+          asserts.assertEquals(result.conn.value.read, 'PONG:PING');
+          asserts.assertEquals(
+            result.conn.value.wrote,
+            4,
+            'write() must report the byte count',
+          );
+          asserts.assertEquals(result.conn.value.remoteAddr, {
+            hostname: '127.0.0.1',
+            port,
+          });
+        } finally {
+          await server.close();
+        }
+      },
+    });
+
+    it({
+      name: 'upgradeTls() reaches startTls() with the streams handed back',
+      bun: false,
+      node: false,
+      fn: async () => {
+        const port = 9962;
+        const server = await echoServer(port);
+        try {
+          const result = await runAsWorkers(`
+await record('upgrade', async () => {
+  const conn = await connect({ hostname: '127.0.0.1', port: ${port} });
+  await conn.write('PING');
+  await conn.read();
+  const tls = await upgradeTls(conn, { hostname: '127.0.0.1' });
+  await tls.write('AFTER');
+  const back = await tls.read();
+  const value = { read: back ? new TextDecoder().decode(back) : null };
+  tls.close();
+  return value;
+});
+`);
+          asserts.assertEquals(
+            result.upgrade.ok,
+            true,
+            `upgradeTls() failed: ${result.upgrade.name}: ${result.upgrade.message}`,
+          );
+          asserts.assertEquals(
+            result.startTlsCalls.length,
+            1,
+            'upgradeTls() must reach cloudflare:sockets startTls()',
+          );
+          const call = result.startTlsCalls[0];
+          asserts.assertEquals(
+            call.secureTransport,
+            'starttls',
+            'connect() must open the socket with secureTransport:"starttls" — workerd refuses a later upgrade otherwise',
+          );
+          asserts.assertEquals(
+            call.readableLocked,
+            false,
+            'startTls() throws on a locked readable; upgradeTls() must release the reader first',
+          );
+          asserts.assertEquals(
+            call.writableLocked,
+            false,
+            'startTls() throws on a locked writable; upgradeTls() must release the writer first',
+          );
+          asserts.assertEquals(
+            call.argCount,
+            0,
+            'workerd rejects every startTls() option, expectedServerHostname included',
+          );
+          asserts.assertEquals(
+            result.upgrade.value.read,
+            'PONG:AFTER',
+            'the upgraded connection must still move bytes',
+          );
+        } finally {
+          await server.close();
+        }
+      },
+    });
+
+    it({
+      name: 'rejects TLS material and UNIX paths workerd cannot honour',
+      bun: false,
+      node: false,
+      fn: async () => {
+        // None of these dial — each must be refused before any I/O.
+        const result = await runAsWorkers(`
+const target = { hostname: 'example.com', port: 443 };
+await record('mtls', () =>
+  connect({ ...target, tls: { cert: 'c', key: 'k' } }));
+await record('caFile', () =>
+  connect({ ...target, tls: { caFile: '/etc/ssl/ca.pem' } }));
+await record('insecure', () =>
+  connect({ ...target, tls: { rejectUnauthorized: false } }));
+await record('unix', () => connect({ path: '/tmp/nope.sock' }));
+`);
+        for (const key of ['mtls', 'caFile', 'insecure', 'unix']) {
+          asserts.assertEquals(
+            result[key].ok,
+            false,
+            `${key} must be refused, not silently accepted`,
+          );
+          asserts.assertEquals(
+            result[key].name,
+            'UnsupportedRuntimeError',
+            `${key} must fail with a typed error, got ${result[key].name}`,
+          );
+        }
+        asserts.assertStringIncludes(result.mtls.message, 'cert/key');
+        // Refused before `validateTLS` would have tried to read the file —
+        // a filesystem error here would name the wrong problem.
+        asserts.assertStringIncludes(result.caFile.message, 'caFile');
+        asserts.assertStringIncludes(
+          result.insecure.message,
+          'rejectUnauthorized',
+        );
+        asserts.assertStringIncludes(result.unix.message, 'UNIX');
+      },
+    });
+
+    it({
+      name: 'upgradeTls() refuses a hostname connect() did not dial',
+      bun: false,
+      node: false,
+      fn: async () => {
+        const port = 9963;
+        const server = await echoServer(port);
+        try {
+          // workerd verifies the peer against the dialed hostname and takes
+          // no override, so a different name must fail loudly rather than
+          // verify something the caller never asked for.
+          const result = await runAsWorkers(`
+await record('mismatch', async () => {
+  const conn = await connect({ hostname: '127.0.0.1', port: ${port} });
+  try {
+    return await upgradeTls(conn, { hostname: 'elsewhere.example' });
+  } finally {
+    conn.close();
+  }
+});
+`);
+          asserts.assertEquals(result.mismatch.ok, false);
+          asserts.assertEquals(
+            result.mismatch.name,
+            'UnsupportedRuntimeError',
+          );
+          asserts.assertStringIncludes(
+            result.mismatch.message,
+            'elsewhere.example',
+          );
+          asserts.assertEquals(
+            result.startTlsCalls.length,
+            0,
+            'the mismatch must be caught before startTls() runs',
+          );
+        } finally {
+          await server.close();
+        }
+      },
+    });
+
+    it({
+      name: 'leaves listen / udp / watch / file / WebServer.start throwing',
+      bun: false,
+      node: false,
+      fn: async () => {
+        // Regression pin: outbound TCP is the only capability this gained.
+        const result = await runAsWorkers(`
+await record('listen', () => listen({ port: 9964 }));
+await record('udp', async () =>
+  (await import('../udp.ts')).udpSocket({ port: 0 }));
+await record('watch', async () =>
+  (await import('../watch.ts')).watch('/tmp'));
+await record('file', async () =>
+  (await import('../file.ts')).readTextFile('/tmp/nope.txt'));
+await record('webserver', async () => {
+  const { WebServer } = await import('../webserver/mod.ts');
+  return await new WebServer('pin', {
+    mode: 'TCP',
+    port: 9965,
+    handler: () => new Response('x'),
+  }).start();
+});
+`);
+        for (
+          const key of ['listen', 'udp', 'watch', 'file', 'webserver']
+        ) {
+          asserts.assertEquals(
+            result[key].ok,
+            false,
+            `${key} must still be unsupported on Workers`,
+          );
+          asserts.assertEquals(
+            result[key].name,
+            'UnsupportedRuntimeError',
+            `${key} threw ${result[key].name}: ${result[key].message}`,
+          );
+        }
+      },
     });
   });
 });

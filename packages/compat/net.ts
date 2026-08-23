@@ -4,6 +4,10 @@
  * Provides a unified API for networking operations across Deno, Bun,
  * and Node.js runtimes including TCP listeners and hostname resolution.
  *
+ * Cloudflare Workers gets the outbound half only: {@link connect} and
+ * {@link upgradeTls} run on `cloudflare:sockets`, while {@link listen}
+ * throws — workerd has no way to accept an inbound TCP connection.
+ *
  * @module
  *
  * @example
@@ -16,7 +20,7 @@
  * const host = hostname();
  * ```
  */
-import { isBun, isDeno, isNode } from './runtime.ts';
+import { isBun, isDeno, isNode, isWorkers } from './runtime.ts';
 import { loadBuiltin } from './_runtime-globals.ts';
 import { assertBuiltin } from './_guards.ts';
 import { ConnectionTimeoutError, UnsupportedRuntimeError } from './Error.ts';
@@ -376,6 +380,249 @@ function wrapNodeSocket(socket: any): Connection {
     localAddr: socket.localAddress && socket.localPort
       ? { hostname: socket.localAddress, port: socket.localPort }
       : undefined,
+    _raw: socket,
+  };
+}
+
+/**
+ * The slice of workerd's `cloudflare:sockets` `Socket` this module uses.
+ * Declared locally because the real types live in
+ * `@cloudflare/workers-types`, which compat does not depend on — a
+ * Workers-only `.d.ts` would force every Deno/Node/Bun consumer to
+ * install it. Internal to this file, so it stays out of `types/`.
+ */
+type CloudflareSocket = {
+  readonly readable: ReadableStream<Uint8Array>;
+  readonly writable: WritableStream<Uint8Array>;
+  readonly opened: Promise<
+    { remoteAddress?: string; localAddress?: string }
+  >;
+  readonly closed: Promise<void>;
+  readonly secureTransport: 'on' | 'off' | 'starttls';
+  close(): Promise<void>;
+  // No parameter: `@cloudflare/workers-types` declares an
+  // `expectedServerHostname` option, but workerd rejects it at runtime
+  // ("startTls called with unsupported expectedServerHostname option"),
+  // so the peer is always verified against the hostname `connect` dialed.
+  startTls(): CloudflareSocket;
+};
+
+/** The `cloudflare:sockets` surface this module calls. */
+type CloudflareSocketsModule = {
+  connect(
+    address: { hostname: string; port: number },
+    options?: { secureTransport?: string; allowHalfOpen?: boolean },
+  ): CloudflareSocket;
+};
+
+/** Address pair carried across a `startTls` upgrade. */
+type SocketAddresses = Pick<Connection, 'remoteAddr' | 'localAddr'>;
+
+/**
+ * Per-socket state {@link upgradeTls} needs, keyed by the raw socket it
+ * receives as `_raw`. A `WeakMap` rather than properties on the socket:
+ * workerd host objects are not ours to extend.
+ */
+type CloudflareSocketState = {
+  /** Hands back the reader / writer — `startTls()` throws on locked streams. */
+  release: () => void;
+  /** Hostname `connect` dialed, and therefore the only name workerd can verify. */
+  hostname: string;
+};
+
+const cloudflareSocketState = new WeakMap<
+  CloudflareSocket,
+  CloudflareSocketState
+>();
+
+/**
+ * TLS fields `cloudflare:sockets` has no equivalent for. Its
+ * `SocketOptions` carries only `secureTransport` / `allowHalfOpen` /
+ * `highWaterMark`, and `startTls()` takes no arguments at all — there is
+ * nowhere to put certificate material.
+ */
+const WORKERS_UNSUPPORTED_TLS_FIELDS = [
+  'cert',
+  'key',
+  'ca',
+  'certFile',
+  'keyFile',
+  'caFile',
+] as const;
+
+/**
+ * Reject TLS settings workerd cannot honour, rather than dropping them.
+ * Silently ignoring `cert`/`key` would hand the caller an unauthenticated
+ * session they believe is mTLS; silently ignoring `ca` or
+ * `rejectUnauthorized: false` turns a deliberate trust decision into a
+ * confusing handshake failure.
+ *
+ * @throws {@link UnsupportedRuntimeError} When any unsupported field is set.
+ */
+function _assertWorkersTlsSupported(
+  operation: string,
+  tls: TLSOptions,
+): void {
+  const supplied = WORKERS_UNSUPPORTED_TLS_FIELDS.filter((field) => {
+    const value = (tls as Record<string, unknown>)[field];
+    return Array.isArray(value) ? value.length > 0 : value !== undefined;
+  });
+  if (supplied.length > 0) {
+    throw new UnsupportedRuntimeError(
+      operation,
+      'WORKERS',
+      `\`cloudflare:sockets\` accepts no TLS material, so ${
+        supplied.join('/')
+      } cannot be honoured — workerd verifies the peer against its own ` +
+        `trust store. Use a publicly-trusted server certificate, or route ` +
+        `the connection through Hyperdrive.`,
+    );
+  }
+  if (tls.rejectUnauthorized === false) {
+    throw new UnsupportedRuntimeError(
+      operation,
+      'WORKERS',
+      '`rejectUnauthorized: false` cannot be honoured — `cloudflare:sockets` ' +
+        'always verifies the peer certificate and exposes no bypass',
+    );
+  }
+}
+
+/**
+ * Resolve `cloudflare:sockets`. The `as string` cast hides the specifier
+ * from static analysis, so bundlers targeting Deno/Node/Bun don't try to
+ * resolve a module only workerd has (the same trick `drivers`' SQLite
+ * adapter uses for `$sqlite_deno`). The `import()` sits inside an async
+ * function, never at module scope — see the {@link loadBuiltin} note
+ * above on why a single top-level await deadlocks bundled consumers.
+ *
+ * @throws {@link UnsupportedRuntimeError} When the module can't be
+ *   resolved, so a mis-detected runtime surfaces as a typed error
+ *   instead of a bare module-resolution failure.
+ */
+async function _loadCloudflareSockets(
+  operation: string,
+): Promise<CloudflareSocketsModule> {
+  try {
+    return await import('cloudflare:sockets' as string);
+  } catch (err) {
+    throw new UnsupportedRuntimeError(
+      operation,
+      'WORKERS',
+      "`cloudflare:sockets` did not resolve; raw TCP needs workerd's socket module",
+      err instanceof Error ? err : undefined,
+    );
+  }
+}
+
+/**
+ * Split workerd's `"host:port"` / `"[v6]:port"` address string into the
+ * {@link Connection} address shape. Returns `undefined` for anything
+ * unparseable — `remoteAddr` is optional, and a wrong address is worse
+ * than none.
+ */
+function _parseSocketAddress(
+  address?: string,
+): { hostname: string; port: number } | undefined {
+  if (!address) return undefined;
+  const split = address.lastIndexOf(':');
+  if (split <= 0) return undefined;
+  const port = Number(address.slice(split + 1));
+  if (!Number.isInteger(port)) return undefined;
+  const host = address.slice(0, split);
+  return {
+    hostname: host.startsWith('[') && host.endsWith(']')
+      ? host.slice(1, -1)
+      : host,
+    port,
+  };
+}
+
+/**
+ * Wraps a `cloudflare:sockets` socket into a {@link Connection}.
+ *
+ * The Workers counterpart of {@link wrapNodeSocket}, adapting Web
+ * Streams instead of events. The failure modes differ but the contract
+ * is the same:
+ *
+ * - **No chunk is dropped between reads.** The reader is acquired once
+ *   and held; bytes arriving while nothing is reading queue inside the
+ *   `ReadableStream` rather than being pushed at a listener that isn't
+ *   there. Acquiring per `read()` would instead throw on the locked
+ *   stream, and releasing between reads would drop the queue.
+ * - **No read hangs on something that already happened.** A finished
+ *   stream keeps resolving `{ done: true }` and an errored one keeps
+ *   rejecting, so a late `read()` settles either way.
+ * - **A peer error can't escape unobserved.** `socket.closed` (and
+ *   `socket.opened`, which only `connect` awaits) reject on a reset;
+ *   with no handler that is an unhandled rejection, which workerd
+ *   reports as a Worker error — the Web-Streams equivalent of the
+ *   process-killing `'error'` event `wrapNodeSocket` guards against.
+ *
+ * @internal
+ */
+function wrapCloudflareSocket(
+  socket: CloudflareSocket,
+  hostname: string,
+  addresses: SocketAddresses = {},
+): Connection {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let writer: WritableStreamDefaultWriter<Uint8Array> | undefined;
+  let closed = false;
+
+  // Observe both lifecycle promises so a peer reset can't surface as an
+  // unhandled rejection. Reads and writes still see the real error from
+  // their own stream.
+  socket.opened.catch(() => {});
+  socket.closed.catch(() => {});
+
+  const release = () => {
+    try {
+      reader?.releaseLock();
+    } catch {
+      // A reader with a read still in flight refuses to release; the
+      // socket is being handed away regardless.
+    }
+    try {
+      writer?.releaseLock();
+    } catch {
+      // Same for an in-flight write.
+    }
+    reader = undefined;
+    writer = undefined;
+  };
+  cloudflareSocketState.set(socket, { release, hostname });
+
+  return {
+    read: async () => {
+      if (closed) return null;
+      reader ??= socket.readable.getReader();
+      try {
+        const { value, done } = await reader.read();
+        return done ? null : (value ?? null);
+      } catch (err) {
+        // `close()` tears the stream down under any in-flight read; that
+        // is EOF, not a failure the caller needs to handle.
+        if (closed) return null;
+        throw err;
+      }
+    },
+    write: async (data: Uint8Array | string) => {
+      const bytes = typeof data === 'string'
+        ? new TextEncoder().encode(data)
+        : data;
+      writer ??= socket.writable.getWriter();
+      await writer.write(bytes);
+      return bytes.length;
+    },
+    close: () => {
+      closed = true;
+      // `close()` is synchronous in the Connection contract, so the
+      // promise workerd returns is observed here rather than awaited.
+      socket.close().catch(() => {});
+    },
+    remoteAddr: addresses.remoteAddr,
+    localAddr: addresses.localAddr,
     _raw: socket,
   };
 }
@@ -940,6 +1187,73 @@ function _validateTlsOptions(tls: TLSOptions): ValidatedTLS {
 }
 
 /**
+ * {@link connect}'s Cloudflare Workers backend, on `cloudflare:sockets`.
+ * Split out rather than inlined as a fourth branch because it must run
+ * *before* `connect`'s shared TLS validation, which resolves `*File`
+ * paths through a filesystem workerd doesn't have.
+ *
+ * @throws {@link ConnectionTimeoutError} When `timeout` elapses or `signal`
+ *   aborts before the socket opens.
+ * @throws {@link UnsupportedRuntimeError} For a UNIX-socket `path`, for TLS
+ *   settings workerd can't honour, or when `cloudflare:sockets` won't resolve.
+ */
+async function _connectWorkers(options: ConnectOptions): Promise<Connection> {
+  if ('path' in options) {
+    throw new UnsupportedRuntimeError(
+      'connect',
+      'WORKERS',
+      '`cloudflare:sockets` dials TCP only; UNIX sockets have no equivalent',
+    );
+  }
+
+  const { port, hostname = '127.0.0.1', tls } = options;
+  const tlsOptions = tls === true ? {} : tls;
+  if (tlsOptions) _assertWorkersTlsSupported('connect', tlsOptions);
+
+  const { connect: cloudflareConnect } = await _loadCloudflareSockets(
+    'connect',
+  );
+  const socket = cloudflareConnect({ hostname, port }, {
+    // `'starttls'` leaves the socket in the clear but keeps `startTls()`
+    // available, which is the only way `upgradeTls` can work later —
+    // workerd decides at connect time, unlike Deno's and Node's
+    // upgrade-any-socket APIs. `'on'` is TLS from the first byte.
+    secureTransport: tlsOptions ? 'on' : 'starttls',
+    allowHalfOpen: false,
+  });
+
+  const signal = combineSignals(options.timeout, options.signal);
+  const timeout = () =>
+    new ConnectionTimeoutError(hostname, port, undefined, options.timeout);
+  let info: { remoteAddress?: string; localAddress?: string };
+  try {
+    info = signal
+      ? await Promise.race([
+        socket.opened,
+        new Promise<never>((_resolve, reject) => {
+          if (signal.aborted) return reject(timeout());
+          signal.addEventListener(
+            'abort',
+            () => reject(timeout()),
+            { once: true },
+          );
+        }),
+      ])
+      : await socket.opened;
+  } catch (err) {
+    // `connect()` has no signal parameter on workerd, so an aborted
+    // attempt leaves a socket still dialing with nobody holding it.
+    socket.close().catch(() => {});
+    throw err;
+  }
+
+  return wrapCloudflareSocket(socket, hostname, {
+    remoteAddr: _parseSocketAddress(info.remoteAddress) ?? { hostname, port },
+    localAddr: _parseSocketAddress(info.localAddress),
+  });
+}
+
+/**
  * Open a TCP, TLS, or UNIX-socket connection.
  *
  * Pass `path` for a UNIX socket, or `port` (with `hostname`, default
@@ -947,13 +1261,21 @@ function _validateTlsOptions(tls: TLSOptions): ValidatedTLS {
  * `timeout` and `signal` may be combined — whichever fires first aborts
  * the attempt.
  *
+ * On Cloudflare Workers this runs on `cloudflare:sockets`, with two
+ * limits workerd imposes: no UNIX sockets, and no TLS material — `cert`,
+ * `key`, `ca` (and their `*File` forms) and `rejectUnauthorized: false`
+ * throw rather than being silently ignored, because workerd verifies the
+ * peer against its own trust store and offers no hook into that.
+ *
  * @throws {@link ConnectionTimeoutError} When `timeout` elapses or
  *   `signal` aborts.
  * @throws {@link FetchPathTraversalError} When a TLS file path contains `../`.
  * @throws {@link FetchFileNotFoundError} When a TLS certificate or key
  *   file is missing.
  * @throws {@link FetchInvalidPEMError} When TLS material is not valid PEM.
- * @throws {@link UnsupportedRuntimeError} On runtimes with no socket backend.
+ * @throws {@link UnsupportedRuntimeError} On runtimes with no socket
+ *   backend, and on Workers for a UNIX-socket `path` or unsupported TLS
+ *   material.
  *
  * @example
  * ```ts
@@ -965,6 +1287,10 @@ function _validateTlsOptions(tls: TLSOptions): ValidatedTLS {
  * @see {@link listen} to accept connections instead.
  */
 export async function connect(options: ConnectOptions): Promise<Connection> {
+  // Ahead of the shared validation below, which reads `*File` paths off a
+  // filesystem workerd has none of.
+  if (isWorkers) return await _connectWorkers(options);
+
   // Common TLS validation (before runtime-specific code)
   let tlsCert: string | undefined;
   let tlsKey: string | undefined;
@@ -1382,6 +1708,13 @@ export type UpgradeTlsOptions = {
  * a successful upgrade — its `read` / `write` are no longer safe to
  * call. The returned `Connection` carries the TLS session.
  *
+ * On Cloudflare Workers this runs on `cloudflare:sockets`' `startTls()`,
+ * with three limits: the socket must have come from {@link connect}
+ * (workerd only upgrades a socket it opened for it), `options.hostname`
+ * must match the hostname `connect` dialed (workerd verifies the peer
+ * against that and takes no override), and the same no-TLS-material rule
+ * as `connect` applies.
+ *
  * @param conn - The plain TCP connection to upgrade.
  * @param options - Hostname (required for SAN/SNI verification) and
  *   TLS configuration.
@@ -1391,6 +1724,9 @@ export type UpgradeTlsOptions = {
  * @throws {Error} If the connection has no underlying raw socket
  *   (e.g. it was constructed by user code, not via {@link connect}),
  *   or if the runtime can't perform an in-place TLS upgrade.
+ * @throws {@link UnsupportedRuntimeError} On Workers, when the socket
+ *   didn't come from {@link connect}, when `hostname` differs from the
+ *   one it dialed, or for TLS material workerd can't honour.
  */
 export async function upgradeTls(
   conn: Connection,
@@ -1405,6 +1741,45 @@ export async function upgradeTls(
 
   // Normalise TLS shape (boolean → empty object, object → as-is).
   const tlsOpt = options.tls === true ? {} : options.tls;
+
+  /* c8 ignore start */
+  if (isWorkers) {
+    // Ahead of `_validateTlsOptions` for the same reason as `connect` —
+    // it would try to read `*File` paths off a filesystem that isn't there.
+    if (tlsOpt) _assertWorkersTlsSupported('upgradeTls', tlsOpt);
+    const socket = raw as CloudflareSocket;
+    const state = cloudflareSocketState.get(socket);
+    if (!state) {
+      throw new UnsupportedRuntimeError(
+        'upgradeTls',
+        'WORKERS',
+        'the raw socket did not come from `connect` — workerd can only upgrade a socket it opened with `secureTransport: "starttls"`',
+      );
+    }
+    // `startTls()` takes no arguments on workerd, so the peer is verified
+    // against the hostname `connect` dialed. Verifying a different name
+    // than the caller asked for would be a silent downgrade of their
+    // intent, so refuse rather than pretend.
+    if (state.hostname !== options.hostname) {
+      throw new UnsupportedRuntimeError(
+        'upgradeTls',
+        'WORKERS',
+        `cannot verify the peer as '${options.hostname}' — workerd checks the certificate against '${state.hostname}', the hostname \`connect\` dialed, and accepts no override`,
+      );
+    }
+    // `startTls()` throws while the streams are locked, so hand back the
+    // reader / writer the wrapper is holding first.
+    state.release();
+    // No handshake to await: `startTls()` returns synchronously and
+    // workerd surfaces a failed handshake on the first read / write, as
+    // Deno's `startTls` does. Addresses carry over — same peer.
+    return wrapCloudflareSocket(socket.startTls(), options.hostname, {
+      remoteAddr: conn.remoteAddr,
+      localAddr: conn.localAddr,
+    });
+  }
+  /* c8 ignore stop */
+
   const validated = tlsOpt && typeof tlsOpt === 'object'
     ? _validateTlsOptions(tlsOpt)
     : { rejectUnauthorized: undefined };
