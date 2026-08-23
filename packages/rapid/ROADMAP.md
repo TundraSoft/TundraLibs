@@ -284,9 +284,20 @@ item 1; items 2 and 3 are independent and rapid-only.
   - Later: drain-aware rolling deploys, fleet cron pause / remote trigger,
     config & feature-flag broadcast, alerting webhooks, a TUI `reqId`→trace
     jump, multi-master HA via rpc's Redis `PubSubAdapter`.
-- **Simple UI module** — a deliberately MINIMAL client-side UI helper served
-  from the static layer — enough for AJAX + basic wiring. Not a
-  React/Vite-class framework.
+- **Simple UI module. 🔍 design PROPOSED 2026-08-23 — see
+  [DESIGN-ui.md](DESIGN-ui.md); awaiting decision.** A route names a
+  **template by function** (`@GET('/users', { template: UserList })`); the
+  handler keeps returning JSON-shaped data; `Accept` (the existing
+  `ctx.accepts`) picks JSON vs HTML and a `rapid-swap` request header picks
+  fragment vs layout-wrapped page; a ~80-line `data-*` client runtime
+  (served from a string, Workers-safe) fetches and swaps fragments, auto-
+  echoes the `csrf` cookie, and honours `rapid-redirect`. Auto-escaping
+  `html`/`raw`/`render` primitives under a new `./ui` subpath; the
+  representer runs at the innermost onion point so `etag`/`compress` see the
+  final HTML; HTML error pages via `app.ui({ errorTemplate })` on the
+  post-onion error path. Mechanism proven by the standalone
+  `rapid-ui-demo` prototype (XSS-escaping verified). Not a React/Vite-class
+  framework — polling/history/transitions explicitly deferred.
 
 ## Parked
 
