@@ -38,6 +38,7 @@ import {
   verifySignedValue,
 } from '../utils/mod.ts';
 import type {
+  RapidApplicationServerOptions,
   RapidContextArgs,
   RapidContextPaging,
   RapidContextQuery,
@@ -68,6 +69,76 @@ export type HTTPContextInit = {
    */
   requestId?: string;
 };
+
+/**
+ * The HTTP `args` view. `params` is known immediately from the route match;
+ * `query` and `paging` PARSE LAZILY, each on first read, once — so a handler
+ * that touches only `params` (already resolved by the router) pays for neither.
+ *
+ * The getters live on the PROTOTYPE (defined once), so building this per request
+ * is a single cheap allocation — not a per-request object literal with inline
+ * accessor properties plus `Object.freeze`, which profiled at ~2.5µs/request on
+ * Node just to read an already-resolved param. Immutability is preserved without
+ * freezing the wrapper: `params` is frozen, `query`/`paging` return their own
+ * frozen collections, and the public members are getters with no setter (the
+ * only writable state is the private lazy caches).
+ */
+class HTTPArgs {
+  /** Route params — frozen so the advertised `Readonly` holds at runtime. */
+  public readonly params: Readonly<Record<string, string>>;
+  private readonly __request: Request;
+  private readonly __server: RapidApplicationServerOptions;
+  private __query: RapidContextQuery | undefined;
+  private __paging: RapidContextPaging | undefined;
+  private __searchParams: URLSearchParams | undefined;
+
+  constructor(
+    params: Readonly<Record<string, string>>,
+    request: Request,
+    server: RapidApplicationServerOptions,
+  ) {
+    this.params = Object.freeze(params);
+    this.__request = request;
+    this.__server = server;
+  }
+
+  /** URL search params — parsed once, shared by `query` and `paging`. */
+  private __sp(): URLSearchParams {
+    return this.__searchParams ??= new URL(this.__request.url).searchParams;
+  }
+
+  get query(): RapidContextQuery {
+    if (this.__query === undefined) {
+      const parsed = parseQueryFilters(this.__sp(), this.__server.query);
+      this.__query = Object.freeze({
+        filters: Object.freeze(parsed.filters),
+        sorting: Object.freeze(parsed.sorting),
+      });
+    }
+    return this.__query;
+  }
+
+  get paging(): RapidContextPaging {
+    if (this.__paging === undefined) {
+      const paging = this.__server.paging ?? {};
+      this.__paging = Object.freeze(parsePaging(
+        paging,
+        pagingFromHeaders(this.__request.headers, paging),
+        pagingFromQuery(this.__sp()),
+      ));
+    }
+    return this.__paging;
+  }
+
+  /**
+   * `query`/`paging` are prototype getters (not own enumerable props), so
+   * `JSON.stringify(ctx.args)` would otherwise drop them. Serializing materializes
+   * both — the same effect the original own-getter object literal had.
+   */
+  toJSON(): RapidContextArgs {
+    return { params: this.params, query: this.query, paging: this.paging };
+  }
+}
 
 /**
  * The HTTP transport context — one per request. Adopts the inbound
@@ -206,48 +277,15 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    *   (deferred with the parse), not on `args`/`params` access.
    */
   public get args(): Readonly<RapidContextArgs> {
-    if (this.__args === undefined) {
-      const server = this.app.option('server')!;
-      const request = this.request;
-      // `query` and `paging` PARSE LAZILY, each on first read. A handler
-      // that only wants `args.params` — already known from the route
-      // match — never pays the query-filter/paging parse (the single
-      // biggest per-request cost) it didn't ask for. The URL is parsed
-      // once, shared, and only when query or paging is actually touched.
-      let query: RapidContextQuery | undefined;
-      let paging: RapidContextPaging | undefined;
-      let searchParams: URLSearchParams | undefined;
-      const getSearchParams =
-        (): URLSearchParams => (searchParams ??=
-          new URL(request.url).searchParams);
-      this.__args = Object.freeze({
-        // Frozen — including query/paging's own nested collections, not
-        // just the top level — so the advertised Readonly holds at
-        // runtime for all of args, not just params (L4's original fix).
-        params: Object.freeze(this.params),
-        get query(): RapidContextQuery {
-          if (query === undefined) {
-            const parsed = parseQueryFilters(getSearchParams(), server.query);
-            query = Object.freeze({
-              filters: Object.freeze(parsed.filters),
-              sorting: Object.freeze(parsed.sorting),
-            });
-          }
-          return query;
-        },
-        get paging(): RapidContextPaging {
-          if (paging === undefined) {
-            paging = Object.freeze(parsePaging(
-              server.paging ?? {},
-              pagingFromHeaders(request.headers, server.paging ?? {}),
-              pagingFromQuery(getSearchParams()),
-            ));
-          }
-          return paging;
-        },
-      }) as Readonly<RapidContextArgs>;
-    }
-    return this.__args;
+    // `params` is immediate (the router already resolved it); reading it
+    // must not pay for building the query/paging machinery. {@link HTTPArgs}
+    // keeps that machinery lazy AND its getters on the prototype, so this is
+    // one cheap allocation per request.
+    return this.__args ??= new HTTPArgs(
+      this.params,
+      this.request,
+      this.app.option('server')!,
+    ) as Readonly<RapidContextArgs>;
   }
 
   /**
