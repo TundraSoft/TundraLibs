@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.3.1...norm-v1.3.2) (2026-08-23)
+
+
+### Bug Fixes
+
+* **norm:** drop sqlite from the root barrel's eager engine imports ([#538](https://github.com/TundraSoft/TundraLibs/issues/538)) ([e327fe7](https://github.com/TundraSoft/TundraLibs/commit/e327fe74cfeec27a350ee35cc8659fd3518ec089))
+
 ## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.3.0...norm-v1.3.1) (2026-08-21)
 
 
