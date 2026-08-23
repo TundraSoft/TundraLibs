@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.1...drivers-v1.1.2) (2026-08-23)
+
+
+### Documentation
+
+* **drivers:** correct Workers/Deno Deploy socket claims in edge docs ([#542](https://github.com/TundraSoft/TundraLibs/issues/542)) ([05f27a2](https://github.com/TundraSoft/TundraLibs/commit/05f27a2d526ff376dfdd90c03bf3cff73d23e40b))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.0...drivers-v1.1.1) (2026-08-21)
 
 
