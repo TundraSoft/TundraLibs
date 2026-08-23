@@ -4,6 +4,12 @@
  * Provides a unified interface for file and directory operations across
  * Deno, Bun, and Node.js runtimes with both async and sync variants.
  *
+ * Cloudflare Workers gets the path-based file operations — read, write,
+ * stat, exists, delete — under workerd's `/tmp`; workerd itself refuses
+ * every other location. Directory operations, copy/move and the file
+ * handle API still throw, and the temp-path creators need an explicit
+ * {@link TempOptions.allowEphemeral}.
+ *
  * @module
  *
  * @example
@@ -18,7 +24,7 @@
  */
 
 import { Bun, loadBuiltin } from './_runtime-globals.ts';
-import { isBun, isDeno, isNode, OS, RUNTIME } from './runtime.ts';
+import { isBun, isDeno, isNode, isWorkers, OS, RUNTIME } from './runtime.ts';
 import { CompatError, UnsupportedRuntimeError } from './Error.ts';
 import { assertBuiltin } from './_guards.ts';
 import * as path from './path.ts';
@@ -33,6 +39,25 @@ type DenoFsFile = any;
 /** Node.js FileHandle type from fs.promises.open() */
 type NodeFsHandle = Awaited<ReturnType<typeof import('node:fs').promises.open>>;
 
+/**
+ * Runtimes that reach the filesystem through `node:fs` (Deno uses
+ * `Deno.*` instead). Cloudflare Workers joins Bun and Node: under
+ * `nodejs_compat`, workerd's `process.getBuiltinModule('node:fs')`
+ * resolves and its operations work — but only under `/tmp`. Every other
+ * location is refused by the platform itself (`operation not permitted`
+ * for a relative path, `no such file or directory` for `/var/...`), so
+ * the caller's own path is the boundary and compat adds no guard of its
+ * own.
+ *
+ * Only the path-based subset is wired through this on Workers — the ops
+ * a caller reaches with a path they chose. Directory work, the file
+ * handle API, and copy/move keep the narrower `isBun || isNode` test,
+ * and temp-file creation is gated separately (see
+ * {@link TempOptions.allowEphemeral}) because there the library, not the
+ * caller, picks the location.
+ */
+const USES_NODE_FS = isBun || isNode || isWorkers;
+
 // Resolved through `process.getBuiltinModule` rather than a top-level
 // `await import()` — the sync variants (`readTextFileSync`, `statSync`, …)
 // need the backend before any promise can settle, and TLA here would make
@@ -41,15 +66,15 @@ type NodeFsHandle = Awaited<ReturnType<typeof import('node:fs').promises.open>>;
 // so it skips both loads.
 const nodeFs: typeof import('node:fs') = loadBuiltin(
   'node:fs',
-  isBun || isNode,
+  USES_NODE_FS,
 );
 const nodeOs: typeof import('node:os') = loadBuiltin(
   'node:os',
-  isBun || isNode,
+  USES_NODE_FS,
 );
 const nodeStream: typeof import('node:stream') = loadBuiltin(
   'node:stream',
-  isBun || isNode,
+  USES_NODE_FS,
 );
 
 //#region Error Classes
@@ -492,7 +517,7 @@ export const pathExists: (path: string) => Promise<boolean> = async (
         }
         throw wrapFileError(error, path, 'pathExists');
       }
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'pathExists');
       // deno-coverage-ignore-stop
@@ -545,7 +570,7 @@ export const pathExistsSync: (path: string) => boolean = (
         }
         throw wrapFileError(error, path, 'pathExistsSync');
       }
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'pathExistsSync');
       // deno-coverage-ignore-stop
@@ -899,7 +924,7 @@ export const stat: (path: string) => Promise<FileInfo> = async (
         uid: info.uid ?? null,
         gid: info.gid ?? null,
       };
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'stat');
       // deno-coverage-ignore-stop
@@ -964,7 +989,7 @@ export const statSync: (path: string) => FileInfo = (
         uid: info.uid ?? null,
         gid: info.gid ?? null,
       };
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'statSync');
       // deno-coverage-ignore-stop
@@ -1033,7 +1058,7 @@ export const readFile: (path: string) => Promise<Uint8Array> = async (
       return await Deno.readFile(path);
     } else if (isBun) {
       return await Bun.file(path).bytes();
-    } else if (isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'readFile');
       // deno-coverage-ignore-stop
@@ -1075,7 +1100,7 @@ export const readFileSync: (path: string) => Uint8Array = (
 
     if (isDeno) {
       return Deno.readFileSync(path);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'readFileSync');
       // deno-coverage-ignore-stop
@@ -1175,7 +1200,7 @@ export const readFileStream: (
       return end === undefined
         ? file.readable
         : __limitStream(file.readable, end - (start ?? 0) + 1);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'readFileStream');
       assertBuiltin(nodeStream, 'node:stream', 'readFileStream');
@@ -1227,7 +1252,7 @@ export const readTextFile: (path: string) => Promise<string> = async (
       return await Deno.readTextFile(path);
     } else if (isBun) {
       return await Bun.file(path).text();
-    } else if (isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'readTextFile');
       // deno-coverage-ignore-stop
@@ -1268,7 +1293,7 @@ export const readTextFileSync: (path: string) => string = (
 
     if (isDeno) {
       return Deno.readTextFileSync(path);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'readTextFileSync');
       // deno-coverage-ignore-stop
@@ -1410,7 +1435,7 @@ export const writeFile: (
         create: opts.create,
         mode: opts.mode,
       });
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'writeFile');
       // deno-coverage-ignore-stop
@@ -1483,7 +1508,7 @@ export const writeFileSync: (
         create: opts.create,
         mode: opts.mode,
       });
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'writeFileSync');
       // deno-coverage-ignore-stop
@@ -1563,7 +1588,7 @@ export const writeTextFile: (
         create: opts.create,
         mode: opts.mode,
       });
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'writeTextFile');
       // deno-coverage-ignore-stop
@@ -1635,7 +1660,7 @@ export const writeTextFileSync: (
         create: opts.create,
         mode: opts.mode,
       });
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'writeTextFileSync');
       // deno-coverage-ignore-stop
@@ -1786,7 +1811,7 @@ export const deleteFile: (path: string) => Promise<void> = async (
 
     if (isDeno) {
       await Deno.remove(path);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'deleteFile');
       // deno-coverage-ignore-stop
@@ -1823,7 +1848,7 @@ export const deleteFileSync: (path: string) => void = (path: string): void => {
 
     if (isDeno) {
       Deno.removeSync(path);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'deleteFileSync');
       // deno-coverage-ignore-stop
@@ -3444,7 +3469,49 @@ export type TempOptions = {
   prefix?: string;
   /** Suffix for the temp file/dir name */
   suffix?: string;
+  /**
+   * Opt in to temp paths on Cloudflare Workers, where they land in
+   * workerd's `/tmp` — in-memory scratch that does not survive the
+   * request that created it (a file written in one request is already
+   * gone in the next, verified on workerd). Stage, read back and relay
+   * within the same request; never treat it as storage. Ignored on Deno,
+   * Bun and Node, which have a real temp directory and need no opt-in.
+   *
+   * The other file operations take a path the caller wrote, so choosing
+   * `/tmp/...` on Workers is already a visible decision. These four pick
+   * the location themselves, so the ephemerality would otherwise be
+   * invisible at the call site — hence the flag. Without it, the temp
+   * creators keep throwing {@link UnsupportedRuntimeError} on Workers.
+   *
+   * @default undefined (throws on Workers)
+   */
+  allowEphemeral?: boolean;
 };
+
+/**
+ * Gate the temp-path creators on Cloudflare Workers. Workerd has a
+ * working `/tmp`, but it is scratch that does not survive the request,
+ * and unlike the path-based operations the caller never sees the
+ * location — so it takes an explicit
+ * {@link TempOptions.allowEphemeral}.
+ *
+ * @throws {@link UnsupportedRuntimeError} On Workers without the opt-in.
+ * @internal
+ */
+function __assertEphemeralAllowed(
+  operation: string,
+  options: TempOptions,
+): void {
+  if (isWorkers && options.allowEphemeral !== true) {
+    throw new UnsupportedRuntimeError(
+      operation,
+      'WORKERS',
+      "a temp path here lives in workerd's in-memory `/tmp`, which does not " +
+        'survive the request — pass `allowEphemeral: true` to accept that, or ' +
+        'write to a `/tmp/...` path of your own choosing',
+    );
+  }
+}
 
 /**
  * Removes a file or directory at the specified path.
@@ -3718,10 +3785,11 @@ export const makeTempFile: (options?: TempOptions) => Promise<string> = async (
 ): Promise<string> => {
   try {
     const opts = options ?? {};
+    __assertEphemeralAllowed('makeTempFile', opts);
 
     if (isDeno) {
       return await Deno.makeTempFile(opts);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeOs, 'node:os', 'makeTempFile');
       // deno-coverage-ignore-stop
@@ -3770,10 +3838,11 @@ export const makeTempFileSync: (options?: TempOptions) => string = (
 ): string => {
   try {
     const opts = options ?? {};
+    __assertEphemeralAllowed('makeTempFileSync', opts);
 
     if (isDeno) {
       return Deno.makeTempFileSync(opts);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeOs, 'node:os', 'makeTempFileSync');
       // deno-coverage-ignore-stop
@@ -3823,10 +3892,11 @@ export const makeTempDir: (options?: TempOptions) => Promise<string> = async (
 ): Promise<string> => {
   try {
     const opts = options ?? {};
+    __assertEphemeralAllowed('makeTempDir', opts);
 
     if (isDeno) {
       return await Deno.makeTempDir(opts);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeOs, 'node:os', 'makeTempDir');
       // deno-coverage-ignore-stop
@@ -3875,10 +3945,11 @@ export const makeTempDirSync: (options?: TempOptions) => string = (
 ): string => {
   try {
     const opts = options ?? {};
+    __assertEphemeralAllowed('makeTempDirSync', opts);
 
     if (isDeno) {
       return Deno.makeTempDirSync(opts);
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeOs, 'node:os', 'makeTempDirSync');
       // deno-coverage-ignore-stop

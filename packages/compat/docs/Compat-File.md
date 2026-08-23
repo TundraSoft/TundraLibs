@@ -37,17 +37,70 @@ The File module provides a unified interface for file system operations across D
 
 ### Features
 
-| Feature                | Bun | Deno | Node.js |
-| ---------------------- | --- | ---- | ------- |
-| Read files             | ✅  | ✅   | ✅      |
-| Write files            | ✅  | ✅   | ✅      |
-| Low-level file handles | ✅  | ✅   | ✅      |
-| Path checks            | ✅  | ✅   | ✅      |
-| File stats             | ✅  | ✅   | ✅      |
-| JSON operations        | ✅  | ✅   | ✅      |
-| Directory ops          | ✅  | ✅   | ✅      |
-| Directory filtering    | ✅  | ✅   | ✅      |
-| Remove files/dirs      | ✅  | ✅   | ✅      |
+| Feature                | Bun | Deno | Node.js | Workers |
+| ---------------------- | --- | ---- | ------- | ------- |
+| Read files             | ✅  | ✅   | ✅      | ✅†     |
+| Write files            | ✅  | ✅   | ✅      | ✅†     |
+| Low-level file handles | ✅  | ✅   | ✅      | ❌      |
+| Path checks            | ✅  | ✅   | ✅      | ✅†‡    |
+| File stats             | ✅  | ✅   | ✅      | ✅†     |
+| JSON operations        | ✅  | ✅   | ✅      | ❌      |
+| Directory ops          | ✅  | ✅   | ✅      | ❌      |
+| Directory filtering    | ✅  | ✅   | ✅      | ❌      |
+| Remove files/dirs      | ✅  | ✅   | ✅      | ✅†§    |
+| Temp file/dir creation | ✅  | ✅   | ✅      | opt-in  |
+
+†Under `/tmp` only — see
+[Cloudflare Workers](#cloudflare-workers) below.\
+‡`pathExists` / `pathExistsSync` only; `isFile` / `isDirectory` still
+throw.\
+§`deleteFile` / `deleteFileSync` only; `remove` and the directory
+removers still throw.
+
+### Cloudflare Workers
+
+Under `nodejs_compat`, workerd resolves `node:fs` and the path-based
+operations run on it — but **only under `/tmp`**. Every other location is
+refused by the platform itself (`operation not permitted` for a relative
+path, `no such file or directory` for `/var/...`), so the path you pass
+is the boundary and compat adds no guard of its own.
+
+Workerd's `/tmp` is in-memory and **does not survive the request that
+created it** — a file written in one request is already gone in the next.
+Stage, read back and relay within a single request; never treat it as
+storage.
+
+Available on Workers:
+
+- `readFile`, `readFileSync`, `readTextFile`, `readTextFileSync`,
+  `readFileStream`
+- `writeFile`, `writeFileSync`, `writeTextFile`, `writeTextFileSync`
+- `stat`, `statSync`, `pathExists`, `pathExistsSync`
+- `deleteFile`, `deleteFileSync`
+
+`makeTempFile`, `makeTempFileSync`, `makeTempDir` and `makeTempDirSync`
+choose the location themselves, so the ephemerality would be invisible at
+the call site. They keep throwing `UnsupportedRuntimeError` on Workers
+unless you pass `allowEphemeral: true`:
+
+```ts
+import {
+  deleteFile,
+  makeTempFile,
+  readFile,
+  writeFile,
+} from '@tundralibs/compat/file';
+
+// Stage an upload, read it back, relay it, clean up — all in one request.
+const scratch = await makeTempFile({ allowEphemeral: true, suffix: '.bin' });
+await writeFile(scratch, new Uint8Array([1, 2, 3]));
+const staged = await readFile(scratch);
+await deleteFile(scratch);
+```
+
+Everything else — directory operations, `copyFile` / `moveFile` /
+`renameFile`, `ensureFile`, `realPath`, `remove`, the JSON helpers and the
+`openFile` handle API — still throws `UnsupportedRuntimeError`.
 
 ## Installation
 
