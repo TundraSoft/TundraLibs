@@ -102,7 +102,9 @@ Exactly the demo's semantics, which it proved correct under an XSS payload:
 
 - `` html`…${v}…` `` escapes **every** interpolated value (`& < > " '`);
   nested `Html` composes without double-escaping; arrays join with `''`;
-  `null` / `undefined` / `false` render as `''` (so `${cond && html\`…\`}`works); everything else goes through`String()` then escaping.
+  `null` / `undefined` / `false` render as `''` (so a conditional
+  interpolation of the form `cond && html…` works); everything else goes
+  through `String()` then escaping.
 - `raw(string)` is the **only** opt-out and therefore the single audit point
   for unsafe markup. It exists for markup you already trust (a sanitized rich-
   text field). It is never used internally by the representer.
