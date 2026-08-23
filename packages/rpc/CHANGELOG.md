@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.5...rpc-v1.2.0) (2026-08-23)
+
+
+### Features
+
+* **rpc:** support Cloudflare Workers via WebSocketServer.handleUpgrade ([#539](https://github.com/TundraSoft/TundraLibs/issues/539)) ([a894a58](https://github.com/TundraSoft/TundraLibs/commit/a894a58ce0b058739c0a5e02a8b04f154cab5624))
+
 ## [1.1.5](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.4...rpc-v1.1.5) (2026-08-21)
 
 
