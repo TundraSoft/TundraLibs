@@ -29,10 +29,14 @@ For socket-less edge/serverless runtimes (Vercel Edge and the browser),
 sockets. Two edge runtimes aren't actually socket-less: Deno Deploy runs the
 real Deno runtime, so every TCP engine (`PostgresEngine`, `MariaEngine`,
 `RedisEngine`, `MemcachedEngine`) connects there natively via `Deno.connect`;
-Cloudflare Workers connects the same engines through `@tundralibs/compat`'s
-`net` module running on `cloudflare:sockets` — no `nodejs_compat` flag needed.
-See the [compatibility matrix](docs/Drivers-Compatibility.md) for how every
-engine compares on transport, edge-safety, and capabilities.
+Cloudflare Workers connects `PostgresEngine`, `RedisEngine` and
+`MemcachedEngine` through `@tundralibs/compat`'s `net` module running on
+`cloudflare:sockets` — no `nodejs_compat` flag needed. `MariaEngine` also
+connects on Workers, but by a different path: it wraps the third-party
+`mariadb` driver directly (not `compat/net`), so it needs Wrangler's
+`nodejs_compat` flag to shim `node:net` underneath it. See the
+[compatibility matrix](docs/Drivers-Compatibility.md) for how every engine
+compares on transport, edge-safety, and capabilities.
 
 ## Modules
 
