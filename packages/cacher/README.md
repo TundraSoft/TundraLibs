@@ -16,13 +16,14 @@ The Cacher package provides a unified caching abstraction that works with multip
 
 The `MEMORY` engine is process-local and works on every runtime — Deno,
 Bun, Node, Cloudflare Workers and the browser. The `REDIS` and
-`MEMCACHED` engines need a reachable TCP target: that works on **Workers**
-(their sockets go through `@tundralibs/drivers`, which uses
-`cloudflare:sockets` under `nodejs_compat` — the target must be reachable
-under Cloudflare's outbound policy) but **not in a plain browser**, which
-has no raw TCP.
+`MEMCACHED` engines need a reachable TCP target, dialed through
+`@tundralibs/drivers`' `RedisEngine`/`MemcachedEngine`, which connect via
+`@tundralibs/compat/net`'s `connect()`. On **Workers** that now runs on
+real TCP through `cloudflare:sockets` — no `nodejs_compat` flag needed —
+so both engines work there. In a plain **browser** they still don't:
+a browser has no raw TCP at all, `cloudflare:sockets` included.
 
-`RedisCacher`/`MemCacher` statically import their `@tundralibs/drivers`
+`RedisCacher`/`MemCacher` statically import those `@tundralibs/drivers`
 engines at module top level, so importing `@tundralibs/cacher` never
 throws or fails to bundle anywhere — the driver classes load fine; it is
 only the socket that a target lacks. The connection is deferred to

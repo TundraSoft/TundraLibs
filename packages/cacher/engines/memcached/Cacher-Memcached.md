@@ -9,10 +9,10 @@ Memcached-backed distributed cache engine.
 ![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 > **Runtime note:** `MemCacher` needs a reachable TCP target. That works
-> on Cloudflare Workers (sockets go through `cloudflare:sockets` under
-> `nodejs_compat`, when the target is reachable under Cloudflare's outbound
-> policy) but not in a plain browser, which has no raw TCP. The class
-> imports fine everywhere — only `connect()` requires the socket.
+> on Cloudflare Workers — real TCP via `@tundralibs/compat/net`'s
+> `cloudflare:sockets` backend, no `nodejs_compat` flag needed — but not in
+> a plain browser, which has no raw TCP. The class imports fine everywhere —
+> only `connect()` requires the socket.
 
 ## Overview
 
