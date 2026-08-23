@@ -91,6 +91,7 @@ import {
 import { UnsupportedRuntimeError } from '../Error.ts';
 import { assertBuiltin } from '../_guards.ts';
 import { type ResolvedUpgrade, resolveUpgrade } from './_resolveUpgrade.ts';
+import { nodeLightRequest } from './_lightRequest.ts';
 import { hasPermissionSync } from '../permissions.ts';
 // Local aliases for runtime-only types — see _runtime-globals.ts. Using
 // `any` decouples us from Deno's lib types (no clash on the consumer
@@ -2624,7 +2625,7 @@ export class WebServer<T = unknown> {
         headers.push([key, value]);
       }
     }
-    let body: BodyInit | null | undefined = undefined;
+    let body: ReadableStream<Uint8Array> | null = null;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       body = new ReadableStream({
         start(controller) {
@@ -2634,13 +2635,12 @@ export class WebServer<T = unknown> {
         },
       });
     }
-    return new Request(url, {
-      method: req.method || 'GET',
-      headers,
-      body,
-      // @ts-expect-error - duplex required for streaming request bodies
-      duplex: 'half',
-    });
+    // A LIGHTWEIGHT Request: method/url/headers/body are cheap own state; a real
+    // `Request` (undici's ~1.8µs constructor) is built only if a handler touches
+    // a heavy member. Full fidelity — `instanceof Request` holds. Measured
+    // +4.3% Node throughput (paired A/B); see _lightRequest.ts and
+    // bench/OPTIMIZATION-NOTES.md.
+    return nodeLightRequest(req.method || 'GET', url, headers, body);
   }
 
   /**

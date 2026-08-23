@@ -27,6 +27,7 @@ The `@tundralibs/compat` package provides unified APIs that work consistently ac
 | [Test](docs/Compat-Test.md)                      | Testing utilities                                                  | [Docs](docs/Compat-Test.md)                |
 | [Bench](docs/Compat-Bench.md)                    | Cross-runtime micro-benchmark harness                              | [Docs](docs/Compat-Bench.md)               |
 | [Fetch](docs/Compat-Fetch.md)                    | HTTP client utilities                                              | [Docs](docs/Compat-Fetch.md)               |
+| [Http](docs/Compat-Http.md)                      | Methods/status/text, negotiation, ranges, cookies, content-type    | [Docs](docs/Compat-Http.md)                |
 
 ## Browser / Cloudflare Workers support
 

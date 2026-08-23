@@ -238,3 +238,59 @@ micro-benches can't see: the `options.handler` megamorphic call site,
 IC pollution from the adapter indirection, and Deno.serve-internal
 fast paths a wrapping closure may defeat. Flagged as the stopping
 point for black-box measurement on this machine.
+
+## ROUND 3 — the lightweight inbound Request (the undici-constructor lever)
+
+Rounds 1-2 concluded the remaining Node gap was undici's `Request`/`Response`
+CONSTRUCTORS (~3.5µs combined) and named the one lever left: a
+hono/node-server-style "lightweight Request." Round 3 built it — for the
+INBOUND (`Request`) half, which is the part compat owns. (The outbound
+`Response` half is the caller's — rapid's `serializeResponse` — and the
+internal-slot shortcut stays blocked on Node 26+ `#private` fields.)
+
+`_lightRequest.ts` — `nodeLightRequest(method, url, headerPairs, body)` returns
+a `Request`-shaped object: `method`/`url`/`headers`/`body` are cheap own state,
+and a real `Request` is materialized ONCE, lazily, only if a handler touches a
+heavy member (`text`/`json`/`arrayBuffer`/`blob`/`bytes`/`formData`/`clone` or a
+rarely-read Fetch field). `Object.setPrototypeOf(proto, Request.prototype)`
+keeps `instanceof Request` true and the full standard surface present. The URL
+is parsed EAGERLY in the constructor — a malformed Host must still throw there
+so the Node handler's catch answers `400` before dispatch (as the eager
+`new Request` did), and `.url` stays undici-identical. Justified by the measured
+consumer surface: across the whole monorepo, handlers read only
+`method`/`url`/`headers`/`body` (rapid's `parseBody` drains `request.body`
+itself, never `request.text()`/`.formData()`), and nothing does
+`instanceof Request` — so the real `Request` is, in practice, never built.
+
+**Isolated micro-bench (Node 26, this machine)** — construct + read
+`method`/`url`/`headers.get()` (what rapid does per request):
+
+| inbound build           | ns/op |
+| ----------------------- | ----: |
+| `new Request(...)`      | 1,851 |
+| `nodeLightRequest(...)` | 1,435 |
+
+= **−416 ns/request, ~22.5% off the inbound translation** (deterministic).
+
+**Paired A/B throughput (the authoritative measure)** — the SAME binary
+serving the light path vs the old `new Request` path (temporary `LR_OFF` env
+toggle, since removed) on two ports SIMULTANEOUSLY, a 50-connection keep-alive
+loader alternating 8 rounds × 4s per server (`GET /users/:id`), req/s:
+
+| round   | new (LightRequest) | old (`new Request`) |     delta |
+| ------- | -----------------: | ------------------: | --------: |
+| 1       |             47,883 |              44,788 |     +6.9% |
+| 2       |             47,807 |              45,261 |     +5.6% |
+| 3       |             47,803 |              46,036 |     +3.8% |
+| 4       |             45,488 |              45,444 |     +0.1% |
+| 5       |             47,143 |              43,515 |     +8.3% |
+| 6       |             45,269 |              44,095 |     +2.7% |
+| 7       |             45,793 |              44,784 |     +2.3% |
+| 8       |             43,135 |              41,204 |     +4.7% |
+| **AVG** |         **46,290** |          **44,391** | **+4.3%** |
+
+The light path won EVERY round (never negative) — signal, not scatter. **~+4.3%
+Node throughput**, on top of rounds 1-2. Deno/Bun are untouched (they hand the
+runtime's native `Request` straight through and never reach this). Correctness:
+full compat suite green on Node (886 tests, 868 pass, 18 runtime-skipped),
+including the malformed-Host `400` and the WebServer body/header/stream paths.

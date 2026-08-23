@@ -693,6 +693,18 @@ server.on('onResponse', [
   dependency of `@tundralibs/compat`), loaded lazily on `start()` so
   importing the module never pulls it in
 - All TCP options supported
+- Node's HTTP server hands the handler an `IncomingMessage`, not a Fetch
+  `Request`, so `WebServer` passes a lightweight `Request`-shaped view
+  instead of building one eagerly (a measurable throughput win — see
+  [`bench/OPTIMIZATION-NOTES.md`](bench/OPTIMIZATION-NOTES.md)). It is a
+  faithful `Request`: `instanceof Request` holds and every member
+  (`method`/`url`/`headers`/`body`, `text()`/`json()`/`arrayBuffer()`/
+  `formData()`/`clone()`, `signal`, …) behaves identically. The one
+  edge: `bodyUsed` only flips `true` once a body-**read** method is
+  called — reading the raw `body` stream directly does not update it.
+  Consume the body through one path (a read method **or** the stream,
+  not both, and once), as Fetch already requires, and this never
+  surfaces.
 
 ### Cloudflare Workers, browsers, and other runtimes
 

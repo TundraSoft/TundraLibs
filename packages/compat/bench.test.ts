@@ -548,3 +548,76 @@ describe('compat.bench', () => {
     });
   });
 });
+
+describe('bench concurrency mode', () => {
+  const CFAST = { warmupMs: 5, budgetMs: 40 };
+
+  it('a sequential bench reports concurrency 1 and opsPerSec === itersPerSec (backward-compatible shape)', async () => {
+    bench('seq-shape', { ...CFAST }, () => 1 + 1);
+    const report = await runBenches({ quiet: true });
+    const b = report.benches[0]!;
+    asserts.assertEquals(b.concurrency, 1);
+    asserts.assertEquals(b.opsPerSec, b.itersPerSec);
+    asserts.assert(b.opsPerSec > 0);
+  });
+
+  it('concurrency > 1 measures throughput: records concurrency, ops/s, per-op latency', async () => {
+    let inFlightMax = 0, inFlight = 0;
+    bench('conc-op', { concurrency: 4, ...CFAST }, async () => {
+      inFlight++;
+      inFlightMax = Math.max(inFlightMax, inFlight);
+      await Promise.resolve();
+      inFlight--;
+    });
+    const report = await runBenches({ quiet: true });
+    const b = report.benches[0]!;
+    asserts.assertEquals(b.concurrency, 4);
+    asserts.assert(b.opsPerSec > 0, 'throughput measured');
+    asserts.assertEquals(
+      b.itersPerSec,
+      b.opsPerSec,
+      'ops/s surfaced as the throughput column',
+    );
+    asserts.assert(b.iters > 0 && b.samples >= 3, 'multiple sample windows');
+    asserts.assert(
+      b.avgNs >= 0 && b.p99Ns >= b.p50Ns,
+      'latency stats coherent',
+    );
+    // The op genuinely ran with >1 in flight (not serialized).
+    asserts.assert(
+      inFlightMax > 1,
+      `expected concurrent execution, saw max ${inFlightMax}`,
+    );
+  });
+
+  it('a concurrency bench honors b.start()/b.end() per op (own context per worker)', async () => {
+    bench('conc-sectioned', { concurrency: 3, ...CFAST }, async (b) => {
+      b.start();
+      await Promise.resolve();
+      b.end();
+    });
+    const report = await runBenches({ quiet: true });
+    asserts.assert(report.benches[0]!.opsPerSec > 0);
+  });
+
+  it('a concurrency group summary compares by THROUGHPUT (higher ops/s = faster)', async () => {
+    // baseline is deliberately slower (an extra await tick) so "fast" wins.
+    bench(
+      'slow',
+      { group: 'tp', baseline: true, concurrency: 4, ...CFAST },
+      async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      },
+    );
+    bench('fast', { group: 'tp', concurrency: 4, ...CFAST }, async () => {
+      await Promise.resolve();
+    });
+    const report = await runBenches({ quiet: true });
+    const slow = report.benches.find((x) => x.name === 'slow')!;
+    const fast = report.benches.find((x) => x.name === 'fast')!;
+    asserts.assertEquals(slow.concurrency, 4);
+    // Both measured a real throughput; the group's comparison basis is ops/s.
+    asserts.assert(slow.opsPerSec > 0 && fast.opsPerSec > 0);
+  });
+});

@@ -100,3 +100,29 @@ Response-side internal shortcut is blocked on Node 26+ (undici's true
 Deno/Bun untouched — Bun stays at native parity, Deno keeps its ~8%
 `_processRequest`-bookkeeping overhead (a separate, still-open target;
 see the paired table at the top).
+
+## Current standing (2026-08-23) — throughput bench + lightweight Request
+
+`WebServer.bench.ts` now measures both views via the harness's `concurrency`
+mode (a compat/bench feature): `[latency]` (single connection) AND
+`[throughput]` (50 concurrent; 30 on Bun — its fetch caps self-connections;
+`WS_BENCH_CONC` overrides). Throughput is the honest server metric — the Node
+gap is visibly wider under load than at single-connection latency, which the
+old latency-only bench under-represented. Caveat: the harness runs benches
+sequentially, so native vs WebServer here is back-to-back, not simultaneous —
+for the drift-free A/B see Round 3 in OPTIMIZATION-NOTES.md.
+
+WebServer-vs-native, WITH the lightweight inbound Request (Round 3), `GET
+/users/:id`, this machine:
+
+| Runtime | latency (single conn) | throughput (concurrent) |
+| ------- | --------------------: | ----------------------: |
+| Deno    |           ~1.01-1.03x |           ~1.04x (c=50) |
+| Bun     |                ~1.03x |      ~1.07-1.08x (c=30) |
+| Node    |           ~1.04-1.11x |      ~1.14-1.16x (c=50) |
+
+Node's residual (~14-16% under load) is now the undici **Response**-constructor
+half + `_processRequest` bookkeeping — the inbound `Request` half was cut ~22%
+by the lightweight Request (Round 3: +4.3% Node throughput in the paired A/B).
+Bun/Deno were never translation-bound; their small gaps are the universal
+bookkeeping (Deno's ~8% throughput-records gap is the open profiler target).

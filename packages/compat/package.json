@@ -26,6 +26,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@std/media-types": "npm:@jsr/std__media-types@^1.0.0",
     "@std/path": "npm:@jsr/std__path@^1.0.0",
     "ws": "^8.21.0"
   },

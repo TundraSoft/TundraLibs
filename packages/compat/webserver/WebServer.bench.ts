@@ -8,9 +8,17 @@
  * One file, all three lanes: the native side is `Deno.serve`,
  * `Bun.serve`, or `node:http` depending on where the file runs, so the
  * within-lane native-vs-WebServer ratio is the comparable number.
- * Single-connection round trips are NOT a load test — for concurrency
- * throughput history (autocannon, 50 connections) see
- * `bench/RESULTS.md` next to this file.
+ *
+ * TWO views per route: the plain benches are single-connection round
+ * trips (per-request latency); the `[throughput]` benches use the
+ * harness's `concurrency` mode (50 in flight; 30 on Bun, whose fetch
+ * caps self-connections — `WS_BENCH_CONC` overrides) to measure ops/s
+ * under load — the metric that actually matters for a server, and where
+ * the translation/bookkeeping overhead shows (Node's gap is visibly
+ * wider under load than at single-connection latency). Caveat: the
+ * harness runs benches sequentially, so native and WebServer throughput
+ * are measured back-to-back, not simultaneously — a small cross-bench
+ * drift the fully-paired A/B in `bench/OPTIMIZATION-NOTES.md` avoids.
  *
  * @module
  */
@@ -156,3 +164,55 @@ bench('WebServer GET /users/:id', { group: 'GET /users/:id' }, async (b) => {
   b.end();
   return status;
 });
+
+// ── throughput (concurrent) — the metric that matters for a server ──
+// Client and server share this process, so the ceiling is the runtime's own
+// SELF-connection limit, not the server's: Bun's fetch refuses connections
+// past ~40 concurrent self-requests, so it defaults lower. The meaningful
+// number is the WITHIN-runtime native-vs-WebServer ratio (comparable at any
+// fixed concurrency); override with WS_BENCH_CONC to push a lane higher.
+const envConc = globalThis as {
+  Deno?: { env: { get(k: string): string | undefined } };
+  process?: { env: Record<string, string | undefined> };
+};
+const CONC = Number(
+  envConc.Deno?.env.get('WS_BENCH_CONC') ??
+    envConc.process?.env?.WS_BENCH_CONC ??
+    (RUNTIME === 'BUN' ? '30' : '50'),
+) || (RUNTIME === 'BUN' ? 30 : 50);
+
+bench(
+  'native GET / [throughput]',
+  { group: 'tp GET /', baseline: true, concurrency: CONC },
+  async () => {
+    await ensureServers();
+    return roundTrip(NATIVE_PORT, '/');
+  },
+);
+
+bench(
+  'WebServer GET / [throughput]',
+  { group: 'tp GET /', concurrency: CONC },
+  async () => {
+    await ensureServers();
+    return roundTrip(COMPAT_PORT, '/');
+  },
+);
+
+bench(
+  'native GET /users/:id [throughput]',
+  { group: 'tp GET /users/:id', baseline: true, concurrency: CONC },
+  async () => {
+    await ensureServers();
+    return roundTrip(NATIVE_PORT, '/users/42');
+  },
+);
+
+bench(
+  'WebServer GET /users/:id [throughput]',
+  { group: 'tp GET /users/:id', concurrency: CONC },
+  async () => {
+    await ensureServers();
+    return roundTrip(COMPAT_PORT, '/users/42');
+  },
+);
