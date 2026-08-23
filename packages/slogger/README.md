@@ -65,15 +65,16 @@ honest per-call cost breakdown.
 and is not a browser/worker-first runtime, so there's no blanket
 badge — but the handler-level split is sharper than "server-only":
 `FileHandler` genuinely needs a real filesystem and won't work in a
-browser (on Workers a `/tmp` path writes to an ephemeral in-memory
-filesystem instead — records are lost when the isolate recycles, and
-the handler warns). `TCPHandler` and `SyslogHandler`'s TCP transport
-dial out through `@tundralibs/compat/net`, which connects on
-Cloudflare Workers via `cloudflare:sockets` (needs the `nodejs_compat`
-flag) but still has nothing to dial from a browser.
-`SyslogHandler`'s UDP transport (no datagram sockets on Workers) and
-UNIX-socket transport (workerd's `connect()` dials TCP only) stay
-host-runtime-only everywhere else. `ConsoleHandler`, `MemoryHandler`,
+browser. On Workers it does work — reads/writes land in workerd's
+`/tmp` — but a record is gone by the very next request, not merely
+when the isolate eventually recycles; the handler detects this at
+open and warns once per instance. `TCPHandler` and `SyslogHandler`'s
+TCP transport dial out through `@tundralibs/compat/net`, which
+connects directly on Cloudflare Workers via `cloudflare:sockets` — no
+`nodejs_compat` flag needed — but still has nothing to dial from a
+browser. `SyslogHandler`'s UDP transport (no datagram sockets on
+Workers) and UNIX-socket transport (workerd's `connect()` dials TCP
+only) stay host-runtime-only everywhere else. `ConsoleHandler`, `MemoryHandler`,
 `BlackholeHandler`, and `StreamHandler` (any web-standard
 `WritableStream` — compose it with `CompressionStream`, a browser's
 own stdout-equivalent, or an in-memory sink) have no such dependency

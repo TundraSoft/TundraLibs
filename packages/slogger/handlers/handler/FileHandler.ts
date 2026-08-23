@@ -94,7 +94,9 @@ function defaultStatfs(): StatfsSync | undefined {
  * Whether `filePath` sits on a filesystem that claims no capacity at
  * all — `statfs` reporting `blocks === 0 && bsize === 0`. No real
  * filesystem describes itself that way; workerd's in-memory one does,
- * and writes to it are discarded when the isolate recycles. The check
+ * and writes to it are discarded by the end of the request that made
+ * them — gone before the next request even starts, not just eventually
+ * at isolate recycle. The check
  * is a property claim rather than a runtime brand, so it stays true for
  * any future ephemeral runtime.
  *
@@ -162,10 +164,12 @@ export type FileHandlerOptions = HandlerOptions & {
  *
  * A successful write does not imply the record was persisted: on
  * Cloudflare Workers only `/tmp` is writable and it is an in-memory
- * filesystem, so writes succeed and even read back, then vanish when
- * the isolate recycles. The handler probes for that at open and reports
- * it once per instance via `console.error`; reach for
- * {@link MemoryHandler} when in-process buffering is what you want.
+ * filesystem, so writes succeed and even read back, then vanish by the
+ * next request — not merely whenever the isolate eventually recycles;
+ * workerd's own guarantee on `/tmp` is per-request. The handler probes
+ * for that at open and reports it once per instance via `console.error`;
+ * reach for {@link MemoryHandler} when in-process buffering is what you
+ * want.
  */
 export class FileHandler extends AbstractHandler {
   /** Runtime discriminator for this handler kind. */
@@ -399,10 +403,11 @@ export class FileHandler extends AbstractHandler {
     console.error(
       `[slogger] FileHandler '${this.name}': the filesystem holding ` +
         `'${this._logFile}' reports zero capacity, so it persists nothing. ` +
-        `Writes will succeed, but every record is discarded when the ` +
-        `process or isolate recycles (a Cloudflare Workers '/tmp' path ` +
-        `behaves this way). Use MemoryHandler if in-process buffering is ` +
-        `what you want, or point 'directory' at a real filesystem.`,
+        `Writes will succeed, but every record is gone by the very next ` +
+        `request (a Cloudflare Workers '/tmp' path behaves this way — ` +
+        `not just eventually, on isolate recycle). Use MemoryHandler if ` +
+        `in-process buffering is what you want, or point 'directory' at ` +
+        `a real filesystem.`,
     );
   }
 

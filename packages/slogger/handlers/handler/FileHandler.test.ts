@@ -751,8 +751,9 @@ describe({
 });
 
 // Issue #280: on workerd a `/tmp` log file accepts writes, reads back,
-// and reports a non-zero size — then loses everything when the isolate
-// recycles. `statfs` is the one honest signal: it reports
+// and reports a non-zero size — then loses everything by the next
+// request (workerd's own guarantee for `/tmp` is per-request, not
+// per-isolate). `statfs` is the one honest signal: it reports
 // `blocks: 0, bsize: 0` there, and non-zero on every real filesystem.
 describe({
   name: 'slogger.handlers.fileHandler - ephemeral filesystem',
