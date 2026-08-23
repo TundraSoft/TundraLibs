@@ -43,6 +43,10 @@ const sidFrom = (res: Response): string | undefined =>
   res.headers.get('set-cookie')?.match(/sid=([^;]+)/)?.[1];
 
 describe('rapid session()', () => {
+  it('is callable with no arguments (the documented app.use(session()) form)', () => {
+    asserts.assertEquals(typeof session(), 'function');
+  });
+
   it('persists data across requests via the signed cookie', async () => {
     const app = await makeApp();
     const r1 = await app.fetch(

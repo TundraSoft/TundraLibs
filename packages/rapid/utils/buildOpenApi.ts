@@ -49,6 +49,10 @@ const errorResponse = (description: string) => ({
   content: { 'application/json': { schema: errorRef } },
 });
 
+/** Order versions so `v2` precedes `v10` (lexicographic would invert them). */
+const byNaturalVersion = (a: string, b: string): number =>
+  a.localeCompare(b, undefined, { numeric: true });
+
 /**
  * Build the OpenAPI document. When `version` is given, only routes of that
  * version (or unversioned) are included — header-versioned routes sharing
@@ -67,8 +71,9 @@ export function buildOpenApi(
 ): Record<string, unknown> {
   const paths: Record<string, Record<string, unknown>> = {};
   // Top-level aggregates, in first-seen route order.
-  const tagDocs = new Map<string, string | undefined>(); // module tag → description
-  const groups = new Map<string, Set<string>>(); // namespace → module tags
+  const allTags = new Set<string>(); // every operation tag → the tags[] catalog
+  const tagDocs = new Map<string, string>(); // a module's name tag → its description
+  const groups = new Map<string, Set<string>>(); // namespace → its operation tags
   const versions = new Set<string>();
   let secured = false;
 
@@ -100,22 +105,33 @@ export function buildOpenApi(
       }
     }
 
-    // The body: documented by a schema OBJECT bound via `payload(Schema)`;
-    // a bare validator function still marks that a body exists.
+    // The body is documented by a schema OBJECT bound via `payload(Schema)`;
+    // a bare validator function still marks that a body exists. Both body and
+    // response accept an OpenAPI OR a JSON-Schema emitter (the same fallback).
     const body = (meta?.binds ?? []).find((b) => b.source === 'payload');
-    const bodySchema = body?.schema?.toOpenAPI?.() ??
-      body?.schema?.toJSONSchema?.() ?? { type: 'object' };
-    const responseSchema = meta?.response?.toOpenAPI?.() ?? { type: 'object' };
+    const responseSchema = meta?.response?.toOpenAPI?.() ??
+      meta?.response?.toJSONSchema?.() ?? { type: 'object' };
 
-    if (meta?.module?.name !== undefined) {
+    // Aggregate the ACTUAL operation tags (module default + route extras), not
+    // just the module name — so every tag reaches the top-level catalog and a
+    // namespace group. Redoc/Scalar HIDE any tag absent from both once
+    // `x-tagGroups` exists, which is why keying by name alone dropped custom
+    // `@Module({tags})` / `@GET({tags})`.
+    const opTags = meta?.tags ?? [];
+    for (const t of opTags) allTags.add(t);
+    if (meta?.module !== undefined) {
       const { name, namespace, description } = meta.module;
-      if (!tagDocs.has(name) || description !== undefined) {
-        tagDocs.set(name, description ?? tagDocs.get(name));
+      // A module's description annotates its NAME tag, when that tag is in use
+      // (a module that opted out of the name tag via `tags: []` has none).
+      if (
+        description !== undefined && name !== undefined && opTags.includes(name)
+      ) {
+        tagDocs.set(name, description);
       }
       if (namespace !== undefined) {
-        (groups.get(namespace) ?? groups.set(namespace, new Set()).get(
-          namespace,
-        )!).add(name);
+        let set = groups.get(namespace);
+        if (set === undefined) groups.set(namespace, set = new Set());
+        for (const t of opTags) set.add(t);
       }
     }
     if (meta?.security !== undefined && meta.security.length > 0) {
@@ -144,7 +160,12 @@ export function buildOpenApi(
         ? {
           requestBody: {
             required: true,
-            content: { 'application/json': { schema: bodySchema } },
+            content: {
+              'application/json': {
+                schema: body.schema?.toOpenAPI?.() ??
+                  body.schema?.toJSONSchema?.() ?? { type: 'object' },
+              },
+            },
           },
         }
         : {}),
@@ -172,7 +193,7 @@ export function buildOpenApi(
   }));
   if (tagGroups.length > 0) {
     const grouped = new Set([...groups.values()].flatMap((s) => [...s]));
-    const ungrouped = [...tagDocs.keys()].filter((t) => !grouped.has(t));
+    const ungrouped = [...allTags].filter((t) => !grouped.has(t));
     if (ungrouped.length > 0) {
       tagGroups.push({ name: 'Other', tags: ungrouped });
     }
@@ -190,16 +211,18 @@ export function buildOpenApi(
     ...(options.servers !== undefined && options.servers.length > 0
       ? { servers: options.servers }
       : {}),
-    ...(tagDocs.size > 0
+    ...(allTags.size > 0
       ? {
-        tags: [...tagDocs].map(([name, description]) => ({
+        tags: [...allTags].map((name) => ({
           name,
-          ...(description !== undefined ? { description } : {}),
+          ...(tagDocs.has(name) ? { description: tagDocs.get(name) } : {}),
         })),
       }
       : {}),
     ...(tagGroups.length > 0 ? { 'x-tagGroups': tagGroups } : {}),
-    ...(versions.size > 0 ? { 'x-versions': [...versions].sort() } : {}),
+    ...(versions.size > 0
+      ? { 'x-versions': [...versions].sort(byNaturalVersion) }
+      : {}),
     paths,
     components: {
       schemas: {

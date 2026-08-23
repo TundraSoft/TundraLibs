@@ -113,6 +113,26 @@ describe('rapid.endpoints', () => {
     await app.stop();
   });
 
+  it('login(pact): the principal is MINIMAL by default ({ id }); a projection widens it', async () => {
+    // The strategy returns a fat record — the endpoint must NOT echo it whole.
+    const fat = { id: 'ada', passwordHash: 'secret!', roles: ['admin'] };
+    const pact = {
+      login: () => Promise.resolve({ principal: fat, token: 't' }),
+    };
+    const app = await make();
+    app.post('/login', login({ pact }));
+    app.post('/login-full', login({ pact, principal: (p) => p }));
+    const min = await (await app.fetch(
+      new Request('http://app/login', { method: 'POST' }),
+    )).json();
+    asserts.assertEquals(min.principal, { id: 'ada' }); // no hash/roles leaked
+    const full = await (await app.fetch(
+      new Request('http://app/login-full', { method: 'POST' }),
+    )).json();
+    asserts.assertEquals(full.principal.passwordHash, 'secret!'); // opt-in only
+    await app.stop();
+  });
+
   it('buildOpenApi assembles paths, converts params, refs the error envelope', () => {
     const doc = buildOpenApi([
       {

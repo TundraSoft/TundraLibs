@@ -7,7 +7,7 @@ import type {
   RapidContextState,
 } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { isStreamBody, pagingFromRecord, parsePaging } from '../utils/mod.ts';
+import { pagingFromRecord, parsePaging } from '../utils/mod.ts';
 
 /**
  * Is `value` a PLAIN object — an object literal or null-prototype bag,
@@ -159,35 +159,14 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
    *   after {@link respond}.
    */
   public override set response(response: RapidContextResponse | null) {
-    if (
-      response?.status !== undefined &&
-      response.status >= 300 && response.status < 400
-    ) {
-      throw new RapidError('RAPID_RESPONSE_INVALID', {
-        message: 'A 3xx status has no meaning on a socket frame',
-        debug: { command: this.command, status: response.status },
-      });
-    }
-    if (response !== null && isStreamBody(response.content)) {
-      throw new RapidError('RAPID_RESPONSE_INVALID', {
-        message: 'A stream body has no meaning on a socket frame (HTTP-only)',
-        debug: { command: this.command },
-      });
-    }
-    super.response = response;
-    if (response === null) {
-      this._status = 200;
-      return;
-    }
-    if (response.status !== undefined) this._status = response.status;
+    this._setEnvelopeResponse(response, 'a socket frame', {
+      command: this.command,
+    });
   }
 
   /** The interpreted response — `content` plus the ok/error `status` (no `headers`). */
   public override get response(): Readonly<RapidContextResponse> | null {
-    const base = super.response;
-    return base === null
-      ? null
-      : { content: base.content, status: this._status };
+    return this._envelopeResponse();
   }
 
   /** The outbound frame body plus the interpreted outcome. */

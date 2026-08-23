@@ -26,6 +26,10 @@ const tokenFrom = (res: Response): string | undefined =>
   res.headers.get('set-cookie')?.match(/csrf=([^;]+)/)?.[1];
 
 describe('rapid csrf()', () => {
+  it('is callable with no arguments (the documented app.use(csrf()) form)', () => {
+    asserts.assertEquals(typeof csrf(), 'function');
+  });
+
   it('issues a signed token cookie on a safe request', async () => {
     const app = await makeApp();
     const r = await app.fetch(new Request('http://app/form'));

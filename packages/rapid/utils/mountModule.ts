@@ -22,6 +22,7 @@ import {
   decorationsOf,
   moduleMetaOf,
 } from '../decorators/mod.ts';
+import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
 import { RapidModule } from '../modules/RapidModule.ts';
 import { getSession } from '../middlewares/session.ts';
 import { isStreamBody } from './streams.ts';
@@ -223,6 +224,12 @@ function buildInvoker<S extends RapidContextState>(
   instance: object,
   label: string,
 ): (ctx: RapidContext<S>) => Promise<RapidContextResponse> {
+  // No binds (e.g. `@GET('/health')`) → skip the per-request `binds.map` array
+  // AND the `Promise.all([])` microtask; call the method with no arguments.
+  if (binds.length === 0) {
+    return async (): Promise<RapidContextResponse> =>
+      assertModuleReply(await fn.apply(instance), label);
+  }
   return async (ctx: RapidContext<S>): Promise<RapidContextResponse> => {
     const args = await Promise.all(
       binds.map((binder) => extractBind<S>(binder, ctx)),
@@ -386,8 +393,41 @@ export function mountModule<S extends RapidContextState>(
     for (const name of names) {
       if (seen.has(name)) continue;
       const decorations = decorationsOf(level!, name);
-      if (decorations === undefined) continue; // @On/@Use only — not a mount
+      if (decorations === undefined) {
+        // A method carrying ONLY @Use/@On (no route/command/job). A
+        // RapidModule handles those through its runtime — skip quietly. A
+        // plain @Module class has NO invoke/event tier, so the guard or
+        // subscription would be silently inert: fail loud instead.
+        if (
+          !isModule &&
+          (middlewareOf(level!, name) !== undefined ||
+            onEventsOf(level!, name) !== undefined)
+        ) {
+          throw new RapidError('RAPID_CONFIG', {
+            message: `${ctorName}.${String(name)} has @Use/@On, but ` +
+              `${ctorName} is not a RapidModule — only a RapidModule runs the ` +
+              `invoke/event tier those decorators need, so here they would be ` +
+              `ignored silently. Extend RapidModule, or remove them.`,
+            details: { class: ctorName, method: String(name) },
+          });
+        }
+        continue;
+      }
       seen.add(name);
+      // A transport decoration + @Use on the SAME method: @Use runs ONLY on
+      // the in-process invoke() path — buildInvoker calls the method directly,
+      // so @Use would NOT guard an HTTP/SOCKET/JOB request. A guard that reads
+      // as protecting the route but silently doesn't is worse than none. Route
+      // guards belong in route-scoped middleware / guardHTTP.
+      if (middlewareOf(level!, name) !== undefined) {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `${ctorName}.${String(name)} stacks @Use on a route/` +
+            `command/job decorator — @Use only runs on invoke(), so it would ` +
+            `NOT guard real requests. Move the guard to route-scoped ` +
+            `middleware (e.g. guardHTTP(authorize(...))).`,
+          details: { class: ctorName, method: String(name) },
+        });
+      }
 
       // The function INSTALLED under this name at this level — a wrapping
       // decorator's replacement, if one was stacked — via the descriptor,

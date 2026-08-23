@@ -55,7 +55,7 @@ const verifyToken = async (token: string, secret: string): Promise<boolean> =>
  * // the client reads the `csrf` cookie and sends it back as `x-csrf-token`
  * ```
  */
-export function csrf(options: CsrfOptions): RapidMiddleware {
+export function csrf(options: CsrfOptions = {}): RapidMiddleware {
   const cookieName = options.cookie ?? 'csrf';
   const headerName = options.header ?? 'x-csrf-token';
   const fieldName = options.field ?? '_csrf';

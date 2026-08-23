@@ -50,10 +50,27 @@ describe('rapid.HTTPContext.serve / .html', () => {
     });
     const h = res.headers as Record<string, string>;
     asserts.assertEquals(h['content-type'], 'application/x-thing');
+    // ASCII `filename=` plus the RFC 5987 `filename*` (same value here).
     asserts.assertEquals(
       h['content-disposition'],
-      'attachment; filename="report.json"',
+      `attachment; filename="report.json"; filename*=UTF-8''report.json`,
     );
+  });
+
+  it('serve() download with a non-ASCII filename encodes it (does not 500)', async () => {
+    const res = await ctx().serve(`${dir}/data.json`, {
+      download: '文档.json',
+    });
+    const cd = (res.headers as Record<string, string>)['content-disposition'];
+    // ASCII fallback has no raw non-Latin-1 bytes (so Headers.set won't throw);
+    // filename* carries the real UTF-8 name.
+    asserts.assertStringIncludes(cd, `filename="__.json"`);
+    asserts.assertStringIncludes(
+      cd,
+      `filename*=UTF-8''${encodeURIComponent('文档.json')}`,
+    );
+    // Proof it survives the WHATWG Headers value validation.
+    new Headers({ 'content-disposition': cd });
   });
 
   it('serve() on a missing path throws RAPID_NOT_FOUND (→ 404)', async () => {

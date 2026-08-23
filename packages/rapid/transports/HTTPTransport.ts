@@ -326,6 +326,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     };
   }
 
+  /** Whether a websocket/rpc listener is mounted (channels + commands need it). */
+  public get hasSocketListener(): boolean {
+    return this.__rpc !== undefined;
+  }
+
   /** Declare a channel on the live rpc server (post-start app.channel()). */
   public declareChannel(name: string, opts: RapidChannelOptions): void {
     this.__rpc?.channel(name, this.__adaptChannel(opts));
@@ -479,20 +484,22 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // Finalization (respond + cleanup) runs as `_invoke`'s `finalize`
     // step — the SAME ambient scope as the onion, not a second one, so
     // its logs stay correlated without a second AsyncLocalStorage entry.
+    // Span attributes are read ONLY when a tracer is active — build them (and
+    // the parent context) only then, so the common no-tracer request allocates
+    // neither. The route TEMPLATE, never the raw (attacker-controlled) path,
+    // keeps `http.route` low-cardinality (OTel semconv; mirrors __identity).
+    const tracing = this._app.tracer !== undefined;
     return this._invoke(
       ctx,
       chain,
       dispatch,
-      this._app.tracer !== undefined ? extract(request.headers) : undefined,
-      {
-        'http.request.method': method,
-        // The route TEMPLATE when matched; a constant otherwise — never the
-        // raw (attacker-controlled) path, which would put unbounded-
-        // cardinality/attacker input into `http.route` (OTel semconv wants
-        // the template, low-cardinality when unmatched). Mirrors the span
-        // name + metric label collapse in Transport.__identity.
-        'http.route': entry !== undefined ? entry.path : '<unmatched>',
-      },
+      tracing ? extract(request.headers) : undefined,
+      tracing
+        ? {
+          'http.request.method': method,
+          'http.route': entry !== undefined ? entry.path : '<unmatched>',
+        }
+        : undefined,
       () => this.__finalize(ctx, requestIdHeader),
     );
   }
@@ -505,11 +512,57 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // request (no reply cookies, or only unsigned ones) gets `undefined`
     // back and finalizes fully synchronously; only a SIGNED reply cookie
     // (async HMAC) yields a promise, and only then do we go async.
-    const signing = ctx._applyReplyCookies();
+    //
+    // _applyReplyCookies() can THROW (an illegal reply-cookie name reaches
+    // serializeCookie) or REJECT (signed variant). finalize runs OUTSIDE the
+    // onion's disclose() try, so an unguarded throw here would escape as a raw
+    // 500 / unhandled rejection, bypassing the disclosure envelope every other
+    // response path gets — catch it and surface it through the same model.
+    let signing: void | Promise<void>;
+    try {
+      signing = ctx._applyReplyCookies();
+    } catch (error) {
+      return this.__errorResponse(ctx, error, requestIdHeader);
+    }
     if (signing !== undefined) {
-      return signing.then(() => this.__materialize(ctx, requestIdHeader));
+      return signing.then(
+        () => this.__materialize(ctx, requestIdHeader),
+        (error) => this.__errorResponse(ctx, error, requestIdHeader),
+      );
     }
     return this.__materialize(ctx, requestIdHeader);
+  }
+
+  /**
+   * Build the disclosure `Response` for a finalize-time failure (a reply-cookie
+   * apply or a respond()/serialization throw), through the same model the
+   * onion uses. Seeds from `ctx.responseHeaders` so headers already accumulated
+   * (a queued `Set-Cookie`, CORS/security headers) survive — the success path
+   * keeps them, so the error path must too.
+   */
+  private __errorResponse(
+    ctx: HTTPContext<S>,
+    error: unknown,
+    requestIdHeader: string,
+  ): Response {
+    const err = RapidError.from(error);
+    this._app.log.error('response finalization failed', {
+      requestId: ctx.requestId,
+      code: err.code,
+      stack: err.stack,
+    });
+    const payload = err.payload(this._app.mode);
+    const headers = ctx.responseHeaders;
+    headers.set('content-type', 'application/json');
+    headers.set(requestIdHeader, ctx.requestId);
+    return new Response(
+      JSON.stringify(
+        typeof payload === 'object' && payload !== null
+          ? { ...payload, requestId: ctx.requestId }
+          : { message: payload, requestId: ctx.requestId },
+      ),
+      { status: err.status, headers },
+    );
   }
 
   /** The respond() + cleanup half of finalize, sync-through (see above). */
@@ -521,46 +574,21 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     try {
       response = ctx.respond();
     } catch (error) {
-      // respond() itself failing (bad status, serialization) must NOT
-      // escape into the WebServer as a raw handler rejection — surface
-      // it through the same disclosure model as any other error.
-      const err = RapidError.from(error);
-      this._app.log.error('response materialization failed', {
-        requestId: ctx.requestId,
-        code: err.code,
-        stack: err.stack,
-      });
-      const payload = err.payload(this._app.mode);
-      response = new Response(
-        JSON.stringify(
-          typeof payload === 'object' && payload !== null
-            ? { ...payload, requestId: ctx.requestId }
-            : { message: payload, requestId: ctx.requestId },
-        ),
-        {
-          status: err.status,
-          headers: {
-            'content-type': 'application/json',
-            [requestIdHeader]: ctx.requestId,
-          },
-        },
-      );
+      // respond() itself failing (bad status, serialization) must NOT escape
+      // into the WebServer as a raw handler rejection — surface it through the
+      // same disclosure model, keeping the accumulated headers (see
+      // __errorResponse: a just-queued Set-Cookie must not vanish).
+      response = this.__errorResponse(ctx, error, requestIdHeader);
     }
-    // Cleanup runs AFTER the response is materialised (success or error),
-    // never blocking it. When there is nothing to clean — no body parse
-    // to settle, no upload temp files — skip the await entirely so a
-    // plain request finalizes fully synchronously.
-    if (!ctx.hasPendingCleanup) return response;
-    return ctx.cleanup().then(
-      () => response,
-      (error) => {
-        // Cleanup must never break a response — log and move on.
-        this._app.log.error('context cleanup failed', {
-          requestId: ctx.requestId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return response;
-      },
-    );
+    // Cleanup (settle a still-in-flight body parse, unlink upload temp files)
+    // runs AFTER the response — and must NOT delay it, as the client gains
+    // nothing from waiting on `unlink()`s. Nothing to clean → return
+    // synchronously; otherwise DETACH it (fire-and-forget; `detach` absorbs
+    // the rejection, and `cleanup()` logs its own per-file failures) so the
+    // response flushes immediately. Upload temp files live only on
+    // Deno/Bun/Node, where a background task settles fine, and `app.stop()`
+    // removes the owned upload dir regardless.
+    if (ctx.hasPendingCleanup) ctx.detach(ctx.cleanup());
+    return response;
   }
 }

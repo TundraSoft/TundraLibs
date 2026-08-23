@@ -295,6 +295,59 @@ describe('rapid.utils.buildOpenApi', () => {
     asserts.assertEquals(bare['x-tagGroups'], undefined);
   });
 
+  it('a CUSTOM tag that differs from the module name reaches the catalog and its namespace group (regression: was hidden)', () => {
+    const doc = buildOpenApi(
+      [{
+        method: 'GET',
+        path: '/u',
+        middlewares: [],
+        handler: () => ({}),
+        openapi: {
+          // Operation tag is NOT the module name — the case the old code dropped.
+          tags: ['User Management'],
+          module: {
+            name: 'Users',
+            namespace: 'api',
+            description: 'People',
+          },
+        },
+      }] as never,
+    );
+    // The custom tag is in the catalog and the `api` group — not the bare name.
+    asserts.assertEquals(doc.tags, [{ name: 'User Management' }]);
+    asserts.assertEquals(doc['x-tagGroups'], [{
+      name: 'api',
+      tags: ['User Management'],
+    }]);
+    // The module description has no name-tag in use, so it attaches to nothing
+    // rather than inventing an orphan 'Users' tag.
+    asserts.assert(
+      !(doc.tags as { name: string }[]).some((t) => t.name === 'Users'),
+    );
+  });
+
+  it('response schema honors toJSONSchema when toOpenAPI is absent (parity with the request body)', () => {
+    const doc = buildOpenApi(
+      [{
+        method: 'GET',
+        path: '/r',
+        middlewares: [],
+        handler: () => ({}),
+        openapi: { response: { toJSONSchema: () => ({ type: 'array' }) } },
+      }] as never,
+    );
+    const schema = (doc.paths as Record<
+      string,
+      Record<string, {
+        responses: Record<
+          string,
+          { content: { 'application/json': { schema: unknown } } }
+        >;
+      }>
+    >)['/r']!.get!.responses['200']!.content['application/json'].schema;
+    asserts.assertEquals(schema, { type: 'array' });
+  });
+
   it('x-versions lists EVERY declared version even when the document is filtered to one', () => {
     const doc = buildOpenApi(
       [
@@ -317,5 +370,18 @@ describe('rapid.utils.buildOpenApi', () => {
     );
     asserts.assert(!('/b' in (doc.paths as object)));
     asserts.assertEquals(doc['x-versions'], ['v1', 'v2']);
+  });
+
+  it('x-versions sorts naturally: v2 before v10 (not lexicographic)', () => {
+    const doc = buildOpenApi(
+      (['v10', 'v2', 'v1'] as const).map((v) => ({
+        method: 'GET',
+        path: `/${v}`,
+        middlewares: [],
+        handler: () => ({}),
+        version: v,
+      })) as never,
+    );
+    asserts.assertEquals(doc['x-versions'], ['v1', 'v2', 'v10']);
   });
 });

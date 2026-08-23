@@ -40,6 +40,10 @@ export type RapidRouteOpenApi = {
   module?: { name?: string; namespace?: string; description?: string };
   /** The route's binders — param/query/header/payload sources. */
   binds?: readonly RapidBinder[];
-  /** The declared response schema (from `@GET(..., { response })`). */
-  response?: { toOpenAPI?: () => unknown };
+  /**
+   * The declared response schema (from `@GET(..., { response })`) — either
+   * emitter is honored (`toOpenAPI` preferred, then `toJSONSchema`), matching
+   * the request-body path.
+   */
+  response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
 };

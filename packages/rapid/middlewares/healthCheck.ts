@@ -37,7 +37,12 @@ export function healthCheck(options: HealthCheckOptions = {}): RapidMiddleware {
   const check = options.check;
 
   const middleware: RapidMiddleware = async (ctx, next) => {
-    if (ctx.type !== 'HTTP' || ctx.method !== 'GET') return next();
+    // GET and HEAD — many liveness/readiness probes issue HEAD.
+    if (
+      ctx.type !== 'HTTP' || (ctx.method !== 'GET' && ctx.method !== 'HEAD')
+    ) {
+      return next();
+    }
     if (new URL(ctx.url).pathname !== path) return next();
 
     if (check === undefined) {

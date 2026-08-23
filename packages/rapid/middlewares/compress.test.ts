@@ -57,6 +57,32 @@ describe('rapid.middlewares.compress', () => {
     asserts.assertEquals((await r.json()).data, big);
   });
 
+  it('buffered path: a handler-set content-length does not survive onto the smaller gzip body', async () => {
+    // In-process fetch so the raw wire headers are observable (a real fetch
+    // would decode gzip and repair the length, hiding the bug).
+    const a = await Application.initialize({
+      name: 'cz',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    a.use(compress());
+    a.get('/x', () => ({
+      content: big,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'content-length': '999999', // the UNCOMPRESSED length the handler knew
+      },
+    }));
+    const res = await a.fetch(
+      new Request('http://app/x', { headers: { 'accept-encoding': 'gzip' } }),
+    );
+    asserts.assertEquals(res.headers.get('content-encoding'), 'gzip');
+    const actual = (await res.arrayBuffer()).byteLength;
+    // Reported length equals the ACTUAL compressed body — never the stale value.
+    asserts.assertEquals(res.headers.get('content-length'), String(actual));
+    asserts.assert(res.headers.get('content-length') !== '999999');
+  });
+
   it('skips a body under the threshold', async () => {
     const r = await fetch(`${base}/small`, {
       headers: { 'accept-encoding': 'gzip' },

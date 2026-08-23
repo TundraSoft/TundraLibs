@@ -53,6 +53,13 @@ describe('rapid.serveStatic (live)', () => {
     asserts.assertEquals(await r.text(), '<h1>Home</h1>');
   });
 
+  it('prefix matches on a path boundary: /sapp.css does NOT resolve under prefix /s', async () => {
+    // Old raw startsWith('/s') would serve pub/app.css for '/sapp.css'.
+    const r = await fetch(`${url}/sapp.css`);
+    await r.text();
+    asserts.assertEquals(r.status, 404);
+  });
+
   it('serves a nested file by extension type', async () => {
     const r = await fetch(`${url}/s/app.css`);
     asserts.assertEquals(r.status, 200);

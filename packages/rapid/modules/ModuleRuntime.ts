@@ -302,6 +302,37 @@ export class ModuleRuntime {
         const on = level === undefined
           ? undefined
           : onEventsOf(level, methodName);
+        // Override-without-re-decorate: this derived level OWNS the method
+        // (an override) yet declares no @Use/@On, while an ANCESTOR level
+        // does — the ancestor's guard/subscription would be silently dropped
+        // (the override runs unguarded, an @On handler vanishes). The route
+        // tier (mountModule) rejects the same shape; mirror it here.
+        if (middleware === undefined && on === undefined) {
+          for (
+            let anc: object | null = Object.getPrototypeOf(proto);
+            anc !== null && anc !== RapidModule.prototype &&
+            anc !== Object.prototype;
+            anc = Object.getPrototypeOf(anc)
+          ) {
+            const ancLevel = Object.getOwnPropertyDescriptor(anc, 'constructor')
+              ?.value as object | undefined;
+            if (ancLevel === undefined) continue;
+            if (
+              middlewareOf(ancLevel, methodName) !== undefined ||
+              onEventsOf(ancLevel, methodName) !== undefined
+            ) {
+              const declaredOn = (ancLevel as { name?: string }).name ??
+                '(anonymous)';
+              throw new RapidError('RAPID_CONFIG', {
+                message: `${ctorName}.${methodName} overrides a method with ` +
+                  `@Use/@On declared on ${declaredOn} without re-declaring ` +
+                  `them — the guard/subscription would be silently dropped. ` +
+                  `Re-apply the decorator(s) on the override, or remove it.`,
+                details: { module: ctorName, method: methodName },
+              });
+            }
+          }
+        }
         if (on !== undefined) {
           if (middleware !== undefined) {
             throw new RapidError('RAPID_CONFIG', {

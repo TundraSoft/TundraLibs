@@ -45,6 +45,7 @@ import {
   query,
   session,
   SOCKET,
+  Use,
 } from './decorators/mod.ts';
 import { event, type EventContext, RapidModule } from './modules/mod.ts';
 import { buildOpenApi } from './utils/mod.ts';
@@ -2952,14 +2953,17 @@ describe('rapid.Application', () => {
       // Duplicate tag deduped; explicit operationId wins.
       asserts.assertEquals(p['/users/me']!.get!.tags, ['Users']);
       asserts.assertEquals(p['/users/me']!.get!.operationId, 'whoami');
-      // Module identity → top-level tags + namespace group; bearerAuth declared.
-      asserts.assertEquals(doc.tags, [{
-        name: 'Users',
-        description: 'User directory',
-      }]);
+      // Top-level catalog + group list EVERY operation tag (not just the
+      // module name) — the custom `Lookup` route tag must appear, or Redoc
+      // would hide the operation carrying it. The module description annotates
+      // its name tag.
+      asserts.assertEquals(doc.tags, [
+        { name: 'Users', description: 'User directory' },
+        { name: 'Lookup' },
+      ]);
       asserts.assertEquals(doc['x-tagGroups'], [{
         name: 'people',
-        tags: ['Users'],
+        tags: ['Users', 'Lookup'],
       }]);
       asserts.assert(
         'bearerAuth' in
@@ -2984,13 +2988,14 @@ describe('rapid.Application', () => {
       const doc = buildOpenApi(app.routes);
       asserts.assertEquals(ops(doc)['/roles']!.get!.tags, ['Roles', 'Access']);
       asserts.assertEquals(ops(doc)['/roles']!.get!.operationId, 'Roles_list');
-      asserts.assertEquals(doc.tags, [{
-        name: 'Roles',
-        description: 'Role catalog',
-      }]);
+      // Both the module's own tags reach the catalog + the namespace group.
+      asserts.assertEquals(doc.tags, [
+        { name: 'Roles', description: 'Role catalog' },
+        { name: 'Access' },
+      ]);
       asserts.assertEquals(doc['x-tagGroups'], [{
         name: 'people',
-        tags: ['Roles'],
+        tags: ['Roles', 'Access'],
       }]);
     });
 
@@ -3100,6 +3105,166 @@ describe('rapid.Application', () => {
       } finally {
         await removeDir(dir, { recursive: true });
       }
+    });
+  });
+}
+
+// ==========================================================================
+// @Use trust-boundary guards (REVIEW-3 #1, #2, #12) — fail loud, never silent
+// ==========================================================================
+{
+  const make = () =>
+    Application.initialize({
+      name: 'useguard',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+  const pass = (_c: unknown, next: () => void | Promise<void>) => next();
+
+  describe('rapid @Use guard boundary', () => {
+    it('#1 @Use stacked on a route decorator is rejected at mount (would not guard the request)', async () => {
+      @Module('Admin', { prefix: '/admin' })
+      class Admin {
+        @GET('/purge')
+        @Use(pass)
+        purge(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      const app = await make();
+      const err = asserts.assertThrows(
+        () => app.module(new Admin()),
+        RapidError,
+      );
+      asserts.assertEquals((err as RapidError).code, 'RAPID_CONFIG');
+      asserts.assertStringIncludes((err as Error).message, '@Use');
+    });
+
+    it('#12 @Use/@On on a plain (non-RapidModule) class is rejected at mount', async () => {
+      class Plain {
+        @GET('/ok')
+        ok(): RapidContextResponse {
+          return { content: {} };
+        }
+        @Use(pass)
+        helper(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      const app = await make();
+      asserts.assertEquals(
+        asserts.assertThrows(() => app.module(new Plain()), RapidError).code,
+        'RAPID_CONFIG',
+      );
+    });
+
+    it('#2 a subclass overriding a @Use-guarded invoke method without re-decorating is rejected', async () => {
+      class Base extends RapidModule {
+        readonly name: string = 'Base';
+        readonly namespace = 'guarded';
+        protected readonly events = {};
+        @Use(pass)
+        doThing(): RapidContextResponse {
+          return { content: { guarded: true } };
+        }
+        // A route so the module is mountable.
+        @GET('/base')
+        route(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      class Sub extends Base {
+        override readonly name = 'Sub';
+        // Overrides doThing WITHOUT re-applying @Use — the guard would vanish.
+        override doThing(): RapidContextResponse {
+          return { content: { guarded: false } };
+        }
+      }
+      const app = await make();
+      const err = await asserts.assertRejects(
+        () => app.modules({ modules: [{ Sub }] }),
+        RapidError,
+      );
+      asserts.assertEquals((err as RapidError).code, 'RAPID_CONFIG');
+      asserts.assertStringIncludes(
+        (err as Error).message,
+        'without re-declaring',
+      );
+    });
+
+    it('a @Use guard on a pure invoke method (no route) still mounts fine', async () => {
+      class Svc extends RapidModule {
+        readonly name = 'Svc';
+        readonly namespace = 'svc';
+        protected readonly events = {};
+        @Use(pass)
+        compute(): RapidContextResponse {
+          return { content: { ok: true } };
+        }
+        @GET('/svc')
+        route(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      const app = await make();
+      await app.modules({ modules: [{ Svc }] }); // must NOT throw
+      const r = await app.fetch(new Request('http://app/svc'));
+      asserts.assertEquals(r.status, 200);
+    });
+  });
+}
+
+// ==========================================================================
+// REVIEW-3 #9 (post-start channel) + #4 (reply-cookie disclosure)
+// ==========================================================================
+{
+  const make = () =>
+    Application.initialize({
+      name: 'rev3',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+
+  describe('rapid post-start channel() + reply-cookie disclosure', () => {
+    it('#9 channel() after start() throws when the app mounted no socket listener', async () => {
+      const app = await make(); // zero channels, zero socket commands
+      app.get('/', () => ({ content: {} }));
+      await app.start();
+      try {
+        asserts.assertEquals(
+          asserts.assertThrows(() => app.channel('news'), RapidError).code,
+          'RAPID_CONFIG',
+        );
+      } finally {
+        await app.stop();
+      }
+    });
+
+    it('a channel declared BEFORE start() mounts the listener; a later one then works', async () => {
+      const app = await make();
+      app.channel('news'); // before start → listener will be mounted
+      await app.start();
+      app.channel('more'); // listener exists now → no throw
+      await app.stop();
+    });
+
+    it('#4 an illegal reply-cookie name is disclosed as a themed error, not a raw crash', async () => {
+      const app = await make();
+      app.get('/bad', () => ({
+        content: { ok: true },
+        cookies: [{ name: 'bad name', value: 'x' }], // space → illegal name
+      }));
+      // app.fetch RESOLVES with a themed response (does not reject/crash).
+      const res = await app.fetch(new Request('http://app/bad'));
+      asserts.assert(
+        res.status >= 400,
+        `expected an error status, got ${res.status}`,
+      );
+      const body = await res.json();
+      asserts.assert(
+        'requestId' in body,
+        'disclosure envelope carries requestId',
+      );
     });
   });
 }

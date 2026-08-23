@@ -3,6 +3,7 @@ import type { Meter } from '../utils/Meter.ts';
 import type { Slogger } from '@tundralibs/slogger';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
+import { isStreamBody } from '../utils/streams.ts';
 import type {
   RapidApplicationJobMetrics,
   RapidContextArgs,
@@ -240,8 +241,7 @@ export abstract class Context<
    * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond}.
    */
   public set response(response: RapidContextResponse | null) {
-    this._assertNotResponded();
-    this._content = response?.content ?? null;
+    this._setBaseResponse(response);
   }
 
   /**
@@ -250,6 +250,53 @@ export abstract class Context<
    */
   public get response(): Readonly<RapidContextResponse> | null {
     return this._content === null ? null : { content: this._content };
+  }
+
+  /** The base setter's body — content storage + the freeze guard, in one place. */
+  protected _setBaseResponse(response: RapidContextResponse | null): void {
+    this._assertNotResponded();
+    this._content = response?.content ?? null;
+  }
+
+  /**
+   * The shared `response` SETTER for the non-HTTP envelope transports (JOB,
+   * SOCKET): both consume `status` as the outcome and reject a 3xx (no
+   * redirects) and a stream body (HTTP-only), differing only in the wording.
+   * `subject` is the noun ('a background job' / 'a socket frame') and `debug`
+   * the per-transport identity ({ job } / { command }).
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID on a 3xx status, a stream
+   *   body, or after {@link respond}.
+   */
+  protected _setEnvelopeResponse(
+    response: RapidContextResponse | null,
+    subject: string,
+    debug: Record<string, unknown>,
+  ): void {
+    if (
+      response?.status !== undefined &&
+      response.status >= 300 && response.status < 400
+    ) {
+      throw new RapidError('RAPID_RESPONSE_INVALID', {
+        message: `A 3xx status has no meaning on ${subject}`,
+        debug: { ...debug, status: response.status },
+      });
+    }
+    if (response !== null && isStreamBody(response.content)) {
+      throw new RapidError('RAPID_RESPONSE_INVALID', {
+        message: `A stream body has no meaning on ${subject} (HTTP-only)`,
+        debug,
+      });
+    }
+    this._setBaseResponse(response);
+    this._status = response === null ? 200 : (response.status ?? this._status);
+  }
+
+  /** The shared `response` GETTER for the envelope transports — `content` + outcome `status`. */
+  protected _envelopeResponse(): Readonly<RapidContextResponse> | null {
+    return this._content === null
+      ? null
+      : { content: this._content, status: this._status };
   }
 
   /**

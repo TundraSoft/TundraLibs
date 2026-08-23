@@ -355,9 +355,14 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
         : path.slice(
           Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1,
         );
-      // Strip quotes/CR/LF so a filename can't break out of the header.
-      const name = raw.replace(/["\r\n]/g, '');
-      headers['content-disposition'] = `attachment; filename="${name}"`;
+      // A header value must be Latin-1 (`Headers.set` THROWS on a code point
+      // > U+00FF — a CJK/emoji filename would 500). Emit an ASCII-safe
+      // `filename=` (non-ASCII → '_', quotes/backslashes dropped) AND an RFC
+      // 5987 `filename*` carrying the real UTF-8 name for modern clients.
+      const ascii = raw.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '');
+      const encoded = encodeURIComponent(raw);
+      headers['content-disposition'] =
+        `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
     }
     return { content, status: options.status ?? 200, headers };
   }

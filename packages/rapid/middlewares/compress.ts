@@ -148,14 +148,20 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     const { bytes, contentType } = bodyOf(ctx);
     if (bytes.length < threshold || !isCompressible(contentType)) return;
 
+    const compressed = await compressBytes(bytes, encoding);
     ctx.response = {
-      content: await compressBytes(bytes, encoding),
+      content: compressed,
       // content-type must be re-stated (we're handing bytes now, which
       // would otherwise default to octet-stream at serialize time).
       headers: {
         'content-type': contentType,
         'content-encoding': encoding,
         'vary': vary,
+        // The body IS these bytes now — restate the length so a
+        // content-length the handler set for the UNCOMPRESSED body can't
+        // survive the per-key header merge and truncate/hang the client
+        // (the stream path drops it instead; here we know the exact size).
+        'content-length': String(compressed.length),
       },
     };
   };

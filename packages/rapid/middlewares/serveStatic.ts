@@ -96,13 +96,17 @@ export type ServeStaticOptions = {
  * is denied. Either failure falls through (`next()`).
  *
  * Emits a weak `ETag` (size + mtime) and `Last-Modified`, and answers a
- * matching `If-None-Match` with `304` WITHOUT reading the file. Still reads
- * whole files into memory and does no `Range` handling — that follow-up waits
- * on the streaming response model.
+ * matching `If-None-Match` with `304` WITHOUT reading the file. Bodies are
+ * STREAMED (compat `readFileStream`), and a `Range` request is honored with a
+ * `206`/`416` (see {@link parseRange}).
  */
 export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
   const root = path.resolve(options.root);
   const prefix = options.prefix ?? '/';
+  // Match on a path BOUNDARY, not a raw prefix, so `/static` cannot swallow
+  // `/staticfoo`. Trailing slashes stripped → `''` for a root mount (which
+  // then matches every path).
+  const mountAt = prefix.replace(/\/+$/, '');
   const index = options.index === undefined ? 'index.html' : options.index;
   const cacheControl = options.maxAge === undefined
     ? undefined
@@ -125,9 +129,14 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
     } catch {
       return next(); // malformed percent-encoding
     }
-    if (!pathname.startsWith(prefix)) return next();
+    if (
+      mountAt !== '' && pathname !== mountAt &&
+      !pathname.startsWith(mountAt + '/')
+    ) {
+      return next();
+    }
 
-    let rel = pathname.slice(prefix.length);
+    let rel = pathname.slice(mountAt.length);
     if (rel === '' || rel.endsWith('/')) {
       if (index === false) return next();
       rel += index;

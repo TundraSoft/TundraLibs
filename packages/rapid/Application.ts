@@ -1,7 +1,12 @@
 import { ambient } from '@tundralibs/ambient';
 import { makeTempDirSync, remove, removeSync } from '@tundralibs/compat/file';
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
-import { isBrowser, isWorkers } from '@tundralibs/compat/runtime';
+import {
+  exit,
+  isBrowser,
+  isWorkers,
+  unrefTimer,
+} from '@tundralibs/compat/runtime';
 import { Tracer } from '@tundralibs/tracer';
 import {
   Config,
@@ -571,6 +576,23 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { name },
       });
     }
+    // Declared AFTER start() with no listener mounted: the app started with
+    // zero channels and zero socket commands, so no websocket upgrade endpoint
+    // exists and this channel would be silently unreachable. Fail loud rather
+    // than register a channel nobody can subscribe to.
+    if (
+      this.__started && this.__http !== undefined &&
+      !this.__http.hasSocketListener
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `channel('${name}') was declared after start(), but this app ` +
+          `started with no channels or socket commands, so no websocket ` +
+          `listener was mounted — clients could never subscribe. Declare a ` +
+          `channel (or an app.socket() command) BEFORE start().`,
+        details: { name },
+      });
+    }
     this.__channels.set(name, options);
     // Declared after start()? Register it on the live rpc server too.
     this.__http?.declareChannel(name, options);
@@ -1084,17 +1106,12 @@ export class Application<S extends RapidContextState = RapidContextState>
     // later teardown steps (jobs, module dispose) settle first in the normal
     // case, and the exit only fires when teardown is genuinely wedged.
     const drainMs = this.option('shutdownTimeout')!;
-    let timer: number | { unref?: () => void } | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (drainMs > 0) {
-      timer = setTimeout(() => {
-        // deno-lint-ignore no-explicit-any
-        const g = globalThis as any;
-        g.Deno?.exit?.(1) ?? g.process?.exit?.(1);
-      }, Math.ceil(drainMs * 1.1));
-      if (typeof timer === 'number') {
-        // deno-lint-ignore no-explicit-any
-        (globalThis as any).Deno?.unrefTimer?.(timer);
-      } else timer.unref?.();
+      // Nuclear exit via compat (never a raw runtime global — golden rule);
+      // unref'd so it can't itself keep the process alive when teardown wins.
+      timer = setTimeout(() => exit(1), Math.ceil(drainMs * 1.1));
+      unrefTimer(timer);
     }
     try {
       const http = this.__http;
@@ -1125,7 +1142,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       if (failures.length > 0) throw RapidError.from(failures[0]);
       return this;
     } finally {
-      if (timer !== undefined) clearTimeout(timer as number);
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
 

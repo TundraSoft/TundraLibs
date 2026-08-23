@@ -103,7 +103,7 @@ export function getSession<S extends RapidContextState = RapidContextState>(
  * });
  * ```
  */
-export function session(options: SessionOptions): RapidMiddleware {
+export function session(options: SessionOptions = {}): RapidMiddleware {
   const store = options.store ?? memoryStore<SessionRecord>();
   const name = options.cookie ?? 'sid';
   const idleTtl = options.idleTtl ?? 30 * 60_000;
