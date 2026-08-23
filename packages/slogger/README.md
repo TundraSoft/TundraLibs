@@ -72,15 +72,23 @@ honest per-call cost breakdown.
 `@tundralibs/slogger` is designed for server-side application logging
 and is not a browser/worker-first runtime, so there's no blanket
 badge — but the handler-level split is sharper than "server-only":
-`TCPHandler`, `SyslogHandler`, and `FileHandler` genuinely need a raw
-socket or real filesystem and won't work at the edge. `ConsoleHandler`,
-`MemoryHandler`, `BlackholeHandler`, and `StreamHandler` (any
-web-standard `WritableStream` — compose it with `CompressionStream`,
-a browser's own stdout-equivalent, or an in-memory sink) have no such
-dependency and are genuinely portable. `HTTPHandler` ships logs over
-`fetch`, so it's edge-safe too, modulo one Deno-specific pre-flight
-permission check that no-ops elsewhere. Restrict a browser/Worker
-bundle to those handlers and avoid the three server-only ones.
+`FileHandler` genuinely needs a real filesystem and won't work in a
+browser (on Workers a `/tmp` path writes to an ephemeral in-memory
+filesystem instead — records are lost when the isolate recycles, and
+the handler warns). `TCPHandler` and `SyslogHandler`'s TCP transport
+dial out through `@tundralibs/compat/net`, which connects on
+Cloudflare Workers via `cloudflare:sockets` (needs the `nodejs_compat`
+flag) but still has nothing to dial from a browser.
+`SyslogHandler`'s UDP transport (no datagram sockets on Workers) and
+UNIX-socket transport (workerd's `connect()` dials TCP only) stay
+host-runtime-only everywhere else. `ConsoleHandler`, `MemoryHandler`,
+`BlackholeHandler`, and `StreamHandler` (any web-standard
+`WritableStream` — compose it with `CompressionStream`, a browser's
+own stdout-equivalent, or an in-memory sink) have no such dependency
+and are genuinely portable. `HTTPHandler` ships logs over `fetch`, so
+it's edge-safe too, modulo one Deno-specific pre-flight permission
+check that no-ops elsewhere. Restrict a browser/Worker bundle to the
+handlers your target actually supports.
 
 ## Modules
 
