@@ -7,6 +7,7 @@
 
 import { describe, it } from '@tundralibs/compat/test';
 import { Server } from './Server.ts';
+import { RpcStateError } from './errors/mod.ts';
 import type { InboundFrame, OutboundFrame } from './types/mod.ts';
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 import * as asserts from '@std/asserts';
@@ -1234,6 +1235,82 @@ describe({
     // =========================================================================
     // Lifecycle
     // =========================================================================
+
+    // =========================================================================
+    // Request-driven wire-up
+    // =========================================================================
+
+    describe('handleUpgrade()', () => {
+      /** A request that actually looks like a WebSocket upgrade. */
+      const upgradeRequest = (url = 'http://localhost/ws') =>
+        new Request(url, {
+          headers: { upgrade: 'websocket', connection: 'Upgrade' },
+        });
+
+      // Screening and the upgrade hook both run before the primitive
+      // dispatches on runtime, so these hold everywhere — including the
+      // two runtimes that cannot upgrade from a `Request` at all.
+      it('answers 426 when the request is not a WebSocket upgrade', async () => {
+        const hub = new Server();
+        const res = await hub.handleUpgrade(new Request('http://localhost/'));
+        asserts.assertStrictEquals(res.status, 426);
+        asserts.assertStrictEquals(res.headers.get('upgrade'), 'websocket');
+        await hub.close();
+      });
+
+      it('forwards the request and peer info to the upgrade hook', async () => {
+        const seen: { url: string; info: unknown }[] = [];
+        const hub = new Server({
+          upgrade: (request, info) => {
+            seen.push({ url: request.url, info });
+            return false; // refuse — stops before the runtime dispatch
+          },
+        });
+        const res = await hub.handleUpgrade(
+          upgradeRequest('http://localhost/chat'),
+          { remoteAddress: '10.0.0.7', remotePort: 4711 },
+        );
+        asserts.assertStrictEquals(res.status, 403);
+        asserts.assertEquals(seen, [{
+          url: 'http://localhost/chat',
+          info: { remoteAddress: '10.0.0.7', remotePort: 4711 },
+        }]);
+        await hub.close();
+      });
+
+      it('rejects with RpcStateError once the Server is closed', async () => {
+        // The primitive throws its own bare `Error('WebSocketServer is
+        // closed')` here; a closed Server must fail the same typed way
+        // `use` / `command` / `channel` do.
+        const hub = new Server();
+        await hub.close();
+        await asserts.assertRejects(
+          () => hub.handleUpgrade(upgradeRequest()),
+          RpcStateError,
+          'Server is closed',
+        );
+      });
+
+      it({
+        name: 'rejects with UnsupportedRuntimeError on Bun and Node',
+        // Neither can answer an upgrade with a `Response`. rpc must let
+        // the primitive's typed refusal through untouched, so the message
+        // still names the wire-ups that do work there.
+        deno: false,
+        fn: async () => {
+          const hub = new Server();
+          const err = await asserts.assertRejects(
+            () => hub.handleUpgrade(upgradeRequest()),
+          );
+          asserts.assertStrictEquals(
+            (err as Error).name,
+            'UnsupportedRuntimeError',
+          );
+          asserts.assertStringIncludes((err as Error).message, 'handlers()');
+          await hub.close();
+        },
+      });
+    });
 
     // =========================================================================
     // Backpressure observation
