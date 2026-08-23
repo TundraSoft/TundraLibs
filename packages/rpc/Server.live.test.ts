@@ -470,6 +470,88 @@ describe({
       });
     });
 
+    describe({
+      name: 'request-driven wire-up',
+      // Deno is the one test runtime where `handleUpgrade` runs
+      // end-to-end in-process: `Deno.upgradeWebSocket` takes a `Request`
+      // and hands back a `Response` — the same shape a Workers `fetch`
+      // handler has. Bun and Node cannot upgrade from a `Request` at
+      // all (asserted in `Server.test.ts`).
+      bun: false,
+      node: false,
+      fn: () => {
+        it('serves commands, pub/sub and disconnect without listen()', async () => {
+          const unsubscribed: string[] = [];
+          const hub = new Server();
+          hub.command('add', undefined, (ctx) => {
+            const { a, b } = ctx.payload as { a: number; b: number };
+            return a + b;
+          });
+          hub.channel('news', {
+            onUnsubscribe: ({ channel }) => {
+              unsubscribed.push(channel);
+            },
+          });
+
+          const port = nextPort();
+          // No `hub.listen()` anywhere — the RPC layer never owns a
+          // socket, it only answers requests handed to it.
+          const server = Deno.serve(
+            { port, hostname: '127.0.0.1', onListen: () => {} },
+            (request, info) =>
+              hub.handleUpgrade(request, {
+                remoteAddress: info.remoteAddr.transport === 'tcp'
+                  ? info.remoteAddr.hostname
+                  : null,
+              }),
+          );
+
+          const ws = new WebSocket(`ws://127.0.0.1:${port}/rpc`);
+          try {
+            await waitForOpen(ws);
+
+            const result = await sendAndAwait(ws, {
+              id: 'r1',
+              type: 'cmd',
+              cmd: 'add',
+              payload: { a: 2, b: 3 },
+            }) as ResultFrame;
+            asserts.assert(result.ok);
+            asserts.assertStrictEquals((result as { data: unknown }).data, 5);
+
+            const sub = await sendAndAwait(ws, {
+              id: 's1',
+              type: 'sub',
+              channel: 'news',
+            });
+            asserts.assertStrictEquals(sub.type, 'subscribed');
+
+            const collected = collectMessages(ws, 'news', 1);
+            await sleep(50);
+            await hub.publish('news', { headline: 'from a fetch handler' });
+            const messages = await collected;
+            asserts.assertEquals(
+              messages[0]!.data,
+              { headline: 'from a fetch handler' },
+            );
+
+            await closeSocket(ws);
+            // The close handler runs on the server's own turn.
+            await sleep(100);
+            asserts.assertEquals(
+              unsubscribed,
+              ['news'],
+              'a disconnect must still tear the subscription down',
+            );
+          } finally {
+            await closeSocket(ws);
+            await hub.close();
+            await server.shutdown();
+          }
+        });
+      },
+    });
+
     describe('error frames over the wire', () => {
       it('garbage input gets a BAD_FORMAT error frame', async () => {
         const hub = new Server();

@@ -1,6 +1,7 @@
 import type { UpgradeDecision } from '@tundralibs/compat/webserver';
 import type { PubSubAdapter } from '../../pubsub/mod.ts';
 import type { BackpressureHandler } from './BackpressureHandler.ts';
+import type { SendErrorHandler } from './SendErrorHandler.ts';
 
 /**
  * Construction options for `Server`.
@@ -53,4 +54,21 @@ export type ServerOptions<T = unknown> = {
    * log, drop further sends, …).
    */
   onBackpressure?: BackpressureHandler<T>;
+
+  /**
+   * Called when a server-initiated send (`publish`, `result`, `msg`,
+   * `subscribed`, …) throws on a connection whose `readyState` is
+   * still `OPEN` — a send failure that is NOT explained by the
+   * ordinary closed-mid-flight case, which stays silent as before.
+   *
+   * The one place this fires today: `publish()` fanning out on
+   * Cloudflare Workers. Each connection is pinned to the I/O context
+   * of the request that upgraded it, so writing to any *other*
+   * connection throws even though it's perfectly alive — and without
+   * this hook, that failure was invisible: `publish()` still resolved,
+   * having reached only the one subscriber on the current stack. This
+   * hook does not make fan-out work (that needs a Durable Object
+   * owning every connection); it's how you find out you need one.
+   */
+  onSendError?: SendErrorHandler<T>;
 };

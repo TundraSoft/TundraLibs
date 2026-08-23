@@ -28,6 +28,7 @@ export type {
   CommandHandler,
   ListenOptions,
   Middleware,
+  SendErrorHandler,
   ServerOptions,
   Validator,
 } from './server/mod.ts';
