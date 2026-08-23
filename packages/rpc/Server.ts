@@ -385,9 +385,12 @@ export class Server<T = unknown> {
    * inferred). Each connection belongs to the I/O context of the request
    * that upgraded it, and workerd refuses I/O across contexts. Serving a
    * connection's own traffic is unaffected, but writing to a *different*
-   * one throws there and the send path swallows it: {@link publish}
-   * reaches only the subscriber whose request is on the stack, and every
-   * other subscriber is dropped **silently**. Fan-out there needs a
+   * one throws there: {@link publish} reaches only the subscriber whose
+   * request is on the stack, and every other subscriber is dropped. That
+   * drop is no longer silent — the connection is still `OPEN` when the
+   * throw happens, so it's routed to {@link ServerOptions.onSendError}
+   * rather than swallowed like an ordinary closed-socket send. The hook
+   * only makes the failure observable; fan-out itself still needs a
    * Durable Object owning the sockets, which this does not provide.
    * `backpressureThreshold` never fires either — workerd's `WebSocket`
    * has no `bufferedAmount`.
@@ -872,13 +875,19 @@ export class Server<T = unknown> {
   /**
    * Encode and send one frame, then poll back-pressure so
    * {@link ServerOptions.onBackpressure} fires for Server-originated
-   * traffic. A socket that closed mid-send is swallowed, not thrown.
+   * traffic. A socket that closed mid-send is swallowed, not thrown;
+   * one that's still `OPEN` and threw anyway is routed to
+   * {@link ServerOptions.onSendError} instead — see its doc for why
+   * that distinction matters on Workers.
    */
   protected _send(ws: ServerWebSocket<T>, frame: OutboundFrame): void {
     try {
       ws.send(encodeFrame(frame));
-    } catch {
-      // ws closed mid-flight; nothing to do.
+    } catch (err) {
+      if (ws.readyState === 1 /* OPEN */) {
+        void this._opts.onSendError?.(ws, err);
+      }
+      // Otherwise: closed/closing mid-flight; nothing to do.
       return;
     }
     // Mirror the observability that `wss.send`/`wss.broadcast` give for

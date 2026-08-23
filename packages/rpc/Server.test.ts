@@ -19,10 +19,13 @@ import * as asserts from '@std/asserts';
 class MockWs<T = unknown> {
   sent: OutboundFrame[] = [];
   closed = false;
+  /** When set, every `send()` throws this instead of recording the frame. */
+  throwOnSend: Error | undefined = undefined;
 
   constructor(public data: T = undefined as unknown as T) {}
 
   send(payload: string | Uint8Array | ArrayBuffer): void {
+    if (this.throwOnSend) throw this.throwOnSend;
     if (typeof payload !== 'string') return;
     this.sent.push(JSON.parse(payload) as OutboundFrame);
   }
@@ -35,7 +38,7 @@ class MockWs<T = unknown> {
   pong(): boolean {
     return false;
   }
-  readonly readyState = 1;
+  readyState = 1;
   bufferedAmount = 0;
   readonly protocol = '';
   readonly remoteAddress: string | undefined = '127.0.0.1';
@@ -1386,6 +1389,78 @@ describe({
         );
 
         asserts.assertEquals(events, []);
+        await close(hub, ws);
+      });
+    });
+
+    // =========================================================================
+    // Send-error observation
+    // =========================================================================
+
+    describe('send errors', () => {
+      it('fires onSendError when a send throws on a still-OPEN socket', async () => {
+        // The Workers cross-request-I/O-context shape: the socket is
+        // alive (readyState OPEN) but the underlying send still throws.
+        const events: Array<[unknown, unknown]> = [];
+        const hub = new Server({
+          onSendError: (ws, err) => {
+            events.push([ws, err]);
+          },
+        });
+        hub.command('ping', undefined, () => 'pong');
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        ws.throwOnSend = new TypeError('cross-context I/O');
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: 'a1', type: 'cmd', cmd: 'ping' }),
+        );
+
+        asserts.assertEquals(events.length, 1);
+        asserts.assertStrictEquals(events[0]?.[0], ws.asServerWebSocket());
+        asserts.assertStrictEquals(events[0]?.[1], ws.throwOnSend);
+        await close(hub, ws);
+      });
+
+      it('does not fire when the socket is closed/closing — the ordinary dead-connection case', async () => {
+        const events: unknown[] = [];
+        const hub = new Server({
+          onSendError: (_ws, err) => {
+            events.push(err);
+          },
+        });
+        hub.command('ping', undefined, () => 'pong');
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        ws.throwOnSend = new Error('socket closed');
+        ws.readyState = 3; // CLOSED
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: 'a1', type: 'cmd', cmd: 'ping' }),
+        );
+
+        asserts.assertEquals(events, []);
+        await close(hub, ws);
+      });
+
+      it('a send failure with no onSendError configured does not throw', async () => {
+        const hub = new Server();
+        hub.command('ping', undefined, () => 'pong');
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        ws.throwOnSend = new TypeError('cross-context I/O');
+        // Would reject if `_send` re-threw instead of routing to the
+        // (absent) hook.
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: 'a1', type: 'cmd', cmd: 'ping' }),
+        );
         await close(hub, ws);
       });
     });
