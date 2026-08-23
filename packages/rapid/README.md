@@ -224,6 +224,19 @@ app.module(new Users());
 (`param`, `query`, `payload`, `paging`, `header`, `connection`) type the method
 signature via the decorator's `bind` tuple.
 
+**OpenAPI comes from the same declarations.** On a route,
+`{ summary, description, tags, operationId, security, response }` document the
+operation; on the module, `@Module('Users', { description, tags, security })`
+sets what its routes inherit. A module's `name` is its routes' default tag,
+its `namespace` their tag group (`x-tagGroups` — the namespace is the parent,
+the module the sub-module within it), its `description` the tag's. Bind the
+body with a schema **object** — `payload(UserSchema)` — and it is validated
+_and_ documented (`toOpenAPI()` becomes the request body); `payload(Schema.parse)`
+validates only. Only the body documents: `auth`/`session`/`cookie` binders are
+context-derived, not part of the request contract. `security: ['bearerAuth']`
+emits the requirement (the scheme is declared for you); `[]` marks a route
+deliberately public. `operationId` defaults to `<Module>_<method>`.
+
 Decorations are recorded by method **name** in the class's TC39 decorator
 metadata, so they compose freely with third-party decorators — a wrapping
 decorator (a timer, retry, cache) may sit above or below a rapid one; the route
@@ -359,8 +372,10 @@ app.get('/openapi.json', openapi());
   503, else 200.
 - `metrics({ format })` — serves `app.meter` as Prometheus text (default) or
   JSON; returns 503 when `server.metrics` is off.
-- `openapi({ info, servers, expose })` — the assembled OpenAPI 3.0.3 document
-  built from the mounted routes (cached per version).
+- `openapi({ info, servers, expose, securitySchemes })` — the assembled OpenAPI
+  3.0.3 document built from the mounted routes (cached per version; every
+  declared version is listed as `x-versions`). `bearerAuth` is declared
+  automatically; declare any other scheme routes name in `security` here.
 - `login({ pact, strategy })` — logs a user in through a `@tundralibs/pact`
   instance and returns the token + principal (pact is a type-only import, so it
   adds no runtime dependency until you pass an instance):

@@ -135,10 +135,11 @@ describe('rapid.endpoints', () => {
     asserts.assertEquals((doc.info as { title: string }).title, 'Blog');
     const paths = doc.paths as Record<
       string,
-      Record<string, { summary?: string; parameters?: unknown[] }>
+      Record<string, { description?: string; parameters?: unknown[] }>
     >;
     asserts.assert('/posts/{id}' in paths); // :id: → {id}
-    asserts.assertEquals(paths['/posts/{id}']!.get!.summary, 'One post');
+    // `description` is the long-form field; `summary` is its own option.
+    asserts.assertEquals(paths['/posts/{id}']!.get!.description, 'One post');
     asserts.assert(
       (paths['/posts/{id}']!.get!.parameters as { name: string }[]).some((p) =>
         p.name === 'id'

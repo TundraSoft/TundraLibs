@@ -43,12 +43,28 @@ export type ModuleDecoratorOptions = {
    * wins.
    */
   version?: string;
+  /** Describes the module's tag in the OpenAPI document's top-level `tags`. */
+  description?: string;
+  /**
+   * OpenAPI tags every route in the class carries (a route's own `tags`
+   * are merged on top). Defaults to `[name]`; an explicit `[]` opts out.
+   */
+  tags?: readonly string[];
+  /**
+   * Default security-scheme names for every route in the class; a route's
+   * own `security` (including `[]` = public) wins.
+   */
+  security?: readonly string[];
 };
 
-/** The options-only form's options: identity comes from the module's fields. */
+/**
+ * The options-only form's options: identity (`name`/`namespace`) comes
+ * from the module's fields; everything else — mount shape AND OpenAPI
+ * grouping — may be declared here.
+ */
 export type ModuleMountOptions = Pick<
   ModuleDecoratorOptions,
-  'prefix' | 'version'
+  'prefix' | 'version' | 'description' | 'tags' | 'security'
 >;
 
 type ModuleClassDecorator = <
@@ -83,8 +99,8 @@ export function Module(options?: ModuleMountOptions): ModuleClassDecorator;
  * }
  * ```
  *
- * @param name - The module's identity (diagnostics, future OpenAPI
- *   tagging) — required, unlike everything in `options`.
+ * @param name - The module's identity (diagnostics, and the default
+ *   OpenAPI tag of its routes) — required, unlike everything in `options`.
  * @throws {RapidError} RAPID_CONFIG when `name` is empty, `prefix` is
  *   non-empty and does not start with `/`, or at decoration time
  *   under legacy decorator compilation.
@@ -118,6 +134,11 @@ export function Module(
     prefix,
     ...(opts.namespace !== undefined ? { namespace: opts.namespace } : {}),
     ...(opts.version !== undefined ? { version: opts.version } : {}),
+    ...(opts.description !== undefined
+      ? { description: opts.description }
+      : {}),
+    ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
+    ...(opts.security !== undefined ? { security: opts.security } : {}),
   };
   return (target, context): void => {
     assertClassContext(context, 'Module');

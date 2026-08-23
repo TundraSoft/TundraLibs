@@ -12,6 +12,7 @@
 import {
   buildOpenApi,
   type OpenApiInfo,
+  type OpenApiSecuritySchemes,
   type OpenApiServer,
 } from '../utils/mod.ts';
 import type { RapidHTTPHandler } from '../types/mod.ts';
@@ -20,6 +21,12 @@ import type { RapidHTTPHandler } from '../types/mod.ts';
 export type OpenApiOptions = {
   info?: OpenApiInfo;
   servers?: readonly OpenApiServer[];
+  /**
+   * Security schemes routes may reference by name in `security`. `bearerAuth`
+   * (HTTP bearer) is always declared; declare anything else here, e.g.
+   * `{ apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' } }`.
+   */
+  securitySchemes?: OpenApiSecuritySchemes;
   /**
    * Which app modes serve the spec. Secure-by-default: DEVELOPMENT only, so
    * mounting it doesn't leak the full route inventory to anonymous clients in
@@ -46,6 +53,9 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
     const doc = buildOpenApi(ctx.app.routes, {
       info: { title: ctx.app.option('name'), ...options.info },
       ...(options.servers !== undefined ? { servers: options.servers } : {}),
+      ...(options.securitySchemes !== undefined
+        ? { securitySchemes: options.securitySchemes }
+        : {}),
       ...(version !== '' ? { version } : {}),
     });
     // Cache ONLY real versions. `?version=` is client-controlled and

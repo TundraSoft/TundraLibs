@@ -31,9 +31,21 @@ export type RapidDecoration =
      * the owning `@Module`'s `version` default, when both are set.
      */
     version?: string;
-    /** Free-text summary (future OpenAPI generator raw material — no runtime effect today). */
+    /** One-line OpenAPI operation summary. */
+    summary?: string;
+    /** Longer OpenAPI operation description. */
     description?: string;
-    /** The response shape (future OpenAPI raw material — no runtime effect today). */
+    /** OpenAPI tags, merged over the owning module's at mount. */
+    tags?: readonly string[];
+    /** OpenAPI operation id; defaults to `<Module>_<method>` at mount. */
+    operationId?: string;
+    /** Security-scheme names; `[]` = public. Overrides the module default. */
+    security?: readonly string[];
+    /**
+     * The response shape — documentation only (the method's actual return
+     * value is never checked against it): `buildOpenApi` emits its
+     * `toOpenAPI()` as the 200 schema.
+     */
     response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
   }
   | {

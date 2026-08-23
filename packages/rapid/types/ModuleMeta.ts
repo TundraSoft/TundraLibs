@@ -10,14 +10,14 @@
  * Metadata recorded by `@Module` against a class constructor. Only
  * `name` is required — a class with no `@Module` at all is still
  * mountable (empty defaults throughout), `@Module` lets it opt into
- * an identity, a path prefix, a namespace, and a default version.
+ * an identity, a path prefix, a namespace, a default version, and the
+ * OpenAPI grouping its routes inherit.
  */
 export type RapidModuleMeta = {
   /**
-   * The module's identity — for diagnostics (mount-time error
-   * messages) and future OpenAPI tagging. Purely a label; does not
-   * affect routing. Absent for a `RapidModule` subclass — its `name`
-   * field is canonical.
+   * The module's identity — mount-time diagnostics and the DEFAULT
+   * OpenAPI tag for every route in the class. Does not affect routing.
+   * Absent for a `RapidModule` subclass — its `name` field is canonical.
    */
   name?: string;
   /**
@@ -25,7 +25,9 @@ export type RapidModuleMeta = {
    * class, `{namespace}.{command|name}` — sockets/jobs are otherwise
    * FLAT namespaces (unlike HTTP paths, which nest structurally), so
    * this is their collision-avoidance mechanism, mirroring what
-   * `prefix` already gives HTTP paths. HTTP paths ignore it.
+   * `prefix` already gives HTTP paths. HTTP paths ignore it. In the
+   * OpenAPI document it is the module's TAG GROUP (`x-tagGroups`): the
+   * namespace is the parent, `name` the sub-module within it.
    */
   namespace?: string;
   /**
@@ -42,4 +44,17 @@ export type RapidModuleMeta = {
    * wins.
    */
   version?: string;
+  /** Describes the module's tag in the document's top-level `tags` list. */
+  description?: string;
+  /**
+   * OpenAPI tags every route in the class carries (the route's own are
+   * merged on top). Defaults to `[name]`; an explicit `[]` opts the module
+   * out of a default tag.
+   */
+  tags?: readonly string[];
+  /**
+   * Default security-scheme names for every route in the class; a route's
+   * own `security` (including `[]` = public) wins.
+   */
+  security?: readonly string[];
 };

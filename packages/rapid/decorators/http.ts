@@ -42,17 +42,36 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * unversioned API to declare one for no benefit.
    */
   version?: string;
-  /** Free-text summary (future OpenAPI generator raw material — no runtime effect today). */
+  /** One-line OpenAPI operation summary. */
+  summary?: string;
+  /** Longer OpenAPI operation description (Markdown allowed by the spec). */
   description?: string;
   /**
-   * The response body's shape — METADATA ONLY, no runtime effect
-   * today (the method's actual return value is never checked against
-   * it). Raw material for a future OpenAPI generator: rapid takes NO
-   * dependency on `@tundralibs/guardian` for this — anything
-   * structurally shaped like a guardian schema (a `.toOpenAPI()` or
-   * `.toJSONSchema()` emitter) works, matching request validation's
-   * existing path (`bind: [payload(Schema.parse)]`, no NEW mechanism
-   * needed there).
+   * OpenAPI tags for this route, merged OVER the owning `@Module`'s tags
+   * (which default to the module's name) and deduplicated at mount.
+   */
+  tags?: readonly string[];
+  /**
+   * OpenAPI operation id. Defaults at mount to `<ModuleName>_<method>` —
+   * the key an SDK generator names its client methods by.
+   */
+  operationId?: string;
+  /**
+   * Security-scheme NAMES this route requires (`['bearerAuth']`); an
+   * EMPTY array marks it deliberately public, overriding the owning
+   * `@Module`'s `security` default. Documentation only — enforcement is
+   * the `authorize()` middleware's job. `bearerAuth` is declared in the
+   * document for you; other schemes via `openapi({ securitySchemes })`.
+   */
+  security?: readonly string[];
+  /**
+   * The response body's shape — DOCUMENTATION ONLY: the method's actual
+   * return value is never checked against it; `buildOpenApi` emits its
+   * `toOpenAPI()` as the 200 schema. rapid takes NO dependency on
+   * `@tundralibs/guardian` for this — anything structurally shaped like
+   * a guardian schema (a `.toOpenAPI()` / `.toJSONSchema()` emitter)
+   * works. The request side is `bind: [payload(Schema)]` (a schema
+   * OBJECT — validates and documents the body at once).
    */
   response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
 };
@@ -72,7 +91,8 @@ type RouteDecorator<This, A extends readonly unknown[]> = (
  * otherwise TypeScript infers `A` from the method's own signature and
  * every parameter check silently disappears, while the mount tier
  * would pass `undefined` for each one. With `bind`, the tuple drives
- * the parameter types as documented.
+ * the parameter types as documented. Options WITHOUT `bind` (summary,
+ * tags, security, …) keep the no-parameter pin.
  */
 type RouteFactory = {
   <This>(path: string): RouteDecorator<This, []>;
@@ -80,6 +100,10 @@ type RouteFactory = {
     path: string,
     options: RouteDecoratorOptions<A> & { bind: RapidBinds<A> },
   ): RouteDecorator<This, A>;
+  <This>(
+    path: string,
+    options: Omit<RouteDecoratorOptions<[]>, 'bind'>,
+  ): RouteDecorator<This, []>;
 };
 
 /**
@@ -102,9 +126,15 @@ function route<This, A extends readonly unknown[]>(
       binds: options.bind ?? [],
       methodName: String(context.name),
       ...(options.version !== undefined ? { version: options.version } : {}),
+      ...(options.summary !== undefined ? { summary: options.summary } : {}),
       ...(options.description !== undefined
         ? { description: options.description }
         : {}),
+      ...(options.tags !== undefined ? { tags: options.tags } : {}),
+      ...(options.operationId !== undefined
+        ? { operationId: options.operationId }
+        : {}),
+      ...(options.security !== undefined ? { security: options.security } : {}),
       ...(options.response !== undefined ? { response: options.response } : {}),
     });
   };

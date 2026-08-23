@@ -111,4 +111,211 @@ describe('rapid.utils.buildOpenApi', () => {
       'The blog API',
     );
   });
+
+  it('summary/description/operationId/tags map to their own fields; a version is x-version, never a tag', () => {
+    const doc = buildOpenApi(
+      [{
+        method: 'GET',
+        path: '/u',
+        middlewares: [],
+        handler: () => ({}),
+        version: 'v2',
+        openapi: {
+          summary: 'List users',
+          description: 'All of them, paged.',
+          operationId: 'Users_list',
+          tags: ['Users', 'Directory'],
+        },
+      }] as never,
+    );
+    const op =
+      (doc.paths as Record<string, Record<string, Record<string, unknown>>>)[
+        '/u'
+      ]!.get!;
+    asserts.assertEquals(op.summary, 'List users');
+    asserts.assertEquals(op.description, 'All of them, paged.');
+    asserts.assertEquals(op.operationId, 'Users_list');
+    asserts.assertEquals(op.tags, ['Users', 'Directory']);
+    asserts.assertEquals(op['x-version'], 'v2');
+    asserts.assertEquals(doc['x-versions'], ['v2']);
+  });
+
+  it('security names become requirements and declare bearerAuth; [] stays public; custom schemes merge', () => {
+    const routes = [
+      {
+        method: 'GET',
+        path: '/secure',
+        middlewares: [],
+        handler: () => ({}),
+        openapi: { security: ['bearerAuth'] },
+      },
+      {
+        method: 'GET',
+        path: '/public',
+        middlewares: [],
+        handler: () => ({}),
+        openapi: { security: [] },
+      },
+    ] as never;
+    const doc = buildOpenApi(routes);
+    const paths = doc.paths as Record<
+      string,
+      Record<string, { security?: unknown }>
+    >;
+    asserts.assertEquals(paths['/secure']!.get!.security, [{ bearerAuth: [] }]);
+    asserts.assertEquals(paths['/public']!.get!.security, []);
+    const schemes =
+      (doc.components as { securitySchemes?: Record<string, unknown> })
+        .securitySchemes!;
+    asserts.assertEquals(schemes.bearerAuth, {
+      type: 'http',
+      scheme: 'bearer',
+    });
+    // A custom scheme merges over the default.
+    const custom = buildOpenApi(routes, {
+      securitySchemes: {
+        apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+      },
+    });
+    const merged =
+      (custom.components as { securitySchemes: Record<string, unknown> })
+        .securitySchemes;
+    asserts.assert('bearerAuth' in merged && 'apiKey' in merged);
+    // No secured route and no declared scheme → no securitySchemes at all.
+    const plain = buildOpenApi([routes[1]] as never);
+    asserts.assertEquals(
+      (plain.components as { securitySchemes?: unknown }).securitySchemes,
+      undefined,
+    );
+  });
+
+  it('payload(Schema) documents the request body; a bare validator keeps the object default', () => {
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'POST',
+          path: '/typed',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: {
+            binds: [{
+              source: 'payload',
+              schema: {
+                toOpenAPI: () => ({ type: 'object', required: ['email'] }),
+              },
+            }],
+          },
+        },
+        {
+          method: 'POST',
+          path: '/bare',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: {
+            binds: [{ source: 'payload', validate: (v: unknown) => v }],
+          },
+        },
+      ] as never,
+    );
+    const body = (p: string) =>
+      (doc.paths as Record<
+        string,
+        Record<string, {
+          requestBody: {
+            required: boolean;
+            content: { 'application/json': { schema: unknown } };
+          };
+        }>
+      >)[p]!.post!.requestBody;
+    asserts.assertEquals(body('/typed').content['application/json'].schema, {
+      type: 'object',
+      required: ['email'],
+    });
+    asserts.assertEquals(body('/typed').required, true);
+    asserts.assertEquals(body('/bare').content['application/json'].schema, {
+      type: 'object',
+    });
+  });
+
+  it('module identity aggregates into top-level tags (with descriptions) and namespace tag groups; ungrouped → Other', () => {
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'GET',
+          path: '/users',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: {
+            tags: ['Users'],
+            module: {
+              name: 'Users',
+              namespace: 'people',
+              description: 'User directory',
+            },
+          },
+        },
+        {
+          method: 'GET',
+          path: '/roles',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: {
+            tags: ['Roles'],
+            module: { name: 'Roles', namespace: 'people' },
+          },
+        },
+        {
+          method: 'GET',
+          path: '/ping',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: { tags: ['Ops'], module: { name: 'Ops' } },
+        },
+      ] as never,
+    );
+    asserts.assertEquals(doc.tags, [
+      { name: 'Users', description: 'User directory' },
+      { name: 'Roles' },
+      { name: 'Ops' },
+    ]);
+    asserts.assertEquals(doc['x-tagGroups'], [
+      { name: 'people', tags: ['Users', 'Roles'] },
+      { name: 'Other', tags: ['Ops'] },
+    ]);
+    // No modules at all → neither aggregate is emitted.
+    const bare = buildOpenApi(
+      [{
+        method: 'GET',
+        path: '/',
+        middlewares: [],
+        handler: () => ({}),
+      }] as never,
+    );
+    asserts.assertEquals(bare.tags, undefined);
+    asserts.assertEquals(bare['x-tagGroups'], undefined);
+  });
+
+  it('x-versions lists EVERY declared version even when the document is filtered to one', () => {
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'GET',
+          path: '/a',
+          middlewares: [],
+          handler: () => ({}),
+          version: 'v1',
+        },
+        {
+          method: 'GET',
+          path: '/b',
+          middlewares: [],
+          handler: () => ({}),
+          version: 'v2',
+        },
+      ] as never,
+      { version: 'v1' },
+    );
+    asserts.assert(!('/b' in (doc.paths as object)));
+    asserts.assertEquals(doc['x-versions'], ['v1', 'v2']);
+  });
 });

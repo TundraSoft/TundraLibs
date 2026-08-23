@@ -29,6 +29,21 @@ describe('rapid.decorators.binders', () => {
     asserts.assertEquals(connection().source, 'connection');
   });
 
+  it('payload(Schema) keeps the schema for documentation and calls parse as a METHOD', () => {
+    const schema = {
+      prefix: 'u:',
+      parse(value: unknown): string {
+        return `${this.prefix}${value as string}`; // reads `this` — must survive
+      },
+      toOpenAPI: () => ({ type: 'object' }),
+    };
+    const binder = payload(schema);
+    asserts.assertStrictEquals(binder.schema, schema);
+    asserts.assertEquals(binder.validate!('ada'), 'u:ada');
+    // A bare validator function carries NO schema — it cannot document.
+    asserts.assertEquals(payload((v) => v).schema, undefined);
+  });
+
   it('validators ride along untouched — nothing executes here', () => {
     let calls = 0;
     const binder = param('n', (value) => {

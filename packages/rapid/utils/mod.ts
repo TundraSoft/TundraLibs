@@ -62,5 +62,6 @@ export { Meter, type MeterSample } from './Meter.ts';
 export {
   buildOpenApi,
   type OpenApiInfo,
+  type OpenApiSecuritySchemes,
   type OpenApiServer,
 } from './buildOpenApi.ts';

@@ -117,6 +117,20 @@ Core and the current capability set are built and green on Deno / Bun / Node
   the new `redirect` key (string → 302, `{ url, permanent }` → 301, `location`
   set, precedence over `status`), the Module HTTP ergonomics item is done:
   input binders (`cookie`/`auth`/`session`) in, cookies/redirect/stream out.
+- **OpenAPI from the decorators (2026-08-23)** — routes take `summary` /
+  `description` / `tags` / `operationId` / `security`; `@Module` takes
+  `description` / `tags` / `security` as the defaults its routes inherit. A
+  module's `name` is the default tag, its `namespace` the tag group
+  (`x-tagGroups`; namespace = parent, module = sub-module), its `description`
+  the top-level tag's. `payload(Schema)` (a schema OBJECT, anything with
+  `.parse`/`.toOpenAPI`) validates AND documents the request body — body only,
+  by decision: context-derived binders never document. `security` names emit
+  requirements + `components.securitySchemes` (`bearerAuth` built in, others via
+  `openapi({ securitySchemes })`); `[]` = public. `operationId` defaults to
+  `<Module>_<method>` (the SDK generator's key). Version is no longer emitted
+  as a tag — it is `x-version` per operation and `x-versions` at the root.
+  Deferred (pact in flux): deriving `security` from the `authorize()`
+  middleware itself.
   Transport rule, documented: both keys are HTTP-only and SILENTLY IGNORED on
   JOB/SOCKET (a redirect never becomes a 3xx there), so a multi-transport
   method returns them without branching.

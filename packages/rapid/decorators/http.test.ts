@@ -34,6 +34,37 @@ describe('rapid.decorators.http', () => {
     asserts.assertEquals(new Users().find('7'), { content: { id: '7' } });
   });
 
+  it('records the OpenAPI options (summary/description/tags/operationId/security/response) as data', () => {
+    const response = { toOpenAPI: () => ({ type: 'object' }) };
+    class Docs {
+      @GET('/docs', {
+        summary: 'Short',
+        description: 'Long form.',
+        tags: ['Docs'],
+        operationId: 'Docs_custom',
+        security: [],
+        response,
+      })
+      get(): RapidContextResponse {
+        return { content: {} };
+      }
+    }
+    const [entry] = decorationsOf(Docs, 'get')!;
+    asserts.assertEquals(entry, {
+      kind: 'HTTP',
+      method: 'GET',
+      path: '/docs',
+      binds: [],
+      methodName: 'get',
+      summary: 'Short',
+      description: 'Long form.',
+      tags: ['Docs'],
+      operationId: 'Docs_custom',
+      security: [],
+      response,
+    });
+  });
+
   it('aliases (same factory twice) and multi-transport stacks all record', () => {
     class Reports {
       @GET('/reports/:id:', { bind: [param('id')] })

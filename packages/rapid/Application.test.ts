@@ -40,11 +40,13 @@ import {
   paging,
   param,
   payload,
+  POST,
   query,
   session,
   SOCKET,
 } from './decorators/mod.ts';
 import { event, type EventContext, RapidModule } from './modules/mod.ts';
+import { buildOpenApi } from './utils/mod.ts';
 import type {
   RapidClusterSnapshot,
   RapidContextResponse,
@@ -2874,6 +2876,144 @@ describe('rapid.Application', () => {
       app.module(new Binders());
       const r = await app.fetch(new Request('http://app/session'));
       asserts.assertEquals((await r.json()).seen, 1);
+    });
+  });
+}
+
+// ==========================================================================
+// OpenAPI metadata from modules — tags / operationId / security / payload(Schema)
+// ==========================================================================
+{
+  const make = () =>
+    Application.initialize({
+      name: 'oas',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+  type Op = Record<string, unknown> & {
+    tags?: string[];
+    security?: unknown;
+    requestBody?: { content: { 'application/json': { schema: unknown } } };
+  };
+  const ops = (doc: Record<string, unknown>) =>
+    doc.paths as Record<string, Record<string, Op>>;
+
+  describe('OpenAPI metadata from mounted modules', () => {
+    it('a decorated class: module name is the default tag, route tags merge, security resolves route → module, operationId defaults to Module_method', async () => {
+      const UserSchema = {
+        parse: (v: unknown) => v as { email: string },
+        toOpenAPI: () => ({ type: 'object', required: ['email'] }),
+      };
+      @Module('Users', {
+        prefix: '/users',
+        namespace: 'people',
+        description: 'User directory',
+        security: ['bearerAuth'],
+      })
+      class Users {
+        @GET('/:id:', {
+          bind: [param('id')],
+          summary: 'One user',
+          tags: ['Lookup'],
+        })
+        find(id: string): RapidContextResponse {
+          return { content: { id } };
+        }
+        @POST('/', { bind: [payload(UserSchema)], security: [] })
+        create(body: { email: string }): RapidContextResponse {
+          return { content: body, status: 201 };
+        }
+        @GET('/me', { tags: ['Users'], operationId: 'whoami' }) // dup tag + explicit id
+        me(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      const app = await make();
+      app.module(new Users());
+      const doc = buildOpenApi(app.routes);
+      const p = ops(doc);
+      asserts.assertEquals(p['/users/{id}']!.get!.tags, ['Users', 'Lookup']);
+      asserts.assertEquals(p['/users/{id}']!.get!.summary, 'One user');
+      asserts.assertEquals(p['/users/{id}']!.get!.operationId, 'Users_find');
+      asserts.assertEquals(p['/users/{id}']!.get!.security, [{
+        bearerAuth: [],
+      }]); // module default
+      // `@POST('/')` under prefix `/users` registers the joined `/users/` —
+      // the document shows the path as registered.
+      const create = p['/users/']!.post!;
+      // Route-level `[]` overrides the module default → public.
+      asserts.assertEquals(create.security, []);
+      asserts.assertEquals(create.operationId, 'Users_create');
+      asserts.assertEquals(
+        create.requestBody!.content['application/json'].schema,
+        { type: 'object', required: ['email'] },
+      );
+      // Duplicate tag deduped; explicit operationId wins.
+      asserts.assertEquals(p['/users/me']!.get!.tags, ['Users']);
+      asserts.assertEquals(p['/users/me']!.get!.operationId, 'whoami');
+      // Module identity → top-level tags + namespace group; bearerAuth declared.
+      asserts.assertEquals(doc.tags, [{
+        name: 'Users',
+        description: 'User directory',
+      }]);
+      asserts.assertEquals(doc['x-tagGroups'], [{
+        name: 'people',
+        tags: ['Users'],
+      }]);
+      asserts.assert(
+        'bearerAuth' in
+          (doc.components as { securitySchemes: Record<string, unknown> })
+            .securitySchemes,
+      );
+    });
+
+    it('a RapidModule: name/namespace come from the fields; @Module may still add description/tags', async () => {
+      @Module({ description: 'Role catalog', tags: ['Roles', 'Access'] })
+      class Roles extends RapidModule {
+        readonly name = 'Roles';
+        readonly namespace = 'people';
+        protected readonly events = {};
+        @GET('/roles')
+        list(): RapidContextResponse {
+          return { content: { roles: [] } };
+        }
+      }
+      const app = await make();
+      await app.modules({ modules: [{ Roles }] });
+      const doc = buildOpenApi(app.routes);
+      asserts.assertEquals(ops(doc)['/roles']!.get!.tags, ['Roles', 'Access']);
+      asserts.assertEquals(ops(doc)['/roles']!.get!.operationId, 'Roles_list');
+      asserts.assertEquals(doc.tags, [{
+        name: 'Roles',
+        description: 'Role catalog',
+      }]);
+      asserts.assertEquals(doc['x-tagGroups'], [{
+        name: 'people',
+        tags: ['Roles'],
+      }]);
+    });
+
+    it('tags: [] on a module opts out of the default tag; a plain class without @Module has none', async () => {
+      @Module('Quiet', { tags: [] })
+      class Quiet {
+        @GET('/q')
+        q(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      class Bare {
+        @GET('/b')
+        b(): RapidContextResponse {
+          return { content: {} };
+        }
+      }
+      const app = await make();
+      app.module(new Quiet());
+      app.module(new Bare());
+      const p = ops(buildOpenApi(app.routes));
+      asserts.assertEquals(p['/q']!.get!.tags, undefined);
+      asserts.assertEquals(p['/b']!.get!.tags, undefined);
+      asserts.assertEquals(p['/b']!.get!.operationId, 'b'); // no module name → method only
     });
   });
 }

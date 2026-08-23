@@ -6,6 +6,8 @@
  * @module
  */
 
+import type { RapidSchema } from './Schema.ts';
+
 /** The extraction sources a binder can name. */
 export type RapidBinderSource =
   | 'param'
@@ -37,4 +39,12 @@ export type RapidBinder<T = unknown> = {
    * invocation time, never at decoration time.
    */
   validate?: (value: unknown) => T | Promise<T>;
+  /**
+   * The DOCUMENTATION half of a schema object passed to `payload(Schema)` —
+   * read by the OpenAPI assembler for the request body, never at invocation
+   * time. Only `payload` sets it: the body is the one client-sent value that
+   * has a schema. Context-derived binders (`auth`, `session`, `cookie`,
+   * `connection`, …) are not part of the request contract and never document.
+   */
+  schema?: Pick<RapidSchema, 'toOpenAPI' | 'toJSONSchema'>;
 };

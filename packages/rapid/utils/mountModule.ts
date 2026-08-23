@@ -202,6 +202,14 @@ function assertBindableOnKind(
   }
 }
 
+/** The owning module's OpenAPI identity, resolved once per mount. */
+type ModuleDoc = {
+  name: string | undefined;
+  tags: readonly string[];
+  security: readonly string[] | undefined;
+  description: string | undefined;
+};
+
 /** Build the per-transport closure `route`/`socket`/`job` receives. */
 function buildInvoker<S extends RapidContextState>(
   fn: BoundMethod,
@@ -228,6 +236,7 @@ function registerDecoration<S extends RapidContextState>(
   namespace: string | undefined,
   moduleVersion: string | undefined,
   label: string,
+  doc: ModuleDoc,
 ): void {
   assertBindableOnKind(decoration, label);
   switch (decoration.kind) {
@@ -236,11 +245,34 @@ function registerDecoration<S extends RapidContextState>(
       // default; either may be absent (an unversioned route).
       const version = decoration.version ?? moduleVersion;
       const invoker = buildInvoker<S>(fn, decoration.binds, instance, label);
+      // OpenAPI grouping: module tags (its name by default) under the
+      // route's own, deduplicated; security and operationId likewise
+      // resolve route → module → derived default.
+      const tags = [...new Set([...doc.tags, ...(decoration.tags ?? [])])];
+      const security = decoration.security ?? doc.security;
+      const operationId = decoration.operationId ??
+        (doc.name !== undefined
+          ? `${doc.name}_${decoration.methodName}`
+          : decoration.methodName);
+      const module = {
+        ...(doc.name !== undefined ? { name: doc.name } : {}),
+        ...(namespace !== undefined ? { namespace } : {}),
+        ...(doc.description !== undefined
+          ? { description: doc.description }
+          : {}),
+      };
       const openapi: RapidRouteOpenApi = {
         binds: decoration.binds,
+        operationId,
+        ...(decoration.summary !== undefined
+          ? { summary: decoration.summary }
+          : {}),
         ...(decoration.description !== undefined
           ? { description: decoration.description }
           : {}),
+        ...(tags.length > 0 ? { tags } : {}),
+        ...(security !== undefined ? { security } : {}),
+        ...(Object.keys(module).length > 0 ? { module } : {}),
         ...(decoration.response !== undefined
           ? { response: decoration.response }
           : {}),
@@ -307,9 +339,9 @@ export function mountModule<S extends RapidContextState>(
   const ctor = (instance as { constructor: object }).constructor;
   const meta = moduleMetaOf(ctor);
   const ctorName = (ctor as { name?: string }).name ?? '(anonymous)';
-  // A RapidModule's identity lives on its fields; @Module may only add
-  // prefix/version. Declaring name/namespace in both places is an error,
-  // not an override — one source of truth.
+  // A RapidModule's identity lives on its fields; @Module may add the mount
+  // shape and OpenAPI grouping, never name/namespace. Declaring those in
+  // both places is an error, not an override — one source of truth.
   const isModule = instance instanceof RapidModule;
   if (
     isModule && meta !== undefined &&
@@ -317,7 +349,8 @@ export function mountModule<S extends RapidContextState>(
   ) {
     throw new RapidError('RAPID_CONFIG', {
       message: `${ctorName} is a RapidModule — its name/namespace come ` +
-        `from the class fields; @Module on it takes only { prefix, version }`,
+        `from the class fields; @Module on it takes only ` +
+        `{ prefix, version, description, tags, security }`,
       details: { class: ctorName, meta },
     });
   }
@@ -326,6 +359,14 @@ export function mountModule<S extends RapidContextState>(
     ? (instance as RapidModule).namespace
     : meta?.namespace;
   const moduleVersion = meta?.version;
+  const moduleName = isModule ? (instance as RapidModule).name : meta?.name;
+  const doc: ModuleDoc = {
+    name: moduleName,
+    // The module's name is its default tag; an explicit `tags: []` opts out.
+    tags: meta?.tags ?? (moduleName !== undefined ? [moduleName] : []),
+    security: meta?.security,
+    description: meta?.description,
+  };
 
   const seen = new Set<PropertyKey>();
   let mounted = 0;
@@ -372,6 +413,7 @@ export function mountModule<S extends RapidContextState>(
           namespace,
           moduleVersion,
           label,
+          doc,
         );
         mounted++;
       }

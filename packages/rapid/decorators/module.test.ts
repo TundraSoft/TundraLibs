@@ -39,6 +39,30 @@ describe('rapid.decorators.module', () => {
     });
   });
 
+  it('records the OpenAPI grouping (description/tags/security) in both forms', () => {
+    @Module('Users', {
+      description: 'People',
+      tags: ['Users', 'Directory'],
+      security: ['bearerAuth'],
+    })
+    class Named {}
+    asserts.assertEquals(moduleMetaOf(Named), {
+      name: 'Users',
+      prefix: '',
+      description: 'People',
+      tags: ['Users', 'Directory'],
+      security: ['bearerAuth'],
+    });
+    // Options-only form (RapidModule subclasses): grouping allowed, identity not.
+    @Module({ description: 'Roles', tags: [] })
+    class OptionsOnly {}
+    asserts.assertEquals(moduleMetaOf(OptionsOnly), {
+      prefix: '',
+      description: 'Roles',
+      tags: [],
+    });
+  });
+
   it('no options -> empty-string prefix, no namespace/version', () => {
     @Module('Bare')
     class Bare {}

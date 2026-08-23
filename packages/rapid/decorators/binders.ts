@@ -17,6 +17,7 @@ import type {
   RapidBinder,
   RapidContextPaging,
   RapidContextQuery,
+  RapidSchema,
 } from '../types/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
 import type { RapidSession } from '../middlewares/session.ts';
@@ -54,10 +55,27 @@ export function payload(): RapidBinder<unknown>;
 export function payload<T>(
   validate: (value: unknown) => T | Promise<T>,
 ): RapidBinder<T>;
+/**
+ * Pass a schema OBJECT (`payload(UserSchema)`, anything with `.parse` —
+ * a guardian schema) and the binder both validates the body AND documents
+ * it: `buildOpenApi` emits the schema's `toOpenAPI()` as the request body.
+ * `payload(Schema.parse)` still works but cannot document. This is the
+ * ONLY binder that takes a schema object — the body is the one client-sent
+ * value with a schema; context-derived binders never appear in OpenAPI.
+ */
+export function payload<T>(schema: RapidSchema<T>): RapidBinder<T>;
 export function payload(
-  validate?: (value: unknown) => unknown,
+  arg?: ((value: unknown) => unknown) | RapidSchema,
 ): RapidBinder<unknown> {
-  return { source: 'payload', validate };
+  if (arg === undefined || typeof arg === 'function') {
+    return { source: 'payload', validate: arg };
+  }
+  // Called as a method so a schema whose `parse` reads `this` keeps working.
+  return {
+    source: 'payload',
+    validate: (value) => arg.parse(value),
+    schema: arg,
+  };
 }
 
 /**
