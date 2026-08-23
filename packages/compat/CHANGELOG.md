@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.5.0...compat-v2.6.0) (2026-08-23)
+
+
+### Features
+
+* **compat:** outbound TCP/TLS, ephemeral file I/O, and request-driven WebSocket upgrades on Workers ([#536](https://github.com/TundraSoft/TundraLibs/issues/536)) ([1ef287c](https://github.com/TundraSoft/TundraLibs/commit/1ef287c51128c410066549ba4d5e1820ab862f2d))
+
 ## [2.5.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.4.0...compat-v2.5.0) (2026-08-22)
 
 
