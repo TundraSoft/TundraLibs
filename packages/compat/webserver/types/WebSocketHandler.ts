@@ -8,16 +8,26 @@ import type { WebSocketUpgradeContext } from './WebSocketUpgradeContext.ts';
  *
  * ## Runtime support
  *
- * | Handler  | Bun   | Deno  | Node | Notes                                                              |
- * | -------- | ----- | ----- | ---- | ------------------------------------------------------------------ |
- * | upgrade  | ✅    | ✅    | ✅   | Accept / refuse / customize per-request                            |
- * | open     | ✅    | ✅    | ✅   |                                                                    |
- * | message  | ✅    | ✅    | ✅   |                                                                    |
- * | close    | ✅    | ✅    | ✅   |                                                                    |
- * | error    | ✅\*  | ✅    | ✅   | Bun has no native error event — we synthesize from caught throws   |
- * | ping     | ✅    | ❌\** | ✅   | Deno consumes ping/pong frames internally — unreachable            |
- * | pong     | ✅    | ❌\** | ✅   | (same)                                                             |
- * | drain    | ✅    | ✅\†  | ✅   | Deno emulated by polling `bufferedAmount`                          |
+ * | Handler  | Bun   | Deno  | Node | Workers | Notes                                                            |
+ * | -------- | ----- | ----- | ---- | ------- | ---------------------------------------------------------------- |
+ * | upgrade  | ✅    | ✅    | ✅   | ✅      | Accept / refuse / customize per-request                          |
+ * | open     | ✅    | ✅    | ✅   | ✅\‡    | Workers: called directly — `accept()` opens the socket with no event |
+ * | message  | ✅    | ✅    | ✅   | ✅      |                                                                  |
+ * | close    | ✅    | ✅    | ✅   | ✅      |                                                                  |
+ * | error    | ✅\*  | ✅    | ✅   | ✅      | Bun has no native error event — we synthesize from caught throws |
+ * | ping     | ✅    | ❌\** | ✅   | ❌\**   | Deno and workerd both answer ping/pong internally — unreachable  |
+ * | pong     | ✅    | ❌\** | ✅   | ❌\**   | (same)                                                           |
+ * | drain    | ✅    | ✅\†  | ✅   | ❌\§    | Deno emulated by polling `bufferedAmount`                        |
+ *
+ * The Workers column applies to `WebSocketServer.handleUpgrade`, the
+ * request-driven wire-up — workerd can accept a WebSocket but can never
+ * `listen()`, so `WebServer` never reaches these handlers there.
+ *
+ * \‡ Verified on workerd: `WebSocketPair`'s server end is already
+ * `OPEN` after `accept()`, so no `open` event is ever dispatched.
+ *
+ * \§ Workerd's `WebSocket` has no `bufferedAmount` property at all, so
+ * there is nothing to poll and nothing to report as backpressure.
  *
  * @typeParam T - Per-connection data type.
  */

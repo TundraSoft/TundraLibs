@@ -32,6 +32,9 @@ import type {
   WebSocketHandler,
   WebSocketUpgradeContext,
 } from '../webserver/types/mod.ts';
+import { resolveUpgrade } from '../webserver/_resolveUpgrade.ts';
+import { isDeno, isWorkers } from '../runtime.ts';
+import { UnsupportedRuntimeError } from '../Error.ts';
 import { StringCodec } from './codecs.ts';
 import type {
   Codec,
@@ -44,6 +47,9 @@ import type {
 
 /** Default cap on incoming frame size — 1 MB. */
 const DEFAULT_MAX_FRAME_SIZE = 1_048_576;
+
+// deno-lint-ignore no-explicit-any
+const g = globalThis as any;
 
 /** Terminal handler — runs after all middleware. */
 type _MessageHandler<T, M> = (
@@ -79,6 +85,62 @@ const exceedsFrameSize = (raw: WebSocketData, max: number): boolean => {
   if (raw instanceof Uint8Array) return raw.byteLength > max;
   return raw.byteLength > max;
 };
+
+/**
+ * Adapt a browser-style `WebSocket` — what both `Deno.upgradeWebSocket`
+ * and workerd's `WebSocketPair` hand back — to the unified
+ * {@link ServerWebSocket} surface the handlers expect.
+ *
+ * Two places the underlying platforms fall short of that surface, both
+ * reported honestly rather than faked:
+ *
+ * - **`ping` / `pong` return `false`.** Neither runtime exposes the
+ *   control frames; both answer them internally. That is the same
+ *   answer {@link WebServer}'s Deno branch already gives.
+ * - **`bufferedAmount` falls back to `0`** on workerd, which does not
+ *   implement the property at all (Deno does). A constant `0` means
+ *   {@link WebSocketServer.onBackpressure} can never fire there — see
+ *   the note on {@link WebSocketServer.handleUpgrade}.
+ *
+ * @typeParam T - Per-connection data type.
+ * @internal
+ */
+function adaptBrowserWebSocket<T>(
+  socket: WebSocket,
+  userData: T,
+  remoteAddress: string | null,
+): ServerWebSocket<T> {
+  // Closure-held: a browser WebSocket carries no user-data slot of its
+  // own, so the wrapper's `data` setter mutates this instead.
+  let connectionData = userData;
+  return {
+    // `WebSocketData`'s `Uint8Array` is `Uint8Array<ArrayBufferLike>` under
+    // TS 5.7+, which the platform `send`'s `BufferSource` rejects; the
+    // backing buffer is always a real `ArrayBuffer` here, so the cast is safe.
+    send: (data: WebSocketData) => socket.send(data as string | BufferSource),
+    close: (code?: number, reason?: string) => socket.close(code, reason),
+    ping: () => false,
+    pong: () => false,
+    get readyState() {
+      return socket.readyState;
+    },
+    get bufferedAmount() {
+      return socket.bufferedAmount ?? 0;
+    },
+    get protocol() {
+      return socket.protocol ?? '';
+    },
+    get data() {
+      return connectionData;
+    },
+    set data(v: T) {
+      connectionData = v;
+    },
+    get remoteAddress() {
+      return remoteAddress ?? undefined;
+    },
+  };
+}
 
 /**
  * Middleware-aware WebSocket server primitive.
@@ -325,6 +387,180 @@ export class WebSocketServer<T = unknown, M = string> {
       message: (ws, msg) => this.__handleMessage(ws, msg),
       close: (ws, code, reason) => this.__handleClose(ws, code, reason),
     };
+  }
+
+  /**
+   * Serve one already-arrived upgrade request and hand back the
+   * response — the third wire-up, for runtimes that never listen.
+   *
+   * {@link listen} and {@link handlers} both assume something is bound
+   * to a port. Cloudflare Workers can accept a WebSocket but can never
+   * `listen()`, and a Deno app may already be inside `Deno.serve`. Both
+   * express an upgrade as "given this `Request`, return a `Response`",
+   * which is exactly this method:
+   *
+   * ```ts ignore
+   * export default { fetch: (req: Request) => wss.handleUpgrade(req) };
+   * ```
+   *
+   * The connection is driven by the same `open` / `message` / `close`
+   * dispatch {@link handlers} builds, so middleware, the codec, frame
+   * limits, {@link connections} and {@link broadcast} all behave
+   * identically to the listen-based path. The
+   * {@link WebSocketServerOptions.upgrade} hook runs first with the same
+   * accept / refuse / customize contract.
+   *
+   * **Runtime support.** Workers (`WebSocketPair`) and Deno
+   * (`Deno.upgradeWebSocket`) only. Bun's `server.upgrade(req)` returns
+   * a boolean and needs the `Bun.serve` server object — there is no
+   * `Response` to return — and Node has no `Request`/`Response` server
+   * model at all, so both throw {@link UnsupportedRuntimeError}
+   * pointing at {@link handlers} / {@link listen}, which do work there.
+   *
+   * **Backpressure on Workers.** Workerd's `WebSocket` has no
+   * `bufferedAmount`, so `ws.bufferedAmount` reads `0` and
+   * {@link onBackpressure} never fires. It works normally on Deno.
+   *
+   * @param request - The upgrade request, straight from your handler.
+   * @param info - Peer address and port, when your runtime gives you
+   *   them (Deno: `info.remoteAddr`; Workers: the `CF-Connecting-IP`
+   *   header). Passed through to the `upgrade` hook and surfaced as
+   *   `ws.remoteAddress`. Both default to `null`.
+   *
+   * @returns The `101` upgrade response to return from your handler; a
+   *   `426` when `request` is not a WebSocket upgrade; or a `403` when
+   *   the `upgrade` hook refused. Check `status` if you'd rather answer
+   *   a refusal your own way.
+   *
+   * @throws {Error} When the server is already {@link close}d.
+   * @throws {@link UnsupportedRuntimeError} On Bun, Node, or any runtime
+   *   without a request-driven upgrade.
+   *
+   * @example Cloudflare Workers
+   * ```ts ignore
+   * const wss = new WebSocketServer();
+   * wss.onMessage((ctx) => ctx.ws.send(`echo: ${ctx.message}`));
+   *
+   * export default {
+   *   fetch: (request: Request) =>
+   *     wss.handleUpgrade(request, {
+   *       remoteAddress: request.headers.get('CF-Connecting-IP'),
+   *     }),
+   * };
+   * ```
+   */
+  async handleUpgrade(
+    request: Request,
+    info: {
+      remoteAddress?: string | null;
+      remotePort?: number | null;
+    } = {},
+  ): Promise<Response> {
+    if (this.__closed) throw new Error('WebSocketServer is closed');
+
+    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+      return new Response('Expected a WebSocket upgrade request', {
+        status: 426,
+        headers: { upgrade: 'websocket' },
+      });
+    }
+
+    const remoteAddress = info.remoteAddress ?? null;
+    const remotePort = info.remotePort ?? null;
+    const resolved = await resolveUpgrade<T>(
+      request,
+      this.__opts.upgrade,
+      remoteAddress,
+      remotePort,
+    );
+    if (!resolved.accepted) {
+      // The listen-based path falls through to the WebServer's HTTP
+      // handler here. There is no HTTP handler to fall through to, so
+      // answer with a status the caller can override.
+      return new Response('WebSocket upgrade refused', { status: 403 });
+    }
+
+    // The same dispatch `handlers()` hands a WebServer — not a parallel
+    // copy of it, so middleware and the codec cannot drift between the
+    // two paths, and anything wired in later is picked up here for free.
+    const handlers = this.handlers();
+    const attach = (socket: WebSocket, ws: ServerWebSocket<T>) => {
+      socket.addEventListener('message', (event: MessageEvent) => {
+        void handlers.message?.(ws, event.data as WebSocketData);
+      });
+      socket.addEventListener('close', (event: CloseEvent) => {
+        void handlers.close?.(ws, event.code, event.reason);
+      });
+      socket.addEventListener('error', (event: Event) => {
+        const error = 'error' in event
+          ? (event as ErrorEvent).error as Error
+          : new Error('WebSocket error');
+        void handlers.error?.(ws, error);
+      });
+    };
+
+    /* c8 ignore start */
+    if (isWorkers) {
+      const pair = new g.WebSocketPair();
+      const client = pair[0] as WebSocket;
+      const server = pair[1] as WebSocket & { accept(): void };
+      // `accept()` puts the server end into OPEN immediately — no
+      // `open` event ever fires on this side, so the handler is
+      // invoked directly rather than waited for.
+      server.accept();
+      const ws = adaptBrowserWebSocket<T>(
+        server,
+        resolved.userData,
+        remoteAddress,
+      );
+      attach(server, ws);
+      await handlers.open?.(ws, resolved.upgradeContext);
+      return new Response(null, {
+        status: 101,
+        ...(resolved.extraHeaders && { headers: resolved.extraHeaders }),
+        webSocket: client,
+      } as ResponseInit);
+    }
+    /* c8 ignore stop */
+
+    /* c8 ignore start */
+    if (isDeno) {
+      const upgradeOptions: { protocol?: string; idleTimeout?: number } = {};
+      if (resolved.protocol) upgradeOptions.protocol = resolved.protocol;
+      const { socket, response } = Deno.upgradeWebSocket(
+        request,
+        upgradeOptions,
+      );
+      const ws = adaptBrowserWebSocket<T>(
+        socket,
+        resolved.userData,
+        remoteAddress,
+      );
+      // Deno hands back a CONNECTING socket — the handshake finishes
+      // after the response is returned, so `open` has to be awaited
+      // rather than called, or the first `send` would throw.
+      socket.addEventListener('open', () => {
+        void handlers.open?.(ws, resolved.upgradeContext);
+      });
+      attach(socket, ws);
+      if (resolved.extraHeaders) {
+        for (const [key, value] of new Headers(resolved.extraHeaders)) {
+          response.headers.set(key, value);
+        }
+      }
+      return response;
+    }
+    /* c8 ignore stop */
+
+    /* c8 ignore start */
+    throw new UnsupportedRuntimeError(
+      'WebSocketServer.handleUpgrade',
+      undefined,
+      'no request-driven WebSocket upgrade here — Bun needs the `Bun.serve` ' +
+        'server object and returns no response, and Node upgrades a raw ' +
+        'socket. Use `handlers()` with a WebServer, or `listen()`',
+    );
+    /* c8 ignore stop */
   }
 
   /**

@@ -14,7 +14,13 @@
  *
  * The root `@tundralibs/norm` barrel already imports this module.
  *
- * Pulls the Postgres TCP wire stack — NOT edge-safe; use `neon` there.
+ * Pulls the Postgres TCP wire stack over `@tundralibs/compat/net` —
+ * genuinely usable on Cloudflare Workers since compat added real TCP
+ * support there (raw sockets via `cloudflare:sockets`). SSL needs a
+ * publicly-trusted server certificate: `cloudflare:sockets` has no
+ * client-cert/CA hook, so a self-signed or privately-issued cert fails
+ * the handshake. `neon` remains the fetch-only alternative when that
+ * matters, or in a browser (no raw sockets there at all).
  *
  * @since 1.2.0
  */

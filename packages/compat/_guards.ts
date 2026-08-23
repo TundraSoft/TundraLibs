@@ -1,13 +1,17 @@
 /**
  * @fileoverview Internal guard for Node built-ins loaded via
- * {@link loadBuiltin}. A runtime that looks Node-like (`isNode` /
- * `isBun`) can still be missing a specific built-in — Cloudflare
- * Workers under `nodejs_compat` exposes `process.versions.node` yet
- * returns `undefined` for `node:http`, `node:fs`, `node:net`, … — so a
- * branch that dereferences the loaded module would throw a bare
- * `TypeError`. {@link assertBuiltin} turns that into an explicit
+ * {@link loadBuiltin}. A runtime can be missing the specific built-in a
+ * branch needs — a browser has no `process.getBuiltinModule` at all, and
+ * which modules Cloudflare Workers resolves depends on the
+ * `nodejs_compat` flag and compatibility date — so a branch that
+ * dereferences the loaded module would throw a bare `TypeError`.
+ * {@link assertBuiltin} turns that into an explicit
  * {@link UnsupportedRuntimeError} at the head of the branch, before any
  * dereference.
+ *
+ * Resolving is not the same as working: workerd returns a `node:dgram`
+ * whose `bind()` never calls back, which is why `udp.ts` rejects on
+ * `isWorkers` rather than trusting the guard alone.
  *
  * Not re-exported from the package root — internal to compat.
  *

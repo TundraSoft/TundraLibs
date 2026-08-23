@@ -59,8 +59,12 @@ const norm = new Norm({
 `dialect` is one of `postgres`, `maria`, `sqlite`, `mongo` (self-hosted)
 or `neon`, `turso`, `d1` (fetch-only, for edge/serverless runtimes). This
 guide imports the root `@tundralibs/norm` barrel throughout, which
-registers all seven and is server-only; on an edge runtime import
-`@tundralibs/norm/core` plus the single engine module you need — see
+registers six of the seven — every dialect except `sqlite`, which needs
+its own explicit `@tundralibs/norm/engines/sqlite` import. See
+**[Browser / Worker compatibility](../README.md#browser--worker-compatibility)**
+for which of those six actually run on an edge runtime; either way,
+prefer `@tundralibs/norm/core` plus the single engine module you need
+there instead of the root barrel — see
 **[Choosing an entry point](../README.md#choosing-an-entry-point)**.
 
 ## 2. Model the schema

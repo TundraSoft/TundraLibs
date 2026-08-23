@@ -25,6 +25,7 @@ into an existing `WebServer`, or standalone.
   - [Custom codec](#custom-codec)
   - [Middleware: timing + logging](#middleware-timing--logging)
   - [Broadcasting to all connections](#broadcasting-to-all-connections)
+  - [Serving without a listening socket](#serving-without-a-listening-socket)
 - [Looking for command routing or pub/sub?](#looking-for-command-routing-or-pubsub)
 - [Runtime support](#runtime-support)
 - [Related Documentation](#related-documentation)
@@ -130,6 +131,7 @@ Each `on*` registration replaces the previous. `use()` appends.
 ```ts ignore
 wss.handlers(); // → WebSocketHandler<T>, pass to WebServer
 await wss.listen({ port }); // standalone — internal WebServer
+await wss.handleUpgrade(request); // → Response; no listening socket
 wss.send(ws, message); // codec-encode, send to one ws, observe backpressure
 wss.broadcast(message); // codec-encode once, send to every open connection
 wss.connections; // snapshot of open sockets (ReadonlyArray)
@@ -436,6 +438,59 @@ for (const ws of wss.connections) {
 }
 ```
 
+### Serving without a listening socket
+
+Cloudflare Workers can accept a WebSocket but can never `listen()`, and a
+Deno app may already be inside `Deno.serve`. Both express an upgrade as
+"given this `Request`, return a `Response`", which is what
+`handleUpgrade` exposes:
+
+```ts ignore
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
+const wss = new WebSocketServer();
+wss.onMessage((ctx) => ctx.ws.send(`echo: ${ctx.message}`));
+
+// Cloudflare Workers
+export default {
+  fetch: (request: Request) =>
+    wss.handleUpgrade(request, {
+      remoteAddress: request.headers.get('CF-Connecting-IP'),
+    }),
+};
+```
+
+```ts ignore
+// Deno — same method, from inside Deno.serve
+Deno.serve((request, info) =>
+  wss.handleUpgrade(request, {
+    remoteAddress: info.remoteAddr.transport === 'tcp'
+      ? info.remoteAddr.hostname
+      : null,
+  })
+);
+```
+
+The connection is driven by the same `open` / `message` / `close`
+dispatch `handlers()` builds, so middleware, the codec, frame limits,
+`connections` and `broadcast` all behave exactly as they do on the
+listen-based path. The `upgrade` hook runs first with the same
+accept / refuse / customize contract.
+
+It answers `101` on success, `426` when the request is not an upgrade,
+and `403` when the `upgrade` hook refuses — check `status` if you would
+rather handle a refusal yourself.
+
+**Bun and Node throw `UnsupportedRuntimeError`.** Bun's
+`server.upgrade(req)` returns a boolean and needs the `Bun.serve` server
+object, so there is no `Response` to hand back; Node upgrades a raw
+socket and has no `Request`/`Response` server model at all. Use
+`handlers()` or `listen()` there — both work.
+
+**Backpressure on Workers.** Workerd's `WebSocket` has no
+`bufferedAmount`, so it reads `0` and `onBackpressure` never fires.
+It works normally on Deno.
+
 ## Looking for command routing or pub/sub?
 
 `WebSocketServer` is the primitive — it has no opinion on the wire
@@ -455,14 +510,26 @@ this primitive.
 
 ## Runtime support
 
-The primitive is pure JS on top of `compat/webserver` — it inherits
-whatever that module supports. Today that means:
+`handlers()` and `listen()` are pure JS on top of `compat/webserver` —
+they inherit whatever that module supports:
 
 - **Bun**: native WebSocket
 - **Deno**: native WebSocket via `Deno.upgradeWebSocket()`
 - **Node**: WebSocket via the `ws` npm package
 
-`WebSocketServer` itself has no runtime branches.
+`handleUpgrade()` is the one method with runtime branches, because it
+needs a request-driven upgrade the runtime can answer with a `Response`:
+
+| Runtime     | `handlers()` / `listen()`  | `handleUpgrade()`                                                  |
+| ----------- | -------------------------- | ------------------------------------------------------------------ |
+| Bun         | ✅                         | ❌ `server.upgrade()` returns a boolean and needs the serve object |
+| Deno        | ✅                         | ✅ `Deno.upgradeWebSocket()`                                       |
+| Node        | ✅                         | ❌ upgrades a raw socket; no `Response` model                      |
+| **Workers** | ❌ nothing can bind a port | ✅ `WebSocketPair` + a `101` response                              |
+
+Ping/pong are unreachable on Deno and Workers alike — both answer the
+control frames internally, so `ws.ping()` / `ws.pong()` return `false`.
+See the table on `WebSocketHandler` for the per-handler detail.
 
 ## Related Documentation
 

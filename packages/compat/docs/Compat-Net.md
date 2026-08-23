@@ -279,6 +279,10 @@ async function listen(options: ListenOptions): Promise<Listener>;
 - **Deno**: Uses `Deno.listen()` for TCP/Unix, `Deno.listenTls()` for TLS
 - **Bun**: Uses Node.js-compatible `net.createServer()` for TCP/Unix, `tls.createServer()` for TLS
 - **Node.js**: Uses `net.createServer()` for TCP/Unix, `tls.createServer()` for TLS
+- **Cloudflare Workers**: Throws `UnsupportedRuntimeError`. Not a gap in
+  compat — workerd's request/response model has no way to accept an
+  inbound TCP connection, so there is nothing to bind. Outbound
+  connections do work; see [`connect()`](#connect).
 
 **Example - Basic TCP server:**
 
@@ -426,6 +430,21 @@ async function connect(options: ConnectOptions): Promise<Connection>;
 - **Deno**: Uses `Deno.connect()` for TCP/Unix, `Deno.connectTls()` for TLS
 - **Bun**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
 - **Node.js**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
+- **Cloudflare Workers**: Uses `cloudflare:sockets`' `connect()` — the
+  same primitive Hyperdrive is built on. Plain TCP opens with
+  `secureTransport: 'starttls'` so [`upgradeTls()`](#upgradetls) stays
+  available (the socket is still in the clear until you call it);
+  `tls` opens with `secureTransport: 'on'`. Three things workerd cannot
+  do, each an `UnsupportedRuntimeError` rather than a silent drop:
+  - **UNIX sockets** — `cloudflare:sockets` dials TCP only.
+  - **TLS material** — `cert`, `key`, `ca` and their `*File` forms all
+    throw, as does `rejectUnauthorized: false`. workerd's `SocketOptions`
+    has nowhere to put certificates and verifies the peer against its own
+    trust store with no bypass, so the server needs a publicly-trusted
+    certificate. For a private CA, route through Hyperdrive.
+  - **`timeout` / `signal`** are honoured, but by racing the abort against
+    the socket opening and closing it — `cloudflare:sockets` has no
+    signal parameter of its own.
 
 **Example - TCP connection:**
 
@@ -675,6 +694,16 @@ async function upgradeTls(
 
 - **Deno**: Uses `Deno.startTls()`
 - **Bun / Node.js**: Uses `tls.connect({ socket: rawSocket, ... })`
+- **Cloudflare Workers**: Uses the socket's own `startTls()`. The same
+  no-TLS-material rule as [`connect()`](#connect) applies, plus two
+  workerd-specific constraints:
+  - The connection must have come from `connect()` — workerd only
+    upgrades a socket it opened with `secureTransport: 'starttls'`.
+  - `hostname` must match the one `connect()` dialed. `startTls()` takes
+    no arguments (its `expectedServerHostname` option is declared in
+    `@cloudflare/workers-types` but rejected by the runtime), so workerd
+    verifies against the dialed name. Rather than verify a different name
+    than you asked for, a mismatch throws `UnsupportedRuntimeError`.
 
 **Example — PostgreSQL-style STARTTLS:**
 

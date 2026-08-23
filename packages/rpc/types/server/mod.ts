@@ -5,5 +5,6 @@ export type { CommandContext } from './CommandContext.ts';
 export type { CommandHandler } from './CommandHandler.ts';
 export type { ListenOptions } from './ListenOptions.ts';
 export type { Middleware } from './Middleware.ts';
+export type { SendErrorHandler } from './SendErrorHandler.ts';
 export type { ServerOptions } from './ServerOptions.ts';
 export type { Validator } from './Validator.ts';

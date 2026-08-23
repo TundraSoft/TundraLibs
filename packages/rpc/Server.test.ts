@@ -7,6 +7,7 @@
 
 import { describe, it } from '@tundralibs/compat/test';
 import { Server } from './Server.ts';
+import { RpcStateError } from './errors/mod.ts';
 import type { InboundFrame, OutboundFrame } from './types/mod.ts';
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 import * as asserts from '@std/asserts';
@@ -18,10 +19,13 @@ import * as asserts from '@std/asserts';
 class MockWs<T = unknown> {
   sent: OutboundFrame[] = [];
   closed = false;
+  /** When set, every `send()` throws this instead of recording the frame. */
+  throwOnSend: Error | undefined = undefined;
 
   constructor(public data: T = undefined as unknown as T) {}
 
   send(payload: string | Uint8Array | ArrayBuffer): void {
+    if (this.throwOnSend) throw this.throwOnSend;
     if (typeof payload !== 'string') return;
     this.sent.push(JSON.parse(payload) as OutboundFrame);
   }
@@ -34,7 +38,7 @@ class MockWs<T = unknown> {
   pong(): boolean {
     return false;
   }
-  readonly readyState = 1;
+  readyState = 1;
   bufferedAmount = 0;
   readonly protocol = '';
   readonly remoteAddress: string | undefined = '127.0.0.1';
@@ -1236,6 +1240,82 @@ describe({
     // =========================================================================
 
     // =========================================================================
+    // Request-driven wire-up
+    // =========================================================================
+
+    describe('handleUpgrade()', () => {
+      /** A request that actually looks like a WebSocket upgrade. */
+      const upgradeRequest = (url = 'http://localhost/ws') =>
+        new Request(url, {
+          headers: { upgrade: 'websocket', connection: 'Upgrade' },
+        });
+
+      // Screening and the upgrade hook both run before the primitive
+      // dispatches on runtime, so these hold everywhere — including the
+      // two runtimes that cannot upgrade from a `Request` at all.
+      it('answers 426 when the request is not a WebSocket upgrade', async () => {
+        const hub = new Server();
+        const res = await hub.handleUpgrade(new Request('http://localhost/'));
+        asserts.assertStrictEquals(res.status, 426);
+        asserts.assertStrictEquals(res.headers.get('upgrade'), 'websocket');
+        await hub.close();
+      });
+
+      it('forwards the request and peer info to the upgrade hook', async () => {
+        const seen: { url: string; info: unknown }[] = [];
+        const hub = new Server({
+          upgrade: (request, info) => {
+            seen.push({ url: request.url, info });
+            return false; // refuse — stops before the runtime dispatch
+          },
+        });
+        const res = await hub.handleUpgrade(
+          upgradeRequest('http://localhost/chat'),
+          { remoteAddress: '10.0.0.7', remotePort: 4711 },
+        );
+        asserts.assertStrictEquals(res.status, 403);
+        asserts.assertEquals(seen, [{
+          url: 'http://localhost/chat',
+          info: { remoteAddress: '10.0.0.7', remotePort: 4711 },
+        }]);
+        await hub.close();
+      });
+
+      it('rejects with RpcStateError once the Server is closed', async () => {
+        // The primitive throws its own bare `Error('WebSocketServer is
+        // closed')` here; a closed Server must fail the same typed way
+        // `use` / `command` / `channel` do.
+        const hub = new Server();
+        await hub.close();
+        await asserts.assertRejects(
+          () => hub.handleUpgrade(upgradeRequest()),
+          RpcStateError,
+          'Server is closed',
+        );
+      });
+
+      it({
+        name: 'rejects with UnsupportedRuntimeError on Bun and Node',
+        // Neither can answer an upgrade with a `Response`. rpc must let
+        // the primitive's typed refusal through untouched, so the message
+        // still names the wire-ups that do work there.
+        deno: false,
+        fn: async () => {
+          const hub = new Server();
+          const err = await asserts.assertRejects(
+            () => hub.handleUpgrade(upgradeRequest()),
+          );
+          asserts.assertStrictEquals(
+            (err as Error).name,
+            'UnsupportedRuntimeError',
+          );
+          asserts.assertStringIncludes((err as Error).message, 'handlers()');
+          await hub.close();
+        },
+      });
+    });
+
+    // =========================================================================
     // Backpressure observation
     // =========================================================================
 
@@ -1309,6 +1389,78 @@ describe({
         );
 
         asserts.assertEquals(events, []);
+        await close(hub, ws);
+      });
+    });
+
+    // =========================================================================
+    // Send-error observation
+    // =========================================================================
+
+    describe('send errors', () => {
+      it('fires onSendError when a send throws on a still-OPEN socket', async () => {
+        // The Workers cross-request-I/O-context shape: the socket is
+        // alive (readyState OPEN) but the underlying send still throws.
+        const events: Array<[unknown, unknown]> = [];
+        const hub = new Server({
+          onSendError: (ws, err) => {
+            events.push([ws, err]);
+          },
+        });
+        hub.command('ping', undefined, () => 'pong');
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        ws.throwOnSend = new TypeError('cross-context I/O');
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: 'a1', type: 'cmd', cmd: 'ping' }),
+        );
+
+        asserts.assertEquals(events.length, 1);
+        asserts.assertStrictEquals(events[0]?.[0], ws.asServerWebSocket());
+        asserts.assertStrictEquals(events[0]?.[1], ws.throwOnSend);
+        await close(hub, ws);
+      });
+
+      it('does not fire when the socket is closed/closing — the ordinary dead-connection case', async () => {
+        const events: unknown[] = [];
+        const hub = new Server({
+          onSendError: (_ws, err) => {
+            events.push(err);
+          },
+        });
+        hub.command('ping', undefined, () => 'pong');
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        ws.throwOnSend = new Error('socket closed');
+        ws.readyState = 3; // CLOSED
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: 'a1', type: 'cmd', cmd: 'ping' }),
+        );
+
+        asserts.assertEquals(events, []);
+        await close(hub, ws);
+      });
+
+      it('a send failure with no onSendError configured does not throw', async () => {
+        const hub = new Server();
+        hub.command('ping', undefined, () => 'pong');
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        ws.throwOnSend = new TypeError('cross-context I/O');
+        // Would reject if `_send` re-threw instead of routing to the
+        // (absent) hook.
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: 'a1', type: 'cmd', cmd: 'ping' }),
+        );
         await close(hub, ws);
       });
     });

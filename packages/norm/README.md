@@ -33,25 +33,38 @@ dialects are exercised end-to-end by the live test suite.
 
 ## Browser / Worker compatibility
 
-This package is intentionally **server-side first**. The root barrel,
-`@tundralibs/norm`, side-effect-registers all seven dialects for the
-convenience of a single import — including `maria` and `mongo` (real
-npm clients, `mariadb`/`mongodb`, with unconditional Node-builtin
-imports) and `sqlite` (needs `bun:sqlite` / a Deno-only dynamic
-import). None of those three resolve outside their own runtime —
-confirmed directly with esbuild — so the root barrel cannot be bundled
-for a browser or Worker.
+The root barrel, `@tundralibs/norm`, side-effect-registers six of the
+seven dialects for a single import — every one except `sqlite`.
+`sqlite` needs a native binding on every runtime (`bun:sqlite`, a
+Deno-only `@db/sqlite` import-map alias, `node:sqlite`), none of which
+resolve in a bundled target, so it's the one dialect the barrel
+doesn't import eagerly — register it yourself with
+`import '@tundralibs/norm/engines/sqlite'` (Deno/Bun/Node only, never
+at the edge). The other six carry no such specifier, and the barrel
+itself now bundles cleanly for a Worker or browser build with them all
+present — confirmed with a real esbuild/wrangler build, not just a
+module-graph check.
 
-Use `@tundralibs/norm/core` plus the single engine you need instead.
-`neon`, `turso`, and `d1` are the fetch-only dialects meant for the
-edge. `postgres` is worth calling out separately: it's a hand-rolled
-wire-protocol implementation over `@tundralibs/compat/net`, not a
-third-party client, so `core` + `engines/postgres` bundles and
-_imports_ cleanly everywhere too (verified in a workerd-shaped
-environment) — it just can't _connect_ anywhere without a real TCP
-socket, which a browser or standard Worker doesn't have. Only `maria`,
-`mongo`, and `sqlite` are genuinely npm/runtime-bound; reach for those
-on Deno/Bun/Node, not at the edge.
+Bundling isn't the same as running, though:
+
+- `neon`, `turso`, and `d1` are fetch-only (HTTP, no sockets needed) —
+  they work in a Worker and in a browser.
+- `postgres` is a hand-rolled wire protocol over
+  `@tundralibs/compat/net`, which now has a real Workers backend
+  (`cloudflare:sockets`) — confirmed connecting there. It still can't
+  reach anywhere from a browser: there's no raw-socket API there at
+  all.
+- `maria` wraps the third-party `mariadb` driver directly (bypassing
+  `compat` entirely) and has been confirmed connecting over real TCP
+  on Workers too. It assumes Node globals (`process`, etc.) the driver
+  needs, so it doesn't run in a browser either.
+- `mongo`'s Workers behavior hasn't been verified — treat it as
+  server-only until someone checks.
+
+Use `@tundralibs/norm/core` plus the specific engines you need when
+you want to be explicit about what ships to an edge/browser build; the
+root barrel no longer forces an unbundlable dependency on you except
+for `sqlite`.
 
 ## Modules
 
@@ -87,28 +100,46 @@ npx jsr add @tundralibs/norm
 
 ## Choosing an entry point
 
-**`@tundralibs/norm` — server (Deno, Bun, Node).** The root barrel
-registers all seven dialects, so any `database` config constructs with
-no extra import. The price is that it pulls the **native** SQLite
-adapter, whose per-runtime bindings no edge bundler can resolve: the
-barrel cannot be built for Cloudflare Workers or a browser.
+**`@tundralibs/norm` — server (Deno, Bun, Node), and now Workers/browser
+builds too.** The root barrel registers six of the seven dialects, so
+any `database` config other than `sqlite` constructs with no extra
+import. `sqlite` is the one held back: it needs a **native** binding on
+every runtime (`jsr:@db/sqlite` on Deno, `bun:sqlite`, `node:sqlite`),
+none of which an edge bundler can resolve, so it stays out of the
+barrel's eager imports rather than making the barrel itself unbundlable
+for everyone.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
 
+declare const host: string, database: string, username: string;
+
 const norm = new Norm({
-  database: { dialect: 'sqlite', path: './data' },
+  database: { dialect: 'postgres', host, database, username },
   secret: process.env.SECRET,
 });
 ```
 
-**`@tundralibs/norm/core` — edge/serverless.** Identical exports with
-nothing registered; you import the one engine you need and no other
-driver enters the bundle. `core` + `engines/d1` is verified running on
-workerd.
+`sqlite` needs its own explicit import before use, on any runtime:
 
 ```typescript
-import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
+import '@tundralibs/norm/engines/sqlite';
+import { Norm } from '@tundralibs/norm';
+
+const norm = new Norm({ database: { dialect: 'sqlite', path: './data' } });
+```
+
+**`@tundralibs/norm/core` — edge/serverless.** Identical exports with
+nothing registered; you import the one engine you need and no other
+driver enters the bundle. Verified running on workerd: `core` +
+`engines/d1` (fetch-only, no pooling); `core` + `engines/postgres` (a
+real TCP connection via `compat/net`'s `cloudflare:sockets` backend —
+pooling and transactions both work, unlike the fetch dialects below);
+`core` + `engines/maria` (wraps the third-party `mariadb` driver
+directly, independent of `compat`).
+
+```typescript
+import '@tundralibs/norm/engines/d1'; // or /neon, /turso, /postgres, /maria
 import { Norm } from '@tundralibs/norm/core';
 
 declare const env: Record<string, string>; // the Worker's bindings
@@ -123,11 +154,13 @@ const norm = new Norm({
 });
 ```
 
-Only `neon` (Postgres over HTTP) and `turso` / `d1` (SQLite over HTTP)
-run on an edge runtime, and they are one-shot fetch calls — no pooling,
-no transactions, as `executor.capabilities` reports. A dialect whose
-module was never imported throws `ENGINE_NOT_REGISTERED` at
-construction, naming the import to add; the registry behind all of this
+`neon`, `turso` and `d1` are one-shot fetch calls — no pooling, no
+transactions, as `executor.capabilities` reports. `postgres` and
+`maria` are real connections and don't carry that limit. `mongo`'s
+Workers behavior is unverified; `sqlite` cannot run there at all (no
+native binding). A dialect whose module was never imported throws
+`ENGINE_NOT_REGISTERED` at construction, naming the import to add; the
+registry behind all of this
 is documented in [`engines/registry.ts`](engines/registry.ts).
 
 ## Quick Start
