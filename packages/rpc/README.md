@@ -48,9 +48,13 @@ than inferred:
 - **Cross-connection fan-out.** Each connection belongs to the I/O
   context of the request that upgraded it, and workerd refuses I/O
   across contexts, so `publish()` reaches only the subscriber whose
-  request is currently on the stack — every other subscriber is dropped
-  silently. Real fan-out on Workers needs a Durable Object owning the
-  sockets, which this package does not provide.
+  request is currently on the stack — every other subscriber's send
+  throws. That throw is no longer silent: the connection is still
+  `OPEN` when it happens, so it's routed to `ServerOptions.onSendError`
+  instead of being swallowed like an ordinary closed-socket send. The
+  hook only makes the drop observable — real fan-out on Workers needs a
+  Durable Object owning the sockets, which this package does not
+  provide.
 - **`backpressureThreshold`.** Workerd's `WebSocket` has no
   `bufferedAmount`, so the hook never fires.
 
