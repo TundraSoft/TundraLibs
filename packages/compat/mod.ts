@@ -41,7 +41,7 @@ export {
   WebServer,
   type WebSocketData,
   type WebSocketHandler,
-  type WebSocketReadyState,
+  WebSocketReadyState,
   type WebSocketUpgradeContext,
 } from './webserver/mod.ts';
 
