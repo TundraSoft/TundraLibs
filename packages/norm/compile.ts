@@ -49,10 +49,12 @@ import {
 } from './crypto.ts';
 import type { Executor } from './executor.ts';
 import { assertRegistry } from './asserts/registry.ts';
+import { buildCachePlan, type NormCacheConfig, QueryCache } from './cache.ts';
 import {
   type DefinitionIssue,
   NormCryptoError,
   NormDefinitionError,
+  NormError,
 } from './errors/mod.ts';
 
 /** The operation descriptor a {@link Witness} receives. */
@@ -102,6 +104,10 @@ export type NormEvents = {
     isSlow: boolean,
     id: string,
   ) => void;
+  /** A read was served from the query cache instead of the database —
+   * no `call` fires for it (nothing executed). `id` is the SAME ULID in
+   * the returned NormResult envelope. Metadata only. */
+  cacheHit: (entity: string, op: string, id: string) => void;
   transactionBegin: (txId: string) => void;
   transactionCommit: (txId: string) => void;
   transactionRollback: (txId: string) => void;
@@ -119,7 +125,9 @@ export type NormEvents = {
       | 'all-rows-delete'
       | 'unbounded-read'
       | 'grouped-page-cap'
-      | 'raw-sql',
+      | 'raw-sql'
+      | 'cache-skip'
+      | 'cache-error',
     message: string,
   ) => void;
   /** An encrypted cell failed to decrypt on read (corruption, tamper, or
@@ -318,6 +326,9 @@ export type Runtime = {
   readonly eager: ReadonlyMap<string, ReadonlyArray<string>>;
   /** Observability wrapper from `NormConfig.witness`; see {@link Witness}. */
   readonly witness?: Witness;
+  /** The read-query cache, present only when the `Norm` was constructed
+   * with a `cache` config. Undefined = caching globally off. */
+  readonly cache?: QueryCache;
 };
 
 /** Where a hashed filter's digest lands. */
@@ -425,6 +436,7 @@ export function compileRuntime(
   executor: Executor,
   emit: NormEmit,
   witness?: Witness,
+  cacheCfg?: NormCacheConfig,
 ): Runtime {
   const algorithm = cfg.algorithm ?? DEFAULT_ENCRYPT_ALGORITHM;
 
@@ -488,6 +500,35 @@ export function compileRuntime(
 
   const reverseMap = buildReverseMap(registry);
 
+  // Read cache (opt-in): derive the static plan, then GUARD the
+  // encryption boundary — an external cache store must never hold the
+  // decrypted plaintext of an `encrypt()` column, so cache + encrypted
+  // columns are only allowed together on the in-process MEMORY engine.
+  let cache: QueryCache | undefined;
+  if (cacheCfg !== undefined) {
+    const plan = buildCachePlan(registry);
+    const engineName = (cacheCfg.engine ?? 'MEMORY').trim().toUpperCase();
+    if (engineName !== 'MEMORY') {
+      for (const key of plan.cacheable) {
+        if ((compiled.get(key)?.localEncrypted.size ?? 0) > 0) {
+          throw new NormError(
+            `Entity '${key}' declares encrypted columns and cache > 0 on the ` +
+              `'${engineName}' cache engine — caching would store their ` +
+              `decrypted plaintext at rest. Cache encrypted entities only on ` +
+              `the in-process 'MEMORY' engine, or drop 'cache' on this entity.`,
+            { code: 'INVALID_CACHE_CONFIG', entity: key },
+          );
+        }
+      }
+    }
+    cache = new QueryCache(
+      cacheCfg,
+      plan,
+      (entity, message) =>
+        emit('warning', entity, 'CACHE', 'cache-error', message),
+    );
+  }
+
   // Default-read eager keys per entity: own belongsTo aliases with
   // `project: true`, plus hasOne reverses whose FK declared
   // `reverseProject: true`.
@@ -522,6 +563,7 @@ export function compileRuntime(
     emit,
     compiled,
     eager,
+    cache,
   };
 }
 

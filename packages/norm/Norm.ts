@@ -64,6 +64,7 @@ import {
   type Runtime,
   type Witness,
 } from './compile.ts';
+import type { NormCacheConfig } from './cache.ts';
 import {
   type CryptoOverrides,
   type EncryptAlgorithm,
@@ -145,6 +146,17 @@ export type NormConfig = {
    * {@link Witness} for the contract.
    */
   witness?: Witness;
+  /**
+   * Enable the read-query cache ({@link NormCacheConfig}). OFF by
+   * default; even when set, only entities that declare a per-entity
+   * `cache` TTL (minutes) are cached. Held privately (it owns cache
+   * connections, like `engine`), kept OUT of the options bag.
+   *
+   * ```ts ignore
+   * new Norm({ engine, cache: { engine: 'MEMORY', name: 'app' } });
+   * ```
+   */
+  cache?: NormCacheConfig;
 };
 
 /** `_on<event>` handler keys accepted inline in the constructor. */
@@ -172,6 +184,8 @@ export class Norm extends Options<NormConfig, NormEvents> {
   private readonly __executor: Executor;
   /** See {@link NormConfig.witness}; threaded into every runtime. */
   private readonly __witness?: Witness;
+  /** See {@link NormConfig.cache}; threaded into every runtime's cache. */
+  private readonly __cacheCfg?: NormCacheConfig;
   private readonly __compileCfg: {
     secret: string | undefined;
     algorithm: EncryptAlgorithm | undefined;
@@ -199,11 +213,13 @@ export class Norm extends Options<NormConfig, NormEvents> {
       crypto: _crypto,
       secret: _secret,
       witness: _witness,
+      cache: _cache,
       ...storable
     } = cfg;
     this._setOptions(storable as EventOptionKeys<NormConfig, NormEvents>);
     const resolved = resolveEngine(cfg);
     this.__witness = cfg.witness;
+    this.__cacheCfg = cfg.cache;
     this.__executor = resolved.executor;
     this.__forwardEngineEvents(resolved.engine);
     this.__compileCfg = {
@@ -284,6 +300,7 @@ export class Norm extends Options<NormConfig, NormEvents> {
       this.__executor,
       (event, ...args) => void this._emit(event, ...args),
       this.__witness,
+      this.__cacheCfg,
     );
     // NOT intersected with Record<string, AnyDefinition> — that would
     // collapse `keyof R` to string and repo() would accept any typo.
@@ -312,6 +329,11 @@ type TxToken = {
   /** The live driver session — nesting `transaction()` opens a savepoint
    * on it (the driver owns the savepoint lifecycle). */
   readonly session: Session;
+  /** Entity keys written during this transaction — cache pruning is
+   * DEFERRED to commit (an in-tx prune could be repopulated with
+   * soon-to-be-visible-or-rolled-back data by another connection). One
+   * set is shared across the whole tx tree, savepoints included. */
+  readonly dirty: Set<string>;
 };
 
 /** @internal Migration-subsystem seam: NormDb instance → Runtime.
@@ -344,6 +366,9 @@ export class NormDb<R, Scope extends string = never> {
   /** The live driver session when this handle is inside a transaction —
    * nesting `transaction()` opens a savepoint on it. */
   private readonly __session: Session | undefined;
+  /** Written-entity accumulator when inside a transaction; cache prunes
+   * fire from it on commit. Undefined outside a transaction. */
+  private readonly __txDirty: Set<string> | undefined;
   private readonly __scope: NormScope | undefined;
   private readonly __baseExecutor: Executor;
   private readonly __repoCache = new Map<string, unknown>();
@@ -364,10 +389,12 @@ export class NormDb<R, Scope extends string = never> {
     if (tx !== undefined && tx[TX_SCOPE] === true) {
       this.__txId = tx.txId;
       this.__session = tx.session;
+      this.__txDirty = tx.dirty;
       this.__executor = bindTx(executor, tx.txId);
     } else {
       this.__txId = undefined;
       this.__session = undefined;
+      this.__txDirty = undefined;
       this.__executor = executor;
     }
     RUNTIMES.set(this, runtime);
@@ -395,7 +422,12 @@ export class NormDb<R, Scope extends string = never> {
       this.__runtime,
       this.__rawExecutor(),
       this.__txId !== undefined && this.__session !== undefined
-        ? { [TX_SCOPE]: true, txId: this.__txId, session: this.__session }
+        ? {
+          [TX_SCOPE]: true,
+          txId: this.__txId,
+          session: this.__session,
+          dirty: this.__txDirty ?? new Set<string>(),
+        }
         : undefined,
       next,
     );
@@ -442,6 +474,7 @@ export class NormDb<R, Scope extends string = never> {
           this.__executor,
           this.__txId,
           this.__scope,
+          this.__txDirty,
         );
         break;
       case 'VIEW':
@@ -646,6 +679,10 @@ export class NormDb<R, Scope extends string = never> {
             [TX_SCOPE]: true,
             txId: sp.id,
             session: sp,
+            // Same dirty set as the enclosing transaction: a savepoint's
+            // writes are pruned at the outer commit (over-pruning a
+            // rolled-back savepoint is at worst a harmless cache miss).
+            dirty: this.__txDirty ?? new Set<string>(),
           }, this.__scope),
         )
       );
@@ -653,6 +690,10 @@ export class NormDb<R, Scope extends string = never> {
     // Outer → a REAL engine transaction, driven by the driver's callback.
     let txId: string | undefined;
     let fnThrew = false;
+    // Writes accumulate here and are pruned from the cache ONLY on a
+    // successful commit — deferring the prune past commit is what keeps
+    // a concurrent connection from repopulating stale entries mid-tx.
+    const dirty = new Set<string>();
     try {
       const result = await this.__executor.transaction(async (session) => {
         txId = session.id;
@@ -660,7 +701,7 @@ export class NormDb<R, Scope extends string = never> {
         const scoped = new NormDb<R, Scope>(
           this.__runtime,
           this.__rawExecutor(),
-          { [TX_SCOPE]: true, txId: session.id, session },
+          { [TX_SCOPE]: true, txId: session.id, session, dirty },
           this.__scope,
         );
         try {
@@ -675,6 +716,14 @@ export class NormDb<R, Scope extends string = never> {
         }
       }, options);
       this.__runtime.emit('transactionCommit', txId!);
+      // Committed: now visible to other connections, so prune. A prune
+      // failure must not turn a committed transaction into a thrown one.
+      const cache = this.__runtime.cache;
+      if (cache !== undefined && dirty.size > 0) {
+        await Promise.all([...dirty].map((k) => cache.invalidate(k))).catch(
+          () => {},
+        );
+      }
       return result;
     } catch (err) {
       if (fnThrew && txId !== undefined) {
@@ -732,6 +781,17 @@ export class NormDb<R, Scope extends string = never> {
       });
     }
     return secret;
+  }
+
+  // ─── Read-cache control (no-ops when no `cache` was configured) ────
+
+  /**
+   * Drop EVERY cached read across all entities of this connection. To
+   * drop one entity's cache instead, use the repo:
+   * `db.repo('Users').clearCache()`. No-op when no `cache` was configured.
+   */
+  public clearCache(): Promise<void> {
+    return this.__runtime.cache?.clearAll() ?? Promise.resolve();
   }
 
   // ─── Engine lifecycle proxies (engine-wide, shared by handles) ─────

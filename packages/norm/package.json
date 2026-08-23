@@ -24,6 +24,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@tundralibs/cacher": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",
     "@tundralibs/drivers": "workspace:*",

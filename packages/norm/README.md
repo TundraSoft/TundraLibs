@@ -420,6 +420,58 @@ await db.raw('SELECT count(*) AS n FROM users WHERE role = :role:', {
 `raw()` and `query()` bypass the typed pipeline (no decrypt, no scope,
 no validation) and emit a `warning` event when used.
 
+## Read caching
+
+OFF by default. Pass a `cache` config to `new Norm({...})` and give
+each entity a `cache` TTL in **minutes**; then non-transactional
+`find` / `findOne` / `count` / `getByPK` reads are served from
+`@tundralibs/cacher`, keyed by the query. The TTL is **windowed** —
+each hit resets the clock.
+
+```typescript ignore
+const norm = new Norm({
+  engine,
+  cache: { engine: 'MEMORY', name: 'app' }, // or REDIS/MEMCACHED + options
+});
+
+// Per-entity opt-in (minutes; 0/omitted = off):
+Entity('users', {/* columns */}, { pk: ['id'], cache: 5 });
+
+await users.find(); // miss → DB, then cached
+await users.find(); // hit  → emits `cacheHit`
+await users.find(undefined, { noCache: true }); // bypass for this call
+await users.insert({/* ... */}); // any write prunes the table's cache
+await db.repo('Users').clearCache(); // drop one entity (and dependent views)
+await db.clearCache(); // drop every entity's cache
+```
+
+- **Per-table invalidation.** Each entity gets its own cache namespace
+  (`name__Entity`), so a write to `TableA` prunes only `TableA` — and two
+  `Norm`s sharing one cache engine stay isolated as long as their `name`s
+  differ. Inside a transaction, reads bypass the cache and the prune is
+  deferred to **commit** (a rollback prunes nothing).
+- **Never cached:** reads that **join** another table (a `cache-skip`
+  `warning` fires so it's diagnosable) — a joined entry would depend on
+  more than one table, breaking per-table pruning; model those as a
+  **VIEW** instead. A single-table aggregate (`GROUP BY` on one table) is
+  cached normally. A VIEW / QUERY _is_ cacheable: norm resolves its stored
+  query's source tables (transitively) and prunes it when any is written.
+- **Encryption guard.** Caching decrypted rows on an external store would
+  leak the plaintext of `encrypt()` columns, so an entity with encrypted
+  columns may only be cached on the in-process `MEMORY` engine — otherwise
+  `use()` throws at compose time.
+- **Backend-failure safe.** A cache-backend hiccup (Redis/Memcached
+  unreachable) degrades to a database read — a failed `get` is a miss, a
+  failed `set`/prune is skipped — and surfaces a `cache-error` `warning`;
+  it never fails the query.
+- **Any cacher engine.** `MEMORY`, `REDIS`, and `MEMCACHED` all work —
+  norm goes through cacher's unified API, and each engine's `clear()` is
+  correctly namespace-scoped (Memcached uses version bumping, not a
+  server-wide flush).
+- **Caveats.** Prune-on-write is not atomic with the DB write (bounded,
+  one-read-window staleness); `raw()` and external writes do **not**
+  invalidate.
+
 ## Events
 
 Wire the metadata-only event surface to your logger — it never carries
@@ -447,9 +499,13 @@ const norm = new Norm({
 });
 ```
 
-The surface: `call`, `warning`, `decryptError` (an encrypted cell failed
-to decrypt on read — a data-integrity / key-rotation signal, metadata
-only), `transactionBegin` / `transactionCommit` / `transactionRollback`,
+The surface: `call`, `cacheHit` (a read served from the cache — no
+`call` fires for it), `warning` (codes include `cache-skip` for a
+joined read that could not be cached, and `cache-error` when a cache
+backend failed and the query fell back to the database), `decryptError` (an
+encrypted cell failed to decrypt on read — a data-integrity /
+key-rotation signal, metadata only), `transactionBegin` /
+`transactionCommit` / `transactionRollback`,
 plus the engine's own events proxied from the driver — `connect`,
 `disconnect`, `connectionFailed`, `error`, `transactionTimeout`, `query`,
 and `slowQuery`. All subscribe inline via `_on<event>` keys (or
@@ -514,6 +570,8 @@ not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
   relations, hooks, validators.
 - **[Querying](docs/NORM-Querying.md)** — filters, projections,
   relations, aggregates, pagination.
+- **[Read caching](docs/NORM-Caching.md)** — per-entity TTLs, per-table
+  invalidation, engines, and backend-failure behavior.
 - **[Security](docs/NORM-Security.md)** — encryption, digests, masks.
 - **[Migrations](docs/NORM-Migrations.md)** — the `Migrator` workflow.
 - **[Scoping](docs/NORM-Scoping.md)** — tenant scoping & default filters.

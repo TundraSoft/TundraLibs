@@ -23,6 +23,7 @@
 
 // ─── Runtime ─────────────────────────────────────────────────────────
 export { type DatabaseConfig, Norm, type NormConfig, NormDb } from './Norm.ts';
+export type { NormCacheConfig } from './cache.ts';
 export {
   type NormDialect,
   type NormEngineFactory,
