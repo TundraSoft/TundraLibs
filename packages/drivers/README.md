@@ -22,12 +22,17 @@ The result is a uniform API across services — you connect, run operations,
 disconnect — with the same shape whether you're talking to Memcached, a SQL
 database, or anything else.
 
-For socket-less edge/serverless runtimes (Cloudflare Workers, Vercel Edge, Deno
-Deploy), `NeonHttpEngine` speaks Postgres over HTTPS `fetch`, and `TursoEngine`
-and `D1Engine` speak SQLite (Turso / libSQL, and Cloudflare D1) over HTTPS
+For socket-less edge/serverless runtimes (Vercel Edge and the browser),
+`NeonHttpEngine` speaks Postgres over HTTPS `fetch`, and `TursoEngine` and
+`D1Engine` speak SQLite (Turso / libSQL, and Cloudflare D1) over HTTPS
 `fetch` — instead of a TCP socket or a native binding, same engine surface, no
-sockets. See the [compatibility matrix](docs/Drivers-Compatibility.md) for how
-every engine compares on transport, edge-safety, and capabilities.
+sockets. Two edge runtimes aren't actually socket-less: Deno Deploy runs the
+real Deno runtime, so every TCP engine (`PostgresEngine`, `MariaEngine`,
+`RedisEngine`, `MemcachedEngine`) connects there natively via `Deno.connect`;
+Cloudflare Workers connects the same engines through `@tundralibs/compat`'s
+`net` module running on `cloudflare:sockets` — no `nodejs_compat` flag needed.
+See the [compatibility matrix](docs/Drivers-Compatibility.md) for how every
+engine compares on transport, edge-safety, and capabilities.
 
 ## Modules
 
