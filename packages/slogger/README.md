@@ -44,22 +44,6 @@ delegated to worker threads via `pino-pretty` / `pino-roll` /
 `pino-transport`. Slogger keeps everything in-process so one log call
 can fan out to many destination shapes; that's the trade.
 
-| Logger      | Model                                          | Cross-runtime?   | Tier         |
-| ----------- | ---------------------------------------------- | ---------------- | ------------ |
-| **Slogger** | Multi-handler, multi-format, in-process        | ✅ native        | Winston-tier |
-| Winston     | Multi-transport, format pipeline, in-process   | Via Node compat* | Winston-tier |
-| log4js-node | Multi-appender, multi-layout, in-process       | Via Node compat* | Winston-tier |
-| Pino        | JSON-only in-process, worker-thread transports | Via Node compat* | Pino-tier    |
-| Bunyan      | JSON-only multi-stream                         | Via Node compat* | Pino-tier    |
-
-\* Run fine on Deno and Bun through their Node.js compatibility
-layers — confirmed by installing winston, log4js, pino (including its
-worker-thread `pino-pretty` transport), and bunyan and running each
-under Node, Bun 1.4, and Deno 2.9 with no failures. None of the four
-ship a native Deno/Bun build, publish to JSR, or are tested against
-those runtimes upstream, though — Slogger is the only one of the five
-with first-class, natively-tested support on all three.
-
 **When to use Slogger:** you need one record to fan out to multiple
 destinations of different shapes (console + syslog + DB + OTEL), you
 want to run on Deno/Bun/Node from one codebase, you don't want to
