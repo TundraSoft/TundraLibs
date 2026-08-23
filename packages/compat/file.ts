@@ -5,10 +5,10 @@
  * Deno, Bun, and Node.js runtimes with both async and sync variants.
  *
  * Cloudflare Workers gets the path-based file operations — read, write,
- * stat, exists, delete — under workerd's `/tmp`; workerd itself refuses
- * every other location. Directory operations, copy/move and the file
- * handle API still throw, and the temp-path creators need an explicit
- * {@link TempOptions.allowEphemeral}.
+ * stat, exists, is-file/is-directory, delete — under workerd's `/tmp`;
+ * workerd itself refuses every other location. Directory operations,
+ * copy/move and the file handle API still throw, and the temp-path
+ * creators need an explicit {@link TempOptions.allowEphemeral}.
  *
  * @module
  *
@@ -628,7 +628,7 @@ export const isFile: (path: string) => Promise<boolean> = async (
         }
         throw wrapFileError(error, path, 'isFile');
       }
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'isFile');
       // deno-coverage-ignore-stop
@@ -689,7 +689,7 @@ export const isFileSync: (path: string) => boolean = (
         }
         throw wrapFileError(error, path, 'isFileSync');
       }
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'isFileSync');
       // deno-coverage-ignore-stop
@@ -750,7 +750,7 @@ export const isDirectory: (path: string) => Promise<boolean> = async (
         }
         throw wrapFileError(error, path, 'isDirectory');
       }
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'isDirectory');
       // deno-coverage-ignore-stop
@@ -823,7 +823,7 @@ export const isDirectorySync: (path: string) => boolean = (
         }
         throw wrapFileError(error, path, 'isDirectorySync');
       }
-    } else if (isBun || isNode) {
+    } else if (USES_NODE_FS) {
       // deno-coverage-ignore-start
       assertBuiltin(nodeFs, 'node:fs', 'isDirectorySync');
       // deno-coverage-ignore-stop

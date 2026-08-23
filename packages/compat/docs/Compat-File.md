@@ -42,7 +42,7 @@ The File module provides a unified interface for file system operations across D
 | Read files             | ✅  | ✅   | ✅      | ✅†     |
 | Write files            | ✅  | ✅   | ✅      | ✅†     |
 | Low-level file handles | ✅  | ✅   | ✅      | ❌      |
-| Path checks            | ✅  | ✅   | ✅      | ✅†‡    |
+| Path checks            | ✅  | ✅   | ✅      | ✅†     |
 | File stats             | ✅  | ✅   | ✅      | ✅†     |
 | JSON operations        | ✅  | ✅   | ✅      | ❌      |
 | Directory ops          | ✅  | ✅   | ✅      | ❌      |
@@ -52,8 +52,6 @@ The File module provides a unified interface for file system operations across D
 
 †Under `/tmp` only — see
 [Cloudflare Workers](#cloudflare-workers) below.\
-‡`pathExists` / `pathExistsSync` only; `isFile` / `isDirectory` still
-throw.\
 §`deleteFile` / `deleteFileSync` only; `remove` and the directory
 removers still throw.
 
