@@ -12,8 +12,12 @@
  * Fidelity is preserved: the prototype is chained to `Request.prototype`, so
  * `instanceof Request` still holds, and the full standard `Request` surface is
  * present (cheap where it can be, delegated to the materialized instance
- * otherwise). Node-only — Deno/Bun hand their runtime's native `Request`
- * straight through and never reach this.
+ * otherwise). The one edge is `bodyUsed`: it reflects the materialized real
+ * `Request`, so it flips `true` only once a body-read method runs — reading the
+ * raw `body` stream directly does not update it. Consuming the body once through
+ * a single path (the Fetch contract already) keeps this invisible. Node-only —
+ * Deno/Bun hand their runtime's native `Request` straight through and never
+ * reach this.
  *
  * @module
  */
@@ -84,6 +88,8 @@ class LightRequest {
   }
 
   get bodyUsed(): boolean {
+    // Reflects the materialized Request; a raw `body` stream read (no read
+    // method) leaves it false. See the fileoverview caveat.
     return this[REAL]?.bodyUsed ?? false;
   }
 
