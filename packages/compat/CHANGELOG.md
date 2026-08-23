@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.6.0...compat-v2.7.0) (2026-08-23)
+
+
+### Features
+
+* **compat:** HTTP protocol helpers, lightweight Node Request, and bench throughput mode ([4b0d802](https://github.com/TundraSoft/TundraLibs/commit/4b0d802ef0006995b7f3839c54b21a9be7b2f57a))
+
 ## [2.6.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.5.0...compat-v2.6.0) (2026-08-23)
 
 
