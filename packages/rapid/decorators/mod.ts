@@ -10,6 +10,7 @@
 
 export {
   auth,
+  config,
   connection,
   cookie,
   header,

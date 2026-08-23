@@ -221,8 +221,12 @@ app.module(new Users());
 
 `@Module` adds an HTTP `prefix` (paths only), a `namespace` (joined onto the flat
 `@SOCKET`/`@JOB` names), and a default route `version`. Argument binders
-(`param`, `query`, `payload`, `paging`, `header`, `connection`) type the method
-signature via the decorator's `bind` tuple.
+(`param`, `query`, `payload`, `paging`, `header`, `cookie`, `auth`, `session`,
+`connection`, `config`) type the method signature via the decorator's `bind`
+tuple. `config('auth.hmac.maxSkew')` binds a value from the loaded config sets
+on any transport (the set is the file basename lowercased — `Auth.yaml` →
+`auth.…` — and the keys after it are case-sensitive; a missing path binds
+`undefined`); middleware reads the same sets via `ctx.config`.
 
 **OpenAPI comes from the same declarations.** On a route,
 `{ summary, description, tags, operationId, security, response }` document the

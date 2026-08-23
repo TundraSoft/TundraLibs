@@ -7,6 +7,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import {
+  makeDir,
   makeTempDir,
   pathExists,
   readTextFile,
@@ -198,6 +199,82 @@ describe('rapid.cli init scaffold', () => {
       f['.github/workflows/ci.yml']!,
       'node-version: 24',
     );
+  });
+
+  it('the scaffolded Application.yaml BOOTS an app and documents every option rapid defaults', async () => {
+    const base = await makeTempDir({ prefix: 'rapid-yaml-' });
+    try {
+      const yaml = scaffold(
+        {
+          name: 'cfgapp',
+          module: false,
+          norm: false,
+          runtime: 'deno',
+          docker: false,
+          github: false,
+          ai: false,
+        },
+        '1.0.0',
+      )['configs/Application.yaml']!;
+      await makeDir(`${base}/configs`, { recursive: true });
+      await writeTextFile(`${base}/configs/Application.yaml`, yaml);
+      // 1. It boots: every active key is accepted and validated.
+      const app = await Application.initialize({
+        path: `${base}/configs`,
+        env: false,
+      });
+      asserts.assertEquals(app.option('name'), 'cfgapp');
+      asserts.assertEquals(app.option('server')!.port, 3000);
+      asserts.assertEquals(app.mode, 'DEVELOPMENT');
+
+      // 2. Drift guard: the template must document every option rapid
+      // DEFAULTS. A new defaulted option fails here until the template
+      // (cli/templates.ts APPLICATION_YAML) is updated — by design.
+      const active = new Set<string>();
+      const stack: string[] = [];
+      for (const line of yaml.split('\n')) {
+        const m = /^( *)([A-Za-z_]\w*):/.exec(line); // skips comments / blanks
+        if (m === null) continue;
+        const depth = m[1]!.length / 2;
+        stack.length = depth;
+        stack[depth] = m[2]!;
+        active.add(stack.slice(0, depth + 1).join('.'));
+      }
+      const server = app.option('server')!;
+      const groups: Record<string, Record<string, unknown>> = {
+        server: server as Record<string, unknown>,
+        'server.paging': server.paging as Record<string, unknown>,
+        'server.query': server.query as Record<string, unknown>,
+        'server.versioning': server.versioning as Record<string, unknown>,
+        jobs: app.option('jobs') as Record<string, unknown>,
+        uploads: app.option('uploads') as Record<string, unknown>,
+      };
+      // Documented as a COMMENTED example on purpose (its default is a temp dir).
+      const commentedByDesign = new Set(['uploads.path']);
+      for (const [group, obj] of Object.entries(groups)) {
+        for (const [key, value] of Object.entries(obj)) {
+          const path = `${group}.${key}`;
+          if (commentedByDesign.has(path)) continue;
+          if (
+            value !== null && typeof value === 'object' && !Array.isArray(value)
+          ) {
+            continue; // sub-groups are checked under their own entry above
+          }
+          asserts.assert(
+            active.has(path),
+            `Application.yaml template is missing \`${path}\` (rapid defaults it) — update APPLICATION_YAML in cli/templates.ts`,
+          );
+        }
+      }
+      for (const top of ['mode', 'stateMode', 'shutdownTimeout', 'logger']) {
+        asserts.assert(
+          active.has(top),
+          `template missing top-level \`${top}\``,
+        );
+      }
+    } finally {
+      await removeDir(base, { recursive: true });
+    }
   });
 
   it('scaffold() --ai emits ONE AGENTS.md source + two pointers, runtime- and module-aware', () => {

@@ -147,7 +147,9 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // route is left untouched — it registered above and wins here.
     if (this._app.option('server')?.autoHead !== false) {
       const has = new Set(
-        this._app.routes.map((e) => `${e.method}\0${e.path}\0${e.version ?? ''}`),
+        this._app.routes.map((e) =>
+          `${e.method}\0${e.path}\0${e.version ?? ''}`
+        ),
       );
       for (const entry of this._app.routes) {
         if (entry.method !== 'GET') continue;

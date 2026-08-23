@@ -48,17 +48,72 @@ const GITIGNORE = `node_modules/
 .rapid-uploads/
 `;
 
-const APPLICATION_YAML = `name: {{name}}
+const APPLICATION_YAML =
+  `# {{name}} — the \`Application\` config set. Every key except \`name\` is
+# optional; the values below ARE rapid's defaults unless a comment says
+# otherwise. \`\${VAR}\` placeholders are filled from the environment / .env
+# at load; an UNSET placeholder is left as literal text — never commit secrets.
+name: {{name}}
+# DEVELOPMENT | PRODUCTION — error disclosure and the default log level
+# (rapid defaults to PRODUCTION; a new project starts in DEVELOPMENT)
 mode: DEVELOPMENT
+# Signing key for signed cookies, session() and csrf() — at least 32 chars,
+# from the environment. Uncomment once APP_SECRET is set: an unset
+# placeholder is NOT a valid secret and fails validation at boot.
+# secret: \${APP_SECRET}
+# CLONE | PROTOTYPE | SHARE — how each request's ctx.state is built
+stateMode: CLONE
+# Graceful-shutdown deadline in ms before force-exit (0 disables)
+shutdownTimeout: 25000
+
 server:
-  port: 3000
+  enabled: true # run the HTTP listener on this replica
+  port: 3000 # 0 = OS-assigned (rapid's own default is 8008)
   hostname: localhost
+  # unixSocketPath: /tmp/{{name}}.sock # replaces TCP entirely when set
+  # tls: # see @tundralibs/compat TLSOptions — inline PEM or file paths
+  requestIdHeader: x-request-id # inbound correlation id adopted per request
+  trustProxy: false # false | true | <reverse-proxy hop count>
+  maxBodySize: 1048576 # bytes, non-file bodies (0 disables)
+  metrics: false # app.meter + the metrics() endpoint
+  autoHead: true # a HEAD route for every GET
+  methodNotAllowed: false # 405 + Allow instead of 404 on a wrong method
+  ignoreTrailingSlash: true # /users and /users/ are the same route
+  socketPath: /ws # websocket upgrade path for socket commands
+  paging:
+    pageHeader: x-page-number
+    sizeHeader: x-page-size
+    defaultSize: 10
+    maxSize: 1000 # larger requests are clamped
+    maxPage: 1000
+  query: # structural caps for the query-string parser
+    maxFilters: 50
+    maxSorts: 5
+    maxValueLength: 2048
+    maxArrayItems: 100
   versioning:
-    mode: header
-    identifier: x-api-version
-    default: v1
+    mode: header # header | accept | path
+    identifier: x-api-version # header name | accept vendor token | path regex
+    default: v1 # the version a request without one resolves to
+
+jobs:
+  enabled: true # run scheduled (@JOB / app.job) jobs on this replica
+
+uploads:
+  # path: ./uploads # default: a temp dir created at boot
+  maxSize: 10485760 # bytes per file
+  allowedExtensions: [] # FAIL-SAFE: nothing accepted until listed, e.g. [.png, .pdf]
+
 logger:
-  level: INFO
+  # Syslog severity NUMBER: 0 EMERGENCY · 1 ALERT · 2 CRITICAL · 3 ERROR
+  # · 4 WARNING · 5 NOTICE · 6 INFO · 7 DEBUG (names are not accepted)
+  # (default: 7 DEBUG in DEVELOPMENT, 6 INFO in PRODUCTION)
+  level: 6
+
+# Tracing is opt-in — uncomment to enable.
+# tracer:
+#   exporter:
+#     type: CONSOLE # CONSOLE | OTLP (OTLP also takes baseURL + headers)
 `;
 
 const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
@@ -535,7 +590,10 @@ export function scaffold(
 - Route methods are decorated (\`@GET('/path/:id:')\`, \`@POST\`, …, from
   \`@tundralibs/rapid/decorators\`). Decorators are metadata-only and never
   wrap the method, so a module unit-tests with \`new Greeter().hello('x')\` and
-  no server. Bind arguments with \`bind: [param('id'), payload(validate)]\`.
+  no server. Bind arguments with \`bind: [param('id'), payload(Schema)]\` — a
+  schema OBJECT validates AND documents the body; \`config('set.key')\` binds a
+  config value on any transport (set = lowercased file name, keys
+  case-sensitive).
 - A module method returns the same \`{ content }\` reply shape as a handler.
   Declared events are emitted with \`this.emit('Name', payload)\`; \`this.log\`
   is a scoped logger. See \`modules/Greeter.ts\`.

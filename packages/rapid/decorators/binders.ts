@@ -166,3 +166,24 @@ export function session(): RapidBinder<RapidSession | undefined> {
 export function connection(): RapidBinder<SOCKETConnection> {
   return { source: 'connection' };
 }
+
+/**
+ * Bind a configuration value (`ctx.config.get(path)`) — on ANY transport,
+ * since config is not request-bound. `path` is `set.key.sub`: the SET is
+ * the config file's basename LOWERCASED at load (`configs/Auth.yaml` →
+ * `auth.hmac.maxSkew`); every key after it is case-sensitive. A missing
+ * path yields `undefined` and the parameter is PINNED to `unknown` — pass
+ * a validator to narrow or require it. Never documented in OpenAPI: config
+ * is not part of the request contract.
+ */
+export function config(path: string): RapidBinder<unknown>;
+export function config<T>(
+  path: string,
+  validate: (value: unknown) => T | Promise<T>,
+): RapidBinder<T>;
+export function config(
+  path: string,
+  validate?: (value: unknown) => unknown,
+): RapidBinder<unknown> {
+  return { source: 'config', name: path, validate };
+}

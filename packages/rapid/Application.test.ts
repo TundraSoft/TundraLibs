@@ -30,6 +30,7 @@ import { session as sessionMw } from './middlewares/session.ts';
 import type { RapidSession } from './middlewares/session.ts';
 import {
   auth,
+  config,
   connection,
   cookie,
   GET,
@@ -3014,6 +3015,91 @@ describe('rapid.Application', () => {
       asserts.assertEquals(p['/q']!.get!.tags, undefined);
       asserts.assertEquals(p['/b']!.get!.tags, undefined);
       asserts.assertEquals(p['/b']!.get!.operationId, 'b'); // no module name → method only
+    });
+  });
+}
+
+// ==========================================================================
+// config() binder + ctx.config — settings from the loaded config sets
+// ==========================================================================
+{
+  @Module('Cfg', {})
+  class Cfg {
+    @GET('/skew', { bind: [config('auth.hmac.maxSkew')] })
+    raw(skew: unknown): RapidContextResponse {
+      return { content: { skew: skew ?? null } };
+    }
+    @GET('/skew-typed', {
+      bind: [config('auth.hmac.maxSkew', (v) => Number(v))],
+    })
+    typed(skew: number): RapidContextResponse {
+      return { content: { skew } };
+    }
+    // Keys are case-sensitive; the SET name is the file basename lowercased.
+    @GET('/wrong-key-case', { bind: [config('auth.hmac.MaxSkew')] })
+    wrongKey(v: unknown): RapidContextResponse {
+      return { content: { v: v ?? null } };
+    }
+    @GET('/wrong-set-case', { bind: [config('Auth.hmac.maxSkew')] })
+    wrongSet(v: unknown): RapidContextResponse {
+      return { content: { v: v ?? null } };
+    }
+  }
+
+  const withConfigDir = async (): Promise<[Application, string]> => {
+    const dir = await makeTempDir({ prefix: 'rapid-cfg-' });
+    await writeTextFile(
+      `${dir}/Application.yaml`,
+      'name: cfg\nserver:\n  port: 0\n  hostname: 127.0.0.1\nlogger:\n  handlers: []\n',
+    );
+    await writeTextFile(`${dir}/Auth.yaml`, 'hmac:\n  maxSkew: 300000\n');
+    const app = await Application.initialize({ path: dir, env: false });
+    return [app, dir];
+  };
+
+  describe('rapid config() binder + ctx.config', () => {
+    it('binds a value from another config set; a validator narrows it', async () => {
+      const [app, dir] = await withConfigDir();
+      try {
+        app.module(new Cfg());
+        const raw = await app.fetch(new Request('http://app/skew'));
+        asserts.assertEquals((await raw.json()).skew, 300000);
+        const typed = await app.fetch(new Request('http://app/skew-typed'));
+        asserts.assertEquals((await typed.json()).skew, 300000);
+      } finally {
+        await removeDir(dir, { recursive: true });
+      }
+    });
+
+    it('a missing path is undefined (not a throw); keys are case-sensitive and the set name is lowercased', async () => {
+      const [app, dir] = await withConfigDir();
+      try {
+        app.module(new Cfg());
+        for (const path of ['/wrong-key-case', '/wrong-set-case']) {
+          const r = await app.fetch(new Request(`http://app${path}`));
+          asserts.assertEquals(r.status, 200, path);
+          asserts.assertEquals((await r.json()).v, null, path);
+        }
+      } finally {
+        await removeDir(dir, { recursive: true });
+      }
+    });
+
+    it('ctx.config is the app config, reachable from any middleware', async () => {
+      const [app, dir] = await withConfigDir();
+      try {
+        app.use((ctx, next) => {
+          // ctx.config is on the BASE context (any transport); setHeader is HTTP-only.
+          const skew = ctx.config.get<number>('auth.hmac.maxSkew');
+          if (ctx.type === 'HTTP') ctx.setHeader('x-skew', String(skew));
+          return next();
+        });
+        app.get('/', () => ({ content: { ok: true } }));
+        const r = await app.fetch(new Request('http://app/'));
+        asserts.assertEquals(r.headers.get('x-skew'), '300000');
+      } finally {
+        await removeDir(dir, { recursive: true });
+      }
     });
   });
 }

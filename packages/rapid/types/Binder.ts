@@ -18,7 +18,8 @@ export type RapidBinderSource =
   | 'cookie'
   | 'auth'
   | 'session'
-  | 'connection';
+  | 'connection'
+  | 'config';
 
 /**
  * One argument-binding descriptor, produced by the binder factories

@@ -131,6 +131,17 @@ Core and the current capability set are built and green on Deno / Bun / Node
   as a tag — it is `x-version` per operation and `x-versions` at the root.
   Deferred (pact in flux): deriving `security` from the `authorize()`
   middleware itself.
+- **Config in context + `config()` binder; complete `Application.yaml`
+  (2026-08-23)** — `ctx.config` (= `app.config`, every set beside
+  `Application`) on every context, and a `config(path, validate?)` binder on
+  any transport (set = lowercased file basename, keys case-sensitive, missing
+  → `undefined`; never documented in OpenAPI). `rapid init` now writes an
+  `Application.yaml` listing EVERY option with its default and allowed values
+  in comments; `secret`/`tls`/`unixSocketPath`/`uploads.path`/`tracer` are
+  commented examples. The "ongoing maintenance" risk is enforced, not
+  remembered: a CLI test boots an app from the scaffolded file AND asserts
+  every option rapid defaults appears in the template — a new defaulted
+  option fails CI until the template is updated.
   Transport rule, documented: both keys are HTTP-only and SILENTLY IGNORED on
   JOB/SOCKET (a redirect never becomes a 3xx there), so a multi-transport
   method returns them without branching.
@@ -203,8 +214,9 @@ sequencing fact, not a deferral.
 
 ### Auth & config (TODO — 🔍 user to review pact first, 2026-08-23)
 
-Three items from the HMAC-auth discussion. Sequencing: the pact decision gates
-item 1; items 2 and 3 are independent and rapid-only.
+One item left from the HMAC-auth discussion (its two rapid-only siblings —
+`ctx.config` + `config()` binder, and the complete `Application.yaml` — shipped
+2026-08-23); gated on the pact decision.
 
 - **Signed-request auth scheme (HMAC) alongside Bearer.** `authenticate`
   grows scheme dispatch on the `Authorization` scheme word (RFC 7235):
@@ -229,42 +241,6 @@ item 1; items 2 and 3 are independent and rapid-only.
   HMAC) — config-held (env-sourced) or app-resolved. Guard: reject a resolved
   key that still looks like an unresolved `${VAR}` placeholder (see item 3).
   pact change = own branch off `main` → PR → release, then rapid consumes.
-- **Config in context + `config()` binder.** `ctx.config` getter
-  (= `ctx.app.config`, which every middleware can already reach — `session()`
-  / `csrf()` read `ctx.app.secret` the same way; the getter is for
-  discoverability), and a `config(path, validate?)` binder beside `param` /
-  `cookie` / `auth` / `session`: one new `RapidBinderSource` + one `case` in
-  `mountModule.extractBind` (`ctx.app.config.get(path)`). Works on **every**
-  transport (config is not request-bound — unlike cookie/session). **Case
-  rule (verified in utils `Config.ts`):** keys are case-sensitive — `get`
-  splits on `.` and indexes directly, no folding — but the **set name** (first
-  segment) is the file basename **lowercased at load**, so `configs/Auth.yaml`
-  is reachable only as `auth.…`; `get('Auth.…')` throws "set does not exist".
-  The binder folds nothing; its JSDoc states the set-name rule.
-- **`rapid init` writes a complete `Application.yaml`** — every option with
-  its default value and the allowed values in a comment, not today's
-  five-key stub. Survey done (all from source): top-level `name` / `secret` /
-  `mode` (`DEVELOPMENT` | `PRODUCTION`, default PRODUCTION) / `stateMode`
-  (`CLONE` | `PROTOTYPE` | `SHARE`) / `shutdownTimeout` 25000; `server`
-  (`enabled`, `port` 8008, `hostname` localhost, `unixSocketPath`, `tls`,
-  `requestIdHeader` x-request-id, `trustProxy` false|N, `maxBodySize`
-  1048576, `metrics` false, `autoHead` true, `methodNotAllowed` false,
-  `ignoreTrailingSlash` true, `socketPath` /ws, `paging` {pageHeader,
-  sizeHeader, defaultSize 10, maxSize 1000, maxPage 1000}, `query`
-  {maxFilters 50, maxSorts 5, maxValueLength 2048, maxArrayItems 100},
-  `versioning` {mode header|accept|path, identifier, default}); `jobs.enabled`
-  true; `uploads` {path (temp dir), maxSize 10485760, allowedExtensions []};
-  `logger` (console handler, level DEBUG in DEVELOPMENT else INFO); `tracer`
-  opt-in (`exporter: { type: CONSOLE }` | `{ type: OTLP, baseURL, headers }`,
-  `sampler`, `idGenerator`, `resource`). Defaults live in
-  `Application.ts:356-405` + `:442-450`; `autoHead` / `methodNotAllowed` /
-  `ignoreTrailingSlash` default in the transport. **Trap (verified):** an
-  unset `${VAR}` is left as the **literal text** (utils `variableReplacer` →
-  `templatize` with `onMissing: 'literal'`), so `secret: ${APP_SECRET}` with
-  no env becomes the 13-char string `${APP_SECRET}` and only fails when
-  something signs — emit `secret` commented out with a "set APP_SECRET"
-  note, and consider a strict `onMissing` mode in utils `loadConfig` as a
-  separate utils PR.
 
 ### Scaling & ops
 

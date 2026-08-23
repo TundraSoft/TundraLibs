@@ -110,6 +110,14 @@ describe('rapid.context.Context (base)', () => {
     asserts.assert(ran, 'settleDetached must await outstanding detached work');
   });
 
+  it('ctx.config is the application config (identity), on every context', async () => {
+    const app = await makeApp();
+    const ctx = new TestContext(app, { action: 'a' });
+    asserts.assertStrictEquals(ctx.config, app.config);
+    // A programmatic app has no config sets loaded.
+    asserts.assertEquals(ctx.config.has('anything.at.all'), false);
+  });
+
   it('settleDetached resolves immediately when nothing was detached', async () => {
     const app = await makeApp();
     const ctx = new TestContext(app, { action: 'a' });

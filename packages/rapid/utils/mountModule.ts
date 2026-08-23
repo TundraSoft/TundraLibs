@@ -116,6 +116,12 @@ async function extractBind<S extends RapidContextState>(
     case 'connection':
       raw = (ctx as Extract<RapidContext<S>, { type: 'SOCKET' }>).connection;
       break;
+    case 'config':
+      // Any transport. An explicit `undefined` default turns a missing set
+      // or key into `undefined` instead of Config's throw — the validator
+      // (if any) decides whether absence is an error.
+      raw = ctx.app.config.get<unknown>(binder.name!, undefined);
+      break;
   }
   return binder.validate ? await binder.validate(raw) : raw;
 }

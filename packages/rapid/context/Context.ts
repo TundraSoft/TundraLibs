@@ -156,6 +156,18 @@ export abstract class Context<
   }
 
   /**
+   * The application's loaded configuration — every config set beside
+   * `Application` (`configs/Auth.yaml` → `ctx.config.get('auth.…')`), so
+   * a middleware can read settings without reaching through `ctx.app`.
+   * Set names are the file basename LOWERCASED at load; the keys after
+   * the set are case-sensitive. Any transport — config is not
+   * request-bound.
+   */
+  public get config(): Application<S>['config'] {
+    return this.app.config;
+  }
+
+  /**
    * The invocation payload — the RESERVED lazy body channel, uniform
    * via await: HTTP overrides with a cached parse PROMISE, SOCKET with
    * the frame's decoded value (synchronous), and here at the base it is
