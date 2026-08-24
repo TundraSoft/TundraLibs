@@ -10,6 +10,7 @@ parsed at insert time; no regex runs at lookup.
 - [Parameter with literal suffix — `:name:<literal>`](#2-parameter-with-literal-suffix--nameliteral)
 - [Greedy suffix — `:name:-*`](#3-greedy-suffix--name-)
 - [Greedy prefix — `*-:name:`](#4-greedy-prefix---name)
+- [Percent-decoding of captured values](#percent-decoding-of-captured-values)
 - [Matching priority](#matching-priority)
 - [The captured-parameter object](#the-captured-parameter-object)
 
@@ -188,6 +189,41 @@ router.get('/api/*-:version:/data', [handler]);
 
 The `-` is the canonical separator shown above; the literal can be
 any non-`/` character.
+
+## Percent-decoding of captured values
+
+Every captured value — from `:name:`, `:name:<literal>`, and both
+greedy forms alike — is run through `decodeURIComponent` exactly once
+before it reaches `match.params`. This applies uniformly, not just to
+the greedy-suffix case called out above:
+
+```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+router.get('/search/:term:', []);
+router.get('/files/:name:.txt', []);
+
+router.find('GET', '/search/caf%C3%A9')?.params.term; // 'café'
+router.find('GET', '/files/a%2Fb.txt')?.params.name; // 'a/b'
+```
+
+> **A malformed percent-escape is a miss, not a throw.** A stray `%`
+> or an incomplete escape (e.g. `%zz`) makes `decodeURIComponent` throw
+> internally; RadRouter catches that per-branch and treats it as a
+> non-match rather than propagating a `URIError` to the caller.
+> `router.find()` **never throws** on a malformed request path — a
+> request nobody can satisfy just resolves to `undefined`, the same
+> `undefined` as any other miss.
+
+```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+router.get('/users/:id:', []);
+
+router.find('GET', '/users/%'); // undefined — not a thrown URIError
+```
 
 ## Matching priority
 

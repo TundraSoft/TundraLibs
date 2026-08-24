@@ -102,7 +102,7 @@ if (match) {
 | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
 | [Patterns](docs/RadRouter-Patterns.md)                     | Variable, suffix-literal, and greedy patterns; matching priority         |
 | [Routing](docs/RadRouter-Routing.md)                       | Versioned endpoints, case sensitivity, slash handling                    |
-| [API](docs/RadRouter-API.md)                               | Full reference: constructor, registration, lookup, maintenance           |
+| [API](docs/RadRouter-API.md)                               | Full reference: constructor, registration, lookup, maintenance, errors   |
 | [Wire-up](docs/RadRouter-WireUp.md)                        | Integration with `compat/webserver`, Express, Oak                        |
 | [Performance](docs/RadRouter-Performance.md)               | Benchmarks: per-shape, case-mode, router shootout                        |
 | [Tracing](../tracer/docs/Tracer-Recipes.md#radrouter--rpc) | Ready-made `@tundralibs/tracer` middleware for RadRouter's generic chain |

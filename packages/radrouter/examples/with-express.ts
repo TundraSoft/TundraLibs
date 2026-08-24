@@ -62,16 +62,6 @@ router.post('/users', [(req, res) => {
   res.status(201).json({ created: true, body: req.body });
 }]);
 
-const METHODS: HTTPMethod[] = [
-  'GET',
-  'POST',
-  'PUT',
-  'DELETE',
-  'PATCH',
-  'HEAD',
-  'OPTIONS',
-];
-
 // The adapter: one Express middleware that consults RadRouter on
 // every request, attaches matched params, and runs the chain. Sits
 // at app-level so all RadRouter routes flow through it.
@@ -79,8 +69,8 @@ const radHandler: ExpressMw = (req, res, next) => {
   const match = router.find(req.method as HTTPMethod, req.path);
 
   if (!match) {
-    // Probe sibling methods on the same path to distinguish 404 / 405.
-    const allowed = METHODS.filter((m) => router.find(m, req.path));
+    // Distinguish 404 from 405 without hand-rolling a method list.
+    const allowed = router.allowedMethods(req.path);
     if (allowed.length) {
       res.set('Allow', allowed.join(', '));
       return res.status(405).send('Method Not Allowed');
