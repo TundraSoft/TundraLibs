@@ -4,20 +4,32 @@ One app, every Doctor idea. Run it on any runtime:
 
 ```bash
 deno run packages/doctor/examples/order-service/main.ts
+bun run packages/doctor/examples/order-service/main.ts
+node --import tsx packages/doctor/examples/order-service/main.ts
 ```
 
-| File                   | Shows                                                                                                          |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `tokens.ts`            | `label<T>('Name')` — typed tokens for values Doctor can't `new` (config, clock, an optional reviewer)          |
-| `wiring.ts`            | `Doctor.stock(label, value)`, `Doctor.prescribe(Class, { mode, factory })`, side-effect imports, `checkup()`   |
-| `Logger.ts`            | `@Vial('SINGLETON')` injecting a label while it constructs                                                     |
-| `Connection.ts`        | `@Vial('SCOPED')` — one per request scope; `ScopeRequiredError` without one                                    |
-| `OrderRepository.ts`   | `@Vial('TRANSIENT')` whose `inject(Connection)` inherits the **ambient** scope                                 |
-| `PaymentGateway.ts`    | a class with constructor arguments, prescribed with a factory                                                  |
-| `AuditTrail.ts`        | a lazy getter breaking a SINGLETON cycle, using the untyped `inject('Name')` form to avoid a value import      |
-| `OrderService.ts`      | the composition; an optional dependency via `Doctor.has(label)`                                                |
-| `OrderHandler.ts`      | a plain class built per request with `Doctor.resolve(Class, scope)`, ended with `Doctor.discharge(scope)`      |
-| `OrderService.test.ts` | a fresh world per case with `revoke` + `prescribe` (no `reset()`); fakes ride into `wire()` before `checkup()` |
+| File                 | Shows                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `tokens.ts`          | `label<T>('Name')` — typed tokens for values Doctor can't `new` (config, clock, an optional reviewer)          |
+| `wiring.ts`          | `Doctor.stock(label, value)`, `Doctor.prescribe(Class, { mode, factory })`, side-effect imports, `checkup()`   |
+| `Logger.ts`          | `@Vial('SINGLETON')` injecting a label while it constructs                                                     |
+| `Connection.ts`      | `@Vial('SCOPED')` — one per request scope; `ScopeRequiredError` without one                                    |
+| `OrderRepository.ts` | `@Vial('TRANSIENT')` whose `inject(Connection)` inherits the **ambient** scope                                 |
+| `PaymentGateway.ts`  | a class with constructor arguments, prescribed with a factory                                                  |
+| `AuditTrail.ts`      | a lazy getter breaking a SINGLETON cycle, using the untyped `inject('Name')` form to avoid a value import      |
+| `OrderService.ts`    | the composition; an optional dependency via `Doctor.has(label)`                                                |
+| `OrderHandler.ts`    | a plain class built per request with `Doctor.resolve(Class, scope)`, ended with `Doctor.discharge(scope)`      |
+| `verify-testing.ts`  | a fresh world per case with `revoke` + `prescribe` (no `reset()`); fakes ride into `wire()` before `checkup()` |
+
+`verify-testing.ts` is a plain script, not a `*.test.ts` file — see the
+comment at its top for why — so it does not run under `deno task test`; run
+it by hand the same way as `main.ts`:
+
+```bash
+deno run packages/doctor/examples/order-service/verify-testing.ts
+bun run packages/doctor/examples/order-service/verify-testing.ts
+node --import tsx packages/doctor/examples/order-service/verify-testing.ts
+```
 
 Expected shape of the output (ids vary):
 

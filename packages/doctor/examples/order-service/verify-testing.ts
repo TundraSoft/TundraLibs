@@ -1,14 +1,24 @@
 /**
- * Testing a wired app without `Doctor.reset()` (which would also wipe
- * every `@Vial` registration made at import time): between cases the
- * boot helper REVOKES what the last case registered and re-prescribes
- * the vials, so singletons are rebuilt — and the fakes ride into `wire()`
- * so they are in place before `checkup()` builds anything.
+ * Verifies the testing idiom documented in docs/Doctor-Stock.md ("Testing:
+ * revoke + stock, not reset"): between cases, REVOKE what the previous case
+ * registered, re-`prescribe` the vials, and let fakes ride into `wire()`
+ * before `checkup()` builds anything — no `Doctor.reset()`, which would also
+ * wipe every `@Vial` registration made at import time.
+ *
+ * Deliberately NOT named `*.test.ts`: `deno test` / `bun test` discovery and
+ * CI's `node --import tsx --test 'packages/**\/*.test.ts'` glob sweep any
+ * matching file straight into the required suite — that glob can't be
+ * filtered by `deno.json` config, so file naming is the only guardrail (see
+ * .github/instructions/documentation.instructions.md, "Example Projects").
+ * Run it by hand instead:
+ *
+ *   deno run packages/doctor/examples/order-service/verify-testing.ts
+ *   bun run packages/doctor/examples/order-service/verify-testing.ts
+ *   node --import tsx packages/doctor/examples/order-service/verify-testing.ts
  * @module
  */
-import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
-import { Doctor, type VialClass, type VialModes } from '../../mod.ts';
+import { Doctor, type VialClass, type VialModes } from '@tundralibs/doctor';
 import { AuditTrail } from './AuditTrail.ts';
 import { Connection } from './Connection.ts';
 import { Logger } from './Logger.ts';
@@ -44,8 +54,16 @@ const boot = (options: WireOptions = {}) => {
   });
 };
 
-describe('order-service', () => {
-  it('places an order under a request scope, stamped by the frozen clock', () => {
+let cases = 0;
+const check = (name: string, run: () => void) => {
+  run();
+  cases++;
+  console.log(`✓ ${name}`);
+};
+
+check(
+  'places an order under a request scope, stamped by the frozen clock',
+  () => {
     boot();
     const h = Doctor.resolve(OrderHandler, 'req-1');
     asserts.assertEquals(h.handle('o-1', 100), {
@@ -56,18 +74,21 @@ describe('order-service', () => {
     });
     asserts.assertEquals(h.conn.rows.get('o-1')?.at, FROZEN.toISOString());
     Doctor.discharge('req-1');
-  });
+  },
+);
 
-  it('flags only when the optional REVIEWER label is stocked', () => {
-    boot({ reviews: false });
-    const off = Doctor.resolve(OrderHandler, 'r').handle('o-2', 900);
-    asserts.assert(off.status === 'placed' && off.flagged === false);
-    boot({ reviews: true });
-    const on = Doctor.resolve(OrderHandler, 'r').handle('o-3', 900);
-    asserts.assert(on.status === 'placed' && on.flagged === true);
-  });
+check('flags only when the optional REVIEWER label is stocked', () => {
+  boot({ reviews: false });
+  const off = Doctor.resolve(OrderHandler, 'r').handle('o-2', 900);
+  asserts.assert(off.status === 'placed' && off.flagged === false);
+  boot({ reviews: true });
+  const on = Doctor.resolve(OrderHandler, 'r').handle('o-3', 900);
+  asserts.assert(on.status === 'placed' && on.flagged === true);
+});
 
-  it('a declining gateway, stocked under the CLASS token, is audited and never saved', () => {
+check(
+  'a declining gateway, stocked under the CLASS token, is audited and never saved',
+  () => {
     boot({ gateway: new PaymentGateway('') }); // '' → declines
     const h = Doctor.resolve(OrderHandler, 'req-2');
     asserts.assertEquals(h.handle('o-9', 10).status, 'declined');
@@ -75,5 +96,7 @@ describe('order-service', () => {
     asserts.assert(
       h.orders.audit.entries.some((e) => e.what.includes('o-9 declined')),
     );
-  });
-});
+  },
+);
+
+console.log(`\n${cases} checks passed`);

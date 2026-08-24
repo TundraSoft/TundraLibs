@@ -129,6 +129,8 @@ The string token **is** the class name, so:
 - [@Vial](Doctor-Vial.md) — registers the classes `inject` resolves
 - [stock](Doctor-Stock.md) — typed labels for ready-made values and labelled
   factories
+- [containers](Doctor-Container.md) — what "the ambient container" `inject`
+  reads actually is
 
 ---
 

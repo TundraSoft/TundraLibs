@@ -4,7 +4,7 @@
  * names no scope, so it inherits the AMBIENT one from the driving
  * `Doctor.resolve(Handler, scope)` call. @module
  */
-import { inject, Vial } from '../../mod.ts';
+import { inject, Vial } from '@tundralibs/doctor';
 import { Connection } from './Connection.ts';
 
 @Vial('TRANSIENT')

@@ -4,7 +4,7 @@
  * Two eager sides would throw `CircularDependencyError`; a getter
  * resolves on first access, when both instances already exist. @module
  */
-import { inject, Vial } from '../../mod.ts';
+import { inject, Vial } from '@tundralibs/doctor';
 import type { OrderService } from './OrderService.ts';
 import { CLOCK } from './tokens.ts';
 

@@ -151,7 +151,10 @@ Doctor.stock(Db, fakeDb); // a test double, no reset() needed
 
 `has` accepts a label, a bare name, or a class; so does `revoke` — a
 bare name revokes whatever `dispenseByName` would resolve it to.
-`reset()` clears stocked entries along with everything else.
+`reset()` clears stocked entries along with everything else. `has` also
+reads through to a parent container; `Doctor.knows(Class)` is the
+class-only, **local-only** sibling check — see
+[containers](Doctor-Container.md#knows-vs-has).
 
 ### Testing: `revoke` + `stock`, not `reset`
 
@@ -192,6 +195,8 @@ need with `revoke` + `stock`.
 - [inject](Doctor-Inject.md) — `inject(label)` / `inject(Class)` /
   `inject('Token')`
 - [@Vial](Doctor-Vial.md) — the class-registration path
+- [containers](Doctor-Container.md) — `stock` on a child overrides only
+  that child
 - [Errors](../errors/Doctor-Errors.md)
 
 ---
