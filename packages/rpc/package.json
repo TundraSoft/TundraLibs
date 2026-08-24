@@ -15,6 +15,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@std/asserts": "npm:@jsr/std__assert@^1.0.19",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   }

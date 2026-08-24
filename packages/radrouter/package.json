@@ -15,5 +15,9 @@
   "dependencies": {
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "find-my-way": "npm:find-my-way@^8.2.2",
+    "radix3": "npm:radix3@^1.1.2"
   }
 }

@@ -15,8 +15,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@std/fmt": "npm:@jsr/std__fmt@^1.0.7",
-    "@std/datetime": "npm:@jsr/std__datetime@^0.225.4",
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.10",
+    "@std/datetime": "npm:@jsr/std__datetime@^0.225.7",
     "@tundralibs/utils": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/id": "workspace:*"

@@ -29,8 +29,12 @@
     "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*",
     "@tundralibs/id": "workspace:*",
-    "$maria": "npm:mariadb@^3.4.5",
-    "$mongo": "npm:mongodb@^6.10.0"
+    "$maria": "npm:mariadb@^3.5.3",
+    "$mongo": "npm:mongodb@^6.21.0"
+  },
+  "devDependencies": {
+    "pg": "npm:pg@^8.23.0",
+    "postgres": "npm:postgres@^3.4.9"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0"

@@ -14,11 +14,11 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@std/datetime": "npm:@jsr/std__datetime@^0.225.3",
-    "@tundralibs/compat": "workspace:*",
+    "@std/datetime": "npm:@jsr/std__datetime@^0.225.7",
     "@tundralibs/utils": "workspace:*"
   },
   "devDependencies": {
-    "zod": "npm:zod@^4"
+    "@tundralibs/compat": "workspace:*",
+    "zod": "npm:zod@^4.4.3"
   }
 }
