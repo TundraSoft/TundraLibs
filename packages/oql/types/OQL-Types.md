@@ -242,6 +242,54 @@ Like `INSERT`, `data` values may be expressions, and an optional
 }
 ```
 
+### INSERT_FROM_QUERY branch — `Query<'INSERT_FROM_QUERY', PT>`
+
+`INSERT INTO <table> (<columns>) SELECT ... FROM <source>` — append rows
+produced by a SELECT into `table`. There is no `data`; the source rows
+come from `query`.
+
+```typescript ignore
+{
+  type: 'INSERT_FROM_QUERY';
+  table: string;
+  schema?: string;
+  columns: Array<keyof PT>;
+  // Source SELECT. Its `projection` supplies the values, positionally.
+  query: Query<'SELECT', TableType, Record<string, TableType>>;
+}
+```
+
+**`columns` and `query.projection` are matched positionally, by count —
+not by name.** `assertInsertFromQuery` only checks that the two lists
+have the same length; the Nth target column receives the Nth projected
+value regardless of what either is called. Order `columns` to line up
+with `projection`'s key order, or the insert silently writes values into
+the wrong columns.
+
+```typescript
+import { assertQuery, type Query } from '@tundralibs/oql';
+
+type OrderHistory = { id: number; userId: number; total: number };
+
+const query: Query<'INSERT_FROM_QUERY', OrderHistory> = {
+  type: 'INSERT_FROM_QUERY',
+  table: 'order_history',
+  // Position 1↔1, 2↔2, 3↔3 against the source projection below — the
+  // names happen to match here, but assertInsertFromQuery does not
+  // check that; only the count is checked.
+  columns: ['id', 'userId', 'total'],
+  query: {
+    type: 'SELECT',
+    table: 'orders',
+    columns: ['id', 'userId', 'total', 'status'],
+    projection: { '@id': true, '@userId': true, '@total': true },
+    where: { '@status': 'completed' },
+  },
+};
+
+assertQuery(query);
+```
+
 ## Filter Types
 
 ### QueryFilter<PT, FPT>
@@ -318,6 +366,33 @@ Plus three non-object filter forms accepted on every column:
 - A direct literal value (`'@status': 'active'`) — implicit `$eq`.
 - An array of values (`'@status': ['active', 'pending']`) — implicit `$in`.
 - `null` — implicit `$null: true`.
+
+**`boolean` columns cannot use the operator-object form at all** — not
+even `$eq`/`$ne`/`$in`/`$nin`/`$null`. `Operators<T>`'s object branch is
+gated by `T extends string` or `T extends Date | number | bigint`;
+neither holds for `boolean`, so the object branch resolves to `never`
+and only the three non-object shorthand forms above type-check on a
+boolean column:
+
+```typescript
+import type { QueryFilter } from '@tundralibs/oql';
+
+type Account = { id: number; active: boolean };
+
+const isActive: QueryFilter<Account> = { '@active': true }; // OK — implicit $eq
+const eitherState: QueryFilter<Account> = { '@active': [true, false] }; // OK — implicit $in
+const isNull: QueryFilter<Account> = { '@active': null }; // OK — implicit $null: true
+// const bad: QueryFilter<Account> = { '@active': { $eq: true } };
+// ❌ TS2353 — '$eq' does not exist on type 'boolean[]'
+
+console.log(isActive, eitherState, isNull);
+```
+
+This is a compile-time-only restriction — see the note on the
+[Operators validator](../asserts/OQL-Asserts.md#operators) in the
+asserts doc: the runtime validator does not re-check operator-to-column-type
+applicability, so a boolean filter built dynamically (bypassing the
+type checker) will not be caught by `assertQuery` either.
 
 **Null inside operator values is disallowed.** `$eq: null`, `$ne: null`,
 `$in: [null, …]`, `$nin: [null, …]` are rejected at both the type and
