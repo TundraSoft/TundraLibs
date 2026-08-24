@@ -40,7 +40,7 @@ Cross-runtime HTTP/HTTPS server with WebSocket support for Bun, Deno, and Node.j
 | WS drain callback        | ✅   | ✅\‡ | ✅\¶    |
 | WS error callback        | ✅\§ | ✅   | ✅      |
 | Backlog option           | ❌   | ✅   | ✅      |
-| ReusePort                | ❌   | ✅   | ❌\‖    |
+| ReusePort                | ❌   | ✅   | ✅\‖    |
 | Graceful shutdown        | ✅   | ✅   | ✅      |
 | Request metrics          | ✅   | ✅   | ✅      |
 | Abort signal             | ✅   | ✅   | ✅      |
@@ -60,11 +60,11 @@ try/catch and synthesize `error` events from caught throws.\
 event (the `ws` package has no WebSocket-level equivalent), so — unlike
 Deno's `bufferedAmount` polling — it reflects real socket backpressure:
 the callback runs when a send buffer that had filled empties again.\
-\‖ Accepted at construction with no error and stored on
-`server.options`, but Node's startup path calls
-`server.listen(port, hostname, backlog, callback)` — that legacy
-positional form has no `reusePort` slot, so the value is never passed
-to Node and has no effect there.
+\‖ Node passes `reusePort` through `server.listen({ … })`, but only
+where the kernel exposes `SO_REUSEPORT` (Linux, FreeBSD, illumos/Solaris,
+AIX) and on Node ≥ 22.12. On macOS and Windows Node would raise `ENOTSUP`,
+so it is skipped there and becomes a no-op — matching Deno/Bun, which
+tolerate it silently on unsupported platforms rather than erroring.
 
 [ws-pkg]: https://github.com/websockets/ws
 
@@ -128,23 +128,23 @@ const server = new WebServer('API', {
   port: 3000, // Default: 8008
   hostname: '0.0.0.0', // Default: 'localhost'
   backlog: 511, // Connection queue size (Deno/Node only; ignored on Bun)
-  reusePort: true, // Allow port reuse (Deno only; accepted but has no effect on Node — see Features table)
+  reusePort: true, // Allow port reuse (Deno + Node on SO_REUSEPORT platforms — see Features table)
   handler: (req, info) => new Response('OK'),
 });
 ```
 
-| Option        | Type               | Default       | Description                                                       |
-| ------------- | ------------------ | ------------- | ----------------------------------------------------------------- |
-| `mode`        | `'TCP'`            | Required      | Server mode                                                       |
-| `port`        | `number`           | `8008`        | Port number (0-65535)                                             |
-| `hostname`    | `string`           | `'localhost'` | Bind address                                                      |
-| `backlog`     | `number`           | -             | Connection queue size                                             |
-| `reusePort`   | `boolean`          | -             | Allow multiple processes to bind (Deno only — see Features table) |
-| `handler`     | `Function`         | Required      | Request handler                                                   |
-| `tls`         | `TLSOptions`       | -             | TLS configuration                                                 |
-| `websocket`   | `WebSocketHandler` | -             | WebSocket handlers                                                |
-| `abortSignal` | `AbortSignal`      | -             | Signal for graceful shutdown                                      |
-| `metrics`     | `boolean`          | `false`       | Opt-in metrics collection                                         |
+| Option        | Type               | Default       | Description                                                                                   |
+| ------------- | ------------------ | ------------- | --------------------------------------------------------------------------------------------- |
+| `mode`        | `'TCP'`            | Required      | Server mode                                                                                   |
+| `port`        | `number`           | `8008`        | Port number (0-65535)                                                                         |
+| `hostname`    | `string`           | `'localhost'` | Bind address                                                                                  |
+| `backlog`     | `number`           | -             | Connection queue size                                                                         |
+| `reusePort`   | `boolean`          | -             | Allow multiple processes to bind (Deno + Node on SO_REUSEPORT platforms — see Features table) |
+| `handler`     | `Function`         | Required      | Request handler                                                                               |
+| `tls`         | `TLSOptions`       | -             | TLS configuration                                                                             |
+| `websocket`   | `WebSocketHandler` | -             | WebSocket handlers                                                                            |
+| `abortSignal` | `AbortSignal`      | -             | Signal for graceful shutdown                                                                  |
+| `metrics`     | `boolean`          | `false`       | Opt-in metrics collection                                                                     |
 
 ### UNIX Mode
 
@@ -717,8 +717,8 @@ server.on('onResponse', [
 - WebSocket via the [`ws`][ws-pkg] npm package (taken as a normal
   dependency of `@tundralibs/compat`), loaded lazily on `start()` so
   importing the module never pulls it in
-- `backlog` supported; `reusePort` is accepted but has no effect (see
-  the Features table)
+- `backlog` supported; `reusePort` honored on `SO_REUSEPORT` platforms
+  (Node ≥ 22.12), a no-op on macOS/Windows (see the Features table)
 - `drain` callback fires from the underlying socket's `drain` event —
   it reflects real send backpressure (see the Features table)
 - Node's HTTP server hands the handler an `IncomingMessage`, not a Fetch

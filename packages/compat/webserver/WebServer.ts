@@ -114,6 +114,20 @@ const nodeHttps: typeof import('node:https') = loadBuiltin(
   'node:https',
   isNode,
 );
+const nodeOs: typeof import('node:os') = loadBuiltin('node:os', isNode);
+
+// Platforms whose kernel exposes `SO_REUSEPORT`, so Node's
+// `server.listen({ reusePort: true })` binds instead of throwing `ENOTSUP`.
+// Node added the option in 22.12.0 (harmlessly ignored on 22.0–22.11) but
+// raises on unsupported platforms — macOS and Windows among them. Deno and
+// Bun silently tolerate `reusePort` everywhere, so we gate it to the same
+// effect: real port reuse where the OS supports it, a no-op elsewhere.
+const REUSEPORT_PLATFORMS: ReadonlySet<string> = new Set([
+  'linux',
+  'freebsd',
+  'sunos',
+  'aix',
+]);
 
 // Runtimes that can actually host a port-listening HTTP server. Used to
 // skip the constructor's filesystem-touching option validation (UNIX
@@ -233,10 +247,14 @@ const _stringifyThrown = (err: unknown): string => {
  * | UNIX sockets    | ✅  | ✅   | ✅      |
  * | WebSocket       | ✅  | ✅   | ✅*     |
  * | Backlog option  | ❌  | ✅   | ✅      |
- * | ReusePort       | ❌  | ✅   | ✅      |
+ * | ReusePort       | ❌  | ✅   | ✅†     |
  *
  * *Node.js WebSocket is provided via the `ws` npm package, loaded
  * lazily on first use; Bun and Deno use their native implementations.
+ *
+ * †Node honors `reusePort` only where the kernel exposes `SO_REUSEPORT`
+ * (Linux, FreeBSD, illumos/Solaris, AIX) and on Node ≥ 22.12; elsewhere
+ * (macOS, Windows) it is a no-op, matching Deno/Bun rather than raising.
  *
  * @example TCP server with metrics monitoring (collection is opt-in)
  * ```typescript
@@ -2219,19 +2237,35 @@ export class WebServer<T = unknown> {
     const ready = new Promise<void>((resolve) => {
       if (this.mode === 'TCP') {
         const tcpOptions = this.options as ServerOptions<'TCP'>;
-        server.listen(
-          tcpOptions.port,
-          tcpOptions.hostname,
-          tcpOptions.backlog,
-          () => {
-            // `address()` is an AddressInfo object once listening on TCP.
-            const bound = server.address();
-            if (bound !== null && typeof bound === 'object') {
-              this.__boundPort = bound.port;
-            }
-            resolve();
-          },
-        );
+        // Options-object form (not the positional one) so `reusePort` can be
+        // threaded through — the positional signature has no slot for it.
+        // Only pass it where the kernel honors `SO_REUSEPORT`; on macOS /
+        // Windows Node raises `ENOTSUP`, whereas Deno and Bun no-op, so
+        // gating keeps every runtime consistent.
+        const listenOptions: {
+          port?: number;
+          host?: string;
+          backlog?: number;
+          reusePort?: boolean;
+        } = {
+          port: tcpOptions.port,
+          host: tcpOptions.hostname,
+          backlog: tcpOptions.backlog,
+        };
+        if (
+          tcpOptions.reusePort === true &&
+          REUSEPORT_PLATFORMS.has(nodeOs.platform())
+        ) {
+          listenOptions.reusePort = true;
+        }
+        server.listen(listenOptions, () => {
+          // `address()` is an AddressInfo object once listening on TCP.
+          const bound = server.address();
+          if (bound !== null && typeof bound === 'object') {
+            this.__boundPort = bound.port;
+          }
+          resolve();
+        });
       } else {
         const unixOptions = this.options as ServerOptions<'UNIX'>;
         server.listen(unixOptions.unixSocketPath, () => resolve());

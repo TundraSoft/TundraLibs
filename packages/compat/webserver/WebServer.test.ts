@@ -2452,6 +2452,77 @@ h87g/qBXJrxZ7o+w+KxL/Q==
   // is our supported floor.
   // ===========================================================================
 
+  describe('reusePort binding (Node)', () => {
+    it({
+      // Regression guard: threading `reusePort` naively into Node's
+      // `listen()` raises `ENOTSUP` on macOS/Windows (no `SO_REUSEPORT`),
+      // where Deno/Bun no-op. The Node path must gate it by platform so
+      // `start()` succeeds everywhere — a no-op off Linux/FreeBSD/etc.
+      name: 'reusePort: true starts cleanly on Node on any platform',
+      deno: false,
+      bun: false,
+      fn: async () => {
+        const port = getNextPort();
+        const server = new WebServer('RPClean', {
+          mode: 'TCP',
+          port,
+          hostname: '127.0.0.1',
+          reusePort: true,
+          handler: () => new Response('ok'),
+        });
+        activeServer = server;
+        await server.start();
+        if (server.state !== 'RUNNING') {
+          throw new Error('server with reusePort:true failed to start');
+        }
+        await server.stop(false);
+        activeServer = null;
+      },
+    });
+
+    it({
+      // The real bind-behavior test: two servers binding the SAME port
+      // both start only because `reusePort` took effect — without it the
+      // second bind throws EADDRINUSE. Gated to SO_REUSEPORT platforms
+      // (skips macOS/Windows, where the option is a no-op); CI runs Linux,
+      // so this actually exercises the feature.
+      name: 'reusePort lets two Node servers bind the same port',
+      deno: false,
+      bun: false,
+      darwin: false,
+      windows: false,
+      fn: async () => {
+        const port = getNextPort();
+        const make = (n: string) =>
+          new WebServer(`RPShare-${n}`, {
+            mode: 'TCP',
+            port,
+            hostname: '127.0.0.1',
+            reusePort: true,
+            handler: () => new Response(n),
+          });
+        const a = make('a');
+        const b = make('b');
+        try {
+          await a.start();
+          // Second bind on the same port — succeeds only with reusePort.
+          await b.start();
+          if (a.state !== 'RUNNING' || b.state !== 'RUNNING') {
+            throw new Error('both servers should be RUNNING on the same port');
+          }
+          if (a.port !== port || b.port !== port) {
+            throw new Error(
+              `expected both on ${port}, got ${a.port}/${b.port}`,
+            );
+          }
+        } finally {
+          await a.stop(false).catch(() => {});
+          await b.stop(false).catch(() => {});
+        }
+      },
+    });
+  });
+
   describe('WebSocket support', () => {
     it({
       name: 'should handle WebSocket upgrade',
