@@ -182,6 +182,40 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `ambient.run` measured at 0.4% of CPU, and the bag is load-bearing for
   per-app DI isolation, event/invoke correlation, and log correlation — an
   opt-out would break all three for negligible gain.
+- **Per-request hot-path perf — the plan is closed (2026-08-24).** The
+  `bench/REPORT.md` ranked plan (R1–R5) is landed or deliberately dropped, and
+  the autocannon framework comparison was re-run on compat 2.7.0:
+  - **Async-spine collapse (R1).** `_invoke`/`__runInvoke` run the onion
+    SYNCHRONOUSLY on the zero-middleware/no-tracer happy path — the thenable
+    branch enters the promise lane only when the handler actually returns one,
+    so a bare sync handler finalizes without allocating a single request
+    promise. Same ambient scope, error disclosure, and finalize order — no
+    behavior change. (~−0.7/−0.9/−1.0µs Deno/Bun/Node.)
+  - **`ctx.args.params` freed.** Reading it cost ~2.5µs/req on Node building
+    the frozen `args` wrapper (a per-request object literal with inline
+    `query`/`paging` accessor getters + `Object.freeze`) for a param the router
+    had already resolved into `this.params`. Now an `HTTPArgs` class with the
+    getters on the PROTOTYPE — one cheap allocation; `params` frozen and
+    `query`/`paging` return their own frozen collections (contract intact); a
+    `toJSON()` keeps `JSON.stringify(ctx.args)` whole. Wrapper tax ~2.5→0.7µs;
+    `ctx.args.params` now measures on top of a direct `ctx.params` read.
+  - **Node Fetch-tax (R5).** The lazy-`Request` impersonation shipped in
+    **compat 2.7.0** (`LightRequest` — serves method/url/headers/body from
+    `IncomingMessage`, materializes undici only on a heavy read; ~+5.6%
+    transport / ~+2% rapid throughput on Node 26, isolated A/B). rapid picks it
+    up when it consumes 2.7.0.
+  - **Request-id (R2).** Landed as the `sequenceID()` default above; the pooled
+    ULID was dropped as CSPRNG-unsafe.
+  - **Pathname raw-scan (R3) — REJECTED.** Replacing `new URL(request.url)
+    .pathname` in `__handle` saves ~0.1µs but drops dot-segment normalization
+    (`/a/../b` → `/b`); since `Deno.serve` delivers `request.url` UN-normalized,
+    a raw scan would route the same request differently per runtime AND weaken
+    the routing/guard security boundary. `new URL` stays (the call site
+    documents this).
+  - **Standing** (autocannon `-c 50`, this machine): Node 26 — rapid ≈ express
+    parity on `GET /` (~102%), ~94% on `/users/:id`; Deno — rapid ≥ oak on
+    `GET /`, ~91% on params; fastify sits at raw `node:http` (the honest
+    ceiling for a Fetch-contract framework). No rapid-side perf lever remains.
 
 ## Backlog
 
