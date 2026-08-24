@@ -6,7 +6,7 @@
  * captive dependency — so the per-request repository is passed in.
  * @module
  */
-import { Doctor, inject, Vial } from '../../mod.ts';
+import { Doctor, inject, Vial } from '@tundralibs/doctor';
 import { AuditTrail } from './AuditTrail.ts';
 import type { OrderRepository } from './OrderRepository.ts';
 import { PaymentGateway } from './PaymentGateway.ts';

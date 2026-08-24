@@ -10,7 +10,7 @@
  *   AuditTrail.ts      lazy getter breaking a SINGLETON cycle; `inject('Name')`
  *   OrderService.ts    the composition, plus an OPTIONAL label via `Doctor.has`
  *   OrderHandler.ts    a plain class built per request with `Doctor.resolve`
- *   OrderService.test.ts   a fresh world per case via `revoke` + `prescribe`, fakes into `wire()`
+ *   verify-testing.ts  a fresh world per case via `revoke` + `prescribe`, fakes into `wire()`
  *
  * Run on any runtime:
  *
@@ -21,7 +21,7 @@
  * ```
  * @module
  */
-import { Doctor, ScopeRequiredError } from '../../mod.ts';
+import { Doctor, ScopeRequiredError } from '@tundralibs/doctor';
 import { AuditTrail } from './AuditTrail.ts';
 import { Connection } from './Connection.ts';
 import { OrderHandler } from './OrderHandler.ts';

@@ -142,8 +142,8 @@ Verified directly: a `@Vial`/`inject()` consumer bundled with
 `--target=es2022` runs correctly in a real browser tab and in a
 workerd-shaped environment (`process`, `Bun`, `Deno`, `window`, and
 `document` all absent). Doctor itself has zero runtime dependencies
-beyond `@tundralibs/utils`'s `Singleton` — imported from its narrow
-`@tundralibs/utils/Singleton` subpath, not the full barrel, so
+beyond `@tundralibs/utils`'s `BaseError` — imported from its narrow
+`@tundralibs/utils/BaseError` subpath, not the full barrel, so
 `getFreePort`'s Node-builtin loading code (`node:net`/`tls`/…) never
 enters the bundle. Confirmed empirically: the barrel import pulled
 those strings in regardless of tree-shaking (they're module-level,
@@ -239,6 +239,11 @@ End a request by dropping its scope:
 ```typescript ignore
 Doctor.discharge(`req-${id}`); // drops every instance in that scope
 ```
+
+`Doctor.dischargeAll()` drops every scope at once — registrations are
+untouched. Reach for it between test suites or at shutdown, not per request:
+it does not know which scopes are still "in use", it just empties all of
+them.
 
 ## Boot-time preflight: checkup()
 
@@ -352,17 +357,48 @@ Two caveats, both by design:
 
 Full API in [stock](docs/Doctor-Stock.md).
 
+## Multi-container: `createContainer` + `setContainerProvider`
+
+Beyond the single process-wide `Doctor`, a container can mint isolated
+**children** — same registrations, independent instances and overrides — and
+a host framework can bridge them across `await` so `inject()` still resolves
+against the right one:
+
+```typescript
+import { Doctor, inject, label } from '@tundralibs/doctor';
+
+const NAME = label<string>('Name');
+Doctor.stock(NAME, 'global-value');
+
+class Greeter {
+  name = inject(NAME);
+}
+
+const tenant = Doctor.createContainer();
+tenant.stock(NAME, 'tenant-value'); // overrides NAME for `tenant` only
+
+console.log(tenant.resolve(Greeter).name); // 'tenant-value'
+console.log(new Greeter().name); // 'global-value' — a bare `new` never sees a child
+```
+
+Full API, the async-host bridge (`setContainerProvider`), and the
+constraints above (`@Vial` always registers to the global; a bare `new`
+never sees a child; `resolve()`'s factory lookup never reads through to the
+parent) in [containers](docs/Doctor-Container.md).
+
 ## Modules
 
-| Module       | Description                                                  | Documentation                            |
-| ------------ | ------------------------------------------------------------ | ---------------------------------------- |
-| `Doctor`     | Process-wide injector (register, dispense, resolve, checkup) | This page                                |
-| `inject`     | Resolve by label, by class, or — untyped — by name           | [Doctor-Inject](docs/Doctor-Inject.md)   |
-| `stock`      | Typed labels for ready-made values and labelled factories    | [Doctor-Stock](docs/Doctor-Stock.md)     |
-| `@Vial`      | Class decorator — registers the class                        | [Doctor-Vial](docs/Doctor-Vial.md)       |
-| `./errors`   | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](errors/Doctor-Errors.md) |
-| `./types`    | `Vial`, `VialModes`, `VialOptions`, `Label`, `StockOptions`  | —                                        |
-| `./examples` | The runnable order-service example                           | [examples/](examples/order-service/)     |
+| Module                                     | Description                                                  | Documentation                                |
+| ------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------- |
+| `Doctor`                                   | Process-wide injector (register, dispense, resolve, checkup) | This page                                    |
+| `inject`                                   | Resolve by label, by class, or — untyped — by name           | [Doctor-Inject](docs/Doctor-Inject.md)       |
+| `stock`                                    | Typed labels for ready-made values and labelled factories    | [Doctor-Stock](docs/Doctor-Stock.md)         |
+| `@Vial`                                    | Class decorator — registers the class                        | [Doctor-Vial](docs/Doctor-Vial.md)           |
+| `createContainer` / `setContainerProvider` | Child containers + async-host bridging                       | [Doctor-Container](docs/Doctor-Container.md) |
+| `./decorators`                             | `Vial` decorator (same export as root, narrower import)      | [Doctor-Vial](docs/Doctor-Vial.md)           |
+| `./errors`                                 | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](errors/Doctor-Errors.md)     |
+| `./types`                                  | `Vial`, `VialModes`, `VialOptions`, `Label`, `StockOptions`  | —                                            |
+| `./examples`                               | The runnable order-service example                           | [examples/](examples/order-service/)         |
 
 ## Example
 
@@ -372,10 +408,12 @@ every idea on this page: typed labels stocked at boot, a factory-prescribed
 vial, SINGLETON / SCOPED / TRANSIENT lifecycles, the ambient operation
 scope via `Doctor.resolve(Handler, scope)` + `discharge`, a lazy getter
 breaking a cycle, an optional dependency via `Doctor.has`, `checkup()`, and
-a test that swaps fakes with `revoke` + `stock`.
+a verification script that swaps fakes with `revoke` + `prescribe`.
 
 ```bash
 deno run packages/doctor/examples/order-service/main.ts
+bun run packages/doctor/examples/order-service/main.ts
+node --import tsx packages/doctor/examples/order-service/main.ts
 ```
 
 ## Related Documentation
@@ -383,6 +421,7 @@ deno run packages/doctor/examples/order-service/main.ts
 - [inject](docs/Doctor-Inject.md) — resolve by label, by class, or untyped by name
 - [stock](docs/Doctor-Stock.md) — typed labels for ready-made values and labelled factories
 - [@Vial](docs/Doctor-Vial.md) — registration decorator
+- [containers](docs/Doctor-Container.md) — child containers + async-host bridging
 - [Errors](errors/Doctor-Errors.md) — error classes and matching strategies
 - [order-service example](examples/order-service/) — every idea above in one runnable app
 

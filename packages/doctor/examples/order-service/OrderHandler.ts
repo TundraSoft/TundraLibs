@@ -5,7 +5,7 @@
  * handler, its repository and the Connection all share one request.
  * @module
  */
-import { inject } from '../../mod.ts';
+import { inject } from '@tundralibs/doctor';
 import { Connection } from './Connection.ts';
 import { OrderRepository } from './OrderRepository.ts';
 import { OrderService, type PlaceResult } from './OrderService.ts';

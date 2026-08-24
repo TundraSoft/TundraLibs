@@ -6,7 +6,7 @@
  * HERE and not inside the first request.
  * @module
  */
-import { Doctor } from '../../mod.ts';
+import { Doctor } from '@tundralibs/doctor';
 import { PaymentGateway } from './PaymentGateway.ts';
 import {
   CLOCK,
