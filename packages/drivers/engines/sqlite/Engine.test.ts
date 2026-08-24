@@ -76,7 +76,8 @@ class ProbeSqliteEngine extends SQLiteEngine {
     return this._wrapDriverError(error, query);
   }
 
-  /** The resolved `pool` option — after the defaults merge and `_processOption`. */
+  /** The resolved `pool` option — after the defaults merge and the
+   * constructor's single-handle clamp. */
   public poolOption(): EnginePoolOptions | undefined {
     return this._getOption('pool');
   }
@@ -209,8 +210,8 @@ describe({
 
 // ---------------------------------------------------------------------------
 // Pool pinning (NO live DB). SQLite must run on a single shared handle, so a
-// caller-supplied `pool.min`/`pool.max` is clamped back to 1 in
-// `_processOption` — *after* the defaults merge that otherwise lets caller
+// caller-supplied `pool.min`/`pool.max` is clamped back to 1 in the
+// constructor — *before* the defaults merge that otherwise lets caller
 // options win. Before that clamp, `pool: { min: 2, max: 5 }` opened a second
 // handle; in `:memory:` mode that second handle is a separate empty database,
 // a silent TABLE_NOT_FOUND trap. Construction is lazy, so no handle is opened.

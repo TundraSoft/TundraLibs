@@ -30,7 +30,7 @@ Concurrent `execute` calls serialize on that one handle automatically, and
 `Capabilities.pooledConnections` is `false`.
 
 > **The single handle is a hard invariant, not just a default.** `pool.min` /
-> `pool.max` are forced back to `1` in `_processOption` — after the options
+> `pool.max` are forced back to `1` in the constructor — before the options
 > merge that otherwise lets caller values win — so `pool: { min: 2, max: 5 }`
 > still yields exactly one connection. This protects correctness: SQLite
 > serializes writers poorly, and in `':memory:'` mode each extra handle would
