@@ -16,11 +16,14 @@ node --import tsx packages/norm/examples/subscription-billing/main.ts
 | `seed.ts`   | two tenant organizations and their customers, fixed UUIDs so `main.ts` doesn't have to thread insert results everywhere                                                     |
 | `main.ts`   | nine numbered scenarios, run top to bottom — Migrator create, CRUD, `@AsOf`, the audit trail, the VIEW/QUERY, `db.scope()`, two `transaction()` calls, and Migrator v1 → v2 |
 
-Needs separate installs alongside `@tundralibs/norm`: `@tundralibs/drivers`
-(the SQLite engine) and `@tundralibs/compat` (a cross-runtime temp
-directory for the Migrator's snapshot files — the database itself is
-`:memory:`, so this is the only disk write the example makes, and it's
-removed when the run finishes).
+Norm constructs and owns the SQLite engine itself from the `database`
+config — `import '@tundralibs/norm/engines/sqlite'` registers the
+dialect (the one engine held out of the root barrel; see the README's
+"Choosing an entry point"), and no `@tundralibs/drivers` import is
+needed. The one extra install is `@tundralibs/compat`, for a
+cross-runtime temp directory the Migrator writes its snapshot files
+into — the database itself is `:memory:`, so that's the only disk
+write the example makes, and it's removed when the run finishes.
 
 Expected shape of the output (ids and counts of ordered items vary run to
 run; ordering doesn't):

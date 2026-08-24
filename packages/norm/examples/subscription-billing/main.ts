@@ -25,8 +25,7 @@
 import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
 import { Migrator } from '@tundralibs/norm/migrations';
-// Needs separate installs: deno add @tundralibs/drivers @tundralibs/compat
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+// Needs a separate install: deno add @tundralibs/compat
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import { ORG_ACME, ORG_GLOBEX, SEED_CUSTOMERS } from './seed.ts';
 import { PLAN_CATALOG, SchemaV1, SchemaV2 } from './schema.ts';
@@ -40,8 +39,10 @@ const say = (title: string, value: unknown) =>
   console.log(`\n▶ ${title}\n${JSON.stringify(value, null, 2)}`);
 
 const migDir = await makeTempDir({ prefix: 'norm-subscription-billing-' });
-const engine = new SQLiteEngine('subscription-billing', { path: ':memory:' });
-const norm = new Norm({ engine, secret: SECRET });
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: ':memory:' },
+  secret: SECRET,
+});
 
 try {
   // ─── 1. Migrator: create the v1 schema ────────────────────────────
