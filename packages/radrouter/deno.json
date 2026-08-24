@@ -8,8 +8,5 @@
     "./types": "./types/mod.ts",
     "./errors": "./errors/mod.ts"
   },
-  "imports": {
-    "find-my-way": "npm:find-my-way@^8.2.2",
-    "radix3": "npm:radix3@^1.1.2"
-  }
+  "imports": {}
 }

@@ -10,7 +10,6 @@
     "./errors": "./errors/mod.ts"
   },
   "imports": {
-    "@std/datetime": "jsr:@std/datetime@^0.225.7",
-    "zod": "npm:zod@^4.4.3"
+    "@std/datetime": "jsr:@std/datetime@^0.225.7"
   }
 }
