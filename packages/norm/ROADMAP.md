@@ -8,18 +8,19 @@
 > The remaining gaps are almost entirely **productization** — the cheaper
 > class of gap to close — not capability.
 >
-> **Last updated:** 2026-08-20
+> **Last updated:** 2026-08-23
 
 ## Current state
 
-| Layer               | Status   | Notes                                                                        |
-| ------------------- | -------- | ---------------------------------------------------------------------------- |
-| Typed model surface | Complete | Schema, querying, aggregates, scoping, transactions (with savepoints)        |
-| Four-engine support | Complete | SQLite / PG / Maria / Mongo — one migration + encryption story, live-proven  |
-| At-rest encryption  | Complete | `.encrypt().hash().mask()`; key rotation via `rotateKey()` (key-id envelope) |
-| Migrations          | Complete | Stored reviewed plans + hash-verified apply + advisory lock                  |
-| Observability       | Complete | `witness` hook bridges the metadata-only event bus to `@tundralibs/tracer`   |
-| Escape hatch        | Partial  | `db.raw<R>()` typed passthrough (crypto-blind by design); `query(IR)`        |
+| Layer               | Status   | Notes                                                                                                                                                                                       |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typed model surface | Complete | Schema, querying, aggregates, scoping, transactions (with savepoints)                                                                                                                       |
+| Four-engine support | Complete | SQLite / PG / Maria / Mongo — one migration + encryption story, live-proven                                                                                                                 |
+| At-rest encryption  | Complete | `.encrypt().hash().mask()`; key rotation via `rotateKey()` (key-id envelope)                                                                                                                |
+| Migrations          | Complete | Stored reviewed plans + hash-verified apply + advisory lock                                                                                                                                 |
+| Observability       | Complete | `witness` hook bridges the metadata-only event bus to `@tundralibs/tracer`                                                                                                                  |
+| Read caching        | Complete | Opt-in per-entity TTL over `@tundralibs/cacher`; per-table namespaced pruning; view/query dep-invalidation; MEMORY/REDIS/MEMCACHED; degrades on backend failure. Joins deferred (see below) |
+| Escape hatch        | Partial  | `db.raw<R>()` typed passthrough (crypto-blind by design); `query(IR)`                                                                                                                       |
 
 ## Planned / deferred
 
@@ -44,6 +45,12 @@ before adopting is tooling, not new query power.
   `customType`, no `CHECK`, no partial/expression indexes.
 - **After-write hooks / global subscribers** — no hook that sees the
   persisted result, no cross-entity subscribers.
+- **Cached joined reads** — the read cache covers single-table reads
+  (single-table aggregates included); joined / relational reads are never
+  cached (a joined entry depends on more than one table, breaking
+  per-table pruning) — the sanctioned pattern is a cacheable `VIEW`.
+  Caching ad-hoc runtime joins precisely would need per-key dependency
+  tracking cacher doesn't expose today.
 - **Engine breadth** — no MSSQL/Oracle/Spanner (NORM uniquely adds Mongo).
 - **Polymorphic associations / STI / embeddables.**
 

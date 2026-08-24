@@ -106,6 +106,10 @@ export type FindOptions = {
    * surface it as `result.total` — the answer to "how many match in
    * TOTAL" when limit/offset paginate `data`. */
   total?: boolean;
+  /** `true` = bypass the read cache for THIS call entirely: do not read
+   * a cached value and do not populate one (the query still runs against
+   * the database). No effect when caching is not configured. */
+  noCache?: boolean;
 };
 
 /** Resolved projection plan (join planner output). */
@@ -194,6 +198,10 @@ export class ReadRepo<
    * repo was reached through, and not yet narrowed — _scopeForOp
    * filters it to THIS entity's columns. undefined = unscoped. */
   protected readonly _scope: NormScope | undefined;
+  /** The enclosing transaction's written-entity accumulator (TABLE
+   * repos only), or undefined outside a transaction. A write records
+   * its entity key here and the prune fires at commit. */
+  protected readonly _txDirty: Set<string> | undefined;
 
   /**
    * Internal — constructed by the runtime, not by user code; reach a
@@ -203,6 +211,7 @@ export class ReadRepo<
    * @param executor - The engine seam it issues queries against.
    * @param txId - Set when the repo runs inside a transaction.
    * @param scope - The active `db.scope(...)` filter, if any.
+   * @param txDirty - The transaction's dirty-entity set (writes only).
    */
   public constructor(
     runtime: Runtime,
@@ -210,12 +219,93 @@ export class ReadRepo<
     executor: Executor,
     txId?: string,
     scope?: NormScope,
+    txDirty?: Set<string>,
   ) {
     this._runtime = runtime;
     this._compiled = compiled;
     this._executor = executor;
     this._txId = txId;
     this._scope = scope;
+    this._txDirty = txDirty;
+  }
+
+  /**
+   * Cache-read helper for the read methods: returns the cached value for
+   * `q` (already-built query IR) or `undefined` when caching is off for
+   * this entity, the read is transaction-scoped, `noCache` was passed,
+   * or the query joins / aggregates (which are never cached — a
+   * `cache-skip` warning is emitted so the miss is diagnosable). On a
+   * miss when caching WOULD apply, returns the cache key so the caller
+   * can populate it; otherwise the key is undefined.
+   */
+  protected async _cacheLookup(
+    op: string,
+    q: unknown,
+    opts: { noCache?: boolean; decrypt?: boolean; joined: boolean },
+  ): Promise<{ hit: true; value: unknown } | { hit: false; key?: string }> {
+    const cache = this._runtime.cache;
+    if (
+      cache === undefined || !cache.enabledFor(this._compiled.key) ||
+      this._txId !== undefined || opts.noCache === true
+    ) {
+      return { hit: false };
+    }
+    if (opts.joined) {
+      this._runtime.emit(
+        'warning',
+        this._compiled.key,
+        op,
+        'cache-skip',
+        `${this._compiled.key}.${op.toLowerCase()}() not cached — the query ` +
+          `joins another table. Model a cached multi-table read as a VIEW.`,
+      );
+      return { hit: false };
+    }
+    const key = await cache.keyFor(
+      this._compiled.key,
+      q,
+      opts.decrypt !== false,
+    );
+    const value = await cache.get<unknown>(this._compiled.key, key);
+    return value === undefined ? { hit: false, key } : { hit: true, value };
+  }
+
+  /** Store a read result under the key from a prior {@link _cacheLookup}
+   * miss. No-op when `key` is undefined (caching did not apply). */
+  protected async _cacheStore(
+    key: string | undefined,
+    value: unknown,
+  ): Promise<void> {
+    if (key === undefined) return;
+    await this._runtime.cache!.set(this._compiled.key, key, value);
+  }
+
+  /**
+   * Prune the cache after a write to THIS entity: outside a transaction,
+   * clear its namespace (and any dependent VIEW/QUERY) immediately;
+   * inside one, defer to the commit-time prune by recording the key.
+   * Always runs (independent of whether THIS entity is itself cacheable)
+   * so a write to a table still invalidates views built over it.
+   */
+  protected async _invalidateCache(): Promise<void> {
+    const cache = this._runtime.cache;
+    if (cache === undefined) return;
+    if (this._txId !== undefined && this._txDirty !== undefined) {
+      this._txDirty.add(this._compiled.key);
+      return;
+    }
+    await cache.invalidate(this._compiled.key);
+  }
+
+  /**
+   * Manually drop this entity's cached reads — the same invalidation a
+   * write performs: this entity's namespace plus any VIEW / QUERY whose
+   * stored query reads from it. No-op when the `Norm` has no `cache`
+   * configured. Use {@link NormDb.clearCache} to drop every entity.
+   */
+  public clearCache(): Promise<void> {
+    return this._runtime.cache?.invalidate(this._compiled.key) ??
+      Promise.resolve();
   }
 
   /** The subset of the scope whose columns EXIST on this entity —
@@ -450,6 +540,39 @@ export class ReadRepo<
       ...(typeof options.offset === 'number' ? { offset: options.offset } : {}),
     } as NormDMLQuery;
 
+    // 3b. Read cache: JOINED reads are never cached (a joined entry
+    //     would depend on more than one table, breaking per-table
+    //     pruning) — model those as a VIEW. A single-table aggregate is
+    //     fine: it still depends on exactly one table. A joined aggregate
+    //     is caught by the join check. (`total: true` rides the key so a
+    //     paginated read and its total stay distinct.)
+    const joined = Object.keys(plan.oqlJoins).length > 0;
+    const lookup = await this._cacheLookup(
+      'SELECT',
+      { q, total: options.total === true },
+      { noCache: options.noCache, decrypt: options.decrypt, joined },
+    );
+    if (lookup.hit) {
+      const cached = lookup.value as {
+        data: Row[];
+        count: number;
+        total?: number;
+      };
+      this._runtime.emit('cacheHit', c.key, 'SELECT', id);
+      return makeResult<Row[]>({
+        id,
+        op: 'SELECT',
+        txId: this._txId,
+        count: cached.count,
+        time: 0,
+        isSlow: false,
+        total: cached.total,
+        scoped: this._scopedEnvelope(scopeApplied),
+        data: cached.data,
+      });
+    }
+    const cacheKey = lookup.key;
+
     // 4. Execute (tx-bound when this repo is tx-scoped).
     const res = await this._executor.execute<Row>(q);
     this._emitCall('SELECT', res.time, res.isSlow, id);
@@ -522,6 +645,10 @@ export class ReadRepo<
       total = coerceCount(cres.data[0]?.Count);
     }
 
+    // 11. Populate the cache on a miss (no-op when caching did not apply
+    //     to this read). Store the fully-processed rows + counts.
+    await this._cacheStore(cacheKey, { data: rows, count: rows.length, total });
+
     return makeResult<Row[]>({
       id,
       op: 'SELECT',
@@ -584,7 +711,10 @@ export class ReadRepo<
    *   or misuses a hashed/encrypted one, or a scoped handle's guard is
    *   violated.
    */
-  public async count(filter?: FilterOf<R, Self>): Promise<NormResult> {
+  public async count(
+    filter?: FilterOf<R, Self>,
+    options: { noCache?: boolean } = {},
+  ): Promise<NormResult> {
     const id = ulid();
     const c = this._compiled;
     // Same guard + hashed rewrite as find(); joined refs plan their
@@ -602,23 +732,42 @@ export class ReadRepo<
       (plan?.where ?? where) as QueryFilter | undefined,
       scopeApplied,
     );
+    const joined = plan !== undefined && Object.keys(plan.oqlJoins).length > 0;
     const q = {
       type: 'COUNT',
       ...this._irBase(),
       columns: c.columnNames,
-      ...(plan !== undefined && Object.keys(plan.oqlJoins).length > 0
-        ? { joins: plan.oqlJoins }
-        : {}),
+      ...(joined ? { joins: plan!.oqlJoins } : {}),
       ...(effWhere ? { where: effWhere } : {}),
     } as NormDMLQuery;
+
+    const lookup = await this._cacheLookup('COUNT', q, {
+      noCache: options.noCache,
+      joined,
+    });
+    if (lookup.hit) {
+      this._runtime.emit('cacheHit', c.key, 'COUNT', id);
+      return makeResult({
+        id,
+        op: 'COUNT',
+        txId: this._txId,
+        count: lookup.value as number,
+        time: 0,
+        isSlow: false,
+        scoped: this._scopedEnvelope(scopeApplied),
+      });
+    }
+
     const res = await this._executor.execute<Row>(q);
     this._emitCall('COUNT', res.time, res.isSlow, id);
+    // Postgres/MariaDB return COUNT() as BIGINT-string; coerce.
+    const count = coerceCount(res.data[0]?.Count);
+    await this._cacheStore(lookup.key, count);
     return makeResult({
       id,
       op: 'COUNT',
       txId: this._txId,
-      // Postgres/MariaDB return COUNT() as BIGINT-string; coerce.
-      count: coerceCount(res.data[0]?.Count),
+      count,
       time: res.time,
       isSlow: res.isSlow,
       scoped: this._scopedEnvelope(scopeApplied),
@@ -1935,14 +2084,14 @@ export class Repo<
   /** Fetch one row by primary key (composite keys: all columns). */
   public getByPK(
     pk: PrimaryKeyOf<D>,
-    options?: { decrypt?: boolean },
+    options?: { decrypt?: boolean; noCache?: boolean },
   ): Promise<NormResult<DefaultRowOf<R, Self> | null>>;
   /** Fetch one row by primary key under an explicit projection. */
   public getByPK<
     const P extends ProjectionInput & ValidProjection<R, Self, P>,
   >(
     pk: PrimaryKeyOf<D>,
-    options: { project: P; decrypt?: boolean },
+    options: { project: P; decrypt?: boolean; noCache?: boolean },
   ): Promise<NormResult<ProjectedRowOf<R, Self, P> | null>>;
   /**
    * @throws {@link NormQueryError} Propagated from {@link find} — e.g. an
@@ -1950,7 +2099,11 @@ export class Repo<
    */
   public async getByPK(
     pk: PrimaryKeyOf<D>,
-    options: { project?: ProjectionInput; decrypt?: boolean } = {},
+    options: {
+      project?: ProjectionInput;
+      decrypt?: boolean;
+      noCache?: boolean;
+    } = {},
     // deno-lint-ignore no-explicit-any
   ): Promise<NormResult<any>> {
     const r = await (this.find as (
@@ -1960,6 +2113,7 @@ export class Repo<
       limit: 1,
       decrypt: options.decrypt,
       project: options.project,
+      noCache: options.noCache,
     });
     const row = r.data[0] ?? null;
     const out: NormResult<Row | null> = {
@@ -2048,6 +2202,7 @@ export class Repo<
     } as Query<'INSERT'>;
     const res = await this._executor.execute<Row>(q);
     this._emitCall('INSERT', res.time, res.isSlow, id);
+    await this._invalidateCache();
     const returned = await this.__finishReturning(
       res.data,
       opts.decrypt !== false,
@@ -2291,6 +2446,7 @@ export class Repo<
     } as Query<'UPSERT'>;
     const res = await this._executor.execute<Row>(q);
     this._emitCall('UPSERT', res.time, res.isSlow, id);
+    await this._invalidateCache();
     const returned = await this.__finishReturning(
       res.data,
       opts.decrypt !== false,
@@ -2381,6 +2537,7 @@ export class Repo<
     } as Query<'UPDATE'>;
     const res = await this._executor.execute<Row>(q);
     this._emitCall('UPDATE', res.time, res.isSlow, id);
+    await this._invalidateCache();
     return makeResult({
       id,
       op: 'UPDATE',
@@ -2454,6 +2611,7 @@ export class Repo<
     } as Query<'DELETE'>;
     const res = await this._executor.execute<Row>(q);
     this._emitCall('DELETE', res.time, res.isSlow, id);
+    await this._invalidateCache();
     return makeResult({
       id,
       op: 'DELETE',
@@ -2513,6 +2671,7 @@ export class Repo<
     } as Query<'TRUNCATE'> as ExecutorQuery;
     const res = await this._executor.execute<Row>(q);
     this._emitCall('TRUNCATE', res.time, res.isSlow, id);
+    await this._invalidateCache();
     return makeResult({
       id,
       op: 'TRUNCATE',
@@ -3012,6 +3171,15 @@ export class QueryAccessor<D extends AnyDef> {
   }
 
   /**
+   * Manually drop this stored query's cached reads (and any VIEW / QUERY
+   * that reads from it). No-op when the `Norm` has no `cache` configured.
+   */
+  public clearCache(): Promise<void> {
+    return this.__runtime.cache?.invalidate(this.__compiled.key) ??
+      Promise.resolve();
+  }
+
+  /**
    * Re-issue the stored SELECT, optionally overriding pagination.
    * Result rows come back RAW — stored queries lack column
    * provenance, so ciphertext is not decrypted. The afterRead row
@@ -3020,7 +3188,7 @@ export class QueryAccessor<D extends AnyDef> {
    * @throws {@link NormHookError} When the entity's `afterRead` hook throws.
    */
   public async find(
-    opts: { limit?: number; offset?: number } = {},
+    opts: { limit?: number; offset?: number; noCache?: boolean } = {},
   ): Promise<NormResult<RowOf<D>[]>> {
     const id = ulid();
     const base = (this.__compiled.def as unknown as QueryDefinition).query;
@@ -3046,6 +3214,36 @@ export class QueryAccessor<D extends AnyDef> {
       ...(effLimit !== 0 ? { limit: effLimit } : {}),
       ...(typeof opts.offset === 'number' ? { offset: opts.offset } : {}),
     };
+
+    // Read cache: a stored QUERY is a single terminal read (never norm-
+    // joined) whose namespace is pruned when any of its source tables is
+    // written. Rows come back raw (no decrypt), so the decrypt flag is a
+    // constant here.
+    const cache = this.__runtime.cache;
+    const cacheable = cache !== undefined &&
+      cache.enabledFor(this.__compiled.key) && this.__txId === undefined &&
+      opts.noCache !== true;
+    let cacheKey: string | undefined;
+    if (cacheable) {
+      cacheKey = await cache!.keyFor(this.__compiled.key, q, false);
+      const cached = await cache!.get<{ data: Row[]; count: number }>(
+        this.__compiled.key,
+        cacheKey,
+      );
+      if (cached !== undefined) {
+        this.__runtime.emit('cacheHit', this.__compiled.key, 'SELECT', id);
+        return makeResult<RowOf<D>[]>({
+          id,
+          op: 'SELECT',
+          txId: this.__txId,
+          count: cached.count,
+          time: 0,
+          isSlow: false,
+          data: cached.data as RowOf<D>[],
+        });
+      }
+    }
+
     const res = await this.__executor.execute<Row>(q);
     this.__runtime.emit(
       'call',
@@ -3074,6 +3272,12 @@ export class QueryAccessor<D extends AnyDef> {
           );
         }
       }
+    }
+    if (cacheKey !== undefined) {
+      await cache!.set(this.__compiled.key, cacheKey, {
+        data: rows,
+        count: rows.length,
+      });
     }
     return makeResult<RowOf<D>[]>({
       id,

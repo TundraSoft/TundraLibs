@@ -54,6 +54,10 @@ export type NormErrorCode =
    * has not been imported — import `@tundralibs/norm/engines/<dialect>`,
    * or the root `@tundralibs/norm` barrel which registers all of them. */
   | 'ENGINE_NOT_REGISTERED'
+  /** The `cache` config on `new Norm({...})` or a per-entity `cache`
+   * TTL is invalid, out of range, or would cache the plaintext of
+   * encrypted columns on a non-MEMORY engine. */
+  | 'INVALID_CACHE_CONFIG'
   // ── Definition / registry ({@link NormDefinitionError}) ────────────
   /** Two registry keys map to the same database object, or a key is
    * provided by more than one composed schema. */

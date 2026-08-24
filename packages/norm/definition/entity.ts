@@ -234,6 +234,17 @@ export type EntityTableOptions<
   /** Rows a limit-less `find()` fetches (default 10). `0` = UNBOUNDED
    * — every such read emits a `warning` event when it runs. */
   readonly defaultPageSize?: number;
+  /**
+   * Read-cache time-to-live in MINUTES. `0`/omitted (default) = no
+   * caching. Only engages when the `Norm` was constructed with a
+   * `cache` config; then non-transactional, non-joined `find` /
+   * `findOne` / `count` / `getByPK` results are cached under this
+   * entity's own namespace, keyed by the query, with a WINDOWED TTL
+   * (each read resets the clock). Any write to this table prunes them.
+   * Reads that join or aggregate are never cached — model a cached
+   * multi-table read as a VIEW instead.
+   */
+  readonly cache?: number;
 };
 
 /** VIEW options — DB-side, joinable, composable. */
@@ -267,6 +278,14 @@ export type EntityViewOptions<
   /** Rows a limit-less `find()` fetches (default 10). `0` = UNBOUNDED
    * — every such read emits a `warning` event when it runs. */
   readonly defaultPageSize?: number;
+  /**
+   * Read-cache TTL in MINUTES (`0`/omitted = off; needs a `cache`
+   * config on `Norm`). A VIEW is a derivation over base tables, so its
+   * cache is pruned whenever ANY of the tables its stored query reads
+   * (resolved transitively through composed views) is written. See
+   * {@link EntityTableOptions.cache}.
+   */
+  readonly cache?: number;
 };
 
 /** QUERY options — client-side stored SELECT; terminal. */
@@ -283,6 +302,14 @@ export type EntityQueryOptions<
   /** Rows a limit-less `find()` fetches (default 10). `0` = UNBOUNDED
    * — every such read emits a `warning` event when it runs. */
   readonly defaultPageSize?: number;
+  /**
+   * Read-cache TTL in MINUTES (`0`/omitted = off; needs a `cache`
+   * config on `Norm`). A QUERY is a derivation over base tables, so its
+   * cache is pruned whenever ANY of the tables its stored query reads
+   * (resolved transitively through composed views) is written. See
+   * {@link EntityTableOptions.cache}.
+   */
+  readonly cache?: number;
 };
 
 /** Index/unique targets: declared columns plus the synthesized
@@ -389,6 +416,8 @@ export type TableDefinition<
   readonly renamedFrom?: string;
   readonly hooks?: O['hooks'];
   readonly defaultPageSize?: number;
+  /** Read-cache TTL in minutes; 0/omitted = off. See the option type. */
+  readonly cache?: number;
 };
 
 /** The emitted VIEW definition. */
@@ -413,6 +442,8 @@ export type ViewDefinition<
     : undefined;
   readonly hooks?: EmittedReadHooks;
   readonly defaultPageSize?: number;
+  /** Read-cache TTL in minutes; 0/omitted = off. See the option type. */
+  readonly cache?: number;
 };
 
 /** The emitted QUERY definition (client-side; no DDL, no dbSchema). */
@@ -430,6 +461,8 @@ export type QueryDefinition<
   readonly query: Query<'SELECT'>;
   readonly hooks?: EmittedReadHooks;
   readonly defaultPageSize?: number;
+  /** Read-cache TTL in minutes; 0/omitted = off. See the option type. */
+  readonly cache?: number;
 };
 
 /** Spec of the synthesized hash sibling. */
@@ -614,6 +647,7 @@ export function Entity(
       ...(o.defaultPageSize !== undefined
         ? { defaultPageSize: o.defaultPageSize }
         : {}),
+      ...(o.cache !== undefined ? { cache: o.cache } : {}),
     });
   }
 
@@ -684,5 +718,6 @@ export function Entity(
     ...(o.defaultPageSize !== undefined
       ? { defaultPageSize: o.defaultPageSize }
       : {}),
+    ...(o.cache !== undefined ? { cache: o.cache } : {}),
   });
 }
