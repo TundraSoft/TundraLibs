@@ -183,27 +183,27 @@ describe('Math operations', () => {
 
 ## Compatibility Matrix
 
-| Feature                            | Bun | Deno | Node.js |
-| ---------------------------------- | --- | ---- | ------- |
-| Runtime / OS / arch detection      | ✅  | ✅   | ✅      |
-| Process info (pid, env, cwd)       | ✅  | ✅   | ✅      |
-| Process exit + signals             | ✅  | ✅   | ✅      |
-| System resources (cpu/mem/uptime)  | ✅  | ✅\* | ✅      |
-| File operations                    | ✅  | ✅   | ✅      |
-| Filesystem watching                | ✅  | ✅   | ✅‡     |
-| Networking utilities               | ✅  | ✅   | ✅      |
-| Path utilities                     | ✅  | ✅   | ✅      |
-| HTTP Server                        | ✅  | ✅   | ✅      |
-| WebSocket                          | ✅  | ✅   | ✅¶     |
-| Permission checks                  | ✅  | ✅   | ✅**    |
-| Testing utilities                  | ✅  | ✅   | ✅      |
-| TLS upgrade (STARTTLS)             | ✅  | ✅   | ✅      |
-| `rejectUnauthorized: false`        | ✅  | ❌†  | ✅      |
-| CLI args + prompt + widgets        | ✅  | ✅   | ✅      |
-| WS middleware + codecs + broadcast | ✅  | ✅   | ✅      |
+| Feature                            | Bun  | Deno | Node.js |
+| ---------------------------------- | ---- | ---- | ------- |
+| Runtime / OS / arch detection      | ✅   | ✅   | ✅      |
+| Process info (pid, env, cwd)       | ✅   | ✅   | ✅      |
+| Process exit + signals             | ✅   | ✅   | ✅      |
+| System resources (cpu/mem/uptime)  | ✅   | ✅\* | ✅      |
+| File operations                    | ✅   | ✅   | ✅      |
+| Filesystem watching                | ✅   | ✅   | ✅‡     |
+| Networking utilities               | ✅   | ✅   | ✅      |
+| Path utilities                     | ✅   | ✅   | ✅      |
+| HTTP Server                        | ✅   | ✅   | ✅      |
+| WebSocket                          | ✅   | ✅   | ✅¶     |
+| Permission checks                  | ✅** | ✅   | ✅**    |
+| Testing utilities                  | ✅   | ✅   | ✅      |
+| TLS upgrade (STARTTLS)             | ✅   | ✅   | ✅      |
+| `rejectUnauthorized: false`        | ✅   | ❌†  | ✅      |
+| CLI args + prompt + widgets        | ✅   | ✅   | ✅      |
+| WS middleware + codecs + broadcast | ✅   | ✅   | ✅      |
 
 \*`memoryUsage().arrayBuffers` is `0` on Deno (the runtime doesn't expose it).\
-\*\*Node.js permissions always return `true` (no permission system).\
+\*\*Bun and Node.js permissions always return `true` (no permission system) — only Deno performs a real check.\
 †Deno requires `--unsafely-ignore-certificate-errors=hostname` CLI flag.\
 ‡Recursive watching on Linux requires Node 20+; older Node throws.\
 ¶Node.js WebSocket built on the `ws` npm package (normal dependency, pure-JS, no native deps).

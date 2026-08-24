@@ -37,10 +37,10 @@ Cross-runtime HTTP/HTTPS server with WebSocket support for Bun, Deno, and Node.j
 | WS subprotocol selection | ✅   | ✅   | ✅      |
 | WS bufferedAmount        | ✅   | ✅   | ✅      |
 | WS ping / pong callbacks | ✅   | ❌\† | ✅      |
-| WS drain callback        | ✅   | ✅\‡ | ✅      |
+| WS drain callback        | ✅   | ✅\‡ | ✅\¶    |
 | WS error callback        | ✅\§ | ✅   | ✅      |
 | Backlog option           | ❌   | ✅   | ✅      |
-| ReusePort                | ❌   | ✅   | ✅      |
+| ReusePort                | ❌   | ✅   | ❌\‖    |
 | Graceful shutdown        | ✅   | ✅   | ✅      |
 | Request metrics          | ✅   | ✅   | ✅      |
 | Abort signal             | ✅   | ✅   | ✅      |
@@ -50,10 +50,21 @@ package (a normal dependency of `@tundralibs/compat`). Pure-JS, no
 native deps.\
 \† Deno's WebSocket consumes ping/pong frames internally; user
 callbacks are unreachable. Hard runtime limit.\
-\‡ Deno doesn't surface backpressure events; emulated by polling
-`bufferedAmount` after each `send()`.\
+\‡ Deno doesn't surface backpressure events; best-effort emulation by
+polling `bufferedAmount` after each `send()` — it may not fire when the
+OS flushes a small/loopback write synchronously (`bufferedAmount` never
+rises).\
 \§ Bun's runtime has no `error` callback; we wrap user handlers in
-try/catch and synthesize `error` events from caught throws.
+try/catch and synthesize `error` events from caught throws.\
+\¶ Node fires `drain` from the underlying `net.Socket`'s own `drain`
+event (the `ws` package has no WebSocket-level equivalent), so — unlike
+Deno's `bufferedAmount` polling — it reflects real socket backpressure:
+the callback runs when a send buffer that had filled empties again.\
+\‖ Accepted at construction with no error and stored on
+`server.options`, but Node's startup path calls
+`server.listen(port, hostname, backlog, callback)` — that legacy
+positional form has no `reusePort` slot, so the value is never passed
+to Node and has no effect there.
 
 [ws-pkg]: https://github.com/websockets/ws
 
@@ -116,24 +127,24 @@ const server = new WebServer('API', {
   mode: 'TCP',
   port: 3000, // Default: 8008
   hostname: '0.0.0.0', // Default: 'localhost'
-  backlog: 511, // Connection queue size (Deno/Node only)
-  reusePort: true, // Allow port reuse (Deno/Node only)
+  backlog: 511, // Connection queue size (Deno/Node only; ignored on Bun)
+  reusePort: true, // Allow port reuse (Deno only; accepted but has no effect on Node — see Features table)
   handler: (req, info) => new Response('OK'),
 });
 ```
 
-| Option        | Type               | Default       | Description                      |
-| ------------- | ------------------ | ------------- | -------------------------------- |
-| `mode`        | `'TCP'`            | Required      | Server mode                      |
-| `port`        | `number`           | `8008`        | Port number (0-65535)            |
-| `hostname`    | `string`           | `'localhost'` | Bind address                     |
-| `backlog`     | `number`           | -             | Connection queue size            |
-| `reusePort`   | `boolean`          | -             | Allow multiple processes to bind |
-| `handler`     | `Function`         | Required      | Request handler                  |
-| `tls`         | `TLSOptions`       | -             | TLS configuration                |
-| `websocket`   | `WebSocketHandler` | -             | WebSocket handlers               |
-| `abortSignal` | `AbortSignal`      | -             | Signal for graceful shutdown     |
-| `metrics`     | `boolean`          | `false`       | Opt-in metrics collection        |
+| Option        | Type               | Default       | Description                                                       |
+| ------------- | ------------------ | ------------- | ----------------------------------------------------------------- |
+| `mode`        | `'TCP'`            | Required      | Server mode                                                       |
+| `port`        | `number`           | `8008`        | Port number (0-65535)                                             |
+| `hostname`    | `string`           | `'localhost'` | Bind address                                                      |
+| `backlog`     | `number`           | -             | Connection queue size                                             |
+| `reusePort`   | `boolean`          | -             | Allow multiple processes to bind (Deno only — see Features table) |
+| `handler`     | `Function`         | Required      | Request handler                                                   |
+| `tls`         | `TLSOptions`       | -             | TLS configuration                                                 |
+| `websocket`   | `WebSocketHandler` | -             | WebSocket handlers                                                |
+| `abortSignal` | `AbortSignal`      | -             | Signal for graceful shutdown                                      |
+| `metrics`     | `boolean`          | `false`       | Opt-in metrics collection                                         |
 
 ### UNIX Mode
 
@@ -416,6 +427,8 @@ console.log(`Listening on ${server.address}`);
 **Throws:**
 
 - `ServerAlreadyRunningError` - Server not in STOPPED state
+- `UnsupportedRuntimeError` - Runtime cannot host a server (Workers,
+  browsers, and any runtime other than Bun/Deno/Node)
 - `ServerError` - Failed to bind
 
 #### `stop(graceful?: boolean): Promise<void>`
@@ -437,6 +450,8 @@ await server.stop(false);
 **Throws:**
 
 - `ServerNotRunningError` - Server not in RUNNING state
+- `UnsupportedRuntimeError` - Runtime cannot host a server
+- `ServerError` - The stop operation itself failed
 
 #### `on(event, listener): void`
 
@@ -473,9 +488,18 @@ server.off('onError');
 
 Marks server as referenced (prevents process exit).
 
+**Throws:**
+
+- `ServerNotRunningError` - Server is not in RUNNING state (also
+  thrown if called before the first `start()`)
+- `UnsupportedRuntimeError` - Runtime cannot host a server
+- `ServerError` - The underlying `ref()` call failed
+
 #### `unref(): void`
 
 Marks server as unreferenced (allows process exit).
+
+**Throws:** same as `ref()` — `ServerNotRunningError` / `UnsupportedRuntimeError` / `ServerError`.
 
 ```typescript
 import type { WebServer } from '@tundralibs/compat/webserver';
@@ -683,7 +707,8 @@ server.on('onResponse', [
 - WebSocket via `Deno.upgradeWebSocket()`
 - `ping` / `pong` callbacks unavailable — Deno consumes those frames
   internally (hard runtime limit)
-- `drain` callback emulated via `bufferedAmount` polling (~50ms tick)
+- `drain` callback best-effort via `bufferedAmount` polling (~50ms tick);
+  may not fire on synchronous local flushes (see the Features table)
 - All other options supported
 
 ### Node.js
@@ -692,7 +717,10 @@ server.on('onResponse', [
 - WebSocket via the [`ws`][ws-pkg] npm package (taken as a normal
   dependency of `@tundralibs/compat`), loaded lazily on `start()` so
   importing the module never pulls it in
-- All TCP options supported
+- `backlog` supported; `reusePort` is accepted but has no effect (see
+  the Features table)
+- `drain` callback fires from the underlying socket's `drain` event —
+  it reflects real send backpressure (see the Features table)
 - Node's HTTP server hands the handler an `IncomingMessage`, not a Fetch
   `Request`, so `WebServer` passes a lightweight `Request`-shaped view
   instead of building one eagerly (a measurable throughput win — see
@@ -712,7 +740,7 @@ server.on('onResponse', [
 not provide. Construction is safe — `new WebServer(...)` never throws on
 them (the filesystem-touching option validation for UNIX sockets and
 file-based TLS is skipped) — but `start()` rejects with
-[`UnsupportedRuntimeError`](../errors/) (`operation: 'WebServer.start'`).
+[`UnsupportedRuntimeError`](../Error.ts) (`operation: 'WebServer.start'`).
 Gate on `isWorkers` / `isBrowser` from `@tundralibs/compat/runtime`, or
 catch the error. On Cloudflare Workers, export a `fetch` handler instead
 of starting a server.

@@ -206,6 +206,12 @@ type PromptOptions = {
 function prompt(message: string, options?: PromptOptions): Promise<string>;
 ```
 
+> `prompt()` needs `node:readline` + `node:process` — present on Deno, Bun,
+> and Node, but not in browsers or on Cloudflare Workers without the
+> `nodejs_compat` flag. On those runtimes it throws
+> `UnsupportedRuntimeError` (from `@tundralibs/compat`) instead of silently
+> returning the default.
+
 **Example:**
 
 ```typescript
@@ -234,6 +240,10 @@ function choose(
 ```
 
 Throws `RangeError` if `choices` is empty.
+
+> Same runtime requirement as `prompt()` above — `choose()` throws
+> `UnsupportedRuntimeError` outside Deno/Bun/Node (no `node:readline`/
+> `node:process` to render the menu or read the answer).
 
 **Example:**
 
@@ -273,10 +283,19 @@ class ProgressBar {
   readonly total: number;
   update(value: number, label?: string): void; // clamps to [0, total]
   increment(by?: number): void; // default 1
-  complete(label?: string): void; // forces final render + newline, then inert
-  stop(): void; // abandon current state, emit newline
+  complete(label?: string): void; // forces a final render, then inert (TTY: + trailing newline)
+  stop(): void; // TTY: emits a newline. Non-TTY: no-op — there's no in-place line to close out
 }
 ```
+
+> `complete()`'s trailing blank line and `stop()`'s newline only happen in
+> TTY mode. In non-TTY mode `stop()` writes nothing at all — don't rely on
+> it to terminate the last percent-line, that line was already written by
+> the preceding `update()`/`increment()`.
+>
+> On runtimes without `node:process` (browsers, Workers without
+> `nodejs_compat`) the default `stream` silently falls back to a no-op sink
+> — pass your own `stream` there or nothing renders.
 
 **Example:**
 
@@ -296,9 +315,11 @@ bar.complete('Done');
 
 ### Spinner
 
-In TTY mode animates braille frames in place. In non-TTY mode emits
-a single "starting" line on `start()` and a final line on
-`succeed`/`fail`/`stop` — no animation in non-interactive output.
+In TTY mode animates braille frames in place. In non-TTY mode `start()`
+emits a single "label…" line (nothing if there's no label), and
+`succeed()`/`fail()` each emit one final status line — no animation, no
+✓/✗ symbol. `stop()` in non-TTY mode does neither: there's no in-place
+frame to clear, so it just marks the spinner stopped and writes nothing.
 
 ```typescript ignore
 const SPINNER_FRAMES_BRAILLE: readonly string[];
@@ -320,11 +341,16 @@ class Spinner {
   start(label?: string): void;
   tick(): void; // advance one frame manually (the timer drives this)
   setLabel(label: string): void;
-  succeed(label?: string): void; // ✓ + label
-  fail(label?: string): void; // ✗ + label
-  stop(): void; // clears the line, no symbol
+  succeed(label?: string): void; // TTY: ✓ + label. Non-TTY: label only, no ✓
+  fail(label?: string): void; // TTY: ✗ + label. Non-TTY: label only, no ✗
+  stop(): void; // TTY: clears the line, no symbol. Non-TTY: no-op
 }
 ```
+
+> Same runtime requirement as `ProgressBar` — on runtimes without
+> `node:process` (browsers, Workers without `nodejs_compat`) the default
+> `stream` falls back to a no-op sink; pass your own `stream` or nothing
+> renders.
 
 For terminals that don't render Unicode well (legacy Windows cmd,
 genuinely dumb terminals), opt into ASCII frames:

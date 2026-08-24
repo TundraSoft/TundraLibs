@@ -50,9 +50,12 @@ The Net module provides a unified interface for networking operations across Den
 | Hostname resolution         | ✅  | ✅   | ✅      |
 | Read from socket            | ✅  | ✅   | ✅      |
 | Write to socket             | ✅  | ✅   | ✅      |
-| Address info                | ✅  | ✅   | ✅      |
+| Address info                | ✅† | ✅†  | ✅†     |
 
-*Deno requires the `--unsafely-ignore-certificate-errors=hostname` CLI flag instead.
+*Deno requires the `--unsafely-ignore-certificate-errors=hostname` CLI flag instead.\
+†TCP/TLS only. A UNIX-socket `Connection` — from either `listen()` or
+`connect()` — always has `remoteAddr: undefined` and `localAddr:
+undefined`, on every runtime; UNIX sockets have no host/port to report.
 
 ## Installation
 
@@ -228,8 +231,8 @@ type Connection = {
 
 **Properties:**
 
-- `remoteAddr` - Information about the remote endpoint (hostname and port)
-- `localAddr` - Information about the local endpoint (hostname and port)
+- `remoteAddr` - Information about the remote endpoint (hostname and port). `undefined` for a UNIX-socket connection on every runtime — there's no host/port to report.
+- `localAddr` - Information about the local endpoint (hostname and port). Same UNIX-socket caveat as `remoteAddr`.
 - `_raw` - The underlying runtime-specific socket handle. Used internally by `upgradeTls()` to perform in-place TLS negotiation (e.g. Postgres `SSLRequest`, SMTP `STARTTLS`). Treat as opaque — do not call methods on this object directly.
 
 #### `UpgradeTlsOptions`
@@ -269,10 +272,13 @@ async function listen(options: ListenOptions): Promise<Listener>;
 **Throws:**
 
 - `Error` - If the port is already in use or if binding fails
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format
-- `UnsupportedRuntimeError` - If called in an unsupported runtime
+- `UnsupportedRuntimeError` - If called in an unsupported runtime (on
+  Workers, always — there is no way to accept an inbound connection)
 
 **Runtime Implementation:**
 
@@ -419,11 +425,20 @@ async function connect(options: ConnectOptions): Promise<Connection>;
 
 **Throws:**
 
-- `Error` - If the connection fails
+- `Error` - If the connection fails. On Deno specifically, also thrown
+  (plain `Error`, not a `CompatError` subclass) when
+  `tls.rejectUnauthorized` is `false` — Deno has no in-process
+  verification bypass; run with `--unsafely-ignore-certificate-errors`
+  or supply `tls.ca`/`tls.caFile` instead. Bun and Node honor the flag.
 - `ConnectionTimeoutError` - If the connection times out (when `timeout` is specified)
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format
+- `UnsupportedRuntimeError` - If called in an unsupported runtime, or on
+  Workers for a UNIX-socket `path` or TLS material `cloudflare:sockets`
+  can't honour (see the Workers notes below)
 
 **Runtime Implementation:**
 
@@ -686,9 +701,15 @@ async function upgradeTls(
 
 - `Error` - If `conn._raw` is missing (connection was not created by `connect()`).
 - `Error` - On Deno, if `rejectUnauthorized: false` is requested (not supported — use `--unsafely-ignore-certificate-errors` instead).
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles.
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences.
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist.
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format.
+- `UnsupportedRuntimeError` - On an unrecognized runtime, and on
+  Workers when the socket didn't come from `connect()`, when `hostname`
+  differs from the one `connect()` dialed, or for TLS material workerd
+  can't honour.
 
 **Runtime Implementation:**
 

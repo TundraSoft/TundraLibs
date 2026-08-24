@@ -16,12 +16,18 @@ Shared types and error classes used across the Compat package.
   - [Types](#types)
     - [TLSOptions](#tlsoptions)
     - [ValidatedTLS](#validatedtls)
-  - [Error Classes](#error-classes)
+  - [Base Error Classes](#base-error-classes)
+    - [CompatError](#compaterror)
+    - [CompatTypeError](#compattypeerror)
+    - [UnsupportedRuntimeError](#unsupportedruntimeerror)
+    - [ConnectionTimeoutError](#connectiontimeouterror)
+  - [TLS Error Classes](#tls-error-classes)
     - [FetchTLSError](#fetchtlserror)
     - [FetchFileNotFoundError](#fetchfilenotfounderror)
     - [FetchInvalidPEMError](#fetchinvalidpemerror)
     - [FetchPathTraversalError](#fetchpathtraversalerror)
   - [Functions](#functions)
+    - [validateTLS()](#validatetls)
     - [validateTLSContent()](#validatetlscontent)
     - [validateTLSFiles()](#validatetlsfiles)
     - [validateUnixSocket()](#validateunixsocket)
@@ -34,7 +40,7 @@ Shared types and error classes used across the Compat package.
 
 ## Overview
 
-The Common module contains the shared TLS configuration types, error classes, and validation utilities used by both the [Fetch](Compat-Fetch.md) and [Net](Compat-Net.md) modules. Import error classes and `TLSOptions` directly from this module when you need to type-check thrown errors or annotate TLS configuration in your own code.
+The Common module contains two layers: the **base error hierarchy** (`CompatError` and friends) that every module in the package throws, and the **TLS configuration types, TLS-specific errors, and validation utilities** used by the [Fetch](Compat-Fetch.md), [Net](Compat-Net.md), and [WebServer](../webserver/Compat-WebServer.md) modules. Import error classes and `TLSOptions` directly from this module when you need to type-check thrown errors or annotate TLS configuration in your own code.
 
 ## Installation
 
@@ -181,9 +187,130 @@ type ValidatedTLS = {
 };
 ```
 
-## Error Classes
+## Base Error Classes
 
-All error classes extend `CompatError` which captures the current `runtime` and `os` at the time the error is thrown.
+Every error `@tundralibs/compat` throws — in this module and every other one (`file`, `net`, `webserver`, `watch`, `udp`, …) — extends `CompatError` or its `TypeError`-flavoured sibling `CompatTypeError`. Catch `CompatError` for one branch that handles _any_ compat failure; catch a specific subclass when you need to react differently to different failures (retry a timeout, log a path-traversal attempt as a security event, feature-detect around an unsupported runtime, …).
+
+### CompatError
+
+Base class for nearly every error the package throws (import validation, network, filesystem, server lifecycle, …). Captures `runtime` and `os` at construction time and exposes a `toJSON()` for structured logging.
+
+```typescript ignore
+class CompatError extends Error {
+  readonly runtime: Runtime; // 'DENO' | 'BUN' | 'NODE' | 'WORKERS' | 'BROWSER' | 'UNKNOWN'
+  readonly os: OperatingSystem; // 'WINDOWS' | 'LINUX' | 'DARWIN' | 'UNKNOWN'
+  toJSON(): Record<string, unknown>;
+}
+```
+
+**Example — catch-all handling:**
+
+```typescript
+import { CompatError } from '@tundralibs/compat';
+import { readTextFile } from '@tundralibs/compat/file';
+
+try {
+  await readTextFile('./config.json');
+} catch (error) {
+  if (error instanceof CompatError) {
+    // Every compat-thrown error lands here, whatever the concrete
+    // subclass — FileOperationError, UnsupportedRuntimeError, etc.
+    console.error(
+      `[${error.runtime}/${error.os}] ${error.name}: ${error.message}`,
+    );
+  } else {
+    throw error; // not a compat error — rethrow
+  }
+}
+```
+
+> A `CompatError` catch is a fallback net, not a substitute for branching on a specific subclass when the response needs to differ per failure — see [Compat-File](Compat-File.md) and [Compat-Net](Compat-Net.md) for the module-specific subclasses.
+
+### CompatTypeError
+
+Same fields and `toJSON()` as `CompatError`, extending `TypeError` instead of `Error` for failures that are type-shape problems (a caller passed something a runtime check rejected) rather than operational ones. Branch on it with `instanceof CompatTypeError`.
+
+```typescript ignore
+class CompatTypeError extends TypeError {
+  readonly runtime: Runtime;
+  readonly os: OperatingSystem;
+  toJSON(): Record<string, unknown>;
+}
+```
+
+### UnsupportedRuntimeError
+
+Thrown whenever the current runtime cannot service a call — a Deno-only feature invoked from Node, or, most commonly across this package, a capability Cloudflare Workers or the browser genuinely lack (`webserver`'s `start()`, `watch()`, a UNIX-socket `connect()`, `udpSocket()`, …). This is the error every "degrades gracefully" runtime gap documented across the package resolves to, instead of a raw `TypeError` on a missing built-in.
+
+```typescript ignore
+class UnsupportedRuntimeError extends CompatError {
+  readonly operation: string; // the call that couldn't be serviced
+  readonly detectedRuntime: Runtime; // runtime that lacked the feature
+}
+
+new UnsupportedRuntimeError(
+  operation: string,
+  detectedRuntime?: Runtime, // defaults to the runtime detected at import time
+  additionalDetails?: string,
+  cause?: Error,
+)
+```
+
+**Example:**
+
+```typescript
+import { UnsupportedRuntimeError } from '@tundralibs/compat';
+import { listen } from '@tundralibs/compat/net';
+
+try {
+  const listener = await listen({ port: 8080 });
+  listener.close();
+} catch (error) {
+  if (error instanceof UnsupportedRuntimeError) {
+    // e.g. on Cloudflare Workers: workerd has no way to accept an
+    // inbound connection, so `listen()` always throws here.
+    console.error(`${error.operation} unsupported on ${error.detectedRuntime}`);
+  }
+}
+```
+
+> Prefer feature-detecting with `isWorkers` / `isBrowser` / `RUNTIME` from [Compat-Runtime](Compat-Runtime.md) _before_ the call, and skip the code path entirely — catching `UnsupportedRuntimeError` is for call sites that only conditionally need the capability.
+
+### ConnectionTimeoutError
+
+Thrown by `net`'s `connect()` when a TCP/TLS/UNIX-socket connection doesn't complete within the configured `timeout`. Carries either `hostname`/`port` (TCP/TLS) or `path` (UNIX), plus the `timeoutMs` that elapsed.
+
+```typescript ignore
+class ConnectionTimeoutError extends CompatError {
+  readonly hostname?: string;
+  readonly port?: number;
+  readonly path?: string;
+  readonly timeoutMs?: number;
+}
+```
+
+**Example:**
+
+```typescript
+import { ConnectionTimeoutError } from '@tundralibs/compat';
+import { connect } from '@tundralibs/compat/net';
+
+try {
+  await connect({ hostname: 'unreachable.example', port: 443, timeout: 2000 });
+} catch (error) {
+  if (error instanceof ConnectionTimeoutError) {
+    console.error(
+      `Timed out after ${error.timeoutMs}ms connecting to ${error.hostname}:${error.port}`,
+    );
+  }
+}
+```
+
+See [Compat-Net](Compat-Net.md) for the full `connect()` / `listen()` reference.
+
+## TLS Error Classes
+
+All TLS error classes extend `CompatError` which captures the current `runtime` and `os` at the time the error is thrown.
 
 ### FetchTLSError
 
@@ -359,7 +486,51 @@ try {
 
 ## Functions
 
+### validateTLS()
+
+Resolves a whole {@link TLSOptions}-shaped value (the `tls` field you pass to `connect()`, `fetch()`, or `WebServer`'s TLS options) to validated PEM content. This is what `net`, `fetch`, and `webserver` call internally, and the function to reach for whenever you're holding a `TLSOptions` object and don't already know — or don't want to branch on — whether it's inline PEM or file paths. Use `validateTLSContent()` / `validateTLSFiles()` directly only when you already have the individual `cert`/`key`/`ca` (or `certFile`/`keyFile`/`caFile`) fields in hand.
+
+```typescript ignore
+function validateTLS(tls: InlineTLS & FileTLS): ValidatedTLS;
+```
+
+**Parameters:**
+
+- `tls` - Inline PEM fields (`cert`/`key`/`ca`) or file-path fields (`certFile`/`keyFile`/`caFile`) — never both.
+
+**Returns:** `ValidatedTLS` object with validated PEM content (file paths are read and resolved to strings).
+
+**Throws:**
+
+- `FetchTLSError` - If `tls` mixes inline material with file paths (e.g. `cert` alongside `keyFile`).
+- `FetchInvalidPEMError` - If any PEM is malformed, the wrong type, or `cert`/`key` (`certFile`/`keyFile`) are provided without each other.
+- `FetchFileNotFoundError` / `FetchPathTraversalError` - For the file-path style, on a missing or unsafe path.
+
+**Example:**
+
+```typescript
+import { FetchTLSError, validateTLS } from '@tundralibs/compat';
+
+const ok = validateTLS({
+  ca: ['-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'],
+});
+// ok.ca is now validated PEM content
+
+try {
+  // Mixing inline material with file paths is rejected — pick one style.
+  validateTLS({ cert: '...', keyFile: '/etc/ssl/client.key' });
+} catch (error) {
+  if (error instanceof FetchTLSError) {
+    console.error(`Invalid TLS config in ${error.source}: ${error.message}`);
+  }
+}
+```
+
+> `validateTLS`'s parameter type (`InlineTLS & FileTLS`) is more permissive than the exported {@link TLSOptions} type, which rejects a mixed object at compile time. Passing an `InlineTLS & FileTLS` value straight through — bypassing a `TLSOptions`-typed call site — moves that guard to runtime, where it throws `FetchTLSError` instead.
+
 ### validateTLSContent()
+
+> **Internal:** Marked `@internal` in source and used by `validateTLS()` and `WebServer` internally. Prefer `validateTLS()` when you're holding a `TLSOptions`-shaped value; reach for this directly only when you already have separate `cert`/`key`/`ca` fields.
 
 Validates PEM content for certificate, key, and optional CA certificates. Synchronous.
 
@@ -398,6 +569,8 @@ const tls = validateTLSContent(certPem, keyPem, [caPem]);
 ```
 
 ### validateTLSFiles()
+
+> **Internal:** Marked `@internal` in source and used by `validateTLS()` internally. Prefer `validateTLS()` when you're holding a `TLSOptions`-shaped value; reach for this directly only when you already have separate `certFile`/`keyFile`/`caFile` fields.
 
 Reads TLS files from disk and validates their PEM content. Synchronous.
 
@@ -534,8 +707,9 @@ All PEM content is checked against a 1 MB size limit before regex validation to 
 ## Related Documentation
 
 - [Compat-Fetch](Compat-Fetch.md) - HTTP client with TLS and Unix socket support
-- [Compat-Net](Compat-Net.md) - TCP/TLS networking with `upgradeTls`
-- [Compat-Runtime](Compat-Runtime.md) - Runtime detection utilities
+- [Compat-Net](Compat-Net.md) - TCP/TLS networking with `upgradeTls`, plus `ConnectionTimeoutError` in context
+- [Compat-WebServer](../webserver/Compat-WebServer.md) - HTTPS/WSS server TLS configuration
+- [Compat-Runtime](Compat-Runtime.md) - Runtime detection utilities; `isWorkers` / `isBrowser` for feature-detecting around `UnsupportedRuntimeError`
 
 ---
 

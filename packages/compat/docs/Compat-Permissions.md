@@ -222,17 +222,19 @@ ensurePermissions([
 
 ```typescript
 import { hasPermission } from '@tundralibs/compat/permissions';
+import { getEnv } from '@tundralibs/compat/runtime';
+import { readTextFile } from '@tundralibs/compat/file';
 
 async function loadConfiguration() {
   // Try environment variables first
   if (await hasPermission({ name: 'env' })) {
-    const apiKey = Deno.env.get('API_KEY');
+    const apiKey = getEnv()['API_KEY'];
     if (apiKey) return { apiKey };
   }
 
   // Fall back to file
   if (await hasPermission({ name: 'read', path: './secrets.json' })) {
-    const file = await Deno.readTextFile('./secrets.json');
+    const file = await readTextFile('./secrets.json');
     return JSON.parse(file);
   }
 
@@ -240,27 +242,45 @@ async function loadConfiguration() {
 }
 ```
 
+> `hasPermission({ name: 'env' })` (and every other permission check) is
+> **always `true` on Bun/Node** — there is no permission system to deny
+> it. That makes a `Deno.env.get(...)` / `Deno.readTextFile(...)` call
+> guarded only by `hasPermission` doubly wrong on those runtimes: the
+> guard never blocks the call, and the call itself throws
+> `ReferenceError: Deno is not defined` there. Use the cross-runtime
+> helpers (`getEnv()` from `@tundralibs/compat/runtime`, `readTextFile()`
+> from `@tundralibs/compat/file`) for the actual read, and reserve the
+> permission check for Deno-specific pre-flight gating.
+
 ### Runtime-Aware Permission Handling
 
 ```typescript
 import { isDeno } from '@tundralibs/compat/runtime';
 import { hasPermissionSync } from '@tundralibs/compat/permissions';
+import { pathExistsSync } from '@tundralibs/compat/file';
 
 function canAccessPath(path: string): boolean {
-  // In Deno, check actual permissions
+  // On Deno, ask the permission system directly — a 'GRANTED' read
+  // permission doesn't guarantee the path exists, but a denial means
+  // there's no point trying.
   if (isDeno) {
     return hasPermissionSync({ name: 'read', path });
   }
 
-  // In other runtimes, check if file exists
-  try {
-    Deno.statSync(path);
-    return true;
-  } catch {
-    return false;
-  }
+  // Bun/Node have no permission system to query — `pathExistsSync` is
+  // the closest cross-runtime proxy for "can I get at this path".
+  return pathExistsSync(path);
 }
 ```
+
+> The naive version of this example calls `Deno.statSync()` directly in
+> the non-Deno branch — that reads fine and even type-checks under
+> `deno check` (Deno's own ambient globals are in scope), but `Deno` does
+> not exist on Bun or Node and throws `ReferenceError: Deno is not defined`
+> at runtime exactly on the branch meant to run there. Type-checking is
+> not the same as running the code on the runtime it targets — use the
+> compat helper (`pathExistsSync` from `@tundralibs/compat/file`) instead
+> of a runtime-specific global whenever the code must run everywhere.
 
 ### Graceful Degradation
 
@@ -439,100 +459,6 @@ try {
   if (error instanceof TypeError) {
     console.error('Invalid permission name');
   }
-}
-```
-
----
-
-[← Back to Compat](../README.md)
-
-![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
-![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
-![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
-
-## Usage
-
-```typescript
-import {
-  hasPermission,
-  hasPermissionSync,
-} from '@tundralibs/compat/permissions';
-```
-
-## API
-
-### hasPermission(descriptor)
-
-Async permission check.
-
-```typescript
-import { hasPermission } from '@tundralibs/compat/permissions';
-
-const canRead = await hasPermission({ name: 'read', path: './data' });
-const canWrite = await hasPermission({ name: 'write', path: './output' });
-const canNet = await hasPermission({ name: 'net', host: 'api.example.com' });
-```
-
-### hasPermissionSync(descriptor)
-
-Sync permission check.
-
-```typescript
-import { hasPermissionSync } from '@tundralibs/compat/permissions';
-
-const canRead = hasPermissionSync({ name: 'read', path: './data' });
-```
-
-## Permission Descriptors
-
-| Permission | Properties             | Description                 |
-| ---------- | ---------------------- | --------------------------- |
-| `read`     | `path?: string`        | File/directory read access  |
-| `write`    | `path?: string`        | File/directory write access |
-| `net`      | `host?: string`        | Network access              |
-| `env`      | `variable?: string`    | Environment variable access |
-| `run`      | `path?: string \| URL` | Subprocess execution        |
-
-## Runtime Behavior
-
-| Runtime     | Behavior                                        |
-| ----------- | ----------------------------------------------- |
-| **Deno**    | Uses `Deno.permissions.query()` for real checks |
-| **Bun**     | Always returns `true` (no permission system)    |
-| **Node.js** | Always returns `true` (no permission system)    |
-
-## Examples
-
-### Pre-flight Checks
-
-```typescript
-import { hasPermissionSync } from '@tundralibs/compat/permissions';
-
-function ensurePermissions() {
-  if (!hasPermissionSync({ name: 'read', path: './config' })) {
-    throw new Error('Cannot read config directory');
-  }
-
-  if (!hasPermissionSync({ name: 'write', path: './logs' })) {
-    throw new Error('Cannot write to logs directory');
-  }
-}
-```
-
-### Conditional Features
-
-```typescript
-import { hasPermission } from '@tundralibs/compat/permissions';
-
-declare function loadFromFile(path: string): Promise<string | undefined>;
-
-async function loadSecrets() {
-  if (await hasPermission({ name: 'env', variable: 'API_KEY' })) {
-    return process.env.API_KEY;
-  }
-
-  // Fallback to file-based secrets
-  return loadFromFile('./secrets.json');
 }
 ```
 
