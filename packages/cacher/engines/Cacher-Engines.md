@@ -149,7 +149,12 @@ await cache.delete('user:1');
 
 ### `clear()`
 
-Removes all entries in this instance's namespace.
+Removes all entries in this instance's namespace. The mechanism is
+backend-specific — Memory and Redis delete outright (Redis via `KEYS` +
+`DEL`, not `SCAN`-based), Memcached bumps a version counter instead of
+deleting — see each engine's own doc for the tradeoffs:
+[Cacher-Redis.md#notes](redis/Cacher-Redis.md#notes),
+[Cacher-Memcached.md#notes](memcached/Cacher-Memcached.md#notes).
 
 ```typescript
 import { MemoryCacher } from '@tundralibs/cacher/engines';

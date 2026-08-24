@@ -191,6 +191,15 @@ isolation guaranteed by `clear()`. The same rule is enforced by
 `AbstractEngine`, so it also applies when an engine is constructed directly
 (e.g. `new RedisCacher('user-cache', …)`), not just through `Cacher.create`.
 
+> **Calling `create()` again for an existing name ignores `options`.** The
+> manager returns the already-built instance verbatim — it does not merge,
+> replace, or even read the new `options` object (only the `engine` type is
+> checked, and a mismatch throws). `Cacher.create('MEMORY', 'x', { defaultExpiry: 300 })`
+> followed later by `Cacher.create('MEMORY', 'x', { defaultExpiry: 60 })`
+> still has a 300-second default. To rebuild `'x'` with different options,
+> call `await Cacher.removeInstance('x')` first (or `await Cacher.clear()`
+> to drop every instance).
+
 ### `Cacher.addEngine(name, engine)`
 
 Registers a custom cache engine constructor.
@@ -216,6 +225,77 @@ class MyCustomEngine extends AbstractEngine<CacherOptions> {
 Cacher.addEngine('CUSTOM', MyCustomEngine);
 const cache = Cacher.create('CUSTOM', 'custom-cache', { defaultExpiry: 300 });
 ```
+
+### `Cacher.getInstance(name)` / `Cacher.hasInstance(name)`
+
+Look up an instance already built by `Cacher.create()` without constructing a
+new one. `getInstance` returns `undefined` (not a throw) for an unknown or
+invalid name; `hasInstance` returns `false`.
+
+```typescript
+import { Cacher } from '@tundralibs/cacher';
+
+Cacher.create('MEMORY', 'lookup-demo', { defaultExpiry: 300 });
+
+if (Cacher.hasInstance('lookup-demo')) {
+  const cache = Cacher.getInstance('lookup-demo')!;
+  await cache.set('key', 'value');
+}
+```
+
+### `Cacher.removeInstance(name)`
+
+Finalizes (disconnects, for Redis/Memcached) and forgets one named instance,
+returning `true` if it existed. This is the only way to change an existing
+name's engine or options — see the callout on `Cacher.create()` above.
+
+```typescript
+import { Cacher } from '@tundralibs/cacher';
+
+Cacher.create('MEMORY', 'removable', { defaultExpiry: 300 });
+const removed = await Cacher.removeInstance('removable');
+console.log(removed); // true
+```
+
+### `Cacher.getRegisteredEngines()` / `Cacher.getActiveInstances()`
+
+List the engine identifiers registered with `addEngine` (built-in engines
+included) and the instance names built with `create`, both sorted
+alphabetically.
+
+```typescript
+import { Cacher } from '@tundralibs/cacher';
+
+Cacher.create('MEMORY', 'inventory-demo', { defaultExpiry: 300 });
+
+console.log(Cacher.getRegisteredEngines()); // ['MEMCACHED', 'MEMORY', 'REDIS']
+console.log(Cacher.getActiveInstances().includes('inventory-demo')); // true
+```
+
+### `Cacher.clear()`
+
+Finalizes and removes **every** active instance process-wide — not to be
+confused with `cache.clear()` below, which only empties one instance's
+entries and leaves the instance itself registered and usable.
+
+```typescript
+import { Cacher } from '@tundralibs/cacher';
+
+Cacher.create('MEMORY', 'shutdown-demo', { defaultExpiry: 300 });
+
+// Application shutdown: disconnect every Redis/Memcached instance and
+// drop all instances from the manager's registry.
+await Cacher.clear();
+console.log(Cacher.getActiveInstances().length); // 0
+```
+
+> **`Cacher.clear()` (manager) vs. `cache.clear()` (instance).** `Cacher.clear()`
+> tears down and unregisters every instance the manager knows about — after
+> it runs, `Cacher.getInstance(name)` returns `undefined` for names that
+> existed a moment ago, and a later `Cacher.create()` with the same name
+> builds a fresh instance (this time honouring the new `options`, since the
+> old one is gone). `cache.clear()` only deletes that one instance's data —
+> the instance stays connected and registered.
 
 ### `cache.set<T>(key, value, options?)`
 
@@ -251,9 +331,15 @@ Removes a single entry from the cache.
 ### `cache.clear()`
 
 Removes all entries in this cache instance's namespace, leaving other
-namespaces on the same backend untouched.
+namespaces on the same backend untouched. This is **not** the same operation
+as the manager-level `Cacher.clear()` documented above — this one only
+empties data; the instance itself stays connected and registered.
 
-On **Memory** and **Redis** the entries are deleted outright. **Memcached**
+On **Memory** and **Redis** the entries are deleted outright. **Redis**'s
+`clear()` runs `KEYS ${name}:*` followed by one bulk `DEL` — see
+[Cacher-Redis.md](engines/redis/Cacher-Redis.md#notes) for why that is fine
+for development but not for a namespace with a large number of keys on a
+busy production server. **Memcached**
 has no key enumeration, so the engine keys every entry with a per-namespace
 version and `clear()` bumps that version: prior entries become unreachable
 immediately for the clearing instance, then get reclaimed by Memcached's LRU

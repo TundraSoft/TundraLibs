@@ -153,21 +153,35 @@ const CacherEngineErrorCodes = {
 
 ## Error Code Reference
 
-| Code                             | Category      | Description                                |
-| -------------------------------- | ------------- | ------------------------------------------ |
-| `UNKNOWN_ERROR`                  | General       | Catch-all for unrecognised codes           |
-| `CONFIG_MALFORMED`               | Configuration | The supplied config object is malformed    |
-| `CONFIG_MISSING`                 | Configuration | A required config key is absent            |
-| `CONFIG_INVALID`                 | Configuration | A config value fails validation            |
-| `CONNECTION_FAILED`              | Connection    | Could not establish a connection           |
-| `CONNECTION_TIMEOUT`             | Connection    | Connection attempt exceeded the timeout    |
-| `CONNECTION_REFUSED`             | Connection    | Server actively refused the connection     |
-| `CONNECTION_LOST`                | Connection    | An established connection was dropped      |
-| `CONNECTION_INVALID_CREDENTIALS` | Connection    | Authentication failed                      |
-| `OPERATION_NOT_SUPPORTED`        | Operation     | The engine does not support this operation |
-| `OPERATION_FAILED`               | Operation     | The operation failed at runtime            |
-| `OPERATION_INVALID_PARAMS`       | Operation     | Invalid parameters passed to an operation  |
-| `OPERATION_PERMISSION_DENIED`    | Operation     | Insufficient permissions for the operation |
+`Raised by` marks the codes any of the three built-in engines (Memory,
+Redis, Memcached) can actually throw today. The rest exist for custom
+`AbstractEngine` subclasses to reuse instead of inventing ad-hoc codes —
+catching them against a built-in engine's calls is dead code, not
+defensive coding.
+
+| Code                             | Category      | Raised by              | Description                                |
+| -------------------------------- | ------------- | ---------------------- | ------------------------------------------ |
+| `UNKNOWN_ERROR`                  | General       | (fallback, any engine) | Catch-all for unrecognised codes           |
+| `CONFIG_MALFORMED`               | Configuration | custom engines only    | The supplied config object is malformed    |
+| `CONFIG_MISSING`                 | Configuration | built-in engines       | A required config key is absent            |
+| `CONFIG_INVALID`                 | Configuration | built-in engines       | A config value fails validation            |
+| `CONNECTION_FAILED`              | Connection    | built-in engines       | Could not establish a connection           |
+| `CONNECTION_TIMEOUT`             | Connection    | custom engines only    | Connection attempt exceeded the timeout    |
+| `CONNECTION_REFUSED`             | Connection    | custom engines only    | Server actively refused the connection     |
+| `CONNECTION_LOST`                | Connection    | custom engines only    | An established connection was dropped      |
+| `CONNECTION_INVALID_CREDENTIALS` | Connection    | custom engines only    | Authentication failed                      |
+| `OPERATION_NOT_SUPPORTED`        | Operation     | custom engines only    | The engine does not support this operation |
+| `OPERATION_FAILED`               | Operation     | built-in engines       | The operation failed at runtime            |
+| `OPERATION_INVALID_PARAMS`       | Operation     | built-in engines       | Invalid parameters passed to an operation  |
+| `OPERATION_PERMISSION_DENIED`    | Operation     | custom engines only    | Insufficient permissions for the operation |
+
+> **Redis/Memcached wrap every driver failure uniformly.** A bad password,
+> a refused connection, a DNS failure, and a timeout during `connect()` all
+> surface as `CONNECTION_FAILED` with the driver's message on `reason` — the
+> built-in engines never distinguish them into `CONNECTION_REFUSED` /
+> `CONNECTION_TIMEOUT` / `CONNECTION_INVALID_CREDENTIALS`. Branch on
+> `reason`'s text (fragile) or just treat any `CONNECTION_FAILED` as "could
+> not reach the server" without a code-level cause breakdown.
 
 ## Examples
 
@@ -183,11 +197,12 @@ async function connect(host: string) {
   } catch (err) {
     if (err instanceof CacherEngineError) {
       switch (err.code) {
+        // Redis wraps connection refusal, DNS failure, timeout AND bad
+        // credentials all into this one code — the built-in engine never
+        // raises CONNECTION_INVALID_CREDENTIALS (see the "Raised by"
+        // column above), so a Redis auth failure lands here too.
         case 'CONNECTION_FAILED':
-          console.error('Could not reach Redis server');
-          break;
-        case 'CONNECTION_INVALID_CREDENTIALS':
-          console.error('Check Redis username/password');
+          console.error('Could not reach Redis server:', err.message);
           break;
         case 'CONFIG_MISSING':
           console.error('Missing required config:', err.context);

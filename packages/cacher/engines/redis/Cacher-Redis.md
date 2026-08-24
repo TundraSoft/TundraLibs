@@ -84,11 +84,12 @@ type RedisCacherOptions = CacherOptions & {
 
 ### `EngineSSLOptions`
 
-Forwarded verbatim to `RedisEngine`. Both inline PEM strings and file paths are accepted.
+Forwarded verbatim to `RedisEngine`. Pick **one** presentation style — inline
+PEM strings or file paths — per connection.
 
 ```typescript
 type EngineSSLOptions = {
-  ca?: string; // CA certificate PEM string
+  ca?: string[]; // CA certificate(s), PEM strings
   cert?: string; // Client certificate PEM string
   key?: string; // Client private key PEM string
   caFile?: string; // Path to CA certificate file
@@ -98,6 +99,20 @@ type EngineSSLOptions = {
   enforce?: boolean; // Enforce TLS even if not required
 };
 ```
+
+> **Inline and file-path fields are mutually exclusive.** Supplying both
+> styles in one `ssl` object (e.g. `{ ca: [...], certFile: '...' }`) is
+> rejected at the type level and again at runtime. `cert`/`key` (and
+> `certFile`/`keyFile`) must also be supplied as a pair — providing only one
+> half throws. `ca` is an **array** of PEM strings, not a single string.
+>
+> `rejectUnauthorized: false` is not honoured on every runtime: it **throws**
+> on Deno (which has no in-process certificate-skip primitive), and on
+> Cloudflare Workers `ssl` may only be `true`/`false`/`{ enforce }` —
+> `cert`/`key`/`ca`/`certFile`/`keyFile`/`caFile`/`rejectUnauthorized: false`
+> all throw there, because `cloudflare:sockets` accepts no TLS material and
+> always verifies the peer against its own trust store. Bun and Node accept
+> `rejectUnauthorized: false`.
 
 ### `new RedisCacher(name, options)`
 
@@ -248,6 +263,14 @@ try {
 - Values are JSON-serialized on write and deserialized on read.
 - Sliding expiry uses Redis `EXPIRE` to reset the TTL on each `get()`.
 - `username` and `password` must both be provided or both absent; providing only one throws `CacherEngineError('CONFIG_MISSING', ...)`.
+- `clear()` runs `KEYS {name}:*` (glob-escaping the namespace first) then one
+  bulk `DEL` of everything it finds. `KEYS` is O(N) over the whole keyspace
+  and blocks Redis's single-threaded event loop while it runs — fine for
+  development or a namespace with a small number of keys, but a namespace
+  with many thousands of keys on a shared production server can stall other
+  clients for the duration of the scan. There is no `SCAN`-based option
+  today; if that matters, clear via a separate `SCAN` + batched `DEL` outside
+  this cacher, or keep namespaces small enough that `KEYS` is cheap.
 
 ---
 
