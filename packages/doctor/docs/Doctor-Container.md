@@ -92,19 +92,15 @@ extra container at all — see [Lifecycles](../README.md#lifecycles).
 > never a bare `new` when the instance is meant to see that child's
 > overrides.
 
-> **`resolve()`'s factory lookup does not read through to the parent.**
-> Unlike `dispense` / `prescribe` / `stock`, which all walk up to an
-> ancestor, `resolve()` looks for a registered `factory` only in the
-> container you call it on. That is harmless for a class that is genuinely
-> unregistered everywhere — the documented use case above — because the
-> result (a bare `new`) is the same either way. But `child.resolve(SomeVial)`
-> for a class registered **with a custom `factory`** only on an ancestor
-> silently skips that factory and falls back to `new SomeVial()` with _no_
-> constructor arguments, rather than throwing or reading through — a class
-> whose constructor requires arguments then builds with `undefined` in their
-> place instead of failing loudly. Reach for `dispense()` instead whenever
-> the target might be registered anywhere up the chain; reserve `resolve()`
-> on a child for classes you know are unregistered everywhere in it.
+> **`resolve()` reads a registered `factory` through to the parent, the
+> same as `dispense()`.** `child.resolve(SomeVial)` for a class registered
+> **with a custom `factory`** on an ancestor honours that factory — the
+> read-through the whole container chain shares — so a class whose
+> constructor needs arguments is built the way its factory intends, not with
+> a bare `new`. Where `resolve()` still differs from `dispense()`: it always
+> constructs a **fresh** instance — never the cached SINGLETON / SCOPED one —
+> and it will build a class registered **nowhere** with a bare `new`, which
+> is exactly the unregistered-per-request-handler case it exists for.
 
 ### `knows` vs `has`
 
