@@ -213,7 +213,7 @@ const rows = await engine.transaction(async (tx) => {
 });
 ```
 
-`tx` is a [`TransactionScope`](#) — `{ id, execute, transaction }`. `execute`
+`tx` is a [`TransactionScope`](../types/TransactionScope.ts) — `{ id, execute, transaction }`. `execute`
 runs on the transaction's connection; `transaction(fn)` nests.
 
 ### Nested transactions = savepoints

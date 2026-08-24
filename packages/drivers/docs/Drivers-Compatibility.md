@@ -11,11 +11,20 @@ class.
 
 - **Kind** — SQL (relational), document, or KV (key/value).
 - **Dialect** — the OQL translator family. The public `engine.Dialect` getter
-  is defined only on `SQLEngine` subclasses; document/KV engines
-  (`MongoEngine`, `RedisEngine`, `MemcachedEngine`) extend a non-SQL base and
-  expose **no** `engine.Dialect` getter (reading it is `undefined`), so their
-  cell is `—`. (`MongoEngine` still translates OQL to Mongo operations
-  internally — it just carries no public SQL-dialect getter.)
+  is defined on `SQLConnectionEngine` — the pool-free base shared by
+  `SQLEngine` (the pooled SQL engines) **and** the three pool-free HTTP
+  engines (`NeonHttpEngine`, `TursoEngine`, `D1Engine`), so every SQL engine
+  in the matrix has it. Document/KV engines (`MongoEngine`, `RedisEngine`,
+  `MemcachedEngine`) extend a different, non-SQL base (`ConnectionEngine` /
+  `BaseEngine`) that declares no `Dialect` property at all — `engine.Dialect`
+  on one of them is a **compile-time** `TS2339`, not a value that reads as
+  `undefined` at runtime, so their cell is `—`. (`MongoEngine` still
+  translates OQL to Mongo operations internally — it just carries no public
+  SQL-dialect getter.) A consumer holding a mixed union of engine types
+  should narrow with `'Dialect' in engine` rather than reading the property
+  directly — see
+  [Branching on capabilities at runtime](#branching-on-capabilities-at-runtime)
+  below.
 - **Transport** — how bytes leave the process.
 - **Edge-safe** — runs on every edge/serverless runtime, including ones with
   no socket primitive at all (Vercel Edge), because it uses only global
@@ -72,6 +81,40 @@ Notes:
   `referentialActions`, `inPlaceAlter`) don't apply. Mongo and Redis _could_
   support transactions (Mongo sessions, Redis `MULTI`/`EXEC`) but the surface
   isn't wired through yet, so both declare `transactions: false` honestly.
+
+## Branching on capabilities at runtime
+
+Every value in the matrix above is read straight off `engine.Capabilities`
+(and, for SQL engines, `engine.Dialect`) — no engine-specific `instanceof`
+checks needed. `Capabilities` is present on every engine type, so it's
+always safe to read; `Dialect` is not (see the Legend note above), so narrow
+with `'Dialect' in engine` rather than reading it directly on a value whose
+static type might be a non-SQL engine:
+
+```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { RedisEngine } from '@tundralibs/drivers/redis';
+
+type AnyEngine = PostgresEngine | RedisEngine;
+
+/** SQL dialect when the engine has one, `undefined` for document/KV engines. */
+function dialectOf(engine: AnyEngine): string | undefined {
+  // `Dialect` only exists on SQL engines (`SQLConnectionEngine` subclasses,
+  // covering every SQL row in the matrix above). `'Dialect' in engine` both
+  // checks its presence and narrows the type — reading `engine.Dialect`
+  // directly on a `RedisEngine`-typed value is a compile error, not a
+  // runtime `undefined`.
+  return 'Dialect' in engine ? engine.Dialect : undefined;
+}
+
+const pg = new PostgresEngine('app', { host: 'localhost', database: 'app' });
+const cache = new RedisEngine('cache', { host: 'localhost' });
+
+console.log(pg.Capabilities.transactions); // true — safe to call pg.transaction(fn)
+console.log(cache.Capabilities.transactions); // false — RedisEngine has no transaction() at all
+console.log(dialectOf(pg)); // 'postgres'
+console.log(dialectOf(cache)); // undefined
+```
 
 ## Edge / serverless
 

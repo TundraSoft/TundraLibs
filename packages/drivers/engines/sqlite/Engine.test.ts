@@ -9,7 +9,7 @@ import {
 import { SQLiteEngine } from './Engine.ts';
 import type { SqliteDb } from './adapter.ts';
 import { EngineError } from '../../errors/mod.ts';
-import type { EngineQuery } from '../../types/mod.ts';
+import type { EnginePoolOptions, EngineQuery } from '../../types/mod.ts';
 
 // SQLite is embedded — always available IF the runtime's native binding is
 // loadable. On Node.js: `node:sqlite` (built-in, Node 22.5+) or
@@ -74,6 +74,12 @@ describe({
 class ProbeSqliteEngine extends SQLiteEngine {
   public wrapError(error: unknown, query: EngineQuery): EngineError {
     return this._wrapDriverError(error, query);
+  }
+
+  /** The resolved `pool` option — after the defaults merge and the
+   * constructor's single-handle clamp. */
+  public poolOption(): EnginePoolOptions | undefined {
+    return this._getOption('pool');
   }
 }
 
@@ -198,6 +204,56 @@ describe({
         instanceId: 'SQLITE::sqlite-errmap',
       });
       asserts.assertStrictEquals(engine.wrapError(original, q), original);
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Pool pinning (NO live DB). SQLite must run on a single shared handle, so a
+// caller-supplied `pool.min`/`pool.max` is clamped back to 1 in the
+// constructor — *before* the defaults merge that otherwise lets caller
+// options win. Before that clamp, `pool: { min: 2, max: 5 }` opened a second
+// handle; in `:memory:` mode that second handle is a separate empty database,
+// a silent TABLE_NOT_FOUND trap. Construction is lazy, so no handle is opened.
+// ---------------------------------------------------------------------------
+describe({
+  name: 'drivers.SQLiteEngine.pool-pinning (no DB)',
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: () => {
+    it('clamps a caller-supplied pool.min/max to a single handle', () => {
+      const engine = new ProbeSqliteEngine('pool-clamp', {
+        path: ':memory:',
+        pool: { min: 2, max: 5 },
+      });
+      const pool = engine.poolOption();
+      asserts.assertEquals(pool?.min, 1);
+      asserts.assertEquals(pool?.max, 1);
+    });
+
+    it('keeps other pool knobs while pinning the size to 1', () => {
+      const engine = new ProbeSqliteEngine('pool-knobs', {
+        path: ':memory:',
+        pool: { max: 8, idleTimeoutSeconds: 42, acquireTimeoutSeconds: 7 },
+      });
+      const pool = engine.poolOption();
+      asserts.assertEquals(pool?.min, 1);
+      asserts.assertEquals(pool?.max, 1);
+      asserts.assertEquals(pool?.idleTimeoutSeconds, 42);
+      asserts.assertEquals(pool?.acquireTimeoutSeconds, 7);
+    });
+
+    it('clamps before validating, so a lone pool.min never trips min > max', () => {
+      // Merged with the default `{ max: 1 }` this is `{ min: 3, max: 1 }`, which
+      // the base pool validator rejects as min > max. Clamping first turns it
+      // into `{ min: 1, max: 1 }`, so construction succeeds.
+      const engine = new ProbeSqliteEngine('pool-min-only', {
+        path: ':memory:',
+        pool: { min: 3 },
+      });
+      const pool = engine.poolOption();
+      asserts.assertEquals(pool?.min, 1);
+      asserts.assertEquals(pool?.max, 1);
     });
   },
 });
