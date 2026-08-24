@@ -192,6 +192,9 @@ const renderCodecov = (pkgs: Pkg[]): string => {
     "  - '**/*.bench.ts'",
     "  - '**/tests/**'",
     "  - '**/fixtures/**'",
+    // Example Projects (docs convention): standalone runnable apps verified
+    // by being RUN, not covered by tests — never count toward coverage.
+    "  - '**/examples/**'",
     "  - '.github/**'",
     'coverage:',
     '  precision: 2',
