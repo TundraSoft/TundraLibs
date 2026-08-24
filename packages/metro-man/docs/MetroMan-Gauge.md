@@ -78,7 +78,15 @@ Adjust the named series. Series default to 0 if absent. Overloads:
 
 ### `reset()` / `remove(labels?)`
 
-Inherited from `BaseMetric`.
+`reset()` drops every series; `remove(labels?)` drops a single series
+and returns `true` if a series was actually removed. Both inherited
+from `BaseMetric`.
+
+**Throws:**
+
+- `InvalidLabelError` — `remove(labels)` rejects a label name outside
+  `[A-Za-z_][A-Za-z0-9_]*`, the same validation `set`/`inc`/`dec`
+  apply.
 
 ### `toJSON()` / `toString()` / `toPrometheus()` / `dump(mode)`
 
@@ -86,11 +94,28 @@ Inherited from `BaseMetric`.
 
 ## Output
 
+### Prometheus text (`toPrometheus()` / `dump('PROMETHEUS')`)
+
 ```
 # HELP queue_depth
 # TYPE queue_depth gauge
 queue_depth 0
 queue_depth{priority="high"} 1
+```
+
+### JSON (`toJSON()` / `dump('JSON')`)
+
+```json
+{
+  "name": "queue_depth",
+  "help": "",
+  "type": "GAUGE",
+  "labels": ["priority"],
+  "data": {
+    "no_label": 0,
+    "priority=\"high\"": 1
+  }
+}
 ```
 
 ---
