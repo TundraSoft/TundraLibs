@@ -68,14 +68,11 @@ This page expands the **At-rest encryption** summary in the
 The secret and algorithm live on the `Norm` instance, not the schema:
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
-
-const engine = new SQLiteEngine('app', { path: './data' });
 
 const norm = new Norm({
-  engine,
+  database: { dialect: 'sqlite', path: './data' },
   secret: process.env.NORM_SECRET, // required if any column .encrypt()s
   algorithm: 'AES-256-GCM', // optional; this is the default
 });
@@ -462,18 +459,16 @@ rejects it — rows would be written in one format and read back in
 another.
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 declare const kms: {
   encrypt(plain: string, secret: string, algo: string): Promise<string>;
   decrypt(cipher: string, secret: string, algo: string): Promise<string>;
 };
-const engine = new SQLiteEngine('app', { path: './data' });
 
 const norm = new Norm({
-  engine,
+  database: { dialect: 'sqlite', path: './data' },
   secret: process.env.NORM_SECRET,
   crypto: {
     // Delegate the symmetric crypto to a KMS-backed helper.
@@ -491,19 +486,17 @@ SHA-256; swapping `hash` for a keyed HMAC binds every digest to your
 secret:
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { type HashAlgorithm, Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 declare function hmac(
   plain: string,
   key: string,
   algo: HashAlgorithm,
 ): Promise<string>;
-const engine = new SQLiteEngine('app', { path: './data' });
 
 const norm = new Norm({
-  engine,
+  database: { dialect: 'sqlite', path: './data' },
   secret: process.env.NORM_SECRET,
   crypto: {
     // HMAC-with-secret siblings + digests instead of bare SHA.
@@ -562,19 +555,16 @@ decides what a read does with that one cell:
 | `'throw'`            | The read raises a typed `NormCryptoError` naming the entity, column, and pk. Use it when a failure must be loud — an operational alarm rather than a silent gap.                             |
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 declare const metrics: {
   increment(name: string, tags: Record<string, string>): void;
 };
-const engine = new SQLiteEngine('app', { path: './data' });
-const secret = process.env.NORM_SECRET;
 
 const norm = new Norm({
-  engine,
-  secret,
+  database: { dialect: 'sqlite', path: './data' },
+  secret: process.env.NORM_SECRET,
   onDecryptFailure: 'null', // the default
 });
 

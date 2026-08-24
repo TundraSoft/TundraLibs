@@ -196,9 +196,10 @@ is documented in [`engines/registry.ts`](engines/registry.ts).
 ## Quick Start
 
 ```typescript
+// sqlite needs its own explicit import before use, on any runtime —
+// the other six dialects don't (see "Choosing an entry point" below).
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 // 1. Define entities with the Column builders.
 const Users = Entity('users', {
@@ -215,9 +216,12 @@ const Users = Entity('users', {
 // 2. Group entities into a named schema.
 const Identity = Schema('Identity', { Users });
 
-// 3. Open a connection and compose the schema(s).
-const engine = new SQLiteEngine('app', { path: './data' });
-const norm = new Norm({ engine, secret: process.env.SECRET });
+// 3. Open a connection and compose the schema(s) — norm constructs and
+//    owns the engine from a dialect config; you never see the instance.
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: './data' },
+  secret: process.env.SECRET,
+});
 const db = norm.use(Identity);
 
 // 4. CRUD — typed, validated, encrypted.
@@ -508,16 +512,14 @@ Wire the metadata-only event surface to your logger — it never carries
 row data, plaintext, or secrets:
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
-const engine = new SQLiteEngine('app', { path: './data' });
 const secret = process.env.SECRET;
 const log = console;
 
 const norm = new Norm({
-  engine,
+  database: { dialect: 'sqlite', path: './data' },
   secret,
   _oncall: (entity, op, ms, isSlow, id) => log.info({ entity, op, ms, id }),
   _onwarning: (entity, op, code, msg) => log.warn({ entity, op, code, msg }),
@@ -551,7 +553,11 @@ fire, and their spans parent to it automatically via
 [ambient](../ambient/README.md).
 
 ```typescript ignore
-const norm = new Norm({ engine, secret, witness: tracer.wrap });
+const norm = new Norm({
+  database: { dialect: 'postgres', host, database, username },
+  secret,
+  witness: tracer.wrap,
+});
 ```
 
 `tracer.wrap` (tracer ≥ 0.4) is the ready-made Witness-shaped adapter: it

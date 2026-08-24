@@ -92,10 +92,9 @@ re-exported from the package root — migrations are an operational
 concern, kept out of the request path and out of your app bundle.
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
 import { Migrator } from '@tundralibs/norm/migrations';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const Users = Entity('users', {
   id: Column.integer(),
@@ -106,8 +105,10 @@ const Users = Entity('users', {
   unique: { email: ['email_hash'] },
 });
 
-const engine = new SQLiteEngine('app', { path: './data' });
-const norm = new Norm({ engine, secret: process.env.SECRET });
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: './data' },
+  secret: process.env.SECRET,
+});
 const db = norm.use(Schema('App', { Users }));
 
 // The Migrator binds to the handle returned by norm.use(...).

@@ -27,17 +27,18 @@ compile time — typos are TypeScript errors, not runtime surprises.
 ## Setup
 
 Every example below operates on a composed database handle `db`. You
-obtain one by opening an engine, constructing a `Norm`, and composing
-one or more schemas with `use`:
+obtain one by constructing a `Norm` from a `database` config and
+composing one or more schemas with `use`:
 
 ```typescript ignore
+import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import { Identity, Shortener } from './models/mod.ts';
 
-const engine = new SQLiteEngine('shortly', { path: './data' });
-const norm = new Norm({ engine, secret: process.env.SECRET });
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: './data' },
+  secret: process.env.SECRET,
+});
 const db = norm.use(Identity, Shortener);
 
 // db.repo(key) returns a typed repository for a registered entity.

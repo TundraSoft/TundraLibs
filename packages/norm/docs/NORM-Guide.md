@@ -25,20 +25,9 @@ PostgreSQL, MariaDB, SQLite, and MongoDB unchanged.
 deno add @tundralibs/norm       # or: bunx / npx jsr add @tundralibs/norm
 ```
 
-`Norm` needs an engine (bring your own, or let it build one from a
-`database` config) and, if you use encrypted columns, a `secret`.
-
-```typescript
-import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
-
-const engine = new SQLiteEngine('shortly', { path: './data' });
-const norm = new Norm({ engine, secret: Deno.env.get('APP_SECRET') });
-```
-
-For a server engine, skip the manual engine and pass a `database`
-config instead:
+`Norm` needs an engine — let it build one from a `database` config,
+the way every example in this guide does — and, if you use encrypted
+columns, a `secret`.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
@@ -66,6 +55,12 @@ for which of those six actually run on an edge runtime; either way,
 prefer `@tundralibs/norm/core` plus the single engine module you need
 there instead of the root barrel — see
 **[Choosing an entry point](../README.md#choosing-an-entry-point)**.
+
+`Norm` also accepts a pre-built `engine` instance instead of `database`
+— useful when you need to share one connection with other tooling
+(a raw query runner, a health check) — but a `database` config is what
+every example in this guide uses, and what you want unless you have a
+specific reason to construct the engine yourself.
 
 ## 2. Model the schema
 
@@ -404,13 +399,14 @@ default, and the Migrator applies your actual definitions, so you test
 the real schema:
 
 ```typescript ignore
+import '@tundralibs/norm/engines/sqlite';
 import { Migrator } from '@tundralibs/norm/migrations';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const tempDir = await Deno.makeTempDir();
-const engine = new SQLiteEngine('test', { path: tempDir });
-const db = new Norm({ engine, secret: 'test' }).use(Identity, Shortener);
+const db = new Norm({
+  database: { dialect: 'sqlite', path: tempDir },
+  secret: 'test',
+}).use(Identity, Shortener);
 await new Migrator(db, { dir: tempDir }).snapshot();
 await new Migrator(db, { dir: tempDir }).apply();
 // ...run your app code against `db`, assert on the NormResult envelopes.
