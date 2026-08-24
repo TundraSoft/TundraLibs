@@ -9,11 +9,18 @@ import express from "express";
 import { sequenceID, ulid } from "../../id/mod.ts";
 import { ambient } from "../../ambient/mod.ts";
 
-const mode = process.env.MODE ?? "full"; // 'id' | 'full'
-const port = Number(process.env.PORT ?? "4013");
+// Cross-runtime env (express runs on Node/Bun natively, Deno via node-compat).
+const g = globalThis as {
+  Deno?: { env: { get(k: string): string | undefined } };
+  process?: { env: Record<string, string | undefined> };
+};
+const genv = (k: string): string | undefined =>
+  g.Deno?.env.get(k) ?? g.process?.env?.[k];
+const mode = genv("MODE") ?? "full"; // 'id' | 'full'
+const port = Number(genv("PORT") ?? "4013");
 // Match rapid's default: ONE shared sequenceID instance, stringified per call.
 const seq = sequenceID();
-const idgen = process.env.IDGEN ?? "seq"; // 'seq' (rapid default) | 'ulid'
+const idgen = genv("IDGEN") ?? "seq"; // 'seq' (rapid default) | 'ulid'
 const mintId = (): string => idgen === "ulid" ? ulid() : String(seq());
 let counter = 0;
 

@@ -39,7 +39,10 @@
     "pg": "npm:pg@^8.13.0",
     "postgres": "npm:postgres@^3.4.5",
     "find-my-way": "npm:find-my-way@^8.2.2",
-    "radix3": "npm:radix3@^1.1.2"
+    "radix3": "npm:radix3@^1.1.2",
+    "express": "npm:express@^5.2.1",
+    "fastify": "npm:fastify@^5.12.1",
+    "@oak/oak": "jsr:@oak/oak@^17"
   },
   "fmt": {
     "indentWidth": 2,

@@ -32,11 +32,18 @@ GET /             -> { ok: true }
 GET /users/:id    -> { id: <id> }
 ```
 
-- `rapid-server.ts` — rAPId (:4001). oak runs on Deno, express/fastify on
-  Node+Bun, rAPId on all three.
-- `oak-parity-server.ts` (:4012, Deno) / `express-parity-server.ts` (:4013) /
-  `fastify-parity-server.ts` (:4014) — peer + parity middleware. Env: `MODE`
-  (`id`|`full`, default `full`), `IDGEN` (`seq`|`ulid`, default `seq`), `PORT`.
+- `rapid-server.ts` (:4001) / `oak-parity-server.ts` (:4012) /
+  `express-parity-server.ts` (:4013) / `fastify-parity-server.ts` (:4014) — each
+  runs on **all three** runtimes (cross-runtime env; `@oak/oak` resolves to jsr
+  on Deno and the npm build on Node/Bun; express/fastify resolve to node_modules
+  on Node/Bun and via Deno's node-compat — the root `deno.json` maps all three).
+  Peer + parity middleware. Env: `MODE` (`id`|`full`, default `full`), `IDGEN`
+  (`seq`|`ulid`, default `seq`), `PORT`.
+
+> **Non-native combos are compat-shim reads, not the framework's true ceiling.**
+> Each framework is fastest on its home runtime — oak on Deno, express/fastify
+> on Node. oak-on-Node/Bun (npm build) and express/fastify-on-Deno (node-compat)
+> carry the runtime's shim overhead, so read those cells as informational.
 
 **Load is driven by `autocannon`** via `parity-driver.mjs` (its programmatic API
 from one node process; `ROUNDS`/`CONN`/`DUR` env). autocannon — not the compat
@@ -55,19 +62,23 @@ ROUNDS=3 CONN=50 DUR=8 node packages/rapid/bench/parity-driver.mjs \
     {"label":"express","url":"http://localhost:4013/users/42"}]'
 ```
 
-### Current standing (`autocannon -c 50 -d 8`, 3-round avg, this machine)
+### Current standing (`autocannon -c 50`, this machine, all four everywhere)
 
-req/s, `GET /users/:id` (peers at full parity):
+req/s, `GET /users/:id`, peers at full parity (**bold** = fastest per runtime;
+_italic_ = non-native, compat-shim):
 
-| Runtime |  rAPId |    oak | express | fastify | rAPId vs peer                       |
-| ------- | -----: | -----: | ------: | ------: | ----------------------------------- |
-| Deno    | 59,251 | 59,017 |       — |       — | ≈ oak (100%)                        |
-| Bun     | 69,199 |      — |  55,660 |  64,623 | **>express (+24%), >fastify (+7%)** |
-| Node    | 37,361 |      — |  39,989 |  58,860 | 93% express, 64% fastify            |
+| Runtime |      rAPId |      oak |  express |    fastify |
+| ------- | ---------: | -------: | -------: | ---------: |
+| Deno    | **57,974** |   55,772 | _36,026_ |   _52,830_ |
+| Bun     | **71,672** | _58,596_ |   56,452 |     66,344 |
+| Node    |     37,982 | _31,393_ |   39,380 | **57,590** |
 
-rAPId is at-or-ahead of its peers on Deno and Bun; Node is the weak lane — the
-undici `Response` construction tax (fastify runs on raw `node:http`). fastify is
-the honest ceiling for a Fetch-contract framework.
+- **rAPId is the fastest framework on Deno and Bun.**
+- **Node** is rAPId's weak lane: ≈ express, ahead of oak, behind **fastify**
+  (which runs on raw `node:http` — the honest ceiling for a Fetch-contract
+  framework). The gap is the undici `Response` construction tax.
+- Each framework peaks on its home runtime; treat the _italic_ cells (oak off
+  Deno, express/fastify off Node) as shim reads, not the framework's ceiling.
 
 ## Not benchmarks
 

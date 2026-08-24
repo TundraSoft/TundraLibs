@@ -5,15 +5,22 @@
 // @tundralibs/ambient ALS scope rapid uses for log correlation. MODE=id
 // skips the ALS wrap so the id's own cost is isolated. Same two routes as
 // oak-server.ts.
-import { Application, Router } from "jsr:@oak/oak@^17";
+import { Application, Router } from "@oak/oak";
 import { sequenceID, ulid } from "../../id/mod.ts";
 import { ambient } from "../../ambient/mod.ts";
 
-const mode = Deno.env.get("MODE") ?? "full"; // 'id' | 'full'
-const port = Number(Deno.env.get("PORT") ?? "4012");
+// Cross-runtime env (oak runs on Deno natively, Node/Bun via the npm build).
+const g = globalThis as {
+  Deno?: { env: { get(k: string): string | undefined } };
+  process?: { env: Record<string, string | undefined> };
+};
+const genv = (k: string): string | undefined =>
+  g.Deno?.env.get(k) ?? g.process?.env?.[k];
+const mode = genv("MODE") ?? "full"; // 'id' | 'full'
+const port = Number(genv("PORT") ?? "4012");
 // Match rapid's default: ONE shared sequenceID instance, stringified per call.
 const seq = sequenceID();
-const idgen = Deno.env.get("IDGEN") ?? "seq"; // 'seq' (rapid default) | 'ulid'
+const idgen = genv("IDGEN") ?? "seq"; // 'seq' (rapid default) | 'ulid'
 const mintId = (): string => idgen === "ulid" ? ulid() : String(seq());
 let counter = 0;
 
