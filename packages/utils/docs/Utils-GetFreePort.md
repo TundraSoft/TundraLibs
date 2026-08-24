@@ -9,9 +9,17 @@ The `getFreePort` utility provides a robust way to find available TCP ports for 
 - **Dynamic Services**: Allocate ports for microservices and containerized applications
 - **CI/CD Pipelines**: Prevent port conflicts when running parallel tests
 
+> **Deno, Bun, and Node.js only.** `getFreePort` trial-binds a listener
+> via [`compat/net.listen`](../../compat/docs/Compat-Net.md), and
+> `listen()` throws `UnsupportedRuntimeError` on Cloudflare Workers
+> (workerd has no way to accept an inbound TCP connection — outbound
+> `connect()` still works there) and is unavailable in the browser
+> (no raw TCP at all). Don't call `getFreePort` from code that also
+> has to run on those two targets.
+
 ## API
 
-### `getFreePort(options?: GetFreePortOptions): number`
+### `getFreePort(options?: GetFreePortOptions): Promise<number>`
 
 Finds and returns an available TCP port within the specified range.
 
@@ -160,13 +168,31 @@ console.log(`Server running at http://localhost:${port}`);
 
 The port allocation uses the following strategy:
 
-1. **Random Selection**: Ports are selected randomly within the range to reduce collision probability
-2. **Availability Check**: Each candidate port is tested by attempting to bind a TCP listener
-3. **Immediate Release**: Successfully bound ports are immediately released for use
-4. **Bounded Attempts**: Maximum attempts = (max - min + 1 - excludeCount) * 3 to prevent infinite loops
-5. **Exclusion Filtering**: Excluded ports are skipped during selection
+1. **Random Selection**: Ports are picked via `crypto.getRandomValues`
+   uniformly within `[min, max]` (not a linear scan), to reduce
+   collision probability
+2. **Availability Check**: Each candidate port is tested by attempting
+   to bind a TCP listener; excluded picks are skipped without a bind
+   attempt
+3. **Immediate Release**: A successful bind is closed immediately and
+   the port number returned — see the race-condition caveat below
+4. **Bounded Attempts**: `maxAttempts = clamp((max - min + 1) * 10, 100, 10000)`
+   — a wide range gets proportionally more tries, capped at 10,000; a
+   narrow one still gets at least 100. Exhausting `maxAttempts` throws
+   `PortError`.
+5. **Exclusion Filtering**: `exclude` is deduped and checked against
+   the range up front — if every port in `[min, max]` is excluded, it
+   throws immediately rather than spending attempts
 
 This approach balances randomization (good for parallel processes) with deterministic termination.
+
+> **No lock between bind-test and real use.** `getFreePort` closes its
+> trial listener before returning — there is no OS-level reservation
+> held on the port afterwards. A concurrent `getFreePort()` call, or
+> any other process, can bind that same port in the gap before your
+> code actually uses it. See the "Don't assume port stays free" and
+> "Don't reuse ports immediately in parallel" callouts below for the
+> two situations this actually bites.
 
 ## Best Practices
 
@@ -280,12 +306,21 @@ for (let i = 0; i < 3; i++) {
 }
 ```
 
-## Performance Considerations
+## Performance
 
-- **Random selection** reduces collision probability in parallel scenarios
-- **Bounded attempts** prevents infinite loops (typical: 50-300 attempts)
-- **Network I/O** for port checking adds ~1-5ms per attempt
-- **Expected time**: Usually < 50ms for reasonable ranges
+Benched on Apple M2 Max / Deno 2.9.5 (`packages/utils/getFreePort.bench.ts`,
+awaited):
+
+| Range                | Time (avg) |
+| -------------------- | ---------- |
+| Default (1024–65535) | ~31 µs     |
+| Narrow (9000–9100)   | ~34 µs     |
+
+A default-range call almost always succeeds on its first bind attempt
+— each attempt is one real listen-then-close round trip, not a
+millisecond-scale network operation. Cost only climbs meaningfully
+when most of the range is excluded or already bound, forcing more
+attempts before one succeeds.
 
 ## Common Use Cases
 
@@ -324,15 +359,22 @@ const hostPort = await getFreePort({ min: 30000, max: 32000 });
 
 ## Error Handling
 
-| Error Type                                         | Cause                        | Resolution                       |
-| -------------------------------------------------- | ---------------------------- | -------------------------------- |
-| `PortError: Port must be between 0 and 65535`      | Invalid min/max values       | Use valid port range (0-65535)   |
-| `PortError: min must be less than or equal to max` | min > max                    | Correct parameter order          |
-| `PortError: No free port found`                    | All ports exhausted/excluded | Widen range or reduce exclusions |
+`getFreePort` always throws `PortError` (never a bare `Error`) for a
+bad range or an exhausted search. The exact messages:
+
+| Message                                                         | Cause                                              | Resolution                        |
+| --------------------------------------------------------------- | -------------------------------------------------- | --------------------------------- |
+| `Minimum port must be between 0 and 65535`                      | `min` outside 0-65535                              | Use a valid `min`                 |
+| `Maximum port must be between 0 and 65535`                      | `max` outside 0-65535                              | Use a valid `max`                 |
+| `Maximum port must be greater than minimum port`                | `max < min`                                        | Correct parameter order           |
+| `All ports in range are excluded`                               | Every port in `[min, max]` is in `exclude`         | Widen the range or trim `exclude` |
+| `No free port found in range ${min}-${max} after ${n} attempts` | Range is real but every attempt lost the bind race | Widen range or retry              |
 
 ## Related
 
+- [Compat-Net `listen()`](../../compat/docs/Compat-Net.md) - the
+  cross-runtime TCP listener `getFreePort` trial-binds through, and
+  the source of the Workers/browser limitation above
 - [IP Utils](./Utils-IpUtils.md) - IP address manipulation and validation
 - [Is In Subnet](./Utils-IsInSubnet.md) - Subnet membership checking
-- [Events](./Utils-Events.md) - Event emitter for port lifecycle management
 - [Config](./Utils-Config.md) - Configuration management for network settings

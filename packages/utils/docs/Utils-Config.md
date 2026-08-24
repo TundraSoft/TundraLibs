@@ -8,7 +8,9 @@ Multi-format configuration file loader with environment variable substitution an
 
 The Config utility provides a powerful system for loading and managing application configuration from multiple file formats (JSON, YAML, TOML) with support for:
 
-- **Multiple Formats**: JSON, JSONC, YAML, TOML
+- **Multiple Formats**: `.json`, `.js`, `.yaml`/`.yml`, `.toml` — see
+  [Supported File Formats](#supported-file-formats) for the exact
+  extension list the loader scans for.
 - **Environment Variables**: Opt-in `${VAR}` substitution, via the `env` option
 - **Directory Filtering**: Include/exclude patterns for selective loading
 - **Type Safety**: Full TypeScript support with generic types
@@ -327,21 +329,31 @@ for (const server of servers) {
 
 ## Error Handling
 
+Directory-read failures surface as the typed errors `loadConfig`'s
+underlying `readDir` call (`@tundralibs/compat/file`) throws —
+`FileNotFound` and `FileAccessDenied` — not generic `Error`s with a
+particular substring. `loadConfig` itself throws plain `Error` for a
+duplicate basename or a parse failure:
+
 ```typescript
 import { loadConfig } from '@tundralibs/utils';
+import { FileAccessDenied, FileNotFound } from '@tundralibs/compat/file';
 
 try {
   const config = await loadConfig({ path: './config' });
 } catch (err) {
-  const error = err as Error;
-  if (error.message.includes('Config path not found')) {
-    console.error('Configuration directory not found');
-  } else if (error.message.includes('Permission denied')) {
-    console.error('Insufficient permissions to read config');
-  } else if (error.message.includes('Duplicate config file')) {
-    console.error('Multiple files with same name found');
-  } else if (error.message.includes('Error parsing')) {
-    console.error('Invalid configuration file format');
+  if (err instanceof FileNotFound) {
+    console.error('Configuration directory not found:', err.path);
+  } else if (err instanceof FileAccessDenied) {
+    console.error('Insufficient permissions to read config:', err.path);
+  } else if (
+    err instanceof Error && err.message.includes('Duplicate config file')
+  ) {
+    console.error('Multiple files with the same basename found');
+  } else if (err instanceof Error && err.message.includes('Error parsing')) {
+    console.error('Invalid configuration file format:', err.cause);
+  } else {
+    throw err;
   }
 }
 ```
@@ -360,10 +372,13 @@ config/
 
 ### 2. Use Environment-Specific Configs
 
-```typescript
-import { loadConfig } from '@tundralibs/utils';
+`Deno.env` / `process.env` are runtime-specific globals; use
+[`envArgs`](Utils-EnvArgs.md) to read the selector portably:
 
-const env = Deno.env.get('ENVIRONMENT') || 'development';
+```typescript
+import { envArgs, loadConfig } from '@tundralibs/utils';
+
+const env = envArgs().get('ENVIRONMENT') ?? 'development';
 const config = await loadConfig({
   path: `./config/${env}`,
   include: [/^(?!test)/], // Exclude test configs
@@ -405,11 +420,19 @@ for (const key of requiredKeys) {
 
 ## Supported File Formats
 
-| Format | Extensions        | Parser       | Features                    |
-| ------ | ----------------- | ------------ | --------------------------- |
-| JSON   | `.json`, `.jsonc` | `@std/jsonc` | Comments support with JSONC |
-| YAML   | `.yaml`, `.yml`   | `@std/yaml`  | Anchors, aliases            |
-| TOML   | `.toml`           | `@std/toml`  | Sections, nested tables     |
+| Format | Extensions scanned | Parser       | Features                            |
+| ------ | ------------------ | ------------ | ----------------------------------- |
+| JSON   | `.json`, `.js`     | `@std/jsonc` | `//` and `/* */` comments tolerated |
+| YAML   | `.yaml`, `.yml`    | `@std/yaml`  | Anchors, aliases                    |
+| TOML   | `.toml`            | `@std/toml`  | Sections, nested tables             |
+
+> `.json` files may contain JSONC-style comments — the parser used for
+> `.json`/`.js` is `@std/jsonc` regardless of extension — but the
+> directory scan itself only picks up the five extensions above. **A
+> file literally named `*.jsonc` is invisible to `loadConfig`**
+> (silently not loaded, no error): put comments in a `.json`-extension
+> file instead. Likewise `.js` is scanned and parsed as JSONC, not
+> executed.
 
 ## Performance Notes
 

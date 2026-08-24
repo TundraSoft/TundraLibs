@@ -75,8 +75,8 @@ import { parse } from '@tundralibs/utils';
 const message = '<34>Oct 11 22:14:15 mymachine su: john changed user';
 const parsed = parse(message);
 
-console.log(parsed.facilityName); // 'AUTH'
-console.log(parsed.severityName); // 'INFO'
+console.log(parsed.facilityName); // 'AUTH'    (PRI 34 → facility 4)
+console.log(parsed.severityName); // 'CRITICAL' (PRI 34 → severity 2)
 console.log(parsed.hostname); // 'mymachine'
 console.log(parsed.appName); // 'su'
 console.log(parsed.message); // 'john changed user'
@@ -110,17 +110,19 @@ console.log(parsed.structuredData);
 ```typescript
 import { parse, SyslogFacilities, SyslogSeverities } from '@tundralibs/utils';
 
+// PRI = facility*8 + severity; using USER (1) so PRI decodes to the
+// severity each message's text names: 14 → INFO(6), 11 → ERROR(3), 10 → CRITICAL(2)
 const messages = [
-  '<34>Oct 11 22:14:15 host1 app: info message',
-  '<27>Oct 11 22:14:16 host2 app: error message',
-  '<19>Oct 11 22:14:17 host3 app: critical message',
+  '<14>Oct 11 22:14:15 host1 app: info message',
+  '<11>Oct 11 22:14:16 host2 app: error message',
+  '<10>Oct 11 22:14:17 host3 app: critical message',
 ];
 
 const errors = messages
   .map(parse)
   .filter((msg) => msg.severity <= SyslogSeverities.ERROR);
 
-console.log(errors.length); // 2 (error and critical)
+console.log(errors.length); // 2 (error and critical; INFO is above the ERROR threshold)
 ```
 
 ### Generate Syslog Message

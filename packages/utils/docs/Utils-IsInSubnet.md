@@ -452,15 +452,21 @@ if (validation === true) {
 }
 ```
 
-## Performance Considerations
+## Performance
 
-- **Binary Comparison**: O(1) substring comparison after conversion
-- **IPv4 Conversion**: ~5-10μs per IP address
-- **IPv6 Conversion**: ~20-30μs per IP address (includes expansion)
-- **Validation Overhead**: ~2-5μs for input validation
-- **Total Time**: Typically 10-50μs per check depending on IP version
+Benched on Apple M2 Max / Deno 2.9.5 (`packages/utils/isInSubnet.bench.ts`):
 
-For high-throughput scenarios:
+| Input                                                  | Time (avg) |
+| ------------------------------------------------------ | ---------- |
+| IPv4, e.g. `192.168.1.5` in `192.168.0.0/16`           | ~970 ns    |
+| IPv6, e.g. `2001:db8::1` in `2001:db8::/32`            | ~3.4 µs    |
+| IPv6, e.g. `fe80::1:2:3:4` in `fe80::/10`              | ~3.5 µs    |
+| IPv6 full form, `…:0370:7334` in `2001:0db8:85a3::/64` | ~4.1 µs    |
+
+IPv6 costs roughly 3-4x IPv4 — each call runs `isSubnet` (which
+itself expands IPv6) plus a second `expandIPv6` + `ipv6ToBinary` pass
+for the address being checked, and 128-bit binary strings are longer
+to compare than 32-bit ones. For high-throughput scenarios:
 
 ```typescript
 import { ipv4ToBinary } from '@tundralibs/utils';

@@ -184,24 +184,31 @@ ips.sort((a, b) => ipv4ToLong(a) - ipv4ToLong(b));
 #### `ipv4ToHexSegments(ipv4: string): string[]`
 
 Converts IPv4 to hexadecimal segments for IPv6-mapped addresses.
+Each segment is `.toString(16)` — **not** zero-padded to 4 digits.
 
 ```typescript
 import { ipv4ToHexSegments } from '@tundralibs/utils';
 
 ipv4ToHexSegments('192.168.1.1');
-// Returns: ['c0a8', '0101']
+// Returns: ['c0a8', '101']   ← not '0101'; no zero-padding
+
+ipv4ToHexSegments('10.0.0.1');
+// Returns: ['a00', '1']
 
 // Use for creating IPv6-mapped address:
 const segments = ipv4ToHexSegments('192.168.1.1');
 const ipv6Mapped = `::ffff:${segments[0]}:${segments[1]}`;
-// Result: '::ffff:c0a8:0101'
+// Result: '::ffff:c0a8:101'
 ```
 
 ### Range Checking
 
-#### `isIPv4InRange(ip: string, cidr: string, mask: number): boolean`
+#### `isIPv4InRange(ip: string, rangeStart: string, cidr: number): boolean`
 
-Checks if IPv4 address falls within a CIDR range using efficient bitwise operations.
+Checks if IPv4 address falls within a CIDR range using efficient
+bitwise operations. `rangeStart` is a plain dotted-decimal IPv4
+address (the network address), not CIDR notation — the prefix length
+is the separate `cidr` argument.
 
 ```typescript
 import { isIPv4InRange } from '@tundralibs/utils';
@@ -232,19 +239,32 @@ console.log(validateIPAddress('invalid')); // 'Invalid'
 
 ### Subnet Membership Check
 
+This is what [`isInSubnet`](Utils-IsInSubnet.md) does internally for
+IPv4 — shown here with the low-level primitives, using a different
+name so it doesn't shadow the real export (which takes a single CIDR
+string, not separate network/mask arguments):
+
 ```typescript
 import { ipv4ToBinary } from '@tundralibs/utils';
 
-function isInSubnet(ip: string, subnet: string, mask: number): boolean {
+function checkSubnetMembership(
+  ip: string,
+  network: string,
+  mask: number,
+): boolean {
   const ipBinary = ipv4ToBinary(ip);
-  const subnetBinary = ipv4ToBinary(subnet);
+  const networkBinary = ipv4ToBinary(network);
 
-  return ipBinary.substring(0, mask) === subnetBinary.substring(0, mask);
+  return ipBinary.substring(0, mask) === networkBinary.substring(0, mask);
 }
 
-isInSubnet('192.168.1.10', '192.168.0.0', 16); // true
-isInSubnet('10.0.0.1', '192.168.0.0', 16); // false
+checkSubnetMembership('192.168.1.10', '192.168.0.0', 16); // true
+checkSubnetMembership('10.0.0.1', '192.168.0.0', 16); // false
 ```
+
+For real subnet checks, prefer the actual export — it validates
+input, never throws, and supports IPv6 too:
+`isInSubnet('192.168.1.10', '192.168.0.0/16')`.
 
 ### IP Address Sorting
 
@@ -294,8 +314,8 @@ function ipv4ToIPv6Mapped(ipv4: string): string | null {
   return `::ffff:${hexSegments[0]}:${hexSegments[1]}`;
 }
 
-ipv4ToIPv6Mapped('192.168.1.1'); // '::ffff:c0a8:0101'
-ipv4ToIPv6Mapped('10.0.0.1'); // '::ffff:0a00:0001'
+ipv4ToIPv6Mapped('192.168.1.1'); // '::ffff:c0a8:101'
+ipv4ToIPv6Mapped('10.0.0.1'); // '::ffff:a00:1'
 ```
 
 ### Network Range Calculator
@@ -505,14 +525,22 @@ if (ip >= '192.168.0.0' && ip <= '192.168.255.255') {}
 if (isIPv4InRange(ip, '192.168.0.0', 16)) {}
 ```
 
-## Performance Considerations
+## Performance
 
-- **Validation**: O(1) regex matching, ~1-2μs per call
-- **Binary Conversion**: O(n) where n is address segments, ~5-10μs for IPv4, ~20-30μs for IPv6
-- **Range Checking**: O(1) bitwise operations, ~3-5μs per check
-- **Expansion**: O(1) for IPv6, ~15-20μs
+Benched on Apple M2 Max / Deno 2.9.5:
 
-For high-performance scenarios:
+| Function                          | Time (avg) |
+| --------------------------------- | ---------- |
+| `isValidIPv4`                     | ~66 ns     |
+| `ipv4ToLong`                      | ~119 ns    |
+| `ipv4ToBinary`                    | ~293 ns    |
+| `isIPv4InRange`                   | ~370 ns    |
+| `expandIPv6` (compressed input)   | ~444 ns    |
+| `ipv6ToBinary` (compressed input) | ~1.4 µs    |
+
+All well under a microsecond except full IPv6 binary conversion,
+which pays for `expandIPv6` plus a 128-bit walk. For high-performance
+scenarios:
 
 - Cache validation results for frequently checked IPs
 - Use `isIPv4InRange` instead of binary string comparison
