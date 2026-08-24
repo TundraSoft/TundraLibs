@@ -18,6 +18,7 @@
 export { generateTOTP, verifyTOTP } from './TOTP.ts';
 export { generateHOTP, verifyHOTP } from './HOTP.ts';
 export {
+  constantTimeEqual,
   generateOTPAuthURL,
   type HOTPOptions,
   type OTPAuthURLOptions,
