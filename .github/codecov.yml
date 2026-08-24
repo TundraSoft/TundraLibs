@@ -5,6 +5,7 @@ ignore:
   - '**/*.bench.ts'
   - '**/tests/**'
   - '**/fixtures/**'
+  - '**/examples/**'
   - '.github/**'
 coverage:
   precision: 2
