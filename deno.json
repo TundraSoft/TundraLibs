@@ -54,6 +54,7 @@
       "./.sonarlint",
       "./.devcontainer",
       "**/fixtures/**",
+      "**/examples/**",
       "./backup",
       "**/CHANGELOG.md",
       "./.claude"
@@ -75,6 +76,7 @@
       "**/fixtures/**",
       "**/tests/**",
       "**/*.test.ts",
+      "**/examples/**",
       "./backup"
     ]
   },
