@@ -175,11 +175,28 @@ Age.parse('42'); // 42  ← coerced
 | `.validPort(msg?)` / `.port(msg?)`                        | 0–65535 integer                                                                                   |
 | `.timestamp(msg?)`                                        | valid Unix timestamp (non-negative integer)                                                       |
 | `.unixSeconds(msg?)` / `.unixMillis(msg?)`                | timestamp validation at second / millisecond resolution                                           |
-| `.fullYear(msg?)`                                         | 4-digit calendar year (1900–9999)                                                                 |
+| `.fullYear(opts?, msg?)`                                  | 4-digit calendar year; `opts.min`/`opts.max` default to `1900`/`2099`                             |
 | `.percentage(msg?)` / `.probability(msg?)` / `.bps(msg?)` | `[0,100]` / `[0,1]` / basis-points `[0,10000]` ranges                                             |
-| `.bigDecimal(msg?)`                                       | finite number — alias for `.finite()` framed as "numeric value suitable for decimal accounting"   |
+| `.bigDecimal(opts, msg?)`                                 | value round-trips exactly at `opts.scale` decimal places (fixed-point / money check)              |
 | `.latitude(msg?)` / `.longitude(msg?)`                    | geographic ranges                                                                                 |
 | `.strict(msg?)`                                           | reject coercion — input must already be `typeof 'number'` (see [Coercion rules](#coercion-rules)) |
+
+> `.fullYear()`'s default range is **1900–2099**, not a generic "4-digit year" — `.fullYear().parse(2150)` throws even though `2150` is a 4-digit number. Pass `{ max: 9999 }` to widen it.
+>
+> `.bigDecimal(opts, msg?)` takes a **required** `opts: { scale: number; precision?: number }` object — it is not a `.finite()` alias, and calling it with no argument (`.bigDecimal()`) throws a raw `TypeError` from a failed destructure (`Cannot destructure property 'scale' of 'opts' as it is undefined`) instead of a `GuardianError`. Always pass `{ scale }`:
+
+```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+const Money = Guardian.number().bigDecimal({ scale: 2 });
+Money.parse(19.99); // 19.99
+Money.parse(19.999); // throws — 'Number must fit in scale=2 decimal places (got 19.999)'
+
+// opts.precision caps total significant digits (integer + fractional digits combined).
+const SmallMoney = Guardian.number().bigDecimal({ scale: 2, precision: 4 });
+SmallMoney.parse(19.99); // 19.99   — 4 significant digits
+SmallMoney.parse(199.99); // throws — 5 significant digits exceeds precision 4
+```
 
 ### Transforms
 

@@ -346,8 +346,11 @@ const EnvVars = Guardian.record(
   Guardian.string().pattern(/^[A-Z_]+$/),
   Guardian.string(),
 );
-EnvVars.parse({ API_KEY: 'abc', DB_HOST: 'localhost' });
-// throws: { api_key: 'lowercase' }
+EnvVars.parse({ API_KEY: 'abc', DB_HOST: 'localhost' }); // OK — keys match the pattern
+
+const [err] = EnvVars.safeParse({ api_key: 'lowercase' });
+err?.listCauses();
+// { api_key: 'String does not match pattern /^[A-Z_]+$/' }   ← key itself fails the pattern
 ```
 
 | Method                                                | Description                                    |
@@ -561,7 +564,9 @@ TreeSchema.parse({
 });
 ```
 
-The thunk is invoked at most once; the resolved guardian is cached for subsequent parses.
+Once the thunk resolves successfully, the result is cached and never invoked again — including across every subsequent `.parse()` call.
+
+> For a self-referencing target like `TreeSchema` above, that first successful resolution doesn't necessarily happen on the very first call: while `TreeSchema` is still being assigned, an internal async-capability probe may call the thunk before the binding exists, hit a "used before assignment" failure, and silently retry on the next probe — all before your code ever calls `.parse()`. This is invisible for a plain `() => TreeSchema` thunk, but if your thunk does more than return a binding (e.g. it increments a counter or has other side effects), don't assume it runs exactly once end-to-end — only the _outcome_ (one resolved guardian, reused forever) is guaranteed.
 
 Schema emit uses cycle detection: a `LazyGuardian` that emits itself emits `{ $ref: '#' }` (self-reference) on the second visit, breaking the recursion. Downstream codegen tools may want to lift the cycle into a named `$ref: '#/$defs/Tree'`; pass `name` via `.describe({ title: 'Tree' })` so it surfaces as the schema title.
 
