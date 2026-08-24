@@ -36,12 +36,12 @@ const sleep = (ms: number): Promise<void> =>
 // Every span below is opened with no reference to its caller's span. Parenting
 // happens entirely through the ambient active-span context.
 
-async function dbQuery(table: string): Promise<void> {
+async function dbQuery(table: string, ms: number): Promise<void> {
   await tracer.startActiveSpan(
     'db.query',
     { kind: SpanKind.CLIENT, attributes: { 'db.collection.name': table } },
     async () => {
-      await sleep(10 + Math.random() * 10);
+      await sleep(ms);
     },
   );
 }
@@ -50,7 +50,7 @@ async function recordLedgerEntry(): Promise<void> {
   // Three calls removed from `checkout` (checkout -> chargeCard ->
   // recordLedgerEntry -> here) — still parents to `payment.gateway`, the span
   // active when `chargeCard` opened it.
-  await dbQuery('payments_ledger');
+  await dbQuery('payments_ledger', 13);
 }
 
 async function chargeCard(): Promise<void> {
@@ -76,7 +76,7 @@ async function checkout(orderId: string): Promise<void> {
     { kind: SpanKind.SERVER, attributes: { 'order.id': orderId } },
     async () => {
       await verifyAuth();
-      await dbQuery('orders');
+      await dbQuery('orders', 16);
       await chargeCard();
     },
   );
