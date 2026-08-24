@@ -211,6 +211,14 @@ const server = new Server<Conn>({
   onBackpressure: (ws, bufferedAmount) => {
     console.warn('slow consumer', ws.data.userId, bufferedAmount);
   },
+
+  // Fires when a server-initiated send throws on a connection that is
+  // still OPEN — not the ordinary closed-mid-flight case, which stays
+  // silent. The one place this fires today: `publish()` fan-out on
+  // Cloudflare Workers (see Browser / Worker compatibility above).
+  onSendError: (ws, err) => {
+    console.error('send failed on live connection', ws.data.userId, err);
+  },
 });
 ```
 
@@ -1035,6 +1043,46 @@ for it.
 The three client-side codes above are the exception: they have no wire
 frame behind them and carry their code in the `Error`'s `message`
 only, so branch on `err.message` for those.
+
+### Local errors (thrown synchronously, never cross the wire)
+
+Everything above is a _wire_ error — something a remote peer reported
+back over the protocol. Both `Server` and `Client` also throw plain
+JS errors synchronously for local misuse, before any frame is sent.
+All four classes extend `RpcError` (itself extending
+`@tundralibs/utils`'s `BaseError`), so a single `instanceof RpcError`
+catches any of them:
+
+| Class                  | Thrown by                                                             | When                                        |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------------------- |
+| `RpcConfigError`       | `new Client(opts)`                                                    | `opts.url` is missing or not a string       |
+| `RpcRegistrationError` | `server.command(name, …)` / `server.channel(name, …)`                 | `name` is already registered                |
+| `RpcStateError`        | `server.use()` / `.command()` / `.channel()` / `.handleUpgrade()`     | called after `server.close()`               |
+| `RpcStateError`        | `client.command()` / `.subscribe()` / `.publish()`                    | called while `client.state !== 'CONNECTED'` |
+| `RpcStateError`        | any `Middleware` / `ClientSendMiddleware` / `ClientReceiveMiddleware` | its `next()` is called more than once       |
+
+```ts
+import { Client, RpcConfigError, RpcStateError, Server } from '@tundralibs/rpc';
+
+try {
+  new Client({ url: '' });
+} catch (err) {
+  console.error(err instanceof RpcConfigError, (err as Error).message);
+  // true 'Client: `url` is required and must be a string'
+}
+
+const server = new Server();
+await server.close();
+try {
+  server.command('late', undefined, () => 'never runs');
+} catch (err) {
+  console.error(err instanceof RpcStateError); // true
+}
+```
+
+These never reach a remote peer — a duplicate `command()` registration
+or a closed-server call is a bug in the process calling it, not
+something the other end of the wire could observe or recover from.
 
 ## Runtime support
 

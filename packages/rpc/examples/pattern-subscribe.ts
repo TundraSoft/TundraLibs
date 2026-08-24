@@ -130,8 +130,14 @@ type NodeLikeProcess = {
 };
 const proc = (globalThis as { process?: NodeLikeProcess }).process ?? undefined;
 
-// Deno
-addEventListener?.('unload', shutdown);
+// Deno and Bun both implement the `addEventListener` Web API; Node does
+// not define it as a bare global at all, so a plain `addEventListener?.(…)`
+// reference throws `ReferenceError: addEventListener is not defined` there
+// — go through `globalThis` so the guard actually guards on Node too.
+type GlobalWithListener = {
+  addEventListener?: (type: string, cb: () => void) => void;
+};
+(globalThis as GlobalWithListener).addEventListener?.('unload', shutdown);
 // Node + Bun
 proc?.on?.('SIGINT', () => {
   void shutdown().then(() => proc?.exit?.(0));
