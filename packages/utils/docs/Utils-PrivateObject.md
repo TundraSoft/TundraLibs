@@ -56,13 +56,19 @@ const store = privateObject<MyData>({ token: 'secret' });
 ### PrivateObject Methods
 
 - `get<K>(key: K): T[K]` - Retrieve value
-- `set<K>(key: K, value: T[K]): void` - Set value
+- `set<K>(key: K, value: T[K]): void` - Set value (no-op, see
+  "Immutable Mode" below, when mutations are disabled)
 - `has<K>(key: K): boolean` - Check key existence
-- `delete<K>(key: K): void` - Remove key
+- `delete<K>(key: K): void` - Remove key (no-op when mutations are
+  disabled)
 - `forEach(callback): void` - Iterate entries
 - `keys(): string[]` - Get all keys
-- `clear(): void` - Remove all entries
-- `asObject(): T` - Convert to plain object
+- `clear(): void` - Remove all entries (no-op when mutations are
+  disabled)
+- `asObject(): T` - With mutations enabled, returns the LIVE internal
+  record — mutating the result mutates the store. With mutations
+  disabled, returns a defensive shallow copy instead, so the read-only
+  guarantee can't be defeated by mutating the returned object
 
 ## Usage Examples
 
@@ -106,10 +112,18 @@ const config = privateObject(
 
 console.log(config.get('apiKey')); // "secret"
 
-config.set('apiKey', 'new'); // Throws Error!
-config.delete('timeout'); // Throws Error!
-config.clear(); // Throws Error!
+config.set('apiKey', 'new'); // silently no-ops — does NOT throw
+config.delete('timeout'); // silently no-ops
+config.clear(); // silently no-ops
+
+console.log(config.get('apiKey')); // still "secret"
+console.log(config.has('timeout')); // still true
 ```
+
+> With `enableMutations: false`, `set`/`delete`/`clear` do NOT throw —
+> they return without changing state. Check the return value or a
+> follow-up `get`/`has` if the caller needs to know a write was
+> rejected; nothing in `PrivateObject`'s surface signals it.
 
 ### Iteration
 
@@ -182,13 +196,31 @@ const config = privateObject<AppConfig>({
 });
 
 function getConfig() {
-  return config.asObject(); // Returns plain object copy
+  return config.asObject(); // LIVE reference — see the warning below
 }
 
 function updateTimeout(ms: number) {
   config.set('timeout', ms);
 }
+
+// This store was created with the (default) enableMutations: true, so
+// asObject() hands back the SAME object `privateObject` wraps — not a
+// copy. Mutating it bypasses `set()` entirely and writes straight into
+// the "private" store:
+const snapshot = getConfig();
+snapshot.timeout = 9999;
+console.log(config.get('timeout')); // 9999 — the "encapsulated" value moved too
 ```
+
+> `asObject()` only copies when the store was created with
+> `enableMutations: false` (see "Immutable Mode" above). On a mutable
+> store — the default — it returns the live internal record, so
+> anything the caller does to the returned object (including
+> `JSON.stringify`, which does not mutate, but also `snapshot.x = y`,
+> which does) reaches into the "private" data. If a caller must not be
+> able to write back, either build the store with
+> `enableMutations: false`, or copy the result yourself before handing
+> it out further (`{ ...config.asObject() }`).
 
 ### Cache Implementation
 

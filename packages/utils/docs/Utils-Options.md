@@ -86,8 +86,23 @@ class Client extends Options<MyOptions> {
 - `_getOptions()`: Read a defensive copy of the whole bag (nested
   plain-object groups are copied too — mutating the result never
   writes into the store)
+- `_setOption<K>(key, value)`: Write ONE option outside the
+  constructor (e.g. from a `setHost(host)` method) — the value passes
+  through `_processOption` exactly like an option supplied to
+  `_setOptions` does
+- `_processOption(key, value)`: Override this to validate or coerce —
+  it is the ONLY path a value can take into the store, so it is the
+  single place to enforce every rule, whether the value arrived via the
+  constructor or a later `_setOption` call. Default: returns the value
+  unchanged. Throw to reject.
 - All public Events methods (`on`, `off`, `once`); emission is the
   protected `_emit`, for subclasses
+
+> `_processOption` is the only validation seam. A check written
+> anywhere else — e.g. an `if` in the constructor after `_setOptions`
+> returns — only guards the values supplied at construction time; it
+> does nothing for a later `this._setOption('port', badValue)` call.
+> See "Validating options" below.
 
 ## Usage Examples
 
@@ -284,7 +299,9 @@ class MyPlugin extends Plugin {
 
 1. **Defaults First**: Always provide sensible defaults
 2. **Type Safety**: Define option and event interfaces
-3. **Validation**: Validate options in constructor
+3. **Validation**: Validate in `_processOption`, not with an `if` after
+   `_setOptions` — that only catches construction-time values, not a
+   later `_setOption` call (see "Validating options" below)
 4. **Event Naming**: Use `_on` prefix for event handlers in config
 
 ## Common Patterns
@@ -292,20 +309,41 @@ class MyPlugin extends Plugin {
 ### Builder Pattern
 
 ```typescript
-import { Options } from '@tundralibs/utils';
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
 
 type BuilderOptions = { host: string };
 type BuilderEvents = { built: () => void };
 
 class Builder extends Options<BuilderOptions, BuilderEvents> {
-  setHost(host: string) {
-    this._getOption('host'); // Current value
-    return this; // Chainable
+  constructor(config: EventOptionKeys<BuilderOptions, BuilderEvents>) {
+    super();
+    this._setOptions(config);
+  }
+
+  setHost(host: string): this {
+    this._setOption('host', host); // goes through _processOption
+    return this; // chainable
+  }
+
+  build(): string {
+    return `connecting to ${this._getOption('host')}`;
   }
 }
+
+const built = new Builder({ host: 'localhost' })
+  .setHost('db.internal')
+  .build();
+console.log(built); // "connecting to db.internal"
 ```
 
-### Configuration Validation
+### Validating options
+
+`_processOption` is the ONE hook every option value passes through —
+override it to reject or coerce. Because `_setOption` (used by
+`setHost` above, and by `_setOptions` internally) routes through the
+same hook, a rule written here holds for the constructor AND for any
+later programmatic update — unlike a check placed in the constructor
+after `_setOptions` runs, which only guards the initial value.
 
 ```typescript
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
@@ -319,12 +357,37 @@ class ValidatedServer extends Options<ValidatedOptions, ValidatedEvents> {
   constructor(config: EventOptionKeys<ValidatedOptions, ValidatedEvents>) {
     super();
     this._setOptions(config, defaults);
-
-    // Validate
-    if (this._getOption('port') < 1024) {
-      throw new Error('Port must be >= 1024');
-    }
   }
+
+  protected override _processOption(
+    key: keyof ValidatedOptions,
+    value: ValidatedOptions[typeof key],
+  ): ValidatedOptions[typeof key] {
+    if (key === 'port' && (value as number) < 1024) {
+      throw new Error('port must be >= 1024');
+    }
+    return value;
+  }
+
+  setPort(port: number): void {
+    this._setOption('port', port); // rejected the same way as the constructor
+  }
+}
+
+new ValidatedServer({ port: 3000 }); // ok
+new ValidatedServer({}); // ok — default 8080
+
+try {
+  new ValidatedServer({ port: 80 });
+} catch (err) {
+  console.log((err as Error).message); // "port must be >= 1024"
+}
+
+const server = new ValidatedServer({});
+try {
+  server.setPort(80); // rejected the same way — same hook, not bypassable
+} catch (err) {
+  console.log((err as Error).message); // "port must be >= 1024"
 }
 ```
 

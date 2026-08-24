@@ -10,12 +10,25 @@ Essential utility functions and patterns for TypeScript/JavaScript development.
 
 ## Overview
 
-The Utils package provides a comprehensive collection of utility functions, decorators, and design patterns that address common development needs. From configuration management to performance optimization, these utilities are designed to enhance productivity and code quality.
+`utils` is the dependency-free foundation the rest of TundraLibs builds
+on: `BaseError` is the root of every package's error hierarchy,
+`Options`/`Events` is the base class most config-bearing classes
+extend, and `Singleton` backs classes that must have exactly one
+instance. Around that core sit small, independent helpers — decorators
+(`Once`/`Memoize`/`Throttle`), config/env loading, IP/subnet checks,
+syslog parsing, string templating — that have no dependency on each
+other or on the core classes; reach for only the ones you need.
 
 `Once`, `Memoize`, and `Throttle` are TC39 standard decorators (no
-`experimentalDecorators`), usable on methods and getters. `Singleton`
-is also available as its own subpath import
+`experimentalDecorators`). `Memoize` and `Throttle` work on both
+methods and getters; `Once` is method-only — decorating a getter with
+`@Once` is a compile-time type error, not a supported (if degraded)
+case. `Singleton` is also available as its own subpath import
 (`@tundralibs/utils/Singleton`) for consumers who only need it.
+
+See [`examples/connection-pool/`](examples/connection-pool/) for a
+small runnable app that composes `Options`, `Events`, `BaseError`, and
+`Singleton` — the four core pieces — into one class.
 
 Most of the surface — `BaseError`, `Options`/`Events`, `Singleton`,
 `Once`/`Memoize`/`Throttle`, `variableReplacer`, IP/subnet helpers —

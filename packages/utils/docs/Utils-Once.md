@@ -148,6 +148,12 @@ try {
 }
 ```
 
+> A FALSY thrown value (`throw 0`, `throw ''`, `throw false`) is still
+> cached and re-thrown on later calls — `once` tracks "did the first
+> call throw" as its own flag, not by checking the thrown value's
+> truthiness, so it can't mistake a legitimately falsy throw for "no
+> error yet".
+
 ### Resource Allocation
 
 ```typescript

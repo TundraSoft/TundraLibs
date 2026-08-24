@@ -45,12 +45,18 @@ signatures.
 
 ### Public methods (subscription)
 
-- `on(event, callback)`: Register a listener (or an array of them);
-  duplicates are no-ops
-- `once(event, callback)`: Register a one-time listener; removable
-  before firing with `off(event, callback)`
-- `off(event, callback?)`: Remove a listener (or all listeners for the
-  event when omitted)
+- `on(event, callback)`: Register a listener (or an array of them, each
+  registered independently); duplicates are no-ops
+- `once(event, callback)`: Register a one-time listener (or an array —
+  each fires independently, not as a single group); removable before
+  firing with `off(event, callback)`
+- `off(event, callback?)`: Remove a listener. Omit `callback` entirely
+  to clear every listener for the event; pass an array to remove each
+  listed callback.
+
+> An EMPTY array (`off('event', [])`) removes nothing — it is not the
+> same as omitting the argument. Only a fully-omitted `callback` clears
+> the whole event.
 
 ### Protected methods (emission — for the owning class)
 
