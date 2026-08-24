@@ -12,24 +12,27 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { makeTempDir, readTextFile, removeDir } from '@tundralibs/compat/file';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '../mod.ts';
 import { Migrator } from './mod.ts';
 
 const SECRET = 'sqlite-dbschema-secret-abcdef0123456789';
 
 describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () => {
-  let engine: SQLiteEngine;
+  let norm: Norm;
   let dbDir = '';
   let migDir = '';
 
   beforeAll(async () => {
     dbDir = await makeTempDir({ prefix: 'norm-dbschema-db-' });
     migDir = await makeTempDir({ prefix: 'norm-dbschema-mig-' });
-    engine = new SQLiteEngine('dbschema-test', { path: dbDir });
+    norm = new Norm({
+      database: { dialect: 'sqlite', path: dbDir },
+      secret: SECRET,
+    });
   });
   afterAll(async () => {
-    await engine.disconnect().catch(() => {});
+    await norm.disconnect().catch(() => {});
     await removeDir(dbDir, { recursive: true }).catch(() => {});
     await removeDir(migDir, { recursive: true }).catch(() => {});
   });
@@ -44,7 +47,6 @@ describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () 
       Label: Column.varchar(120),
     }, { pk: ['Id'], dbSchema: 'Bots' });
 
-    const norm = new Norm({ engine: engine as never, secret: SECRET });
     const db = norm.use(Schema('MM', { Account, Job }));
     const mig = new Migrator(db, { dir: migDir, renderSql: true });
 

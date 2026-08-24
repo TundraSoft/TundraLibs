@@ -39,7 +39,9 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '../mod.ts';
+import { registerEngine, resolveEngineFactory } from '../engines/mod.ts';
 import { Migrator } from '../migrations/mod.ts';
 
 describe('norm audit — drop-column retirement live sqlite', () => {
@@ -48,6 +50,19 @@ describe('norm audit — drop-column retirement live sqlite', () => {
       path: ':memory:',
     });
     await engine.connect();
+    // Two Norm handles (v1 then v2) must share ONE `:memory:` database —
+    // norm2 reads what norm1 wrote and continues the same migration chain.
+    // `new Norm({ engine })` is gone, so pin the sqlite factory to this
+    // engine for each synchronous construction, then restore the stock.
+    const makeNorm = (): Norm => {
+      const stock = resolveEngineFactory('sqlite');
+      registerEngine('sqlite', () => engine as never);
+      try {
+        return new Norm({ database: { dialect: 'sqlite', path: ':memory:' } });
+      } finally {
+        registerEngine('sqlite', stock as never);
+      }
+    };
     const migDir = await makeTempDir({ prefix: 'norm-audit-drop-sqlite-' });
     try {
       const UsersV1 = Entity('adrop_users', {
@@ -56,7 +71,7 @@ describe('norm audit — drop-column retirement live sqlite', () => {
         LegacyNote: Column.varchar(100), // NOT NULL
       }, { pk: ['Id'], audit: { name: 'AdropUserAudit' } });
 
-      const norm1 = new Norm({ engine: engine as never });
+      const norm1 = makeNorm();
       const db1 = norm1.use(Schema('App', { Users: UsersV1 }));
       const mig1 = new Migrator(db1, { dir: migDir });
       await mig1.snapshot();
@@ -74,7 +89,7 @@ describe('norm audit — drop-column retirement live sqlite', () => {
         Name: Column.varchar(30),
       }, { pk: ['Id'], audit: { name: 'AdropUserAudit' } });
 
-      const norm2 = new Norm({ engine: engine as never });
+      const norm2 = makeNorm();
       const db2 = norm2.use(Schema('App', { Users: UsersV2 }));
       const mig2 = new Migrator(db2, { dir: migDir });
       await mig2.snapshot();

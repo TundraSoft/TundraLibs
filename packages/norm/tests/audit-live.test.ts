@@ -15,11 +15,16 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { envArgs } from '@tundralibs/utils';
-import { MariaEngine } from '@tundralibs/drivers/maria';
 import { MongoEngine } from '@tundralibs/drivers/mongo';
-import { PostgresEngine } from '@tundralibs/drivers/postgres';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
-import { Column, Entity, Norm, type NormDb, Schema } from '../mod.ts';
+import '@tundralibs/norm/engines/sqlite';
+import {
+  Column,
+  type DatabaseConfig,
+  Entity,
+  Norm,
+  type NormDb,
+  Schema,
+} from '../mod.ts';
 import { buildSnapshot } from '../migrations/snapshot.ts';
 import { runtimeOf } from '../Norm.ts';
 
@@ -37,18 +42,33 @@ const Users = Entity('audit_users', {
 const AuditSchema = Schema('AT', { Users });
 type Registry = (typeof AuditSchema)['entities'];
 
-// deno-lint-ignore no-explicit-any
-type AnyEngine = any;
 type Fixture = {
   name: string;
-  make: () => AnyEngine;
+  /** The database config Norm builds its engine from — the same env-var
+   * params the fixture used to hand a raw engine constructor, now that
+   * `new Norm({ engine })` is gone. */
+  dbConfig: DatabaseConfig;
   /** Dialect DDL for BOTH the main table and its replica; undefined =
-   * schemaless / Mongo (no CREATE, cleared via deleteMany instead). */
+   * schemaless / Mongo (no CREATE, cleared via `clear()` instead). */
   ddl?: { main: string; audit: string };
+  /** Schemaless engines only: wipe leftover docs before a run, straight at
+   * the driver through a throwaway connection (Norm exposes no filterless
+   * delete) — same intent as the SQL fixtures' raw DROP TABLE. */
+  clear?: () => Promise<void>;
 };
 
 const dbName = () =>
   env.get('DB_SCHEMA') ? `${env.get('DB_SCHEMA')}_norm` : undefined;
+
+/** Shared by the Mongo `dbConfig` (Norm's engine) and its `clear()`
+ * throwaway engine, so both hit the same server database. */
+const MONGO = {
+  host: env.get('MONGO_HOST') || 'localhost',
+  port: Number.parseInt(env.get('MONGO_PORT') || '27017', 10),
+  database: env.get('MONGO_DB') || 'mongo',
+  username: env.get('MONGO_USERNAME') || env.get('MONGO_USER') || undefined,
+  password: env.get('MONGO_PASSWORD') || undefined,
+};
 
 /** SQLite returns EffectiveFrom/To as ISO strings; Postgres/MariaDB
  * decode them to real `Date` objects — normalize to epoch ms so
@@ -59,7 +79,7 @@ const ms = (v: unknown) => new Date(v as string | Date).getTime();
 const FIXTURES: Fixture[] = [
   {
     name: 'sqlite',
-    make: () => new SQLiteEngine('tmp-live-audit-sqlite', { path: ':memory:' }),
+    dbConfig: { dialect: 'sqlite', path: ':memory:' },
     ddl: {
       main: `CREATE TABLE audit_users (
         Id TEXT PRIMARY KEY, Name TEXT NOT NULL,
@@ -73,15 +93,15 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: 'postgres',
-    make: () =>
-      new PostgresEngine('tmp-live-audit-pg', {
-        host: env.get('POSTGRES_HOST') || 'localhost',
-        port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
-        database: dbName() || env.get('POSTGRES_DB') || 'postgres',
-        username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
-          'postgres',
-        password: env.get('POSTGRES_PASSWORD') || '',
-      }),
+    dbConfig: {
+      dialect: 'postgres',
+      host: env.get('POSTGRES_HOST') || 'localhost',
+      port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
+      database: dbName() || env.get('POSTGRES_DB') || 'postgres',
+      username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
+        'postgres',
+      password: env.get('POSTGRES_PASSWORD') || '',
+    },
     ddl: {
       main: `CREATE TABLE audit_users (
         "Id" VARCHAR(40) PRIMARY KEY, "Name" VARCHAR(30) NOT NULL,
@@ -96,14 +116,14 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: 'maria',
-    make: () =>
-      new MariaEngine('tmp-live-audit-maria', {
-        host: env.get('MARIA_HOST') || 'localhost',
-        port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
-        database: dbName() || env.get('MARIA_DB') || 'mysql',
-        username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') || 'root',
-        password: env.get('MARIA_PASSWORD') || '',
-      }),
+    dbConfig: {
+      dialect: 'maria',
+      host: env.get('MARIA_HOST') || 'localhost',
+      port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
+      database: dbName() || env.get('MARIA_DB') || 'mysql',
+      username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') || 'root',
+      password: env.get('MARIA_PASSWORD') || '',
+    },
     // DATETIME(6) — MariaDB TIMESTAMP caps at 2038; the sentinel is 2099.
     ddl: {
       main: 'CREATE TABLE audit_users (' +
@@ -119,17 +139,19 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: 'mongo',
-    make: () =>
-      new MongoEngine('tmp-live-audit-mongo', {
-        host: env.get('MONGO_HOST') || 'localhost',
-        port: Number.parseInt(env.get('MONGO_PORT') || '27017', 10),
-        database: env.get('MONGO_DB') || 'mongo',
-        username: env.get('MONGO_USERNAME') || env.get('MONGO_USER') ||
-          undefined,
-        password: env.get('MONGO_PASSWORD') || undefined,
-      }),
+    dbConfig: { dialect: 'mongo', ...MONGO },
     // Schemaless — no CREATE; the mirror write is norm-managed and
     // best-effort (no transactions), same caveat as temporal.
+    clear: async () => {
+      const clean = new MongoEngine('tmp-live-audit-mongo-clean', MONGO);
+      try {
+        await clean.connect();
+        await clean.deleteMany('audit_users', {});
+        await clean.deleteMany('audit_users_audit', {});
+      } finally {
+        await clean.disconnect().catch(() => {});
+      }
+    },
   },
 ];
 
@@ -140,19 +162,18 @@ for (const fx of FIXTURES) {
     let reason = '';
 
     beforeAll(async () => {
-      let engine: AnyEngine;
+      // Probe availability by actually opening the pool — `connect()` warms
+      // it and rejects when the database is unreachable, so a down engine
+      // skips exactly as the old engine.connect()+ping() check did.
       try {
-        engine = fx.make();
-        await engine.connect();
-        if (typeof engine.ping === 'function') await engine.ping();
+        norm = new Norm({ database: fx.dbConfig, secret: 'x'.repeat(32) });
+        await norm.connect();
       } catch (e) {
         reason = `${fx.name} unavailable: ${(e as Error).message}`;
-        try {
-          await engine?.disconnect?.();
-        } catch { /* ignore */ }
+        await norm?.disconnect().catch(() => {});
+        norm = undefined;
         return;
       }
-      norm = new Norm({ engine, secret: 'x'.repeat(32) });
       db = norm.use(AuditSchema);
       if (fx.ddl !== undefined) {
         await db.raw('DROP TABLE IF EXISTS audit_users_audit').catch(
@@ -162,12 +183,7 @@ for (const fx of FIXTURES) {
         await db.raw(fx.ddl.main);
         await db.raw(fx.ddl.audit);
       } else {
-        await (engine as {
-          deleteMany(c: string, f: unknown): Promise<number>;
-        }).deleteMany('audit_users', {}).catch(() => {});
-        await (engine as {
-          deleteMany(c: string, f: unknown): Promise<number>;
-        }).deleteMany('audit_users_audit', {}).catch(() => {});
+        await fx.clear?.();
       }
     });
 

@@ -19,6 +19,8 @@ import {
   rotateKey,
   Schema,
 } from './mod.ts';
+import '@tundralibs/norm/engines/sqlite';
+import { registerEngine, resolveEngineFactory } from './engines/mod.ts';
 import { Migrator } from './migrations/mod.ts';
 import { DEFAULT_ENCRYPT_ALGORITHM, defaultEncrypt } from './crypto.ts';
 
@@ -33,18 +35,36 @@ const Vaults = Entity('vaults', {
 
 let dir = '';
 let migDir = '';
+let sharedEngine: SQLiteEngine;
 
-/** A Norm over the shared db under a given key (default 'null' policy —
- * a cell that won't decrypt reads as null rather than throwing). */
+/**
+ * A Norm over the shared db under a given key (default 'null' policy — a
+ * cell that won't decrypt reads as null rather than throwing).
+ *
+ * Rotation reads and rewrites ONE physical database under several secrets,
+ * so every handle in a test must bind to the SAME engine instance. `new
+ * Norm({ engine })` is gone, so pin the sqlite dialect factory to
+ * `sharedEngine` for the single synchronous `new Norm` call — there is no
+ * `await` between the pin and its restore, so it can never bleed into
+ * another test — then restore the stock factory.
+ */
 function norm(secret: string) {
-  const engine = new SQLiteEngine('rotate', { path: dir });
-  return new Norm({ engine, secret }).use(Schema('App', { Vaults }));
+  const stock = resolveEngineFactory('sqlite');
+  registerEngine('sqlite', () => sharedEngine as never);
+  try {
+    return new Norm({ database: { dialect: 'sqlite', path: dir }, secret })
+      .use(Schema('App', { Vaults }));
+  } finally {
+    registerEngine('sqlite', stock as never);
+  }
 }
 
 describe('norm.rotateKey — in-place key rotation', () => {
   beforeEach(async () => {
     dir = await makeTempDir({ prefix: 'norm-rotate-db-' });
     migDir = await makeTempDir({ prefix: 'norm-rotate-mig-' });
+    sharedEngine = new SQLiteEngine('rotate', { path: dir });
+    await sharedEngine.connect();
     const db = norm(KEY_A);
     await new Migrator(db, { dir: migDir }).snapshot();
     await new Migrator(db, { dir: migDir }).apply();
@@ -55,6 +75,7 @@ describe('norm.rotateKey — in-place key rotation', () => {
     ]);
   });
   afterEach(async () => {
+    await sharedEngine.disconnect();
     await removeDir(dir, { recursive: true });
     await removeDir(migDir, { recursive: true });
   });

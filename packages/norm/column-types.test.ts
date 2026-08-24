@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import * as asserts from '@std/asserts';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from './mod.ts';
 import { Migrator } from './migrations/mod.ts';
 
@@ -27,22 +27,30 @@ const Widgets = Entity('widgets', {
 
 let dir = '';
 let migDir = '';
+let norm: Norm;
 
+// One Norm owns the on-disk database; each `open()` is a fresh handle
+// onto the SAME engine (one pool, one file), so the migration applied in
+// beforeAll is visible to the test bodies.
 function open() {
-  const engine = new SQLiteEngine('coltypes', { path: dir });
-  return new Norm({ engine, secret: 'coltypes-secret' })
-    .use(Schema('App', { Widgets }));
+  return norm.use(Schema('App', { Widgets }));
 }
 
 describe('norm.column-types — extended SQL types round-trip (live SQLite)', () => {
   beforeAll(async () => {
     dir = await makeTempDir({ prefix: 'norm-coltypes-db-' });
     migDir = await makeTempDir({ prefix: 'norm-coltypes-mig-' });
+    norm = new Norm({
+      database: { dialect: 'sqlite', path: dir },
+      secret: 'coltypes-secret',
+    });
+    await norm.connect();
     const db = open();
     await new Migrator(db, { dir: migDir }).snapshot();
     await new Migrator(db, { dir: migDir }).apply();
   });
   afterAll(async () => {
+    await norm.disconnect();
     await removeDir(dir, { recursive: true });
     await removeDir(migDir, { recursive: true });
   });
@@ -87,8 +95,8 @@ describe('norm.column-types — extended SQL types round-trip (live SQLite)', ()
       label: Column.clob().minLength(3),
     }, { pk: ['id'] });
     const gdir = await makeTempDir({ prefix: 'norm-coltypes-g-' });
-    const engine = new SQLiteEngine('coltypes-g', { path: gdir });
-    const db = new Norm({ engine }).use(Schema('G', { Guarded }));
+    const db = new Norm({ database: { dialect: 'sqlite', path: gdir } })
+      .use(Schema('G', { Guarded }));
     const gmig = await makeTempDir({ prefix: 'norm-coltypes-gm-' });
     await new Migrator(db, { dir: gmig }).snapshot();
     await new Migrator(db, { dir: gmig }).apply();

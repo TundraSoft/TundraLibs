@@ -10,7 +10,6 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import '@tundralibs/norm/engines/sqlite';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import {
   Column,
   Entity,
@@ -161,12 +160,10 @@ describe('norm audit', () => {
       Id: Column.varchar(40).default(() => crypto.randomUUID()),
       Name: Column.varchar(30),
     }, { pk: ['Id'], audit: { name: 'UserAudit5' } });
-    const engine = new SQLiteEngine('audit-readonly-test', {
-      path: ':memory:',
+    const norm = new Norm({
+      database: { dialect: 'sqlite', path: ':memory:' },
     });
-    await engine.connect();
     try {
-      const norm = new Norm({ engine });
       const db = norm.use(Schema('S5', { Users }));
       const auditRepo = db.repo('UserAudit5');
       for (
@@ -180,7 +177,7 @@ describe('norm audit', () => {
         );
       }
     } finally {
-      await engine.disconnect();
+      await norm.disconnect();
     }
   });
 
@@ -190,13 +187,12 @@ describe('norm audit', () => {
         Id: Column.varchar(40).default(() => crypto.randomUUID()),
         Name: Column.varchar(30),
       }, { pk: ['Id'], audit: { name: 'UserAuditL' } });
-      const engine = new SQLiteEngine('audit-live-sqlite', {
-        path: ':memory:',
+      const norm = new Norm({
+        database: { dialect: 'sqlite', path: ':memory:' },
       });
-      await engine.connect();
       try {
-        const norm = new Norm({ engine });
         const db = norm.use(Schema('SL', { Users }));
+        await norm.connect();
         await db.raw(
           'CREATE TABLE usersl (Id TEXT PRIMARY KEY, Name TEXT NOT NULL)',
         );
@@ -242,7 +238,7 @@ describe('norm audit', () => {
           'no version should be current after delete',
         );
       } finally {
-        await engine.disconnect();
+        await norm.disconnect();
       }
     });
   });
