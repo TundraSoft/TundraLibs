@@ -48,7 +48,7 @@ import { type CompiledEntity, decryptCell, type Runtime } from './compile.ts';
 import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
-import { isExpressionValue, validateRows } from './guardians.ts';
+import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
 import {
   canonicalizePlain,
   type HashAlgorithm,
@@ -653,6 +653,10 @@ export class ReadRepo<
 
     // 5. JSON-parse relation values (SQLite returns aggregates as text).
     this._parseJoinJson(rows, plan);
+
+    // 5b. Decode raw DATE_TYPES columns SQLite returned as ISO strings
+    //     back to `Date` (Postgres/MariaDB/Mongo already return one).
+    this._decodeDateColumns(rows);
 
     // 6. Decrypt encrypted result columns — top-level and inside
     //    relation values.
@@ -1813,6 +1817,30 @@ export class ReadRepo<
             // Leave the raw string in place — caller can decode it.
           }
         }
+      }
+    }
+  }
+
+  /** Decode a raw driver value back to `Date` for every top-level
+   * DATE_TYPES column that came back as a string — SQLite has no
+   * native date/time storage class, so it returns the ISO string norm
+   * wrote on `.encrypt()`-less columns, unlike Postgres/MariaDB/Mongo
+   * (already real `Date` objects; this is a no-op there) and unlike an
+   * `.encrypt()`ed date column (its type is restored by `decryptCell`
+   * in crypto.ts, which is why encrypted columns are skipped here —
+   * running this first would try to parse ciphertext as a date, and
+   * with `decrypt: false` the ciphertext must survive untouched). Only
+   * top-level row columns; a date column nested inside a joined
+   * relation value is not decoded here. */
+  protected _decodeDateColumns(rows: Row[]): void {
+    if (rows.length === 0) return;
+    const c = this._compiled;
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    for (const [key, spec] of Object.entries(specs)) {
+      if (!DATE_TYPES.has(spec.type) || c.localEncrypted.has(key)) continue;
+      for (const row of rows) {
+        const v = row[key];
+        if (typeof v === 'string') row[key] = new Date(v);
       }
     }
   }
@@ -3635,16 +3663,17 @@ export class Repo<
     return out;
   }
 
-  /** RETURNING pipeline: decrypt → masks → hidden strip → afterRead
-   * column transforms → afterRead row hook. Masks compute from the
-   * DECODED stored value (before the source's own afterRead — same
-   * input as the read path) and survive the hidden strip even when
-   * their source does not. */
+  /** RETURNING pipeline: date decode → decrypt → masks → hidden strip →
+   * afterRead column transforms → afterRead row hook. Masks compute
+   * from the DECODED stored value (before the source's own afterRead —
+   * same input as the read path) and survive the hidden strip even
+   * when their source does not. */
   private async __finishReturning(
     rows: Row[],
     decrypt: boolean,
   ): Promise<ReadRowOf<D>[]> {
     const c = this._compiled;
+    this._decodeDateColumns(rows);
     if (decrypt) rows = await this._decryptRows(rows);
     this._applyEntityMasks(c, rows, decrypt);
     if (c.returningStrip !== undefined) {
