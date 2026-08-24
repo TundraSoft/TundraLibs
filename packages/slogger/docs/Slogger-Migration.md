@@ -191,8 +191,16 @@ const logger = new Slogger({
 });
 
 logger.info('User logged in', { userId: '123' });
-logger.error('Operation failed', { err });
+logger.error('Operation failed', { err: err.message });
 ```
+
+> **Don't pass the raw `Error` object as a context value.** `Error`'s
+> `message`/`stack` are non-enumerable, so `JSON.stringify` — what
+> `jsonFormatter`, `logfmtFormatter` and `otelLogFormatter` all use
+> under the hood — serialises a bare `Error` to `{}`. Extract the
+> fields you want (`error.message`, `error.stack`) into the context
+> explicitly. See
+> [Formatters → JSON Formatter](../formatters/Slogger-Formatters.md#json-formatter).
 
 ### Key Differences
 
@@ -268,7 +276,7 @@ const logger = new Slogger({
 });
 
 logger.info('Server started on port', { port });
-logger.error('Request failed', { err: error });
+logger.error('Request failed', { err: error.message });
 ```
 
 ### Level Mapping
