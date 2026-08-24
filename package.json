@@ -16,6 +16,8 @@
     "test:bun": "bun test packages/",
     "test:deno": "deno test --allow-all --parallel",
     "test:node": "node --import tsx --test 'packages/**/*.test.ts'",
+    "test:coverage:bun": "bun test --coverage packages/",
+    "test:coverage:node": "node --import tsx --test --experimental-test-coverage 'packages/**/*.test.ts'",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

@@ -3,6 +3,11 @@
     "check": "deno check packages/*/mod.ts packages/*/examples/**/*.ts",
     "test": "deno test --allow-all --parallel",
     "test:watch": "deno test --allow-all --watch",
+    "test:bun": "bun test packages/",
+    "test:node": "node --import tsx --test 'packages/**/*.test.ts'",
+    "test:coverage": "deno test --allow-all --parallel --coverage=./coverage && deno coverage ./coverage",
+    "test:coverage:bun": "bun test --coverage packages/",
+    "test:coverage:node": "node --import tsx --test --experimental-test-coverage 'packages/**/*.test.ts'",
     "bench": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --all",
     "bench:deno": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --lanes=deno --all",
     "bench:bun": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --lanes=bun --all",
@@ -89,6 +94,7 @@
       "coverage",
       "docs",
       "**/fixtures/**",
+      "**/examples/**",
       "./backup"
     ]
   },
