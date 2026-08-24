@@ -464,6 +464,73 @@ describe('pact.Pact refresh rotation', () => {
     await pact.logout(first.token);
     asserts.assertEquals(await pact.refresh(first.refreshToken!), null);
   });
+
+  it('refresh returns null when the user vanished between rotations', async () => {
+    const { store, pact } = setup();
+    const first = await login(pact);
+    store.users.clear(); // user deleted; the family is still live
+    asserts.assertEquals(await pact.refresh(first.refreshToken!), null);
+  });
+
+  it('a malformed / non-refresh token yields null (TOKEN_TYPE_MISMATCH)', async () => {
+    const { pact } = setup();
+    const first = await login(pact);
+    const failures: Error[] = [];
+    pact.on('verifyFailed', (e) => {
+      failures.push(e);
+    });
+    // the ACCESS token is not a refresh token
+    asserts.assertEquals(await pact.refresh(first.token), null);
+    // garbage isn't a JWT at all
+    asserts.assertEquals(await pact.refresh('not.a.jwt'), null);
+    asserts.assert(failures.length >= 1);
+  });
+});
+
+describe('pact.Pact logout edge cases', () => {
+  it('stateless JWT logout is a no-op (nothing to revoke)', async () => {
+    const store = makeStore();
+    const pact = new Pact({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      hooks: store.hooks, // JWT, no refresh → stateless
+    });
+    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
+    const r = await pact.login('password', {
+      identifier: 'a@x.io',
+      password: 'pw-123456789',
+    });
+    await pact.logout(r!.token); // resolves, throws nothing
+    // the access token still verifies — stateless logout can't revoke it
+    asserts.assert(await pact.verify(r!.token) !== null);
+  });
+
+  it('OPAQUE logout of an unknown token is a silent no-op', async () => {
+    const store = makeStore();
+    const pact = new Pact({
+      bits: BITS,
+      password: true,
+      session: { strategy: 'OPAQUE' },
+      hooks: store.hooks,
+    });
+    await pact.logout('never-issued'); // no throw, no event
+  });
+
+  it('refresh() throws when refresh rotation is not configured', async () => {
+    const store = makeStore();
+    const pact = new Pact({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      hooks: store.hooks,
+    });
+    const err = await asserts.assertRejects(
+      () => pact.refresh('x'),
+      PactDefinitionError,
+    );
+    asserts.assertEquals((err as PactDefinitionError).code, 'MISSING_OPTION');
+  });
 });
 
 describe('pact.Pact authenticate schemes', () => {
@@ -564,6 +631,53 @@ describe('pact.Pact authenticate schemes', () => {
     );
   });
 
+  it('APIKEY with a hash-only-missing record, and HMAC with no stored secret, reject', async () => {
+    const { store, pact } = setup();
+    const p = await pact.register({
+      identifier: 'a@x.io',
+      password: 'pw-123456789',
+    });
+    // A signing-style key (only `secret`, no `secretHash`) can't be presented
+    // as an APIKEY.
+    store.apiKeys.set('k_ak_1', {
+      id: 'k_ak_1',
+      userId: p.id,
+      secret: 'signing-only',
+    });
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'APIKEY',
+        keyId: 'k_ak_1',
+        secret: 'signing-only',
+      }),
+      null,
+    );
+    // A presented-style key (only `secretHash`) can't verify HMAC signatures.
+    store.apiKeys.set('k_ak_2', {
+      id: 'k_ak_2',
+      userId: p.id,
+      secretHash: await (async () => 'deadbeef')(),
+    });
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'HMAC',
+        keyId: 'k_ak_2',
+        signature: await signHMAC('x', 'whatever'),
+        payload: 'x',
+      }),
+      null,
+    );
+    // unknown key id → null (both schemes)
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'APIKEY',
+        keyId: 'ghost',
+        secret: 's',
+      }),
+      null,
+    );
+  });
+
   it('HMAC verifies a signature against the stored signing secret', async () => {
     const { store, pact } = setup();
     const p = await pact.register({
@@ -593,6 +707,68 @@ describe('pact.Pact authenticate schemes', () => {
       }),
       null,
     );
+  });
+});
+
+describe('pact.Pact OAuth login', () => {
+  const setup = () => {
+    const store = makeStore();
+    const pact = new Pact({
+      bits: BITS,
+      secret: SECRET,
+      oauth: {
+        google: {
+          provider: 'GOOGLE',
+          clientId: 'cid',
+          clientSecret: 'cs',
+          redirectUri: 'https://app.example.com/cb',
+        },
+      },
+      hooks: store.hooks,
+    });
+    // Inject a stub fetch into the internal OAuth client's `_fetch` seam so
+    // the login pipeline runs end-to-end without touching the network.
+    const stub = ((input: unknown) => {
+      const url = String(input);
+      const body = url.includes('/token')
+        ? { access_token: 'at' }
+        : { sub: 'g-1', email: 'a@x.io' };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    }) as unknown as typeof fetch;
+    (pact as unknown as {
+      __oauth: Map<string, { _fetch: typeof fetch }>;
+    }).__oauth.get('google')!._fetch = stub;
+    return { store, pact };
+  };
+
+  it('first login provisions via createUser (isNew); repeat login finds the user', async () => {
+    const { pact } = setup();
+    const first = await pact.login('google', { code: 'c', verifier: 'v' });
+    asserts.assert(first !== null);
+    asserts.assertEquals(first.isNew, true); // provisioned
+    asserts.assertEquals(first.profile?.id, 'g-1'); // fresh profile rides along
+    asserts.assertEquals(first.profile?.email, 'a@x.io');
+    asserts.assert(await pact.verify(first.token) !== null);
+
+    const second = await pact.login('google', { code: 'c2', verifier: 'v2' });
+    asserts.assert(second !== null);
+    asserts.assertEquals(second.isNew, false); // existing account found
+    asserts.assertEquals(second.principal.id, first.principal.id);
+  });
+
+  it('oauthRedirect returns url/state/verifier/nonce; unknown provider throws', async () => {
+    const { pact } = setup();
+    const { url, state, verifier, nonce } = await pact.oauthRedirect('google');
+    asserts.assert(url.startsWith('https://accounts.google.com'));
+    asserts.assert(state.length > 0 && verifier.length > 0 && nonce.length > 0);
+    const err = asserts.assertThrows(() => {
+      pact.oauthRedirect('ghost');
+    });
+    asserts.assertEquals((err as { code?: string }).code, 'UNKNOWN_STRATEGY');
   });
 });
 

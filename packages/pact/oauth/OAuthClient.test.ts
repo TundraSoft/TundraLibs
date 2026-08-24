@@ -1,5 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { issueJWT } from '@tundralibs/crypt/JWT';
 import { OAuthClient } from './OAuthClient.ts';
 import { PactDefinitionError, PactOAuthError } from '../errors/mod.ts';
 
@@ -119,6 +120,34 @@ describe('pact.OAuthClient authorizationUrl', () => {
     asserts.assertEquals(parsed.searchParams.get('state'), 'held-by-app');
     asserts.assertEquals(parsed.searchParams.get('scope'), 'openid');
   });
+
+  it('a non-OIDC provider (GitHub) gets no nonce/claims params', async () => {
+    const client = new OAuthClient('github', {
+      ...GOOGLE_CONFIG,
+      provider: 'GITHUB',
+      claims: { login: 'login' }, // ignored — GitHub does not speak OIDC claims
+    });
+    const parsed = new URL((await client.authorizationUrl()).url);
+    asserts.assertEquals(parsed.searchParams.get('nonce'), null);
+    asserts.assertEquals(parsed.searchParams.get('claims'), null);
+  });
+
+  it('an id_token provider (Apple) targets the id_token claims set and skips dot-paths', async () => {
+    const client = new OAuthClient('apple', {
+      ...GOOGLE_CONFIG,
+      provider: 'APPLE',
+      claims: {
+        real_user_status: 'real_user_status',
+        nested: { from: 'a.b.c' }, // dot-path → provider returns it on its own
+      },
+    });
+    const parsed = new URL((await client.authorizationUrl()).url);
+    asserts.assertEquals(
+      JSON.parse(parsed.searchParams.get('claims')!),
+      { id_token: { real_user_status: null } }, // targets id_token, no dot-path
+    );
+    asserts.assertEquals(parsed.searchParams.get('response_mode'), 'form_post');
+  });
 });
 
 describe('pact.OAuthClient callback', () => {
@@ -160,6 +189,28 @@ describe('pact.OAuthClient callback', () => {
     asserts.assert(exchange.body.includes('code=c0de'));
     asserts.assert(exchange.body.includes('code_verifier=v3r'));
     asserts.assert(exchange.body.includes('client_secret=cs'));
+  });
+
+  it('a public (PKCE-only) client sends no client_secret', async () => {
+    const client = new OAuthClient('google', {
+      provider: 'GOOGLE',
+      clientId: 'cid',
+      redirectUri: 'https://app.example.com/cb', // no clientSecret
+    });
+    const { fn, seen } = mockFetch([
+      [
+        'https://oauth2.googleapis.com/token',
+        () => json({ access_token: 'at' }),
+      ],
+      [
+        'https://openidconnect.googleapis.com/v1/userinfo',
+        () => json({ sub: 'g-1' }),
+      ],
+    ]);
+    setFetch(client, fn);
+    await client.callback({ code: 'c', verifier: 'v' });
+    const exchange = seen.find((s) => s.url.includes('/token'))!;
+    asserts.assertFalse(exchange.body.includes('client_secret'));
   });
 
   it('fail-closed state check: mismatched or missing state rejects', async () => {
@@ -273,6 +324,110 @@ describe('pact.OAuthClient OIDC discovery', () => {
     asserts.assertEquals(
       (err as PactOAuthError).code,
       'OAUTH_EXCHANGE_FAILED',
+    );
+  });
+});
+
+describe('pact.OAuthClient id_token identity (userinfo-less)', () => {
+  const ISSUER = 'https://sso.example.com';
+  // Discovery WITHOUT a userinfo_endpoint → identity comes from the id_token.
+  const DISCOVERY = {
+    authorization_endpoint: `${ISSUER}/auth`,
+    token_endpoint: `${ISSUER}/token`,
+    jwks_uri: `${ISSUER}/jwks`,
+  };
+  const config = {
+    provider: 'OIDC' as const,
+    clientId: 'cid',
+    clientSecret: 'cs',
+    redirectUri: 'https://app.example.com/cb',
+    issuer: ISSUER,
+  };
+  const idToken = (claims: Record<string, unknown>) =>
+    issueJWT('HS256', {
+      iss: ISSUER,
+      aud: 'cid',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      ...claims,
+    }, 'irrelevant-when-jwks-unreachable');
+
+  const flow = (jwksResponder: () => Response, token: string) =>
+    mockFetch([
+      [`${ISSUER}/.well-known`, () => json(DISCOVERY)],
+      [`${ISSUER}/token`, () => json({ access_token: 'at', id_token: token })],
+      [`${ISSUER}/jwks`, jwksResponder],
+    ]);
+
+  it('PREFERRED (default) degrades to claim-validated decoding when JWKS is unreachable', async () => {
+    const degraded: string[] = [];
+    const client = new OAuthClient('sso', config, (r) => degraded.push(r));
+    const { fn } = flow(
+      () => new Response('boom', { status: 500 }),
+      await idToken({ sub: 'oidc-1', email: 'a@x.io' }),
+    );
+    setFetch(client, fn);
+    const profile = await client.callback({ code: 'c', verifier: 'v' });
+    asserts.assertEquals(profile.id, 'oidc-1');
+    asserts.assertEquals(profile.email, 'a@x.io');
+    asserts.assertEquals(degraded.length, 1); // the downgrade was reported
+  });
+
+  it('REQUIRED makes an unreachable JWKS fatal (OAUTH_JWKS_UNAVAILABLE)', async () => {
+    const client = new OAuthClient('sso', {
+      ...config,
+      idTokenVerification: 'REQUIRED',
+    });
+    const { fn } = flow(
+      () => new Response('boom', { status: 500 }),
+      await idToken({ sub: 'oidc-1' }),
+    );
+    setFetch(client, fn);
+    const err = await asserts.assertRejects(
+      () => client.callback({ code: 'c', verifier: 'v' }),
+      PactOAuthError,
+    );
+    asserts.assertEquals(
+      (err as PactOAuthError).code,
+      'OAUTH_JWKS_UNAVAILABLE',
+    );
+  });
+
+  it('a bad claim is fatal even on the degraded path (OAUTH_IDTOKEN_INVALID)', async () => {
+    const client = new OAuthClient('sso', config);
+    const { fn } = flow(
+      () => new Response('boom', { status: 500 }),
+      await idToken({ sub: 'oidc-1', aud: 'someone-else' }), // wrong audience
+    );
+    setFetch(client, fn);
+    const err = await asserts.assertRejects(
+      () => client.callback({ code: 'c', verifier: 'v' }),
+      PactOAuthError,
+    );
+    asserts.assertEquals(
+      (err as PactOAuthError).code,
+      'OAUTH_IDTOKEN_INVALID',
+    );
+  });
+
+  it('a nonce mismatch is rejected when expectedNonce is supplied', async () => {
+    const client = new OAuthClient('sso', config);
+    const { fn } = flow(
+      () => new Response('boom', { status: 500 }),
+      await idToken({ sub: 'oidc-1', nonce: 'real-nonce' }),
+    );
+    setFetch(client, fn);
+    const err = await asserts.assertRejects(
+      () =>
+        client.callback({
+          code: 'c',
+          verifier: 'v',
+          expectedNonce: 'attacker-nonce',
+        }),
+      PactOAuthError,
+    );
+    asserts.assertEquals(
+      (err as PactOAuthError).code,
+      'OAUTH_IDTOKEN_INVALID',
     );
   });
 });
