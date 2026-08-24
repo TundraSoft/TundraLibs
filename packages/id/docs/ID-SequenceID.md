@@ -52,6 +52,13 @@ The generated IDs are:
 
 > **Uniqueness contract.** SequenceID is collision-free **within a single generator** for up to 16,777,216 IDs per startup-second. It is **not** collision-free across multiple generators in the same process, nor across multiple processes with colliding `PID % 256` started in the same wall-clock second. Treat `sequenceID()` as a singleton per logical sequence (e.g. one per table) and instantiate it at module load. For distributed/clustered scenarios, prefer `ulid` or `ObjectID`.
 
+> **Security note:** SequenceID has **no random component** — server ID,
+> startup time, and counter are all fully predictable to anyone who can
+> observe a few consecutive IDs. Never use it for session tokens,
+> password-reset links, API keys, or anywhere the value must be hard to
+> guess — use [NanoID](./ID-NanoID.md), [ulid](./ID-ULID.md), or
+> [cuid2](./ID-CUID2.md) for those.
+
 ## Features
 
 | Feature                          | Support | Description                                          |
@@ -638,16 +645,10 @@ console.timeEnd('Generate 1M IDs');
 - **CPU Usage**: Very low (simple bit operations)
 - **Database Impact**: None (client-side generation)
 
-**Comparison with Alternatives:**
-
-| Method              | Speed                | Database Load | Uniqueness Guarantee                |
-| ------------------- | -------------------- | ------------- | ----------------------------------- |
-| SequenceID          | ~15M/sec             | Zero          | Per-generator (caller singleton)    |
-| UUID v4             | ~5M/sec              | Zero          | Very high (cryptographic random)    |
-| Auto-increment      | ~100K/sec            | High          | Perfect (single DB)                 |
-| Database UUID_SHORT | ~10K/sec (roundtrip) | High          | Per-server (DB-coordinated counter) |
-| NanoID              | ~8M/sec              | Zero          | Very high (cryptographic random)    |
-| ULID                | ~3M/sec              | Zero          | Very high (cryptographic random)    |
+`sequenceID` touches no CSPRNG on the hot path, which makes it the fastest
+generator in this package. For measured per-generator numbers — including how
+it compares to `ObjectID`, `simpleID`, `cuid2`, `ulid`, `nanoID`, and `cuid` on
+Deno, Bun, and Node — see [Performance](ID-Performance.md).
 
 ## Related Documentation
 
