@@ -36,8 +36,9 @@ async function chargeCard(log: Logger, order: Order) {
 Ambient stores the context **once** at the request boundary; anything below
 reads it — at any depth, across every `await`, isolated between concurrent
 requests. It is built on `AsyncLocalStorage` (uniform across Deno, Bun and Node)
-and is the shared substrate `slogger` (log correlation), `tracer` (spans) and
-`rpc` read request context from.
+— `slogger` reads request context straight from it for log correlation, and
+`tracer` builds its own isolated span store on the same primitive (not the
+shared bag; see [Ambient-Integration](docs/Ambient-Integration.md#tracer-who-owns-what)).
 
 ## Installation
 

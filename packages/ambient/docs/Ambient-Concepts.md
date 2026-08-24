@@ -107,6 +107,14 @@ ambient.run({ correlationId: 'c1', tenant: 't1' }, () => {
 
 Outside any scope, `child` behaves like `run` over the patch alone.
 
+> `run()` called again while a scope is already active does **not** merge with
+> it — it opens a brand-new bag for `fn`'s duration, so `correlationId` or any
+> field added via `set` on the outer scope disappears until the inner `run()`
+> returns (the outer bag then reappears untouched). This bites when two
+> composed layers each try to open the request scope. `child()` is what
+> merges; `ambient.active()` is how to guard against double-opening — see
+> [Ambient-Integration](Ambient-Integration.md#opening-the-scope-middleware).
+
 ## The bag is mutable and live
 
 `get()` returns the live `RequestContext`, not a snapshot, and

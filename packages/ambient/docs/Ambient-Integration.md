@@ -57,6 +57,33 @@ Reusing an inbound `x-correlation-id` (when you trust the caller) is what makes
 one id follow a request across your own services. For untrusted edges, always
 mint fresh.
 
+> `run()` does not merge with an already-active scope — a second call nested
+> inside the first _replaces_ the bag for its duration (the outer one comes
+> back once it returns), silently dropping `correlationId` and anything added
+> via `set` in between. This matters when you cannot guarantee only one layer
+> opens the scope — e.g. mounting a sub-app that carries its own copy of this
+> same middleware. Guard with `ambient.active()` instead of assuming a single
+> boundary:
+>
+> ```typescript
+> import { ambient } from '@tundralibs/ambient';
+>
+> // Safe to mount at more than one layer — only the outermost call opens a
+> // scope; an inner one reuses whatever is already active.
+> async function ensureRequestContext(
+>   req: Request,
+>   next: () => Promise<Response>,
+> ): Promise<Response> {
+>   if (ambient.active()) return next();
+>   const correlationId = req.headers.get('x-correlation-id') ??
+>     crypto.randomUUID();
+>   return ambient.run({ correlationId }, next);
+> }
+> ```
+>
+> Skip the check at a genuine single, well-known boundary (one composition
+> root, one call site) — it is dead weight there, not a default to reach for.
+
 Later enrichment goes through `set` — authentication is the classic case:
 
 ```typescript
