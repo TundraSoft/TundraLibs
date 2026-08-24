@@ -171,9 +171,11 @@ const c = await db.repo('Visits').count({ '@Link.@slug': 'link-00' });
 
 ## Filters
 
-Filters are the OQL filter language typed to your columns. A bare
-`@column` key is equality shorthand; an operator bag applies one of the
-operators below; `$and` / `$or` compose sub-filters.
+Filters are the [OQL filter language](../../oql/README.md#comprehensive-filter-system)
+typed to your columns — norm's `FilterOf` type is OQL's own `QueryFilter`
+derived over your entity's column shape, not a norm-specific reinvention.
+A bare `@column` key is equality shorthand; an operator bag applies one
+of the operators below; `$and` / `$or` compose sub-filters.
 
 ### Equality shorthand
 
@@ -196,6 +198,14 @@ await db.repo('Links').find({ '@isActive': true }); // isActive = true
 | `$null`    | `$null: true` / `false` — IS (NOT) NULL. |
 | `$or`      | Any sub-filter matches.                  |
 | `$and`     | All sub-filters match.                   |
+
+This is the subset used in this guide's examples, not the full list —
+because `FilterOf` rides OQL's own operator typing, every OQL operator
+type-checks and runs identically on the matching column kind: `$gt` /
+`$gte` / `$lt` / `$lte` (number, bigint, date columns) and `$nlike` /
+`$nilike` / `$startsWith` / `$endsWith` / `$contains` (string columns).
+See OQL's [Comprehensive Filter System](../../oql/README.md#comprehensive-filter-system) for the
+complete, authoritative operator grammar per column type.
 
 ```typescript ignore
 // $in over a hashed column — plaintext equality, rewritten to digests:
@@ -262,6 +272,38 @@ await db.repo('Links').find({ '@createdAt': { $gt: '@Owner.@createdAt' } });
 await db.repo('Owners').find({ '@name': { $gt: '@Items.@label' } });
 ```
 
+### Hand-written `$exists` / `$nexists` (advanced)
+
+The lift above is norm generating an `$exists` node for you from an
+`'@Alias.@col'` ref. Because `FilterOf` is OQL's own `QueryFilter`,
+OQL's raw top-level
+[`$exists` / `$nexists`](../../oql/README.md#correlated-exists-filters)
+correlated-subquery operators are themselves also part of the type — and
+they reach the SQL translator unchanged, verified against the compiled
+IR:
+
+```typescript ignore
+// Physical table name ('items'), NOT the entity registry key ('Items') —
+// this bypasses norm's alias/entity abstraction entirely.
+await db.repo('Owners').find({
+  $exists: {
+    table: 'items',
+    on: { '@ownerId': '@id' }, // subquery-local column : outer column
+    where: { '@label': 'x' },
+  },
+});
+```
+
+This is a raw escape hatch, not a typed norm feature: `table` is the
+**physical** table name (not a registry key), the columns inside `on` /
+`where` are **not** validated against any entity's declared columns, and
+none of norm's usual rewrites (hashed-column-to-digest, scope filters)
+apply inside it. Prefer the `'@Alias.@col'` auto-lift above — it is
+typed, validated, and needs no knowledge of physical names; reach for a
+hand-written `$exists` only for a correlation OQL can express but norm's
+relation graph cannot (e.g. correlating on a column that isn't part of
+any declared foreign key).
+
 ### Hashed columns (encrypted, filterable by plaintext)
 
 A column declared `.encrypt().hash()` stores ciphertext but stays
@@ -297,6 +339,20 @@ any SQL runs:
 - A column marked `.unfilterable()`.
 - Ordering or aggregating an **encrypted** column — randomized
   ciphertext neither sorts nor groups.
+
+**JSON columns cannot be filtered by path.** OQL itself supports
+`@col.@key` [JSON path filtering](../../oql/README.md#json-column-filtering); norm does not
+implement it. Norm's relation resolver reads _any_ two-segment
+`'@Alias.@col'` key as a foreign-key or reverse-relation reference, JSON
+columns included — so `'@payload.@kind'` on a `Column.json<Shape>()`
+column **type-checks** (the typed path key is inherited structurally
+from OQL) but throws `NormQueryError` (`UNKNOWN_RELATION`) at runtime,
+reporting `payload` as an unknown relation alias. Filter a JSON column
+only as a **whole value** — `$eq` / `$ne` / `$in` / `$nin` / `$null` —
+and model path-level filtering as a VIEW with the extraction baked into
+its stored `SELECT` (or drop to `db.query()` with a hand-built IR — see
+[Escape hatches](#escape-hatches)) when you need to match on an inner
+field.
 
 ## Projections
 
@@ -362,8 +418,9 @@ local column (e.g. `'@id': true`) alongside the relations.
 ## Relations
 
 Relations are declared as foreign keys that reference the target's
-registry key (see [Schema definition](NORM-Schema.md)). NORM resolves
-three cardinalities in query results:
+registry key (see [Schema definition](NORM-Schema.md)); norm plans the
+underlying joins through OQL's own [JOIN Support](../../oql/README.md#join-support). NORM resolves three
+cardinalities in query results:
 
 - **belongsTo** — the FK side; always `object | null` (LEFT join).
 - **hasOne** — a reverse relation where the FK columns equal the

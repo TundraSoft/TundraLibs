@@ -15,6 +15,7 @@ it, so a forgotten tenant filter can't leak across tenants.
 - [Graceful across a mixed registry](#graceful-across-a-mixed-registry)
 - [The `scoped` envelope field](#the-scoped-envelope-field)
 - [Rules and limits](#rules-and-limits)
+- [Scoping and temporal / audit tables](#scoping-and-temporal--audit-tables)
 - [Scoping vs views](#scoping-vs-views)
 
 ## Creating a scoped handle
@@ -258,8 +259,24 @@ c.scoped; // undefined
   value as ciphertext with the digest sibling populated (so scoped reads
   find the row).
 - **`raw()` and `query()` bypass the scope.** They run below the filter
-  layer; both emit a `warning` event so an audit can see the escape
-  hatch was used inside a scoped context.
+  layer. `raw()` emits a `warning` event on every call (scoped or not)
+  so an audit can see the escape hatch was used; `query()` does not —
+  it bypasses scope silently.
+
+## Scoping and temporal / audit tables
+
+A `temporal` entity is a plain table under the hood, so scope applies
+exactly as documented above — including on a virtual `@AsOf` read: the
+`@AsOf` range predicate and the scope's equality predicate are ANDed
+into the same `WHERE`.
+
+An `audit` replica inherits its source table's columns, so a scope
+column the source declares (e.g. `orgId`) exists on the replica too,
+and a scoped handle's reads confine it exactly like any other entity —
+gracefully skipped if the source didn't declare the column. The
+replica only exposes `find`/`findOne`/`count` (it is read-only; norm
+owns its writes), so only the read side of scoping applies to it. See
+[Temporal](NORM-Temporal.md) and [Audit](NORM-Audit.md).
 
 ## Scoping vs views
 

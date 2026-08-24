@@ -31,6 +31,7 @@ compose.
   - [VIEW](#view)
   - [QUERY](#query)
   - [Options reference](#options-reference)
+  - [dbSchema, defaultPageSize, and table renames](#dbschema-defaultpagesize-and-table-renames)
   - [Hooks](#hooks)
   - [Write scoping (insert / update pick-lists)](#write-scoping-insert--update-pick-lists)
 - [Foreign keys and relations](#foreign-keys-and-relations)
@@ -232,6 +233,10 @@ const email = Column.varchar(255)
   .beforeWrite((v) => v.trim().toLowerCase()); // case-insensitive at rest
 
 const country = Column.char(2).beforeWrite((v) => v.toUpperCase());
+
+// afterRead runs on the way out — after decrypt, before masks compute.
+// Store a compact code, hand callers a display-ready value:
+const status = Column.varchar(12).afterRead((v) => v.replace(/_/g, ' '));
 ```
 
 ### Encryption and hashing
@@ -502,25 +507,73 @@ export const TopLinks = Entity('top_links', {
 
 ### Options reference
 
-| Option            | Kind        | Description                                                                                                                        |
-| ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `type`            | all         | `'TABLE'` (default), `'VIEW'`, or `'QUERY'`.                                                                                       |
-| `pk`              | TABLE       | **Required.** Primary-key column tuple; composite keys list several.                                                               |
-| `fk`              | TABLE, VIEW | Named FK aliases → target + column mapping. See [Foreign keys](#foreign-keys-and-relations).                                       |
-| `index`           | TABLE       | Named indexes: name → column tuple. Synthesized `<col>_hash` siblings are indexable.                                               |
-| `unique`          | TABLE       | Named `UNIQUE` constraints, emitted as unique indexes (diffable on every dialect).                                                 |
-| `insert`          | TABLE       | Insert [pick-list](#write-scoping-insert--update-pick-lists).                                                                      |
-| `update`          | TABLE       | Update [pick-list](#write-scoping-insert--update-pick-lists).                                                                      |
-| `hooks`           | all         | Whole-row [hooks](#hooks). TABLEs get the write + delete hooks; read-only kinds get `afterRead` only.                              |
-| `dbSchema`        | TABLE, VIEW | Database namespace (e.g. Postgres `public`). Named `dbSchema` because "schema" already means a named entity collection in norm.    |
-| `comment`         | all         | Documentation + DDL comment (`COMMENT ON TABLE …`).                                                                                |
-| `defaultPageSize` | all         | Rows a limit-less `find()` fetches (default `10`). `0` = UNBOUNDED, and every such read emits a `warning` event.                   |
-| `cache`           | all         | Read-cache TTL in minutes (`0`/omitted = off; needs a `cache` config on `Norm`). See [Read caching](NORM-Caching.md).              |
-| `temporal`        | TABLE       | Make it an effective-dated **[temporal table](NORM-Temporal.md)** — norm keeps every version, `insert` supersedes, delete is off.  |
-| `audit`           | TABLE       | Generate a versioned **[audit replica](NORM-Audit.md)** — the table itself is unchanged; norm mirrors every write into it.         |
-| `query`           | VIEW, QUERY | **Required** on read-only kinds. The stored OQL `SELECT`.                                                                          |
-| `materialized`    | VIEW        | `CREATE MATERIALIZED VIEW` (Postgres; degrades elsewhere).                                                                         |
-| `renamedFrom`     | TABLE       | Migration hint: this table's previous physical name (optionally `'dbSchema.name'`-qualified). Consumed only by the migration diff. |
+| Option            | Kind        | Description                                                                                                                                                                                  |
+| ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`            | all         | `'TABLE'` (default), `'VIEW'`, or `'QUERY'`.                                                                                                                                                 |
+| `pk`              | TABLE       | **Required.** Primary-key column tuple; composite keys list several.                                                                                                                         |
+| `fk`              | TABLE, VIEW | Named FK aliases → target + column mapping. See [Foreign keys](#foreign-keys-and-relations).                                                                                                 |
+| `index`           | TABLE       | Named indexes: name → column tuple. Synthesized `<col>_hash` siblings are indexable.                                                                                                         |
+| `unique`          | TABLE       | Named `UNIQUE` constraints, emitted as unique indexes (diffable on every dialect).                                                                                                           |
+| `insert`          | TABLE       | Insert [pick-list](#write-scoping-insert--update-pick-lists).                                                                                                                                |
+| `update`          | TABLE       | Update [pick-list](#write-scoping-insert--update-pick-lists).                                                                                                                                |
+| `hooks`           | all         | Whole-row [hooks](#hooks). TABLEs get the write + delete hooks; read-only kinds get `afterRead` only.                                                                                        |
+| `dbSchema`        | TABLE, VIEW | Database namespace (e.g. Postgres `public`). Named `dbSchema` because "schema" already means a named entity collection in norm.                                                              |
+| `comment`         | all         | Documentation + DDL comment (`COMMENT ON TABLE …`).                                                                                                                                          |
+| `defaultPageSize` | all         | Rows a limit-less `find()` fetches (default `10`). `0` = UNBOUNDED, and every such read emits a `warning` event.                                                                             |
+| `cache`           | all         | Read-cache TTL in minutes (`0`/omitted = off; needs a `cache` config on `Norm`). See [Read caching](NORM-Caching.md).                                                                        |
+| `temporal`        | TABLE       | Make it an effective-dated **[temporal table](NORM-Temporal.md)** — norm keeps every version; `insert` supersedes, and `update`/`upsert`/`truncate`/`delete` are all disabled (insert-only). |
+| `audit`           | TABLE       | Generate a versioned **[audit replica](NORM-Audit.md)** — the table itself is unchanged; norm mirrors every write into it.                                                                   |
+| `query`           | VIEW, QUERY | **Required** on read-only kinds. The stored OQL `SELECT`.                                                                                                                                    |
+| `materialized`    | VIEW        | `CREATE MATERIALIZED VIEW` (Postgres; degrades elsewhere).                                                                                                                                   |
+| `renamedFrom`     | TABLE       | Migration hint: this table's previous physical name (optionally `'dbSchema.name'`-qualified). Consumed only by the migration diff.                                                           |
+
+### dbSchema, defaultPageSize, and table renames
+
+Three options from the table above are easy to skim past — a minimal
+example for each.
+
+**`dbSchema`** places a TABLE or VIEW in a database namespace instead of
+the dialect's default one (Postgres `public`, or the equivalent):
+
+```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
+export const Invoices = Entity('invoices', {
+  id: Column.integer(),
+  amount: Column.decimal(10, 2),
+}, { pk: ['id'], dbSchema: 'billing' });
+```
+
+Reach for it when one database hosts several logical groupings you want
+DDL to land in separately (per-tenant schemas, `billing` vs `public`).
+Leave it unset for the common single-schema case — it isn't free
+complexity-wise: every reader of the entity now has to know which
+schema it actually lives in.
+
+**`defaultPageSize`** overrides how many rows a limit-less `find()`
+fetches for this entity (the global default is 10 — see
+[Pagination and totals](NORM-Querying.md#pagination-and-totals)):
+
+```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
+export const AuditLog = Entity('audit_log', {
+  id: Column.bigint(),
+  message: Column.text(),
+}, { pk: ['id'], defaultPageSize: 50 });
+```
+
+Raise it for entities callers typically page through in bigger chunks.
+Set it to `0` only once you've deliberately decided every limit-less
+read of this entity should return every row — that still emits an
+`unbounded-read` `warning` event on every such read, because a forgotten
+`limit` on a large table is a production incident, not a style nit.
+
+**`renamedFrom`** (entity-level) is consumed only by the migration diff —
+it has no effect on reads, writes, or validation, and doesn't change what
+callers see. See [Table renames](NORM-Migrations.md#table-renames) for
+the full mechanics and worked example, including when a stable registry
+key already makes it unnecessary.
 
 ### Hooks
 

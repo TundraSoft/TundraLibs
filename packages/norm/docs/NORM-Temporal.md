@@ -23,6 +23,7 @@ was in force on 〈date〉?" questions or a "restore a previous version" need.
 - [Options](#options)
 - [Cross-engine notes](#cross-engine-notes)
 - [Common issues](#common-issues)
+- [Related documentation](#related-documentation)
 
 ## Defining one
 
@@ -66,19 +67,23 @@ non-overlapping: each version's `EffectiveTo` is the next one's
 
 ## Writing: insert = supersede
 
-On a temporal table the write verbs are effective-dating operations:
+On a temporal table, `insert` is the only write verb that runs — every
+other one throws `NormUnsupportedError`:
 
 - **`insert`** supersedes: it closes the current version and opens a new
-  one with your values.
-- **`update`** routes to `insert` — fields are never mutated in place; an
-  update is just a new version.
-- **`delete`** is **disabled** (throws `NormUnsupportedError`) — history is
-  never removed.
+  one with your values. This is the ONLY way to add a version.
+- **`update`** and **`upsert`** are **disabled**, not routed to `insert` —
+  a partial `update()` payload would otherwise validate against the
+  wrong (non-partial) guardian and silently drop every column the
+  caller didn't repeat, so norm rejects the call outright instead.
+- **`delete`** and **`truncate`** are likewise **disabled** — history is
+  never removed or bulk-erased.
 
 ```ts ignore
 await repo.insert({ Name: 'Gold', Fees: 150 }); // supersedes the current Gold
-await repo.update({ Name: 'Gold', Fees: 180 }); // same thing — a new version
-await repo.delete({ Name: 'Gold' }); // throws: delete is disabled
+await repo.insert({ Name: 'Gold', Fees: 180 }); // a new version — the only way to change one
+await repo.update({ Fees: 180 }, { '@Name': 'Gold' }); // throws: temporal is insert-only
+await repo.delete({ '@Name': 'Gold' }); // throws: delete is disabled
 ```
 
 ## Scheduling with `EffectiveFrom`
@@ -153,6 +158,16 @@ temporal: {
   guard concurrent writers. Use temporal on a transaction-capable engine
   when the one-current guarantee matters.
 
+> **On SQLite, `EffectiveFrom`/`EffectiveTo` come back as ISO strings, not
+> `Date` instances — even through a typed `find()`.** The row type still
+> declares them `Date` (Postgres/MariaDB do decode to a real `Date`), so
+> code that calls `.getFullYear()` or similar directly on a temporal read
+> will throw on SQLite specifically. Coerce defensively:
+> `new Date(row.EffectiveTo as unknown as string)` works on both shapes
+> (the `Date` constructor accepts a `Date` or an ISO string). See
+> `packages/norm/examples/subscription-billing/main.ts`'s `asDate()`
+> helper for a working pattern.
+
 ## Common issues
 
 - **"`find` returns duplicates."** Expected — a bare `find({ '@Name': x })`
@@ -161,9 +176,32 @@ temporal: {
 - **The pk is not the identity.** `Id` identifies a _version_ (a fresh
   value per insert); the _record_ is identified by the temporal key. FKs
   from other tables point at a specific version's pk (immutable — safe).
-- **`delete` throws.** By design. To "remove" a record, supersede it with a
+- **`update`/`upsert`/`truncate`/`delete` all throw.** By design — only
+  `insert()` writes. To "remove" a record, supersede it with a
   tombstone value your app recognizes, or query only current rows.
 - **Backdating is rejected.** `EffectiveFrom` can only be "now" or the
   future (`TEMPORAL_PAST`) — history is immutable on purpose.
 - **MongoDB is best-effort.** No transaction, no unique index — don't rely
   on the one-current guarantee there under concurrency.
+- **Caching + `@AsOf` rarely hits.** A temporal table may also declare
+  `cache` (see [Caching](NORM-Caching.md)) — writes still invalidate it
+  correctly. But `'@AsOf': new Date()` bakes the exact millisecond into
+  the cache key, so consecutive calls almost never hit; filter on
+  `'@EffectiveTo': sentinel` instead for a cacheable "current" read.
+
+## Related documentation
+
+- [Audit tables](NORM-Audit.md) — the alternative history strategy;
+  shares the same `EffectiveFrom`/`EffectiveTo`/`@AsOf` mechanics but
+  keeps the source table's normal write semantics.
+- [Read caching](NORM-Caching.md) — `cache` on a temporal table, and the
+  `@AsOf` cache-key caveat above.
+- [Migrations](NORM-Migrations.md) — a temporal table migrates as an
+  ordinary TABLE; `EffectiveFrom`/`EffectiveTo` are physical columns
+  diffed like any other.
+- [Schema definition](NORM-Schema.md) — columns, entities, and the
+  `temporal` option in context.
+
+---
+
+[← Back to NORM](../README.md)

@@ -24,6 +24,7 @@ rejects `temporal` + `audit` together at definition time.
 - [Options](#options)
 - [Cross-engine notes](#cross-engine-notes)
 - [Common issues](#common-issues)
+- [Related documentation](#related-documentation)
 
 ## Defining one
 
@@ -182,6 +183,11 @@ separate override.
 - **MongoDB** and the edge HTTP engines have no transactions, so the
   mirror is **best-effort** — same caveat as
   [temporal](NORM-Temporal.md#cross-engine-notes).
+- **On SQLite, the replica's `EffectiveFrom`/`EffectiveTo` come back as
+  ISO strings, not `Date` instances, even through a typed `find()`** —
+  same gap as [temporal's](NORM-Temporal.md#cross-engine-notes), since
+  the replica reuses that machinery for its read side. Coerce
+  defensively before calling `Date` methods on them.
 - **Encryption** carries over unchanged: an `.encrypt()` column's
   ciphertext (and key-id envelope) is copied into the replica as-is —
   never decrypted, never re-encrypted. Old versions decrypt through the
@@ -210,3 +216,29 @@ separate override.
 - **"Where did `email` go after I dropped it from the source?"** It's
   still there, as `_email_`, forever — just not through `find()`. See
   [Schema evolution](#schema-evolution-dropping-a-source-column).
+- **"Can I cache the audit replica?"** No — `audit` has no `cache`
+  option, so `db.repo('UserAudit')` always reads the database. The
+  SOURCE table may still declare its own `cache` normally; mirrored
+  writes invalidate it exactly like any other write (see
+  [Caching](NORM-Caching.md)). Don't route around this by defining a
+  cached VIEW over the replica's physical table either — a mirrored
+  write invalidates the SOURCE's cache namespace only, never the
+  replica's, so that VIEW's cache would go stale for its full TTL after
+  every write.
+
+## Related documentation
+
+- [Temporal tables](NORM-Temporal.md) — the alternative history
+  strategy; shares the same `EffectiveFrom`/`EffectiveTo`/`@AsOf`
+  mechanics but keeps every version in the source table itself.
+- [Read caching](NORM-Caching.md) — `cache` on the source table vs. the
+  replica (the replica can never be cached).
+- [Migrations](NORM-Migrations.md) — the `Migrator` workflow, including
+  [column retirement](NORM-Migrations.md#audit-replicas-never-drop-a-column)
+  in full.
+- [Schema definition](NORM-Schema.md) — columns, entities, and the
+  `audit` option in context.
+
+---
+
+[← Back to NORM](../README.md)

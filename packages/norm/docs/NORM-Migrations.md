@@ -215,6 +215,12 @@ await mig.apply({
 });
 ```
 
+> `apply()`/`rollback()` run DDL only — neither touches norm's
+> [read cache](NORM-Caching.md). If the `Norm` instance you migrate
+> against also has `cache` configured, call `db.clearCache()` after
+> applying so rows cached under the old shape don't linger, especially
+> on an external engine (Redis/Memcached) that outlives the process.
+
 #### What happens when a statement fails halfway
 
 A version's plan is many statements. What a mid-plan failure leaves
@@ -522,11 +528,15 @@ const mig = new Migrator(db, {
 ```
 
 Because the stamp is refreshed between versions, the TTL only has to
-outlast the slowest **single** step, not the whole run. A step that
-legitimately runs longer than `lockStaleMs` (a multi-hour table rebuild)
-cannot refresh mid-flight — raise the value for those. A lock file
-written by an older norm (bare token, no stamp) falls back to the file's
-mtime.
+outlast the slowest **single** step, not the whole run. A
+crypto-transforming [rebuild](#the-rebuild-engine) re-stamps the lock
+after every chunk (`rebuildChunkSize` rows), so it can safely run past
+`lockStaleMs` — that's exactly what the chunk-level touch is for. A
+**structural** rebuild's single `INSERT … SELECT` copy (no crypto
+change) has no mid-flight checkpoint, though: if that one statement
+legitimately runs longer than `lockStaleMs` on a huge table, raise the
+value for it. A lock file written by an older norm (bare token, no
+stamp) falls back to the file's mtime.
 
 ## Renames
 
@@ -772,6 +782,11 @@ context.
   `renamedFrom`, and the crypto markers migrations diff on.
 - [Audit tables](NORM-Audit.md) — the generated replica whose dropped
   columns this migrator retires instead of dropping.
+- [Temporal tables](NORM-Temporal.md) — migrates as an ordinary TABLE;
+  `EffectiveFrom`/`EffectiveTo` are physical columns diffed like any
+  other, with no migration-specific handling.
+- [Read caching](NORM-Caching.md) — why `db.clearCache()` is a manual
+  step after `apply()`/`rollback()`.
 - [Security](NORM-Security.md) — encryption and digest siblings, whose
   flips drive the rebuild engine.
 - [Querying](NORM-Querying.md) — the typed read/write surface the

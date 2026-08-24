@@ -21,6 +21,7 @@ types never change.
   - [Why ciphertext can't be filtered](#why-ciphertext-cant-be-filtered)
   - [Filtering, uniqueness, and upsert keys](#filtering-uniqueness-and-upsert-keys)
 - [One-way digest columns — `Column.hash()`](#one-way-digest-columns--columnhash)
+- [Password columns — `Column.password()`](#password-columns--columnpassword)
 - [Virtual masks — `Column.mask()`](#virtual-masks--columnmask)
 - [Hidden columns — `.hidden()`](#hidden-columns--hidden)
 - [Crypto overrides](#crypto-overrides)
@@ -35,13 +36,17 @@ types never change.
 NORM turns column-level cryptography into a declaration. Five builder
 markers, all read from one schema:
 
-| Marker                 | What it does                                             | Reversible            | Filterable                          |
-| ---------------------- | -------------------------------------------------------- | --------------------- | ----------------------------------- |
-| `.encrypt()`           | Ciphertext at rest, plaintext in TS                      | Yes (with the secret) | No (see `.hash()`)                  |
-| `.encrypt().hash()`    | Encrypt **and** synthesize a `<col>_hash` digest sibling | Yes                   | Yes — equality only                 |
-| `Column.hash(algo)`    | One-way digest column (store only the digest)            | **No**                | Yes — equality only                 |
-| `Column.mask(src, fn)` | Virtual, computed-on-read presentation column            | n/a                   | No — never stored                   |
-| `.hidden()`            | Excluded from default reads, opt-in projectable          | n/a                   | Yes (unless also `.unfilterable()`) |
+| Marker                 | What it does                                             | Reversible            | Filterable                                         |
+| ---------------------- | -------------------------------------------------------- | --------------------- | -------------------------------------------------- |
+| `.encrypt()`           | Ciphertext at rest, plaintext in TS                      | Yes (with the secret) | No (see `.hash()`)                                 |
+| `.encrypt().hash()`    | Encrypt **and** synthesize a `<col>_hash` digest sibling | Yes                   | Yes — equality only                                |
+| `Column.hash(algo)`    | One-way digest column (store only the digest)            | **No**                | Yes — equality only, except `'PBKDF2'` (see below) |
+| `Column.mask(src, fn)` | Virtual, computed-on-read presentation column            | n/a                   | No — never stored                                  |
+| `.hidden()`            | Excluded from default reads, opt-in projectable          | n/a                   | Yes (unless also `.unfilterable()`)                |
+
+`Column.password(algo)` is the same digest-column builder as
+`Column.hash(algo)`, named for credentials — see
+[Password columns](#password-columns--columnpassword).
 
 Encryption is **per cell**: every encrypted value carries its own
 random salt and IV, so two equal plaintexts never produce equal
@@ -284,7 +289,10 @@ const Users = Entity('users', {
 
 The algorithm — `'SHA-256'` (default), `'SHA-384'`, or `'SHA-512'` —
 determines the physical `VARCHAR` length: 64, 96, or 128 hex
-characters respectively.
+characters respectively. A fourth algorithm, `'PBKDF2'`, is also
+accepted here (`Column.hash('PBKDF2')`) but behaves differently enough
+that it gets its own section next — it is salted and **not**
+filterable.
 
 ```typescript ignore
 const row = (await db.repo('Users').insert({ pin: '4471' /* ... */ })).data[0]!;
@@ -300,6 +308,46 @@ digest rewrites only the _value_ and keeps the `@pin` key, because the
 column itself already stores the digest. Both are transparent to the
 caller. Validators (`pattern` / `minLength` / `maxLength`) on a digest
 column constrain the plaintext — your password policy — not the digest.
+
+## Password columns — `Column.password()`
+
+`Column.password(algorithm?)` builds the same digest column as
+`Column.hash(algorithm?)` — same builder, same physical shape — under a
+name that reads better on a credential. It takes two kinds of algorithm:
+
+- `'SHA-256'` (default) / `'SHA-384'` / `'SHA-512'` — a **deterministic**
+  digest, identical in every respect to `Column.hash(algo)`: write and
+  filter by plaintext, brute-forceable if the table leaks. Use this only
+  when you genuinely need to look a row up by the credential.
+- `'PBKDF2'` — a **salted** hash, the correct choice for real login
+  passwords. Every hash is unique even for the same plaintext, so the
+  column is **not filterable** — `Column.hash('PBKDF2')` carries the same
+  restriction, since it is the identical call. Read the row and verify
+  the candidate instead:
+
+```typescript ignore
+import { Column, Entity, pbkdf2Verify } from '@tundralibs/norm';
+
+const Users = Entity('users', {
+  id: Column.uuid(),
+  password: Column.password('PBKDF2').minLength(8),
+}, { pk: ['id'] });
+
+// db.repo('Users').insert({ id, password: 'hunter2boat' }) stores
+// 'pbkdf2-sha256$<iterations>$<salt>$<digest>' — a self-describing,
+// non-fixed-width string, so the column is a `VARCHAR(255)`, not the
+// 64/96/128-char fixed width the SHA-* algorithms get.
+
+const row = (await db.repo('Users').findOne({ '@id': userId })).data!;
+const ok = await pbkdf2Verify('hunter2boat', row.password); // boolean
+```
+
+`pbkdf2Verify` is re-exported from `@tundralibs/norm` (and
+`@tundralibs/norm/core`) for exactly this check. The KDF itself — hash
+family, iteration count — is overridable per instance via
+`crypto.pbkdf2Hash` on `new Norm({...})`, independent from the `hash`
+override: bare SHA digests (`Column.hash()`/`.password()` without
+`'PBKDF2'`, and encrypt-sibling digests) still route through `hash`.
 
 ## Virtual masks — `Column.mask()`
 
@@ -400,6 +448,11 @@ type CryptoOverrides = {
     algorithm: EncryptAlgorithm,
   ) => Promise<string>;
   hash?: (plaintext: string, algorithm: HashAlgorithm) => Promise<string>;
+  // Salted PBKDF2 KDF for `Column.hash('PBKDF2')` / `Column.password('PBKDF2')`
+  // columns — see [Password columns](#password-columns--columnpassword).
+  // Independent of `hash`: it takes no algorithm parameter and never
+  // affects a bare SHA digest.
+  pbkdf2Hash?: (plaintext: string) => Promise<string>;
 };
 ```
 
@@ -663,6 +716,9 @@ Be precise about what NORM does **not** do yet:
 - [Scoping](NORM-Scoping.md) — tenant scoping and how scope columns
   interact with encryption (plain `.encrypt()` rejected;
   `.encrypt().hash()` matched via the digest sibling).
+- [Audit](NORM-Audit.md#cross-engine-notes) — how an `audit` replica
+  carries an `.encrypt()` column's ciphertext over unchanged (copied,
+  never decrypted or re-encrypted).
 
 ---
 
