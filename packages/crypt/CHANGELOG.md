@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.1.1...crypt-v1.2.0) (2026-08-24)
+
+
+### Features
+
+* **crypt:** export constantTimeEqual as a public primitive ([#601](https://github.com/TundraSoft/TundraLibs/issues/601)) ([ff5bbc3](https://github.com/TundraSoft/TundraLibs/commit/ff5bbc3b06de4c5955a5bf3bb164fe112f25aecd))
+
+
+### Documentation
+
+* **crypt:** document generators random/preset gaps, fix RSA/EC option types ([#562](https://github.com/TundraSoft/TundraLibs/issues/562)) ([2d9e479](https://github.com/TundraSoft/TundraLibs/commit/2d9e4798963b28003b823dae2d949c08b1b6aae4))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.1.0...crypt-v1.1.1) (2026-08-21)
 
 
