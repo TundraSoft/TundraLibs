@@ -90,8 +90,9 @@ describe('pact.OAuthClient authorizationUrl', () => {
     });
     const { url, state, verifier, nonce } = await client.authorizationUrl();
     const parsed = new URL(url);
-    asserts.assert(
-      url.startsWith('https://accounts.google.com/o/oauth2/v2/auth'),
+    asserts.assertEquals(
+      parsed.origin + parsed.pathname,
+      'https://accounts.google.com/o/oauth2/v2/auth',
     );
     asserts.assertEquals(parsed.searchParams.get('client_id'), 'cid');
     asserts.assertEquals(parsed.searchParams.get('state'), state);

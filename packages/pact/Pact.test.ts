@@ -763,7 +763,7 @@ describe('pact.Pact OAuth login', () => {
   it('oauthRedirect returns url/state/verifier/nonce; unknown provider throws', async () => {
     const { pact } = setup();
     const { url, state, verifier, nonce } = await pact.oauthRedirect('google');
-    asserts.assert(url.startsWith('https://accounts.google.com'));
+    asserts.assertEquals(new URL(url).origin, 'https://accounts.google.com');
     asserts.assert(state.length > 0 && verifier.length > 0 && nonce.length > 0);
     const err = asserts.assertThrows(() => {
       pact.oauthRedirect('ghost');
