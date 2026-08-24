@@ -29,8 +29,22 @@ Throttles function to execute at most once per delay period.
 **Parameters:**
 
 - `fn`: Function to throttle
-- `delay`: Minimum milliseconds between executions
+- `delay`: Minimum milliseconds between executions — measured from when
+  the PREVIOUS call finished, not when it started (see the callout
+  below for why this matters for async functions)
 - `ignoreArgs`: If true, throttles globally; if false, per unique args
+
+> **For an async `fn`, the `delay` window is re-armed on completion,
+> not on invocation.** Concurrent calls with the same argument key
+> while a call is still in flight always return that in-flight promise
+> (regardless of `delay`), and the clock for the NEXT real execution
+> only starts counting once the current one settles. So if `fn` takes
+> longer than `delay` to run, the effective minimum gap between real
+> executions is `fn`'s own runtime plus `delay`, not `delay` alone — a
+> `throttle(slowFetch, 100)` where `slowFetch` takes 300ms will not
+> re-invoke `slowFetch` until at least 100ms AFTER the previous call
+> resolved (~400ms after it started), never at the 100ms mark. This is
+> verified current behavior of `throttle()`, not a hypothetical.
 
 ### `@Throttle(delay: number, ignoreArgs?: boolean)`
 

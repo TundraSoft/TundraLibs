@@ -1,6 +1,6 @@
 # Utils - memoize
 
-Function and method memoization with TTL, async support, and automatic cleanup.
+Function and method memoization with TTL and async support.
 
 [← Back to Utils](../README.md)
 
@@ -11,7 +11,9 @@ The memoize utility provides advanced caching for functions and class methods:
 - **TTL Support**: Time-based cache expiration
 - **Async Functions**: Proper promise handling and deduplication
 - **Method Decorator**: `@Memoize` for class methods
-- **Memory Management**: Automatic cache cleanup
+- **Lazy Eviction**: An expired entry is dropped the next time its
+  exact argument set is called again — there is no background sweep
+  (see "Unbounded Cache Growth" below)
 - **Type Safety**: Full TypeScript support
 
 ## Installation
@@ -35,7 +37,9 @@ Memoizes a function with optional time-to-live.
 
 ### `@Memoize(timeout?: number)`
 
-Decorator for memoizing class methods. Exported directly from `memoize.ts`; the main module only exports `memoize`.
+Decorator for memoizing class methods and getters. Exported from both
+`@tundralibs/utils` (the main barrel) and the narrower
+`@tundralibs/utils/memoize` subpath.
 
 ## Usage Examples
 
@@ -179,9 +183,35 @@ await getWeather('London'); // Cached
 
 - **Time Complexity**: O(1) cache lookup
 - **Space Complexity**: O(n) where n is unique argument combinations
-- **Memory Cleanup**: Automatic after TTL expiration
+- **Memory Cleanup**: LAZY, not automatic — an entry is only dropped
+  the next time its exact argument set is looked up again and found
+  expired. See "Unbounded Cache Growth" below.
 
 ## Common Pitfalls
+
+### Unbounded Cache Growth
+
+There is no background timer sweeping expired entries and no maximum
+cache size — the internal `Map` only shrinks when a key is looked up
+again after its TTL has passed. A memoized function called with a
+large or unbounded number of distinct argument combinations (e.g.
+one argument being a request ID or a timestamp) keeps every entry
+alive until either that exact key is called again post-expiry, or the
+whole memoized wrapper itself is garbage-collected.
+
+```typescript
+import { memoize } from '@tundralibs/utils';
+
+declare function lookupUser(id: string): { id: string };
+
+// ❌ Every distinct id gets its own cache entry, forever — none are
+// ever evicted unless that SAME id is looked up again after its TTL.
+const bad = memoize((id: string) => lookupUser(id), 60);
+
+// ✅ Memoize only over a small, bounded key space (or don't memoize
+// per-request-scoped lookups at all).
+const good = memoize((tier: 'free' | 'paid') => lookupUser(tier), 60);
+```
 
 ### Non-Serializable Arguments
 
