@@ -2360,12 +2360,22 @@ export class WebServer<T = unknown> {
               });
             }
             if (wsHandler.drain) {
-              // ws emits 'drain' on the underlying net.Socket; the
-              // `drain` here refers to the WebSocket-level event we
-              // expose. ws-the-library doesn't have a direct equivalent;
-              // best approximation: when bufferedAmount returns to 0
-              // after being non-zero. We poll on send via the wrapper's
-              // send shim — see __wrapNodeWebSocket.
+              // The `ws` library exposes no WebSocket-level drain event, but
+              // its underlying `net.Socket` emits 'drain' when a write buffer
+              // that had filled (send backpressure) empties again — exactly
+              // the drain semantic. `ws.bufferedAmount` polling (as on Deno)
+              // is unreliable here: it stays 0 on a loopback flush. The
+              // socket exists once the upgrade has completed.
+              const sock = wsConn._socket as
+                | { on(ev: 'drain', cb: () => void): void }
+                | undefined;
+              sock?.on('drain', () => {
+                try {
+                  wsHandler.drain?.(wrapper);
+                } catch {
+                  // Drain handlers shouldn't throw; swallow if they do.
+                }
+              });
             }
           });
         },

@@ -17,7 +17,7 @@ import type { WebSocketUpgradeContext } from './WebSocketUpgradeContext.ts';
  * | error    | ✅\*  | ✅    | ✅   | ✅      | Bun has no native error event — we synthesize from caught throws |
  * | ping     | ✅    | ❌\** | ✅   | ❌\**   | Deno and workerd both answer ping/pong internally — unreachable  |
  * | pong     | ✅    | ❌\** | ✅   | ❌\**   | (same)                                                           |
- * | drain    | ✅    | ✅\†  | ✅   | ❌\§    | Deno emulated by polling `bufferedAmount`                        |
+ * | drain    | ✅    | ✅\†  | ✅   | ❌\§    | Node via the `ws` socket's `drain` event; Deno best-effort polls `bufferedAmount` |
  *
  * The Workers column applies to `WebSocketServer.handleUpgrade`, the
  * request-driven wire-up — workerd can accept a WebSocket but can never

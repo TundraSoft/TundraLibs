@@ -2565,6 +2565,84 @@ h87g/qBXJrxZ7o+w+KxL/Q==
     });
 
     it({
+      // Node-only: the drain callback is wired to the `ws` package's
+      // underlying `net.Socket` 'drain' event, which only exists on the
+      // Node path. (Bun surfaces drain natively; Deno best-effort polls
+      // `bufferedAmount`.) The `ws` client is used deliberately so its
+      // underlying socket can be paused to build real send backpressure —
+      // `bufferedAmount` never rises on a loopback flush, so a plain fast
+      // reader could never exercise this. Regression guard: before the fix
+      // the Node upgrade path had an empty `if (wsHandler.drain)` block and
+      // the callback was never invoked.
+      name: 'fires drain on Node once send backpressure clears',
+      deno: false,
+      bun: false,
+      fn: async () => {
+        const port = getNextPort();
+        let drainFired = 0;
+
+        activeServer = new WebServer('Test', {
+          mode: 'TCP',
+          port,
+          hostname: 'localhost',
+          handler: () => new Response('Not a WebSocket'),
+          websocket: {
+            // ~200 MB burst: guarantees the server socket's write buffer
+            // fills while the client is paused, so a later 'drain' fires.
+            open: (ws) => {
+              const chunk = 'x'.repeat(256 * 1024);
+              for (let i = 0; i < 800; i++) ws.send(chunk);
+            },
+            drain: () => {
+              drainFired++;
+            },
+          },
+        });
+
+        await activeServer.start();
+        await delay(100);
+
+        const wsPkg = await import('ws');
+        const client = new wsPkg.WebSocket(`ws://localhost:${port}/`);
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('drain test timed out')),
+            8000,
+          );
+          client.on('open', () => {
+            // Pause reads to build backpressure, then resume to force drain.
+            const sock =
+              (client as unknown as { _socket: import('node:net').Socket })
+                ._socket;
+            sock.pause();
+            setTimeout(() => sock.resume(), 600);
+          });
+          client.on('error', () => {
+            clearTimeout(timer);
+            reject(new Error('drain test connection errored'));
+          });
+          // Poll for the drain callback; resolve as soon as it fires.
+          const check = setInterval(() => {
+            if (drainFired > 0) {
+              clearInterval(check);
+              clearTimeout(timer);
+              resolve();
+            }
+          }, 50);
+        });
+
+        client.close();
+        if (drainFired === 0) {
+          throw new Error('drain callback never fired after backpressure');
+        }
+
+        await activeServer.stop(false);
+        activeServer = null;
+        await delay(50);
+      },
+    });
+
+    it({
       name: 'should track WebSocket upgrade metrics',
       fn: async () => {
         const port = getNextPort();
