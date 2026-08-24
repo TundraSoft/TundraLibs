@@ -57,7 +57,7 @@ npx jsr add @tundralibs/compat
 ```typescript ignore
 const DELIMITER: string; // Path delimiter (: on Unix, ; on Windows)
 const SEPARATOR: string; // Directory separator (/ on Unix, \ on Windows)
-const SEPARATOR_PATTERN: RegExp; // Matches both / and \
+const SEPARATOR_PATTERN: RegExp; // Matches one-or-more separators for the current OS
 ```
 
 **Example:**
@@ -68,6 +68,13 @@ import { DELIMITER, SEPARATOR } from '@tundralibs/compat/path';
 console.log(`Separator: ${SEPARATOR}`); // / on Unix, \ on Windows
 console.log(`Delimiter: ${DELIMITER}`); // : on Unix, ; on Windows
 ```
+
+> `SEPARATOR_PATTERN` is **not** a universal "matches both `/` and `\`"
+> pattern — verified against source: on Windows it's `/[\\/]+/` (both), but
+> on every other OS (Deno/Bun/Node on Linux/macOS) it's `/\/+/`, matching
+> only forward slashes. `\` is a legal filename character on Unix, so it is
+> deliberately left alone there. `SEPARATOR_PATTERN.test('a\\b')` is
+> `false` on Unix and `true` on Windows — verified directly, not inferred.
 
 ## API Reference
 
@@ -347,14 +354,20 @@ const path = format({
 });
 console.log(path); // '/home/user/file.txt'
 
-// Override base with name + ext
+// `base`, when present, is used as-is instead of `name` + `ext`.
 const path2 = format({
-  root: 'C:\\',
-  dir: 'C:\\Users',
+  dir: '/home/user',
   base: 'document.pdf',
+  name: 'ignored',
+  ext: '.ignored',
 });
-console.log(path2); // 'C:\Users\document.pdf'
+console.log(path2); // '/home/user/document.pdf' — base wins
 ```
+
+> `base` always wins over `name` + `ext` when both are present — verified
+> against the underlying `node:path`/`@std/path` `format()`. Pass one or
+> the other, not both, unless you're relying on that precedence
+> deliberately.
 
 ## Examples
 
@@ -436,7 +449,10 @@ import {
 } from '@tundralibs/compat/path';
 
 function ensurePlatformPath(path: string): string {
-  // Replace all separators with platform-specific one
+  // Collapses runs of the current OS's separator(s) into one SEPARATOR.
+  // On Windows this also folds stray `/` into `\`; on Unix it only
+  // dedupes repeated `/` — a literal `\` in the string is left as-is,
+  // since it's a legal filename character there, not a separator.
   return path.replace(SEPARATOR_PATTERN, SEPARATOR);
 }
 

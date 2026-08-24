@@ -12,6 +12,7 @@ Cross-runtime detection and environment information.
 - [Installation](#installation)
 - [API Reference](#api-reference)
 - [Examples](#examples)
+- [Best Practices](#best-practices)
 
 ## Overview
 
@@ -164,11 +165,12 @@ returns `{}` — except on Workers, where it returns `process.env` when
 exit).
 
 Capability-backed operations that need a primitive the runtime lacks throw
-[`UnsupportedRuntimeError`](../errors/) instead of a raw `TypeError`: the
-whole of `file` (filesystem), `net`/`udp` (sockets), `watch` (file
-watching), `webserver`'s `start()` (a port-listening server), and the
-interactive `cli` prompts. Feature-detect with `isWorkers` / `isBrowser`
-(or `RUNTIME`) and avoid those paths, or catch the error.
+[`UnsupportedRuntimeError`](Compat-Common.md#unsupportedruntimeerror) instead
+of a raw `TypeError`: the whole of `file` (filesystem), `net`/`udp`
+(sockets), `watch` (file watching), `webserver`'s `start()` (a
+port-listening server), and the interactive `cli` prompts. Feature-detect
+with `isWorkers` / `isBrowser` (or `RUNTIME`) and avoid those paths, or
+catch the error.
 
 ### Operating System Detection
 
@@ -284,6 +286,10 @@ exit primitive available).
 function exit(code?: number): never;
 ```
 
+> ⚠ Pending I/O is discarded. Prefer letting the event loop drain
+> naturally — reach for `exit` only when you need an explicit status
+> code (CLI tools, soak scripts, fatal-error paths).
+
 **Example:**
 
 ```typescript
@@ -318,10 +324,6 @@ import { unrefTimer } from '@tundralibs/compat/runtime';
 const timer = setInterval(() => {}, 60_000);
 unrefTimer(timer); // a background tick that won't hold the process open
 ```
-
-> ⚠ Pending I/O is discarded. Prefer letting the event loop drain
-> naturally — reach for `exit` only when you need an explicit status
-> code (CLI tools, soak scripts, fatal-error paths).
 
 ### Environment Access
 
@@ -549,20 +551,20 @@ type Signal = 'SIGINT' | 'SIGTERM' | 'SIGHUP' | 'SIGBREAK';
 
 **Platform Support:**
 
-- **Windows**: Only `SIGINT`, `SIGBREAK`, and `SIGHUP` are reliable
+- **Windows**: Only `SIGINT` and `SIGBREAK` are reliable
 - **Unix/Linux/macOS**: All signals supported
 
 **Example - Graceful shutdown:**
 
 ```typescript
-import { onSignal } from '@tundralibs/compat/runtime';
+import { exit, onSignal } from '@tundralibs/compat/runtime';
 
 const cleanup = onSignal('SIGINT', () => {
   console.log('Received SIGINT, shutting down gracefully...');
   // Close database connections
   // Save state
   // Exit cleanly
-  Deno.exit(0);
+  exit(0);
 });
 ```
 
@@ -939,26 +941,6 @@ function getTempDir(): string {
 }
 ```
 
-## Detection Logic
-
-### Runtime Priority
-
-Detection happens in this order:
-
-1. **Deno** - `globalThis.Deno !== undefined`
-2. **Bun** - `globalThis.Bun !== undefined`
-3. **Node.js** - `process.versions.node !== undefined` (excluding Deno/Bun)
-4. **Unknown** - None of the above
-
-This order ensures correct detection even when multiple global objects exist.
-
-### OS Detection
-
-Operating system is detected from:
-
-- **Deno**: `Deno.build.os`
-- **Bun/Node.js**: `process.platform`
-
 ## Best Practices
 
 1. **Use constants over functions** - `isDeno` is faster than `getRuntime() === 'DENO'`
@@ -987,93 +969,6 @@ if (typeof Deno !== 'undefined' && 'permissions' in Deno) {
   // Use Deno permissions API
 }
 ```
-
----
-
-[← Back to Compat](../README.md)
-
-![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
-![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
-![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
-
-## Usage
-
-```typescript
-import { isBun, isDeno, isNode, RUNTIME } from '@tundralibs/compat/runtime';
-```
-
-## API
-
-### Constants
-
-| Export    | Type                                     | Description                |
-| --------- | ---------------------------------------- | -------------------------- |
-| `RUNTIME` | `'DENO' \| 'BUN' \| 'NODE' \| 'UNKNOWN'` | Current runtime identifier |
-| `isDeno`  | `boolean`                                | True if running on Deno    |
-| `isBun`   | `boolean`                                | True if running on Bun     |
-| `isNode`  | `boolean`                                | True if running on Node.js |
-
-## Examples
-
-### Conditional Logic
-
-```typescript
-import { isBun, isDeno, isNode, RUNTIME } from '@tundralibs/compat/runtime';
-
-// `Bun` is typed by `@types/bun` in Bun projects.
-declare const Bun: { file(path: string): unknown };
-
-// String-based check
-switch (RUNTIME) {
-  case 'DENO':
-    console.log('Running on Deno');
-    break;
-  case 'BUN':
-    console.log('Running on Bun');
-    break;
-  case 'NODE':
-    console.log('Running on Node.js');
-    break;
-}
-
-// Boolean checks
-if (isDeno) {
-  // Deno-specific API
-  const permissions = await Deno.permissions.query({ name: 'read' });
-}
-
-if (isBun) {
-  // Bun-specific API
-  const file = Bun.file('./data.txt');
-}
-
-if (isNode) {
-  // Node.js-specific API
-  const fs = await import('node:fs');
-}
-```
-
-### Feature Detection
-
-```typescript
-import { isBun, isDeno, isNode } from '@tundralibs/compat/runtime';
-
-function getServerType() {
-  if (isBun) return 'Bun.serve';
-  if (isDeno) return 'Deno.serve';
-  if (isNode) return 'node:http';
-  return 'unknown';
-}
-```
-
-## Detection Logic
-
-The runtime is detected in order:
-
-1. **Deno**: `globalThis.Deno` exists
-2. **Bun**: `globalThis.Bun` exists
-3. **Node.js**: `process.versions.node` exists (and not Deno/Bun)
-4. **`'UNKNOWN'`**: Default fallback (browsers, workerd, etc.)
 
 ---
 

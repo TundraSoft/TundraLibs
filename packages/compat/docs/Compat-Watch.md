@@ -100,10 +100,29 @@ function watch(
 ### Errors
 
 - `RangeError` — when `paths` is an empty array
-- `Error` — on unknown runtimes (no fs watching available)
+- `UnsupportedRuntimeError` — on a runtime with no fs-watching backend
+  (Workers, browsers). Exported from `@tundralibs/compat`, not from
+  `@tundralibs/compat/watch` — import it from the root specifier to
+  `instanceof`-check it.
 - The underlying runtime API may throw synchronously if a path
   doesn't exist or isn't accessible — those errors propagate
   unchanged from `watch()`.
+
+```typescript
+import { watch } from '@tundralibs/compat/watch';
+import { UnsupportedRuntimeError } from '@tundralibs/compat';
+
+try {
+  const w = watch('./src');
+  for await (const ev of w) console.log(ev.kind, ev.paths);
+} catch (error) {
+  if (error instanceof UnsupportedRuntimeError) {
+    console.warn('No filesystem watching on this runtime:', error.message);
+  } else {
+    throw error;
+  }
+}
+```
 
 ## Event Fidelity
 

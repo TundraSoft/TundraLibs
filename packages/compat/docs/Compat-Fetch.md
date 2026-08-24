@@ -128,11 +128,18 @@ MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUANBgkqhkiG9w0Bahq...
 -----END CERTIFICATE-----
 ```
 
-Supported key types:
+Common key types:
 
 - `PRIVATE KEY` (PKCS#8)
 - `RSA PRIVATE KEY` (PKCS#1)
 - `EC PRIVATE KEY` (Elliptic curve)
+
+> **Note:** Unlike `cert`/`ca` (checked against the `CERTIFICATE` label),
+> `key`'s PEM label isn't verified — validation only confirms balanced
+> `-----BEGIN X-----`/`-----END X-----` markers, not that `X` says
+> `PRIVATE KEY`. A mislabeled or wrong-type block still passes this
+> layer; the runtime's TLS stack is what rejects a genuinely invalid key
+> at connect time.
 
 ### Encrypted Private Keys
 
@@ -210,7 +217,14 @@ fetch(
 - `FetchPathTraversalError` - If file paths contain `../` or null bytes
 - `FetchFileNotFoundError` - If TLS files or socket don't exist
 - `FetchInvalidPEMError` - If certificates are not valid PEM format
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles
 - `UnsupportedRuntimeError` - If TLS/Unix used on Node.js
+- `Error` (plain, not a `CompatError` subclass) - On Deno, when
+  `tls.rejectUnauthorized` is `false` — Deno has no in-process way to
+  disable certificate verification. Run Deno with
+  `--unsafely-ignore-certificate-errors`, or pass the server's CA via
+  `tls.ca`/`tls.caFile` instead.
 
 ### TLSOptions
 
@@ -238,14 +252,21 @@ type TLSOptions = {
   caFile?: string;
   /**
    * Whether to reject untrusted server certificates.
-   * Defaults to `true`. Set `false` only in development.
-   * Not supported on Deno.
+   * Defaults to `true`. Bun honors `false`; Deno rejects it (see below).
    */
   rejectUnauthorized?: boolean;
 };
 ```
 
 > **Note:** `cert`/`key` and `certFile`/`keyFile` must always be supplied together. Providing one without the other throws `FetchInvalidPEMError`.
+
+> **Deno + `rejectUnauthorized: false`:** Deno has no in-process way to
+> bypass certificate verification, so `fetch(url, { tls: { rejectUnauthorized: false } })`
+> throws a **plain `Error`** on Deno — not `FetchTLSError` or any other
+> `CompatError` subclass, so an `instanceof FetchTLSError` branch in a
+> catch block won't see it. Bun honors the flag natively. On Deno, either
+> run with `--unsafely-ignore-certificate-errors`, or supply the server's
+> CA via `tls.ca` / `tls.caFile` instead of disabling verification.
 
 ### Error Classes
 

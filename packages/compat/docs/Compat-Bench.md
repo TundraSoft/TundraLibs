@@ -156,6 +156,11 @@ Direct invocation takes files, directories, or `--all`, plus:
 changes, e.g. `⚠ path.join [NODE]: 31.2% SLOWER since a1b2c3d`), and
 `--smoke`.
 
+> `--smoke` and the baseline flags are mutually exclusive: passing
+> `--smoke` together with `--save-baseline` or `--baseline` exits 1 with an
+> error rather than silently saving or comparing against meaningless
+> numbers.
+
 ## Notes
 
 - Benches must be able to run standalone — the file IS the entry point.
