@@ -186,6 +186,10 @@ cache.finalize();
 - Values are JSON-serialized on write and deserialized on read — the stored value must be JSON-compatible.
 - Namespace isolation: all keys are stored as `{name}:{key}` internally, so two `MemoryCacher` instances with different names never collide.
 - Expiry is implemented using `setTimeout`. Creating many entries with short TTLs generates many timers; use `clear()` or `finalize()` to release them.
+- Expiry timers are unref'd (where the runtime supports it), so a pending TTL
+  never keeps the process alive on its own — a short-lived script that calls
+  `set()` and returns can still exit immediately without calling `finalize()`
+  first.
 - Data is **not** persisted across process restarts.
 
 ---

@@ -80,11 +80,12 @@ type MemCacherOptions = CacherOptions & {
 
 ### `EngineSSLOptions`
 
-Forwarded verbatim to `MemcachedEngine`. Both inline PEM strings and file paths are accepted.
+Forwarded verbatim to `MemcachedEngine`. Pick **one** presentation style —
+inline PEM strings or file paths — per connection.
 
 ```typescript
 type EngineSSLOptions = {
-  ca?: string; // CA certificate PEM string
+  ca?: string[]; // CA certificate(s), PEM strings
   cert?: string; // Client certificate PEM string
   key?: string; // Client private key PEM string
   caFile?: string; // Path to CA certificate file
@@ -94,6 +95,20 @@ type EngineSSLOptions = {
   enforce?: boolean; // Enforce TLS even if not required
 };
 ```
+
+> **Inline and file-path fields are mutually exclusive.** Supplying both
+> styles in one `ssl` object (e.g. `{ ca: [...], certFile: '...' }`) is
+> rejected at the type level and again at runtime. `cert`/`key` (and
+> `certFile`/`keyFile`) must also be supplied as a pair — providing only one
+> half throws. `ca` is an **array** of PEM strings, not a single string.
+>
+> `rejectUnauthorized: false` is not honoured on every runtime: it **throws**
+> on Deno (which has no in-process certificate-skip primitive), and on
+> Cloudflare Workers `ssl` may only be `true`/`false`/`{ enforce }` —
+> `cert`/`key`/`ca`/`certFile`/`keyFile`/`caFile`/`rejectUnauthorized: false`
+> all throw there, because `cloudflare:sockets` accepts no TLS material and
+> always verifies the peer against its own trust store. Bun and Node accept
+> `rejectUnauthorized: false`.
 
 ### `new MemCacher(name, options)`
 
@@ -236,6 +251,12 @@ try {
 - `clear()` is **namespace-scoped**. Because Memcached exposes no key enumeration, the engine cannot delete a namespace's keys by prefix and deliberately does **not** call `flush_all` (which would wipe every other namespace and application on the server). Instead it keeps a per-namespace version counter (`{name}:__ns_version__`) that is embedded in every data key, and `clear()` atomically increments it. All previously-written entries become unreachable at once; Memcached then reclaims them through normal LRU eviction rather than deleting them synchronously. Each instance caches the counter locally but re-reads it from the server at most once per second, so a `clear()` on one instance is observed by every other instance sharing the namespace within about a second — both for reads (peers stop serving cleared entries) and writes (peers' new writes land under the current version, visible to all instances). There is no unbounded window in which peers serve stale data or write invisible keys.
 - Standard Memcached does not support TLS without a custom build. For TLS, use a managed service (e.g. AWS ElastiCache for Memcached with TLS enabled).
 - `host` is required; omitting it throws `CacherEngineError('CONFIG_MISSING', ...)`.
+- `has(key)` fetches and discards the full value — the Memcached protocol has
+  no lightweight existence check, so `has()` costs the same wire transfer as
+  `get()`. Unlike Redis (`EXISTS`, O(1), no value transfer) or Memory (a
+  local map lookup), calling `has()` on its own before a `get()` for a large
+  cached value doubles the transfer for no benefit; call `get()` directly
+  and check the result instead.
 
 ---
 
