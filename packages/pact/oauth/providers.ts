@@ -90,6 +90,12 @@ const subject = (v: unknown): string | undefined => {
   return undefined;
 };
 
+/**
+ * Built-in provider presets keyed by {@link PactOAuthProviderKind} —
+ * endpoints, default scopes, and a profile normalizer per provider. The
+ * `OAuthClient` looks these up by the configured `provider`; exposed for
+ * standalone/advanced use.
+ */
 export const PROVIDERS: Record<PactOAuthProviderKind, ProviderPreset> = {
   GOOGLE: {
     authorization: 'https://accounts.google.com/o/oauth2/v2/auth',

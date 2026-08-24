@@ -121,6 +121,7 @@ function resolveAnchor(name: string, config: PactOAuthProviderConfig): string {
  * (one per `oauth` option entry) but usable standalone.
  */
 export class OAuthClient extends RESTler {
+  /** RESTler vendor label — surfaces in request error/trace context. */
   public readonly vendor = 'pact-oauth';
 
   private readonly __name: string;

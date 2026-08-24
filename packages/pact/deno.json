@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/pact",
   "version": "0.4.8",
-  "description": "Transport-agnostic authentication & authorization toolkit — BigInt-bitmask authorization, flat storage hooks, five credential schemes, refresh-token rotation, TOTP, and an OAuth2/OIDC client",
+  "description": "Permissions, Authentication, Control & Tokens — a transport-agnostic auth toolkit with BigInt-bitmask authorization, flat storage hooks, five credential schemes, refresh-token rotation, TOTP, and an OAuth2/OIDC client",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

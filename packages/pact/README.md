@@ -1,10 +1,10 @@
 # Pact
 
-A **transport-agnostic authentication & authorization toolkit**.
-Authorization is **BigInt bitmask** permissions; identity, credentials, and
-sessions run over a flat set of **optional storage hooks** — plain
-functions, no adapter, no base class, no schema ownership. All
-cryptography is delegated to
+**Permissions, Authentication, Control & Tokens** — a **transport-agnostic
+authentication & authorization toolkit**. Authorization is **BigInt
+bitmask** permissions; identity, credentials, and sessions run over a flat
+set of **optional storage hooks** — plain functions, no adapter, no base
+class, no schema ownership. All cryptography is delegated to
 [`@tundralibs/crypt`](../crypt/README.md); OAuth HTTP runs on
 [`@tundralibs/restler`](../restler/README.md).
 

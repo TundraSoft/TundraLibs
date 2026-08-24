@@ -8,5 +8,21 @@
  */
 
 export { OAuthClient } from './OAuthClient.ts';
-export { IdTokenVerifier } from './IdTokenVerifier.ts';
-export { PROVIDERS } from './providers.ts';
+export {
+  type IdTokenContext,
+  type IdTokenVerificationPolicy,
+  IdTokenVerifier,
+  type IdTokenVerifierOptions,
+} from './IdTokenVerifier.ts';
+export {
+  type ProfileNormalizer,
+  type ProviderPreset,
+  PROVIDERS,
+} from './providers.ts';
+export type {
+  PactAuthorizationUrlOptions,
+  PactOAuthCallbackParams,
+  PactOAuthProfile,
+  PactOAuthProviderKind,
+  PactOAuthTokens,
+} from '../types/mod.ts';

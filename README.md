@@ -31,7 +31,7 @@ also run on **Cloudflare Workers** and in the **browser** (see
 - **[MetroMan](packages/metro-man/README.md)** — Prometheus-compatible in-process metrics: Counter, Gauge, Histogram, Summary, and a central registry (MetroMan).
 - **[NORM](packages/norm/README.md)** — Typed, cross-runtime ORM over OQL and drivers — one schema drives types, validation, relations, migrations, and at-rest column encryption
 - **[OQL](packages/oql/README.md)** — Object Query Language — type-safe, database-agnostic query definitions
-- **[Pact](packages/pact/README.md)** — Transport-agnostic authentication & authorization toolkit — BigInt-bitmask authorization, flat storage hooks, five credential schemes, refresh-token rotation, TOTP, and an OAuth2/OIDC client
+- **[Pact](packages/pact/README.md)** — Permissions, Authentication, Control & Tokens — a transport-agnostic auth toolkit with BigInt-bitmask authorization, flat storage hooks, five credential schemes, refresh-token rotation, TOTP, and an OAuth2/OIDC client
 - **[RadRouter](packages/radrouter/README.md)** — Compressed radix-tree HTTP router — typed parameters, greedy patterns, versioned endpoints, generic middleware
 - **[RESTler](packages/restler/README.md)** — Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js
 - **[RPC](packages/rpc/README.md)** — Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters
