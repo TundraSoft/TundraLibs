@@ -95,7 +95,10 @@ const User = Guardian.object({
 });
 
 try {
-  User.parse({ name: 123, age: -5 }); // both fields fail
+  // `name: null` fails outright — coercion never applies to `null`/`undefined`
+  // (see Guardian.string()'s coercion rules), unlike a value such as `123`,
+  // which would silently coerce to `'123'` and pass.
+  User.parse({ name: null, age: -5 }); // both fields fail
 } catch (e) {
   if (!(e instanceof GuardianError)) throw e;
   e.message;
