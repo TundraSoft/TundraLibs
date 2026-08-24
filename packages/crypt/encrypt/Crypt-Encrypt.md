@@ -380,10 +380,15 @@ Implications:
 For raw, deterministic key derivation (e.g., to derive AES key material once and reuse a `CryptoKey` across many ciphertexts in the same process), use the exported `pbkdf2` from `@tundralibs/crypt/encrypt`. With a fixed salt it derives the same bytes every call, so you import the key once and reuse it:
 
 ```typescript
-import { pbkdf2, PBKDF2_ITERATIONS } from '@tundralibs/crypt/encrypt';
+import {
+  pbkdf2,
+  PBKDF2_ITERATIONS,
+  SALT_BYTES,
+} from '@tundralibs/crypt/encrypt';
 
 // A fixed salt makes derivation deterministic — store it alongside the secret.
-const salt = new Uint8Array(16).fill(7);
+// SALT_BYTES (16) is the same salt length encryptAES generates per message.
+const salt = new Uint8Array(SALT_BYTES).fill(7);
 const raw = await pbkdf2('mySecret', salt, PBKDF2_ITERATIONS, 256); // 32 bytes
 
 const key = await crypto.subtle.importKey(
