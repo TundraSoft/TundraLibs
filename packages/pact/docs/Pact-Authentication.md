@@ -129,3 +129,42 @@ const ok = await pact.verifyOtp('user-1', '123456');
 
 `verifyOtp` is `false` for a missing/unenrolled/non-`ACTIVE` user or a
 wrong code — never a throw.
+
+## Signing outbound content (HMAC)
+
+The `HMAC` scheme above verifies signatures a _client_ produced. The
+mirror operation — pact signing content YOUR api emits (signed response
+bodies, outbound webhook payloads, signed URLs) — is `sign` /
+`verifySignature`:
+
+```typescript
+import { Pact } from '@tundralibs/pact';
+
+const pact = new Pact({
+  bits: { READ: 1n },
+  secret: 'a-256-bit-shared-secret-for-hs256!',
+});
+
+const body = JSON.stringify({ ok: true });
+const signature = await pact.sign(body); // send alongside the response
+await pact.verifySignature(body, signature); // true
+```
+
+With no explicit `key`, pact derives the signing key from the configured
+`secret` via **HKDF** under a distinct domain label — never the raw JWT
+signing secret. So content you sign can never be replayed as a valid JWT
+signature under the same secret, even though both are HMAC. Pass an
+explicit `key` to sign with your own (required when pact holds an RSA key
+pair, which carries no shared HMAC secret):
+
+```typescript
+import { Pact } from '@tundralibs/pact';
+
+declare const pact: Pact;
+
+const sig = await pact.sign('webhook payload', 'per-endpoint-secret');
+await pact.verifySignature('webhook payload', sig, 'per-endpoint-secret');
+```
+
+Signatures replay unless the signed content carries a timestamp/nonce the
+verifier checks — the same caveat as the inbound `HMAC` scheme.

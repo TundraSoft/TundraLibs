@@ -682,3 +682,59 @@ describe('pact.Pact otp + strategies + authZ', () => {
     );
   });
 });
+
+describe('pact.Pact content signing', () => {
+  const pact = new Pact({ bits: BITS, secret: SECRET });
+
+  it('sign → verifySignature round-trips (string and bytes)', async () => {
+    const sig = await pact.sign('the response body');
+    asserts.assert(await pact.verifySignature('the response body', sig));
+    asserts.assertFalse(await pact.verifySignature('tampered', sig));
+    asserts.assertFalse(
+      await pact.verifySignature('the response body', 'nope'),
+    );
+
+    const bytes = new TextEncoder().encode('binary payload');
+    const bsig = await pact.sign(bytes);
+    asserts.assert(await pact.verifySignature(bytes, bsig));
+  });
+
+  it('derives a domain-separated key — NOT the raw JWT secret', async () => {
+    // The default (derived) signature must differ from one made with the
+    // raw secret as an explicit key: content signed via pact can never be
+    // a valid HS* JWT signature under the same secret.
+    const derived = await pact.sign('x');
+    const rawKeyed = await pact.sign('x', SECRET);
+    asserts.assertNotEquals(derived, rawKeyed);
+  });
+
+  it('honours an explicit key on both sides', async () => {
+    const sig = await pact.sign('payload', 'my-own-key');
+    asserts.assert(await pact.verifySignature('payload', sig, 'my-own-key'));
+    // wrong key fails; the derived key also does not match an explicit one
+    asserts.assertFalse(
+      await pact.verifySignature('payload', sig, 'other-key'),
+    );
+    asserts.assertFalse(await pact.verifySignature('payload', sig));
+  });
+
+  it('derived signing requires a shared secret (RSA/none → MISSING_OPTION)', async () => {
+    const rsa = new Pact({
+      bits: BITS,
+      algorithm: 'RS256',
+      secret: { privateKey: 'x', publicKey: 'y' },
+    });
+    const err = await asserts.assertRejects(
+      () => rsa.sign('x'),
+      PactDefinitionError,
+    );
+    asserts.assertEquals((err as PactDefinitionError).code, 'MISSING_OPTION');
+    // but an explicit key works even with an RSA pair
+    asserts.assert(
+      await rsa.verifySignature('x', await rsa.sign('x', 'k'), 'k'),
+    );
+
+    const authzOnly = new Pact({ bits: BITS });
+    await asserts.assertRejects(() => authzOnly.sign('x'), PactDefinitionError);
+  });
+});

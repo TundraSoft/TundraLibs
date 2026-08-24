@@ -46,7 +46,7 @@
  * @module
  */
 
-import { hash } from '@tundralibs/crypt';
+import { constantTimeEqual, hash, hkdf } from '@tundralibs/crypt';
 import { pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/encrypt';
 import {
   issueJWT,
@@ -55,7 +55,7 @@ import {
   verifyJWT as cryptVerifyJWT,
 } from '@tundralibs/crypt/JWT';
 import { generateOTPAuthURL, verifyTOTP } from '@tundralibs/crypt/OTP';
-import { verifyHMAC } from '@tundralibs/crypt/sign';
+import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
 import { nanoID } from '@tundralibs/id';
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import {
@@ -112,6 +112,8 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
   private readonly __oauth = new Map<string, OAuthClient>();
   /** Held OUT of the option store — `getOptions()` can never surface it. */
   private readonly __secretMaterial: PactOptions<P>['secret'];
+  /** Cached domain-separated HMAC key for {@link Pact.sign}. */
+  private __contentSignKey?: string;
 
   /**
    * Build the engine. Encodes the capability→hook requiredness table:
@@ -866,6 +868,54 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     return { token };
   }
 
+  // ── content signing (HMAC via crypt) ─────────────────────────────────
+
+  /**
+   * HMAC-sign arbitrary content — signed API responses, webhook payloads,
+   * signed URLs. With no `key`, pact derives one from the configured
+   * `secret` via **HKDF** under a distinct domain label — *not* the raw
+   * JWT signing secret — so a content signature can never be replayed as a
+   * JWT signature. Pass an explicit `key` to sign with your own (required
+   * when pact holds an RSA key pair, which carries no shared HMAC secret).
+   *
+   * @param content - the content to sign
+   * @param key - optional explicit HMAC key
+   * @returns the base64 signature
+   * @throws {@link PactDefinitionError} (`MISSING_OPTION`) when no `key` is
+   *   given and pact has no shared `secret` (or holds an RSA key pair).
+   */
+  async sign(content: string | Uint8Array, key?: string): Promise<string> {
+    return await signHMAC(content, key ?? await this.__contentKey());
+  }
+
+  /**
+   * Verify an HMAC signature produced by {@link Pact.sign} (same key
+   * derivation; pass the same explicit `key` if you signed with one). A
+   * malformed or garbage signature resolves to `false` rather than
+   * throwing, so an attacker-supplied header can never 500 the caller.
+   *
+   * @param content - the signed content
+   * @param signature - the signature to check
+   * @param key - optional explicit HMAC key (see {@link Pact.sign})
+   * @throws {@link PactDefinitionError} (`MISSING_OPTION`) when no `key` is
+   *   given and pact has no shared `secret` (or holds an RSA key pair).
+   */
+  async verifySignature(
+    content: string | Uint8Array,
+    signature: string,
+    key?: string,
+  ): Promise<boolean> {
+    // Resolve the key OUTSIDE the guard so a genuine config error (no
+    // shared secret) still throws; a malformed/garbage signature
+    // (attacker-supplied) resolves to a clean `false`, never a 500.
+    const signingKey = key ?? await this.__contentKey();
+    try {
+      return await verifyHMAC(content, signature, signingKey);
+    } catch {
+      return false;
+    }
+  }
+
   // ── power-user escape hatch ──────────────────────────────────────────
 
   /** The raw bitmask engine (mask math lives here + in `./authz`). */
@@ -1130,14 +1180,39 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     const secret = this.__secret();
     return typeof secret === 'string' ? secret : secret.publicKey;
   }
+
+  /** Shared secret for content signing — RSA pairs have none. */
+  private __hmacSecret(): string {
+    const secret = this.__secret();
+    if (typeof secret !== 'string') {
+      throw new PactDefinitionError(
+        'HMAC signing needs a shared secret string — an RSA key pair is configured; pass a key explicitly',
+        { code: 'MISSING_OPTION', option: 'secret' },
+      );
+    }
+    return secret;
+  }
+
+  /**
+   * Domain-separated HMAC key for {@link Pact.sign} /
+   * {@link Pact.verifySignature}, derived once from the shared secret via
+   * **HKDF** (RFC 5869) under a distinct `info` label. Because it is
+   * `HKDF(secret, 'pact:content-sign')` — never the raw secret — an attacker
+   * who controls signed content cannot produce a valid HS\* JWT signature
+   * (which is HMAC over `base64url(header).base64url(payload)` under the raw
+   * secret).
+   */
+  private async __contentKey(): Promise<string> {
+    if (this.__contentSignKey === undefined) {
+      const derived = await hkdf(this.__hmacSecret(), {
+        info: 'pact:content-sign',
+      });
+      this.__contentSignKey = toHex(derived);
+    }
+    return this.__contentSignKey;
+  }
 }
 
-/** Constant-time hex-digest comparison (length is not secret-derived). */
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
+/** Hex-encode bytes — HKDF output → a string key for crypt's `signHMAC`. */
+const toHex = (bytes: Uint8Array): string =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');

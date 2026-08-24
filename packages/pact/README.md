@@ -195,6 +195,10 @@ export const canEditPost = async (ctx: Ctx, next: Next): Promise<void> => {
 - **TOTP as plain secondary verification** — `enrollOtp()` (seed +
   otpauth URL) and `verifyOtp()`; the app decides when to demand the
   second step. No login state machine.
+- **Content signing** — `sign()` / `verifySignature()` for signed
+  responses, webhook payloads, and signed URLs, keyed by an
+  HKDF-derived, JWT-domain-separated secret (or your own explicit key).
+  See [Authentication](docs/Pact-Authentication.md).
 - **Events everywhere** — `register`, `login`/`loginFailed`,
   `verifyFailed`, `denied`, `refreshReuse`, `logout`,
   `idTokenUnverified`, via `_on<Event>` options or `.on()`. Listener
