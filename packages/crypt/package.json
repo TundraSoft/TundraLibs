@@ -17,9 +17,11 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@std/encoding": "npm:@jsr/std__encoding@1.0.8",
-    "@std/fmt": "npm:@jsr/std__fmt@^1.0.8",
-    "@tundralibs/compat": "workspace:*",
+    "@std/encoding": "npm:@jsr/std__encoding@1.0.11",
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.10",
     "@tundralibs/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
   }
 }

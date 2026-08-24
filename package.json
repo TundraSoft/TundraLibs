@@ -21,11 +21,9 @@
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
-  "dependencies": {
-    "@std/asserts": "npm:@jsr/std__assert@^1.0.0",
-    "@std/testing": "npm:@jsr/std__testing@^1.0.0"
-  },
   "devDependencies": {
+    "@std/asserts": "npm:@jsr/std__assert@^1.0.19",
+    "@std/testing": "npm:@jsr/std__testing@^1.0.20",
     "tsx": "^4.21.0"
   },
   "license": "MIT"

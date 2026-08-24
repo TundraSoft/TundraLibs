@@ -13,7 +13,9 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@tundralibs/compat": "workspace:*",
     "@tundralibs/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
   }
 }
