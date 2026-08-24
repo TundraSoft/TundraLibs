@@ -19,6 +19,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",
     "@tundralibs/id": "workspace:*",
     "@tundralibs/restler": "workspace:*",
