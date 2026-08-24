@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.2...drivers-v1.1.3) (2026-08-24)
+
+
+### Bug Fixes
+
+* **drivers:** pin SQLite pool to a single handle; deepen engine & error docs ([#589](https://github.com/TundraSoft/TundraLibs/issues/589)) ([4fd7e34](https://github.com/TundraSoft/TundraLibs/commit/4fd7e345661c0d593cb299b7a44d3f8bf1d3b010))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.1...drivers-v1.1.2) (2026-08-23)
 
 
