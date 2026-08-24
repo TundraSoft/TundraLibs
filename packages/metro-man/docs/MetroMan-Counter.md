@@ -81,6 +81,11 @@ Increment the named series. Overloads:
 and returns `true` if a series was actually removed. Both inherited from
 `BaseMetric`.
 
+**Throws:**
+
+- `InvalidLabelError` — `remove(labels)` rejects a label name outside
+  `[A-Za-z_][A-Za-z0-9_]*`, the same validation `inc` applies.
+
 ### `toJSON()` / `toString()` / `toPrometheus()` / `dump(mode)`
 
 Inherited from `BaseMetric`. See the
@@ -90,12 +95,43 @@ Inherited from `BaseMetric`. See the
 
 For the example above, after the three `inc()` calls:
 
+### Prometheus text (`toPrometheus()` / `dump('PROMETHEUS')`)
+
+> **The rendered label order is alphabetical by name, not call-site
+> order.** `inc({ status: '200', method: 'GET' })` passed `status`
+> first, but the renderer sorts label entries by name before joining
+> them, so the series key comes out `method="GET",status="200"` —
+> `method` before `status`. This only changes the rendered/canonical
+> key; it never splits or merges series (see
+> [Canonicalisation](../README.md#labels)).
+
 ```
 # HELP http_requests_total Total HTTP requests served
 # TYPE http_requests_total counter
 http_requests_total 1
-http_requests_total{status="200",method="GET"} 1
-http_requests_total{status="500",method="GET"} 1
+http_requests_total{method="GET",status="200"} 1
+http_requests_total{method="GET",status="500"} 1
+```
+
+### JSON (`toJSON()` / `dump('JSON')`)
+
+`data` is keyed by that same alphabetically-sorted string. `labels`,
+by contrast, lists label names in first-seen call order — `status`
+before `method` here, since the first labelled `inc()` passed `status`
+first:
+
+```json
+{
+  "name": "http_requests_total",
+  "help": "Total HTTP requests served",
+  "type": "COUNTER",
+  "labels": ["status", "method"],
+  "data": {
+    "no_label": 1,
+    "method=\"GET\",status=\"200\"": 1,
+    "method=\"GET\",status=\"500\"": 1
+  }
+}
 ```
 
 ---
