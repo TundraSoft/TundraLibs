@@ -23,6 +23,8 @@ import {
   Schema,
   use,
 } from './mod.ts';
+import '@tundralibs/norm/engines/sqlite';
+import { registerEngine, resolveEngineFactory } from './engines/mod.ts';
 import { defaultHash } from './crypto.ts';
 
 type Row = Record<string, unknown>;
@@ -809,7 +811,20 @@ describe('norm.Repo (edge paths over mock executor)', () => {
       connect: () => Promise.resolve(),
       disconnect: () => Promise.resolve(),
     };
-    const norm = new Norm({ engine: fakeEngine as never, secret: SECRET });
+    // `new Norm({ engine })` is gone; pin the sqlite factory to the fake
+    // engine for the single synchronous construction (no `await` between
+    // pin and restore), then restore the stock factory.
+    const stock = resolveEngineFactory('sqlite');
+    registerEngine('sqlite', () => fakeEngine as never);
+    let norm: Norm;
+    try {
+      norm = new Norm({
+        database: { dialect: 'sqlite', path: ':memory:' },
+        secret: SECRET,
+      });
+    } finally {
+      registerEngine('sqlite', stock as never);
+    }
     const db = norm.use(Schema('S', { Renamed }));
     // Registry without ANY encrypted column: read path short-circuits.
     const plain = await db.repo('Renamed').find();

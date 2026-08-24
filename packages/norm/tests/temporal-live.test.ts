@@ -13,12 +13,11 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { envArgs } from '@tundralibs/utils';
-import { MariaEngine } from '@tundralibs/drivers/maria';
 import { MongoEngine } from '@tundralibs/drivers/mongo';
-import { PostgresEngine } from '@tundralibs/drivers/postgres';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+import '@tundralibs/norm/engines/sqlite';
 import {
   Column,
+  type DatabaseConfig,
   Entity,
   Norm,
   type NormDb,
@@ -37,22 +36,38 @@ const FeeSchedule = Entity('fee_schedule', {
   Fees: Column.integer(),
 }, { pk: ['Id'], temporal: { key: ['Name'] } });
 
-// deno-lint-ignore no-explicit-any
-type AnyEngine = any;
-type Fixture = {
-  name: string;
-  make: () => AnyEngine;
-  /** Dialect DDL for the temporal table (undefined = schemaless / Mongo). */
-  ddl?: string;
-};
-
 const dbName = () =>
   env.get('DB_SCHEMA') ? `${env.get('DB_SCHEMA')}_norm` : undefined;
+
+/** Shared by the Mongo `dbConfig` (Norm's engine) and its `clear()`
+ * throwaway engine, so both hit the same server database. */
+const MONGO = {
+  host: env.get('MONGO_HOST') || 'localhost',
+  port: Number.parseInt(env.get('MONGO_PORT') || '27017', 10),
+  database: env.get('MONGO_DB') || 'mongo',
+  username: env.get('MONGO_USERNAME') || env.get('MONGO_USER') || undefined,
+  password: env.get('MONGO_PASSWORD') || undefined,
+};
+
+type Fixture = {
+  name: string;
+  /** The database config Norm builds its engine from — the same env-var
+   * params the fixture used to hand a raw engine constructor, now that
+   * `new Norm({ engine })` is gone. */
+  dbConfig: DatabaseConfig;
+  /** Dialect DDL for the temporal table (undefined = schemaless / Mongo). */
+  ddl?: string;
+  /** Schemaless engines only: wipe leftover docs before a run. truncate()
+   * is disabled on a temporal entity (it would erase the whole history),
+   * and Norm exposes no filterless delete, so go straight at the driver
+   * through a throwaway connection — same intent as the SQL DROP TABLE. */
+  clear?: () => Promise<void>;
+};
 
 const FIXTURES: Fixture[] = [
   {
     name: 'sqlite',
-    make: () => new SQLiteEngine('tmp-live-sqlite', { path: ':memory:' }),
+    dbConfig: { dialect: 'sqlite', path: ':memory:' },
     ddl: `CREATE TABLE fee_schedule (
       Id TEXT PRIMARY KEY, Name TEXT NOT NULL, Fees INTEGER NOT NULL,
       EffectiveFrom TEXT NOT NULL, EffectiveTo TEXT NOT NULL,
@@ -60,15 +75,15 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: 'postgres',
-    make: () =>
-      new PostgresEngine('tmp-live-pg', {
-        host: env.get('POSTGRES_HOST') || 'localhost',
-        port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
-        database: dbName() || env.get('POSTGRES_DB') || 'postgres',
-        username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
-          'postgres',
-        password: env.get('POSTGRES_PASSWORD') || '',
-      }),
+    dbConfig: {
+      dialect: 'postgres',
+      host: env.get('POSTGRES_HOST') || 'localhost',
+      port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
+      database: dbName() || env.get('POSTGRES_DB') || 'postgres',
+      username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
+        'postgres',
+      password: env.get('POSTGRES_PASSWORD') || '',
+    },
     ddl: `CREATE TABLE fee_schedule (
       "Id" VARCHAR(40) PRIMARY KEY, "Name" VARCHAR(30) NOT NULL,
       "Fees" INTEGER NOT NULL,
@@ -77,14 +92,14 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: 'maria',
-    make: () =>
-      new MariaEngine('tmp-live-maria', {
-        host: env.get('MARIA_HOST') || 'localhost',
-        port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
-        database: dbName() || env.get('MARIA_DB') || 'mysql',
-        username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') || 'root',
-        password: env.get('MARIA_PASSWORD') || '',
-      }),
+    dbConfig: {
+      dialect: 'maria',
+      host: env.get('MARIA_HOST') || 'localhost',
+      port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
+      database: dbName() || env.get('MARIA_DB') || 'mysql',
+      username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') || 'root',
+      password: env.get('MARIA_PASSWORD') || '',
+    },
     // DATETIME(6) — MariaDB TIMESTAMP caps at 2038; the sentinel is 2099.
     ddl: 'CREATE TABLE fee_schedule (' +
       '`Id` VARCHAR(40) PRIMARY KEY, `Name` VARCHAR(30) NOT NULL, ' +
@@ -94,17 +109,18 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: 'mongo',
-    make: () =>
-      new MongoEngine('tmp-live-mongo', {
-        host: env.get('MONGO_HOST') || 'localhost',
-        port: Number.parseInt(env.get('MONGO_PORT') || '27017', 10),
-        database: env.get('MONGO_DB') || 'mongo',
-        username: env.get('MONGO_USERNAME') || env.get('MONGO_USER') ||
-          undefined,
-        password: env.get('MONGO_PASSWORD') || undefined,
-      }),
+    dbConfig: { dialect: 'mongo', ...MONGO },
     // Schemaless — no CREATE/UNIQUE; the supersede is norm-managed and
     // best-effort (no transactions).
+    clear: async () => {
+      const clean = new MongoEngine('tmp-live-mongo-clean', MONGO);
+      try {
+        await clean.connect();
+        await clean.deleteMany('fee_schedule', {});
+      } finally {
+        await clean.disconnect().catch(() => {});
+      }
+    },
   },
 ];
 
@@ -115,31 +131,25 @@ for (const fx of FIXTURES) {
     let reason = '';
 
     beforeAll(async () => {
-      let engine: AnyEngine;
+      // Probe availability by actually opening the pool — `connect()` warms
+      // it and rejects when the database is unreachable, so a down engine
+      // skips exactly as the old engine.connect()+ping() check did.
       try {
-        engine = fx.make();
-        await engine.connect();
-        if (typeof engine.ping === 'function') await engine.ping();
+        norm = new Norm({ database: fx.dbConfig });
+        await norm.connect();
       } catch (e) {
         reason = `${fx.name} unavailable: ${(e as Error).message}`;
-        try {
-          await engine?.disconnect?.();
-        } catch { /* ignore */ }
+        await norm?.disconnect().catch(() => {});
+        norm = undefined;
         return;
       }
-      norm = new Norm({ engine });
       db = norm.use(Schema('T', { FeeSchedule }));
       if (fx.ddl !== undefined) {
         await db.raw('DROP TABLE IF EXISTS fee_schedule').catch(() => {});
         await db.raw(fx.ddl);
       } else {
         // Mongo: clear any leftover documents from a previous run.
-        // truncate() is disabled on a temporal entity (it would erase the
-        // whole history norm exists to keep) — go straight at the driver,
-        // bypassing norm's write API entirely, same as the SQL fixtures'
-        // raw DROP TABLE above.
-        await (engine as { deleteMany(c: string, f: unknown): Promise<number> })
-          .deleteMany('fee_schedule', {}).catch(() => {});
+        await fx.clear?.();
       }
     });
 

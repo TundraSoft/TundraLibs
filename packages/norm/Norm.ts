@@ -17,7 +17,7 @@
  * ```
  *
  * **Engine is private** — callers never get the engine reference
- * back, and `secret` / `engine` / `crypto` stay OUT of the options
+ * back, and `secret` / `database` / `crypto` stay OUT of the options
  * bag so `getOptions()` can never leak them.
  *
  * **Events are metadata-only** — entity key, op, timing, plus the
@@ -117,11 +117,9 @@ export type DatabaseConfig =
   | ({ dialect: 'turso' } & TursoEngineOptions)
   | ({ dialect: 'd1' } & D1EngineOptions);
 
-/** Constructor options. Exactly one of `engine` / `database`. */
+/** Constructor options. Norm builds its engine from a `database` config. */
 export type NormConfig = {
-  /** BYO engine (shared with other tooling). */
-  engine?: AnySQLEngine | MongoEngine;
-  /** Or let Norm construct one from a dialect config. */
+  /** The dialect config Norm constructs its engine (one pool) from. */
   database?: DatabaseConfig;
   /** Encryption secret for `.encrypt()` columns (e.g. from an env var). */
   secret?: string;
@@ -137,7 +135,7 @@ export type NormConfig = {
    * each operation an active span and driver query events nest under it:
    *
    * ```ts ignore
-   * new Norm({ engine, witness: (info, fn) =>
+   * new Norm({ database, witness: (info, fn) =>
    *   tracer.startActiveSpan(info.name, fn) });
    * ```
    *
@@ -150,10 +148,10 @@ export type NormConfig = {
    * Enable the read-query cache ({@link NormCacheConfig}). OFF by
    * default; even when set, only entities that declare a per-entity
    * `cache` TTL (minutes) are cached. Held privately (it owns cache
-   * connections, like `engine`), kept OUT of the options bag.
+   * connections, like the engine), kept OUT of the options bag.
    *
    * ```ts ignore
-   * new Norm({ engine, cache: { engine: 'MEMORY', name: 'app' } });
+   * new Norm({ database, cache: { engine: 'MEMORY', name: 'app' } });
    * ```
    */
   cache?: NormCacheConfig;
@@ -175,7 +173,8 @@ type NormEventHandlers = {
  *
  * @example
  * ```ts ignore
- * const norm = new Norm({ engine, secret: Deno.env.get('APP_SECRET') });
+ * const norm = new Norm({ database: { dialect: 'postgres', ... },
+ *                          secret: Deno.env.get('APP_SECRET') });
  * const db = norm.use(Identity, Shortener);
  * await norm.connect();
  * ```
@@ -197,18 +196,17 @@ export class Norm extends Options<NormConfig, NormEvents> {
    * Resolves the engine and captures the crypto configuration; no
    * connection is opened until {@link Norm.connect}.
    *
-   * @param cfg - Engine (`engine`) or a `database` dialect config to
-   *   build one, the encryption `secret` and optional `algorithm` /
-   *   `crypto` overrides, plus inline `_on<event>` handlers. The secret,
-   *   engine, and crypto callbacks are not stored in the options bag.
+   * @param cfg - A `database` dialect config to build the engine from,
+   *   the encryption `secret` and optional `algorithm` / `crypto`
+   *   overrides, plus inline `_on<event>` handlers. The secret, database
+   *   config, and crypto callbacks are not stored in the options bag.
    */
   public constructor(cfg: NormConfig & NormEventHandlers) {
     super();
-    // Sensitive / reference-critical values (secret, engine, crypto
-    // callbacks) stay OUT of the options bag: getOptions() must never
-    // leak them.
+    // Sensitive / reference-critical values (secret, database
+    // credentials, crypto callbacks) stay OUT of the options bag:
+    // getOptions() must never leak them.
     const {
-      engine: _engine,
       database: _database,
       crypto: _crypto,
       secret: _secret,
@@ -863,29 +861,19 @@ function wrap(engine: AnySQLEngine | MongoEngine): ResolvedEngine {
 }
 
 /**
- * Pick the executor: caller-supplied `engine`, or one built from
- * `database` by the dialect's registered factory.
+ * Build the executor from the `database` dialect config using the
+ * dialect's registered factory.
  *
- * @throws {NormError} `INVALID_ENGINE_CONFIG` when both `engine` and
- *   `database` are given, when neither is, or when `database.dialect` is
- *   not a known dialect.
+ * @throws {NormError} `INVALID_ENGINE_CONFIG` when no `database` config
+ *   is given, or when `database.dialect` is not a known dialect.
  * @throws {NormError} `ENGINE_NOT_REGISTERED` when the dialect is known
  *   but its `@tundralibs/norm/engines/<dialect>` module has not been
  *   imported.
  */
 function resolveEngine(cfg: NormConfig): ResolvedEngine {
-  if (cfg.engine !== undefined && cfg.database !== undefined) {
-    throw new NormError(
-      `new Norm({...}): pass exactly one of 'engine' or 'database', not both.`,
-      { code: 'INVALID_ENGINE_CONFIG' },
-    );
-  }
-  if (cfg.engine !== undefined) {
-    return wrap(cfg.engine);
-  }
   if (cfg.database === undefined) {
     throw new NormError(
-      `new Norm({...}): pass one of 'engine' or 'database'.`,
+      `new Norm({...}): a 'database' config is required.`,
       {
         code: 'INVALID_ENGINE_CONFIG',
       },

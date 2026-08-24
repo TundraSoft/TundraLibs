@@ -1,5 +1,5 @@
 /**
- * Norm facade edges: engine/database config resolution per dialect,
+ * Norm facade edges: database config resolution per dialect,
  * lifecycle proxies, transaction capability + commit/rollback failure
  * paths, and crypto helpers without a secret.
  */
@@ -145,15 +145,11 @@ describe('norm.Norm (config + lifecycle + tx edges)', () => {
     await removeDir(dir, { recursive: true });
   });
 
-  it('rejects engine AND database together, and unknown dialects', () => {
+  it('requires a database config, and rejects unknown dialects', () => {
     asserts.assertThrows(
-      () =>
-        new Norm({
-          engine: {} as never,
-          database: { dialect: 'sqlite', path: dir },
-        }),
+      () => new Norm({}),
       Error,
-      "exactly one of 'engine' or 'database'",
+      "a 'database' config is required",
     );
     asserts.assertThrows(
       () =>

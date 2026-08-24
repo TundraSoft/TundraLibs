@@ -464,7 +464,7 @@ each hit resets the clock.
 
 ```typescript ignore
 const norm = new Norm({
-  engine,
+  database: { dialect: 'sqlite', path: ':memory:' },
   cache: { engine: 'MEMORY', name: 'app' }, // or REDIS/MEMCACHED + options
 });
 

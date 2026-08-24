@@ -56,12 +56,6 @@ prefer `@tundralibs/norm/core` plus the single engine module you need
 there instead of the root barrel — see
 **[Choosing an entry point](../README.md#choosing-an-entry-point)**.
 
-`Norm` also accepts a pre-built `engine` instance instead of `database`
-— useful when you need to share one connection with other tooling
-(a raw query runner, a health check) — but a `database` config is what
-every example in this guide uses, and what you want unless you have a
-specific reason to construct the engine yourself.
-
 ## 2. Model the schema
 
 Keep one entity per file and one folder per schema — the folder is the

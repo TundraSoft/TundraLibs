@@ -15,7 +15,9 @@ import {
 } from '@tundralibs/compat/file';
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import type { EngineQueryResult } from '@tundralibs/drivers';
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '../mod.ts';
+import { registerEngine, resolveEngineFactory } from '../engines/mod.ts';
 import { NormMigrationError } from '../errors/mod.ts';
 import { snapshot as logicalSnapshot } from '../definition/mod.ts';
 import {
@@ -34,6 +36,34 @@ import { runtimeOf } from '../Norm.ts';
 import type { Executor } from '../executor.ts';
 
 const SECRET = 'migrations-test-secret';
+
+/**
+ * Construct a Norm bound to a SPECIFIC engine instance. These tests are
+ * built around the engine object itself — fault-injecting SQLite subclasses
+ * ({@link FlakySQLiteEngine}, {@link ClaimsAdvisoryLockEngine}), a
+ * monkey-patched `transaction`, and pairs of handles that must share ONE
+ * physical `:memory:`/file database (crash-recovery, secret-vs-no-secret).
+ * `new Norm({ engine })` is gone, so pin the sqlite factory to `engine` for
+ * the single synchronous `new Norm` call — there is no `await` between the
+ * pin and its restore, so it cannot bleed into another test — then restore
+ * the stock factory. The `database.path` below is ignored (the factory
+ * returns `engine` as-is); the engine carries its own real path.
+ */
+function normOn(
+  engine: { readonly Engine?: string },
+  secret?: string,
+): Norm {
+  const stock = resolveEngineFactory('sqlite');
+  registerEngine('sqlite', () => engine as never);
+  try {
+    return new Norm({
+      database: { dialect: 'sqlite', path: ':memory:' },
+      ...(secret !== undefined ? { secret } : {}),
+    });
+  } finally {
+    registerEngine('sqlite', stock as never);
+  }
+}
 
 /** DDL type tags of a planned step (rebuilds tagged 'REBUILD_TABLE'). */
 function ddlTypes(qs: ReadonlyArray<MigrationAction>): string[] {
@@ -269,7 +299,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
   });
 
   it('v1: snapshot → plan → apply creates tables, siblings, digest cols, indexes', async () => {
-    const norm = new Norm({ engine: engine as never, secret: SECRET });
+    const norm = normOn(engine, SECRET);
     const db = norm.use(Schema('App', { Users: UsersV1 }));
     // renderSql: true → reviewable `.sql` plans ride along with the snapshot.
     const mig = new Migrator(db, { dir: migDir, renderSql: true });
@@ -337,7 +367,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
   });
 
   it('v2: renamedFrom renames the column (data survives), add column + reindex', async () => {
-    const norm = new Norm({ engine: engine as never, secret: SECRET });
+    const norm = normOn(engine, SECRET);
     const db = norm.use(Schema('App', { Users: UsersV2 }));
     // Trailing slashes on `dir` are normalised away — this version continues
     // the same migration chain as v1 above (which passed the bare `migDir`),
@@ -374,7 +404,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
       index: { byName: ['handle'] },
       unique: { email: ['email_hash'] },
     });
-    const norm = new Norm({ engine: engine as never, secret: SECRET });
+    const norm = normOn(engine, SECRET);
     const db = norm.use(Schema('App', { Users: Dropped }));
     const mig = new Migrator(db, { dir: migDir });
     asserts.assertEquals((await mig.snapshot()).version, 3);
@@ -395,7 +425,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
   });
 
   it('rollback replays the reverse diff and prunes history', async () => {
-    const norm = new Norm({ engine: engine as never, secret: SECRET });
+    const norm = normOn(engine, SECRET);
     const db = norm.use(Schema('App', { Users: UsersV2 }));
     const mig = new Migrator(db, { dir: migDir });
 
@@ -424,7 +454,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const engine2 = new SQLiteEngine('mig-tc', { path: dbDir2 });
     await engine2.connect();
     try {
-      const norm = new Norm({ engine: engine2 as never, secret: SECRET });
+      const norm = normOn(engine2, SECRET);
       const dbV2 = norm.use(Schema('App', { Users: UsersV2 }));
       const v2 = new Migrator(dbV2, { dir });
       asserts.assertEquals((await v2.snapshot()).version, 1);
@@ -475,7 +505,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const engine4 = new SQLiteEngine('mig-tr', { path: dbDir4 });
     await engine4.connect();
     try {
-      const norm = new Norm({ engine: engine4 as never, secret: SECRET });
+      const norm = normOn(engine4, SECRET);
       const V1 = Entity('folks', {
         id: Column.integer(),
         tag: Column.varchar(20).nullable(),
@@ -546,7 +576,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const engine3 = new SQLiteEngine('mig-cr', { path: dbDir3 });
     await engine3.connect();
     try {
-      const norm = new Norm({ engine: engine3 as never, secret: SECRET });
+      const norm = normOn(engine3, SECRET);
       const dbV2 = norm.use(Schema('App', { Users: UsersV2 }));
       const v2 = new Migrator(dbV2, { dir });
       await v2.snapshot();
@@ -645,7 +675,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     };
     await engine.connect();
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(Schema('App', { Users: UsersV1 }));
       const mig = new Migrator(db, { dir });
       await mig.snapshot();
@@ -720,7 +750,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const origTouch = FileLock.prototype.touch;
     let touches = 0;
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const dbV2 = norm.use(Schema('App', { Users: UsersV2 }));
       const v2 = new Migrator(dbV2, { dir });
       await v2.snapshot();
@@ -767,7 +797,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const engine5 = new SQLiteEngine('mig-art', { path: dbDir5 });
     await engine5.connect();
     try {
-      const norm = new Norm({ engine: engine5 as never, secret: SECRET });
+      const norm = normOn(engine5, SECRET);
       const db = norm.use(Schema('App', { Users: UsersV1 }));
       // renderSql: true → the review gate is on (artifacts written + verified).
       const mig = new Migrator(db, { dir, renderSql: true });
@@ -806,7 +836,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const engine7 = new SQLiteEngine('mig-nosql', { path: dbDir7 });
     await engine7.connect();
     try {
-      const db = new Norm({ engine: engine7 as never, secret: SECRET })
+      const db = normOn(engine7, SECRET)
         .use(Schema('App', { Users: UsersV1 }));
       const mig = new Migrator(db, { dir }); // renderSql default off → JSON only
       await mig.snapshot();
@@ -937,7 +967,7 @@ describe('norm.migrations (error branches)', () => {
     const engine = new SQLiteEngine('mig-gone', { path: dbDir });
     await engine.connect();
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(Schema('App', { Users: UsersV1 }));
       const mig = new Migrator(db, { dir });
       await mig.snapshot();
@@ -975,7 +1005,7 @@ describe('norm.migrations (error branches)', () => {
     await engine.connect();
     try {
       // v1: encrypted email, WITH a secret — write one row at rest.
-      const normEnc = new Norm({ engine: engine as never, secret: SECRET });
+      const normEnc = normOn(engine, SECRET);
       const dbEnc = normEnc.use(Schema('App', { Users: UsersV1 }));
       const migEnc = new Migrator(dbEnc, { dir });
       await migEnc.snapshot();
@@ -995,7 +1025,7 @@ describe('norm.migrations (error branches)', () => {
         password: Column.hash('SHA-256').minLength(8),
         displayName: Column.varchar(120).nullable(),
       }, { pk: ['id'], index: { byName: ['displayName'] } });
-      const normPlain = new Norm({ engine: engine as never }); // no secret
+      const normPlain = normOn(engine); // no secret
       const dbPlain = normPlain.use(Schema('App', { Users: PlainEmail }));
       const migPlain = new Migrator(dbPlain, { dir });
       await migPlain.snapshot();
@@ -1086,7 +1116,7 @@ describe('norm.migrations lock lifecycle', () => {
       // Pending work exists, so apply() gets past the empty-plan short
       // circuit and actually reaches the advisory lock.
       engine.claimAdvisoryLock();
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(Schema('App', { Users: UsersV1 }));
       const mig = new Migrator(db, { dir });
       await mig.snapshot();
@@ -1117,7 +1147,7 @@ describe('norm.migrations lock lifecycle', () => {
     try {
       // Apply v1 normally (advisoryLock still false) so rollback has an
       // applied head to revert.
-      const good = new Norm({ engine: engine as never, secret: SECRET });
+      const good = normOn(engine, SECRET);
       const goodDb = good.use(Schema('App', { Users: UsersV1 }));
       const goodMig = new Migrator(goodDb, { dir });
       await goodMig.snapshot();
@@ -1127,7 +1157,7 @@ describe('norm.migrations lock lifecycle', () => {
       // Now the same database, seen through an executor that believes it
       // has advisory locks.
       engine.claimAdvisoryLock();
-      const bad = new Norm({ engine: engine as never, secret: SECRET });
+      const bad = normOn(engine, SECRET);
       const badDb = bad.use(Schema('App', { Users: UsersV1 }));
       const badMig = new Migrator(badDb, { dir });
 
@@ -1338,7 +1368,7 @@ describe('norm.migrations mid-plan failure (transactional DDL)', () => {
     const engine = new FlakySQLiteEngine('mig-atomic', { path: dbDir });
     await engine.connect();
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(
         Schema('App', { Accounts: AccountsV1, Ledger: LedgerV1 }),
       );
@@ -1378,7 +1408,7 @@ describe('norm.migrations mid-plan failure (transactional DDL)', () => {
     const engine = new FlakySQLiteEngine('mig-atomic2', { path: dbDir });
     await engine.connect();
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(Schema('App', { Accounts: AccountsV1 }));
       const mig = new Migrator(db, { dir });
       await mig.snapshot();
@@ -1388,7 +1418,7 @@ describe('norm.migrations mid-plan failure (transactional DDL)', () => {
       // v2's ALTER succeeds but recording it in _norm_migrations does
       // not — the nastiest shape of the bug, because the schema moved
       // and the database says it didn't.
-      const norm2 = new Norm({ engine: engine as never, secret: SECRET });
+      const norm2 = normOn(engine, SECRET);
       const db2 = norm2.use(Schema('App', { Accounts: AccountsV2 }));
       const mig2 = new Migrator(db2, { dir });
       await mig2.snapshot();
@@ -1431,7 +1461,7 @@ describe('norm.migrations mid-plan failure (NON-transactional DDL)', () => {
     const engine = new FlakySQLiteEngine('mig-resume', { path: dbDir });
     await engine.connect();
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(
         Schema('App', { Accounts: AccountsV1, Ledger: LedgerV1 }),
       );
@@ -1444,7 +1474,7 @@ describe('norm.migrations mid-plan failure (NON-transactional DDL)', () => {
       await mig.snapshot();
       await mig.apply();
 
-      const norm2 = new Norm({ engine: engine as never, secret: SECRET });
+      const norm2 = normOn(engine, SECRET);
       const db2 = norm2.use(
         Schema('App', { Accounts: AccountsV2, Ledger: LedgerV2 }),
       );
@@ -1517,7 +1547,7 @@ describe('norm.migrations mid-plan failure (NON-transactional DDL)', () => {
     const engine = new FlakySQLiteEngine('mig-planchg', { path: dbDir });
     await engine.connect();
     try {
-      const norm = new Norm({ engine: engine as never, secret: SECRET });
+      const norm = normOn(engine, SECRET);
       const db = norm.use(
         Schema('App', { Accounts: AccountsV1, Ledger: LedgerV1 }),
       );
@@ -1525,7 +1555,7 @@ describe('norm.migrations mid-plan failure (NON-transactional DDL)', () => {
       await mig.snapshot();
       await mig.apply();
 
-      const norm2 = new Norm({ engine: engine as never, secret: SECRET });
+      const norm2 = normOn(engine, SECRET);
       const db2 = norm2.use(
         Schema('App', { Accounts: AccountsV2, Ledger: LedgerV2 }),
       );

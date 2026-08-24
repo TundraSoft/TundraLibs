@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+import '@tundralibs/norm/engines/sqlite';
 import {
   Column,
   Entity,
@@ -59,9 +59,12 @@ describe('norm.scoped-upsert (live sqlite)', () => {
   beforeAll(async () => {
     dbDir = await makeTempDir({ prefix: 'norm-scoped-upsert-db-' });
     migDir = await makeTempDir({ prefix: 'norm-scoped-upsert-mig-' });
-    const engine = new SQLiteEngine('scoped-upsert', { path: dbDir });
-    norm = new Norm({ engine: engine as never, secret: SECRET });
+    norm = new Norm({
+      database: { dialect: 'sqlite', path: dbDir },
+      secret: SECRET,
+    });
     db = norm.use(Schema('ScopeUpsert', { Tickets, Notes }));
+    await norm.connect();
     const mig = new Migrator(db, { dir: migDir });
     await mig.snapshot();
     await mig.apply();
