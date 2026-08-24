@@ -36,9 +36,13 @@ export {
 } from './Column.ts';
 export { hashSiblingOf, hashSourceOf } from './Column.ts';
 export {
+  type AuditDefinition,
+  type AuditTableOptions,
+  type EmittedAudit,
   type EmittedForeignKey,
   type EmittedHooks,
   type EmittedReadHooks,
+  type EmittedTemporal,
   Entity,
   type EntityQueryOptions,
   type EntityTableOptions,
@@ -48,6 +52,7 @@ export {
   type ReadHooks,
   type TableDefinition,
   type TableHooks,
+  type TemporalTableOptions,
   type ViewDefinition,
 } from './entity.ts';
 export {

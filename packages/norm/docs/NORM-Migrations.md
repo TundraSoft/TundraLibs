@@ -419,6 +419,51 @@ await mig.apply({ allowDrop: true }); // explicit opt-in runs the drops
 A dropped column is very often a _forgotten rename_ — hence the hint in
 the message (see [Renames](#renames)).
 
+### Audit replicas never drop a column
+
+Dropping a column from a table with an [audit replica](NORM-Audit.md) drops it from the **source** as normal (still
+gated by `allowDrop`, still blocked by default) — but the **replica**
+never loses it. Instead the column is **retired**: renamed to
+`_<column>_`, and relaxed to nullable if it was `NOT NULL` (the source
+will never supply a value for it again, so a `NOT NULL` retired column
+would fail every future write). This happens automatically —
+unconditionally, not gated by `allowDrop`, since nothing is destroyed:
+
+```typescript ignore
+// Users.legacyNote is NOT NULL and is being removed from the source.
+const [step] = await mig.plan();
+// step.blockedDrops → ['Users.legacyNote']            (the SOURCE drop)
+// step.warnings → ["UserAudit.legacyNote: removed from the source —
+//   retired (not dropped) in the audit replica as '_legacyNote_' so
+//   its history survives; it will read as null on every version
+//   from here on."]
+
+await mig.apply({ allowDrop: true }); // drops Users.legacyNote;
+// UserAudit's copy survives as `_legacyNote_`, nullable, with every
+// historical value intact.
+```
+
+**This preserves the data — it does NOT keep it queryable through
+norm.** `db.repo('UserAudit').find(...)` never mentions `_legacyNote_`:
+the replica's TYPE is rebuilt from the source's _current_ columns every
+time your app starts (the same mechanism that makes add/rename/
+type-change propagate to the replica for free — it cuts both ways), so
+a name that no longer exists on the source is invisible to it too. The
+values are real, physical, and intact in the database; reaching them
+means `db.raw()` or `db.query()`, not `find()`:
+
+```ts ignore
+await db.raw('SELECT "_legacyNote_" FROM user_audit WHERE "id" = :id:', { id });
+```
+
+A retired name is reusable exactly **once**: if a column named
+`legacyNote` is re-added to the source later, it mirrors normally
+under its own name while the frozen `_legacyNote_` keeps the old
+history untouched. Retiring the _same_ name a second time collides
+with the still-frozen column from the first retirement — plan/apply
+falls back to an ordinary (blocked-by-default) drop in that case rather
+than overwriting it.
+
 ### NOT NULL warnings
 
 NORM never emits DDL column defaults (defaults are system-generated at
@@ -725,6 +770,8 @@ context.
 
 - [Schema definition](NORM-Schema.md) — columns, entities, relations,
   `renamedFrom`, and the crypto markers migrations diff on.
+- [Audit tables](NORM-Audit.md) — the generated replica whose dropped
+  columns this migrator retires instead of dropping.
 - [Security](NORM-Security.md) — encryption and digest siblings, whose
   flips drive the rebuild engine.
 - [Querying](NORM-Querying.md) — the typed read/write surface the

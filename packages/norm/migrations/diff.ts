@@ -158,6 +158,79 @@ function pairAndFlags(
   return { pairs, renameColumns, cryptoChanged, rebuild };
 }
 
+/**
+ * Retire (never drop) a column an AUDIT replica's source removed:
+ * synthesize a `_<col>_` column carrying `renamedFrom: col` — and
+ * `nullable: true` when the original was `NOT NULL`, since the source
+ * will never supply a value for it again — onto a COPY of `cur`'s
+ * columns. The underscore-wrapped name survives a later re-add of a
+ * column with the ORIGINAL name (a fresh mirror, unrelated to the
+ * frozen history) — though not a SECOND retirement of the same name,
+ * which would collide with the still-frozen column from the first.
+ *
+ * Deliberately reuses the EXISTING rename/alter/rebuild machinery
+ * instead of a parallel code path: once the synthetic column carries
+ * `renamedFrom`, `pairAndFlags`'s already-tested rename detection (a
+ * `renamedFrom` hint pointing at a `pre`-only, `cur`-absent column)
+ * picks it up automatically — including per-dialect REBUILD-vs-ALTER
+ * for the nullable relax, and the resulting `ALTER_TABLE
+ * .renameColumns` DDL.
+ *
+ * `warn` collects one message per retired column so the caller can
+ * surface it — a column silently vanishing from its usual name is a
+ * meaningful change even though nothing is destroyed.
+ */
+function retireAuditColumns(
+  curr: MigrationSnapshot,
+  prevEntities: Record<string, SnapEntity>,
+  matched: ReadonlyMap<string, string>,
+  warn: (message: string) => void,
+): MigrationSnapshot {
+  let entities: Record<string, SnapEntity> | undefined;
+  for (const [currKey, prevKey] of matched) {
+    const cur = curr.entities[currKey]!;
+    if (cur.kind !== 'TABLE' || cur.auditOf === undefined) continue;
+    const pre = prevEntities[prevKey]!;
+    // Columns an explicit renamedFrom hint already claims pair normally
+    // — only a column with NO home left in `cur` is a real retirement.
+    const renameTargets = new Set<string>();
+    for (const c of Object.values(cur.columns)) {
+      if (c.renamedFrom !== undefined) renameTargets.add(c.renamedFrom);
+    }
+    let newColumns: Record<string, SnapColumn> | undefined;
+    for (const col of Object.keys(pre.columns)) {
+      if (cur.columns[col] !== undefined || renameTargets.has(col)) continue;
+      const frozen = `_${col}_`;
+      if (
+        cur.columns[frozen] !== undefined || pre.columns[frozen] !== undefined
+      ) {
+        // Name in use (a prior retirement, or a genuine column already
+        // called that) — fall through to an ordinary drop rather than
+        // collide; see the doc comment's one-retirement-per-name limit.
+        continue;
+      }
+      const p = pre.columns[col]!;
+      (newColumns ??= { ...cur.columns })[frozen] = {
+        ...p,
+        ...(p.nullable === true ? {} : { nullable: true }),
+        renamedFrom: col,
+      };
+      warn(
+        `${currKey}.${col}: removed from the source — retired (not ` +
+          `dropped) in the audit replica as '${frozen}' so its history ` +
+          `survives; it will read as null on every version from here on.`,
+      );
+    }
+    if (newColumns !== undefined) {
+      (entities ??= { ...curr.entities })[currKey] = {
+        ...cur,
+        columns: newColumns,
+      };
+    }
+  }
+  return entities === undefined ? curr : { ...curr, entities };
+}
+
 /** Topo-order TABLE entity keys parents-first via FK references
  * (cycles fall back to insertion order). */
 function orderForCreate(
@@ -351,6 +424,18 @@ export function diffSnapshots(
       }
     }
   }
+
+  // Audit replicas never lose a column the source removes — retire it
+  // (rename to `_<col>_`, relax to nullable if it was NOT NULL) instead
+  // of dropping it, BEFORE anything below reads column shape. Must run
+  // after entity matching (needs `matched`/`prevEntities`) and before
+  // every column-level pass.
+  curr = retireAuditColumns(
+    curr,
+    prevEntities,
+    matched,
+    (m) => warnings.push(m),
+  );
 
   const newKeys = Object.keys(curr.entities).filter((k) => !matched.has(k));
   const droppedKeys = Object.keys(prevEntities).filter(

@@ -46,13 +46,27 @@ type _DisabledKeys<
  * ```
  */
 export type RowOf<D extends _WithColumns> = _Prettify<
-  { -readonly [K in keyof D['columns']]-?: _TypeOf<D['columns'][K]> }
+  {
+    -readonly [K in Exclude<keyof D['columns'], _AsOfKeys<D>>]-?: _TypeOf<
+      D['columns'][K]
+    >;
+  }
 >;
 
 /** Keys hidden from default reads (`.hidden()` → `project: false`). */
 type _HiddenKeys<D extends _WithColumns> = {
   [K in keyof D['columns']]: D['columns'][K] extends { readonly project: false }
     ? K
+    : never;
+}[keyof D['columns']];
+
+/** The VIRTUAL temporal `AsOf` filter column — filterable but never
+ * readable/stored, so it is excluded from every row shape.
+ * @internal Shared with the projection surface (projected.ts) — a
+ * projection is a row shape too, so `project: { '@AsOf': true }` must
+ * be excluded there for the same reason. */
+export type _AsOfKeys<D extends _WithColumns> = {
+  [K in keyof D['columns']]: D['columns'][K] extends { readonly asOf: true } ? K
     : never;
 }[keyof D['columns']];
 
@@ -63,7 +77,9 @@ type _HiddenKeys<D extends _WithColumns> = {
  */
 export type ReadRowOf<D extends _WithColumns> = _Prettify<
   {
-    -readonly [K in Exclude<keyof D['columns'], _HiddenKeys<D>>]-?: _TypeOf<
+    -readonly [
+      K in Exclude<keyof D['columns'], _HiddenKeys<D> | _AsOfKeys<D>>
+    ]-?: _TypeOf<
       D['columns'][K]
     >;
   }

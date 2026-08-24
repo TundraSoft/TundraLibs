@@ -137,6 +137,18 @@ export function assertRegistry(
               `they cannot be joined. Reference a TABLE or VIEW.`,
           );
         }
+        if (target.type === 'AUDIT') {
+          fail(
+            'TERMINAL_JOIN',
+            key,
+            `fk.${alias}`,
+            `${scope}: ${key}.fk.${alias}: '${fk.model}' is a generated ` +
+              `AUDIT replica — its rows are history, not a stable target ` +
+              `(the pk is per-VERSION, and a row can be superseded or ` +
+              `closed at any time). Reference the SOURCE table it mirrors ` +
+              `instead.`,
+          );
+        }
         for (const [local, remote] of Object.entries(fk.on)) {
           if (!(remote in target.columns)) {
             fail(

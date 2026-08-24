@@ -133,7 +133,7 @@ export function toMermaidERD(input: DocInput): string {
     ) {
       const keys: string[] = [];
       if (
-        def.type === 'TABLE' &&
+        (def.type === 'TABLE' || def.type === 'AUDIT') &&
         (def.primaryKeys as readonly string[]).includes(col)
       ) keys.push('PK');
       if (fkLocals.has(col)) keys.push('FK');
@@ -229,7 +229,7 @@ export function toPlantUML(input: DocInput): string {
         def.columns as Record<string, ColumnSpec>,
       )
     ) {
-      const isPk = def.type === 'TABLE' &&
+      const isPk = (def.type === 'TABLE' || def.type === 'AUDIT') &&
         (def.primaryKeys as readonly string[]).includes(col);
       const marks: string[] = [];
       if (isPk) marks.push('<<PK>>');
@@ -309,10 +309,13 @@ export function toMarkdown(input: DocInput): string {
     }
     out.push('');
 
-    if (def.type === 'TABLE') {
+    if (def.type === 'TABLE' || def.type === 'AUDIT') {
       out.push(
         `- **Primary key:** ${(def.primaryKeys as string[]).join(', ')}`,
       );
+      if (def.type === 'AUDIT') {
+        out.push(`- **Audit of:** ${(def as { auditOf: string }).auditOf}`);
+      }
     } else {
       out.push(`- **Reads from:** ${(def.query as { table: string }).table}`);
     }
