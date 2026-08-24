@@ -39,12 +39,6 @@ const SECRET = 'demo-only-secret-do-not-use-in-production';
 const say = (title: string, value: unknown) =>
   console.log(`\n▶ ${title}\n${JSON.stringify(value, null, 2)}`);
 
-/** `EffectiveFrom`/`EffectiveTo` type as `Date`, but SQLite's driver
- * hands one back as an ISO string at runtime (Postgres/MariaDB decode
- * to a real `Date`) — the `Date` constructor accepts either at
- * runtime, so this coerces past the type-level mismatch. */
-const asDate = (v: Date): Date => new Date(v as unknown as string);
-
 const migDir = await makeTempDir({ prefix: 'norm-subscription-billing-' });
 const engine = new SQLiteEngine('subscription-billing', { path: ':memory:' });
 const norm = new Norm({ engine, secret: SECRET });
@@ -146,11 +140,7 @@ try {
       .data[0]!.Status,
     auditVersions: trail.data.map((v) => ({
       Status: v.Status,
-      // The declared column type is `Date`, but the SQLite driver
-      // actually hands back an ISO string at runtime (Postgres/MariaDB
-      // decode to a real `Date`) — coerce rather than trust the type.
-      // See the report for this example: it's a real type/runtime gap.
-      current: asDate(v.EffectiveTo).getFullYear() > 2098,
+      current: v.EffectiveTo.getFullYear() > 2098,
     })),
   });
 

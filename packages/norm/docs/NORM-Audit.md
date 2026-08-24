@@ -183,10 +183,6 @@ separate override.
 - **MongoDB** and the edge HTTP engines have no transactions, so the
   mirror is **best-effort** — same caveat as
   [temporal](NORM-Temporal.md#cross-engine-notes).
-- **On SQLite, the replica's `EffectiveFrom`/`EffectiveTo` come back as
-  ISO strings, not `Date` instances, even through a typed `find()`** —
-  not specific to the replica or to audit: it's [every date-typed column on SQLite](NORM-Schema.md#column-builders). Coerce defensively
-  before calling `Date` methods on them.
 - **Encryption** carries over unchanged: an `.encrypt()` column's
   ciphertext (and key-id envelope) is copied into the replica as-is —
   never decrypted, never re-encrypted. Old versions decrypt through the

@@ -158,15 +158,6 @@ temporal: {
   guard concurrent writers. Use temporal on a transaction-capable engine
   when the one-current guarantee matters.
 
-> **On SQLite, `EffectiveFrom`/`EffectiveTo` come back as ISO strings, not
-> `Date` instances — even through a typed `find()`.** This isn't unique
-> to temporal — it's [every date-typed column on SQLite](NORM-Schema.md#column-builders); `EffectiveFrom`/`EffectiveTo`
-> just happen to be columns every temporal table has. Coerce
-> defensively: `new Date(row.EffectiveTo as unknown as string)` works on
-> both shapes (the `Date` constructor accepts a `Date` or an ISO
-> string). See `packages/norm/examples/subscription-billing/main.ts`'s
-> `asDate()` helper for a working pattern.
-
 ## Common issues
 
 - **"`find` returns duplicates."** Expected — a bare `find({ '@Name': x })`
