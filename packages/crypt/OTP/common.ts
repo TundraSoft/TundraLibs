@@ -270,23 +270,21 @@ export const generate = async (
 };
 
 /**
- * Compares two OTP code strings in constant time.
+ * Compares two strings in constant time — for OTP codes, hex digests, API
+ * secrets, or any value where a mismatch position must not leak through
+ * timing.
  *
  * Using `===` (or any byte-by-byte compare that short-circuits on the first
  * mismatch) leaks timing information about how many leading characters of a
- * candidate code were correct, which an attacker can exploit to recover the
- * expected code one digit at a time. This helper always inspects every
- * character of the longer string, accumulating differences with a bitwise OR
- * so the running time depends only on the input lengths, not on their
- * contents.
+ * candidate matched, which an attacker can exploit to recover the expected
+ * value one character at a time. This helper always inspects every character
+ * of the longer string, accumulating differences with a bitwise OR so the
+ * running time depends only on the input lengths, not on their contents. A
+ * length mismatch returns `false` (after still scanning every character).
  *
- * Both arguments are expected to be the fixed-length, zero-padded codes
- * produced by {@link generate}; a length mismatch returns `false` (after
- * still scanning every character).
- *
- * @param {string} a - First OTP code.
- * @param {string} b - Second OTP code.
- * @returns {boolean} `true` only when the codes are identical.
+ * @param {string} a - First string.
+ * @param {string} b - Second string.
+ * @returns {boolean} `true` only when the strings are identical.
  */
 export const constantTimeEqual = (a: string, b: string): boolean => {
   const length = Math.max(a.length, b.length);

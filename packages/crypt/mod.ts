@@ -128,6 +128,7 @@ export {
 
 export {
   // type DigestAlgorithms,
+  constantTimeEqual,
   generateHOTP,
   generateTOTP,
   verifyHOTP,
