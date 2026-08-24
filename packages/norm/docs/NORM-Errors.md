@@ -68,17 +68,17 @@ handle migration failures.
 
 ## Error classes
 
-| Class                   | Thrown by                                                                                                           | Carries a code                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `NormError`             | The instance/configuration surface — `new Norm({...})`, dialect resolution, `runtimeOf()`. Also the base class.     | Yes — the three instance codes.                       |
-| `NormQueryError`        | The read/write surface, **before** any engine call: filters, projections, aggregates, upserts, scopes.              | Yes — all seven query-surface codes.                  |
-| `NormCryptoError`       | The crypto path — a cell that would not decrypt/decode, or a request needing a `secret` that was never configured.  | Only for `MISSING_SECRET`; read-path failures do not. |
-| `NormDefinitionError`   | `Entity()` / `Schema()` / `use()` and the compile pass. Aggregates every finding on `context.issues`.               | Yes — the five definition codes.                      |
-| `NormMigrationError`    | The `Migrator` — drift, blocked drops, plan mismatches, lock contention, refused rewrites.                          | Yes — the migration codes, plus `MISSING_SECRET`.     |
-| `NormAdvisoryLockError` | The executor seam when `pg_advisory_lock` / `GET_LOCK` times out. The migrator remaps it to a `NormMigrationError`. | Always `LOCK_TIMEOUT` (set by the constructor).       |
-| `NormValidationError`   | The write path when an insert/update/upsert payload fails the column-derived Guardian. Detail on `context.issues`.  | No — branch on the class.                             |
-| `NormHookError`         | The accessor pipeline when a model's `beforeInsert` / `beforeUpdate` / `beforeDelete` / `afterRead` hook throws.    | No — `context.model` and `context.hook` identify it.  |
-| `NormUnsupportedError`  | Eagerly, when the configured engine lacks a capability (`db.transaction()` on MongoDB). `context.feature` names it. | No — branch on the class.                             |
+| Class                   | Thrown by                                                                                                                                                                                                                                                            | Carries a code                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `NormError`             | The instance/configuration surface — `new Norm({...})`, dialect resolution, `runtimeOf()`. Also the base class.                                                                                                                                                      | Yes — the four instance codes.                        |
+| `NormQueryError`        | The read/write surface, **before** any engine call: filters, projections, aggregates, upserts, scopes.                                                                                                                                                               | Yes — all nine query-surface codes.                   |
+| `NormCryptoError`       | The crypto path — a cell that would not decrypt/decode, or a request needing a `secret` that was never configured.                                                                                                                                                   | Only for `MISSING_SECRET`; read-path failures do not. |
+| `NormDefinitionError`   | `Entity()` / `Schema()` / `use()` and the compile pass. Aggregates every finding on `context.issues`.                                                                                                                                                                | Yes — the five definition codes.                      |
+| `NormMigrationError`    | The `Migrator` — drift, blocked drops, plan mismatches, lock contention, refused rewrites.                                                                                                                                                                           | Yes — the migration codes, plus `MISSING_SECRET`.     |
+| `NormAdvisoryLockError` | The executor seam when `pg_advisory_lock` / `GET_LOCK` times out. The migrator remaps it to a `NormMigrationError`.                                                                                                                                                  | Always `LOCK_TIMEOUT` (set by the constructor).       |
+| `NormValidationError`   | The write path when an insert/update/upsert payload fails the column-derived Guardian. Detail on `context.issues`.                                                                                                                                                   | No — branch on the class.                             |
+| `NormHookError`         | The accessor pipeline when a model's `beforeInsert` / `beforeUpdate` / `beforeDelete` / `afterRead` hook throws.                                                                                                                                                     | No — `context.model` and `context.hook` identify it.  |
+| `NormUnsupportedError`  | Eagerly, when the configured engine lacks a capability (`db.transaction()` on MongoDB), or the entity's own shape forbids the call (`update()`/`upsert()`/`delete()`/`truncate()` on a `temporal` entity — insert-only on every engine). `context.feature` names it. | No — branch on the class.                             |
 
 ## Reading a code
 
@@ -94,14 +94,15 @@ function describe(err: unknown): string {
 }
 ```
 
-There are **27** codes in the `NormErrorCode` union, grouped below by
+There are **30** codes in the `NormErrorCode` union, grouped below by
 the surface that raises them.
 
 ## Query surface codes
 
-Seven codes, all carried by `NormQueryError` and all raised **before**
+Nine codes, all carried by `NormQueryError` and all raised **before**
 the engine is touched — they describe a shape the repository cannot
-execute, never a database failure.
+execute, never a database failure. Two of the nine (`TEMPORAL_PAST`,
+`TEMPORAL_OVERLAP`) apply only to a `temporal` entity's `insert()`.
 
 | Code                    | Raised when                                                                                                                                                                                                                                                         | What to do                                                                                                                                                               |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -112,6 +113,8 @@ execute, never a database failure.
 | `SCOPE_VIOLATION`       | A `db.scope(...)` spec is invalid (a key that is not a single `@column`, or a value that is not an equality primitive), a scoped write would move a row out of its scope, a scoped upsert would adopt an outside row, or `truncate()` is called on a scoped handle. | Fix the scope spec, or drop the offending column from the payload and let the scope fill it. Use `delete({})` instead of `truncate()` on a scoped handle.                |
 | `INVALID_PROJECTION`    | A projection key does not start with `@`, sub-projects a non-relation, names an unknown target, selects only relations, or asks for `total: true` on a filter that cannot be counted.                                                                               | Correct the projection; include at least one local column when projecting relations.                                                                                     |
 | `UNKNOWN_RELATION`      | A relation alias in a filter, `orderBy`, or projection resolves to neither a foreign key nor a reverse relation.                                                                                                                                                    | Use a declared FK alias or the reverse name (`reverseAs`, or the derived default) on that entity.                                                                        |
+| `TEMPORAL_PAST`         | A `temporal` entity's `insert({ EffectiveFrom })` supplied a value that doesn't parse, or is in the past beyond a small clock-skew tolerance — history is immutable.                                                                                                | Omit `EffectiveFrom` (norm stamps "now") or pass a value at/after now. See [Temporal](NORM-Temporal.md).                                                                 |
+| `TEMPORAL_OVERLAP`      | A `temporal` entity's `insert({ EffectiveFrom })` falls at or before the currently active version's own `EffectiveFrom` — a new version must start strictly after the one it supersedes.                                                                            | Pass a later `EffectiveFrom`, or omit it to use "now". See [Temporal](NORM-Temporal.md).                                                                                 |
 
 Two refusals reuse an existing code rather than getting one of their
 own, which is easy to miss: ordering by — or supplying a filter **value**
@@ -135,13 +138,14 @@ They surface as a thrown `NormCryptoError` only under
 
 ## Instance and configuration codes
 
-All three are thrown as a plain `NormError`.
+All four are thrown as a plain `NormError`.
 
-| Code                    | Raised when                                                                                                   | What to do                                                                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `INVALID_HANDLE`        | A value passed where a `NormDb` handle was expected is not one — `runtimeOf()` and the migration seam.        | Pass the value `norm.use(...)` returned, not the `Norm` instance and not a repo.                                                        |
-| `INVALID_ENGINE_CONFIG` | `new Norm({...})` got both `engine` and `database`, neither, or a `database.dialect` NORM does not know.      | Pass exactly one of `engine` / `database`, and a supported dialect.                                                                     |
-| `ENGINE_NOT_REGISTERED` | `database.dialect` names a known dialect whose engine module was never imported (`context.dialect` names it). | Import `@tundralibs/norm/engines/<dialect>` — or the root `@tundralibs/norm` barrel, which registers all of them — before constructing. |
+| Code                    | Raised when                                                                                                                                                                                                                             | What to do                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_HANDLE`        | A value passed where a `NormDb` handle was expected is not one — `runtimeOf()` and the migration seam.                                                                                                                                  | Pass the value `norm.use(...)` returned, not the `Norm` instance and not a repo.                                                        |
+| `INVALID_ENGINE_CONFIG` | `new Norm({...})` got both `engine` and `database`, neither, or a `database.dialect` NORM does not know.                                                                                                                                | Pass exactly one of `engine` / `database`, and a supported dialect.                                                                     |
+| `ENGINE_NOT_REGISTERED` | `database.dialect` names a known dialect whose engine module was never imported (`context.dialect` names it).                                                                                                                           | Import `@tundralibs/norm/engines/<dialect>` — or the root `@tundralibs/norm` barrel, which registers all of them — before constructing. |
+| `INVALID_CACHE_CONFIG`  | An entity declares `cache: <minutes>` and also declares `.encrypt()` columns, on a cache engine other than the in-process `MEMORY` one — an external cache must never hold decrypted plaintext at rest. Raised at `norm.use(...)` time. | Cache that entity only on the `MEMORY` cache engine, or drop `cache` from it. See [Caching](NORM-Caching.md).                           |
 
 `ENGINE_NOT_REGISTERED` is the one you meet most often on `sqlite` — the
 root barrel deliberately does not register it eagerly (a native binding
@@ -337,6 +341,10 @@ well as the code when the reaction differs.
   migration codes police.
 - **[Schema definition](./NORM-Schema.md)** — the declarations validated
   into `NormDefinitionError`.
+- **[Temporal](./NORM-Temporal.md)** — where `TEMPORAL_PAST` and
+  `TEMPORAL_OVERLAP` come from.
+- **[Caching](./NORM-Caching.md)** — where `INVALID_CACHE_CONFIG` comes
+  from.
 
 ---
 

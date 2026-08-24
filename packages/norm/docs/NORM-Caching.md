@@ -16,11 +16,13 @@ prunes that table's cache.
 - [Bypassing the cache per call](#bypassing-the-cache-per-call)
 - [Manual clearing](#manual-clearing)
 - [Views and queries](#views-and-queries)
+- [Temporal and audit tables](#temporal-and-audit-tables)
 - [Encryption](#encryption)
 - [Cache engines](#cache-engines)
 - [Backend failures](#backend-failures)
 - [Events](#events)
 - [Rules and limits](#rules-and-limits)
+- [Related documentation](#related-documentation)
 
 ## Enabling caching
 
@@ -119,6 +121,13 @@ model's own cache plus any VIEW / QUERY that reads from it. `db.clearCache()`
 (no argument) drops everything. Both are no-ops when no `cache` was
 configured.
 
+> A schema [migration](NORM-Migrations.md) never calls either of these —
+> `Migrator.apply()`/`rollback()` run DDL only and don't touch the read
+> cache. If the `Norm` instance you migrate against also has `cache`
+> configured, call `db.clearCache()` afterward so rows cached under the
+> old shape don't linger on an external engine (Redis/Memcached) that
+> outlives the process.
+
 ## Views and queries
 
 VIEW and QUERY entities are cacheable too. Because they derive from base
@@ -140,6 +149,26 @@ const App = Schema('App', {
 
 This is the sanctioned way to cache a multi-table read: model it as a
 VIEW and you get precise, dependency-driven invalidation for free.
+
+## Temporal and audit tables
+
+`cache` combines with [`temporal`](NORM-Temporal.md) on the same TABLE:
+`insert` — the only write verb a temporal table allows — invalidates the
+cache exactly like any other write. The one caveat is `@AsOf`: a filter
+like `find({ '@AsOf': new Date() })` bakes that exact millisecond into
+the cache key, so consecutive calls almost never hit — filter on
+`'@EffectiveTo': sentinel` instead for a cacheable "current" read (see
+[Temporal → Common issues](NORM-Temporal.md#common-issues)).
+
+`cache` also combines with [`audit`](NORM-Audit.md) on the SOURCE table
+— the mirror write into the replica doesn't change how the source's own
+cache is invalidated. The generated **replica itself can never be
+cached**, though: `audit` has no `cache` option, so `db.repo('<name>')`
+always reads the database. Don't route around this with a VIEW
+over the replica's physical table — a mirrored write invalidates the
+SOURCE's cache namespace only, never the replica's, so that VIEW's
+cache would never get pruned and would silently serve stale rows past
+its TTL (see [Audit → Common issues](NORM-Audit.md#common-issues)).
 
 ## Encryption
 
@@ -206,3 +235,18 @@ Wire these on the [event bus](../README.md#events):
   correctness problem.
 - `name` must not contain `:` (cacher's reserved separator) or `__`
   (norm's entity separator).
+
+## Related documentation
+
+- [Temporal tables](NORM-Temporal.md) — `cache` combined with
+  `temporal`, and the `@AsOf` cache-key caveat.
+- [Audit tables](NORM-Audit.md) — `cache` on an audited source table;
+  why the generated replica can never be cached.
+- [Migrations](NORM-Migrations.md) — the `Migrator` never touches the
+  read cache; call `db.clearCache()` after a schema change.
+- [Schema definition](NORM-Schema.md) — columns, entities, and the
+  `cache` option in context.
+
+---
+
+[← Back to NORM](../README.md)

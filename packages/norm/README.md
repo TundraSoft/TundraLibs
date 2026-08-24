@@ -10,6 +10,36 @@ and, on edge runtimes, Neon, Turso, and Cloudflare D1 over HTTP.
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 
+## Standout features
+
+What sets NORM apart from a typical TypeScript ORM — each links to the
+full guide:
+
+- **Row-level / at-rest encryption** — `.encrypt()` any column; filter
+  and enforce uniqueness on ciphertext via a digest sibling. See
+  [Security](docs/NORM-Security.md).
+- **Audit trail / change history** — a generated, read-only replica that
+  mirrors every insert/update/delete with no change to the source table.
+  See [Audit tables](docs/NORM-Audit.md).
+- **Temporal / effective-dated tables** — norm keeps every version of a
+  row in place, with point-in-time (`@AsOf`) reads and scheduled
+  changes. See [Temporal tables](docs/NORM-Temporal.md).
+- **Multi-tenant / row-level scoping** — one call wraps every read and
+  write of a handle in an always-on equality filter, enforced against
+  cross-tenant writes too. See [Scoping](docs/NORM-Scoping.md).
+- **Opt-in read-query caching** — per-entity TTLs, per-table invalidation
+  on write, any `@tundralibs/cacher` backend. See
+  [Read caching](docs/NORM-Caching.md).
+- **Zero-codegen types** — `RowOf`, `InsertOf`, `UpdateOf`, and typed
+  filters/projections read straight off the entity declaration; no
+  generated files, no build step. See
+  [Schema definition](docs/NORM-Schema.md).
+- **Cross-runtime** — Deno, Bun, Node.js, Cloudflare Workers, and (six of
+  seven dialects) the browser, from one codebase. See [Browser / Worker compatibility](#browser--worker-compatibility) below.
+
+See the [subscription-billing example](examples/subscription-billing/) for several of these working
+together in one runnable app.
+
 ## Overview
 
 You define entities with a builder API. From that single declaration

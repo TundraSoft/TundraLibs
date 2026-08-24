@@ -125,6 +125,14 @@ export const Profiles = Entity('profiles', {
 });
 ```
 
+Both `Users` and `Profiles` above are plain tables. The third `Entity()`
+options argument also takes `temporal` (keep every version of a row,
+insert-only) and `audit` (a generated read-only history replica beside
+a normally-mutable table) — mutually exclusive with each other — plus a
+`cache: <minutes>` TTL for join-free reads. See
+[Temporal](NORM-Temporal.md), [Audit](NORM-Audit.md), and
+[Caching](NORM-Caching.md).
+
 Group entities into a schema and compose the schemas into a typed
 database handle. `use()` resolves foreign keys across schema
 boundaries, so `Links.ownerId → Users` works even though they live in
@@ -153,17 +161,17 @@ import { Migrator } from '@tundralibs/norm/migrations';
 
 const mig = new Migrator(db, { dir: './migrations' });
 
-await mig.snapshot(); // writes 0001.json (.sql opt-in: renderSql / renderPlans())
+await mig.snapshot(); // writes 0001.json (reviewable .sql plans are opt-in)
 await mig.plan(); // inspect the DDL before you run it
 await mig.apply(); // execute + record in _norm_migrations
 ```
 
 Day 2, you change a model. `snapshot()` writes `0002.json`; `plan()`
 shows the diff; `apply()` runs it. A rename is a one-line hint
-(`renamedFrom: 'oldName'`) so data survives; a forgotten rename shows
-up as a **blocked drop** and `apply()` refuses rather than silently
-losing a column. See [Migrations](NORM-Migrations.md) for rebuilds,
-stored plans, and the advisory lock.
+(`.renamedFrom('oldName')` on the column) so data survives; a forgotten
+rename shows up as a **blocked drop** and `apply()` refuses rather than
+silently losing a column. See [Migrations](NORM-Migrations.md) for
+rebuilds, stored plans, and the advisory lock.
 
 ## 4. Insert and read
 
@@ -400,7 +408,8 @@ import { Migrator } from '@tundralibs/norm/migrations';
 // Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
-const engine = new SQLiteEngine('test', { path: await Deno.makeTempDir() });
+const tempDir = await Deno.makeTempDir();
+const engine = new SQLiteEngine('test', { path: tempDir });
 const db = new Norm({ engine, secret: 'test' }).use(Identity, Shortener);
 await new Migrator(db, { dir: tempDir }).snapshot();
 await new Migrator(db, { dir: tempDir }).apply();
