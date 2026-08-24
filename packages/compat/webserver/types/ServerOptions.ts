@@ -42,7 +42,13 @@ export type ServerOptions<M extends ServerMode = ServerMode, T = unknown> = (
       hostname?: string;
       /** Pending-connection queue length. Silently ignored on Bun. */
       backlog?: number;
-      /** Allow another listener on the same port (cluster patterns). Ignored on Bun. */
+      /**
+       * Allow another listener on the same port (cluster / load-balancing
+       * patterns). On Node this is honored only where the kernel exposes
+       * `SO_REUSEPORT` (Linux, FreeBSD, illumos/Solaris, AIX) and on Node
+       * ≥ 22.12; on macOS and Windows it is a no-op rather than an error,
+       * matching Deno/Bun. Ignored on Bun.
+       */
       reusePort?: boolean;
       /** TLS settings — when set the server speaks HTTPS. @see {@link TLSOptions} */
       tls?: TLSOptions;
