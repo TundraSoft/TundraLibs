@@ -44,7 +44,24 @@ before adopting is tooling, not new query power.
 - **Thin column-type palette** — no PG enum/array/tsvector/geometry, no
   `customType`, no `CHECK`, no partial/expression indexes.
 - **After-write hooks / global subscribers** — no hook that sees the
-  persisted result, no cross-entity subscribers.
+  persisted result, no cross-entity subscribers. (The temporal write path
+  below would land this seam.)
+- **Temporal & audit tables** — _BOTH BUILT + live-tested on all 4 engines
+  (uncommitted)._ Two effective-dating features sharing one supersede
+  primitive (`EffectiveFrom`/`EffectiveTo`, far-future sentinel
+  making one-current a cross-dialect `UNIQUE` constraint), **no actor**.
+  _Temporal_: the main table itself is versioned (declared temporal key ≠
+  pk; `insert` supersedes — the ONLY write verb; `update`/`upsert`/
+  `truncate`/`delete` all disabled). _Audit_: the main table stays
+  completely normal (unchanged write semantics) and norm mirrors every
+  insert/update/upsert/delete/truncate into a generated, FK-less,
+  read-only replica (main columns + time columns + a new surrogate pk;
+  the main pk becomes the version key). Reads are plain column filters
+  (`EffectiveTo = sentinel` for current, or the virtual `@AsOf` filter —
+  no injected predicate). Best-effort/non-atomic on Mongo + edge
+  (documented). Design in [`DESIGN-Temporal.md`](DESIGN-Temporal.md),
+  user guides in [`docs/NORM-Temporal.md`](docs/NORM-Temporal.md) and
+  [`docs/NORM-Audit.md`](docs/NORM-Audit.md).
 - **Cached joined reads** — the read cache covers single-table reads
   (single-table aggregates included); joined / relational reads are never
   cached (a joined entry depends on more than one table, breaking

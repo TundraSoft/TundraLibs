@@ -52,7 +52,7 @@ export function definitionIssues(def: AnyDefinition): DefinitionIssue[] {
     issues.push(...columnSpecIssues(name, colName, spec));
 
     if (
-      def.type !== 'TABLE' &&
+      (def.type === 'VIEW' || def.type === 'QUERY') &&
       (spec.default !== undefined || spec.transforms?.beforeWrite)
     ) {
       at(
@@ -187,8 +187,11 @@ export function definitionIssues(def: AnyDefinition): DefinitionIssue[] {
     }
   };
 
-  // ── Read-only kinds: stored SELECT + hook restrictions ──────────
-  if (def.type !== 'TABLE') {
+  // ── Read-only DERIVED kinds: stored SELECT + hook restrictions ───
+  // AUDIT falls through to the TABLE rules below — it is a PHYSICAL,
+  // pk-bearing table (just exposed read-only via the repo layer), not
+  // a derived SELECT like VIEW/QUERY.
+  if (def.type === 'VIEW' || def.type === 'QUERY') {
     if (d.query?.type !== 'SELECT') {
       at('query', `Entity('${name}'): ${def.type} query must be a SELECT`);
     }

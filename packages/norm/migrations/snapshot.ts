@@ -63,6 +63,12 @@ export type SnapEntity = {
   readonly materialized?: true;
   /** MIGRATION HINT — excluded from hashing. */
   readonly renamedFrom?: string;
+  /** Registry key of the source TABLE this is a generated AUDIT
+   * replica of; absent for every other entity. `diffSnapshots` reads
+   * this to retire (never drop) a column the source removes — see
+   * `retireAuditColumns`. A structural fact, not a hint: included in
+   * the hash like any other. */
+  readonly auditOf?: string;
 };
 
 /** A whole-schema snapshot file. */
@@ -151,6 +157,7 @@ export function buildSnapshot(
       indexes?: Record<string, readonly string[]>;
       uniques?: Record<string, readonly string[]>;
       renamedFrom?: string;
+      auditOf?: string;
     };
 
     let foreignKeys: Record<string, SnapForeignKey> | undefined;
@@ -201,6 +208,7 @@ export function buildSnapshot(
         }
         : {}),
       ...(t.renamedFrom !== undefined ? { renamedFrom: t.renamedFrom } : {}),
+      ...(t.auditOf !== undefined ? { auditOf: t.auditOf } : {}),
     };
   }
 

@@ -22,6 +22,7 @@ import type {
   AnyDefinition,
   ColumnSpec,
   EmittedForeignKey,
+  EmittedTemporal,
   ReadHooks,
   TableHooks,
 } from './definition/mod.ts';
@@ -293,6 +294,37 @@ export type CompiledEntity = {
     | TableHooks<Record<string, AnyColumnBuilder>>
     | ReadHooks<Record<string, AnyColumnBuilder>>
     | undefined;
+  /** Effective-dating metadata — present for a TABLE with `temporal`
+   * (drives the write-side supersede) AND for a generated AUDIT replica
+   * (drives ONLY the read-side `@AsOf` rewrite; an AUDIT entity is never
+   * write-reachable via `Repo`, so the supersede path never runs for
+   * it). `sentinel` is the resolved open-end timestamp stored in `to`
+   * for the current version. */
+  readonly temporal: CompiledTemporal | undefined;
+  /** Present on a TABLE that declares `audit` — the generated replica's
+   * registry key. The write path resolves the replica's own
+   * `CompiledEntity` (`runtime.compiled.get(replicaKey)`) to mirror
+   * into at insert/update/delete/upsert/truncate time. */
+  readonly audit: CompiledAudit | undefined;
+};
+
+/** Compiled {@link EmittedAudit}: just the replica's registry key — the
+ * replica's OWN `CompiledEntity.temporal` carries the column names/
+ * sentinel the write-side mirror needs. */
+export type CompiledAudit = {
+  readonly replicaKey: string;
+};
+
+/** Compiled {@link EmittedTemporal}: column names + the sentinel as a
+ * `Date` (parsed once). */
+export type CompiledTemporal = {
+  readonly key: readonly string[];
+  readonly from: string;
+  readonly to: string;
+  readonly sentinel: Date;
+  /** Virtual point-in-time filter column: `@<asOf>: T` rewrites to
+   * `from <= T AND to > T`. Not a stored column. */
+  readonly asOf: string;
 };
 
 /** The once-compiled, shared-by-reference state behind an instance. */
@@ -680,7 +712,34 @@ function compileEntity(def: AnyDefinition, key: string): CompiledEntity {
       : new Set(columnNames.filter((c) => !projected.includes(c))),
     guardians: def.type === 'TABLE' ? buildWriteGuardians(columns) : undefined,
     hooks: (def as { hooks?: CompiledEntity['hooks'] }).hooks,
+    // Fires for BOTH a temporal TABLE (write-side supersede) and a
+    // generated AUDIT replica (read-side `@AsOf` only — see the field
+    // doc on CompiledEntity.temporal): `buildAudit` (entity.ts) stamps
+    // the SAME EmittedTemporal shape onto the replica definition.
+    temporal: compileTemporal(def),
+    audit: compileAudit(def),
   };
+}
+
+/** Parse the emitted temporal config into runtime form (sentinel → Date). */
+function compileTemporal(def: AnyDefinition): CompiledTemporal | undefined {
+  const t = (def as { temporal?: EmittedTemporal }).temporal;
+  if (t === undefined) return undefined;
+  return {
+    key: t.key,
+    from: t.from,
+    to: t.to,
+    sentinel: new Date(t.sentinel),
+    asOf: t.asOf,
+  };
+}
+
+/** Parse the emitted audit config (TABLE side) into runtime form — just
+ * the generated replica's registry key. */
+function compileAudit(def: AnyDefinition): CompiledAudit | undefined {
+  const a = (def as { audit?: { name: string } }).audit;
+  if (a === undefined) return undefined;
+  return { replicaKey: a.name };
 }
 
 /**

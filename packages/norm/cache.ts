@@ -33,7 +33,7 @@
 import { Cacher } from '@tundralibs/cacher';
 import type { AbstractEngine, CacherOptions } from '@tundralibs/cacher';
 import { digest } from '@tundralibs/crypt/digest';
-import type { AnyDefinition } from './definition/mod.ts';
+import type { AnyDefinition, EmittedForeignKey } from './definition/mod.ts';
 import { NormError } from './errors/mod.ts';
 
 /** Namespace separator between the connection name and the entity key.
@@ -89,6 +89,13 @@ export type CachePlan = {
    * it (directly or transitively through composed views). A write to
    * the source prunes each dependent's namespace. */
   readonly invalidates: ReadonlyMap<string, readonly string[]>;
+  /** Parent entity key → every entity key whose rows the DATABASE
+   * removes when a parent row is deleted/truncated, via a chain of
+   * `onDelete: 'CASCADE'` foreign keys (direct or transitive — a
+   * cascade-child's own cascade-children are included). A delete /
+   * truncate on the parent prunes each of these too, since the DB
+   * mutates their rows without norm ever calling their `delete()`. */
+  readonly cascadeDependents: ReadonlyMap<string, readonly string[]>;
 };
 
 const TAG = '$$normEnc';
@@ -100,6 +107,12 @@ const TAG = '$$normEnc';
  * become an index-keyed object). Everything else — strings, numbers,
  * booleans, `null`, and already-JSON `json`-column payloads — passes
  * through, recursing into arrays and plain objects.
+ *
+ * A `json`-column payload that itself carries the {@link TAG} key (e.g.
+ * a document literally shaped like `{ $$normEnc: 'date', v: … }`) is
+ * indistinguishable from a norm carrier on read, so it is wrapped in a
+ * `'raw'` escape carrier — {@link decodeFromCache} unwraps it verbatim
+ * instead of reviving it as the wrong type.
  */
 export function encodeForCache(value: unknown): unknown {
   if (value === null || value === undefined) return value;
@@ -113,15 +126,24 @@ export function encodeForCache(value: unknown): unknown {
     return { [TAG]: 'u8', v: Array.from(value) };
   }
   if (Array.isArray(value)) return value.map(encodeForCache);
+  const obj = value as Record<string, unknown>;
+  const fields = encodeFields(obj);
+  // A user object that carries the tag key would be mistaken for a
+  // carrier on decode — escape it so it round-trips unchanged.
+  return TAG in obj ? { [TAG]: 'raw', v: fields } : fields;
+}
+
+/** Field-wise encode of a plain object (never re-interprets the object
+ * itself as a carrier — that decision belongs to {@link encodeForCache}). */
+function encodeFields(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    out[k] = encodeForCache(v);
-  }
+  for (const [k, v] of Object.entries(obj)) out[k] = encodeForCache(v);
   return out;
 }
 
 /** Inverse of {@link encodeForCache}: revive tagged `bigint` / `Date` /
- * `Uint8Array` carriers, recursing through arrays and plain objects. */
+ * `Uint8Array` carriers and unwrap `'raw'` escapes, recursing through
+ * arrays and plain objects. */
 export function decodeFromCache(value: unknown): unknown {
   if (value === null || value === undefined || typeof value !== 'object') {
     return value;
@@ -133,7 +155,15 @@ export function decodeFromCache(value: unknown): unknown {
     if (tag === 'bigint') return BigInt(obj.v as string);
     if (tag === 'date') return new Date(obj.v as string);
     if (tag === 'u8') return Uint8Array.from(obj.v as number[]);
+    // Escaped user object: decode its FIELDS, but do not re-interpret the
+    // restored object (which carries the tag key) as a carrier again.
+    if (tag === 'raw') return decodeFields(obj.v as Record<string, unknown>);
   }
+  return decodeFields(obj);
+}
+
+/** Field-wise decode of a plain object (mirror of {@link encodeFields}). */
+function decodeFields(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) out[k] = decodeFromCache(v);
   return out;
@@ -270,6 +300,23 @@ export class QueryCache {
       jobs.push(this.__clear(dep));
     }
     await Promise.all(jobs);
+  }
+
+  /**
+   * Like {@link invalidate}, plus every entity a DELETE/TRUNCATE on
+   * `entityKey` cascades into via `onDelete: 'CASCADE'` foreign keys —
+   * the database removes their rows without norm ever calling their
+   * `delete()`, so their caches (and any VIEW/QUERY built over them)
+   * would otherwise sit stale for the full TTL. Use for `delete()` and
+   * `truncate()`; a plain `insert()`/`update()` never cascades and
+   * should call {@link invalidate} instead.
+   */
+  public async invalidateCascading(entityKey: string): Promise<void> {
+    const targets = [
+      entityKey,
+      ...(this.__plan.cascadeDependents.get(entityKey) ?? []),
+    ];
+    await Promise.all(targets.map((k) => this.invalidate(k)));
   }
 
   /** Clear every cacheable entity's namespace for this connection. */
@@ -428,5 +475,52 @@ export function buildCachePlan(
     }
   }
 
-  return { ttlSeconds, cacheable, invalidates };
+  // CASCADE FK graph: invert child→parents into parent→direct children,
+  // then close it transitively (a cascade-child's own cascade-children
+  // are removed too when the top parent is deleted).
+  const childToParents = directCascadeParents(registry);
+  const directChildren = new Map<string, Set<string>>();
+  for (const [child, parents] of childToParents) {
+    for (const parent of parents) {
+      const kids = directChildren.get(parent) ?? new Set<string>();
+      kids.add(child);
+      directChildren.set(parent, kids);
+    }
+  }
+  const cascadeDependents = new Map<string, string[]>();
+  for (const parent of directChildren.keys()) {
+    const seen = new Set<string>();
+    const stack = [...(directChildren.get(parent) ?? [])];
+    while (stack.length > 0) {
+      const child = stack.pop()!;
+      if (seen.has(child)) continue;
+      seen.add(child);
+      for (const grandchild of directChildren.get(child) ?? []) {
+        if (!seen.has(grandchild)) stack.push(grandchild);
+      }
+    }
+    if (seen.size > 0) cascadeDependents.set(parent, [...seen]);
+  }
+
+  return { ttlSeconds, cacheable, invalidates, cascadeDependents };
+}
+
+/** Direct CASCADE FK edges: child entity key → the parent entity keys
+ * (`fk.model`) it declares an `onDelete: 'CASCADE'` foreign key to. */
+function directCascadeParents(
+  registry: Record<string, AnyDefinition>,
+): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const [childKey, def] of Object.entries(registry)) {
+    const fks = (def as { foreignKeys?: Record<string, EmittedForeignKey> })
+      .foreignKeys;
+    if (fks === undefined) continue;
+    for (const fk of Object.values(fks)) {
+      if (fk.onDelete !== 'CASCADE') continue;
+      const parents = out.get(childKey) ?? new Set<string>();
+      parents.add(fk.model);
+      out.set(childKey, parents);
+    }
+  }
+  return out;
 }

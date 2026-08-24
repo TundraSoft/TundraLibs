@@ -334,6 +334,10 @@ type TxToken = {
    * soon-to-be-visible-or-rolled-back data by another connection). One
    * set is shared across the whole tx tree, savepoints included. */
   readonly dirty: Set<string>;
+  /** Subset of `dirty` written via `delete()`/`truncate()` — these also
+   * need CASCADE-FK-dependent pruning at commit (see
+   * `QueryCache.invalidateCascading`). */
+  readonly cascadeDirty: Set<string>;
 };
 
 /** @internal Migration-subsystem seam: NormDb instance → Runtime.
@@ -369,6 +373,8 @@ export class NormDb<R, Scope extends string = never> {
   /** Written-entity accumulator when inside a transaction; cache prunes
    * fire from it on commit. Undefined outside a transaction. */
   private readonly __txDirty: Set<string> | undefined;
+  /** Cascade-dirty subset of `__txDirty` (see {@link TxToken.cascadeDirty}). */
+  private readonly __txCascadeDirty: Set<string> | undefined;
   private readonly __scope: NormScope | undefined;
   private readonly __baseExecutor: Executor;
   private readonly __repoCache = new Map<string, unknown>();
@@ -390,11 +396,13 @@ export class NormDb<R, Scope extends string = never> {
       this.__txId = tx.txId;
       this.__session = tx.session;
       this.__txDirty = tx.dirty;
+      this.__txCascadeDirty = tx.cascadeDirty;
       this.__executor = bindTx(executor, tx.txId);
     } else {
       this.__txId = undefined;
       this.__session = undefined;
       this.__txDirty = undefined;
+      this.__txCascadeDirty = undefined;
       this.__executor = executor;
     }
     RUNTIMES.set(this, runtime);
@@ -427,6 +435,7 @@ export class NormDb<R, Scope extends string = never> {
           txId: this.__txId,
           session: this.__session,
           dirty: this.__txDirty ?? new Set<string>(),
+          cascadeDirty: this.__txCascadeDirty ?? new Set<string>(),
         }
         : undefined,
       next,
@@ -475,9 +484,11 @@ export class NormDb<R, Scope extends string = never> {
           this.__txId,
           this.__scope,
           this.__txDirty,
+          this.__txCascadeDirty,
         );
         break;
       case 'VIEW':
+      case 'AUDIT':
         accessor = new ReadRepo<Record<string, AnyDefinition>, string>(
           this.__runtime,
           compiled,
@@ -679,10 +690,11 @@ export class NormDb<R, Scope extends string = never> {
             [TX_SCOPE]: true,
             txId: sp.id,
             session: sp,
-            // Same dirty set as the enclosing transaction: a savepoint's
+            // Same dirty sets as the enclosing transaction: a savepoint's
             // writes are pruned at the outer commit (over-pruning a
             // rolled-back savepoint is at worst a harmless cache miss).
             dirty: this.__txDirty ?? new Set<string>(),
+            cascadeDirty: this.__txCascadeDirty ?? new Set<string>(),
           }, this.__scope),
         )
       );
@@ -694,6 +706,9 @@ export class NormDb<R, Scope extends string = never> {
     // successful commit — deferring the prune past commit is what keeps
     // a concurrent connection from repopulating stale entries mid-tx.
     const dirty = new Set<string>();
+    // Subset of `dirty` written via delete()/truncate() — these also
+    // need CASCADE-FK-dependent pruning (see `_invalidateCache`).
+    const cascadeDirty = new Set<string>();
     try {
       const result = await this.__executor.transaction(async (session) => {
         txId = session.id;
@@ -701,7 +716,7 @@ export class NormDb<R, Scope extends string = never> {
         const scoped = new NormDb<R, Scope>(
           this.__runtime,
           this.__rawExecutor(),
-          { [TX_SCOPE]: true, txId: session.id, session, dirty },
+          { [TX_SCOPE]: true, txId: session.id, session, dirty, cascadeDirty },
           this.__scope,
         );
         try {
@@ -720,7 +735,12 @@ export class NormDb<R, Scope extends string = never> {
       // failure must not turn a committed transaction into a thrown one.
       const cache = this.__runtime.cache;
       if (cache !== undefined && dirty.size > 0) {
-        await Promise.all([...dirty].map((k) => cache.invalidate(k))).catch(
+        await Promise.all(
+          [...dirty].map((k) =>
+            cascadeDirty.has(k) ? cache.invalidateCascading(k) : cache
+              .invalidate(k)
+          ),
+        ).catch(
           () => {},
         );
       }

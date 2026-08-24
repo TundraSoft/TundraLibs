@@ -515,6 +515,9 @@ export const TopLinks = Entity('top_links', {
 | `dbSchema`        | TABLE, VIEW | Database namespace (e.g. Postgres `public`). Named `dbSchema` because "schema" already means a named entity collection in norm.    |
 | `comment`         | all         | Documentation + DDL comment (`COMMENT ON TABLE …`).                                                                                |
 | `defaultPageSize` | all         | Rows a limit-less `find()` fetches (default `10`). `0` = UNBOUNDED, and every such read emits a `warning` event.                   |
+| `cache`           | all         | Read-cache TTL in minutes (`0`/omitted = off; needs a `cache` config on `Norm`). See [Read caching](NORM-Caching.md).              |
+| `temporal`        | TABLE       | Make it an effective-dated **[temporal table](NORM-Temporal.md)** — norm keeps every version, `insert` supersedes, delete is off.  |
+| `audit`           | TABLE       | Generate a versioned **[audit replica](NORM-Audit.md)** — the table itself is unchanged; norm mirrors every write into it.         |
 | `query`           | VIEW, QUERY | **Required** on read-only kinds. The stored OQL `SELECT`.                                                                          |
 | `materialized`    | VIEW        | `CREATE MATERIALIZED VIEW` (Postgres; degrades elsewhere).                                                                         |
 | `renamedFrom`     | TABLE       | Migration hint: this table's previous physical name (optionally `'dbSchema.name'`-qualified). Consumed only by the migration diff. |

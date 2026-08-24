@@ -30,7 +30,7 @@
  */
 
 import type { ColumnSpec } from './Column.ts';
-import type { ReadRowOf } from './infer.ts';
+import type { _AsOfKeys, ReadRowOf } from './infer.ts';
 
 /** Caller-facing projection literal: `{'@col': true | 'rename',
  * '@Alias': true | 'rename' | {'@col': true | 'rename'}}`. */
@@ -62,8 +62,13 @@ export type _FksOf<D> = D extends { readonly foreignKeys?: infer F }
   ? ([F] extends [undefined] ? Record<never, never> : NonNullable<F>)
   : Record<never, never>;
 
-/** Column keys of a definition. */
-type _ColsOf<D> = D extends _WithColumns ? keyof D['columns'] : never;
+/** Column keys of a definition — PROJECTABLE ones: the virtual temporal
+ * `AsOf` filter column is excluded (it is filter-only, never readable,
+ * so `project: { '@AsOf': true }` must be a compile error, not a
+ * `Date`-typed field the runtime then never produces). */
+type _ColsOf<D> = D extends _WithColumns
+  ? Exclude<keyof D['columns'], _AsOfKeys<D>>
+  : never;
 
 // ─── Related-row shaping ─────────────────────────────────────────────
 

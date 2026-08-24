@@ -572,6 +572,10 @@ not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
   relations, aggregates, pagination.
 - **[Read caching](docs/NORM-Caching.md)** — per-entity TTLs, per-table
   invalidation, engines, and backend-failure behavior.
+- **[Temporal tables](docs/NORM-Temporal.md)** — effective-dated version
+  history, `@AsOf` point-in-time reads, scheduling.
+- **[Audit tables](docs/NORM-Audit.md)** — a generated, versioned
+  replica that mirrors every write, with no change to the source table.
 - **[Security](docs/NORM-Security.md)** — encryption, digests, masks.
 - **[Migrations](docs/NORM-Migrations.md)** — the `Migrator` workflow.
 - **[Scoping](docs/NORM-Scoping.md)** — tenant scoping & default filters.
