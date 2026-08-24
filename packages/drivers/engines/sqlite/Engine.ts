@@ -42,6 +42,7 @@ import { SQLiteTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from '../../SQLEngine.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type {
+  EnginePoolOptions,
   EngineQuery,
   SQLEngineCapabilities,
   SQLEngineEvents,
@@ -88,15 +89,23 @@ function _isCacheSafeSavepoint(sql: string): boolean {
 const SQLITE_DEFAULTS: Partial<SQLiteEngineOptions> = {
   create: true,
   readonly: false,
-  // Force single-handle pool — SQLite cooperates poorly with parallel writers.
+  // Single-handle pool. This is only the *default*; because the options merge
+  // lets caller values win, a default alone can't hold the invariant, so the
+  // hard single-handle guarantee is enforced in `_processOption` (which clamps
+  // any caller-supplied `pool.min`/`pool.max` back to 1). SQLite cooperates
+  // poorly with parallel writers, and in `:memory:` mode a second handle would
+  // be a separate empty database.
   pool: { min: 1, max: 1 },
 };
 
 /**
  * Local-file (or `':memory:'`) SQLite engine over the runtime's native
  * bindings. The pool is pinned to a single handle — SQLite tolerates parallel
- * writers poorly — so `Capabilities.pooledConnections` is `false` even though
- * this extends the pooled {@link SQLEngine}. In directory mode each schema is
+ * writers poorly, and in `':memory:'` mode a second handle would be a separate
+ * empty database — so `Capabilities.pooledConnections` is `false` even though
+ * this extends the pooled {@link SQLEngine}. That pin is a hard invariant, not
+ * a soft default: any `pool.min`/`pool.max` a caller passes is forced back to
+ * `1` in {@link SQLiteEngine._processOption}. In directory mode each schema is
  * a separate `.db` file `ATTACH`ed under its filename.
  */
 export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
@@ -504,6 +513,41 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   }
 
   //#endregion SQLEngine hooks
+
+  //#region Option processing
+
+  /**
+   * Pins the connection pool to a single handle, then delegates every other
+   * key to {@link SQLEngine._processOption}.
+   *
+   * SQLite runs on one shared database handle by design:
+   * {@link SQLiteEngine.Capabilities}.`pooledConnections` is `false`, the
+   * prepared-statement cache and transaction bookkeeping both assume a single
+   * connection, and in `':memory:'` mode a second handle is a *separate empty
+   * database* — a table created through one handle is invisible on the other
+   * (`TABLE_NOT_FOUND`). The defaults merge lets caller options win, so
+   * `SQLITE_DEFAULTS.pool` cannot hold this on its own; here any caller-supplied
+   * `pool.min` / `pool.max` is forced back to `1` (after the merge) so the
+   * single-handle guarantee cannot be silently defeated. Other pool knobs
+   * (`idleTimeoutSeconds`, `acquireTimeoutSeconds`) pass through unchanged, and
+   * clamping *before* delegating also avoids a spurious `min > max` rejection
+   * when a caller sets only `min`.
+   */
+  protected override _processOption<K extends keyof SQLiteEngineOptions>(
+    key: K,
+    value: SQLiteEngineOptions[K],
+  ): SQLiteEngineOptions[K] {
+    if (key === 'pool' && typeof value === 'object' && value !== null) {
+      value = {
+        ...(value as EnginePoolOptions),
+        min: 1,
+        max: 1,
+      } as SQLiteEngineOptions[K];
+    }
+    return super._processOption(key, value);
+  }
+
+  //#endregion Option processing
 }
 
 //#region Helpers

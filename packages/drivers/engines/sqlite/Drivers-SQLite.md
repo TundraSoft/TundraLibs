@@ -24,19 +24,19 @@ protocol), so each runtime ships its own bindings:
 - Per-runtime native bindings auto-selected
 - Transactions (commit / rollback / auto-rollback / timeout)
 
-The driver **defaults** `pool` to `{ min: 1, max: 1 }` — SQLite cooperates
-poorly with parallel writers, so a single shared handle is the safe default.
-Concurrent `execute` calls serialize on this handle automatically, and
+The driver pins the pool to a single shared handle: any `pool.min` /
+`pool.max` you pass is **clamped to `1`** — it cannot be overridden.
+Concurrent `execute` calls serialize on that one handle automatically, and
 `Capabilities.pooledConnections` is `false`.
 
-> **Leave `pool` unset — the default is overridable, not a hard cap.** It is an
-> ordinary caller option merged over the default, so passing
-> `pool: { min: 2, max: 5 }` really does open additional connections. That is
-> unsafe for SQLite: writers serialize poorly, and in `':memory:'` mode each
-> extra handle is a **separate, empty** database — a table created on one
-> connection is simply missing on another, surfacing as `TABLE_NOT_FOUND`
-> rather than a clear error. Only override this for a deliberate, read-only,
-> file-backed scenario.
+> **The single handle is a hard invariant, not just a default.** `pool.min` /
+> `pool.max` are forced back to `1` in `_processOption` — after the options
+> merge that otherwise lets caller values win — so `pool: { min: 2, max: 5 }`
+> still yields exactly one connection. This protects correctness: SQLite
+> serializes writers poorly, and in `':memory:'` mode each extra handle would
+> be a **separate, empty** database — a table created on one connection would
+> simply be missing on another, surfacing as `TABLE_NOT_FOUND`. Other pool
+> knobs (`idleTimeoutSeconds`, `acquireTimeoutSeconds`) are still honored.
 
 ## Quick Start
 
@@ -117,8 +117,10 @@ SQLite values are normalized via `_encodeValue`:
 `:memory:` databases are per-handle. Each `:memory:` handle is its own
 private in-process database, so two `SQLiteEngine` instances with
 `path: ':memory:'` are completely independent — they don't share data.
-(The forced single-connection pool only keeps one shared handle _within_
-a single instance; it's not what isolates separate instances.)
+The single-handle pin keeps one shared handle _within_ a single instance
+(which is exactly why `pool.max` is clamped to `1` — a second handle in
+`:memory:` mode would silently read from an empty database); it is not
+what isolates separate instances.
 
 ## Errors
 
