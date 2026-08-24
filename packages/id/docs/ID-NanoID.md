@@ -52,16 +52,16 @@ Based on the popular [Node.js nanoid project](https://github.com/ai/nanoid), thi
 
 ## Features
 
-| Feature                  | Support | Description                                    |
-| ------------------------ | ------- | ---------------------------------------------- |
-| Cryptographically Secure | ✅      | Uses Web Crypto API for strong randomness      |
-| URL-Safe                 | ✅      | Default alphabet is URL-safe without encoding  |
-| Customizable Length      | ✅      | Any length from 1 to unlimited characters      |
-| Custom Alphabets         | ✅      | Use any character set for specialized needs    |
-| Zero Dependencies        | ✅      | Self-contained with no external dependencies   |
-| Collision Resistant      | ✅      | < 1% collision rate even with 10,000 samples   |
-| High Performance         | ✅      | Optimized generation with efficient algorithms |
-| Runtime Agnostic         | ✅      | Works on Deno, Bun, and Node.js                |
+| Feature                  | Support | Description                                                                                                  |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------ |
+| Cryptographically Secure | ✅      | Uses Web Crypto API for strong randomness                                                                    |
+| URL-Safe                 | ✅      | Default alphabet is URL-safe without encoding                                                                |
+| Customizable Length      | ✅      | Any length from 1 to unlimited characters                                                                    |
+| Custom Alphabets         | ✅      | Use any character set for specialized needs                                                                  |
+| Zero Dependencies        | ✅      | Self-contained with no external dependencies                                                                 |
+| Collision Resistant      | ✅      | < 1% collision rate even with 10,000 samples                                                                 |
+| High Performance         | ✅      | Optimized generation with efficient algorithms                                                               |
+| Runtime Agnostic         | ✅      | Works on Deno, Bun, Node.js, Cloudflare Workers, and browsers (pure Web Crypto, no runtime-specific globals) |
 
 ## Installation
 
@@ -519,25 +519,16 @@ const standardId = nanoID(21); // 21 bytes, maximum uniqueness
 
 ## Performance
 
-NanoID is optimized for high-performance ID generation:
+nanoID is one of the CSPRNG-backed generators in this package — it draws from
+`crypto.getRandomValues` once per ID, so its cost sits alongside `ulid`,
+`cuid`, and `cuid2` rather than the counter/time-based generators
+(`sequenceID`, `ObjectID`, `simpleID`), which touch no CSPRNG on the hot path.
+Length and alphabet size drive the cost: fewer characters and a smaller
+alphabet mean fewer random bytes to consume, so `nanoID(10)` is roughly half
+the cost of `nanoID(32)`.
 
-**Benchmarks (M1 Mac, Deno 1.40):**
-
-| Operation          | Ops/sec | Time/op |
-| ------------------ | ------- | ------- |
-| nanoID() default   | ~2.5M   | ~400ns  |
-| nanoID(10)         | ~5.2M   | ~190ns  |
-| nanoID(32)         | ~1.8M   | ~550ns  |
-| nanoID(8, NUMBERS) | ~6.1M   | ~163ns  |
-
-**Comparison with other ID generators:**
-
-| Generator | Ops/sec | Size (bytes) | Sortable |
-| --------- | ------- | ------------ | -------- |
-| NanoID    | 2.5M    | 21           | ❌       |
-| UUID v4   | 1.8M    | 36           | ❌       |
-| ObjectID  | 1.2M    | 24           | ✅       |
-| ULID      | 1.0M    | 26           | ✅       |
+For measured per-generator, per-runtime numbers (Deno/Bun/Node) and the
+commands to reproduce them, see [Performance](ID-Performance.md).
 
 **Optimization tips:**
 

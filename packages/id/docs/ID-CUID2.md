@@ -84,7 +84,7 @@ function cuid2(length?: number): string;
 
 #### Throws
 
-`Error` — If `length` is not an integer in `24..32`.
+`InvalidOptionError` — If `length` is not an integer in `24..32`.
 
 #### Example
 

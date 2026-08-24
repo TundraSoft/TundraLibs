@@ -21,7 +21,7 @@ The ID package provides high-performance ID generators optimized for different s
 - ✅ **Sortable options** - Timestamp-based ordering with ULID and SequenceID
 - ✅ **MongoDB-inspired** - ObjectID uses a MongoDB-style layout (not the canonical 24-char hex — see [ObjectID docs](docs/ID-ObjectID.md))
 - ✅ **Dependency-light** - only the `@tundralibs/compat` and `@tundralibs/utils` workspace siblings, no third-party runtime deps
-- ✅ **Runtime agnostic** - Works on Deno, Bun, and Node.js
+- ✅ **Runtime agnostic** - Works on Deno, Bun, Node.js, Cloudflare Workers, and browsers
 
 ## Documentation
 
