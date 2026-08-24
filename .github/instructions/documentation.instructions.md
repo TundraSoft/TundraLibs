@@ -418,8 +418,13 @@ coherently.
 - Excluded from publish via root `deno.json` `publish.exclude`
   (`**/examples/**`) — it never ships in the JSR tarball.
 - Still must pass `deno check` (wired into `deno task check`) — excluded from
-  test/publish does not excuse it from type-checking; a broken example is
-  worse than none.
+  test/publish does not excuse it from type-checking; a **non-compiling
+  example is broken documentation**, so this gate stays.
+- Excluded from `deno fmt` and `deno lint` (root `deno.json` `fmt.exclude` /
+  `lint.exclude`) and from Sonar/Codecov (`sonar.exclusions`, generated
+  `codecov.yml`). Examples are illustrative demo code, verified by being RUN —
+  they must **compile** and run, but are not held to the style/lint rules or
+  the coverage/quality gates that shipped source is.
 - Imports use the public specifier (`@tundralibs/{package}`), same rule as
   every other doc example — it must be draggable into a real project
   unmodified.
