@@ -98,8 +98,8 @@ export interface DoctorContainer {
 
   /**
    * Construct a fresh instance of `type` under `scope`, honouring a
-   * registered `factory` when one exists — always a new instance, even
-   * for SINGLETON registrations.
+   * registered `factory` when one exists — found via this container then
+   * its parent — always a new instance, even for SINGLETON registrations.
    *
    * @throws {UnregisteredVialError} / {ScopeRequiredError} When a
    *   dependency cannot be resolved.

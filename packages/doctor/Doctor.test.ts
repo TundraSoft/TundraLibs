@@ -847,6 +847,27 @@ describe('Doctor', () => {
       asserts.assert(child.dispense(GlobalSvc) !== g);
       asserts.assertStrictEquals(Doctor.dispense(GlobalSvc), g);
     });
+
+    it('should honour a parent-registered factory when resolve() runs on a child', () => {
+      Doctor.reset();
+      class Configured {
+        constructor(public readonly url: string) {}
+      }
+      Doctor.prescribe(Configured, {
+        mode: 'SINGLETON',
+        factory: () => new Configured('from-parent-factory'),
+      });
+      const child = Doctor.createContainer();
+      // resolve() reads the factory through to the parent — parity with
+      // dispense() — instead of silently doing a bare `new` that would
+      // leave the required `url` undefined.
+      asserts.assertEquals(
+        child.resolve(Configured).url,
+        'from-parent-factory',
+      );
+      // Still a fresh instance every call: resolve() never caches.
+      asserts.assert(child.resolve(Configured) !== child.resolve(Configured));
+    });
   });
 
   describe('setContainerProvider (async-context seam)', () => {
