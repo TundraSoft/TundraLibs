@@ -121,6 +121,22 @@ import { Column } from '@tundralibs/norm';
 | `Column.password(algorithm?)`      | `VARCHAR`      | `string`     | Auth digest: `SHA-*` (deterministic, filterable) or `'PBKDF2'` (salted, verify-based). See [Digest columns](#digest-columns).    |
 | `Column.mask(source, fn)`          | _(virtual)_    | `string`     | Computed-on-read [mask](#masked-columns); never stored.                                                                          |
 
+> **On SQLite, every `date`/`time`/`datetime`/`timestamp`/`timestamptz`
+> column comes back as an ISO string at runtime, not a `Date` instance —
+> even through a typed `find()`.** The TS type still says `Date`
+> (Postgres/MariaDB genuinely decode to one); SQLite has no native
+> date/time storage class, norm's SQLite engine encodes a `Date` to an
+> ISO string on write, and nothing decodes it back on read. Verified
+> directly: a plain `Column.timestamp()` column, inserted and read back
+> through `repo.find()`, returns `typeof value === 'string'` on SQLite.
+> Coerce defensively before calling `Date` methods —
+> `new Date(row.col as unknown as string)` accepts either shape — or
+> compare timestamps as strings/epoch-ms rather than trusting
+> `instanceof Date`. The same gap affects the auto-injected
+> `EffectiveFrom`/`EffectiveTo` on [temporal](NORM-Temporal.md#cross-engine-notes)
+> and [audit](NORM-Audit.md#cross-engine-notes) tables — it isn't unique
+> to those, it's every date-typed column on SQLite.
+
 `json` / `boolean` / `blob` / `binary` / `varbinary` / `bit` are the
 _base_ builder — they carry
 the [common modifiers](#common-modifiers) and `encrypt()`, but none of

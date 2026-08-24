@@ -159,14 +159,13 @@ temporal: {
   when the one-current guarantee matters.
 
 > **On SQLite, `EffectiveFrom`/`EffectiveTo` come back as ISO strings, not
-> `Date` instances — even through a typed `find()`.** The row type still
-> declares them `Date` (Postgres/MariaDB do decode to a real `Date`), so
-> code that calls `.getFullYear()` or similar directly on a temporal read
-> will throw on SQLite specifically. Coerce defensively:
-> `new Date(row.EffectiveTo as unknown as string)` works on both shapes
-> (the `Date` constructor accepts a `Date` or an ISO string). See
-> `packages/norm/examples/subscription-billing/main.ts`'s `asDate()`
-> helper for a working pattern.
+> `Date` instances — even through a typed `find()`.** This isn't unique
+> to temporal — it's [every date-typed column on SQLite](NORM-Schema.md#column-builders); `EffectiveFrom`/`EffectiveTo`
+> just happen to be columns every temporal table has. Coerce
+> defensively: `new Date(row.EffectiveTo as unknown as string)` works on
+> both shapes (the `Date` constructor accepts a `Date` or an ISO
+> string). See `packages/norm/examples/subscription-billing/main.ts`'s
+> `asDate()` helper for a working pattern.
 
 ## Common issues
 

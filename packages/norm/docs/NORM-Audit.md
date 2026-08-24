@@ -185,9 +185,8 @@ separate override.
   [temporal](NORM-Temporal.md#cross-engine-notes).
 - **On SQLite, the replica's `EffectiveFrom`/`EffectiveTo` come back as
   ISO strings, not `Date` instances, even through a typed `find()`** —
-  same gap as [temporal's](NORM-Temporal.md#cross-engine-notes), since
-  the replica reuses that machinery for its read side. Coerce
-  defensively before calling `Date` methods on them.
+  not specific to the replica or to audit: it's [every date-typed column on SQLite](NORM-Schema.md#column-builders). Coerce defensively
+  before calling `Date` methods on them.
 - **Encryption** carries over unchanged: an `.encrypt()` column's
   ciphertext (and key-id envelope) is copied into the replica as-is —
   never decrypted, never re-encrypted. Old versions decrypt through the
