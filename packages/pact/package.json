@@ -1,12 +1,14 @@
 {
   "name": "@tundralibs/pact",
   "version": "0.4.8",
-  "description": "Permissions, Authentication, Control & Tokens — a barebones auth kernel with BigInt-bitmask authorization, JWT/HMAC tokens, and pluggable identity hooks",
+  "description": "Transport-agnostic authentication & authorization toolkit — BigInt-bitmask authorization, flat storage hooks, five credential schemes, refresh-token rotation, TOTP, and an OAuth2/OIDC client",
   "license": "MIT",
   "type": "module",
   "main": "mod.ts",
   "exports": {
     ".": "./mod.ts",
+    "./authz": "./authz/mod.ts",
+    "./oauth": "./oauth/mod.ts",
     "./types": "./types/mod.ts",
     "./errors": "./errors/mod.ts"
   },
@@ -17,9 +19,9 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",
     "@tundralibs/id": "workspace:*",
+    "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   }
 }

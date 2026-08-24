@@ -3,8 +3,7 @@
  * maps.
  *
  * BigInt masks are not JSON-serializable, so grants embedded in a JWT claim
- * (or any wire format) travel as decimal strings — the same reason Discord
- * serializes its permission bitfields as strings. `serializeGrants` before
+ * (or any wire format) travel as decimal strings. `serializeGrants` before
  * embedding, `deserializeGrants` after verifying.
  *
  * Every accumulator here is created with `Object.create(null)`, so module
@@ -17,7 +16,7 @@
  */
 
 import { PactDefinitionError } from './errors/mod.ts';
-import type { PACTGrants } from './types/mod.ts';
+import type { PactGrants } from './types/mod.ts';
 
 /**
  * OR-merge any number of grant sets (later sets never *remove* bits —
@@ -25,11 +24,11 @@ import type { PACTGrants } from './types/mod.ts';
  * common `combineGrants(direct, ...groupGrants)` call needs no guards.
  */
 export function combineGrants(
-  ...sets: Array<PACTGrants | undefined>
-): PACTGrants {
+  ...sets: Array<PactGrants | undefined>
+): PactGrants {
   // Null-proto accumulator: `combined[module]` must never read an inherited
-  // Object.prototype member (e.g. module '__proto__' or 'constructor'). [F2]
-  const combined: PACTGrants = Object.create(null);
+  // Object.prototype member (e.g. module '__proto__'). [F2]
+  const combined: PactGrants = Object.create(null);
   for (const set of sets) {
     if (set === undefined) continue;
     for (const [module, mask] of Object.entries(set)) {
@@ -40,7 +39,7 @@ export function combineGrants(
 }
 
 /** Grants → JSON-safe wire form: each BigInt mask as a decimal string. */
-export function serializeGrants(grants: PACTGrants): Record<string, string> {
+export function serializeGrants(grants: PactGrants): Record<string, string> {
   // Null-proto so a '__proto__' module is written as an own property
   // instead of silently vanishing through the prototype setter. [F2]
   const wire: Record<string, string> = Object.create(null);
@@ -54,16 +53,16 @@ export function serializeGrants(grants: PACTGrants): Record<string, string> {
  * Wire form → grants. Accepts decimal strings (the {@link serializeGrants}
  * output), non-negative integer numbers, or BigInts.
  *
- * @throws {@link PactDefinitionError} (`INVALID_GRANTS`) when a value is not
- *   a non-negative decimal integer (rejects `''`, hex/octal, floats, and
- *   negatives).
+ * @throws {@link PactDefinitionError} (`INVALID_GRANTS`) when a value is
+ *   not a non-negative decimal integer (rejects `''`, hex/octal, floats,
+ *   and negatives).
  */
 export function deserializeGrants(
   input: Record<string, string | number | bigint>,
-): PACTGrants {
+): PactGrants {
   // Null-proto so a '__proto__' module is written as an own property
   // instead of silently vanishing through the prototype setter. [F2]
-  const grants: PACTGrants = Object.create(null);
+  const grants: PactGrants = Object.create(null);
   for (const [module, value] of Object.entries(input)) {
     let mask: bigint;
     if (typeof value === 'bigint') {

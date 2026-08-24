@@ -566,7 +566,7 @@ describe('pact.IdTokenVerifier availability policy', () => {
 
   it("'required' hard-fails with OAUTH_JWKS_UNAVAILABLE", async () => {
     const verifier = new IdTokenVerifier('apple', () => unreachable.fn, {
-      policy: 'required',
+      policy: 'REQUIRED',
     });
     const token = await mint('RS256', claims());
     const err = await asserts.assertRejects(
@@ -597,7 +597,7 @@ describe('pact.IdTokenVerifier availability policy', () => {
     ) {
       const { fn } = jwksFetch(respond);
       const strict = new IdTokenVerifier('apple', () => fn, {
-        policy: 'required',
+        policy: 'REQUIRED',
       });
       const token = await mint('RS256', claims());
       const err = await asserts.assertRejects(
@@ -612,7 +612,7 @@ describe('pact.IdTokenVerifier availability policy', () => {
     const doc = await jwks([{ alg: 'RS256', kid: 'key-1' }]);
     const { fn } = jwksFetch(() => jsonResponse(doc));
     const strict = new IdTokenVerifier('apple', () => fn, {
-      policy: 'required',
+      policy: 'REQUIRED',
     });
     const token = await mint('RS256', claims(), { kid: 'never-published' });
     const err = await asserts.assertRejects(
@@ -627,7 +627,7 @@ describe('pact.IdTokenVerifier availability policy', () => {
     const doc = await jwks([{ alg: 'RS256', kid: 'key-1' }]);
     const { fn, calls } = jwksFetch(() => jsonResponse(doc));
     const strict = new IdTokenVerifier('idp', () => fn, {
-      policy: 'required',
+      policy: 'REQUIRED',
     });
     const token = await mint('RS256', claims());
     const err = await asserts.assertRejects(
