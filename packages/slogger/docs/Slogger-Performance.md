@@ -375,6 +375,23 @@ Example:
 - 3 file handlers × 4KB = 12KB buffer memory
 - 3 file handlers × 16KB = 48KB buffer memory
 
+### Other Bounded Memory Knobs
+
+`bufferSizeBytes` is FileHandler-specific. Two other built-in handlers
+have their own, differently-shaped memory caps:
+
+- **`HTTPHandler`'s `maxBufferSize`** (default `10_000` records) caps
+  the pending-batch-plus-retry-backlog queue. Under a persistently
+  failing endpoint, records above the cap are dropped **oldest-first**
+  — bounded data loss instead of unbounded growth — and
+  `droppedLogCount` tells you how many. See
+  [Handlers → HTTP Handler](../handlers/Slogger-Handlers.md#http-handler).
+- **`MemoryHandler`'s `capacity`** (default `100` records) fixes a
+  ring buffer's size up front, in **records**, not bytes — memory use
+  never grows past `capacity × (average SlogObject size)` for the life
+  of the handler. See
+  [Handlers → Memory Handler](../handlers/Slogger-Handlers.md#memory-handler).
+
 ### Context Object Size
 
 Keep context objects reasonable:

@@ -190,22 +190,45 @@ it's deliberately scoped out of the cross-runtime core.
 
 ---
 
-## 6. UDP transport (for SyslogHandler and standalone)
+## 6. Standalone UDPHandler (non-syslog UDP destinations)
 
-**Pending compat layer work.** `@tundralibs/compat/net` only exposes
-TCP + UNIX socket today. UDP needs:
+**Shipped for SyslogHandler, still user territory otherwise.**
+`@tundralibs/compat/udp` now exposes `udpSocket()`, and
+`SyslogHandler`'s `transport` already accepts `{ type: 'udp', host,
+port }` (RFC 5424 framing, one datagram per record, best-effort — no
+ack, no retry). What's still not in-tree is a _non-syslog_ UDP
+handler for other datagram destinations (statsd-style metric+log
+push, a custom collector protocol, …) — the primitive
+(`@tundralibs/compat/udp`'s `udpSocket()`) is the same one
+`SyslogHandler` already builds on, so wiring a `UDPHandler` is now a
+matter of formatter choice and wire framing, not new transport work.
 
-- Deno: `Deno.connectDatagram({ port, transport: 'udp' })` →
-  `.send(data, addr)`
-- Node: `node:dgram` → `socket.send(buf, port, host, cb)`
-- Bun: `Bun.udpSocket({ port, socket: ... })`
+**Sketch:**
 
-Adding `connectDatagram()` / `listenDatagram()` to compat is its own
-~150 LOC PR. Once that lands:
+```ts ignore
+import { AbstractHandler, type HandlerOptions } from '@tundralibs/slogger';
+import { type UdpSocket, udpSocket } from '@tundralibs/compat/udp';
 
-- Extend `SyslogTransport` with `{ type: 'udp', host, port }`.
-- Add a separate `UDPHandler` for non-syslog UDP destinations
-  (statsd-style metric+log push, etc.).
+type UDPHandlerOptions = HandlerOptions & {
+  host: string;
+  port: number;
+};
+
+class UDPHandler extends AbstractHandler {
+  public readonly mode = 'udp';
+  private __socket?: UdpSocket;
+  // ... init() opens udpSocket(); _handle() sends one datagram per
+  //     record via __socket.send(bytes, host, port); finalize() closes.
+}
+```
+
+**Policy choices the user owns:**
+
+- Wire format per datagram (raw JSON, statsd line protocol, a custom
+  binary frame)?
+- Datagram size limit — split or drop an oversized record?
+- Best-effort only (matching `SyslogHandler`'s UDP transport), or a
+  thin ack/retry layer on top?
 
 ---
 
@@ -231,7 +254,7 @@ Adding `connectDatagram()` / `listenDatagram()` to compat is its own
 | `FileHandler`      | disk with rotation                                                |
 | `HTTPHandler`      | POST/PUT batches to a URL                                         |
 | `TCPHandler`       | line-delimited or octet-counted TCP socket                        |
-| `SyslogHandler`    | RFC 5424 over TCP or UNIX socket                                  |
+| `SyslogHandler`    | RFC 5424 over TCP, UDP, or UNIX socket                            |
 | `StreamHandler`    | write to any `WritableStream` (gzip, child process, websocket, …) |
 | `MemoryHandler`    | ring buffer for tests / dev tools / panic-replay                  |
 | `BlackholeHandler` | discard (load testing, conditional silencing)                     |

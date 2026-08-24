@@ -367,94 +367,109 @@ logger.info('User profile', {
 
 Use regex patterns to mask specific data formats.
 
+> **`sensitivePatterns` scans the MESSAGE string only — never
+> `context` values.** A pattern is run against `log.message` via
+> `String.replace`; a context field is redacted by _key name_
+> (`sensitiveFields`), never by matching its value against a regex. A
+> credit-card number sitting in `context.card` is invisible to
+> `sensitivePatterns` — pass it in the message, or (better) add the
+> key to `sensitiveFields` instead. Getting this backwards is a
+> silent leak, not an error: the field logs in cleartext with no
+> warning.
+>
+> Every example below defaults to `MaskingStrategy.FULL` (no
+> `strategy` is set), which replaces the ENTIRE matched substring with
+> `maskChar` repeated to the same length — not a partial
+> first/last-character reveal. Verified against a real run of each
+> example; see [Masking Strategies](#masking-strategies) above for
+> `PARTIAL`/`PREFIX`/`SUFFIX`, which mask the whole matched span too
+> (the strategy has no notion of "local part" vs. "domain" inside a
+> matched email — it sees one string).
+
 ### Email Addresses
 
 ```typescript
-import {
-  jsonFormatter,
-  maskingFormatter,
-  type Slogger,
-} from '@tundralibs/slogger';
+import { jsonFormatter, maskingFormatter } from '@tundralibs/slogger';
+import type { SlogObject } from '@tundralibs/slogger';
 
-declare const logger: Slogger;
-
-maskingFormatter({
+const fmt = maskingFormatter({
   sensitivePatterns: [
     /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
   ],
   baseFormatter: jsonFormatter,
 });
 
-logger.info('Contact support at support@example.com');
-// Output: Contact support at s***@example.com
+declare const log: SlogObject; // log.message: "Contact support at support@example.com"
+fmt(log); // → "message":"Contact support at *******************"
 ```
 
 ### Credit Card Numbers
 
+Patterns match the message, so the card number has to be IN the
+message for this to do anything — see the callout above. To mask a
+`context.card`-style field instead, name it in `sensitiveFields` (see
+[Sensitive Field Detection](#sensitive-field-detection)).
+
 ```typescript
-import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+import { maskingFormatter } from '@tundralibs/slogger';
+import type { SlogObject } from '@tundralibs/slogger';
 
-declare const logger: Slogger;
-
-maskingFormatter({
+const fmt = maskingFormatter({
   sensitivePatterns: [
     /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
   ],
 });
 
-logger.info('Payment', { card: '4532-1234-5678-9010' });
-// Output: { card: '4***0' }
+declare const log: SlogObject; // log.message: "Payment attempted with card 4532-1234-5678-9010"
+fmt(log); // → "Payment attempted with card *******************"
 ```
 
 ### Phone Numbers (US)
 
 ```typescript
-import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+import { maskingFormatter } from '@tundralibs/slogger';
+import type { SlogObject } from '@tundralibs/slogger';
 
-declare const logger: Slogger;
-
-maskingFormatter({
+const fmt = maskingFormatter({
   sensitivePatterns: [
     /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
   ],
 });
 
-logger.info('Call 555-123-4567 for help');
-// Output: Call 5***7 for help
+declare const log: SlogObject; // log.message: "Call 555-123-4567 for help"
+fmt(log); // → "Call ************ for help"
 ```
 
 ### Social Security Numbers (US)
 
 ```typescript
-import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+import { maskingFormatter } from '@tundralibs/slogger';
+import type { SlogObject } from '@tundralibs/slogger';
 
-declare const logger: Slogger;
-
-maskingFormatter({
+const fmt = maskingFormatter({
   sensitivePatterns: [
     /\b\d{3}-\d{2}-\d{4}\b/g,
   ],
 });
 
-logger.info('SSN: 123-45-6789');
-// Output: SSN: ***
+declare const log: SlogObject; // log.message: "SSN: 123-45-6789"
+fmt(log); // → "SSN: ***********"
 ```
 
 ### IP Addresses
 
 ```typescript
-import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+import { maskingFormatter } from '@tundralibs/slogger';
+import type { SlogObject } from '@tundralibs/slogger';
 
-declare const logger: Slogger;
-
-maskingFormatter({
+const fmt = maskingFormatter({
   sensitivePatterns: [
     /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, // IPv4
   ],
 });
 
-logger.info('Connection from 192.168.1.100');
-// Output: Connection from 1***0
+declare const log: SlogObject; // log.message: "Connection from 192.168.1.100"
+fmt(log); // → "Connection from *************"
 ```
 
 ### API Keys
