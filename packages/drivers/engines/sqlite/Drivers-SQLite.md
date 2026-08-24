@@ -24,9 +24,19 @@ protocol), so each runtime ships its own bindings:
 - Per-runtime native bindings auto-selected
 - Transactions (commit / rollback / auto-rollback / timeout)
 
-The driver forces `pool: { min: 1, max: 1 }` — SQLite cooperates poorly
-with parallel writers, so a single shared handle is the safe default.
-Concurrent `execute` calls serialize on this handle automatically.
+The driver **defaults** `pool` to `{ min: 1, max: 1 }` — SQLite cooperates
+poorly with parallel writers, so a single shared handle is the safe default.
+Concurrent `execute` calls serialize on this handle automatically, and
+`Capabilities.pooledConnections` is `false`.
+
+> **Leave `pool` unset — the default is overridable, not a hard cap.** It is an
+> ordinary caller option merged over the default, so passing
+> `pool: { min: 2, max: 5 }` really does open additional connections. That is
+> unsafe for SQLite: writers serialize poorly, and in `':memory:'` mode each
+> extra handle is a **separate, empty** database — a table created on one
+> connection is simply missing on another, surfacing as `TABLE_NOT_FOUND`
+> rather than a clear error. Only override this for a deliberate, read-only,
+> file-backed scenario.
 
 ## Quick Start
 

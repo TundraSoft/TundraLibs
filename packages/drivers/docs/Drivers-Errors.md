@@ -36,7 +36,7 @@ The drivers package provides a comprehensive error system with:
 - **Cause chain preservation** for debugging
 - **Cross-runtime compatibility** (Bun, Deno, Node.js)
 
-All database-specific errors are mapped to standardized codes, enabling consistent error handling regardless of the underlying database system.
+All database-specific errors are mapped to standardized codes when a query runs through an engine's `execute()` / query methods, enabling consistent error handling regardless of the underlying database system. The one exception is the small set of escape-hatch transport clients — see [Transport-Level Errors](#transport-level-errors-escape-hatch-clients) below.
 
 ## Error Classes
 
@@ -62,7 +62,7 @@ class DriverError<M extends Record<string, unknown>> extends BaseError<M> {
 
 ### EngineError
 
-Error thrown by `BaseEngine` and its subclasses for connection-lifecycle and engine-level failures.
+Error thrown by every engine base class (`ConnectionEngine`, `SQLConnectionEngine`, `SQLEngine`, `BaseEngine`/`PooledConnectionEngine`) and the concrete engines built on them, for connection-lifecycle and engine-level failures.
 
 ```typescript ignore
 import { EngineError } from '@tundralibs/drivers/errors';
@@ -79,7 +79,7 @@ class EngineError<M extends EngineErrorMeta> extends DriverError<M> {
 **Properties:**
 
 - `code` - Standardized error code (e.g., 'CONNECTION_FAILED')
-- `engine` - Engine type (e.g., 'PostgresEngine')
+- `engine` - The engine's short identity code, e.g. `'POSTGRES'`, `'MARIA'`, `'REDIS'` — **not** the class name. Set from each engine's own `Engine` field (`PostgresEngine.Engine === 'POSTGRES'`); a wire-compatible alias reports its own identity (`CockroachEngine.Engine === 'COCKROACH'`), not its parent's.
 - `connectionName` - Connection identifier
 - `context` - Error-specific metadata (e.g., `{ instanceId, timeoutMs }`)
 
@@ -87,7 +87,7 @@ class EngineError<M extends EngineErrorMeta> extends DriverError<M> {
 
 All `EngineError` instances include:
 
-- `instanceId` - Formatted as `"<Engine>::<Name>"`
+- `instanceId` - Formatted as `"<Engine>::<Name>"` (e.g. `"POSTGRES::app-db"`)
 - Error-specific variables (e.g., `operation`, `reason`, `timeoutMs`)
 
 ### EngineErrorCode
@@ -154,44 +154,80 @@ EngineErrorCodes['CONNECTION_FAILED'];
 
 **Type:** `Record<EngineErrorCode, string>`
 
+### Transport-Level Errors (Escape-Hatch Clients)
+
+Four more `DriverError` subclasses exist for consumers who bypass the engine and drive its underlying transport directly. Each lives at its own engine's sub-path (not `@tundralibs/drivers/errors`) because it's transport-specific, not cross-engine:
+
+| Class            | Import                         | Thrown by                                                                  |
+| ---------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| `PgServerError`  | `@tundralibs/drivers/postgres` | `PgConnection`, on a Postgres `ErrorResponse` message                      |
+| `NeonHttpError`  | `@tundralibs/drivers/neon`     | `NeonHttpClient.sql`, on a non-2xx HTTP response                           |
+| `TursoHttpError` | `@tundralibs/drivers/turso`    | `TursoHttpClient.execute`, on a Hrana per-statement or pipeline error      |
+| `D1HttpError`    | `@tundralibs/drivers/d1`       | `D1HttpClient.query`, on a non-2xx response or a `success: false` envelope |
+
+> **You will not see these through the normal engine API.** `PostgresEngine`, `NeonHttpEngine`, `TursoEngine`, and `D1Engine` each catch their own transport error internally and re-throw the corresponding `EngineError` — that's what every example elsewhere in this doc catches. These four classes only reach your code if you construct and drive the transport class yourself, bypassing the engine (its connection-pool integration, OQL translation, and value coding included).
+
+```typescript
+import { NeonHttpClient, NeonHttpError } from '@tundralibs/drivers/neon';
+
+const client = new NeonHttpClient({
+  host: 'ep-cool-name-a1b2c3.us-east-2.aws.neon.tech',
+  connectionString:
+    'postgresql://user:password@ep-cool-name-a1b2c3.us-east-2.aws.neon.tech/db',
+});
+
+try {
+  await client.sql('SELECT * FROM users WHERE id = $1', [1]);
+} catch (err) {
+  if (err instanceof NeonHttpError) {
+    // `code` is the Postgres SQLSTATE when Neon returned one; `status` is
+    // the HTTP status of the failed response.
+    console.error(
+      `Neon query failed (${err.code ?? err.status}): ${err.message}`,
+    );
+  }
+  throw err;
+}
+```
+
 ## Error Codes
 
 ### Code Reference
 
 All **30** codes in `EngineErrorCode`, grouped the way `EngineErrorCodes.ts` groups them. Every `EngineError` carries `instanceId` (`"<Engine>::<Name>"`); the **Metadata** column lists the _additional_ variables that code's message template consumes. Each code links to its detail section below.
 
-| Code                                                          | Group         | Raised when                                                                                                                                                  | Metadata                     |
-| ------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
-| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation — raised eagerly at construction, before any connection is attempted.                                                            | `option`, `reason`           |
-| [`MISSING_CONFIG_VALUE`](#missing_config_value)               | Configuration | A required option was not supplied.                                                                                                                          | `option`                     |
-| [`CONNECTION_FAILED`](#connection_failed)                     | Connection    | `connect()` could not establish a connection — bad host/port, network failure, or the server is down.                                                        | —                            |
-| [`DISCONNECTION_FAILED`](#disconnection_failed)               | Connection    | `disconnect()` could not close cleanly.                                                                                                                      | —                            |
-| [`NO_CONNECTION`](#no_connection)                             | Connection    | An operation ran with no active connection. Call `connect()` first.                                                                                          | —                            |
-| [`CONNECTION_LOST`](#connection_lost)                         | Connection    | An established connection dropped mid-flight — also mapped from Postgres `08xxx` / `57Pxx` SQLSTATEs.                                                        | `reason`                     |
-| [`POOL_DRAINING`](#pool_draining)                             | Pool          | A connection was requested while the pool is shutting down (during `disconnect()`).                                                                          | —                            |
-| [`POOL_ACQUIRE_TIMEOUT`](#pool_acquire_timeout)               | Pool          | The wait for a free pooled connection exceeded `acquireTimeoutSeconds`.                                                                                      | `timeoutMs`                  |
-| [`POOL_RESOURCE_FAILED`](#pool_resource_failed)               | Pool          | Reserved for a failure to create a new pool resource. **No throw site raises it today** — the pool reports that as `CONNECTION_FAILED`.                      | —                            |
-| [`OPERATION_FAILED`](#operation_failed)                       | Operation     | Catch-all for a named engine operation that failed (cache `get`/`set`/`delete`, Mongo commands, HTTP round-trips).                                           | `operation`, `reason`        |
-| [`UNSUPPORTED_OPERATION`](#unsupported_operation)             | Operation     | The engine has no implementation for the operation — e.g. transactions on the fetch-only HTTP engines.                                                       | `operation`                  |
-| [`INVALID_AUTH`](#invalid_auth)                               | Auth          | Credentials were rejected — Postgres auth handshake, Redis `AUTH`, or SQLSTATE `28000` / `28P01`.                                                            | `reason`                     |
-| [`PERMISSION_DENIED`](#permission_denied)                     | Auth          | Authenticated, but not authorized — SQLSTATE `42501`, SQLite `SQLITE_READONLY`, Redis `NOPERM`, or Mongo `Unauthorized`.                                     | `reason`                     |
-| [`MISSING_PARAMETERS`](#missing_parameters)                   | Query         | The SQL names `:param:` placeholders that `params` does not supply. Raised before the query is sent.                                                         | `missing`                    |
-| [`QUERY_EXECUTION_FAILED`](#query_execution_failed)           | Query         | The server rejected the statement for a reason with no more specific code. The default for unmapped SQLSTATEs.                                               | `reason`                     |
-| [`QUERY_TIMEOUT`](#query_timeout)                             | Query         | The statement exceeded the engine's configured timeout — Postgres `57014`, MariaDB `ER_QUERY_TIMEOUT`.                                                       | `timeoutMs`                  |
-| [`SYNTAX_ERROR`](#syntax_error)                               | Query         | The statement did not parse — SQLSTATE `42601`, or a SQLite `syntax error`.                                                                                  | `reason`                     |
-| [`DATABASE_NOT_FOUND`](#database_not_found)                   | Schema        | The named database/catalog does not exist — SQLSTATE `3D000`, MariaDB `ER_BAD_DB_ERROR`.                                                                     | `database`                   |
-| [`TABLE_NOT_FOUND`](#table_not_found)                         | Schema        | The referenced table does not exist — SQLSTATE `42P01`, or SQLite `no such table`.                                                                           | `table`                      |
-| [`COLUMN_NOT_FOUND`](#column_not_found)                       | Schema        | The referenced column does not exist — SQLSTATE `42703`, or SQLite `no such column`.                                                                         | `column`                     |
-| [`DUPLICATE_KEY`](#duplicate_key)                             | Constraint    | A UNIQUE or PRIMARY KEY constraint was violated — SQLSTATE `23505`, MariaDB `ER_DUP_ENTRY`, SQLite `SQLITE_CONSTRAINT_UNIQUE`, Mongo `DuplicateKey` (11000). | `constraint`                 |
-| [`FOREIGN_KEY_VIOLATION`](#foreign_key_violation)             | Constraint    | A FOREIGN KEY constraint was violated — SQLSTATE `23503`.                                                                                                    | `constraint`                 |
-| [`NOT_NULL_VIOLATION`](#not_null_violation)                   | Constraint    | A NOT NULL column received `NULL` — SQLSTATE `23502`.                                                                                                        | `column`                     |
-| [`CHECK_VIOLATION`](#check_violation)                         | Constraint    | A CHECK constraint rejected the value — SQLSTATE `23514`.                                                                                                    | `constraint`                 |
-| [`DEADLOCK`](#deadlock)                                       | Concurrency   | The server broke a deadlock and chose this transaction as the victim — SQLSTATE `40P01`. **Retry it.**                                                       | —                            |
-| [`LOCK_TIMEOUT`](#lock_timeout)                               | Concurrency   | Waiting on a row/table lock timed out — SQLSTATE `55P03`, MariaDB `ER_LOCK_WAIT_TIMEOUT`.                                                                    | —                            |
-| [`SERIALIZATION_FAILURE`](#serialization_failure)             | Concurrency   | An MVCC conflict under `SERIALIZABLE` — SQLSTATE `40001`. **Retry it.**                                                                                      | —                            |
-| [`TRANSACTION_NOT_FOUND`](#transaction_not_found)             | Transaction   | A `transactionId` was passed that the engine does not know — usually already committed or rolled back.                                                       | `transactionId`              |
-| [`TRANSACTION_OPERATION_ERROR`](#transaction_operation_error) | Transaction   | `begin` / `commit` / `rollback` itself failed.                                                                                                               | `operation`, `transactionId` |
-| [`UNKNOWN_ERROR`](#unknown_error)                             | Fallback      | The `EngineError` constructor received a code that is not in `EngineErrorCodes`. It coerces to this and preserves the original.                              | `reason`, `originalCode`     |
+| Code                                                          | Group         | Raised when                                                                                                                                                                                                                                             | Metadata                     |
+| ------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation — raised eagerly at construction, before any connection is attempted.                                                                                                                                                       | `option`, `reason`           |
+| [`MISSING_CONFIG_VALUE`](#missing_config_value)               | Configuration | A required option was not supplied.                                                                                                                                                                                                                     | `option`                     |
+| [`CONNECTION_FAILED`](#connection_failed)                     | Connection    | `connect()` could not establish a connection — bad host/port, network failure, or the server is down.                                                                                                                                                   | —                            |
+| [`DISCONNECTION_FAILED`](#disconnection_failed)               | Connection    | `disconnect()` could not close cleanly.                                                                                                                                                                                                                 | —                            |
+| [`NO_CONNECTION`](#no_connection)                             | Connection    | Internal safety net — a pooled connection was written to after it was already marked closed, or (Mongo only) the shared client was still `null` immediately after `connect()` resolved. **Not** the "you forgot to call `connect()`" error — see below. | —                            |
+| [`CONNECTION_LOST`](#connection_lost)                         | Connection    | An established connection dropped mid-flight — also mapped from Postgres `08xxx` / `57Pxx` SQLSTATEs.                                                                                                                                                   | `reason`                     |
+| [`POOL_DRAINING`](#pool_draining)                             | Pool          | A connection was requested while the pool is shutting down (during `disconnect()`).                                                                                                                                                                     | —                            |
+| [`POOL_ACQUIRE_TIMEOUT`](#pool_acquire_timeout)               | Pool          | The wait for a free pooled connection exceeded `acquireTimeoutSeconds`.                                                                                                                                                                                 | `timeoutMs`                  |
+| [`POOL_RESOURCE_FAILED`](#pool_resource_failed)               | Pool          | Reserved for a failure to create a new pool resource. **No throw site raises it today** — the pool reports that as `CONNECTION_FAILED`.                                                                                                                 | —                            |
+| [`OPERATION_FAILED`](#operation_failed)                       | Operation     | Catch-all for a named engine operation that failed (cache `get`/`set`/`delete`, Mongo commands, HTTP round-trips).                                                                                                                                      | `operation`, `reason`        |
+| [`UNSUPPORTED_OPERATION`](#unsupported_operation)             | Operation     | The engine has no implementation for the operation — e.g. transactions on the fetch-only HTTP engines.                                                                                                                                                  | `operation`                  |
+| [`INVALID_AUTH`](#invalid_auth)                               | Auth          | Credentials were rejected — Postgres auth handshake, Redis `AUTH`, or SQLSTATE `28000` / `28P01`.                                                                                                                                                       | `reason`                     |
+| [`PERMISSION_DENIED`](#permission_denied)                     | Auth          | Authenticated, but not authorized — SQLSTATE `42501`, SQLite `SQLITE_READONLY`, Redis `NOPERM`, or Mongo `Unauthorized`.                                                                                                                                | `reason`                     |
+| [`MISSING_PARAMETERS`](#missing_parameters)                   | Query         | The SQL names `:param:` placeholders that `params` does not supply. Raised before the query is sent.                                                                                                                                                    | `missing`                    |
+| [`QUERY_EXECUTION_FAILED`](#query_execution_failed)           | Query         | The server rejected the statement for a reason with no more specific code. The default for unmapped SQLSTATEs.                                                                                                                                          | `reason`                     |
+| [`QUERY_TIMEOUT`](#query_timeout)                             | Query         | The statement exceeded the engine's configured timeout — Postgres `57014`, MariaDB `ER_QUERY_TIMEOUT`.                                                                                                                                                  | `timeoutMs`                  |
+| [`SYNTAX_ERROR`](#syntax_error)                               | Query         | The statement did not parse — SQLSTATE `42601`, or a SQLite `syntax error`.                                                                                                                                                                             | `reason`                     |
+| [`DATABASE_NOT_FOUND`](#database_not_found)                   | Schema        | The named database/catalog does not exist — SQLSTATE `3D000`, MariaDB `ER_BAD_DB_ERROR`.                                                                                                                                                                | `database`                   |
+| [`TABLE_NOT_FOUND`](#table_not_found)                         | Schema        | The referenced table does not exist — SQLSTATE `42P01`, or SQLite `no such table`.                                                                                                                                                                      | `table`                      |
+| [`COLUMN_NOT_FOUND`](#column_not_found)                       | Schema        | The referenced column does not exist — SQLSTATE `42703`, or SQLite `no such column`.                                                                                                                                                                    | `column`                     |
+| [`DUPLICATE_KEY`](#duplicate_key)                             | Constraint    | A UNIQUE or PRIMARY KEY constraint was violated — SQLSTATE `23505`, MariaDB `ER_DUP_ENTRY`, SQLite `SQLITE_CONSTRAINT_UNIQUE`, Mongo `DuplicateKey` (11000).                                                                                            | `constraint`                 |
+| [`FOREIGN_KEY_VIOLATION`](#foreign_key_violation)             | Constraint    | A FOREIGN KEY constraint was violated — SQLSTATE `23503`.                                                                                                                                                                                               | `constraint`                 |
+| [`NOT_NULL_VIOLATION`](#not_null_violation)                   | Constraint    | A NOT NULL column received `NULL` — SQLSTATE `23502`.                                                                                                                                                                                                   | `column`                     |
+| [`CHECK_VIOLATION`](#check_violation)                         | Constraint    | A CHECK constraint rejected the value — SQLSTATE `23514`.                                                                                                                                                                                               | `constraint`                 |
+| [`DEADLOCK`](#deadlock)                                       | Concurrency   | The server broke a deadlock and chose this transaction as the victim — SQLSTATE `40P01`. **Retry it.**                                                                                                                                                  | —                            |
+| [`LOCK_TIMEOUT`](#lock_timeout)                               | Concurrency   | Waiting on a row/table lock timed out — SQLSTATE `55P03`, MariaDB `ER_LOCK_WAIT_TIMEOUT`.                                                                                                                                                               | —                            |
+| [`SERIALIZATION_FAILURE`](#serialization_failure)             | Concurrency   | An MVCC conflict under `SERIALIZABLE` — SQLSTATE `40001`. **Retry it.**                                                                                                                                                                                 | —                            |
+| [`TRANSACTION_NOT_FOUND`](#transaction_not_found)             | Transaction   | A `transactionId` was passed that the engine does not know — usually already committed or rolled back.                                                                                                                                                  | `transactionId`              |
+| [`TRANSACTION_OPERATION_ERROR`](#transaction_operation_error) | Transaction   | `begin` / `commit` / `rollback` itself failed.                                                                                                                                                                                                          | `operation`, `transactionId` |
+| [`UNKNOWN_ERROR`](#unknown_error)                             | Fallback      | The `EngineError` constructor received a code that is not in `EngineErrorCodes`. It coerces to this and preserves the original.                                                                                                                         | `reason`, `originalCode`     |
 
 Which codes you can actually see depends on the engine. The Postgres SQLSTATE map is shared verbatim with the Neon HTTP engine, so those two cover the widest range. SQLite's mapper — used by the native, Turso, and D1 engines — matches on the driver's error code and message text instead, and covers a narrower set: it never produces `DEADLOCK`, `LOCK_TIMEOUT`, `QUERY_TIMEOUT`, `SERIALIZATION_FAILURE`, `DATABASE_NOT_FOUND`, or `INVALID_AUTH`. Anything a mapper does not recognise becomes `QUERY_EXECUTION_FAILED` with the driver's own message on `reason` and the original error on `cause`.
 
@@ -334,7 +370,7 @@ Failed to cleanly disconnect from the database.
 
 #### NO_CONNECTION
 
-Attempted operation without an active connection.
+An operation ran against a connection that had already been closed.
 
 **Template:** `No connection available for ${instanceId}`
 
@@ -342,22 +378,18 @@ Attempted operation without an active connection.
 
 - `instanceId` - Engine instance identifier
 
+> **Not the "you forgot to call `connect()`" error.** `execute()`, `beginTransaction()`, and every query method auto-connect on first use (`if (this._status !== 'READY') await this.connect();`) — calling them on a fresh, never-connected engine transparently connects instead of throwing. `execute()`'s own `@throws` list does not include `NO_CONNECTION` for exactly this reason. The code exists as an internal guard: `PgConnection` and `RedisConnection` throw it if a reserved connection is written to after it was already marked closed (a teardown racing an in-flight write), and `MongoEngine` throws it in the (deliberately hard to reach — the engine coalesces concurrent `connect()` calls into one in-flight attempt) case where its shared client is still `null` right after `connect()` resolved. None of these are triggerable from ordinary application code.
+
 **Example:**
 
 ```typescript
 import { PostgresEngine } from '@tundralibs/drivers/postgres';
-import { EngineError } from '@tundralibs/drivers/errors';
 
+// No explicit connect() call — execute() connects lazily on first use.
 const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
-
-try {
-  await engine.execute({ sql: 'SELECT 1' });
-} catch (err) {
-  if (err instanceof EngineError && err.code === 'NO_CONNECTION') {
-    await engine.connect();
-    await engine.execute({ sql: 'SELECT 1' });
-  }
-}
+const result = await engine.execute({ sql: 'SELECT 1 AS n' });
+console.log(result.data[0]?.n); // 1
+await engine.disconnect();
 ```
 
 #### CONNECTION_LOST
@@ -823,6 +855,8 @@ Transaction operation failed.
 - `instanceId` - Engine instance identifier
 - `transactionId` - Transaction identifier
 
+> `beginTransaction` / `commitTransaction` / `rollbackTransaction` (used below) are the **manual-handle** primitives — the class JSDoc marks them `@internal` and says to prefer the callback form `engine.transaction(fn)` instead, which begins, commits on success, rolls back on any throw, and always releases the connection so it can never leak from the pool. Reach for the manual form only when you need to hold a transaction handle across a control flow `transaction(fn)` can't express (it's what norm's own executor uses). `TRANSACTION_OPERATION_ERROR` is raised by both forms — from a failed `BEGIN` (shown here), or from `transaction(fn)` if its callback swallows a statement error that already auto-rolled-back the transaction and the wrapper then finds nothing to commit. See [`transferFunds`](#complete-error-handling-flow) below for the callback form.
+
 **Example:**
 
 ```typescript
@@ -903,12 +937,14 @@ try {
 
 ### Error Recovery
 
+> A helper meant to work across engine types can't parameter-type on `BaseEngine` (or `ConnectionEngine`/`SQLEngine`): those base classes are generic over the concrete connection/options/events types, and TypeScript's structural check on their protected members means a concrete engine instance (`PostgresEngine`, `MongoEngine`, `RedisEngine`, …) is **not** assignable to the base type's own default type parameters — passing one is a compile error, not just a runtime mismatch. A minimal structural type that names only the method(s) you call sidesteps this and works for every engine.
+
 ```typescript
-import type { BaseEngine } from '@tundralibs/drivers/base';
 import { EngineError } from '@tundralibs/drivers/errors';
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
 
 async function connectWithRetry(
-  engine: BaseEngine,
+  engine: { connect(): Promise<void> },
   maxAttempts = 3,
   delayMs = 1000,
 ): Promise<void> {
@@ -928,6 +964,9 @@ async function connectWithRetry(
     }
   }
 }
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+await connectWithRetry(engine);
 ```
 
 ### Cause Chain Inspection
@@ -1038,9 +1077,11 @@ async function getUser(userId: number) {
         case 'QUERY_TIMEOUT':
           console.warn(`Query timed out after ${err.context.timeoutMs}ms`);
           break;
-        case 'NO_CONNECTION':
-          await db.connect();
-          return getUser(userId); // Retry
+        case 'CONNECTION_LOST':
+          // The pool discards the dead connection; the next execute()
+          // acquires a fresh one.
+          console.warn('Connection dropped mid-query, retrying once');
+          return getUser(userId);
         default:
           console.error(`Query failed: ${err.code}`);
       }
@@ -1049,28 +1090,28 @@ async function getUser(userId: number) {
   }
 }
 
-// Transaction with error handling
+// Transaction with error handling — engine.transaction(fn) begins, commits
+// on success, rolls back on any throw, and always releases the connection.
+// (beginTransaction / commitTransaction / rollbackTransaction, used above
+// in the TRANSACTION_OPERATION_ERROR example, are the internal manual-handle
+// primitives this wraps — prefer this callback form in application code.)
 async function transferFunds(fromId: number, toId: number, amount: number) {
-  const txn = await db.beginTransaction();
-
   try {
-    await db.execute({
-      sql:
-        'UPDATE accounts SET balance = balance - :amount: WHERE id = :fromId:',
-      params: { amount, fromId },
-      transactionId: txn,
-    });
+    await db.transaction(async (tx) => {
+      await tx.execute({
+        sql:
+          'UPDATE accounts SET balance = balance - :amount: WHERE id = :fromId:',
+        params: { amount, fromId },
+      });
 
-    await db.execute({
-      sql: 'UPDATE accounts SET balance = balance + :amount: WHERE id = :toId:',
-      params: { amount, toId },
-      transactionId: txn,
+      await tx.execute({
+        sql:
+          'UPDATE accounts SET balance = balance + :amount: WHERE id = :toId:',
+        params: { amount, toId },
+      });
     });
-
-    await db.commitTransaction(txn);
   } catch (err) {
-    await db.rollbackTransaction(txn);
-
+    // transaction() has already rolled back by the time this runs.
     if (err instanceof EngineError) {
       switch (err.code) {
         case 'DEADLOCK':

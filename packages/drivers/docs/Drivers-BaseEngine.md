@@ -67,7 +67,6 @@ import {
 
 ```typescript
 import { BaseEngine } from '@tundralibs/drivers/base';
-import { EngineError } from '@tundralibs/drivers/errors';
 import type {
   EngineCapabilities,
   EngineEvents,
@@ -105,12 +104,10 @@ class MyEngine extends BaseEngine<MyConnection, MyOptions> {
     options: EventOptionKeys<MyOptions, EngineEvents>,
   ) {
     super(name, options, { port: 1234 });
-    if (this.hasOption('host') === false) {
-      throw new EngineError('MISSING_CONFIG_VALUE', {
-        instanceId: this.instanceId,
-        option: 'host',
-      });
-    }
+    // Throws `EngineError('MISSING_CONFIG_VALUE')` on the first name in the
+    // list that wasn't supplied. Call after `super()` for every option a
+    // concrete engine can't function without.
+    this._requireOptions(['host']);
   }
 
   protected async _createResource(): Promise<MyConnection> {
@@ -165,6 +162,20 @@ class MyEngine extends BaseEngine<MyConnection, MyOptions> {
 | `ssl`         | `boolean \| { ca, cert, key, certFile, keyFile, caFile, rejectUnauthorized, enforce }` | —                   | `compat` `TLSOptions` plus engine-only `enforce` (default `true`). Inline PEM via `cert`/`key`/`ca` (`ca` is `string[]`) or paths via `certFile`/`keyFile`/`caFile`. `enforce: false` falls back to plaintext on TLS failure. |
 | `idGenerator` | `(prefix?: string) => string`                                                          | ULID with prefix    | Used for query / transaction ids.                                                                                                                                                                                             |
 
+> `enforce: false` ("fall back to plaintext on TLS failure") is **not**
+> uniform across engines — it only works where the engine owns its wire
+> protocol and can retry the socket itself:
+>
+> | Engine                       | `enforce: false` behavior                            |
+> | ---------------------------- | ---------------------------------------------------- |
+> | Postgres / Redis / Memcached | Retries the connection in plaintext, emits `notice`. |
+> | MariaDB                      | **Ignored** — `npm:mariadb` has no downgrade path.   |
+> | MongoDB                      | **Ignored** — configure TLS in the connection URI.   |
+> | SQLite                       | **Ignored** — embedded, no network.                  |
+>
+> Setting `enforce: false` against MariaDB/MongoDB/SQLite silently does
+> nothing; `enforce: true` (the default) throws on TLS failure everywhere.
+
 ## Lifecycle
 
 State machine: `CLOSED → CONNECTING → READY → CLOSED`. There is no
@@ -185,9 +196,17 @@ The pool lives inline on the engine. Two modes:
 **Single-connection (default — no `pool` option):**
 
 - `min: 1, max: 1, idleTimeoutMs: 0` (no eviction)
-- One warm connection, queue waits forever (or until `acquireTimeoutMs`)
+- One warm connection. A second caller wanting it while it's checked out
+  queues for a **fixed 30s** before rejecting with `POOL_ACQUIRE_TIMEOUT` —
+  this default is hard-coded for the no-`pool` case and cannot be changed
+  from it.
 - Right when sitting behind PgBouncer / pgcat / RDS Proxy — no
   pool-on-pool.
+
+> Need a different acquire timeout (including unbounded, `0`) on a
+> single connection? You must configure `pool` explicitly —
+> `pool: { min: 1, max: 1, acquireTimeoutSeconds: 0 }` — since the default
+> (unconfigured) single-connection path always uses the fixed 30s value.
 
 **Multi-connection (with `pool` option):**
 
@@ -230,6 +249,12 @@ const pooled = new MyEngine('many', {
 | `_destroyResource`  | yes      | —       | Close one connection. Called by `_release`/`_destroy`/`_drain`. Errors are swallowed.                          |
 | `_ping`             | yes      | —       | Liveness check on a given resource.                                                                            |
 | `_validateResource` | no       | `true`  | Health check before an idle resource is reused **or handed to a waiter**. Return `false` to destroy + replace. |
+
+Call `this._requireOptions(['host', 'database'])` from the constructor, after
+`super(...)`, to enforce required connection config: it throws
+`EngineError('MISSING_CONFIG_VALUE')` naming the first key in the list that
+wasn't supplied. See [Quick Start](#quick-start-subclassing) above for a
+worked example.
 
 Inside subclass methods, use the protected pool helpers:
 
