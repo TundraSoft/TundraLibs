@@ -567,14 +567,21 @@ console.log(validateSubnetWithDetails('192.168.0.0/33'));
 // { valid: false, error: 'IPv4 mask must be 0-32, got: 33' }
 ```
 
-## Performance Considerations
+## Performance
 
-- **IPv4 Validation**: ~10-15μs (regex + octet validation)
-- **IPv6 Validation**: ~25-35μs (expansion + segment validation)
-- **Mask Parsing**: ~1-2μs
-- **Total Time**: Typically 15-40μs per call
+Benched on Apple M2 Max / Deno 2.9.5 (`packages/utils/isSubnet.bench.ts`):
 
-For bulk validation:
+| Input                                 | Time (avg) |
+| ------------------------------------- | ---------- |
+| IPv4, e.g. `192.168.1.0/24`           | ~158 ns    |
+| IPv6 loopback, `::1/128`              | ~653 ns    |
+| IPv6 link-local, `fe80::/10`          | ~686 ns    |
+| IPv6 compressed, `2001:db8::/32`      | ~899 ns    |
+| IPv6 full form, `…:8a2e:0370:7334/64` | ~1.1 µs    |
+
+IPv6 costs more than IPv4 because it goes through `expandIPv6` first;
+full (uncompressed) notation is slightly more expensive again since
+there's more to walk. For bulk validation:
 
 ```typescript
 import { isSubnet } from '@tundralibs/utils';
