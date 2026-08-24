@@ -14,11 +14,26 @@ OQL provides a comprehensive type system for defining database queries that can 
 
 **Key Benefits:**
 
-- Write queries in a type-safe JavaScript/TypeScript object format
-- Validate queries at runtime before execution
-- Translate to native SQL (PostgreSQL, MariaDB, SQLite) or NoSQL (MongoDB)
-- Full TypeScript inference and autocomplete support
-- Comprehensive test coverage (98%+ branch coverage)
+- **Type-safe, database-agnostic query building** — one `Query` object
+  compiles to Postgres, MariaDB, SQLite, or MongoDB; full TypeScript
+  inference and autocomplete. See [Type System](types/OQL-Types.md).
+- **Cross-runtime** — Deno, Bun, Node.js, Cloudflare Workers, and
+  browsers; no I/O, no runtime-specific globals (see
+  [Runtime support](#runtime-support) below).
+- **Comprehensive filter system** — comparison/string/array/null
+  operators gated per column type, correlated `$exists`/`$nexists`
+  subqueries, and JSON-path filtering into JSON/JSONB columns. See
+  [Filter Types](types/OQL-Types.md#filter-types).
+- **JOIN, JSON, and aggregation support** — multi-table joins, JSON
+  column filtering, and `SUM`/`COUNT`/`STRING_AGG`/`JSON_ROW`-style
+  aggregates. See [Aggregate Types](types/OQL-Types.md#aggregate-types).
+- **Runtime validation as a defense-in-depth layer** — every query
+  shape and cross-property scoping rule TypeScript can't express is
+  checked before translation. See [Validators](asserts/OQL-Asserts.md).
+- **4-dialect translation** — SQL (PostgreSQL, MariaDB, SQLite) and
+  NoSQL (MongoDB), with a documented
+  [compatibility matrix](docs/Compatibility.md) for where behavior
+  diverges per dialect.
 
 ## Modules
 
@@ -116,14 +131,30 @@ const { sql, params } = translator.select(query);
 
 OQL supports all standard database operations:
 
+Every DML/DDL branch is documented with its full field shape in
+[Type System](types/OQL-Types.md#query-types), and every runtime
+constraint it enforces in [Validators](asserts/OQL-Asserts.md). The
+notes below are only the footguns worth knowing before you reach for
+one.
+
 ### DML (Data Manipulation Language)
 
 - **SELECT** - Query data with filtering, joins, aggregates, `DISTINCT`
-- **INSERT** - Insert new records
-- **UPDATE** - Update existing records
+- **INSERT** - Insert new records. Expressions in `data` **cannot**
+  reference `@col` — an INSERT row has no other rows to reference yet.
+- **INSERT_FROM_QUERY** - `INSERT INTO ... SELECT ...`: append rows from
+  a source SELECT. `columns` and the source SELECT's `projection` are
+  matched **positionally by count, not by name** — see the
+  [worked example](#insert-from-a-query) below.
+- **UPDATE** - Update existing records. Expressions in `data` **may**
+  reference `@col` (the row being modified).
 - **DELETE** - Delete records
-- **UPSERT** - Insert or update (conflict resolution)
-- **COUNT** - Count records with optional filtering and `COUNT(DISTINCT col)`
+- **UPSERT** - Insert or update (conflict resolution). `updateOnConflict`
+  must be disjoint from `conflictKeys` and every entry must exist as a
+  key in `data` — see [Validators](asserts/OQL-Asserts.md#upsert-query).
+- **COUNT** - Count records with optional filtering and
+  `COUNT(DISTINCT col)`. No `having` — a COUNT has no GROUP BY to filter
+  against; use `SELECT` with `aggregates` + `having` instead.
 
 ### DDL (Data Definition Language)
 
@@ -131,7 +162,10 @@ OQL supports all standard database operations:
 - **DROP_SCHEMA** - Drop database schema
 - **CREATE_TABLE** - Create table with columns and constraints
 - **DROP_TABLE** - Drop table
-- **ALTER_TABLE** - Modify table structure
+- **ALTER_TABLE** - Modify table structure. `alterColumns` entries must
+  set `nullable` explicitly (a boolean) — dialects disagree on the
+  default for an omitted one. See
+  [Validators](asserts/OQL-Asserts.md#alter-table).
 - **TRUNCATE** - Clear table data
 - **CREATE_INDEX** - Create indexes
 - **DROP_INDEX** - Drop indexes
@@ -244,6 +278,13 @@ const filters: QueryFilter<User> = {
 unknown. Use `$null: true` / `$null: false` instead. The shorthand
 `'@col': null` is still accepted and means `IS NULL`.
 
+**`boolean` columns only take the three shorthand forms** — a literal
+(`'@active': true`), an array (`'@active': [true, false]`, implicit
+`$in`), or `null` (implicit `$null: true`). The `{ $eq: … }`-style
+operator-object syntax does not type-check on a boolean column at all;
+see [Operators](types/OQL-Types.md#operators) for the worked example and
+why.
+
 ### Correlated EXISTS Filters
 
 `$exists` / `$nexists` express "at least one / no matching row in
@@ -327,6 +368,14 @@ const query: Query<'SELECT', User, {
   },
 };
 ```
+
+> **MongoDB ignores the declared join `type` entirely.** `INNER`,
+> `LEFT`, `RIGHT`, and `FULL` all compile to the same LEFT-equivalent
+> `$lookup` on Mongo — `RIGHT` is not reversed and `FULL` does not
+> throw, they both silently behave like `LEFT`. This is a translator
+> gap, not documented degradation. See the
+> [JOINs section of the Compatibility Matrix](docs/Compatibility.md#joins)
+> before relying on join `type` on a Mongo-backed query.
 
 ### JSON Column Filtering
 
@@ -536,7 +585,30 @@ arbitrary user input as a view filter without your own validation.
 
 ## Runtime Validation
 
-All queries can be validated before execution:
+All queries can be validated before execution — this is the safety net
+for queries assembled dynamically (from user input, a query builder, or
+anything that bypasses TypeScript's compile-time `Query<QT, PT, LT>`
+checking). The validators enforce cross-property rules TypeScript's type
+system can't express on its own, for example:
+
+- Every column referenced anywhere in the query (WHERE, joins,
+  aggregates, expressions, ORDER BY, HAVING) must be listed in `columns`.
+- `having` may only filter on a declared `aggregates` alias, and is
+  rejected outright on `COUNT` (no GROUP BY to filter against).
+- `distinct: true` conflicts with `aggregates` or a join-alias
+  projection — both already trigger an implicit GROUP BY.
+- `$exists` / `$nexists` `on` keys are restricted to single-segment
+  `@column` refs and reject Expression values.
+- Filter/expression nesting is capped at depth 10 by default, to guard
+  against runaway recursion.
+- Every DDL validator rejects an unrecognized property as a typo-catcher.
+
+See [Validators](asserts/OQL-Asserts.md) for the full per-query-type
+constraint list — including the one gap worth knowing up front:
+operator-to-column-type gating (`$like` only on strings, `$gt` only on
+numeric/date) is a **TypeScript-only** guarantee. `assertQuery` does
+**not** re-check it at runtime — see the note under
+[Operators](asserts/OQL-Asserts.md#operators).
 
 ```typescript
 import type { Query } from '@tundralibs/oql';
@@ -675,6 +747,45 @@ const query: Query<'UPSERT', User> = {
   updateOnConflict: ['@email', '@username'],
 };
 ```
+
+### Insert From a Query
+
+`INSERT_FROM_QUERY` (`INSERT INTO ... SELECT ...`) appends the rows a
+SELECT produces into another table — no `data`, the rows come from
+`query`.
+
+**The target `columns` and the source SELECT's `projection` are matched
+positionally, by count — never by name.** `assertInsertFromQuery` only
+checks the two lists have equal length; get the order wrong and values
+land in the wrong columns with no error.
+
+```typescript
+import { assertQuery, type Query } from '@tundralibs/oql';
+
+type OrderHistory = { id: number; userId: number; total: number };
+
+const query: Query<'INSERT_FROM_QUERY', OrderHistory> = {
+  type: 'INSERT_FROM_QUERY',
+  table: 'order_history',
+  // 1st↔1st, 2nd↔2nd, 3rd↔3rd against the source projection below.
+  columns: ['id', 'userId', 'total'],
+  query: {
+    type: 'SELECT',
+    table: 'orders',
+    columns: ['id', 'userId', 'total', 'status'],
+    projection: { '@id': true, '@userId': true, '@total': true },
+    where: { '@status': 'completed' },
+  },
+};
+
+assertQuery(query);
+```
+
+On MongoDB this compiles to an aggregation over the **source** collection
+ending in `$merge` (append) rather than `$out` (which would replace the
+whole target collection) — see the "INSERT … SELECT" section of the
+[Compatibility Matrix](docs/Compatibility.md) for the full per-dialect
+breakdown.
 
 ## Documentation
 

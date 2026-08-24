@@ -380,12 +380,39 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
 
 ## JOINs
 
-| Join type | Postgres | MariaDB   | SQLite (3.39+) | MongoDB                               |
-| --------- | -------- | --------- | -------------- | ------------------------------------- |
-| INNER     | ✅       | ✅        | ✅             | ✅ via `$lookup`                      |
-| LEFT      | ✅       | ✅        | ✅             | ✅                                    |
-| RIGHT     | ✅       | ✅        | ✅             | emulated by reversing collections     |
-| FULL      | ✅       | ❌ throws | ✅             | not supported (throws when triggered) |
+> **MongoDB does not honour the declared join `type` at all.** Verified
+> against `MongoTranslator.__buildLookup`
+> (`packages/oql/translator/MongoTranslator.ts`): it reads a join's
+> `table`, `columns`, and `on`, but never reads `.type`. Every join —
+> `INNER`, `LEFT`, `RIGHT`, or `FULL` — compiles to the **identical**
+> `$lookup` stage, and the pipeline never `$unwind`s or filters on the
+> result, so the behaviour is uniformly LEFT-outer: a local document with
+> no match still comes through, carrying an empty array for the join
+> alias. Concretely:
+>
+> - **`INNER`** does **not** filter out non-matching local documents —
+>   despite the ✅ below, it silently behaves like `LEFT`.
+> - **`RIGHT`** does **not** reverse the collections. Documents that exist
+>   only on the joined ("right") side, with no match on the primary
+>   ("left") side, are silently absent from the result — exactly like
+>   `LEFT`, not a true RIGHT JOIN.
+> - **`FULL`** does **not** throw. It silently compiles to the same
+>   LEFT-equivalent `$lookup`, so right-only rows are silently missing.
+>
+> This is an unimplemented differentiation, not a documented design
+> choice — earlier revisions of this table claimed RIGHT was emulated by
+> reversing collections and FULL threw; neither is true of the current
+> source. If correctness depends on RIGHT or FULL semantics on MongoDB,
+> do not rely on the `type` field: restructure the query yourself (e.g.
+> swap which table is primary for a RIGHT, or run two queries and merge
+> client-side for a FULL).
+
+| Join type | Postgres | MariaDB   | SQLite (3.39+) | MongoDB                                                 |
+| --------- | -------- | --------- | -------------- | ------------------------------------------------------- |
+| INNER     | ✅       | ✅        | ✅             | ⚠️ compiles, but behaves like LEFT (see callout)        |
+| LEFT      | ✅       | ✅        | ✅             | ✅                                                      |
+| RIGHT     | ✅       | ✅        | ✅             | ⚠️ compiles, but behaves like LEFT — **not** reversed   |
+| FULL      | ✅       | ❌ throws | ✅             | ⚠️ compiles, but behaves like LEFT — does **not** throw |
 
 Every entry in a join's `on` map is a condition, and they AND together
 on every dialect. On MongoDB that means two `$lookup` shapes:
@@ -440,6 +467,12 @@ We **silently fall back / passthrough** for:
 The split is deliberate: silent fallbacks happen when there's a
 reasonable substitute that keeps the query semantically meaningful;
 we throw when emitting anything would actively mislead the caller.
+
+**One entry in this document is not a deliberate fallback**: a declared
+join `type` (`INNER`/`RIGHT`/`FULL`) on MongoDB is silently ignored
+rather than emulated or rejected — see the [JOINs](#joins) callout
+above. Every other row in this document reflects an intentional
+degradation; that one is a translator gap.
 
 ## `LPAD` / `RPAD` on SQLite
 

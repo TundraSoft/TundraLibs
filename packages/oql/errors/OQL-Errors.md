@@ -183,8 +183,16 @@ subqueries share the budget.
 hand-written ones — a builder that wraps each added condition in a fresh
 `$and` will hit 50 quickly. **Fix:** flatten. `$and` and `$or` take arrays,
 so a single `$and: [a, b, c, …]` costs one level where nesting costs one per
-condition. There is no option to raise the limit; it guards against stack
-exhaustion on cyclic or runaway input.
+condition. There is no option to raise this translator-side limit; it
+guards against stack exhaustion on cyclic or runaway input.
+
+**This is a separate limit from `assertQueryFilter`'s `maxDepth`.** The
+assert layer's own recursion guard (see
+[Query Filter](../asserts/OQL-Asserts.md#query-filter)) defaults to 10,
+not 50, and is a caller-adjustable parameter, not a hardcoded value. A
+query that passes `assertQueryFilter` with its default `maxDepth` is
+nowhere near this translator-side ceiling; the two numbers are
+independent guards in different layers, not a typo.
 
 **Extra context:** `depth`.
 
