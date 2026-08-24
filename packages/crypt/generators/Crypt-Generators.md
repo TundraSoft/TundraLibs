@@ -19,6 +19,7 @@ Secure generation of cryptographic keys, random secrets, and mnemonic phrases.
 | RSA key pairs   | ✅  | ✅   | ✅      | ✅      | ✅      |
 | EC key pairs    | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Random secrets  | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Random numbers  | ✅  | ✅   | ✅      | ✅      | ✅      |
 | BIP39 mnemonics | ✅  | ✅   | ✅      | ✅      | ✅      |
 | PEM/JWK export  | ✅  | ✅   | ✅      | ✅      | ✅      |
 
@@ -57,12 +58,16 @@ async function generateRSAKeyPair(
 
 interface RSAKeyOptions {
   algorithm: 'RSA-OAEP' | 'RSA-PSS';
-  keySize?: number; // defaults to 2048
+  keySize?: 2048 | 3072 | 4096; // defaults to 2048
   hashAlgorithm?: 'SHA-256' | 'SHA-384' | 'SHA-512'; // defaults to 'SHA-256'
-  format?: 'PEM' | 'DER' | 'JWK';
+  format?: 'PEM' | 'DER' | 'JWK'; // 'RAW' is rejected for RSA — see below
   extractable?: boolean;
 }
 ```
+
+> `format: 'RAW'` throws — RSA keys have no raw encoding in Web Crypto. `RAW`
+> only works for EC keys (see [`generateECKeyPair()`](#generateeckeypair)
+> below), where it exports the public key alone.
 
 **Example:**
 
@@ -90,10 +95,16 @@ async function generateECKeyPair(
 interface ECKeyOptions {
   algorithm: 'ECDSA' | 'ECDH';
   curve: 'P-256' | 'P-384' | 'P-521';
-  format?: 'PEM' | 'DER' | 'JWK';
+  format?: 'PEM' | 'DER' | 'JWK' | 'RAW';
   extractable?: boolean;
 }
 ```
+
+> `format: 'RAW'` is public-key-only: it exports `publicKeyExported` as the
+> uncompressed curve point and leaves `privateKeyExported` **undefined** —
+> there is no raw encoding for an EC private key. Use it when you only need to
+> hand the public key to a peer (e.g. for ECDH agreement); use `'PEM'` or
+> `'JWK'` when you need both halves.
 
 **Example:**
 
@@ -105,6 +116,72 @@ const { publicKeyExported, privateKeyExported } = await generateECKeyPair({
   curve: 'P-256',
   format: 'JWK',
 });
+```
+
+#### Convenience presets
+
+`generateRSAKeyPair()` and `generateECKeyPair()` take every option explicitly;
+five presets skip the boilerplate for the pairings the rest of this package
+actually consumes. All of them **always generate extractable keys** — call
+the underlying function directly if you need a non-extractable `CryptoKey`.
+
+```typescript ignore
+function generateKeyPair(
+  algorithm: 'RSA-OAEP' | 'RSA-PSS' | 'ECDSA' | 'ECDH',
+  format?: 'PEM' | 'DER' | 'JWK' | 'RAW',
+): Promise<GeneratedKeyPair>; // RSA-OAEP/RSA-PSS: 2048-bit, SHA-256; ECDSA/ECDH: P-256
+
+function generateRSAEncryptionKeys(
+  keySize?: 2048 | 3072 | 4096, // default 2048
+  format?: 'PEM' | 'DER' | 'JWK',
+): Promise<GeneratedKeyPair>; // RSA-OAEP + SHA-256, for encryptRSA/decryptRSA
+
+function generateRSASigningKeys(
+  keySize?: 2048 | 3072 | 4096, // default 2048
+  format?: 'PEM' | 'DER' | 'JWK',
+): Promise<GeneratedKeyPair>; // RSA-PSS + SHA-256, for the PS* side of signRSA/verifyRSA
+
+function generateECDSAKeys(
+  curve?: 'P-256' | 'P-384' | 'P-521', // default 'P-256'
+  format?: 'PEM' | 'DER' | 'JWK' | 'RAW',
+): Promise<GeneratedKeyPair>; // for signEC/verifyEC
+
+function generateECDHKeys(
+  curve?: 'P-256' | 'P-384' | 'P-521', // default 'P-256'
+  format?: 'PEM' | 'DER' | 'JWK' | 'RAW',
+): Promise<GeneratedKeyPair>; // deriveKey usage only — see below
+```
+
+> `generateRSASigningKeys()` and `generateRSAEncryptionKeys()` produce keys for
+> two different RSA primitives. A `generateRSASigningKeys()` key is RSA-PSS —
+> it can sign `PS*` but is refused for `RS*` (PKCS#1 v1.5); it is also the
+> wrong shape for `encryptRSA`/`decryptRSA`, which need an `RSA-OAEP` key.
+> Reach for `generateRSAEncryptionKeys()` for encryption and
+> `generateRSASigningKeys()` for signing — never the same key pair for both.
+
+> `generateECDHKeys()` grants the private key `deriveKey` usage only, so
+> `crypto.subtle.deriveBits` rejects it directly — derive a `CryptoKey` with
+> `deriveKey` and export that if you need raw shared-secret bytes. Both sides
+> of an exchange must agree on the curve; a P-256 key cannot derive against a
+> P-384 one.
+
+**Example:**
+
+```typescript
+import {
+  generateECDSAKeys,
+  generateKeyPair,
+  generateRSAEncryptionKeys,
+} from '@tundralibs/crypt/generators';
+
+// Same as generateRSAKeyPair({ algorithm: 'RSA-OAEP', keySize: 2048, hashAlgorithm: 'SHA-256', format: 'PEM' })
+const encKeys = await generateRSAEncryptionKeys(2048, 'PEM');
+
+// ES256-ready EC keys, JWK-exported
+const signingKeys = await generateECDSAKeys('P-256', 'JWK');
+
+// Fully generic — algorithm decides the sensible default (P-256, or 2048-bit RSA)
+const keys = await generateKeyPair('ECDSA', 'PEM');
 ```
 
 ### Random Secrets
@@ -162,6 +239,56 @@ const password = generatePassword(16, {
 });
 ```
 
+### Random Numbers
+
+#### `randomInt()` / `randomFloat()` / `randomNumber()`
+
+Cryptographically secure alternatives to `Math.random()` for numeric ranges —
+dice rolls, lottery draws, shuffling, sampling — anywhere the output must not
+be predictable. Both integer functions use rejection sampling (drawing extra
+random bytes and discarding out-of-range draws) so every value in the range is
+equally likely; a naive `byte % range` would bias low values whenever `range`
+does not evenly divide 256.
+
+```typescript ignore
+function randomInt(min: number, max: number): number; // inclusive both ends
+function randomFloat(min: number, max: number, precision?: number): number; // max exclusive
+function randomNumber(options?: RandomNumberOptions): number;
+
+interface RandomNumberOptions {
+  min?: number; // default 0
+  max?: number; // default 100
+  float?: boolean; // default false
+  precision?: number; // default 16 (float mode only)
+}
+```
+
+> Reach for `Math.random()` instead when the output does not need to resist
+> prediction (a UI animation delay, a non-security sample). `randomInt`'s
+> rejection sampling costs extra `crypto.getRandomValues()` calls compared to
+> `Math.random()`, which is the right trade for anything security- or
+> fairness-sensitive but unnecessary overhead otherwise.
+
+**Example:**
+
+```typescript
+import {
+  randomFloat,
+  randomInt,
+  randomNumber,
+} from '@tundralibs/crypt/generators';
+
+const dice = randomInt(1, 6); // 1-6 inclusive
+const probability = randomFloat(0, 1); // 0.0 to 0.999...
+const inRange = randomNumber({ min: 10, max: 20 }); // integer, 10-20 inclusive
+const preciseFloat = randomNumber({
+  min: 0,
+  max: 1,
+  float: true,
+  precision: 4,
+});
+```
+
 ### BIP39 Mnemonics
 
 #### `generateBIP39Mnemonic()`
@@ -170,11 +297,26 @@ Generates a BIP39 mnemonic phrase asynchronously.
 
 ```typescript ignore
 const generateBIP39Mnemonic: (
-  options?: BIP39Options, // { wordCount?: 12 | 15 | 18 | 21 | 24, ... }
+  options?: BIP39Options,
 ) => Promise<BIP39Result>; // { words, phrase, entropy, seed }
+
+interface BIP39Options {
+  wordCount?: 12 | 15 | 18 | 21 | 24; // default 12
+  wordlist?: readonly string[]; // default: the built-in English list; must have exactly 2048 entries
+  passphrase?: string; // default ''; folded into `seed` only — see below
+}
 ```
 
-Aliases: `generate12WordSeed()`, `generate24WordSeed()`, `generateSeedPhrase()`
+> `passphrase` never appears in `phrase` or `words` — it only changes the
+> derived `seed`. It cannot be recovered from the phrase, and a different
+> passphrase over the same phrase silently derives a different, equally
+> valid-looking seed. Losing the passphrase is as unrecoverable as losing the
+> phrase itself.
+
+Aliases: `generate12WordSeed(passphrase?)`, `generate24WordSeed(passphrase?)`,
+`generateSeedPhrase(wordCount?, passphrase?)` — positional shorthands fixed to
+the built-in English wordlist; call `generateBIP39Mnemonic` directly to supply
+another language or a custom `wordlist`.
 
 **Example:**
 
