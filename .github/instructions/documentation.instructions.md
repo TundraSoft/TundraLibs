@@ -400,6 +400,32 @@ Use `ts ignore` for:
 Never use `ts ignore` to silence a block that was meant to be a working example.
 That defeats the purpose of the check.
 
+## Example Projects
+
+A package MAY ship a standalone, runnable example under
+`packages/{package}/examples/{app-name}/` — multiple files, its own README,
+meant to be copied wholesale into a consumer's project for a dry run. This is
+different from a markdown ` ```ts ` block: it's a full mini-app, for when a
+single package's surface is too large for inline snippets to demonstrate
+coherently.
+
+- **No `*.test.ts` file anywhere in the directory.** `deno test`/`bun test`
+  discovery and CI's `node --import tsx --test 'packages/**/*.test.ts'` glob
+  would otherwise sweep it into the required suite — that glob can't be
+  filtered by `deno.json` config, so this is the only real guardrail.
+  Verification lives in the example's own README as a `deno run` / `bun run`
+  / `node --import tsx` command a reader runs by hand.
+- Excluded from publish via root `deno.json` `publish.exclude`
+  (`**/examples/**`) — it never ships in the JSR tarball.
+- Still must pass `deno check` (wired into `deno task check`) — excluded from
+  test/publish does not excuse it from type-checking; a broken example is
+  worse than none.
+- Imports use the public specifier (`@tundralibs/{package}`), same rule as
+  every other doc example — it must be draggable into a real project
+  unmodified.
+- The example's own README documents each file's purpose in a table and gives
+  the exact run command per runtime.
+
 ## Verification — run this, do not eyeball it
 
 Documentation in this repo is machine-checked. Both commands emit ANSI colour

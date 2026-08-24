@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno check packages/*/mod.ts",
+    "check": "deno check packages/*/mod.ts packages/*/examples/**/*.ts",
     "test": "deno test --allow-all --parallel",
     "test:watch": "deno test --allow-all --watch",
     "bench": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --all",
@@ -110,7 +110,8 @@
       "**/fixtures/**",
       "**/tests/**",
       "**/test-fixtures/**",
-      "**/soak.ts"
+      "**/soak.ts",
+      "**/examples/**"
     ]
   }
 }
