@@ -12,6 +12,7 @@ Cron expression fields, extensions, and matching semantics.
 
 - [Fields](#fields)
 - [Field syntax](#field-syntax)
+- [Worked examples](#worked-examples)
 - [Day-of-month vs day-of-week (POSIX OR)](#day-of-month-vs-day-of-week-posix-or)
 - [Matching semantics](#matching-semantics)
 - [Examples](#examples)
@@ -55,6 +56,63 @@ silently mis-read. Names must be complete tokens: `JAN1` is an error,
 never a silent misparse. Ranges do not wrap — use a list (`SAT,SUN`)
 instead of `SAT-SUN`.
 
+> A step is rejected only when it exceeds a REAL span. A degenerate
+> single-value span — `59/1`, `0-0/1` — is a valid explicit single
+> firing; any step on it is a no-op, not an error. Only a step wider
+> than an actual multi-value span (`*/60` on 0-59, `*/12` on a 1-12
+> month field) throws.
+
+## Worked examples
+
+Every field-syntax form from the table above, proven against the
+real parser:
+
+```ts
+import { parseSchedule } from '@tundralibs/cronus';
+
+// '*' — every value in the field's range.
+console.assert(parseSchedule('* * * * *').minute.size === 60);
+
+// 'n' — exact value.
+console.assert(parseSchedule('30 6 * * *').minute.has(30));
+
+// 'a-b' — inclusive range.
+console.assert(
+  [...parseSchedule('9-17 * * * *').hour].join(',') ===
+    '9,10,11,12,13,14,15,16,17',
+);
+
+// 'a,b,c' — list (mixes with ranges/steps in the same field).
+console.assert(
+  [...parseSchedule('0,15,30,45 * * * *').minute].join(',') ===
+    '0,15,30,45',
+);
+
+// '*/n' — every n minutes, counting from the field's MINIMUM (0).
+console.assert(
+  [...parseSchedule('*/15 * * * *').minute].join(',') === '0,15,30,45',
+);
+
+// 'a/n' — every n counting from a (NOT the field minimum): 5,15,25…55.
+console.assert(
+  [...parseSchedule('5/10 * * * *').minute].join(',') ===
+    '5,15,25,35,45,55',
+);
+
+// 'a-b/n' — every n within an explicit range.
+console.assert(
+  [...parseSchedule('10-20/5 * * * *').minute].join(',') === '10,15,20',
+);
+
+// Month/day NAMES — case-insensitive, resolved to their numeric value.
+console.assert(
+  [...parseSchedule('0 0 * jan,dec *').month].join(',') === '1,12',
+);
+
+// Day-of-week accepts BOTH 0 and 7 for Sunday — 7 folds to 0.
+console.assert([...parseSchedule('0 0 * * 7').dayOfWeek].join(',') === '0');
+```
+
 ## Day-of-month vs day-of-week (POSIX OR)
 
 When **both** day fields are restricted, a date matches if it
@@ -69,6 +127,42 @@ means "the 13th OR Friday":
 
 When only one is restricted, only that one applies (`0 0 15 * *` is
 strictly the 15th).
+
+> **The star-flag check reads the field STRING's first character, not
+> whether `*` appears anywhere in it.** `*,5` and `5,*` parse to the
+> IDENTICAL value set (every value in the field), but only the one
+> starting with `*` counts as unrestricted — list order changes the
+> matching rule, not just the values:
+>
+> ```ts
+> import { parseSchedule } from '@tundralibs/cronus';
+>
+> console.assert(parseSchedule('0 0 *,5 * 1').domRestricted === false); // '*' leads → unrestricted
+> console.assert(parseSchedule('0 0 5,* * 1').domRestricted === true); // '*' trails → restricted
+> ```
+>
+> With day-of-week fixed to Monday, `0 0 *,5 * 1` fires every Monday
+> (AND — day-of-month is unrestricted), while `0 0 5,* * 1` fires
+> every day (OR — day-of-month is restricted, and its value set
+> already covers every day, so the OR is always satisfied).
+
+> **A field that is "restricted" (doesn't start with `*`) can still
+> cover every value — and the OR rule does not know the difference.**
+> `0-6` for day-of-week matches every day, exactly like `*` would, but
+> because it doesn't start with `*` it still counts as restricted. Pair
+> it with a restricted day-of-month under the POSIX OR rule and the
+> day-of-week side is _always_ satisfied, so the expression fires
+> daily — not just on the day-of-month value it looks like it's
+> pinned to:
+>
+> ```ts
+> import { matches, parseSchedule } from '@tundralibs/cronus';
+>
+> // Looks like "the 13th, or any day 0-6" — reads as "the 13th only"
+> // at a glance, but 0-6 covers every weekday, so the OR fires daily.
+> const dailyByAccident = parseSchedule('0 0 13 * 0-6');
+> console.assert(matches(dailyByAccident, new Date(2026, 7, 14))); // a Friday, NOT the 13th — still fires
+> ```
 
 ## Matching semantics
 
@@ -150,16 +244,38 @@ matches(parseSchedule('30 6 * * *'), new Date(2026, 0, 1, 6, 30)); // true
 
 ### `isValidSchedule()`
 
-Validate without throwing.
+Validate without throwing — `true` means syntactically parseable, NOT
+that the schedule will ever match a real date (`0 0 30 2 *` validates
+`true` and simply never fires).
 
 ```typescript ignore
 isValidSchedule(expression: string): boolean
 ```
 
+**Example:**
+
+```ts
+import { isValidSchedule } from '@tundralibs/cronus';
+
+console.assert(isValidSchedule('*/15 9-17 * * MON-FRI') === true);
+console.assert(isValidSchedule('*/60 * * * *') === false); // step wider than the span
+console.assert(isValidSchedule('not a cron') === false);
+```
+
 ### Static conveniences
 
 `Cronus.isValid(schedule)` and `Cronus.matches(schedule, at?)` wrap the
-above for one-off checks without importing the engine functions.
+above for one-off checks without importing the engine functions —
+useful for validating a schedule from user input without constructing
+a `Cronus` instance:
+
+```ts
+import { Cronus } from '@tundralibs/cronus';
+
+console.assert(Cronus.isValid('*/5 * * * *') === true);
+console.assert(Cronus.isValid('nope') === false);
+console.assert(Cronus.matches('30 6 * * *', new Date(2026, 0, 1, 6, 30)));
+```
 
 ## Related Documentation
 

@@ -106,9 +106,12 @@ await cron.trigger('hourly-cleanup');
 By default the ticker holds the event loop (standalone-daemon
 friendly). When embedding inside a host that owns the lifecycle (an
 HTTP server), pass `{ unref: true }` so a pending tick never blocks
-shutdown — and call `stop()` on teardown. Caveat: with nothing else
-holding the loop, the process can exit mid-run of an async job; the
-host is responsible for draining in-flight work before exit:
+shutdown — and call `stop()` on teardown.
+
+> With `unref: true` and nothing else holding the loop, the process
+> can exit **mid-run** of an async job — cronus never blocks shutdown
+> for you. The host is responsible for draining in-flight work (e.g.
+> tracking outstanding job promises and awaiting them) before exit.
 
 ```typescript
 import { Cronus } from '@tundralibs/cronus';
