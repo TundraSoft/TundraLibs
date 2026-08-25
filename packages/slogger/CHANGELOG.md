@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.2.1...slogger-v1.2.2) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **slogger:** fix masking/format gotchas, document the missing 4 handlers + formatters, add a fan-out example ([#576](https://github.com/TundraSoft/TundraLibs/issues/576)) ([323428d](https://github.com/TundraSoft/TundraLibs/commit/323428dd8fe11d91f09a5ddb9fb0cef8b2dd8171))
+
 ## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.2.0...slogger-v1.2.1) (2026-08-23)
 
 
