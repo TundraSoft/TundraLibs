@@ -6,10 +6,13 @@ Known limitations, planned hardening, and deferred work for
 
 ## Committed follow-ups (additive minors)
 
-Both are **purely additive** — new opt-in capabilities with new hooks, no
-breaking change — so they ship as follow-up minors _after_ the overhaul
-release rather than gating it. Passkeys first (design settled, crypto
-ready), then resource-server mode.
+Everything here is **purely additive** — new opt-in capabilities, options, or
+methods with no breaking change — so these ship as follow-up minors _after_
+the overhaul release rather than gating it. Rough order: passkeys first (design
+settled, crypto ready); the hardening/ergonomics items are small and can batch;
+resource-server once its principal-model design is settled.
+
+### Features
 
 - **Passkeys / WebAuthn** (design settled; gating crypto landed — build-ready).
   A passwordless login method. Config: `rpId` + `rpName` + exact-origin
@@ -44,39 +47,50 @@ ready), then resource-server mode.
   (`getUser({by:'ID'})`, pact still authorizes) vs. claims-derived (a
   `principalFromClaims` mapper, for apps with no user store) vs. both.
 
-## Security posture
+### Hardening & ergonomics
 
-- **HMAC replay window.** `HMAC` signatures verify forever unless the
-  signed payload carries a timestamp/nonce and freshness is checked. The
-  framework owns payload canonicalization today; a `maxSkew` convenience
-  option could move the freshness check into pact.
-- **Single verify key (no keyring).** Zero-downtime rotation of pact's
-  own signing secret needs `kid`-based key selection on verify.
+- **HMAC replay window (skew-bounding).** A captured `(payload, signature)`
+  pair verifies forever today. Add an optional `timestamp` to the `HMAC`
+  credential (framework-extracted) plus a `maxSkew` option; reject outside the
+  window. True single-use (a `nonce` + a seen-nonce store) stays a documented
+  `@tundralibs/cacher` recipe rather than built-in — pact keeps the `HMAC`
+  path stateless.
+- **Signing keyring (`kid` rotation).** Today's single `secret`/key pair means
+  rotating it logs everyone out. Add an optional
+  `keys: [{ kid, secret | keyPair, active }]` beside `secret`; sign with the
+  active key and stamp its `kid` (crypt's `issueJWT` already carries one),
+  select by `header.kid` on verify, and keep retiring keys verify-only until
+  old tokens expire. Zero-downtime signing-key rotation; shares the
+  `kid`-select path with resource-server mode, and matters most for `RS*`.
+- **Revocation helpers.** Revocation is an app-side `revokedAt` write today.
+  Add `revokeApiKey(keyId)` (wires the already-defined hook) and
+  `revokeToken(token)` (a new `revokeToken(tokenHash)` hook, symmetric with
+  `revokeApiKey`).
+- **Compile-time hook gating.** The capability→hook table is enforced at
+  construction (a thrown `PactDefinitionError`). A static `Pact.create(options)`
+  factory lifts it to a _compile_ error (e.g. `password` on ⇒ `getUser`
+  required in `hooks`), added **alongside** the runtime-checked `new Pact(…)`
+  so it stays additive. The only construction-API-shaping item.
 
-## Ergonomics
+## Backlog — bounds the feature set, not yet committed
 
-- **Compile-time hook gating.** The capability→hook table is validated at
-  construction (runtime). Lifting it to the type level needs a factory
-  function (constructors cannot be generic over their argument).
-- **`OPAQUE` sliding expiry.** Opaque sessions have a fixed lifetime;
-  sliding renewal on activity is a possible opt-in (it costs a store
-  write per request, so it will not be the default).
-- **Simple-token / api-key revocation helpers.** Revocation today is an
-  app-side write (`revokedAt`); pact could offer `revokeToken`/
-  `revokeApiKey` sugar over the existing hooks.
+- **`OPAQUE` sliding expiry.** Opaque sessions have a fixed lifetime; sliding
+  renewal on activity is a possible opt-in (it costs a store write per request,
+  throttled, so it will not be the default).
 
-## OAuth completeness
+### OAuth completeness
 
-- **Provider-token refresh** — `tokens.refreshToken` is handed back raw;
-  there is no `refreshProviderToken()` (refresh_token grant) helper.
+- **Provider-token refresh** — `tokens.refreshToken` is handed back raw; there
+  is no `refreshProviderToken()` (refresh_token grant) helper. Worth it only
+  for apps that call provider APIs after login.
 - **GitHub null email** — a private primary email needs a second
   `/user/emails` call; not implemented (documented in the preset).
-- **Apple client-secret minting** — Apple's client "secret" is a
-  short-lived ES256 JWT the consumer mints out-of-band; a helper over
-  crypt's ECDSA support is a candidate.
-- **More presets** — Twitter/X, LinkedIn, GitLab, Slack are the usual
-  asks; the generic `OIDC` discovery preset covers most modern IdPs, so
-  the preset list stays deliberately small.
+- **Apple client-secret minting** — Apple's client "secret" is a short-lived
+  ES256 JWT the consumer mints out-of-band; a helper over crypt's ECDSA support
+  is a candidate.
+- **More presets** — Twitter/X, LinkedIn, GitLab, Slack are the usual asks; the
+  generic `OIDC` discovery preset covers most modern IdPs, so the preset list
+  stays deliberately small.
 - **M2M flows** — `client_credentials` and the device-authorization grant
   (RFC 8628) pair naturally with api keys and CLIs.
 
