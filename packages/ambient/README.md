@@ -4,6 +4,8 @@ Request-scoped context that survives `await` — carry a correlation id, trace
 and span ids, and any custom fields through an entire logical request without
 threading them through every function signature.
 
+[![JSR](https://jsr.io/badges/@tundralibs/ambient)](https://jsr.io/@tundralibs/ambient)
+[![JSR Score](https://jsr.io/badges/@tundralibs/ambient/score)](https://jsr.io/@tundralibs/ambient)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

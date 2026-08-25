@@ -2,6 +2,20 @@
   "name": "@tundralibs/guardian",
   "version": "1.3.1",
   "description": "Schema validation for TypeScript — strict at compile time, forgiving at API boundaries",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "validation",
+    "schema",
+    "schema-validation",
+    "type-safe",
+    "runtime-validation",
+    "parser",
+    "guard"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": {

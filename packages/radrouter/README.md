@@ -4,6 +4,8 @@ Compressed radix-tree HTTP router. Trie-based lookup, typed parameter
 patterns, greedy segments, versioned endpoints, and a structurally
 agnostic middleware slot.
 
+[![JSR](https://jsr.io/badges/@tundralibs/radrouter)](https://jsr.io/@tundralibs/radrouter)
+[![JSR Score](https://jsr.io/badges/@tundralibs/radrouter/score)](https://jsr.io/@tundralibs/radrouter)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

@@ -112,8 +112,13 @@ Links MUST be relative and will be processed by the wiki-sync workflow.
 ````markdown
 # {Package Name}
 
-Brief description.
+Brief, keyword-rich description — name the concrete things a user would
+search for (the tech, the standard, the alternative, the runtimes), not a
+generic label. "Cross-runtime ID generators — NanoID, CUID, ULID,
+ObjectID" beats "Comprehensive ID generation library".
 
+[![JSR](https://jsr.io/badges/@tundralibs/{package})](https://jsr.io/@tundralibs/{package})
+[![JSR Score](https://jsr.io/badges/@tundralibs/{package}/score)](https://jsr.io/@tundralibs/{package})
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
@@ -158,6 +163,22 @@ npx jsr add @tundralibs/{package}
 MIT
 
 ````
+
+### Discoverability & keywords
+
+These libraries are found through search — treat it as part of the docs.
+
+- **README + description are the JSR levers.** JSR search indexes the
+  README and the `deno.json` `description`; it has **no** keywords field.
+  So the H1 line and the `description` must name the concrete tech,
+  standards, and alternatives a user would type — not a generic label.
+- **`package.json` `keywords`** carry the same terms as an array (JSR
+  ignores them, but they help the npm mirror, GitHub topics, and general
+  search). Start from `typescript`, `deno`, `bun`, `nodejs`,
+  `cross-runtime` and add the domain terms (`orm`, `validation`, `redis`,
+  `jwt`, `nanoid`, …); `workspace:add` seeds the base set — extend it.
+- Keep it honest — list only what the package actually does. No stuffing.
+
 ### Module Document (`{Package}-{Module}.md`)
 
 ```markdown

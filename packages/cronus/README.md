@@ -3,6 +3,8 @@
 A cross-runtime, minute-resolution cron scheduler for Deno, Bun, and
 Node.js.
 
+[![JSR](https://jsr.io/badges/@tundralibs/cronus)](https://jsr.io/@tundralibs/cronus)
+[![JSR Score](https://jsr.io/badges/@tundralibs/cronus/score)](https://jsr.io/@tundralibs/cronus)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

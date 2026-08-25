@@ -3,6 +3,19 @@
   "version": "1.3.0",
   "type": "module",
   "description": "Compressed radix-tree HTTP router — typed parameters, greedy patterns, versioned endpoints, generic middleware",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "router",
+    "http-router",
+    "radix-tree",
+    "routing",
+    "middleware",
+    "trie"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

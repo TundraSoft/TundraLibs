@@ -3,6 +3,20 @@
   "version": "2.7.0",
   "type": "module",
   "description": "Compatibility layer smoothing API differences across Deno, Bun, and Node.js",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "compatibility",
+    "polyfill",
+    "runtime",
+    "fetch",
+    "filesystem",
+    "webserver",
+    "websocket"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

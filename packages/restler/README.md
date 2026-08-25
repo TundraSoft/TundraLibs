@@ -6,6 +6,8 @@ authentication, content-type (de)serialization, timeouts, events, and
 errors — over a runtime-aware `fetch` that also supports Unix sockets and
 TLS client authentication.
 
+[![JSR](https://jsr.io/badges/@tundralibs/restler)](https://jsr.io/@tundralibs/restler)
+[![JSR Score](https://jsr.io/badges/@tundralibs/restler/score)](https://jsr.io/@tundralibs/restler)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
