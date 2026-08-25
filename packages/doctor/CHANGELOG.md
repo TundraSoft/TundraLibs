@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.1](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.5.0...doctor-v1.5.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **doctor:** resolve() reads a factory through to the parent container ([#577](https://github.com/TundraSoft/TundraLibs/issues/577)) ([f9e2e6f](https://github.com/TundraSoft/TundraLibs/commit/f9e2e6f9603db2e9c176e7f5948018aa2ff310a4))
+
+
+### Documentation
+
+* **doctor:** document containers, fix a wrong bundling claim, de-risk the example ([#569](https://github.com/TundraSoft/TundraLibs/issues/569)) ([6408b2f](https://github.com/TundraSoft/TundraLibs/commit/6408b2f20ff49dd4a534cd47da6329c5af20c980))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.4.0...doctor-v1.5.0) (2026-08-22)
 
 
