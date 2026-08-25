@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/slogger",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Cross-runtime structured logging that fans one record out to many formats in-process — console, JSON, syslog, file, HTTP, TCP, or any custom handler",
   "keywords": [
     "typescript",
