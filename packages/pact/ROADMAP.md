@@ -74,54 +74,23 @@ resource-server once its principal-model design is settled.
   `hooks`) via conditional types — pure type-tightening on the settled entry
   point, no runtime or API change.
 
-## Security-review hardening backlog (2026-08)
+## Security-review follow-ups (2026-08)
 
-From a two-pass adversarial audit — no critical/high issues; the kernel's core
-defenses (alg-pinning, reuse detection, prototype-pollution, status gate) are
-solid. These are the actionable hardening/robustness/doc items it surfaced,
-**for triage** (grouped, not yet committed):
+A two-pass adversarial audit found no critical/high issues; its actionable
+findings (the `authenticate` uniform-`null` gap, secret-enumeration leak,
+unbounded JWKS fetch, plaintext opaque sessions, fail-open expiry/empty-
+requirement, `isRevoked`-in-`refresh`, the OIDC `azp`/discovery-TTL/param-order
+items, and the doc-accuracy fixes) are **resolved in the overhaul**. Two items
+were deliberately left for later:
 
-- **Uniform `null` on bad input across `authenticate`.** The `HMAC` branch
-  passes an attacker-supplied signature straight to `verifyHMAC`, which _throws_
-  on a malformed signature → a 500 instead of the documented `null` (its sibling
-  `verifySignature` already guards this). Wrap it — and ideally the whole
-  `authenticate` switch — so a throwing verify / a malformed stored `grants` /
-  a throwing hook resolves to `null`, and add a `default: return null` for an
-  unrecognized scheme.
-- **Keep the signing secret off introspection surfaces.** The secret / private
-  key is an own-**enumerable** field, so `console.log(pact)` / `util.inspect` /
-  spread expose it. Make it (and `hooks`/`oauth`) non-enumerable or hold it in a
-  `WeakMap`; consider a `toJSON`/inspect guard.
-- **Bound the JWKS fetch.** It bypasses RESTler's timeout and has no
-  response-size / key-count cap → a stalling `jwks_uri` hangs login. Add an
-  `AbortSignal` timeout (via compat) + size/key caps; optionally constrain a
-  discovery-supplied `jwks_uri` to the issuer host.
-- **Hash opaque session ids at rest** (or document them as bearer-equivalent):
-  today the `OPAQUE` token _is_ the stored key in plaintext, while the `TOKEN`
-  scheme stores only a sha-256 — an asymmetric store-leak exposure.
-- **Defensive store-data handling.** Treat a non-numeric `expiresAt` as expired
-  (fail closed), and validate/normalise `grants` at the write boundary so a
-  corrupt row can't 500 the read path.
-- **Authz degenerate-input safety.** Decide whether an empty/`0n` required
-  permission (`has(m,0n,·)`, `all(m,[],·)`, `toMask(m,[])`) should fail closed
-  rather than be vacuously satisfied; `Number.isSafeInteger` guard on
-  `deserializeGrants`' number branch; validate grant _values_ are `bigint` on
-  the `authz` API.
-- **Revocation reach + telemetry.** Consult `isRevoked` in `refresh` (or
-  document that it governs only the access path); redact the raw token from the
-  `verifyFailed` event.
-- **OIDC completeness.** TTL the discovery document; require `azp` when `aud` is
-  multi-valued; spread app `authParams` _before_ the generated `state`/PKCE so
-  they can't override them.
-- **Doc-accuracy / footguns to document.** Fix the `verify`/`refresh`
-  `@throws MISSING_OPTION` claim (it resolves `null`); note TOTP codes are
-  replayable within the verification window; note `setPassword` does not
-  invalidate existing sessions (point at `logoutAll`); note `embedGrants`
-  freezes `status: 'ACTIVE'` + empties `metadata`; note scoped api-key/token
-  `grants` _replace_ (not intersect) the user's and outlive a grant downgrade.
 - **Password KDF strength.** `register`/`setPassword` use crypt's default
-  210 000 PBKDF2-SHA256 iterations (OWASP's SHA-256 figure is 600 000); expose
-  an override or raise the crypt default.
+  210 000 PBKDF2-SHA256 iterations (OWASP's SHA-256 figure is 600 000). Best
+  fixed by raising crypt's default (a crypt change) or exposing a
+  `password: { iterations }` pass-through — the timing-equalizer dummy hash
+  would need to track whatever count is chosen.
+- **JWKS same-origin defence-in-depth.** A discovery-supplied `jwks_uri` is
+  https-checked but not constrained to the issuer host; an allow-list/same-host
+  check would harden against a compromised-but-trusted IdP.
 
 ## Backlog — bounds the feature set, not yet committed
 
