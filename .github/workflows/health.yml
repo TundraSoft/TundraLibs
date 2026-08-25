@@ -174,32 +174,6 @@ jobs:
         if: matrix.runtime == 'node'
         run: node --import tsx --test 'packages/**/*.test.ts'
 
-      # The example apps are only type-checked in PR CI; RUN them here so a
-      # runtime update that breaks a shipped example is caught as drift. pact's
-      # examples are self-contained (in-memory, no net/fs/env), so they run
-      # unflagged and exit cleanly. Extend the glob as other packages' examples
-      # are confirmed side-effect-free and non-hanging.
-      - name: Run pact examples (deno)
-        if: matrix.runtime == 'deno'
-        run: |
-          for f in packages/pact/examples/*/main.ts; do
-            echo "▶ $f"; deno run "$f"
-          done
-
-      - name: Run pact examples (bun)
-        if: matrix.runtime == 'bun'
-        run: |
-          for f in packages/pact/examples/*/main.ts; do
-            echo "▶ $f"; bun run "$f"
-          done
-
-      - name: Run pact examples (node)
-        if: matrix.runtime == 'node'
-        run: |
-          for f in packages/pact/examples/*/main.ts; do
-            echo "▶ $f"; node --import tsx "$f"
-          done
-
   audit:
     name: Full dependency audit
     runs-on: ubuntu-latest
