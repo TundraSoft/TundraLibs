@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.9](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.8...cacher-v1.0.9) (2026-08-25)
+
+
+### Documentation
+
+* **cacher:** deepen manager & per-engine docs, add runnable example ([#587](https://github.com/TundraSoft/TundraLibs/issues/587)) ([084179d](https://github.com/TundraSoft/TundraLibs/commit/084179df6a083e38594ad1455625b04fc811ad12))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [1.0.8](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.7...cacher-v1.0.8) (2026-08-23)
 
 
