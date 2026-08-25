@@ -16,11 +16,11 @@ import {
   stat,
 } from '@tundralibs/compat/file';
 import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
+import { contentTypeFor } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
   type CookieOptions,
-  mimeTypeFor,
   negotiate,
   pagingFromHeaders,
   pagingFromQuery,
@@ -338,8 +338,8 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
 
   /**
    * Build a response that SERVES a file: read its bytes and set the
-   * content-type from the extension (HTML/CSS/JS/images/… via
-   * {@link mimeTypeFor}; unknown → `application/octet-stream`). Return it
+   * content-type from the extension (HTML/CSS/JS/images/… via compat's
+   * `contentTypeFor`; unknown → `application/octet-stream`). Return it
    * from a handler — `return await ctx.serve('./public/index.html')` — or
    * assign it to {@link response}. `download` sends it as an attachment.
    *
@@ -384,7 +384,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     }
     const content = await readFileStream(path);
     const headers: Record<string, string> = {
-      'content-type': options.contentType ?? mimeTypeFor(path),
+      'content-type': options.contentType ?? contentTypeFor(path),
       'content-length': String(size),
     };
     if (options.download !== undefined && options.download !== false) {

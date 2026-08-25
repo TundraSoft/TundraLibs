@@ -14,7 +14,7 @@ import { deleteFile, writeFile } from '@tundralibs/compat/file';
 import { ulid } from '@tundralibs/id';
 import * as path from '@tundralibs/compat/path';
 import { RapidError } from '../errors/mod.ts';
-import { mimeTypeFor } from './mimeTypeFor.ts';
+import { contentTypeFor } from '@tundralibs/compat/http';
 import type {
   RapidApplicationUploadOptions,
   RapidHTTPRequestBody,
@@ -183,7 +183,7 @@ async function collectFormData(
       // Server-derived from the (allowlist + magic-byte-validated)
       // extension via @std/media-types — NOT the client's `value.type`,
       // which is unverified and "proves nothing" (see the check above).
-      type: mimeTypeFor(value.name),
+      type: contentTypeFor(value.name),
       size: value.size,
     });
   }

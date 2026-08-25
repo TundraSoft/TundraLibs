@@ -17,7 +17,6 @@ export {
   signValue,
   verifySignedValue,
 } from './cookies.ts';
-export { mimeTypeFor } from './mimeTypeFor.ts';
 export { negotiate } from './negotiate.ts';
 export { attachContainer, currentContainer } from './requestContainer.ts';
 export { validated } from './validated.ts';

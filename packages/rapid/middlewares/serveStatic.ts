@@ -2,7 +2,7 @@
  * @fileoverview `serveStatic` — middleware that serves files from a
  * directory. HTTP-only, GET/HEAD only; falls through (`next()`) for any
  * request it doesn't handle, so routes and the 404 still work. Uses the
- * same `mimeTypeFor` resolver as `ctx.serve()`.
+ * same `contentTypeFor` resolver as `ctx.serve()`.
  *
  * @module
  */
@@ -14,7 +14,7 @@ import {
   stat,
 } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
-import { mimeTypeFor } from '../utils/mod.ts';
+import { contentTypeFor } from '@tundralibs/compat/http';
 import type { RapidMiddleware } from '../types/mod.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -182,7 +182,7 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
     const mtimeMs = info.mtime?.getTime() ?? 0;
     const etag = `W/"${info.size.toString(16)}-${mtimeMs.toString(16)}"`;
     const headers: Record<string, string> = {
-      'content-type': mimeTypeFor(real),
+      'content-type': contentTypeFor(real),
       etag,
     };
     if (mtimeMs > 0) headers['last-modified'] = new Date(mtimeMs).toUTCString();
