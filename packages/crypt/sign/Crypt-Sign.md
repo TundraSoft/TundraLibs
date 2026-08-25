@@ -208,6 +208,37 @@ const publicKey = `-----BEGIN PUBLIC KEY-----...`;
 const isValid = await verifyEC('my data', signature, publicKey);
 ```
 
+### `ecdsaDerToRaw()`
+
+Converts an ASN.1/DER ECDSA signature — `SEQUENCE { INTEGER r, INTEGER s }`, as
+emitted by OpenSSL and by every WebAuthn/FIDO2 authenticator's `ES256`
+assertion — into the base64 `R‖S` form `verifyEC` accepts. It is a pure
+re-encoding of the same `(r, s)` pair: it runs no cryptography, so a signature
+that converts cleanly is not thereby valid — `verifyEC` remains the check.
+
+```typescript ignore
+function ecdsaDerToRaw(der: Uint8Array, curve: ECCurve): string;
+```
+
+**Example** — verifying a WebAuthn assertion:
+
+```typescript
+import { ecdsaDerToRaw, verifyEC } from '@tundralibs/crypt/sign';
+
+// `signature` is the authenticator's DER assertion; `signedData` is
+// authenticatorData ‖ SHA-256(clientDataJSON); `publicKey` is the stored
+// credential key.
+declare const signature: Uint8Array;
+declare const signedData: Uint8Array;
+declare const publicKey: JsonWebKey;
+
+const ok = await verifyEC(
+  signedData,
+  ecdsaDerToRaw(signature, 'P-256'),
+  publicKey,
+);
+```
+
 ### Signature encoding: `R‖S`, not DER
 
 ECDSA signatures have two incompatible encodings in common use:
@@ -218,8 +249,9 @@ ECDSA signatures have two incompatible encodings in common use:
 | ASN.1 / DER | `SEQUENCE { INTEGER r, INTEGER s }` | OpenSSL, most non-web tooling          |
 
 `signEC` emits **only** `R‖S` and `verifyEC` accepts **only** `R‖S`; a DER
-signature returns `false` rather than verifying. Convert at the boundary if you
-are bridging DER-based tooling.
+signature returns `false` rather than verifying. Convert at the boundary with
+[`ecdsaDerToRaw()`](#ecdsadertoraw) when bridging DER-based tooling such as
+OpenSSL or a WebAuthn authenticator.
 
 Widths are fixed by the curve:
 

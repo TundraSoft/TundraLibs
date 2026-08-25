@@ -6,6 +6,7 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
+    "./cbor": "./cbor/mod.ts",
     "./digest": "./digest/mod.ts",
     "./encrypt": "./encrypt/mod.ts",
     "./generators": "./generators/mod.ts",
