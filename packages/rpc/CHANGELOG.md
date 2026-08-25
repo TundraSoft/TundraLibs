@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.2.0...rpc-v1.2.1) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **rpc:** document local error classes, fix a real Node crash, add a request/response example ([#563](https://github.com/TundraSoft/TundraLibs/issues/563)) ([2a31abc](https://github.com/TundraSoft/TundraLibs/commit/2a31abc85ed72f6032b91ba5bd2b0cfd7084a4a9))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.5...rpc-v1.2.0) (2026-08-23)
 
 

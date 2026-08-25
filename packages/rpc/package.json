@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/rpc",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters",
   "keywords": [
