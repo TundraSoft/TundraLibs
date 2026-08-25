@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.7.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.0...compat-v2.7.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **compat:** fire Node WS drain callback via the socket drain event ([#593](https://github.com/TundraSoft/TundraLibs/issues/593)) ([7f7dfb1](https://github.com/TundraSoft/TundraLibs/commit/7f7dfb18b3803a61ca06ac148d17b75479e438ba))
+* **compat:** honor WebServer reusePort on Node (platform-gated) ([#600](https://github.com/TundraSoft/TundraLibs/issues/600)) ([3e7ac0a](https://github.com/TundraSoft/TundraLibs/commit/3e7ac0ad53e58ddba8e95e76c4a86fc10aee8dea))
+
+
+### Documentation
+
+* **compat:** deepen all module docs, add cross-runtime example ([#590](https://github.com/TundraSoft/TundraLibs/issues/590)) ([05d18d8](https://github.com/TundraSoft/TundraLibs/commit/05d18d80470b175431b87141d8dc38d497af1db0))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [2.7.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.6.0...compat-v2.7.0) (2026-08-23)
 
 
