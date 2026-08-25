@@ -11,7 +11,7 @@
   "packages/metro-man": "1.0.6",
   "packages/norm": "1.3.2",
   "packages/oql": "1.1.1",
-  "packages/pact": "0.4.8",
+  "packages/pact": "0.5.0",
   "packages/radrouter": "1.3.0",
   "packages/restler": "1.1.6",
   "packages/rpc": "1.2.0",
