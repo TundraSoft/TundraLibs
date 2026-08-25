@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.6.1...tracer-v0.6.2) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **tracer:** add a runnable span-nesting + isolation example ([#561](https://github.com/TundraSoft/TundraLibs/issues/561)) ([22b4c2f](https://github.com/TundraSoft/TundraLibs/commit/22b4c2f0236d941038ea8452b72242bf64c74f96))
+
 ## [0.6.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.6.0...tracer-v0.6.1) (2026-08-21)
 
 
