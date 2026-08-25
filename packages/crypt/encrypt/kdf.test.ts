@@ -5,6 +5,7 @@ import {
   hkdf,
   pbkdf2,
   PBKDF2_ITERATIONS,
+  PBKDF2_PASSWORD_ITERATIONS,
   pbkdf2Hash,
   pbkdf2Verify,
   SALT_BYTES,
@@ -29,12 +30,24 @@ const sameCipherProbe = async (
 
 describe('crypt.encrypt.kdf', () => {
   it('exposes hardened PBKDF2 parameters', () => {
-    // Pin OWASP-guided iteration floor and salt size so a future regression
-    // (e.g. someone halving iterations for "speed") fails this test loudly.
+    // Pin the floors so a future regression (e.g. someone halving iterations
+    // for "speed") fails this test loudly.
+    // The AES-key-derivation count (envelope does not record it, so it cannot
+    // safely rise) stays at the 210k floor.
     asserts.assert(
       PBKDF2_ITERATIONS >= 210_000,
-      `PBKDF2_ITERATIONS (${PBKDF2_ITERATIONS}) below OWASP SHA-256 guidance`,
+      `PBKDF2_ITERATIONS (${PBKDF2_ITERATIONS}) below the AES-derivation floor`,
     );
+    // Password STORAGE is digest-aware and tracks current OWASP guidance:
+    // SHA-256 = 600k, SHA-384/512 = 210k.
+    asserts.assert(
+      PBKDF2_PASSWORD_ITERATIONS['SHA-256'] >= 600_000,
+      `SHA-256 password iterations (${
+        PBKDF2_PASSWORD_ITERATIONS['SHA-256']
+      }) below OWASP guidance (600k)`,
+    );
+    asserts.assert(PBKDF2_PASSWORD_ITERATIONS['SHA-384'] >= 210_000);
+    asserts.assert(PBKDF2_PASSWORD_ITERATIONS['SHA-512'] >= 210_000);
     asserts.assert(
       SALT_BYTES >= 16,
       `SALT_BYTES (${SALT_BYTES}) below 128-bit floor`,
@@ -188,6 +201,24 @@ describe('crypt.encrypt.kdf.pbkdf2 (password hashing)', () => {
     asserts.assertEquals(await pbkdf2Verify('x', ''), false);
   });
 
+  it('defaults to the digest-aware iteration count (SHA-256 → 600k)', async () => {
+    // No opts → the count is chosen from the (default SHA-256) digest and
+    // recorded in the string.
+    const s256 = await pbkdf2Hash('pw');
+    asserts.assertEquals(s256.startsWith('pbkdf2-sha256$600000$'), true);
+    asserts.assertEquals(await pbkdf2Verify('pw', s256), true);
+    const s512 = await pbkdf2Hash('pw', { hash: 'SHA-512' });
+    asserts.assertEquals(s512.startsWith('pbkdf2-sha512$210000$'), true);
+  });
+
+  it('verifies a hash written under an older, lower count (raising is safe)', async () => {
+    // The count is read from the stored string, not the current default, so a
+    // hash minted at 210k still verifies after the default rose to 600k.
+    const legacy = await pbkdf2Hash('pw', { iterations: 210_000 });
+    asserts.assertEquals(legacy.startsWith('pbkdf2-sha256$210000$'), true);
+    asserts.assertEquals(await pbkdf2Verify('pw', legacy), true);
+  });
+
   it('verify returns false on a zero iteration count (no OperationError leak)', async () => {
     // The regex accepts `\d+`, so "0" parses; Web Crypto then rejects
     // `iterations: 0` with a DOMException. That must be swallowed into `false`
@@ -202,10 +233,12 @@ describe('crypt.encrypt.kdf.pbkdf2 (password hashing)', () => {
     asserts.assertEquals(await pbkdf2Verify('wrong', stored), false);
   });
 
-  it('defaults to the OWASP iteration count', async () => {
+  it('pins the AES-derivation count and the SHA-256 password count', () => {
+    // AES key derivation stays at 210k (the envelope can't record it);
+    // password storage defaults to the OWASP SHA-256 count (600k), asserted
+    // end-to-end in the digest-aware default test above.
     asserts.assertEquals(PBKDF2_ITERATIONS, 210_000);
-    const stored = await pbkdf2Hash('pw'); // no iterations override
-    asserts.assertEquals(stored.startsWith(`pbkdf2-sha256$${210_000}$`), true);
+    asserts.assertEquals(PBKDF2_PASSWORD_ITERATIONS['SHA-256'], 600_000);
   });
 });
 

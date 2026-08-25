@@ -368,7 +368,7 @@ package (which used a 16-byte GCM IV) continue to decrypt unchanged.
 
 ### Key Derivation
 
-The AES key is derived from the caller-supplied `secret` using **PBKDF2-SHA-256 at 210,000 iterations** (current OWASP guidance for SHA-256) with a fresh 16-byte random salt generated per encryption. The salt is embedded in the ciphertext envelope so `decryptAES()` can re-derive the same key from `secret`.
+The AES key is derived from the caller-supplied `secret` using **PBKDF2-SHA-256 at 210,000 iterations** with a fresh 16-byte random salt generated per encryption. The salt is embedded in the ciphertext envelope so `decryptAES()` can re-derive the same key from `secret`. (The envelope does not record the iteration count, so this is fixed; **password storage** via `pbkdf2Hash` instead uses the higher, digest-aware `PBKDF2_PASSWORD_ITERATIONS` — 600,000 for SHA-256, per current OWASP guidance — because a stored hash records its own count.)
 
 Implications:
 
