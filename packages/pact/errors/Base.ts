@@ -3,9 +3,9 @@
  *
  * Extends {@link BaseError} from `@tundralibs/utils` so every pact error
  * shares the project-wide contract (typed `context`, `${var}` substitution,
- * cause chains, JSON serialization) — mirrors the norm/drivers pattern.
- * Concrete errors (one per file) set a stable {@link PactErrorCode} on
- * `context.code`; callers branch on `instanceof` and/or {@link PactError.code}.
+ * cause chains, JSON serialization). Concrete errors (one per file) set a
+ * stable {@link PactErrorCode} on `context.code`; callers branch on
+ * `instanceof` and/or {@link PactError.code}.
  *
  * @module
  */
@@ -15,8 +15,7 @@ import type { PactErrorCode } from './PactErrorCodes.ts';
 
 /**
  * Metadata carried on a {@link PactError}'s `context` — a stable `code`
- * plus whatever the throw site attaches (`module`, `permission`,
- * `provider`, …).
+ * plus whatever the throw site attaches (`module`, `permission`, …).
  */
 export type PactErrorMeta = {
   /** Stable error code — see {@link PactErrorCode}. */

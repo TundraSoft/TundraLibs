@@ -1,12 +1,35 @@
 {
   "name": "@tundralibs/pact",
   "version": "0.4.8",
-  "description": "Permissions, Authentication, Control & Tokens — a barebones auth kernel with BigInt-bitmask authorization, JWT/HMAC tokens, and pluggable identity hooks",
+  "description": "Permissions, Authentication, Control & Tokens — a transport-agnostic authentication & authorization toolkit: RBAC BigInt-bitmask permissions, JWT & opaque sessions with refresh-token rotation, five credential schemes (password, JWT, API keys, HMAC, tokens), TOTP MFA, and an OAuth2/OIDC client over flat bring-your-own-storage hooks",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "auth",
+    "authentication",
+    "authorization",
+    "jwt",
+    "oauth2",
+    "oidc",
+    "rbac",
+    "permissions",
+    "sessions",
+    "api-keys",
+    "totp",
+    "mfa",
+    "hmac",
+    "access-control"
+  ],
   "license": "MIT",
   "type": "module",
   "main": "mod.ts",
   "exports": {
     ".": "./mod.ts",
+    "./authz": "./authz/mod.ts",
+    "./oauth": "./oauth/mod.ts",
     "./types": "./types/mod.ts",
     "./errors": "./errors/mod.ts"
   },
@@ -20,6 +43,7 @@
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",
     "@tundralibs/id": "workspace:*",
+    "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   }
 }

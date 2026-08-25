@@ -40,8 +40,18 @@ describe('pact.Permissions', () => {
     asserts.assert(p.all('Post', ['READ', 'EDIT'], grants));
     asserts.assertFalse(p.all('Post', ['READ', 'DELETE'], grants));
     // empty-set semantics: any → false, all → true
-    asserts.assertFalse(p.any('Post', [], grants));
-    asserts.assert(p.all('Post', [], grants));
+    // An empty any()/all() requirement is a bug — fail loud (fail-closed),
+    // not vacuously false/true.
+    asserts.assertThrows(
+      () => p.any('Post', [], grants),
+      PactDefinitionError,
+      'no permissions',
+    );
+    asserts.assertThrows(
+      () => p.all('Post', [], grants),
+      PactDefinitionError,
+      'no permissions',
+    );
   });
 
   it('has works without a catalog (free-form module keys)', () => {
@@ -111,10 +121,28 @@ describe('pact.Permissions edge paths', () => {
     );
   });
 
-  it('no catalog: raw 0n is vacuously satisfied; toNames uses all registry names', () => {
+  it('no catalog: a raw 0n requirement throws (fail-closed); toNames uses all registry names', () => {
     const p = new Permissions(BITS);
-    asserts.assert(p.has('AnyMod', 0n, {}));
+    // A 0n/empty requirement is almost always a bug — fail loud rather than
+    // silently satisfy every principal.
+    asserts.assertThrows(
+      () => p.has('AnyMod', 0n, {}),
+      PactDefinitionError,
+      'no permissions',
+    );
     asserts.assertEquals(p.toNames('AnyMod', 3n).sort(), ['EDIT', 'READ']);
+  });
+
+  it('has() throws a typed error on a non-bigint grant value', () => {
+    const p = new Permissions(BITS);
+    // A grant map that skipped deserializeGrants (a string value) gets a
+    // typed INVALID_GRANTS, not a raw "Cannot mix BigInt" TypeError.
+    const err = asserts.assertThrows(
+      // deno-lint-ignore no-explicit-any
+      () => p.has('Post', 'READ', { Post: '3' } as any),
+      PactDefinitionError,
+    );
+    asserts.assertEquals((err as { code?: string }).code, 'INVALID_GRANTS');
   });
 
   it('toNames on an unknown module (with a catalog) throws', () => {

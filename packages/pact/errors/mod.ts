@@ -1,12 +1,12 @@
 /**
- * @fileoverview Error exports for `@tundralibs/pact`.
+ * @fileoverview Error surface of `@tundralibs/pact`.
  *
  * @module
  */
 
 export { PactError, type PactErrorMeta } from './Base.ts';
+export { type PactErrorCode, PactErrorCodes } from './PactErrorCodes.ts';
 export { PactDefinitionError } from './PactDefinitionError.ts';
 export { PactDeniedError } from './PactDeniedError.ts';
-export { PactTokenError } from './PactTokenError.ts';
 export { PactOAuthError } from './PactOAuthError.ts';
-export { type PactErrorCode, PactErrorCodes } from './PactErrorCodes.ts';
+export { PactTokenError } from './PactTokenError.ts';

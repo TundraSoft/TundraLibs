@@ -1,52 +1,17 @@
 /**
- * @fileoverview `@tundralibs/pact` — bitmask-based authentication &
- * authorization engine with pluggable data-fetch hooks.
+ * @fileoverview `@tundralibs/pact` — transport-agnostic authentication &
+ * authorization toolkit: BigInt-bitmask authorization, hook-backed
+ * identity/sessions (flat optional callbacks — the app owns storage),
+ * five credential schemes, refresh-token rotation, TOTP, and an OAuth2/
+ * OIDC client. Sub-paths: `./authz` (dependency-free authorization core),
+ * `./oauth` (standalone client), `./types`, `./errors`.
  *
  * @module
  */
 
-// ─── Facade ───────────────────────────────────────────────────────────
-export { PACT } from './PACT.ts';
-export type {
-  LoginStrategy,
-  PACTApiKey,
-  PACTApiKeyOptions,
-  PACTEvents,
-  PACTKeyPair,
-  PACTLoginOutcome,
-  PACTLoginResult,
-  PACTOptions,
-  PACTPrincipal,
-  PACTRevocationCheck,
-} from './types/mod.ts';
-
-// ─── OAuth (in-house auth-code + PKCE client) ─────────────────────────
-export { IdTokenVerifier, OAuthClient } from './oauth/mod.ts';
-export type {
-  AuthorizationUrlOptions,
-  CallbackParams,
-  IdTokenContext,
-  IdTokenVerificationPolicy,
-  IdTokenVerifierOptions,
-  OAuthProfile,
-  OAuthProviderConfig,
-  OAuthProviderKind,
-  OAuthTokens,
-} from './types/mod.ts';
-
-// ─── Authorization core ──────────────────────────────────────────────
+export { Pact } from './Pact.ts';
 export { Permissions } from './Permissions.ts';
-export { Groups } from './Groups.ts';
 export { combineGrants, deserializeGrants, serializeGrants } from './grants.ts';
-export type {
-  GroupResolver,
-  PACTGrants,
-  PACTModulePermissions,
-  PACTPermissionBits,
-  PACTPermissionRef,
-} from './types/mod.ts';
-
-// ─── Errors ───────────────────────────────────────────────────────────
 export {
   PactDefinitionError,
   PactDeniedError,
@@ -57,3 +22,32 @@ export {
   PactOAuthError,
   PactTokenError,
 } from './errors/mod.ts';
+export type {
+  PactAuthorizationUrlOptions,
+  PactClaimSpec,
+  PactClaimValue,
+  PactCredential,
+  PactEvents,
+  PactGrants,
+  PactHooks,
+  PactLoginResult,
+  PactModulePermissions,
+  PactNewUser,
+  PactOAuthCallbackParams,
+  PactOAuthProfile,
+  PactOAuthProviderConfig,
+  PactOAuthProviderKind,
+  PactOAuthTokens,
+  PactOptions,
+  PactPermissionBits,
+  PactPermissionRef,
+  PactPrincipal,
+  PactSessionConfig,
+  PactStoredApiKey,
+  PactStoredSession,
+  PactStoredToken,
+  PactStoredUser,
+  PactStrategy,
+  PactStrategyResult,
+  PactUserQuery,
+} from './types/mod.ts';

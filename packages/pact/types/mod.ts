@@ -1,30 +1,33 @@
 /**
- * @fileoverview Type exports for `@tundralibs/pact`.
+ * @fileoverview Type surface of `@tundralibs/pact`.
  *
  * @module
  */
 
-export type { AuthorizationUrlOptions } from './AuthorizationUrlOptions.ts';
-export type { CallbackParams } from './CallbackParams.ts';
-export type { GroupResolver } from './GroupResolver.ts';
-export type { IdTokenContext } from './IdTokenContext.ts';
-export type { IdTokenVerificationPolicy } from './IdTokenVerificationPolicy.ts';
-export type { IdTokenVerifierOptions } from './IdTokenVerifierOptions.ts';
-export type { LoginStrategy } from './LoginStrategy.ts';
-export type { OAuthProfile } from './OAuthProfile.ts';
-export type { OAuthProviderConfig } from './OAuthProviderConfig.ts';
-export type { OAuthProviderKind } from './OAuthProviderKind.ts';
-export type { OAuthTokens } from './OAuthTokens.ts';
-export type { PACTApiKey } from './PACTApiKey.ts';
-export type { PACTApiKeyOptions } from './PACTApiKeyOptions.ts';
-export type { PACTEvents } from './PACTEvents.ts';
-export type { PACTGrants } from './PACTGrants.ts';
-export type { PACTKeyPair } from './PACTKeyPair.ts';
-export type { PACTLoginOutcome } from './PACTLoginOutcome.ts';
-export type { PACTLoginResult } from './PACTLoginResult.ts';
-export type { PACTModulePermissions } from './PACTModulePermissions.ts';
-export type { PACTOptions } from './PACTOptions.ts';
-export type { PACTPermissionBits } from './PACTPermissionBits.ts';
-export type { PACTPermissionRef } from './PACTPermissionRef.ts';
-export type { PACTPrincipal } from './PACTPrincipal.ts';
-export type { PACTRevocationCheck } from './PACTRevocationCheck.ts';
+export type { PactAuthorizationUrlOptions } from './PactAuthorizationUrlOptions.ts';
+export type { PactClaimSpec } from './PactClaimSpec.ts';
+export type { PactClaimValue } from './PactClaimValue.ts';
+export type { PactCredential } from './PactCredential.ts';
+export type { PactEvents } from './PactEvents.ts';
+export type { PactGrants } from './PactGrants.ts';
+export type { PactHooks } from './PactHooks.ts';
+export type { PactLoginResult } from './PactLoginResult.ts';
+export type { PactModulePermissions } from './PactModulePermissions.ts';
+export type { PactNewUser } from './PactNewUser.ts';
+export type { PactOAuthCallbackParams } from './PactOAuthCallbackParams.ts';
+export type { PactOAuthProfile } from './PactOAuthProfile.ts';
+export type { PactOAuthProviderConfig } from './PactOAuthProviderConfig.ts';
+export type { PactOAuthProviderKind } from './PactOAuthProviderKind.ts';
+export type { PactOAuthTokens } from './PactOAuthTokens.ts';
+export type { PactOptions } from './PactOptions.ts';
+export type { PactPermissionBits } from './PactPermissionBits.ts';
+export type { PactPermissionRef } from './PactPermissionRef.ts';
+export type { PactPrincipal } from './PactPrincipal.ts';
+export type { PactSessionConfig } from './PactSessionConfig.ts';
+export type { PactStoredApiKey } from './PactStoredApiKey.ts';
+export type { PactStoredSession } from './PactStoredSession.ts';
+export type { PactStoredToken } from './PactStoredToken.ts';
+export type { PactStoredUser } from './PactStoredUser.ts';
+export type { PactStrategy } from './PactStrategy.ts';
+export type { PactStrategyResult } from './PactStrategyResult.ts';
+export type { PactUserQuery } from './PactUserQuery.ts';
