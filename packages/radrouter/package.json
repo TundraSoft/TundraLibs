@@ -30,7 +30,7 @@
     "@tundralibs/utils": "workspace:*"
   },
   "devDependencies": {
-    "find-my-way": "npm:find-my-way@^8.2.2",
+    "find-my-way": "npm:find-my-way@^9.7.0",
     "radix3": "npm:radix3@^1.1.2"
   }
 }
