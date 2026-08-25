@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.8...pact-v0.5.0) (2026-08-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pact:** the entire public surface is new. PACT is now Pact; groupResolver and the Groups cache, the oauth map callback, generateJWT and verifyJWT, and every PACT-prefixed type name are gone. See README.md and docs/ for the new API.
+
+### Features
+
+* **pact:** rebuild as a transport-agnostic auth toolkit ([#606](https://github.com/TundraSoft/TundraLibs/issues/606)) ([4baa574](https://github.com/TundraSoft/TundraLibs/commit/4baa574ddc5e000ebc683d502b2fb270fd788422))
+
 ## [0.4.8](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.7...pact-v0.4.8) (2026-08-21)
 
 
