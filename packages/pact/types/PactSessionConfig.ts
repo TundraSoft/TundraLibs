@@ -25,7 +25,11 @@ export type PactSessionConfig = {
    * `deleteSession` hooks.
    */
   refresh?: {
-    /** Family lifetime, seconds. @default 30 days */
+    /**
+     * Family lifetime, seconds — the outer bound on how long a
+     * stolen-but-unused refresh token stays usable. Shorten for sensitive
+     * apps. @default 30 days
+     */
     ttl?: number;
     /**
      * Seconds a just-rotated generation stays valid — absorbs legitimate

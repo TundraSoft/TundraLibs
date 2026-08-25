@@ -48,4 +48,12 @@ describe('pact.grants', () => {
     const combined = combineGrants(back, { ['__proto__']: 4n });
     asserts.assertEquals(combined['__proto__'], 7n);
   });
+
+  it('deserializeGrants rejects a negative BigInt mask → INVALID_GRANTS', () => {
+    const err = asserts.assertThrows(
+      () => deserializeGrants({ Post: -3n }),
+      PactDefinitionError,
+    );
+    asserts.assertEquals((err as { code?: string }).code, 'INVALID_GRANTS');
+  });
 });

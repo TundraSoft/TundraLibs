@@ -11,6 +11,12 @@ All crypto happens inside pact (via `@tundralibs/crypt`) **before** a hook
 runs — hooks only ever see opaque hash strings, never a password, token,
 or api-key secret.
 
+One thing is deliberately **not** hook data: the JWT/HMAC signing `secret`
+(and any RS/ES private key) is engine configuration, held out of the option
+store — never put it in a table your hooks read. A store compromise must not
+also leak the key that mints tokens. See
+[Secrets & algorithms](Pact-Authentication.md).
+
 ## The one lookup: `getUser(query)`
 
 One hook serves every user lookup, discriminated by `by`:
@@ -53,7 +59,11 @@ The contracts are plain objects — how you persist them is your business:
   decimal strings — compose group/role membership yourself (the
   [`./authz` algebra](Pact-Authorization.md) makes it a one-liner) and
   return the flat result. `status` defaults to `'ACTIVE'`; `'LOCKED'` /
-  `'DISABLED'` users cannot log in, authenticate, or pass `can`.
+  `'DISABLED'` users cannot log in, authenticate, or pass `can`. `secret`
+  (pbkdf2 hash) and `otpSecret` (TOTP seed) are credential material — the seed
+  is a bearer secret, so encrypt it at rest and leave it OUT of the
+  `{ by: 'ID' }` result used to build a principal (that path needs only
+  `id`/`grants`/`status`/`metadata`).
 - **`PactStoredSession`** — opaque session AND refresh-family record:
   `{ id, userId, expiresAt, generation?, rotatedAt?, revokedAt? }`.
 - **`PactStoredApiKey`** — `{ id, userId, secretHash?, secret?, grants?,
@@ -84,6 +94,17 @@ key checks against its own mask, not the owner's full set.
 | `getToken`           | `(tokenHash) => PactStoredToken \| null` | `TOKEN` scheme                          |
 | `saveToken`          | `(record) => void`                       | `issueToken()`                          |
 | `isRevoked`          | `(claims) => boolean`                    | extra verify-time JWT veto (denylists)  |
+
+### The `isRevoked` seam
+
+`isRevoked(claims)` is the one way to add revocation to an _otherwise
+stateless_ JWT: `verify()` calls it on every access token and treats `true` as
+revoked. The ideal is a fast denylist keyed on the token's `jti`/`sid` (or the
+user id) — a set in Redis, a cached bloom filter. Two constraints: it runs on
+**every** verification, so it must be O(1)/cached rather than a table scan; and
+with [`session.embedGrants`](Pact-Sessions.md) it is the **only** mid-token
+veto you have, since the principal is otherwise rebuilt from the token with no
+store read.
 
 ## The requiredness table
 

@@ -123,6 +123,13 @@ const next = await pact.refresh(login!.refreshToken!);
 await pact.logout(next!.token);
 ```
 
+> The inline `secret` is for readability only. In production it must be an
+> `HS256`-grade key (≥ 32 bytes), loaded from an env var or secret manager,
+> never committed, and never stored where your hooks can read it — see
+> [Secrets & algorithms](docs/Pact-Authentication.md). Keep the access `ttl`
+> short (it is the revocation backstop for stateless JWT) and tune the refresh
+> family `ttl` (the theft window) — see [Sessions](docs/Pact-Sessions.md).
+
 ## The two middlewares
 
 pact slots into any `(ctx, next)` framework as two seams — extraction is
@@ -178,10 +185,16 @@ export const canEditPost = async (ctx: Ctx, next: Next): Promise<void> => {
   `TOKEN` (simple static token, stored by hash), `APIKEY` (key id +
   presented secret), `HMAC` (request signature; the secret never travels).
   See [Authentication](docs/Pact-Authentication.md).
+- **Two session strategies, one surface** — stateless `JWT` (fast, revoke at
+  expiry) or store-backed `OPAQUE` (instantly revocable); `JWT` + `refresh` is
+  the balanced middle. Pick by your revocation needs.
+  See [Sessions](docs/Pact-Sessions.md).
 - **Refresh-token rotation with reuse detection** — every refresh bumps a
   family generation; replaying a stale token revokes the whole family and
   fires the `refreshReuse` event. A `grace` window absorbs legitimate
-  concurrent refreshes. See [Sessions](docs/Pact-Sessions.md).
+  concurrent refreshes; a long family `ttl` (default 30 days) is the window a
+  stolen-but-unused token stays live, so tune it. See
+  [Sessions](docs/Pact-Sessions.md).
 - **Bitmask authorization** — `module × action` over unbounded BigInt
   masks, module-catalog validation that turns typos into thrown config
   errors, and a dependency-free `./authz` subpath that runs in the
@@ -214,6 +227,30 @@ export const canEditPost = async (ctx: Ctx, next: Next): Promise<void> => {
 | `@tundralibs/pact/oauth`  | `OAuthClient`, `IdTokenVerifier`, `PROVIDERS` (standalone) |
 | `@tundralibs/pact/types`  | The type surface                                           |
 | `@tundralibs/pact/errors` | Error classes + codes                                      |
+
+## Examples
+
+The repo's `packages/pact/examples/` directory has nine runnable, self-contained
+mini-apps (in-memory hooks, verified on Deno/Bun/Node) — each a folder with a
+`main.ts` and its own README:
+
+- **password-jwt** — the core register → login → verify → authorize → refresh →
+  logout flow
+- **opaque-sessions** — store-backed `OPAQUE` sessions with instant revocation
+- **api-keys** — issue keys, the `APIKEY` scheme, scoped grants, revocation
+- **hmac-signing** — inbound `HMAC` request signatures + outbound
+  `sign()`/`verifySignature()`
+- **simple-tokens** — opaque static bearer tokens (`TOKEN`): issue, expiry,
+  revoke
+- **rbac-authz** — the dependency-free `./authz` bitmask kernel
+- **totp-mfa** — password login + TOTP as a second factor
+- **custom-strategy** — the `strategies` escape hatch (a mock magic link)
+- **oauth-login** — the OAuth redirect (PKCE/state/nonce) + first-login linking
+  policy
+
+```bash
+deno run packages/pact/examples/password-jwt/main.ts
+```
 
 ## What pact deliberately does NOT do
 

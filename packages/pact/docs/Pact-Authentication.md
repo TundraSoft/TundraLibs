@@ -54,8 +54,14 @@ if (scheme === 'Basic' && value !== '') {
 canonical string) and passes it as `payload` — pact never reconstructs
 requests. The stored key must carry the retrievable `secret` (not just a
 hash): proof-of-possession verification recomputes the signature.
-Signatures replay unless the signed payload carries a timestamp the app
-checks — see the [roadmap](../ROADMAP.md).
+
+**Pitfall — replay.** An HMAC signature is valid _forever_: a captured
+`(payload, signature)` pair verifies again and again unless you make the
+payload single-use. The ideal is to fold a **timestamp and a nonce** into the
+signed `payload`, reject anything outside a small clock-skew window, and
+remember recently-seen nonces to reject reuse. pact verifies the signature but
+cannot see freshness inside an opaque payload, so that check is yours (a
+built-in `maxSkew` convenience is on the [roadmap](../ROADMAP.md)).
 
 ## `login` — session-minting methods
 
@@ -96,6 +102,32 @@ no error); operational failures — a hook or provider threw — emit
 `loginFailed` **with** the error and rethrow, so outages never read as
 wrong passwords.
 
+## Secrets & algorithms
+
+Session tokens (and `sign()`) are only as strong as the key behind them. The
+`secret` + `algorithm` options are **engine configuration, held out of the
+option store** — never hook or database data. Load them from an env var or a
+secret manager; never commit them, and never keep them in the same table your
+`getUser`/`getSession` hooks read (a store compromise must not also hand over
+the token-forging key). Two families, chosen by `algorithm`:
+
+- **`HS*` (HMAC — the default `HS256`)** — one shared secret string that both
+  signs and verifies. RFC 7518 §3.2 sets a length floor: **≥ 32 bytes for
+  `HS256`, ≥ 48 for `HS384`, ≥ 64 for `HS512`** (pact rejects a short secret
+  at construction with `INVALID_OPTION`). Simple and fast — but every service
+  that verifies also holds the key that _mints_. Fine inside one trust domain;
+  wrong when a verifier must not be able to forge.
+- **`RS*` (RSA — `RS256`/`RS384`/`RS512`)** — a `{ privateKey, publicKey }`
+  PEM pair. pact signs with the private key; anyone holding the public key (or
+  a JWKS endpoint) verifies _without_ being able to mint. Choose this when
+  tokens cross a trust boundary: a gateway that verifies but must not forge, or
+  third-party consumers.
+
+Do **not** cross-wire the families — an `HS*` algorithm with a key pair, or an
+`RS*` algorithm with a plain string, is rejected (`INVALID_OPTION`); the shape
+of `secret` must match. Because an `RS*` config carries no shared HMAC secret,
+`sign()` then **requires** an explicit `key` argument — calling it bare throws.
+
 ## Registration & credential changes
 
 - `register({ identifier, password?, grants?, metadata? })` — pbkdf2
@@ -103,14 +135,21 @@ wrong passwords.
   registration (OAuth-only accounts) simply omits `password`.
 - `setPassword(userId, password)` — hash + `updateUser`. Apps never hash.
 - `issueApiKey(userId, { grants? })` / `issueToken(userId, { grants?,
-  expiresAt? })` — mint, store the hash, return the secret ONCE. Scoped
-  `grants` override the user's on later checks.
+  expiresAt? })` — mint, store only the **sha-256 hash**, return the secret
+  **once**. Show it to the user immediately; it is unrecoverable by design, so
+  a lost secret means re-issue, never lookup — and never log or persist the
+  plaintext. Scoped `grants` override the user's on later checks. (The one
+  exception: an `HMAC` api-key must keep its raw `secret` to recompute
+  signatures — encrypt that at rest.)
 
 ## TOTP — plain secondary verification
 
-MFA is deliberately not a login state machine. The seed lives on the
-stored user (`otpSecret` — encrypt at rest when warranted), and the APP
-decides when to demand the second step after `login()`:
+MFA is deliberately not a login state machine. The seed lives on the stored
+user (`otpSecret`), and the APP decides when to demand the second step after
+`login()`. **Treat the seed as a bearer secret:** anyone who can read it can
+generate valid codes, so encrypt it at rest and never return it through a
+`getUser({ by: 'ID' })` path used to build a principal — expose it only to
+`enrollOtp`/`verifyOtp`:
 
 ```typescript
 import { Pact } from '@tundralibs/pact';

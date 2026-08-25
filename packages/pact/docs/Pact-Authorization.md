@@ -26,6 +26,15 @@ pact.assert(principal, 'DELETE', 'Post'); // throws PactDeniedError (emits `deni
 `can`/`assert` gate on the principal too: `null` or a non-`ACTIVE`
 status is always a deny.
 
+This live gate only bites when `verify()` re-resolves the user each request.
+With [`session.embedGrants`](Pact-Sessions.md) the principal is rebuilt from
+the token, so both its grants and its `status` are frozen until the token
+expires — a `LOCKED` user keeps their access, and a role you downgraded keeps
+its old bits, for the token's whole lifetime. Likewise, emptying a group or
+revoking a role updates future `getUser` results but does **not** invalidate
+embedded-grant tokens already minted. Embed only with a short `ttl`, or resolve
+fresh when authority must be current.
+
 ## The app composes effective grants
 
 pact has **no group layer** — group/role/team membership is domain

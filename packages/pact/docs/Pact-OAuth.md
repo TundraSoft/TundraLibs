@@ -71,6 +71,21 @@ const result = await pact.login('google', {
 result?.profile; // the FRESH verified profile — on EVERY login
 ```
 
+**`state`, PKCE, and `nonce` are not optional for browser flows.** Omitting
+`expectedState` disables CSRF protection (an attacker completes _their_ login
+in the victim's browser); dropping the PKCE `verifier` loses code-interception
+protection; omitting `expectedNonce` (OIDC) disables id_token replay
+protection. Supply all three for any user-facing flow. They are also
+**single-use, per-session** secrets: persist `state`/`verifier`/`nonce` bound
+to _this_ user's session (a signed cookie or a short-lived record keyed to the
+session — never a shared/global variable), and delete them the instant the
+callback consumes them.
+
+**The redirect URI must match exactly.** `redirectUri` has to be identical to
+the value registered at the provider — exact scheme, host, port, and path, no
+wildcards — and should point at an origin you control. A loose or
+attacker-influenced redirect target is how authorization codes get stolen.
+
 ## Presets
 
 `GOOGLE`, `GITHUB`, `MICROSOFT` (tenant-scoped, default `common`),
@@ -102,6 +117,14 @@ rides `result.profile` on **every** OAuth login (not just the first), so
 apps can sync updated claims. Richer validation belongs to
 `@tundralibs/guardian` at the app boundary — pact will not grow a DSL.
 
+**Trust boundary.** `profile.claims` and `profile.raw` are values the
+_provider asserted_; pact casts their type but does not vouch for their truth.
+Treat everything outside the id_token's signed, verified core (and
+`emailVerified`) as untrusted input — do not authorize on, or link accounts
+by, a raw claim like `email` or `groups` unless the provider verified it. That
+untrusted-by-default stance is exactly why OAuth first-login linking is left to
+your policy (see [Hooks](Pact-Hooks.md)).
+
 ## id_token verification
 
 Where identity comes from an `id_token` (Apple, userinfo-less `OIDC`
@@ -119,6 +142,13 @@ every path.
   (alert on it). A bad signature or claim is ALWAYS fatal.
 - `'REQUIRED'` — an unobtainable key set fails the login
   (`OAUTH_JWKS_UNAVAILABLE`).
+
+Prefer `'REQUIRED'` whenever the `id_token` is the _sole_ proof of identity
+(Apple, any userinfo-less `OIDC` issuer): under `'PREFERRED'`, an attacker who
+can block your server's JWKS fetch downgrades verification to decode-only, so
+the one signature that matters goes unchecked. Reserve `'PREFERRED'` for flows
+where a second, independently-verified source (a userinfo call) backs the
+identity up.
 
 ## Standalone use
 

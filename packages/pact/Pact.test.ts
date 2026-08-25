@@ -919,3 +919,292 @@ describe('pact.Pact content signing', () => {
     await asserts.assertRejects(() => authzOnly.sign('x'), PactDefinitionError);
   });
 });
+
+describe('pact.Pact — security-path coverage', () => {
+  it('rejects an RS* algorithm handed a string secret → INVALID_OPTION', () => {
+    const err = asserts.assertThrows(() =>
+      Pact.create({ bits: BITS, algorithm: 'RS256', secret: SECRET })
+    );
+    asserts.assertEquals((err as { code?: string }).code, 'INVALID_OPTION');
+  });
+
+  it('gates oauth hooks: missing getUser or createUser → MISSING_HOOK', () => {
+    const { hooks } = makeStore();
+    const oauth = {
+      google: {
+        provider: 'GOOGLE' as const,
+        clientId: 'c',
+        clientSecret: 's',
+        redirectUri: 'https://app.example/cb',
+      },
+    };
+    const err1 = asserts.assertThrows(() =>
+      Pact.create({
+        bits: BITS,
+        secret: SECRET,
+        oauth,
+        hooks: { getUser: hooks.getUser },
+      })
+    );
+    asserts.assertEquals((err1 as { code?: string }).code, 'MISSING_HOOK');
+    const err2 = asserts.assertThrows(() =>
+      Pact.create({ bits: BITS, secret: SECRET, oauth, hooks: {} })
+    );
+    asserts.assertEquals((err2 as { code?: string }).code, 'MISSING_HOOK');
+  });
+
+  it('gates apiKeys hooks: missing getApiKey or getUser → MISSING_HOOK', () => {
+    const { hooks } = makeStore();
+    const err1 = asserts.assertThrows(() =>
+      Pact.create({
+        bits: BITS,
+        apiKeys: true,
+        hooks: { getUser: hooks.getUser },
+      })
+    );
+    asserts.assertEquals((err1 as { code?: string }).code, 'MISSING_HOOK');
+    const err2 = asserts.assertThrows(() =>
+      Pact.create({
+        bits: BITS,
+        apiKeys: true,
+        hooks: { getApiKey: hooks.getApiKey },
+      })
+    );
+    asserts.assertEquals((err2 as { code?: string }).code, 'MISSING_HOOK');
+  });
+
+  it('gates tokens hooks: missing getToken or getUser → MISSING_HOOK', () => {
+    const { hooks } = makeStore();
+    const err1 = asserts.assertThrows(() =>
+      Pact.create({
+        bits: BITS,
+        tokens: true,
+        hooks: { getUser: hooks.getUser },
+      })
+    );
+    asserts.assertEquals((err1 as { code?: string }).code, 'MISSING_HOOK');
+    const err2 = asserts.assertThrows(() =>
+      Pact.create({
+        bits: BITS,
+        tokens: true,
+        hooks: { getToken: hooks.getToken },
+      })
+    );
+    asserts.assertEquals((err2 as { code?: string }).code, 'MISSING_HOOK');
+  });
+
+  it('verify rejects a token whose issuer does not match config', async () => {
+    const store = makeStore();
+    const mint = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      issuer: 'iss-a',
+      audience: 'aud-a',
+      password: true,
+      hooks: store.hooks,
+    });
+    await mint.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
+    const login = await mint.login('password', {
+      identifier: 'a@x',
+      password: 'pw-pw-pw-pw',
+    });
+    asserts.assertExists(login);
+    // the minting pact (matching iss/aud) accepts its own token…
+    asserts.assertExists(await mint.verify(login.token));
+    // …a checker expecting a DIFFERENT issuer rejects it → null
+    const checker = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      issuer: 'iss-b',
+      audience: 'aud-a',
+      password: true,
+      hooks: store.hooks,
+    });
+    asserts.assertEquals(await checker.verify(login.token), null);
+  });
+
+  it('login rethrows an operational error and emits loginFailed with it', async () => {
+    const { hooks } = makeStore();
+    const boom = new Error('ldap down');
+    let captured: Error | undefined;
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      strategies: {
+        flaky: () => {
+          throw boom;
+        },
+      },
+      hooks,
+    });
+    pact.on('loginFailed', (_method, err) => {
+      captured = err;
+    });
+    await asserts.assertRejects(
+      () => pact.login('flaky', {}),
+      Error,
+      'ldap down',
+    );
+    asserts.assertStrictEquals(captured, boom);
+  });
+
+  it('BASIC authenticate → null for an unknown or passwordless user', async () => {
+    const { hooks, users } = makeStore();
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      hooks,
+    });
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'BASIC',
+        identifier: 'ghost@x',
+        password: 'p',
+      }),
+      null,
+    );
+    users.set('u9', {
+      id: 'u9',
+      status: 'ACTIVE',
+      metadata: { email: 'oauth@x' },
+    });
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'BASIC',
+        identifier: 'oauth@x',
+        password: 'p',
+      }),
+      null,
+    );
+  });
+
+  it('TOKEN authenticate → null for an expired record', async () => {
+    const { hooks, users } = makeStore();
+    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: '1' } });
+    const pact = Pact.create({ bits: BITS, tokens: true, hooks });
+    const { token } = await pact.issueToken('u1', {
+      expiresAt: Date.now() - 1000,
+    });
+    asserts.assertEquals(
+      await pact.authenticate({ scheme: 'TOKEN', token }),
+      null,
+    );
+  });
+
+  it('APIKEY and HMAC authenticate → null for a revoked key', async () => {
+    const { hooks, users, apiKeys } = makeStore();
+    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: '1' } });
+    const pact = Pact.create({ bits: BITS, apiKeys: true, hooks });
+    const key = await pact.issueApiKey('u1');
+    apiKeys.set(key.id, { ...apiKeys.get(key.id)!, revokedAt: Date.now() });
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'APIKEY',
+        keyId: key.id,
+        secret: key.secret,
+      }),
+      null,
+    );
+    apiKeys.set('h1', {
+      id: 'h1',
+      userId: 'u1',
+      secret: 'shared-hmac-secret',
+      revokedAt: Date.now(),
+    });
+    const sig = await signHMAC('payload', 'shared-hmac-secret');
+    asserts.assertEquals(
+      await pact.authenticate({
+        scheme: 'HMAC',
+        keyId: 'h1',
+        signature: sig,
+        payload: 'payload',
+      }),
+      null,
+    );
+  });
+
+  it('authenticate → null when the resolved user is non-ACTIVE', async () => {
+    const { hooks, users } = makeStore();
+    users.set('u1', { id: 'u1', status: 'LOCKED', grants: { Post: '1' } });
+    const pact = Pact.create({ bits: BITS, tokens: true, hooks });
+    const { token } = await pact.issueToken('u1');
+    asserts.assertEquals(
+      await pact.authenticate({ scheme: 'TOKEN', token }),
+      null,
+    );
+  });
+
+  it('refresh applies the default grace window (previous gen re-issued)', async () => {
+    const { hooks } = makeStore();
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      session: { refresh: {} },
+      hooks,
+    });
+    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
+    const login = await pact.login('password', {
+      identifier: 'a@x',
+      password: 'pw-pw-pw-pw',
+    });
+    asserts.assertExists(login);
+    const r1 = await pact.refresh(login.refreshToken!);
+    asserts.assertExists(r1);
+    // replaying the ORIGINAL (previous-gen) token within the default 5 s grace
+    // is a concurrent refresh, not reuse → re-issued, family NOT revoked
+    const r2 = await pact.refresh(login.refreshToken!);
+    asserts.assertExists(r2);
+  });
+
+  it('refresh → null when the family record has expired', async () => {
+    const { hooks, sessions } = makeStore();
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      session: { refresh: {} },
+      hooks,
+    });
+    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
+    const login = await pact.login('password', {
+      identifier: 'a@x',
+      password: 'pw-pw-pw-pw',
+    });
+    asserts.assertExists(login);
+    for (const [id, s] of sessions) {
+      sessions.set(id, { ...s, expiresAt: Date.now() - 1000 });
+    }
+    asserts.assertEquals(await pact.refresh(login.refreshToken!), null);
+  });
+
+  it('setPassword hashes via updateUser; without it → MISSING_HOOK', async () => {
+    const { hooks, users } = makeStore();
+    users.set('u1', { id: 'u1', status: 'ACTIVE' });
+    const pact = Pact.create({ bits: BITS, secret: SECRET, hooks });
+    await pact.setPassword('u1', 'a-brand-new-password');
+    const stored = users.get('u1');
+    asserts.assertExists(stored?.secret);
+    asserts.assert(stored!.secret !== 'a-brand-new-password'); // hashed
+    const bare = Pact.create({ bits: BITS, secret: SECRET, hooks: {} });
+    await asserts.assertRejects(
+      () => bare.setPassword('u1', 'x'),
+      PactDefinitionError,
+    );
+  });
+
+  it('verifyOtp → false for a not-enrolled or non-ACTIVE user', async () => {
+    const { hooks, users } = makeStore();
+    users.set('u1', { id: 'u1', status: 'ACTIVE' }); // no otpSecret
+    users.set('u2', {
+      id: 'u2',
+      status: 'LOCKED',
+      otpSecret: 'JBSWY3DPEHPK3PXP',
+    });
+    const pact = Pact.create({ bits: BITS, secret: SECRET, hooks });
+    asserts.assertEquals(await pact.verifyOtp('u1', '000000'), false);
+    const code = await generateTOTP('JBSWY3DPEHPK3PXP');
+    asserts.assertEquals(await pact.verifyOtp('u2', code), false);
+  });
+});

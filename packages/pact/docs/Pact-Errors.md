@@ -38,7 +38,9 @@ The full union lives in `PactErrorCodes`
   hook wired (thrown at construction where possible, else at call time).
 - `MISSING_OPTION` / `INVALID_OPTION` — absent `bits`/`secret`, or
   secret material contradicting the algorithm (HS\* length floor per
-  RFC 7518 §3.2).
+  RFC 7518 §3.2). See
+  [Secrets & algorithms](Pact-Authentication.md) for the key-shape and length
+  rules that raise these before you hit the error.
 - `TOKEN_REVOKED` / `TOKEN_TYPE_MISMATCH` / `REFRESH_REUSED` — the
   token-path rejections; carried by the `verifyFailed` error, while the
   call itself resolves `null`.
@@ -70,6 +72,14 @@ later listeners.
 | `logout`            | a session/family ended (`logout`/`logoutAll`)                    |
 | `idTokenUnverified` | an id_token was accepted decode-only under `'PREFERRED'`. ALERT. |
 
+The two **ALERT** events are an intrusion signal, not decoration.
+`refreshReuse` means a refresh token was replayed — the family is already
+revoked, but force the user to re-authenticate and page on-call if it recurs.
+`idTokenUnverified` means an id_token was accepted without a signature check
+because JWKS was unreachable — investigate the outage and treat affected logins
+as lower-assurance (or use the `'REQUIRED'` policy to make that case fail
+instead).
+
 ```typescript
 import { Pact } from '@tundralibs/pact';
 
@@ -86,5 +96,8 @@ pact.on('denied', (_principal, permission, module) => {
 
 pact imports no logging or tracing package — the events are the
 observability seam, wired at your composition root (slogger, tracer,
-metro-man, or plain console). OAuth HTTP additionally supports restler's
-`witness` tracing seam.
+metro-man, or plain console). They are also the **only** audit trail for the
+uniform-`null` outcomes: because `verify()`/`login()`/`authenticate()` never
+throw on bad input, wiring `verifyFailed`/`loginFailed` is what lets you see —
+and rate-limit — credential stuffing and token-forgery attempts. OAuth HTTP
+additionally supports restler's `witness` tracing seam.
