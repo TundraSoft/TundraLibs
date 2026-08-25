@@ -4,24 +4,48 @@ Known limitations, planned hardening, and deferred work for
 `@tundralibs/pact`. None of these block the current feature set — they
 **bound** it.
 
-## Next major feature
+## Committed follow-ups (additive minors)
 
-- **Passkeys / WebAuthn** (design locked, deliberately not in this cut).
-  First-factor login method: `passkeyRegisterOptions` → `registerPasskey`
-  and `passkeyLoginOptions` → `login('passkey', assertion)`; single-use
-  challenge state via `saveChallenge`/`consumeChallenge` hooks; credential
-  store via `getPasskey`/`savePasskey`/`listPasskeys`; `rpId` +
-  exact-origin allowlist config; sign-counter clone detection. The gating
-  work is a CBOR/COSE decoder — preferred home is `crypt` (reusable
-  WebAuthn primitives) rather than pact-internal.
+Both are **purely additive** — new opt-in capabilities with new hooks, no
+breaking change — so they ship as follow-up minors _after_ the overhaul
+release rather than gating it. Passkeys first (design settled, crypto
+ready), then resource-server mode.
+
+- **Passkeys / WebAuthn** (design settled; gating crypto landed — build-ready).
+  A passwordless login method. Config: `rpId` + `rpName` + exact-origin
+  allowlist (plus `userVerification`, `algorithms`, `timeout`). Four ceremony
+  methods — `begin`/`finishPasskeyRegistration` and
+  `begin`/`finishPasskeyAuthentication` (the latter mints a session, like
+  `login('password')`). Credential store via `getPasskeyCredential` /
+  `savePasskeyCredential` / `updatePasskeyCounter` (plus optional
+  `getUserPasskeys` for exclude/allow lists); the public key is stored as a
+  JWK. The single-use challenge is **app-owned** — returned by `begin…` and
+  passed back as `expectedChallenge`, mirroring OAuth `state`; no challenge
+  hooks. ES256 + RS256, full ceremony verification (challenge / origin /
+  `rpIdHash` / UP-UV flags), sign-counter clone detection. The gating CBOR/COSE
+  decoder and ECDSA DER→raw converter already shipped in `crypt`
+  (`crypt/cbor` — `decodeCBOR`/`coseToJwk`; `ecdsaDerToRaw`) as reusable
+  WebAuthn primitives.
+  - _Deferred within passkeys._ **Ed25519** (`-8`) needs an OKP sign/verify
+    path in `crypt/sign` first; added when convenient — ES256 + RS256 already
+    cover essentially every authenticator in the wild. **Full
+    attestation-statement verification** (`packed`/`tpm`/`android-key`, cert
+    chains, FIDO MDS) is built only on a concrete device-allowlist need —
+    `none` is the passkey-login norm; the registration path is structured so a
+    verifier slots in later without rework.
+
+- **Resource-server mode** (design in progress). Today `BEARER` verifies
+  pact-ISSUED tokens only; this adds verifying EXTERNAL-IdP access tokens
+  (Auth0/Cognito/Entra) by issuer JWKS + `kid`, reusing the `IdTokenVerifier`
+  JWKS engine — routed in `authenticate()` by the token's `iss` (so `verify()`
+  stays pact-issued-only), fail-closed on an unreachable key set. Config:
+  `resourceServer: [{ issuer, jwksUri, audience, algorithms? }]`. **Open
+  question:** how a verified external token becomes a principal — store-mapped
+  (`getUser({by:'ID'})`, pact still authorizes) vs. claims-derived (a
+  `principalFromClaims` mapper, for apps with no user store) vs. both.
 
 ## Security posture
 
-- **Resource-server mode.** `BEARER` verifies pact-issued tokens only.
-  Verifying EXTERNAL-IdP access tokens (Auth0/Cognito/Entra) by issuer
-  JWKS + `kid` — pointing the existing `IdTokenVerifier` machinery at
-  `verify()` via config — is designed and high-value for apps that never
-  mint their own tokens.
 - **HMAC replay window.** `HMAC` signatures verify forever unless the
   signed payload carries a timestamp/nonce and freshness is checked. The
   framework owns payload canonicalization today; a `maxSkew` convenience
