@@ -645,6 +645,12 @@ and the endpoint + auth catalog) lives in
 [`examples/`](./examples/) — run it with
 `deno run -A packages/rapid/examples/main.ts`.
 
+Guides:
+
+- [Database access & connection pooling](./docs/Rapid-Database.md) — sharing one
+  pool across modules and middleware (with or without Norm), and staying safe
+  under concurrency and pool limits.
+
 Every public symbol carries JSDoc; the subpath exports are `.` (root),
 `./cli`, `./context`, `./decorators`, `./endpoints`, `./errors`,
 `./middlewares`, `./modules`, `./testing`, and `./types`.
