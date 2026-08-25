@@ -138,6 +138,7 @@ export {
 export {
   describeKey,
   type ECCurve,
+  ecdsaDerToRaw,
   type ECHashAlgorithm,
   type ECOptions,
   type HMACHashAlgorithm,
