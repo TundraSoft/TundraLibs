@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.2.0...utils-v1.2.1) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **utils:** fix a real Singleton inheritance bug, undocumented Options seams, add a core-composition example ([#571](https://github.com/TundraSoft/TundraLibs/issues/571)) ([cb0dd24](https://github.com/TundraSoft/TundraLibs/commit/cb0dd24db3158be5d8ea78211e3d6733d4f41177))
+* **utils:** fix wrong formulas, defaults, and missing ranges across 8 helper docs ([#568](https://github.com/TundraSoft/TundraLibs/issues/568)) ([86a1a2d](https://github.com/TundraSoft/TundraLibs/commit/86a1a2d8e16661af8272f72916d1f2fc305860cd))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.1.1...utils-v1.2.0) (2026-08-20)
 
 
