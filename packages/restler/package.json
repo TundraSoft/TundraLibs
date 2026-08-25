@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/restler",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js",
   "keywords": [
     "typescript",

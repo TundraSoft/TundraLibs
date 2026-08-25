@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.7](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.6...restler-v1.1.7) (2026-08-25)
+
+
+### Documentation
+
+* add "familiar tool" glossary + oql/restler intro fixes ([#614](https://github.com/TundraSoft/TundraLibs/issues/614)) ([aa60427](https://github.com/TundraSoft/TundraLibs/commit/aa60427ee635c3a0487e3bbb98f3a7078d0f8b6d))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **restler:** fix runtime-support claims, document redaction, add example ([#572](https://github.com/TundraSoft/TundraLibs/issues/572)) ([0067e97](https://github.com/TundraSoft/TundraLibs/commit/0067e9718579ab5a670422776d42b8b867d5a221))
+
 ## [1.1.6](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.5...restler-v1.1.6) (2026-08-21)
 
 

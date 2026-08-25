@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.1.1...oql-v1.1.2) (2026-08-25)
+
+
+### Documentation
+
+* add "familiar tool" glossary + oql/restler intro fixes ([#614](https://github.com/TundraSoft/TundraLibs/issues/614)) ([aa60427](https://github.com/TundraSoft/TundraLibs/commit/aa60427ee635c3a0487e3bbb98f3a7078d0f8b6d))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **oql:** add a cross-dialect translation example ([#560](https://github.com/TundraSoft/TundraLibs/issues/560)) ([0b7aa75](https://github.com/TundraSoft/TundraLibs/commit/0b7aa75b851822b0f0f6145969fa6560ff3a3f4d))
+* **oql:** deepen query-type, expression, and validation coverage; fix Mongo JOIN claims ([#552](https://github.com/TundraSoft/TundraLibs/issues/552)) ([b41822c](https://github.com/TundraSoft/TundraLibs/commit/b41822c5e27a1035ba30411c379491271b9782ee))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.1.0...oql-v1.1.1) (2026-08-21)
 
 

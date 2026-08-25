@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.3.0...radrouter-v1.3.1) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **radrouter:** document allowedMethods(), RouteConflictError, and percent-decoding ([#566](https://github.com/TundraSoft/TundraLibs/issues/566)) ([659ee6c](https://github.com/TundraSoft/TundraLibs/commit/659ee6c1bc509e82dafa8afa6c9814bc6de4f15a))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.2.0...radrouter-v1.3.0) (2026-08-22)
 
 
