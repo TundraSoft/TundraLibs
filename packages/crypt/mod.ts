@@ -138,6 +138,7 @@ export {
 export {
   describeKey,
   type ECCurve,
+  ecdsaDerToRaw,
   type ECHashAlgorithm,
   type ECOptions,
   type HMACHashAlgorithm,
@@ -154,3 +155,14 @@ export {
   verifyHMAC,
   verifyRSA,
 } from './sign/mod.ts';
+
+export {
+  CBORError,
+  type CBORErrorMeta,
+  type CBORValue,
+  type CoseAlgorithm,
+  type CoseKeyResult,
+  coseToJwk,
+  decodeCBOR,
+  decodeCBORItem,
+} from './cbor/mod.ts';

@@ -3,6 +3,20 @@
   "version": "1.0.8",
   "type": "module",
   "description": "Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "cache",
+    "caching",
+    "redis",
+    "memcached",
+    "in-memory",
+    "ttl",
+    "key-value"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

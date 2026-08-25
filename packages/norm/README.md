@@ -6,6 +6,8 @@ drives your types, validation, migrations, and **at-rest column
 encryption**, across PostgreSQL, MariaDB/MySQL, SQLite, and MongoDB —
 and, on edge runtimes, Neon, Turso, and Cloudflare D1 over HTTP.
 
+[![JSR](https://jsr.io/badges/@tundralibs/norm)](https://jsr.io/@tundralibs/norm)
+[![JSR Score](https://jsr.io/badges/@tundralibs/norm/score)](https://jsr.io/@tundralibs/norm)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

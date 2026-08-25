@@ -4,6 +4,8 @@ RPC + pub/sub framework over WebSocket. `Server` + `Client` with
 id-correlated request/response, Koa-style middleware on both ends,
 channels with pluggable adapters, and a stable JSON wire protocol.
 
+[![JSR](https://jsr.io/badges/@tundralibs/rpc)](https://jsr.io/@tundralibs/rpc)
+[![JSR Score](https://jsr.io/badges/@tundralibs/rpc/score)](https://jsr.io/@tundralibs/rpc)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

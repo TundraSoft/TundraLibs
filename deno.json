@@ -13,6 +13,12 @@
     "bench:bun": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --lanes=bun --all",
     "bench:node": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --lanes=node --all",
     "bench:smoke": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --smoke --all",
+    "soak": "deno task soak:sqlite && deno task soak:postgres && deno task soak:maria && deno task soak:redis && deno task soak:memcached",
+    "soak:sqlite": "deno run --allow-all packages/drivers/engines/sqlite/soak.ts",
+    "soak:postgres": "deno run --allow-all packages/drivers/engines/postgres/soak.ts",
+    "soak:maria": "deno run --allow-all packages/drivers/engines/maria/soak.ts",
+    "soak:redis": "deno run --allow-all packages/drivers/engines/redis/soak.ts",
+    "soak:memcached": "deno run --allow-all packages/drivers/engines/memcached/soak.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "publish": "deno publish",
@@ -38,12 +44,7 @@
   "nodeModulesDir": "auto",
   "imports": {
     "@std/asserts": "jsr:@std/assert@^1.0.19",
-    "@std/testing": "jsr:@std/testing@^1.0.20",
-    "zod": "npm:zod@^4.4.3",
-    "pg": "npm:pg@^8.13.0",
-    "postgres": "npm:postgres@^3.4.5",
-    "find-my-way": "npm:find-my-way@^8.2.2",
-    "radix3": "npm:radix3@^1.1.2"
+    "@std/testing": "jsr:@std/testing@^1.0.20"
   },
   "fmt": {
     "indentWidth": 2,

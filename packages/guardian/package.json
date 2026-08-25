@@ -2,6 +2,20 @@
   "name": "@tundralibs/guardian",
   "version": "1.3.1",
   "description": "Schema validation for TypeScript — strict at compile time, forgiving at API boundaries",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "validation",
+    "schema",
+    "schema-validation",
+    "type-safe",
+    "runtime-validation",
+    "parser",
+    "guard"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -14,11 +28,11 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@std/datetime": "npm:@jsr/std__datetime@^0.225.3",
-    "@tundralibs/compat": "workspace:*",
+    "@std/datetime": "npm:@jsr/std__datetime@^0.225.7",
     "@tundralibs/utils": "workspace:*"
   },
   "devDependencies": {
-    "zod": "npm:zod@^4"
+    "@tundralibs/compat": "workspace:*",
+    "zod": "npm:zod@^4.4.3"
   }
 }

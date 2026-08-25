@@ -1,7 +1,9 @@
 # ID
 
-Comprehensive ID generation library supporting multiple formats for different use cases.
+Cross-runtime ID generators for Deno, Bun, and Node.js — NanoID, CUID, CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs.
 
+[![JSR](https://jsr.io/badges/@tundralibs/id)](https://jsr.io/@tundralibs/id)
+[![JSR Score](https://jsr.io/badges/@tundralibs/id/score)](https://jsr.io/@tundralibs/id)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

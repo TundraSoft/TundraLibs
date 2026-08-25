@@ -3,6 +3,19 @@
   "version": "1.2.0",
   "type": "module",
   "description": "Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "rpc",
+    "websocket",
+    "pubsub",
+    "remote-procedure-call",
+    "real-time",
+    "middleware"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -15,6 +28,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@std/asserts": "npm:@jsr/std__assert@^1.0.19",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   }

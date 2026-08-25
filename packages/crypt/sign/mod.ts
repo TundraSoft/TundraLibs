@@ -15,6 +15,7 @@
  * ```
  */
 
+export { ecdsaDerToRaw } from './ecdsaSignature.ts';
 export { signEC, signHMAC, signRSA } from './sign.ts';
 export type {
   ECCurve,

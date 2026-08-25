@@ -6,12 +6,19 @@ also run on **Cloudflare Workers** and in the **browser** (see
 [Runtime support](#runtime-support)). Published to
 [JSR](https://jsr.io) under the `@tundralibs` scope.
 
+They cover databases (an ORM, a query language, and connection drivers
+for PostgreSQL, MariaDB, SQLite, MongoDB, Redis, and Memcached), schema
+validation, structured logging, distributed tracing, Prometheus metrics,
+authentication, caching, dependency injection, HTTP routing,
+cryptography, and ID generation — each independent and dependency-light.
+
 [![Deno 2.0+](https://img.shields.io/badge/Deno-2.0+-000000?logo=deno)](#runtime-support)
 [![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)](#runtime-support)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](#runtime-support)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)](#runtime-support)
 [![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)](#runtime-support)
 
+[![CI](https://github.com/TundraSoft/TundraLibs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TundraSoft/TundraLibs/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/TundraSoft/TundraLibs/graph/badge.svg)](https://codecov.io/gh/TundraSoft/TundraLibs)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
 
@@ -19,25 +26,25 @@ also run on **Cloudflare Workers** and in the **browser** (see
 
 <!-- workspace:packages:start -->
 
-- **[Ambient](packages/ambient/README.md)** — Cross-runtime request-scoped context over AsyncLocalStorage — correlation/trace ids and custom fields that survive await, no threading
-- **[Cacher](packages/cacher/README.md)** — Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines
-- **[compat](packages/compat/README.md)** — Compatibility layer smoothing API differences across Deno, Bun, and Node.js
-- **[Cronus](packages/cronus/README.md)** — Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.
-- **[crypt](packages/crypt/README.md)** — Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random
-- **[Doctor](packages/doctor/README.md)** — Lightweight dependency injection with Singleton, Scoped, and Transient vial lifecycles — TC39 decorators, typed inject() tokens, no reflect-metadata
-- **[drivers](packages/drivers/README.md)** — Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached — plus edge/serverless HTTP dialects (Neon, Turso, Cloudflare D1)
-- **[Guardian](packages/guardian/README.md)** — Schema validation for TypeScript — strict at compile time, forgiving at API boundaries
-- **[ID](packages/id/README.md)** — Cross-runtime ID generators — NanoID, CUID/CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs
-- **[MetroMan](packages/metro-man/README.md)** — Prometheus-compatible in-process metrics: Counter, Gauge, Histogram, Summary, and a central registry (MetroMan).
-- **[NORM](packages/norm/README.md)** — Typed, cross-runtime ORM over OQL and drivers — one schema drives types, validation, relations, migrations, and at-rest column encryption
-- **[OQL](packages/oql/README.md)** — Object Query Language — type-safe, database-agnostic query definitions
-- **[Pact](packages/pact/README.md)** — Permissions, Authentication, Control & Tokens — a transport-agnostic auth toolkit with BigInt-bitmask authorization, flat storage hooks, five credential schemes, refresh-token rotation, TOTP, and an OAuth2/OIDC client
-- **[RadRouter](packages/radrouter/README.md)** — Compressed radix-tree HTTP router — typed parameters, greedy patterns, versioned endpoints, generic middleware
-- **[RESTler](packages/restler/README.md)** — Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js
-- **[RPC](packages/rpc/README.md)** — Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters
-- **[Slogger](packages/slogger/README.md)** — Cross-runtime structured logging that fans one record out to many formats in-process — console, JSON, syslog, file, HTTP, TCP, or any custom handler
-- **[Tracer](packages/tracer/README.md)** — Cross-runtime distributed tracing — W3C Trace Context propagation, automatic span nesting via ambient async context, pluggable samplers and exporters
-- **[utils](packages/utils/README.md)** — Core TypeScript building blocks — the typed Options + Events base class, BaseError, Singleton, and shared helpers (config/env, memoize, IP/subnet, free-port)
+- **[Ambient](packages/ambient/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/ambient)](https://jsr.io/@tundralibs/ambient) — Cross-runtime request-scoped context over AsyncLocalStorage — correlation/trace ids and custom fields that survive await, no threading
+- **[Cacher](packages/cacher/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/cacher)](https://jsr.io/@tundralibs/cacher) — Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines
+- **[compat](packages/compat/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/compat)](https://jsr.io/@tundralibs/compat) — Compatibility layer smoothing API differences across Deno, Bun, and Node.js
+- **[Cronus](packages/cronus/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/cronus)](https://jsr.io/@tundralibs/cronus) — Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.
+- **[crypt](packages/crypt/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/crypt)](https://jsr.io/@tundralibs/crypt) — Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random
+- **[Doctor](packages/doctor/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/doctor)](https://jsr.io/@tundralibs/doctor) — Lightweight dependency injection with Singleton, Scoped, and Transient vial lifecycles — TC39 decorators, typed inject() tokens, no reflect-metadata
+- **[drivers](packages/drivers/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/drivers)](https://jsr.io/@tundralibs/drivers) — Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached — plus edge/serverless HTTP dialects (Neon, Turso, Cloudflare D1)
+- **[Guardian](packages/guardian/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/guardian)](https://jsr.io/@tundralibs/guardian) — Schema validation for TypeScript — strict at compile time, forgiving at API boundaries
+- **[ID](packages/id/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/id)](https://jsr.io/@tundralibs/id) — Cross-runtime ID generators — NanoID, CUID/CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs
+- **[MetroMan](packages/metro-man/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/metro-man)](https://jsr.io/@tundralibs/metro-man) — Prometheus-compatible in-process metrics: Counter, Gauge, Histogram, Summary, and a central registry (MetroMan).
+- **[NORM](packages/norm/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/norm)](https://jsr.io/@tundralibs/norm) — Typed, cross-runtime ORM over OQL and drivers — one schema drives types, validation, relations, migrations, and at-rest column encryption
+- **[OQL](packages/oql/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/oql)](https://jsr.io/@tundralibs/oql) — Object Query Language — type-safe, database-agnostic query definitions
+- **[Pact](packages/pact/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/pact)](https://jsr.io/@tundralibs/pact) — Permissions, Authentication, Control & Tokens — a barebones auth kernel with BigInt-bitmask authorization, JWT/HMAC tokens, and pluggable identity hooks
+- **[RadRouter](packages/radrouter/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/radrouter)](https://jsr.io/@tundralibs/radrouter) — Compressed radix-tree HTTP router — typed parameters, greedy patterns, versioned endpoints, generic middleware
+- **[RESTler](packages/restler/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/restler)](https://jsr.io/@tundralibs/restler) — Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js
+- **[RPC](packages/rpc/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/rpc)](https://jsr.io/@tundralibs/rpc) — Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters
+- **[Slogger](packages/slogger/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/slogger)](https://jsr.io/@tundralibs/slogger) — Cross-runtime structured logging that fans one record out to many formats in-process — console, JSON, syslog, file, HTTP, TCP, or any custom handler
+- **[Tracer](packages/tracer/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/tracer)](https://jsr.io/@tundralibs/tracer) — Cross-runtime distributed tracing — W3C Trace Context propagation, automatic span nesting via ambient async context, pluggable samplers and exporters
+- **[utils](packages/utils/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/utils)](https://jsr.io/@tundralibs/utils) — Core TypeScript building blocks — the typed Options + Events base class, BaseError, Singleton, and shared helpers (config/env, memoize, IP/subnet, free-port)
 
 <!-- workspace:packages:end -->
 

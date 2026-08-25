@@ -4,6 +4,8 @@ A cross-runtime structured logger that fans a single log record out to
 many wire formats in-process — console, JSON, syslog, file, HTTP, TCP —
 without external workers, transports, or sidecar processes.
 
+[![JSR](https://jsr.io/badges/@tundralibs/slogger)](https://jsr.io/@tundralibs/slogger)
+[![JSR Score](https://jsr.io/badges/@tundralibs/slogger/score)](https://jsr.io/@tundralibs/slogger)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

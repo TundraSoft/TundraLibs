@@ -2,6 +2,8 @@
 
 Schema validation for TypeScript — strict at compile time, forgiving at API boundaries.
 
+[![JSR](https://jsr.io/badges/@tundralibs/guardian)](https://jsr.io/@tundralibs/guardian)
+[![JSR Score](https://jsr.io/badges/@tundralibs/guardian/score)](https://jsr.io/@tundralibs/guardian)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

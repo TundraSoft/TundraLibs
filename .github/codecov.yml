@@ -4,6 +4,7 @@
 ignore:
   - '**/*.test.ts'
   - '**/*.bench.ts'
+  - '**/soak.ts'
   - '**/tests/**'
   - '**/fixtures/**'
   - '**/examples/**'

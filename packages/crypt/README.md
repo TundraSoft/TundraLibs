@@ -1,7 +1,9 @@
 # Crypt
 
-Comprehensive cryptographic library providing encryption, hashing, key derivation, digital signatures, JWT handling, OTP generation, and secure random generation.
+Cross-runtime cryptography for Deno, Bun, and Node.js — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP (TOTP/HOTP), key derivation, and secure random.
 
+[![JSR](https://jsr.io/badges/@tundralibs/crypt)](https://jsr.io/@tundralibs/crypt)
+[![JSR Score](https://jsr.io/badges/@tundralibs/crypt/score)](https://jsr.io/@tundralibs/crypt)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
@@ -23,6 +25,7 @@ The Crypt package provides battle-tested cryptographic operations using the nati
 | [JWT](JWT/Crypt-JWT.md)                      | JSON Web Token creation and verification (HS/RS/PS/ES) | [Docs](JWT/Crypt-JWT.md)               |
 | [JWT Errors](JWT/errors/Crypt-JWT-Errors.md) | `JWTError` and its 12 stable error codes               | [Docs](JWT/errors/Crypt-JWT-Errors.md) |
 | [OTP](OTP/Crypt-OTP.md)                      | Time-based and HMAC-based one-time passwords           | [Docs](OTP/Crypt-OTP.md)               |
+| [CBOR](cbor/Crypt-CBOR.md)                   | Minimal CBOR decoder + COSE-key → JWK (WebAuthn)       | [Docs](cbor/Crypt-CBOR.md)             |
 
 ## Installation
 

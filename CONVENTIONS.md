@@ -12,6 +12,7 @@ quietly breaking the pattern.
 - [Exported types live in a `types/` folder](#exported-types-live-in-a-types-folder)
 - [Custom errors live in an `errors/` folder](#custom-errors-live-in-an-errors-folder)
 - [Imports go through folder barrels](#imports-go-through-folder-barrels)
+- [Dependency manifests](#dependency-manifests)
 - [Documentation examples use public specifiers](#documentation-examples-use-public-specifiers)
 - [Privacy prefixing](#privacy-prefixing)
 - [JSDoc: link custom types, declare throws](#jsdoc-link-custom-types-declare-throws)
@@ -339,6 +340,48 @@ Cycle care: when a barrel re-exports a runtime module that imports
 back across folders (the middleware runner importing the context
 base, say), keep that back-edge `import type` — a type-only import
 erases at compile time and cannot create a runtime cycle.
+
+## Dependency manifests
+
+Every package ships two manifests — `deno.json` for JSR/Deno and
+`package.json` for Bun/Node — and both are consumer-facing (they
+travel in the tarball). Four rules keep them honest:
+
+- **One version, declared twice.** Every external **runtime**
+  dependency appears in **both** manifests at the **same** version
+  range. `deno.json` uses the `jsr:`/`npm:` scheme; `package.json`
+  mirrors a JSR package as `npm:@jsr/std__<x>@<ver>` and a plain npm
+  package as `npm:<pkg>@<ver>`. Bump one side, bump the other — a
+  floor that drifts between the two means Deno and Node silently
+  resolve different versions. (Dev/bench-only deps are the exception —
+  see below.)
+- **`dependency` vs `devDependency` follows actual use.** JSR excludes
+  `*.test.ts` and `*.bench.ts` from the published tarball (see the
+  root `publish.exclude`), so anything imported **only** from a test
+  or bench is a `devDependency`; anything a shipped module imports —
+  including harness exports like `compat`'s `./test` or `rpc`'s
+  `./conformance` — is a real `dependency`. Workspace siblings are
+  `"@tundralibs/<pkg>": "workspace:*"`, dev or runtime by the same
+  test.
+- **Single-package dev/bench-only deps go in that package's
+  `package.json` `devDependencies` alone — not in `deno.json`.** A
+  comparison library benchmarked against by one package (`zod` in
+  guardian, `pg`/`postgres` in drivers, `find-my-way`/`radix3` in
+  radrouter) is declared **only** as a `devDependency`. With
+  `nodeModulesDir: auto` Deno resolves the bare specifier straight from
+  `package.json` on the Deno, Bun, and Node lanes alike, so no
+  `deno.json` `imports` entry is needed — and leaving it out keeps
+  `imports` an honest map of the **published/runtime** surface (the
+  bench file is `publish.exclude`d, so nothing shipped references it).
+  The shared test toolchain (`@std/asserts`, `@std/testing`), used by
+  nearly every package's tests, is the one thing kept at the **root** —
+  in both root manifests — rather than copied into each package.
+- **Target-specific deps are declared only where they resolve.** A
+  Deno-only native dep (`jsr:@db/sqlite`) lives only in `deno.json`;
+  a Node/Bun-only shim (`ws`) lives only in `package.json`. That split
+  is deliberate, not drift — the absent side must degrade gracefully
+  (see the runtime golden rule), never throw a raw missing-builtin
+  error.
 
 ## Documentation examples use public specifiers
 

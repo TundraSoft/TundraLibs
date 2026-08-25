@@ -63,7 +63,7 @@ const CURVE_OIDS: ReadonlyArray<readonly [ECCurve, Uint8Array]> = [
 ];
 
 /** A parsed ASN.1 tag-length-value triple, expressed as offsets into a buffer. */
-type Tlv = {
+export type Tlv = {
   /** The (single-byte) identifier octet. */
   tag: number;
   /** Offset of the identifier octet — the start of the whole element. */
@@ -85,7 +85,7 @@ type Tlv = {
  *   a long form wider than four octets).
  * @internal
  */
-const readTlv = (bytes: Uint8Array, offset: number): Tlv => {
+export const readTlv = (bytes: Uint8Array, offset: number): Tlv => {
   if (offset + 2 > bytes.length) {
     throw new Error('Malformed DER: truncated element header');
   }
