@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.6...metro-man-v1.0.7) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **metro-man:** fix wrong label-order example, deepen cardinality/aggregation docs ([#565](https://github.com/TundraSoft/TundraLibs/issues/565)) ([678670b](https://github.com/TundraSoft/TundraLibs/commit/678670b0328593aa6ab6d79930a1d43bed0f7f49))
+
 ## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.5...metro-man-v1.0.6) (2026-08-21)
 
 
