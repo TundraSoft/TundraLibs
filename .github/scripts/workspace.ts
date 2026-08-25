@@ -192,6 +192,10 @@ const renderCodecov = (pkgs: Pkg[]): string => {
     'ignore:',
     "  - '**/*.test.ts'",
     "  - '**/*.bench.ts'",
+    // Driver soak/stress harnesses: dev-only, publish- and Sonar-excluded,
+    // never executed by the test suite (so never in the LCOV) — ignored for
+    // parity with benches/examples.
+    "  - '**/soak.ts'",
     "  - '**/tests/**'",
     "  - '**/fixtures/**'",
     // Example Projects (docs convention): standalone runnable apps verified

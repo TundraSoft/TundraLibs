@@ -1,0 +1,119 @@
+name: Soak (drivers)
+
+# Long-running driver stress tests: each hammers one engine with a concurrent
+# workload mix (insert/select/transactions/type round-trips/bulk/large reads)
+# to surface pool leaks and concurrency bugs the unit suite can't. They need
+# live DB services and run for minutes, so they are kept OFF per-push PR CI —
+# manual dispatch plus a weekly scheduled run keep them honest without taxing
+# every push. Sources: packages/drivers/engines/<engine>/soak.ts (publish- and
+# Sonar-analysis-excluded; run locally via `deno task soak` / `deno task soak:<engine>`).
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: Seconds to soak each engine (SOAK_DURATION_S)
+        required: false
+        default: '120'
+  schedule:
+    # Weekly, Sunday 03:17 UTC. Odd minute dodges the top-of-hour cron surge.
+    - cron: '17 3 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  soak:
+    name: Soak all engines
+    runs-on: ubuntu-latest
+    # Engines read these via envArgs, which merges OS env. sqlite uses
+    # :memory: (no service); redis uses DB 0; postgres/mariadb get a dedicated
+    # `soak` database auto-created by their image env below (no prepare step).
+    env:
+      # workflow_dispatch passes `duration`; scheduled runs fall back to 120s.
+      SOAK_DURATION_S: ${{ github.event.inputs.duration || '120' }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: soak
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      MARIA_HOST: localhost
+      MARIA_PORT: '3306'
+      MARIA_DB: soak
+      MARIA_USER: root
+      MARIA_PASSWORD: mariadb
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      MEMCACHED_HOST: localhost
+      MEMCACHED_PORT: '11211'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: soak
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: mariadb
+          MARIADB_DATABASE: soak
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      memcached:
+        image: memcached:1
+        ports:
+          - 11211:11211
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      # memcached's image ships no health-check client, so `services:` cannot
+      # gate on it — block until it accepts a TCP connection.
+      - name: Wait for memcached
+        run: |
+          for _ in $(seq 1 30); do
+            (echo > /dev/tcp/localhost/11211) >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      # One step per engine, each gated on !cancelled() so a failure (or leak)
+      # in one engine still lets the rest run — the job still fails if any did.
+      # sqlite (:memory:) needs no service and runs first as a smoke check.
+      - name: Soak sqlite
+        run: deno task soak:sqlite
+      - name: Soak postgres
+        if: ${{ !cancelled() }}
+        run: deno task soak:postgres
+      - name: Soak mariadb
+        if: ${{ !cancelled() }}
+        run: deno task soak:maria
+      - name: Soak redis
+        if: ${{ !cancelled() }}
+        run: deno task soak:redis
+      - name: Soak memcached
+        if: ${{ !cancelled() }}
+        run: deno task soak:memcached
