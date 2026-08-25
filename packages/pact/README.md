@@ -1,13 +1,22 @@
 # Pact
 
-**Permissions, Authentication, Control & Tokens** — a **transport-agnostic
-authentication & authorization toolkit**. Authorization is **BigInt
-bitmask** permissions; identity, credentials, and sessions run over a flat
-set of **optional storage hooks** — plain functions, no adapter, no base
-class, no schema ownership. All cryptography is delegated to
+**Permissions, Authentication, Control & Tokens** — a transport-agnostic
+**authentication and authorization toolkit** for Deno, Bun, Node, Cloudflare
+Workers, and the browser. It covers **RBAC** authorization over unbounded
+**BigInt bitmask** permissions; five credential schemes — password (Basic,
+PBKDF2), **JWT** Bearer sessions, opaque tokens, API keys, and **HMAC** request
+signatures; **JWT** and opaque **sessions** with **refresh-token rotation** and
+reuse detection; **TOTP** as a second factor (**MFA / 2FA**); and an in-house
+**OAuth 2.0 / OpenID Connect** client with **PKCE**, `state`, and JWKS
+`id_token` verification. Identity, credentials, and sessions live behind a flat
+set of **optional storage hooks** — plain functions, no adapter, no base class,
+no schema ownership — a lighter, bring-your-own-storage alternative to Passport,
+Lucia, or better-auth. All cryptography is delegated to
 [`@tundralibs/crypt`](../crypt/README.md); OAuth HTTP runs on
 [`@tundralibs/restler`](../restler/README.md).
 
+[![JSR](https://jsr.io/badges/@tundralibs/pact)](https://jsr.io/@tundralibs/pact)
+[![JSR Score](https://jsr.io/badges/@tundralibs/pact/score)](https://jsr.io/@tundralibs/pact)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
