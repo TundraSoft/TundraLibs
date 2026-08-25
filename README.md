@@ -6,6 +6,12 @@ also run on **Cloudflare Workers** and in the **browser** (see
 [Runtime support](#runtime-support)). Published to
 [JSR](https://jsr.io) under the `@tundralibs` scope.
 
+They cover databases (an ORM, a query language, and connection drivers
+for PostgreSQL, MariaDB, SQLite, MongoDB, Redis, and Memcached), schema
+validation, structured logging, distributed tracing, Prometheus metrics,
+authentication, caching, dependency injection, HTTP routing,
+cryptography, and ID generation — each independent and dependency-light.
+
 [![Deno 2.0+](https://img.shields.io/badge/Deno-2.0+-000000?logo=deno)](#runtime-support)
 [![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)](#runtime-support)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](#runtime-support)

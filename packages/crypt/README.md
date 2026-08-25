@@ -1,6 +1,6 @@
 # Crypt
 
-Comprehensive cryptographic library providing encryption, hashing, key derivation, digital signatures, JWT handling, OTP generation, and secure random generation.
+Cross-runtime cryptography for Deno, Bun, and Node.js — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP (TOTP/HOTP), key derivation, and secure random.
 
 [![JSR](https://jsr.io/badges/@tundralibs/crypt)](https://jsr.io/@tundralibs/crypt)
 [![JSR Score](https://jsr.io/badges/@tundralibs/crypt/score)](https://jsr.io/@tundralibs/crypt)

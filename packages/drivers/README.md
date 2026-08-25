@@ -1,6 +1,6 @@
 # Drivers
 
-Cross-runtime connection drivers for databases and key-value stores.
+Cross-runtime connection drivers and pooling for PostgreSQL, MariaDB/MySQL, SQLite, MongoDB, Redis, and Memcached — plus edge/serverless HTTP dialects (Neon, Turso, Cloudflare D1) — on Deno, Bun, and Node.js.
 
 [![JSR](https://jsr.io/badges/@tundralibs/drivers)](https://jsr.io/@tundralibs/drivers)
 [![JSR Score](https://jsr.io/badges/@tundralibs/drivers/score)](https://jsr.io/@tundralibs/drivers)

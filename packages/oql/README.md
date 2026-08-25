@@ -1,6 +1,6 @@
 # OQL (Object Query Language)
 
-Type-safe, database-agnostic query definitions for TypeScript/JavaScript.
+Type-safe, database-agnostic query builder — define a query once and translate it to SQL (PostgreSQL, MariaDB, SQLite) or MongoDB.
 
 [![JSR](https://jsr.io/badges/@tundralibs/oql)](https://jsr.io/@tundralibs/oql)
 [![JSR Score](https://jsr.io/badges/@tundralibs/oql/score)](https://jsr.io/@tundralibs/oql)

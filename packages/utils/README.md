@@ -1,6 +1,6 @@
 # Utils
 
-Essential utility functions and patterns for TypeScript/JavaScript development.
+Core cross-runtime TypeScript building blocks — a typed Options + Events base class, BaseError, Singleton, and helpers for config/env, memoize, throttle, IP/subnet, and free-port lookup.
 
 [![JSR](https://jsr.io/badges/@tundralibs/utils)](https://jsr.io/@tundralibs/utils)
 [![JSR Score](https://jsr.io/badges/@tundralibs/utils/score)](https://jsr.io/@tundralibs/utils)

@@ -481,6 +481,8 @@ const scaffoldPackageJson = (name: string): string =>
       name: `${SCOPE}/${name}`,
       version: NEW_PACKAGE_VERSION,
       description: `TODO: describe ${SCOPE}/${name}`,
+      // Discoverability: extend with domain terms someone would search for.
+      keywords: ['typescript', 'deno', 'bun', 'nodejs', 'cross-runtime'],
       license: 'MIT',
       type: 'module',
       main: 'mod.ts',
