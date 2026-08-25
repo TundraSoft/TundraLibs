@@ -2,6 +2,8 @@
 
 Cross-runtime connection drivers for databases and key-value stores.
 
+[![JSR](https://jsr.io/badges/@tundralibs/drivers)](https://jsr.io/@tundralibs/drivers)
+[![JSR Score](https://jsr.io/badges/@tundralibs/drivers/score)](https://jsr.io/@tundralibs/drivers)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

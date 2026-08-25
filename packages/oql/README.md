@@ -2,6 +2,8 @@
 
 Type-safe, database-agnostic query definitions for TypeScript/JavaScript.
 
+[![JSR](https://jsr.io/badges/@tundralibs/oql)](https://jsr.io/@tundralibs/oql)
+[![JSR Score](https://jsr.io/badges/@tundralibs/oql/score)](https://jsr.io/@tundralibs/oql)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

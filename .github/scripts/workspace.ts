@@ -398,7 +398,8 @@ const renderReadme = (pkgs: Pkg[]): string => {
     Deno.exit(1);
   }
   const list = pkgs.map((p) =>
-    `- **[${p.displayName}](${PACKAGES_DIR}/${p.dir}/README.md)** — ${p.description}`
+    `- **[${p.displayName}](${PACKAGES_DIR}/${p.dir}/README.md)** ` +
+    `[![JSR](https://jsr.io/badges/${SCOPE}/${p.dir})](https://jsr.io/${SCOPE}/${p.dir}) — ${p.description}`
   ).join('\n');
   return current.slice(0, start + README_START.length) +
     '\n\n' + list + '\n\n' +
@@ -505,6 +506,8 @@ const scaffoldReadme = (name: string, displayName: string): string => `# ${displ
 
 TODO: brief description of what this package does and why it exists.
 
+[![JSR](https://jsr.io/badges/${SCOPE}/${name})](https://jsr.io/${SCOPE}/${name})
+[![JSR Score](https://jsr.io/badges/${SCOPE}/${name}/score)](https://jsr.io/${SCOPE}/${name})
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

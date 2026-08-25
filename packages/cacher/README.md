@@ -2,6 +2,8 @@
 
 A flexible caching library with support for Memory, Redis, and Memcached engines.
 
+[![JSR](https://jsr.io/badges/@tundralibs/cacher)](https://jsr.io/@tundralibs/cacher)
+[![JSR Score](https://jsr.io/badges/@tundralibs/cacher/score)](https://jsr.io/@tundralibs/cacher)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

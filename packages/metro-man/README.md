@@ -3,6 +3,8 @@
 Prometheus-compatible in-process metrics for Deno, Bun, Node.js,
 Cloudflare Workers, and browsers.
 
+[![JSR](https://jsr.io/badges/@tundralibs/metro-man)](https://jsr.io/@tundralibs/metro-man)
+[![JSR Score](https://jsr.io/badges/@tundralibs/metro-man/score)](https://jsr.io/@tundralibs/metro-man)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

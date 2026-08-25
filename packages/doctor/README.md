@@ -4,6 +4,8 @@ Lightweight dependency injection for Deno, Bun, Node.js, Cloudflare
 Workers, and browsers — no `reflect-metadata`, no legacy decorators,
 no build flags.
 
+[![JSR](https://jsr.io/badges/@tundralibs/doctor)](https://jsr.io/@tundralibs/doctor)
+[![JSR Score](https://jsr.io/badges/@tundralibs/doctor/score)](https://jsr.io/@tundralibs/doctor)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
