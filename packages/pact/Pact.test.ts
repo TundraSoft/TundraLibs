@@ -1,5 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { hash } from '@tundralibs/crypt';
 import { generateTOTP } from '@tundralibs/crypt/OTP';
 import { signHMAC } from '@tundralibs/crypt/sign';
 import { Pact } from './Pact.ts';
@@ -370,8 +371,10 @@ describe('pact.Pact OPAQUE sessions', () => {
       identifier: 'a@x.io',
       password: 'pw-123456789',
     });
-    const session = store.sessions.get(result!.token)!;
-    store.sessions.set(session.id, { ...session, expiresAt: Date.now() - 1 });
+    // Opaque sessions are stored under sha-256(token), not the raw token.
+    const key = await hash(result!.token);
+    const session = store.sessions.get(key)!;
+    store.sessions.set(key, { ...session, expiresAt: Date.now() - 1 });
     asserts.assertEquals(await pact.verify(result!.token), null);
   });
 
@@ -1206,5 +1209,148 @@ describe('pact.Pact — security-path coverage', () => {
     asserts.assertEquals(await pact.verifyOtp('u1', '000000'), false);
     const code = await generateTOTP('JBSWY3DPEHPK3PXP');
     asserts.assertEquals(await pact.verifyOtp('u2', code), false);
+  });
+});
+
+describe('pact.Pact — security-review fixes', () => {
+  it('authenticate HMAC returns null (never throws) on a malformed signature', async () => {
+    const { hooks, users, apiKeys } = makeStore();
+    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: '1' } });
+    apiKeys.set('h1', { id: 'h1', userId: 'u1', secret: 'shared-hmac-secret' });
+    const pact = Pact.create({ bits: BITS, apiKeys: true, hooks });
+    for (const signature of ['', 'nothex', 'zz', '123']) {
+      asserts.assertEquals(
+        await pact.authenticate({
+          scheme: 'HMAC',
+          keyId: 'h1',
+          signature,
+          payload: 'x',
+        }),
+        null,
+      );
+    }
+  });
+
+  it('holds secret-bearing fields off enumeration surfaces', () => {
+    const { hooks } = makeStore();
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      hooks,
+    });
+    for (const hidden of ['__secretMaterial', '__hooks', '__oauth']) {
+      asserts.assertFalse(
+        Object.getOwnPropertyDescriptor(pact, hidden)?.enumerable ?? false,
+        `${hidden} must not be enumerable`,
+      );
+      asserts.assertFalse(Object.keys(pact).includes(hidden));
+    }
+    // a naive spread of the instance must not carry the raw signing secret
+    const spread = JSON.stringify(Object.values({ ...pact }).map(String));
+    asserts.assertFalse(spread.includes(SECRET));
+  });
+
+  it('authenticate returns null (not undefined) for an unrecognized scheme', async () => {
+    const { hooks } = makeStore();
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      hooks,
+    });
+    asserts.assertEquals(
+      // deno-lint-ignore no-explicit-any
+      await pact.authenticate({ scheme: 'Bearer' } as any),
+      null,
+    );
+  });
+
+  it('OPAQUE sessions are stored under a hash, never the raw token', async () => {
+    const { hooks, sessions } = makeStore();
+    const pact = Pact.create({
+      bits: BITS,
+      password: true,
+      session: { strategy: 'OPAQUE' },
+      hooks,
+    });
+    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
+    const login = await pact.login('password', {
+      identifier: 'a@x',
+      password: 'pw-pw-pw-pw',
+    });
+    asserts.assertExists(login);
+    asserts.assertFalse(sessions.has(login.token)); // not the raw token…
+    asserts.assert(sessions.has(await hash(login.token))); // …its sha-256
+    asserts.assertExists(await pact.verify(login.token)); // still verifies
+  });
+
+  it('verify rejects an OPAQUE session with a non-numeric expiresAt', async () => {
+    const { hooks, sessions, users } = makeStore();
+    users.set('u1', { id: 'u1', status: 'ACTIVE' });
+    const pact = Pact.create({
+      bits: BITS,
+      password: true,
+      session: { strategy: 'OPAQUE' },
+      hooks,
+    });
+    const token = 'opaque-token-xyz';
+    const key = await hash(token);
+    sessions.set(key, {
+      id: key,
+      userId: 'u1',
+      expiresAt: undefined as unknown as number, // corrupt row
+    });
+    asserts.assertEquals(await pact.verify(token), null);
+  });
+
+  it('refresh honors the isRevoked denylist', async () => {
+    const { hooks } = makeStore();
+    let revoked = false;
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      session: { refresh: {} },
+      hooks: { ...hooks, isRevoked: () => revoked },
+    });
+    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
+    const login = await pact.login('password', {
+      identifier: 'a@x',
+      password: 'pw-pw-pw-pw',
+    });
+    asserts.assertExists(login);
+    revoked = true;
+    asserts.assertEquals(await pact.refresh(login.refreshToken!), null);
+  });
+
+  it('authenticate resolves null (not throws) when stored grants are corrupt', async () => {
+    const { hooks, users } = makeStore();
+    // 'FF' is hex — not a valid decimal-string wire mask
+    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: 'FF' } });
+    const pact = Pact.create({ bits: BITS, tokens: true, hooks });
+    const { token } = await pact.issueToken('u1');
+    asserts.assertEquals(
+      await pact.authenticate({ scheme: 'TOKEN', token }),
+      null,
+    );
+  });
+
+  it('verifyFailed emits a redacted token (JWT signature stripped)', async () => {
+    const { hooks } = makeStore();
+    let emitted: string | undefined;
+    const pact = Pact.create({
+      bits: BITS,
+      secret: SECRET,
+      password: true,
+      hooks,
+    });
+    pact.on('verifyFailed', (_e, token) => {
+      emitted = token;
+    });
+    await pact.verify('aaa.bbb.the-secret-signature');
+    asserts.assertExists(emitted);
+    asserts.assert(emitted.endsWith('.<redacted>'));
+    asserts.assertFalse(emitted.includes('the-secret-signature'));
   });
 });

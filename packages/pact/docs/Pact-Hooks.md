@@ -74,8 +74,13 @@ The contracts are plain objects — how you persist them is your business:
   `{ hash, userId, grants?, expiresAt?, revokedAt? }`. The token itself
   is never stored.
 
-`grants` on an api key or token **override** the user's grants — a scoped
-key checks against its own mask, not the owner's full set.
+`grants` on an api key or token **override** (replace, not intersect) the
+user's grants — a scoped key checks against its own mask, not the owner's full
+set. Two consequences: never let untrusted input flow into an issued key's
+`grants` (it is stored verbatim and becomes that key's authority), and a scoped
+key's grants **outlive a later downgrade** of the user — only a non-`ACTIVE`
+status or revoking the key removes them, so revoke over-privileged keys when a
+user's role changes.
 
 ## Hook reference
 

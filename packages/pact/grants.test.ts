@@ -56,4 +56,12 @@ describe('pact.grants', () => {
     );
     asserts.assertEquals((err as { code?: string }).code, 'INVALID_GRANTS');
   });
+
+  it('deserializeGrants rejects a number mask above 2^53 (no silent truncation)', () => {
+    const err = asserts.assertThrows(
+      () => deserializeGrants({ Post: 9007199254740993 }),
+      PactDefinitionError,
+    );
+    asserts.assertEquals((err as { code?: string }).code, 'INVALID_GRANTS');
+  });
 });

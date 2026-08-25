@@ -169,12 +169,32 @@ export class Permissions<P extends PactPermissionBits = PactPermissionBits> {
     grants: PactGrants,
   ): boolean {
     const bit = this.__requireApplicable(module, permission);
-    if (bit === 0n) return true; // vacuous — nothing required
+    if (bit === 0n) {
+      // A zero/empty required permission ("nothing required" — a raw `0n`
+      // ref, or a mask built from no permissions) is almost always a bug.
+      // Fail LOUD rather than silently satisfy every principal, incl. one
+      // that holds nothing.
+      throw new PactDefinitionError(
+        `Authorization check on '${module}' required no permissions ` +
+          `(a 0n/empty requirement) — this is almost always a bug`,
+        { code: 'EMPTY_REQUIREMENT', module },
+      );
+    }
     // `grants` is a caller-supplied plain object; read it own-property-safe
     // so a module named 'constructor'/'__proto__'/… reads an actual grant
-    // (or nothing) rather than an inherited `Object.prototype` member,
-    // which would corrupt the bit math below with a `TypeError`. [F2]
+    // (or nothing) rather than an inherited `Object.prototype` member. [F2]
     const held = Object.hasOwn(grants, module) ? grants[module] ?? 0n : 0n;
+    if (typeof held !== 'bigint') {
+      // Grant VALUES must be BigInt masks (produced by `deserializeGrants`).
+      // A type-violating value (a string from raw JSON, say) would otherwise
+      // throw a raw `TypeError: Cannot mix BigInt and other types` from the
+      // bit math below — surface a typed error instead. [F2 for values]
+      throw new PactDefinitionError(
+        `Grant mask for module '${module}' must be a BigInt (got ${typeof held}) ` +
+          `— run stored grants through deserializeGrants first`,
+        { code: 'INVALID_GRANTS', module },
+      );
+    }
     return (held & bit) === bit;
   }
 
@@ -184,6 +204,7 @@ export class Permissions<P extends PactPermissionBits = PactPermissionBits> {
     permissions: ReadonlyArray<PactPermissionRef<P>>,
     grants: PactGrants,
   ): boolean {
+    this.__requireNonEmpty(module, permissions);
     return permissions.some((p) => this.has(module, p, grants));
   }
 
@@ -193,6 +214,7 @@ export class Permissions<P extends PactPermissionBits = PactPermissionBits> {
     permissions: ReadonlyArray<PactPermissionRef<P>>,
     grants: PactGrants,
   ): boolean {
+    this.__requireNonEmpty(module, permissions);
     return permissions.every((p) => this.has(module, p, grants));
   }
 
@@ -245,6 +267,25 @@ export class Permissions<P extends PactPermissionBits = PactPermissionBits> {
   }
 
   // ── internals ──────────────────────────────────────────────────────
+
+  /**
+   * Reject an empty permission list on `any`/`all` — a check that lists no
+   * permissions is a bug (an empty `all` would be vacuously true, fail-open).
+   *
+   * @throws {@link PactDefinitionError} (`EMPTY_REQUIREMENT`) when empty.
+   */
+  private __requireNonEmpty(
+    module: string,
+    permissions: ReadonlyArray<PactPermissionRef<P>>,
+  ): void {
+    if (permissions.length === 0) {
+      throw new PactDefinitionError(
+        `Authorization check on '${module}' listed no permissions — an empty ` +
+          `any()/all() is almost always a bug`,
+        { code: 'EMPTY_REQUIREMENT', module },
+      );
+    }
+  }
 
   /** Resolve, and verify applicability to `module` when a catalog exists. */
   private __requireApplicable(

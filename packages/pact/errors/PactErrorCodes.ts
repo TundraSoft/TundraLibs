@@ -18,6 +18,7 @@ export type PactErrorCode =
   | 'UNKNOWN_MODULE'
   | 'UNKNOWN_PERMISSION'
   | 'PERMISSION_NOT_IN_MODULE'
+  | 'EMPTY_REQUIREMENT'
   | 'PERMISSION_DENIED'
   | 'TOKEN_REVOKED'
   | 'TOKEN_TYPE_MISMATCH'
@@ -54,6 +55,8 @@ export const PactErrorCodes: Record<PactErrorCode, string> = {
   UNKNOWN_PERMISSION: 'Permission is not declared in the permission registry',
   /** A permission is not applicable to the given module. */
   PERMISSION_NOT_IN_MODULE: 'Permission is not applicable to the module',
+  /** An authorization check required zero/empty permissions (likely a bug). */
+  EMPTY_REQUIREMENT: 'An authorization check required no permissions',
   /** A principal lacks the required permission (authorization denied). */
   PERMISSION_DENIED: 'Principal lacks the required permission',
   /** A structurally valid token was rejected (revocation / dead family). */

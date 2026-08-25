@@ -113,3 +113,8 @@ ends every session/family via the `deleteUserSessions` hook. Both emit
 
 `'OPAQUE'` sessions have a **fixed lifetime** (`ttl` from mint); sliding
 renewal is on the [roadmap](../ROADMAP.md) as an opt-in.
+
+An `'OPAQUE'` token is a bearer secret, so pact stores it hashed: `saveSession`,
+`getSession`, and `deleteSession` see the **sha-256 of the token**, never the
+raw id, and the raw token lives only in the client's hands. A read-only leak of
+the sessions table therefore yields no usable session ids.

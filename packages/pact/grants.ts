@@ -68,9 +68,13 @@ export function deserializeGrants(
     if (typeof value === 'bigint') {
       mask = value;
     } else if (typeof value === 'number') {
-      if (!Number.isInteger(value) || value < 0) {
+      // `Number.isSafeInteger` (not `isInteger`): above 2^53 a JS number is
+      // already rounded, so `BigInt(value)` would silently encode the wrong
+      // mask — reject it and require a decimal string / BigInt for large masks.
+      if (!Number.isSafeInteger(value) || value < 0) {
         throw new PactDefinitionError(
-          `Grants mask for '${module}' must be a non-negative integer (got ${value})`,
+          `Grants mask for '${module}' must be a non-negative safe integer ` +
+            `(got ${value}) — pass a decimal string or BigInt for larger masks`,
           { code: 'INVALID_GRANTS', module },
         );
       }

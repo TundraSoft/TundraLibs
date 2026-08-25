@@ -169,6 +169,13 @@ const ok = await pact.verifyOtp('user-1', '123456');
 `verifyOtp` is `false` for a missing/unenrolled/non-`ACTIVE` user or a
 wrong code — never a throw.
 
+**Pitfall — code replay.** `verifyOtp` keeps no used-code state (MFA is not a
+state machine), and crypt accepts a code across a small ±1-step window (~90s),
+so the **same code verifies more than once** within that window. A captured or
+resubmitted code passes again until it rolls out. If you need true single-use,
+record the last-accepted code (or time-step) per user and reject a repeat
+yourself.
+
 ## Signing outbound content (HMAC)
 
 The `HMAC` scheme above verifies signatures a _client_ produced. The

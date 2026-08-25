@@ -105,6 +105,15 @@ const DEFAULT_JWKS_TTL_MS = 3_600_000;
  */
 const JWKS_MIN_REFRESH_MS = 30_000;
 
+/** Hard timeout on a single JWKS fetch — a stalling host must not hang login. */
+const JWKS_FETCH_TIMEOUT_MS = 10_000;
+
+/** Reject a JWKS response whose declared size exceeds this (256 KiB). */
+const MAX_JWKS_BYTES = 262_144;
+
+/** Cap the number of keys read from a JWKS document. */
+const MAX_JWKS_KEYS = 50;
+
 /**
  * One key from a provider's JWKS document — only the fields *this module*
  * reads. The key material itself (`kty`, `crv`, `n`, `e`, `x`, `y`, …) is
@@ -365,17 +374,27 @@ export class IdTokenVerifier {
   private __fetchKeys(uri: string): Promise<RemoteJWK[]> {
     if (this.__inflight !== undefined) return this.__inflight;
     const request = (async () => {
+      // Bound the fetch: a host that accepts the connection then stalls must
+      // not hang login() forever — the timeout rejection also lets the
+      // `'PREFERRED'` policy degrade — and an unbounded body must not OOM.
       const res = await this.__fetchRef()(uri, {
         headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(JWKS_FETCH_TIMEOUT_MS),
       });
       if (!res.ok) {
         throw new Error(`JWKS endpoint returned ${res.status}`);
+      }
+      const declared = Number(res.headers.get('content-length') ?? '0');
+      if (declared > MAX_JWKS_BYTES) {
+        throw new Error(`JWKS response too large (${declared} bytes)`);
       }
       const doc = await res.json() as { keys?: unknown };
       if (!Array.isArray(doc.keys)) {
         throw new Error('JWKS document has no `keys` array');
       }
-      const keys = doc.keys as RemoteJWK[];
+      // Cap the key count so a huge set can't turn every unknown-`kid` lookup
+      // into an unbounded scan.
+      const keys = (doc.keys as RemoteJWK[]).slice(0, MAX_JWKS_KEYS);
       this.__cache = { uri, keys, fetchedAt: Date.now() };
       return keys;
     })();
@@ -449,16 +468,19 @@ export class IdTokenVerifier {
         { expectedAudience: context.audience, audience: payload.aud },
       );
     }
-    // OIDC Core §3.1.3.7: with multiple audiences the authorized party
-    // must be present and must be us.
-    if (
-      audiences.length > 1 && payload.azp !== undefined &&
-      payload.azp !== context.audience
-    ) {
-      fail(
-        `authorized party mismatch (azp '${String(payload.azp)}')`,
-        { azp: payload.azp },
-      );
+    // OIDC Core §3.1.3.7: with multiple audiences the authorized party MUST
+    // be present and MUST be us.
+    if (audiences.length > 1) {
+      if (payload.azp === undefined) {
+        fail('multi-audience id_token is missing the azp claim', {
+          audience: payload.aud,
+        });
+      } else if (payload.azp !== context.audience) {
+        fail(
+          `authorized party mismatch (azp '${String(payload.azp)}')`,
+          { azp: payload.azp },
+        );
+      }
     }
 
     const now = Math.floor(Date.now() / 1000);

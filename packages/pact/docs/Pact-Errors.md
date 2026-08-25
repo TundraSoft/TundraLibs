@@ -44,6 +44,9 @@ The full union lives in `PactErrorCodes`
 - `TOKEN_REVOKED` / `TOKEN_TYPE_MISMATCH` / `REFRESH_REUSED` — the
   token-path rejections; carried by the `verifyFailed` error, while the
   call itself resolves `null`.
+- `EMPTY_REQUIREMENT` — an authorization check required **no** permissions
+  (a raw `0n`, or an empty `any()`/`all()`); pact fails this closed and throws,
+  because "require nothing" is almost always a bug rather than an allow.
 - `PERMISSION_DENIED` and the catalog codes (`UNKNOWN_MODULE`,
   `UNKNOWN_PERMISSION`, `PERMISSION_NOT_IN_MODULE`,
   `INVALID_PERMISSION_BIT`, `DUPLICATE_PERMISSION_BIT`,

@@ -26,14 +26,23 @@ pact.assert(principal, 'DELETE', 'Post'); // throws PactDeniedError (emits `deni
 `can`/`assert` gate on the principal too: `null` or a non-`ACTIVE`
 status is always a deny.
 
+**Empty requirements fail closed.** A check that requires _no_ permissions — a
+raw `0n`, `toMask(m, [])` (which is `0n`), or an empty `any([])`/`all([])` — is
+almost always a bug (a filtered-to-empty scope list, a missing permission), so
+`has`/`assert`/`any`/`all` **throw `EMPTY_REQUIREMENT`** rather than silently
+satisfy it. Guard your own empty case before building a required mask.
+
 This live gate only bites when `verify()` re-resolves the user each request.
 With [`session.embedGrants`](Pact-Sessions.md) the principal is rebuilt from
 the token, so both its grants and its `status` are frozen until the token
 expires — a `LOCKED` user keeps their access, and a role you downgraded keeps
-its old bits, for the token's whole lifetime. Likewise, emptying a group or
-revoking a role updates future `getUser` results but does **not** invalidate
-embedded-grant tokens already minted. Embed only with a short `ttl`, or resolve
-fresh when authority must be current.
+its old bits, for the token's whole lifetime. The embedded principal also
+carries a hardcoded `status: 'ACTIVE'` and an **empty `metadata`** (not the real
+user's), so do not key authorization or tenancy on `principal.metadata` under
+`embedGrants`. Likewise, emptying a group or revoking a role updates future
+`getUser` results but does **not** invalidate embedded-grant tokens already
+minted. Embed only with a short `ttl`, or resolve fresh when authority must be
+current.
 
 ## The app composes effective grants
 

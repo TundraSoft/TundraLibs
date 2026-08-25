@@ -33,6 +33,9 @@ import type {
   PactOAuthTokens,
 } from '../types/mod.ts';
 
+/** OIDC discovery-document cache lifetime — one hour. */
+const DISCOVERY_TTL_MS = 3_600_000;
+
 /** Resolved provider endpoints (preset constants or oidc discovery). */
 type Endpoints = {
   authorization: string;
@@ -131,6 +134,8 @@ export class OAuthClient extends RESTler {
   private readonly __idTokens: IdTokenVerifier;
   /** Discovered oidc endpoints (fetched once, then cached). */
   private __discovered?: Endpoints;
+  /** When {@link OAuthClient.__discovered} was fetched (epoch ms). */
+  private __discoveredAt = 0;
 
   /**
    * Create a client for one configured provider instance. Endpoints come
@@ -190,21 +195,24 @@ export class OAuthClient extends RESTler {
     const nonce = nanoID(32);
     const url = new URL(endpoints.authorization);
     const params: Record<string, string> = {
+      // App-supplied params FIRST — every pact-generated param below wins, so
+      // config `authParams` / `options.params` can never override `state`,
+      // PKCE, `nonce`, or `redirect_uri` and desync (or weaken) the flow.
+      ...this.__preset.authParams,
+      ...this.__config.authParams,
+      ...options?.params,
       response_type: 'code',
       client_id: this.__config.clientId,
       redirect_uri: this.__config.redirectUri,
       scope: (options?.scopes ?? this.__config.scopes ?? this.__preset.scopes)
         .join(' '),
+      // OIDC-speaking providers get the replay-guard nonce and any declared
+      // claims; others would just echo unknown params back.
+      ...(this.__preset.oidc === true ? { nonce } : {}),
+      ...this.__claimsParam(),
       state,
       code_challenge: await s256(verifier),
       code_challenge_method: 'S256',
-      // OIDC-speaking providers get the replay-guard nonce and any
-      // declared claims; others would just echo unknown params back.
-      ...(this.__preset.oidc === true ? { nonce } : {}),
-      ...this.__claimsParam(),
-      ...this.__preset.authParams,
-      ...this.__config.authParams,
-      ...options?.params,
     };
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
@@ -321,12 +329,18 @@ export class OAuthClient extends RESTler {
   /** Preset endpoints, with `{tenant}` applied and oidc discovery cached. */
   private async __endpoints(): Promise<Endpoints> {
     if (this.__config.provider === 'OIDC') {
-      if (this.__discovered === undefined) {
+      // Re-discover past the TTL so a rotated `jwks_uri`/endpoint (or a
+      // transiently-wrong doc read at startup) is not pinned until restart.
+      if (
+        this.__discovered === undefined ||
+        Date.now() - this.__discoveredAt > DISCOVERY_TTL_MS
+      ) {
         const issuer = this.__config.issuer!.replace(/\/$/, '');
         const doc = await this.__getJson(
           `${issuer}/.well-known/openid-configuration`,
           'OIDC discovery',
         );
+        this.__discoveredAt = Date.now();
         this.__discovered = {
           authorization: this.__requireHttps(
             String(doc.authorization_endpoint),

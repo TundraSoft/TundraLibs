@@ -114,6 +114,8 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
   private readonly __secretMaterial: PactOptions<P>['secret'];
   /** Cached domain-separated HMAC key for {@link Pact.sign}. */
   private __contentSignKey?: string;
+  /** Fixed dummy pbkdf2 hash for constant-time password-miss equalization. */
+  private __dummyHash?: string;
 
   /**
    * Build the engine. **The sole entry point** — the constructor is private,
@@ -266,6 +268,22 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
         );
       }
     }
+
+    // Keep secret-bearing fields OFF enumeration surfaces — an accidental
+    // `console.log(pact)` / `util.inspect` / `{...pact}` / JSON of the engine
+    // must never surface the raw signing key, the derived content key, the
+    // hooks, or the oauth clients (which hold a `clientSecret`).
+    for (
+      const key of [
+        '__secretMaterial',
+        '__contentSignKey',
+        '__dummyHash',
+        '__hooks',
+        '__oauth',
+      ] as const
+    ) {
+      Object.defineProperty(this, key, { enumerable: false });
+    }
   }
 
   // ── authN ────────────────────────────────────────────────────────────
@@ -283,6 +301,9 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     grants?: Record<string, string>;
     metadata?: Record<string, unknown>;
   }): Promise<PactPrincipal> {
+    // Validate caller-supplied grants up front, so a malformed value fails
+    // loudly here rather than being stored and breaking every later read.
+    if (input.grants !== undefined) deserializeGrants(input.grants);
     const createUser = this.__hook('createUser', 'register()');
     const stored = await createUser({
       identifier: input.identifier,
@@ -293,6 +314,12 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
       metadata: input.metadata,
     });
     const principal = this.__toPrincipal(stored);
+    if (principal === null) {
+      throw new PactDefinitionError(
+        'createUser returned a user with malformed grants',
+        { code: 'INVALID_GRANTS' },
+      );
+    }
     this._emit('register', principal);
     return principal;
   }
@@ -395,18 +422,21 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
    * Note: with `embedGrants` the principal is rebuilt from the token —
    * grants AND status changes are invisible until the (short) expiry.
    *
-   * @throws {@link PactDefinitionError} when JWT verification is invoked
-   *   with no `secret` configured (`MISSING_OPTION`) or a needed hook is
-   *   missing (`MISSING_HOOK`).
+   * @throws {@link PactDefinitionError} (`MISSING_HOOK`) when the `'OPAQUE'`
+   *   strategy is used without its session hooks wired. A missing `secret`
+   *   is NOT thrown — it resolves `null` (with `verifyFailed`), keeping the
+   *   uniform bad-token contract; wire `secret` when minting JWT sessions.
    */
   async verify(token: string): Promise<PactPrincipal | null> {
     const cfg = this.__session();
     if (cfg.strategy === 'OPAQUE') {
       const getSession = this.__hook('getSession', `The 'OPAQUE' strategy`);
-      const session = await getSession(token);
+      // The opaque token is a bearer secret — it is stored, and looked up, by
+      // its sha-256 (never in plaintext), so a store leak yields no usable id.
+      const session = await getSession(await this.__sessionKey(token));
       if (
         session === null || session.revokedAt !== undefined ||
-        session.expiresAt <= Date.now()
+        !this.__isLive(session.expiresAt)
       ) {
         return this.__verifyFail(
           new PactTokenError('Session is missing, revoked, or expired', {
@@ -452,14 +482,20 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     const sub = String(claims.sub);
     if (cfg.embedGrants) {
       const wire = (claims as { grants?: unknown }).grants;
-      return {
-        id: sub,
-        grants: typeof wire === 'object' && wire !== null
-          ? deserializeGrants(wire as Record<string, string>)
-          : {},
-        status: 'ACTIVE',
-        metadata: {},
-      };
+      let grants: PactGrants = {};
+      if (typeof wire === 'object' && wire !== null) {
+        try {
+          grants = deserializeGrants(wire as Record<string, string>);
+        } catch {
+          return this.__verifyFail(
+            new PactTokenError('Embedded grants are malformed', {
+              code: 'TOKEN_REVOKED',
+            }),
+            token,
+          );
+        }
+      }
+      return { id: sub, grants, status: 'ACTIVE', metadata: {} };
     }
     return await this.__principalById(sub);
   }
@@ -482,7 +518,12 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
           by: 'IDENTIFIER',
           identifier: credential.identifier,
         });
-        if (user === null || user.secret === undefined) return null;
+        if (user === null || user.secret === undefined) {
+          // Pay the KDF cost even on a miss so a valid identifier can't be
+          // distinguished from an absent one by response latency.
+          await this.__equalizeTiming(credential.password);
+          return null;
+        }
         if (!await pbkdf2Verify(credential.password, user.secret)) {
           return null;
         }
@@ -525,17 +566,26 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
         ) {
           return null;
         }
-        if (
-          !await verifyHMAC(
+        let ok = false;
+        try {
+          ok = await verifyHMAC(
             credential.payload,
             credential.signature,
             record.secret,
-          )
-        ) {
+          );
+        } catch {
+          // A malformed attacker-supplied signature (empty / non-hex) makes
+          // crypt's verifyHMAC throw — resolve to null, never a 500. Same
+          // guard the sibling verifySignature() already applies.
           return null;
         }
+        if (!ok) return null;
         return await this.__principalById(record.userId, record.grants);
       }
+      default:
+        // Unreachable for a well-typed caller; a JS caller passing an
+        // unrecognized scheme gets a clean null, never `undefined`.
+        return null;
     }
   }
 
@@ -575,8 +625,7 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
           : {}),
       });
     } catch (error) {
-      this._emit('verifyFailed', error as Error, refreshToken);
-      return null;
+      return this.__verifyFail(error as Error, refreshToken);
     }
     const sid = (claims as { sid?: unknown }).sid;
     const gen = (claims as { gen?: unknown }).gen;
@@ -591,12 +640,21 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
         refreshToken,
       );
     }
+    // The `isRevoked` denylist governs the refresh path too, not just verify()
+    // — a denylisted token must not be able to mint a fresh access pair.
+    const isRevoked = this.__hooks.isRevoked;
+    if (isRevoked !== undefined && await isRevoked(claims)) {
+      return this.__verifyFail(
+        new PactTokenError('Token has been revoked', { code: 'TOKEN_REVOKED' }),
+        refreshToken,
+      );
+    }
     const getSession = this.__hook('getSession', 'Refresh rotation');
     const saveSession = this.__hook('saveSession', 'Refresh rotation');
     const session = await getSession(sid);
     if (
       session === null || session.revokedAt !== undefined ||
-      session.expiresAt <= Date.now()
+      !this.__isLive(session.expiresAt)
     ) {
       return this.__verifyFail(
         new PactTokenError(
@@ -661,10 +719,11 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
         'deleteSession',
         `The 'OPAQUE' strategy`,
       );
-      const session = await getSession(token);
+      const key = await this.__sessionKey(token);
+      const session = await getSession(key);
       if (session === null) return;
-      await deleteSession(token);
-      this._emit('logout', session.userId, token);
+      await deleteSession(key);
+      this._emit('logout', session.userId, this.__redact(token));
       return;
     }
     if (cfg.refresh === undefined) return; // stateless — nothing to kill
@@ -700,6 +759,13 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
 
   /**
    * pbkdf2-hash via crypt → `updateUser({secret})`. Apps never hash.
+   *
+   * Does **not** invalidate existing sessions or refresh families — a
+   * password change leaves already-issued tokens live. Call
+   * {@link Pact.logoutAll} afterwards if a reset must end other sessions.
+   * Authorizing the caller (proving the actor may change *this* `userId`) is
+   * the app's responsibility — never pass a `userId` straight from request
+   * input.
    *
    * @throws {@link PactDefinitionError} (`MISSING_HOOK`) when the
    *   `updateUser` hook is not wired.
@@ -987,10 +1053,17 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
         'saveSession',
         `The 'OPAQUE' strategy`,
       );
-      const id = nanoID(32);
+      const token = nanoID(32);
       const expiresAt = now + cfg.ttl * 1_000;
-      await saveSession({ id, userId: principal.id, expiresAt });
-      return { token: id, expiresAt };
+      // Store the session under sha-256(token): the raw token is the bearer
+      // secret and is never persisted (mirrors the TOKEN scheme), so a store
+      // leak yields no usable session id.
+      await saveSession({
+        id: await this.__sessionKey(token),
+        userId: principal.id,
+        expiresAt,
+      });
+      return { token, expiresAt };
     }
     if (cfg.refresh === undefined) {
       const expiresAt = now + cfg.ttl * 1_000;
@@ -1108,7 +1181,10 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     }
     const getUser = this.__hook('getUser', `The 'password' login method`);
     const user = await getUser({ by: 'IDENTIFIER', identifier });
-    if (user === null || user.secret === undefined) return null;
+    if (user === null || user.secret === undefined) {
+      await this.__equalizeTiming(supplied);
+      return null;
+    }
     if (!await pbkdf2Verify(supplied, user.secret)) return null;
     return user;
   }
@@ -1119,31 +1195,82 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     return null;
   }
 
-  /** Emit `verifyFailed` with the typed error and resolve `null`. */
+  /**
+   * Emit `verifyFailed` with the typed error and resolve `null`. The token
+   * is REDACTED first (see {@link Pact.__redact}) so an audit listener that
+   * logs the event never records a usable credential.
+   */
   private __verifyFail(error: Error, token: string): null {
-    this._emit('verifyFailed', error, token);
+    this._emit('verifyFailed', error, this.__redact(token));
     return null;
   }
 
-  /** Stored user → runtime principal (masks deserialized, secret gone). */
-  private __toPrincipal(user: PactStoredUser): PactPrincipal {
+  /**
+   * Redact a token for events/logs: drop a JWT's signature segment (the
+   * secret part; the header/payload stay for correlation), mask an opaque
+   * bearer id entirely.
+   */
+  private __redact(token: string): string {
+    const parts = token.split('.');
+    return parts.length === 3
+      ? `${parts[0]}.${parts[1]}.<redacted>`
+      : `<redacted:${token.length}>`;
+  }
+
+  /** A store timestamp is live only when it is a finite, future epoch-ms. */
+  private __isLive(expiresAt: unknown): boolean {
+    return typeof expiresAt === 'number' && Number.isFinite(expiresAt) &&
+      expiresAt > Date.now();
+  }
+
+  /**
+   * Burn one pbkdf2 verification against a fixed dummy hash so an absent or
+   * secret-less account costs the same as a real one — closes the
+   * user-enumeration timing oracle on the password paths.
+   */
+  private async __equalizeTiming(supplied: string): Promise<void> {
+    this.__dummyHash ??= await pbkdf2Hash('pact-timing-equalizer');
+    await pbkdf2Verify(supplied, this.__dummyHash);
+  }
+
+  /** sha-256 of an opaque bearer token — the at-rest session lookup key. */
+  private __sessionKey(token: string): Promise<string> {
+    return hash(token);
+  }
+
+  /**
+   * Stored user → runtime principal, or `null` when its stored grants are
+   * corrupt (a value that violates the decimal wire contract — hex, empty, a
+   * NULL, a float — must deny, not 500 the read path).
+   */
+  private __toPrincipal(user: PactStoredUser): PactPrincipal | null {
+    let grants: PactGrants;
+    try {
+      grants = user.grants !== undefined ? deserializeGrants(user.grants) : {};
+    } catch {
+      return null;
+    }
     return {
       id: user.id,
-      grants: user.grants !== undefined ? deserializeGrants(user.grants) : {},
+      grants,
       status: user.status ?? 'ACTIVE',
       metadata: user.metadata ?? {},
     };
   }
 
-  /** Principal for an authenticated user — non-`ACTIVE` resolves `null`. */
+  /** Principal for an authenticated user — non-`ACTIVE`/corrupt → `null`. */
   private __resolvePrincipal(
     user: PactStoredUser,
     grantsOverride?: Record<string, string>,
   ): PactPrincipal | null {
     const principal = this.__toPrincipal(user);
-    if (principal.status !== 'ACTIVE') return null;
+    if (principal === null || principal.status !== 'ACTIVE') return null;
     if (grantsOverride !== undefined) {
-      principal.grants = deserializeGrants(grantsOverride);
+      try {
+        principal.grants = deserializeGrants(grantsOverride);
+      } catch {
+        return null;
+      }
     }
     return principal;
   }
