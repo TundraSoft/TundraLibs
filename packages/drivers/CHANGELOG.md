@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.3...drivers-v1.1.4) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.2...drivers-v1.1.3) (2026-08-24)
 
 
