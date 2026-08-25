@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.4...cronus-v1.0.5) (2026-08-25)
+
+
+### Documentation
+
+* **cronus:** document job & schedule APIs with runnable examples ([#588](https://github.com/TundraSoft/TundraLibs/issues/588)) ([0004ae8](https://github.com/TundraSoft/TundraLibs/commit/0004ae8dfacc51b3d5197fe7f39208110185746f))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.3...cronus-v1.0.4) (2026-08-21)
 
 
