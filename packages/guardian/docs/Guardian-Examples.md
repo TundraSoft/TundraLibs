@@ -395,7 +395,9 @@ const Inner = Guardian.string().refine(async (v) => v.length > 3, 'too short');
 
 Wrap.metaData?.isAsync; // true
 Wrap.parse({ x: 'no' }); // throws — "Use parseAsync() instead."
-await Wrap.parseAsync({ x: 'no' }); // rejects with 'too short'
+await Wrap.parseAsync({ x: 'no' });
+// rejects — 'Object validation failed with 1 error(s)', with
+// err.context.cause.x.message === 'too short'
 ```
 
 ## Set / Map at the boundary

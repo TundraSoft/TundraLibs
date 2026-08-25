@@ -236,7 +236,9 @@ const apiKey = nanoID(32, ALPHA_NUMERIC);
 
 - ⚠️ Only partially sortable (second precision)
 - ⚠️ Longer than NanoID (26 mixed-radix characters)
-- ⚠️ Random component not cryptographically strong
+- ⚠️ Traceable, not unguessable: timestamp, process ID, and counter are
+  predictable — only the short worker/machine-ID segments are CSPRNG-backed.
+  Never use it for tokens or secrets (see [ObjectID docs](./ID-ObjectID.md))
 
 **Example Use Cases:**
 

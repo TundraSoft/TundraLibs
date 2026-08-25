@@ -155,6 +155,37 @@ const valid = isInsert(query);
 - Data values are: `null`/`undefined`, a primitive (string/number/boolean/bigint), a `Date`, a valid `Expression` (object with a `$$_expression` discriminator), or a literal object payload (object without a `$$_expression` field — typical for JSON / JSONB columns)
 - Expressions (values with a `$$_expression` field) reject `@col` references on INSERT
 
+### INSERT_FROM_QUERY Query
+
+```typescript
+import {
+  assertInsertFromQuery,
+  isInsertFromQuery,
+} from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
+
+assertInsertFromQuery(query);
+const valid = isInsertFromQuery(query);
+```
+
+**Validates:**
+
+- Query type is `'INSERT_FROM_QUERY'`
+- Table and target `columns` are specified
+- `query` (the source SELECT) is required and must itself pass
+  `assertSelectQuery`
+- **`columns.length` must equal the source SELECT's `projection` key
+  count** — the match is **positional, by count, not by name**. A
+  target/source pair with the same number of entries but different
+  names still passes; a mismatched count throws
+  `Invalid INSERT_FROM_QUERY query: target 'columns' has N entries, but
+  source SELECT projection has M entries — they must match`. Order
+  `columns` to line up with the source `projection`'s key order, or the
+  insert silently writes values into the wrong target columns. See the
+  worked example in [Type System](../types/OQL-Types.md) (the
+  `INSERT_FROM_QUERY` branch).
+
 ### UPDATE Query
 
 ```typescript
@@ -208,9 +239,26 @@ const valid = isUpsert(query);
 
 - Query type is 'UPSERT'
 - Table and columns are specified
-- Data matches column list
-- Conflict keys are valid column identifiers
-- updateOnConflict columns are valid
+- `data` is a non-empty object, or a non-empty array of non-empty
+  objects; each entry's keys/values follow the same rules as INSERT
+  (literal-vs-Expression disambiguation), except `@col` references
+  inside Expressions **are** permitted (like UPDATE — an upsert's
+  UPDATE branch can reference the row being modified)
+- `conflictKeys` is a non-empty array of declared column identifiers
+- Optional `updateOnConflict`, if present, must be a **non-empty**
+  array where **every entry is disjoint from `conflictKeys`** (throws
+  `updateOnConflict should not include conflictKey '<id>'` — there's no
+  point updating the column you matched the conflict on) **and every
+  entry must name a key present in the supplied `data`** (throws
+  `updateOnConflict column '<id>' (<col>) must exist in data`). With
+  array `data`, this existence check runs against **only the first
+  row** — a later row silently missing that key is not caught here (it
+  surfaces per-dialect at translation/execution instead: on MongoDB a
+  data row missing a _conflict key_ value throws
+  `DialectUnsupportedError`, see
+  [Compatibility Matrix](../docs/Compatibility.md#upsert-semantics); on
+  the SQL dialects a missing non-conflict column just takes its
+  DEFAULT/NULL).
 
 ### COUNT Query
 
@@ -234,6 +282,12 @@ const valid = isCount(query);
 - A `having` clause is **rejected** — a COUNT has no GROUP BY and no aggregate alias to filter on. Throws `Invalid COUNT query: 'having' is not supported`. Use a `SELECT` with `aggregates` + `having` instead.
 
 ## DDL Validators
+
+Every DDL validator below rejects a query object carrying a property
+outside its known set — even where the per-type list further down
+doesn't call it out separately. This is a typo-catcher (`{ tabel: 'x' }`
+throws instead of silently doing nothing) verified against the
+`rejectExtraProps` calls in `packages/oql/asserts/query/DDL/{table,view,schema,index}.ts`.
 
 ### CREATE TABLE
 
@@ -548,6 +602,26 @@ const valid = isOperators(operators);
 - **Expressions accepted** in comparison/string operator values: any non-Date object with a `$$_expression` discriminator passes (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`).
 - `$like`/`$nlike`/etc. only valid on string-typed columns.
 - `$gt`/`$gte`/`$lt`/`$lte`/`$between` only valid on numeric/bigint/date columns.
+
+> **The two rules above are enforced only when `assertOperators` is
+> called directly with a `columnType` argument — they are NOT enforced
+> on a real query's WHERE/HAVING clause.** `assertFilterOperator` (and
+> therefore `assertQueryFilter`, and therefore `assertSelect` /
+> `assertUpdate` / … for every DML type) calls `isOperators(value)` with
+> **no `columnType` argument** — verified against the single production
+> call site in `packages/oql/asserts/filters/filterOperator.ts`. Column
+> identifiers are just strings at runtime; nothing in the assert layer
+> tracks a schema mapping column name → TS type, so there is no value it
+> could pass. In practice this means `assertSelect` will happily accept
+> `{ '@price': { $like: '%x%' } }` on a `number` column, or
+> `{ '@name': { $gt: 5 } }` on a `string` column, at runtime — only
+> TypeScript's `Operators<T>` conditional type catches that, and only
+> for a query whose `Query<QT, PT, LT>` generic is accurately typed. A
+> query assembled dynamically (built from `unknown` input, cast past the
+> type parameter, or run through `isOperators`/`assertOperators` without
+> a `columnType`) gets none of that protection. If you need this
+> checked at runtime, call `assertOperators(value, columnType)` yourself
+> per field before it reaches `assertQuery`.
 
 ### Join Details
 

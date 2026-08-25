@@ -17,7 +17,7 @@
  * ```
  *
  * **Engine is private** — callers never get the engine reference
- * back, and `secret` / `engine` / `crypto` stay OUT of the options
+ * back, and `secret` / `database` / `crypto` stay OUT of the options
  * bag so `getOptions()` can never leak them.
  *
  * **Events are metadata-only** — entity key, op, timing, plus the
@@ -64,6 +64,7 @@ import {
   type Runtime,
   type Witness,
 } from './compile.ts';
+import type { NormCacheConfig } from './cache.ts';
 import {
   type CryptoOverrides,
   type EncryptAlgorithm,
@@ -116,11 +117,9 @@ export type DatabaseConfig =
   | ({ dialect: 'turso' } & TursoEngineOptions)
   | ({ dialect: 'd1' } & D1EngineOptions);
 
-/** Constructor options. Exactly one of `engine` / `database`. */
+/** Constructor options. Norm builds its engine from a `database` config. */
 export type NormConfig = {
-  /** BYO engine (shared with other tooling). */
-  engine?: AnySQLEngine | MongoEngine;
-  /** Or let Norm construct one from a dialect config. */
+  /** The dialect config Norm constructs its engine (one pool) from. */
   database?: DatabaseConfig;
   /** Encryption secret for `.encrypt()` columns (e.g. from an env var). */
   secret?: string;
@@ -136,7 +135,7 @@ export type NormConfig = {
    * each operation an active span and driver query events nest under it:
    *
    * ```ts ignore
-   * new Norm({ engine, witness: (info, fn) =>
+   * new Norm({ database, witness: (info, fn) =>
    *   tracer.startActiveSpan(info.name, fn) });
    * ```
    *
@@ -145,6 +144,17 @@ export type NormConfig = {
    * {@link Witness} for the contract.
    */
   witness?: Witness;
+  /**
+   * Enable the read-query cache ({@link NormCacheConfig}). OFF by
+   * default; even when set, only entities that declare a per-entity
+   * `cache` TTL (minutes) are cached. Held privately (it owns cache
+   * connections, like the engine), kept OUT of the options bag.
+   *
+   * ```ts ignore
+   * new Norm({ database, cache: { engine: 'MEMORY', name: 'app' } });
+   * ```
+   */
+  cache?: NormCacheConfig;
 };
 
 /** `_on<event>` handler keys accepted inline in the constructor. */
@@ -163,7 +173,8 @@ type NormEventHandlers = {
  *
  * @example
  * ```ts ignore
- * const norm = new Norm({ engine, secret: Deno.env.get('APP_SECRET') });
+ * const norm = new Norm({ database: { dialect: 'postgres', ... },
+ *                          secret: Deno.env.get('APP_SECRET') });
  * const db = norm.use(Identity, Shortener);
  * await norm.connect();
  * ```
@@ -172,6 +183,8 @@ export class Norm extends Options<NormConfig, NormEvents> {
   private readonly __executor: Executor;
   /** See {@link NormConfig.witness}; threaded into every runtime. */
   private readonly __witness?: Witness;
+  /** See {@link NormConfig.cache}; threaded into every runtime's cache. */
+  private readonly __cacheCfg?: NormCacheConfig;
   private readonly __compileCfg: {
     secret: string | undefined;
     algorithm: EncryptAlgorithm | undefined;
@@ -183,27 +196,28 @@ export class Norm extends Options<NormConfig, NormEvents> {
    * Resolves the engine and captures the crypto configuration; no
    * connection is opened until {@link Norm.connect}.
    *
-   * @param cfg - Engine (`engine`) or a `database` dialect config to
-   *   build one, the encryption `secret` and optional `algorithm` /
-   *   `crypto` overrides, plus inline `_on<event>` handlers. The secret,
-   *   engine, and crypto callbacks are not stored in the options bag.
+   * @param cfg - A `database` dialect config to build the engine from,
+   *   the encryption `secret` and optional `algorithm` / `crypto`
+   *   overrides, plus inline `_on<event>` handlers. The secret, database
+   *   config, and crypto callbacks are not stored in the options bag.
    */
   public constructor(cfg: NormConfig & NormEventHandlers) {
     super();
-    // Sensitive / reference-critical values (secret, engine, crypto
-    // callbacks) stay OUT of the options bag: getOptions() must never
-    // leak them.
+    // Sensitive / reference-critical values (secret, database
+    // credentials, crypto callbacks) stay OUT of the options bag:
+    // getOptions() must never leak them.
     const {
-      engine: _engine,
       database: _database,
       crypto: _crypto,
       secret: _secret,
       witness: _witness,
+      cache: _cache,
       ...storable
     } = cfg;
     this._setOptions(storable as EventOptionKeys<NormConfig, NormEvents>);
     const resolved = resolveEngine(cfg);
     this.__witness = cfg.witness;
+    this.__cacheCfg = cfg.cache;
     this.__executor = resolved.executor;
     this.__forwardEngineEvents(resolved.engine);
     this.__compileCfg = {
@@ -284,6 +298,7 @@ export class Norm extends Options<NormConfig, NormEvents> {
       this.__executor,
       (event, ...args) => void this._emit(event, ...args),
       this.__witness,
+      this.__cacheCfg,
     );
     // NOT intersected with Record<string, AnyDefinition> — that would
     // collapse `keyof R` to string and repo() would accept any typo.
@@ -312,6 +327,15 @@ type TxToken = {
   /** The live driver session — nesting `transaction()` opens a savepoint
    * on it (the driver owns the savepoint lifecycle). */
   readonly session: Session;
+  /** Entity keys written during this transaction — cache pruning is
+   * DEFERRED to commit (an in-tx prune could be repopulated with
+   * soon-to-be-visible-or-rolled-back data by another connection). One
+   * set is shared across the whole tx tree, savepoints included. */
+  readonly dirty: Set<string>;
+  /** Subset of `dirty` written via `delete()`/`truncate()` — these also
+   * need CASCADE-FK-dependent pruning at commit (see
+   * `QueryCache.invalidateCascading`). */
+  readonly cascadeDirty: Set<string>;
 };
 
 /** @internal Migration-subsystem seam: NormDb instance → Runtime.
@@ -344,6 +368,11 @@ export class NormDb<R, Scope extends string = never> {
   /** The live driver session when this handle is inside a transaction —
    * nesting `transaction()` opens a savepoint on it. */
   private readonly __session: Session | undefined;
+  /** Written-entity accumulator when inside a transaction; cache prunes
+   * fire from it on commit. Undefined outside a transaction. */
+  private readonly __txDirty: Set<string> | undefined;
+  /** Cascade-dirty subset of `__txDirty` (see {@link TxToken.cascadeDirty}). */
+  private readonly __txCascadeDirty: Set<string> | undefined;
   private readonly __scope: NormScope | undefined;
   private readonly __baseExecutor: Executor;
   private readonly __repoCache = new Map<string, unknown>();
@@ -364,10 +393,14 @@ export class NormDb<R, Scope extends string = never> {
     if (tx !== undefined && tx[TX_SCOPE] === true) {
       this.__txId = tx.txId;
       this.__session = tx.session;
+      this.__txDirty = tx.dirty;
+      this.__txCascadeDirty = tx.cascadeDirty;
       this.__executor = bindTx(executor, tx.txId);
     } else {
       this.__txId = undefined;
       this.__session = undefined;
+      this.__txDirty = undefined;
+      this.__txCascadeDirty = undefined;
       this.__executor = executor;
     }
     RUNTIMES.set(this, runtime);
@@ -395,7 +428,13 @@ export class NormDb<R, Scope extends string = never> {
       this.__runtime,
       this.__rawExecutor(),
       this.__txId !== undefined && this.__session !== undefined
-        ? { [TX_SCOPE]: true, txId: this.__txId, session: this.__session }
+        ? {
+          [TX_SCOPE]: true,
+          txId: this.__txId,
+          session: this.__session,
+          dirty: this.__txDirty ?? new Set<string>(),
+          cascadeDirty: this.__txCascadeDirty ?? new Set<string>(),
+        }
         : undefined,
       next,
     );
@@ -442,9 +481,12 @@ export class NormDb<R, Scope extends string = never> {
           this.__executor,
           this.__txId,
           this.__scope,
+          this.__txDirty,
+          this.__txCascadeDirty,
         );
         break;
       case 'VIEW':
+      case 'AUDIT':
         accessor = new ReadRepo<Record<string, AnyDefinition>, string>(
           this.__runtime,
           compiled,
@@ -646,6 +688,11 @@ export class NormDb<R, Scope extends string = never> {
             [TX_SCOPE]: true,
             txId: sp.id,
             session: sp,
+            // Same dirty sets as the enclosing transaction: a savepoint's
+            // writes are pruned at the outer commit (over-pruning a
+            // rolled-back savepoint is at worst a harmless cache miss).
+            dirty: this.__txDirty ?? new Set<string>(),
+            cascadeDirty: this.__txCascadeDirty ?? new Set<string>(),
           }, this.__scope),
         )
       );
@@ -653,6 +700,13 @@ export class NormDb<R, Scope extends string = never> {
     // Outer → a REAL engine transaction, driven by the driver's callback.
     let txId: string | undefined;
     let fnThrew = false;
+    // Writes accumulate here and are pruned from the cache ONLY on a
+    // successful commit — deferring the prune past commit is what keeps
+    // a concurrent connection from repopulating stale entries mid-tx.
+    const dirty = new Set<string>();
+    // Subset of `dirty` written via delete()/truncate() — these also
+    // need CASCADE-FK-dependent pruning (see `_invalidateCache`).
+    const cascadeDirty = new Set<string>();
     try {
       const result = await this.__executor.transaction(async (session) => {
         txId = session.id;
@@ -660,7 +714,7 @@ export class NormDb<R, Scope extends string = never> {
         const scoped = new NormDb<R, Scope>(
           this.__runtime,
           this.__rawExecutor(),
-          { [TX_SCOPE]: true, txId: session.id, session },
+          { [TX_SCOPE]: true, txId: session.id, session, dirty, cascadeDirty },
           this.__scope,
         );
         try {
@@ -675,6 +729,19 @@ export class NormDb<R, Scope extends string = never> {
         }
       }, options);
       this.__runtime.emit('transactionCommit', txId!);
+      // Committed: now visible to other connections, so prune. A prune
+      // failure must not turn a committed transaction into a thrown one.
+      const cache = this.__runtime.cache;
+      if (cache !== undefined && dirty.size > 0) {
+        await Promise.all(
+          [...dirty].map((k) =>
+            cascadeDirty.has(k) ? cache.invalidateCascading(k) : cache
+              .invalidate(k)
+          ),
+        ).catch(
+          () => {},
+        );
+      }
       return result;
     } catch (err) {
       if (fnThrew && txId !== undefined) {
@@ -734,6 +801,17 @@ export class NormDb<R, Scope extends string = never> {
     return secret;
   }
 
+  // ─── Read-cache control (no-ops when no `cache` was configured) ────
+
+  /**
+   * Drop EVERY cached read across all entities of this connection. To
+   * drop one entity's cache instead, use the repo:
+   * `db.repo('Users').clearCache()`. No-op when no `cache` was configured.
+   */
+  public clearCache(): Promise<void> {
+    return this.__runtime.cache?.clearAll() ?? Promise.resolve();
+  }
+
   // ─── Engine lifecycle proxies (engine-wide, shared by handles) ─────
 
   /** Open the underlying engine's connection pool. Engine-wide — every
@@ -783,29 +861,19 @@ function wrap(engine: AnySQLEngine | MongoEngine): ResolvedEngine {
 }
 
 /**
- * Pick the executor: caller-supplied `engine`, or one built from
- * `database` by the dialect's registered factory.
+ * Build the executor from the `database` dialect config using the
+ * dialect's registered factory.
  *
- * @throws {NormError} `INVALID_ENGINE_CONFIG` when both `engine` and
- *   `database` are given, when neither is, or when `database.dialect` is
- *   not a known dialect.
+ * @throws {NormError} `INVALID_ENGINE_CONFIG` when no `database` config
+ *   is given, or when `database.dialect` is not a known dialect.
  * @throws {NormError} `ENGINE_NOT_REGISTERED` when the dialect is known
  *   but its `@tundralibs/norm/engines/<dialect>` module has not been
  *   imported.
  */
 function resolveEngine(cfg: NormConfig): ResolvedEngine {
-  if (cfg.engine !== undefined && cfg.database !== undefined) {
-    throw new NormError(
-      `new Norm({...}): pass exactly one of 'engine' or 'database', not both.`,
-      { code: 'INVALID_ENGINE_CONFIG' },
-    );
-  }
-  if (cfg.engine !== undefined) {
-    return wrap(cfg.engine);
-  }
   if (cfg.database === undefined) {
     throw new NormError(
-      `new Norm({...}): pass one of 'engine' or 'database'.`,
+      `new Norm({...}): a 'database' config is required.`,
       {
         code: 'INVALID_ENGINE_CONFIG',
       },

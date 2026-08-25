@@ -5,6 +5,8 @@ across functions, and across services. Completes the observability triad with
 [Slogger](../slogger/README.md) (logs) and [MetroMan](../metro-man/README.md)
 (metrics).
 
+[![JSR](https://jsr.io/badges/@tundralibs/tracer)](https://jsr.io/@tundralibs/tracer)
+[![JSR Score](https://jsr.io/badges/@tundralibs/tracer/score)](https://jsr.io/@tundralibs/tracer)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)

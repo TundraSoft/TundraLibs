@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.3...drivers-v1.1.4) (2026-08-25)
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.2...drivers-v1.1.3) (2026-08-24)
+
+
+### Bug Fixes
+
+* **drivers:** pin SQLite pool to a single handle; deepen engine & error docs ([#589](https://github.com/TundraSoft/TundraLibs/issues/589)) ([4fd7e34](https://github.com/TundraSoft/TundraLibs/commit/4fd7e345661c0d593cb299b7a44d3f8bf1d3b010))
+
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.1...drivers-v1.1.2) (2026-08-23)
+
+
+### Documentation
+
+* **drivers:** correct Workers/Deno Deploy socket claims in edge docs ([#542](https://github.com/TundraSoft/TundraLibs/issues/542)) ([05f27a2](https://github.com/TundraSoft/TundraLibs/commit/05f27a2d526ff376dfdd90c03bf3cff73d23e40b))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.0...drivers-v1.1.1) (2026-08-21)
 
 

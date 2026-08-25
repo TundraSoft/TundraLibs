@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import * as asserts from '@std/asserts';
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, pbkdf2Verify, Schema } from './mod.ts';
 import { Migrator } from './migrations/mod.ts';
 
@@ -22,21 +22,26 @@ const Users = Entity('users', {
 
 let dir = '';
 let migDir = '';
+let norm: Norm;
+// One Norm owns the file; each `open()` is another handle onto the same
+// engine, so beforeAll's migration + seed row are visible to every test.
 function open() {
-  return new Norm({ engine: new SQLiteEngine('pw', { path: dir }) })
-    .use(Schema('App', { Users }));
+  return norm.use(Schema('App', { Users }));
 }
 
 describe('norm.Column.password — PBKDF2 (salted) vs SHA-256 (deterministic)', () => {
   beforeAll(async () => {
     dir = await makeTempDir({ prefix: 'norm-pw-db-' });
     migDir = await makeTempDir({ prefix: 'norm-pw-mig-' });
+    norm = new Norm({ database: { dialect: 'sqlite', path: dir } });
+    await norm.connect();
     const db = open();
     await new Migrator(db, { dir: migDir }).snapshot();
     await new Migrator(db, { dir: migDir }).apply();
     await db.repo('Users').insert({ id: 1, pin: '1234', secret: 'hunter2' });
   });
   afterAll(async () => {
+    await norm.disconnect();
     await removeDir(dir, { recursive: true });
     await removeDir(migDir, { recursive: true });
   });
@@ -85,10 +90,10 @@ describe('norm.Column.password — PBKDF2 (salted) vs SHA-256 (deterministic)', 
 
     const d = await makeTempDir({ prefix: 'norm-pw-def-db-' });
     const m = await makeTempDir({ prefix: 'norm-pw-def-mig-' });
+    const accNorm = new Norm({ database: { dialect: 'sqlite', path: d } });
     try {
-      const openAcc = () =>
-        new Norm({ engine: new SQLiteEngine('pwdef', { path: d }) })
-          .use(Schema('App', { Accounts }));
+      await accNorm.connect();
+      const openAcc = () => accNorm.use(Schema('App', { Accounts }));
       await new Migrator(openAcc(), { dir: m }).snapshot();
       await new Migrator(openAcc(), { dir: m }).apply();
 
@@ -113,6 +118,7 @@ describe('norm.Column.password — PBKDF2 (salted) vs SHA-256 (deterministic)', 
       asserts.assertEquals(hit.data.length, 1);
       asserts.assertEquals(hit.data[0]!.id, 1);
     } finally {
+      await accNorm.disconnect();
       await removeDir(d, { recursive: true });
       await removeDir(m, { recursive: true });
     }

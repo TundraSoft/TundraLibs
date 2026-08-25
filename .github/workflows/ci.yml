@@ -141,13 +141,6 @@ jobs:
       # Tracer's OTLP conformance test probes this and SKIPS when unreachable,
       # so a contributor without a local collector still gets a green suite.
       OTLP_ENDPOINT: http://localhost:4318
-      # Coverage/analysis upload credentials. Job-level so the token-presence
-      # guards (`env.*_TOKEN != ''`) on the upload steps can read them — the
-      # steps self-disable until the secrets are configured, and on fork PRs
-      # (which never receive secrets). SonarQube Cloud host is fixed.
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: https://sonarcloud.io
     services:
       postgres:
         image: postgres:17
@@ -292,47 +285,126 @@ jobs:
         if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: deno eval "await import('jsr:@db/sqlite@^0.13.0');"
 
+      # Each runtime leg emits its OWN LCOV and uploads it as an artifact. The
+      # separate `analysis` job then collates all three and feeds the union to
+      # Codecov and SonarQube — it never re-runs a test. Node and Bun cover the
+      # runtime-specific code the Deno leg cannot reach (WebServer's Node path,
+      # sockets), so the merged report is the honest coverage picture.
       - name: Run tests (deno)
         if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: deno test --allow-all --parallel --coverage=./coverage packages/
 
-      # Coverage/analysis run only on the deno leg (native coverage) and only
-      # on push events — same-repo PRs are covered by their branch push run,
-      # and fork PRs lack the secrets these steps need.
-      - name: Generate LCOV report
+      - name: Generate LCOV (deno)
         if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: |
-          deno coverage ./coverage --lcov --output=coverage/report.lcov
-          # Deno emits absolute SF: paths; relativize to the repo root so
-          # Codecov maps them onto the per-package components and the Sonar
-          # scanner (which mounts the repo at a different path) resolves the
-          # files instead of importing 0% coverage.
-          sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" coverage/report.lcov
+          mkdir -p lcov
+          deno coverage ./coverage --lcov --output=lcov/deno.lcov
+          # Deno emits absolute SF: paths; relativize to the repo root so the
+          # SF: entries resolve for Codecov and the Sonar scanner. Bun and Node
+          # already emit root-relative paths when run from the repo root.
+          sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" lcov/deno.lcov
 
-      # Coverage/analysis are reporting side-channels — their results surface
-      # as their own status checks (codecov/*, the SonarQube quality gate), so
-      # an upload/scan failure (e.g. a token/project not yet provisioned, or a
-      # transient service error) must never fail the test job or block a merge.
-      - name: Upload coverage to Codecov
-        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.CODECOV_TOKEN != '' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
+      - name: Run tests (bun)
+        if: matrix.runtime == 'bun' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
+        run: |
+          mkdir -p lcov
+          bun test --coverage --coverage-reporter=lcov --coverage-dir=./lcov packages/
+          mv lcov/lcov.info lcov/bun.lcov
+
+      - name: Run tests (node)
+        if: matrix.runtime == 'node' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
+        run: |
+          # Coverage only on node-24 (identical code across node legs — one
+          # LCOV is enough); node-22 still runs the full suite for compat.
+          if [ "${{ matrix.name }}" = 'node-24' ]; then
+            mkdir -p lcov
+            node --import tsx --test --experimental-test-coverage \
+              --test-reporter=spec --test-reporter-destination=stdout \
+              --test-reporter=lcov --test-reporter-destination=lcov/node.lcov \
+              'packages/**/*.test.ts'
+          else
+            node --import tsx --test 'packages/**/*.test.ts'
+          fi
+
+      # One artifact per runtime with coverage (deno, bun, node-24). node-22
+      # runs tests but produces no LCOV, so it is skipped. Push-only — PRs are
+      # covered by their branch push run.
+      - name: Upload LCOV artifact
+        if: github.event_name == 'push' && env.IS_RELEASE_PLEASE_BRANCH != 'true' && matrix.name != 'node-22'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lcov-${{ matrix.name }}
+          path: lcov/*.lcov
+          if-no-files-found: error
+          retention-days: 1
+
+  # Collates the per-runtime LCOV artifacts and reports the UNION to Codecov
+  # and SonarQube. Runs after the test matrix (so every artifact exists) and
+  # never re-runs a test. Push-only: same-repo PRs are covered by their branch
+  # push run, and fork PRs lack the secrets.
+  analysis:
+    name: Coverage & analysis
+    needs: test
+    if: github.event_name == 'push' && !startsWith(github.ref_name, 'release-please--branches--')
+    runs-on: ubuntu-latest
+    env:
+      # Job-level so the `env.*_TOKEN != ''` guards below can read them — each
+      # reporting step self-disables until its secret is configured (and on
+      # fork PRs, which never receive secrets). SonarQube Cloud host is fixed.
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: https://sonarcloud.io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          # Full history so Sonar attributes new/changed code and blame
+          # accurately (shallow clones degrade new-code detection).
+          fetch-depth: 0
+
+      - name: Download runtime LCOV reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: lcov-*
+          path: lcov
+          merge-multiple: true
+
+      # Reporting side-channels — results surface as their own status checks
+      # (codecov/*, the SonarQube gate), so an upload/scan failure (token not
+      # provisioned, transient outage) must never fail the pipeline. One
+      # Codecov upload per runtime flag so a missing leg carries forward (see
+      # codecov.yml) instead of dropping the union.
+      - name: Upload coverage to Codecov (deno)
+        if: env.CODECOV_TOKEN != ''
         continue-on-error: true
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/report.lcov
+          files: lcov/deno.lcov
+          flags: deno
+          fail_ci_if_error: false
+      - name: Upload coverage to Codecov (bun)
+        if: env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov/bun.lcov
+          flags: bun
+          fail_ci_if_error: false
+      - name: Upload coverage to Codecov (node)
+        if: env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov/node.lcov
+          flags: node
           fail_ci_if_error: false
 
       - name: SonarQube Cloud scan
-        # Per-package components come from sonar-project.properties; coverage
-        # from the LCOV above. Reads SONAR_TOKEN / SONAR_HOST_URL from job env.
-        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.SONAR_TOKEN != '' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
+        # Coverage from all three runtime LCOVs (sonar-project.properties
+        # `reportPaths`); the scan analyses the checked-out source.
+        if: env.SONAR_TOKEN != ''
         continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
-
-      - name: Run tests (bun)
-        if: matrix.runtime == 'bun' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
-        run: bun test packages/
-
-      - name: Run tests (node)
-        if: matrix.runtime == 'node' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
-        run: node --import tsx --test 'packages/**/*.test.ts'

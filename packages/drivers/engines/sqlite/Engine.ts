@@ -88,15 +88,23 @@ function _isCacheSafeSavepoint(sql: string): boolean {
 const SQLITE_DEFAULTS: Partial<SQLiteEngineOptions> = {
   create: true,
   readonly: false,
-  // Force single-handle pool — SQLite cooperates poorly with parallel writers.
+  // Single-handle pool. This is only the *default*; because the options merge
+  // lets caller values win, a default alone can't hold the invariant, so the
+  // hard single-handle guarantee is enforced in the constructor (which clamps
+  // any caller-supplied `pool.min`/`pool.max` back to 1). SQLite cooperates
+  // poorly with parallel writers, and in `:memory:` mode a second handle would
+  // be a separate empty database.
   pool: { min: 1, max: 1 },
 };
 
 /**
  * Local-file (or `':memory:'`) SQLite engine over the runtime's native
  * bindings. The pool is pinned to a single handle — SQLite tolerates parallel
- * writers poorly — so `Capabilities.pooledConnections` is `false` even though
- * this extends the pooled {@link SQLEngine}. In directory mode each schema is
+ * writers poorly, and in `':memory:'` mode a second handle would be a separate
+ * empty database — so `Capabilities.pooledConnections` is `false` even though
+ * this extends the pooled {@link SQLEngine}. That pin is a hard invariant, not
+ * a soft default: any `pool.min`/`pool.max` a caller passes is forced back to
+ * `1` in the constructor. In directory mode each schema is
  * a separate `.db` file `ATTACH`ed under its filename.
  */
 export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
@@ -161,7 +169,19 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     name: string,
     options: EventOptionKeys<SQLiteEngineOptions, SQLEngineEvents>,
   ) {
-    super(name, options, SQLITE_DEFAULTS);
+    // Pin the pool to a single handle before the options merge. SQLite runs
+    // on one shared handle (`Capabilities.pooledConnections` is `false`; in
+    // `':memory:'` mode a second handle is a *separate empty database*). The
+    // merge lets caller values win over `SQLITE_DEFAULTS.pool`, so any
+    // caller-supplied `pool.min`/`pool.max` is forced back to `1` HERE —
+    // rather than by overriding `_processOption`, which would narrow that
+    // method's generic (`<K extends keyof SQLiteEngineOptions>`) and break
+    // `SQLiteEngine`'s structural assignability to a consumer's base engine
+    // type (e.g. norm's `AnySQLEngine`). Other pool knobs pass through.
+    const pinned = options?.pool != null && typeof options.pool === 'object'
+      ? { ...options, pool: { ...options.pool, min: 1, max: 1 } }
+      : options;
+    super(name, pinned, SQLITE_DEFAULTS);
     this._requireOptions(['path']);
   }
 

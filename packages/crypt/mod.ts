@@ -63,6 +63,7 @@ export {
   type HKDFHash,
   pbkdf2,
   PBKDF2_ITERATIONS,
+  PBKDF2_PASSWORD_ITERATIONS,
   type PBKDF2Hash,
   pbkdf2Hash,
   pbkdf2Verify,
@@ -128,6 +129,7 @@ export {
 
 export {
   // type DigestAlgorithms,
+  constantTimeEqual,
   generateHOTP,
   generateTOTP,
   verifyHOTP,
@@ -137,6 +139,7 @@ export {
 export {
   describeKey,
   type ECCurve,
+  ecdsaDerToRaw,
   type ECHashAlgorithm,
   type ECOptions,
   type HMACHashAlgorithm,
@@ -153,3 +156,14 @@ export {
   verifyHMAC,
   verifyRSA,
 } from './sign/mod.ts';
+
+export {
+  CBORError,
+  type CBORErrorMeta,
+  type CBORValue,
+  type CoseAlgorithm,
+  type CoseKeyResult,
+  coseToJwk,
+  decodeCBOR,
+  decodeCBORItem,
+} from './cbor/mod.ts';

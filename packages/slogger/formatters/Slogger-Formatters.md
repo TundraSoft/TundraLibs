@@ -12,6 +12,9 @@ Log formatters for structured and human-readable output.
 - [Formatter Types](#formatter-types)
 - [String Formatters](#string-formatters)
 - [JSON Formatter](#json-formatter)
+- [Logfmt Formatter](#logfmt-formatter)
+- [RFC 5424 Formatter](#rfc-5424-formatter)
+- [OpenTelemetry Formatter](#opentelemetry-formatter)
 - [Masking Formatter](#masking-formatter)
 - [Custom Formatters](#custom-formatters)
 - [Examples](#examples)
@@ -27,15 +30,22 @@ Formatters convert log objects into strings for output. Slogger provides multipl
 
 ## Formatter Types
 
-| Formatter  | Output Format                                         | Use Case           | Bun | Deno | Node.js |
-| ---------- | ----------------------------------------------------- | ------------------ | --- | ---- | ------- |
-| standard   | `[isoDate] [LEVEL] message`                           | General purpose    | ✅  | ✅   | ✅      |
-| detailed   | `isoDate [LEVEL] [AppName] [hostname] message`        | Development        | ✅  | ✅   | ✅      |
-| compact    | `LEVEL [HH:mm:ss] message` (UTC time)                 | Minimal output     | ✅  | ✅   | ✅      |
-| minimalist | `message`                                             | Ultra-minimal      | ✅  | ✅   | ✅      |
-| keyValue   | `level=LEVEL app=AppName message="message" key=value` | Log parsers        | ✅  | ✅   | ✅      |
-| json       | Structured JSON object                                | Machine processing | ✅  | ✅   | ✅      |
-| masking    | Wraps other formatters with data redaction            | Security           | ✅  | ✅   | ✅      |
+| Formatter  | Output Format                                         | Use Case                         | Bun | Deno | Node.js |
+| ---------- | ----------------------------------------------------- | -------------------------------- | --- | ---- | ------- |
+| standard   | `[isoDate] [LEVEL] message`                           | General purpose                  | ✅  | ✅   | ✅      |
+| detailed   | `isoDate [LEVEL] [AppName] [hostname] message`        | Development                      | ✅  | ✅   | ✅      |
+| compact    | `LEVEL [HH:mm:ss] message` (UTC time)                 | Minimal output                   | ✅  | ✅   | ✅      |
+| minimalist | `message`                                             | Ultra-minimal                    | ✅  | ✅   | ✅      |
+| keyValue   | `level=LEVEL app=AppName message="message" key=value` | Log parsers                      | ✅  | ✅   | ✅      |
+| json       | Structured JSON object                                | Machine processing               | ✅  | ✅   | ✅      |
+| prettyJson | Indented JSON (2-space)                               | Console / interactive debugging  | ✅  | ✅   | ✅      |
+| logfmt     | `key=value key2="quoted"` (logfmt)                    | Heroku Logplex, Splunk, Promtail | ✅  | ✅   | ✅      |
+| otelLog    | OpenTelemetry log-record JSON                         | OTel collectors                  | ✅  | ✅   | ✅      |
+| masking    | Wraps other formatters with data redaction            | Security                         | ✅  | ✅   | ✅      |
+
+`rfc5424Formatter` (RFC 5424 syslog wire format) is not registered by
+name — pass it directly as a `formatter` function. See
+[RFC 5424 Formatter](#rfc-5424-formatter).
 
 ## String Formatters
 
@@ -219,10 +229,28 @@ Structured JSON output for machine processing and log aggregation.
     "userId": "123",
     "ip": "192.168.1.1"
   },
-  "timestamp": 1705312200000,          // Unix timestamp (ms)
-  "isoDate": "2024-01-15T10:30:00.000Z" // ISO 8601 timestamp
+  "date": "2024-01-15T10:30:00.000Z",  // Date, serialized to ISO by the replacer
+  "isoDate": "2024-01-15T10:30:00.000Z", // ISO 8601 timestamp (same instant as `date`)
+  "timestamp": 1705312200000           // Unix timestamp (ms)
 }
 ```
+
+> `date` and `isoDate` are the same instant in two shapes — `date` is
+> the `SlogObject`'s `Date` field (JSON has no Date type, so the
+> replacer serializes it to an ISO string, same as `isoDate`);
+> `isoDate` is already a string on the record. Real field order also
+> puts `levelName` before `level` and `date`/`isoDate` after
+> `context`/`message`, not in declaration order — object key order in
+> the actual JSON follows insertion order in `Slogger.log()`, not the
+> `SlogObject` type's declaration order.
+>
+> **A raw `Error` object in `context` serializes to `{}`.**
+> `Error.prototype.message`/`.stack` are non-enumerable, and
+> `JSON.stringify` (what this formatter, `logfmtFormatter`, and
+> `otelLogFormatter` all use) only serializes own enumerable
+> properties. Extract the fields you want —
+> `{ error: error.message, stack: error.stack }` — instead of passing
+> `{ error }`.
 
 ### Usage
 
@@ -256,6 +284,183 @@ logger.info('API request', {
 - Numeric and string severity levels
 - Automatic context serialization
 - ULID for unique log identification
+
+## Logfmt Formatter
+
+Renders a record as `key=value key2="quoted value" key3=42` — the
+structured-but-human-readable line format used widely in the Go
+ecosystem (Heroku Logplex, Splunk Observability, Datadog log parsing,
+Promtail/Loki ingestion). Nested context is flattened to dot-path keys
+(`{user:{id:1}}` → `user.id=1`); arrays render as JSON literals.
+
+### Usage
+
+```typescript
+import {
+  logfmtFormatter,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
+const logger = new Slogger({
+  appName: 'api',
+  level: SyslogSeverities.INFO,
+  handlers: [{
+    name: 'console',
+    type: 'ConsoleHandler',
+    level: SyslogSeverities.INFO,
+    formatter: logfmtFormatter(), // or the registered name: 'logfmt'
+  }],
+});
+
+logger.info('user logged in', { userId: 42, ip: '10.0.0.1' });
+// Output: ts=<isoDate> level=info app=api host=<hostname> msg="user logged in" userId=42 ip=10.0.0.1
+```
+
+### Options
+
+```typescript
+interface LogfmtOptions {
+  envelopeOrder?: ReadonlyArray<
+    'ts' | 'level' | 'app' | 'host' | 'msg' | 'id' | 'context'
+  >; // default: ['ts','level','app','host','msg','context']
+  useNumericLevel?: boolean; // level=6 instead of level=info (default: false)
+  useEpochTimestamp?: boolean; // ts=<ms> instead of an ISO string (default: false)
+}
+```
+
+> **Values are quoted/escaped against logfmt injection.** A context
+> key or value containing a space, `"`, `=`, or a control byte is
+> quoted and escaped — otherwise an attacker-controlled value could
+> split the line or inject extra `k=v` pairs into what a downstream
+> parser reads as separate fields.
+
+## RFC 5424 Formatter
+
+Produces one RFC 5424 syslog frame per record:
+`<PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG`
+(`PRI = facility * 8 + severity`; absent fields are the NILVALUE `-`).
+This is what `SyslogHandler` uses internally — see
+[Handlers → Syslog Handler](../handlers/Slogger-Handlers.md#syslog-handler)
+— but it's exported standalone so any handler (file, HTTP, a raw
+`TCPHandler`, …) can emit RFC 5424-framed lines.
+
+### Usage
+
+```typescript
+import {
+  rfc5424Formatter,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+import { SyslogFacilities } from '@tundralibs/utils';
+
+const logger = new Slogger({
+  appName: 'my-app',
+  level: SyslogSeverities.INFO,
+  handlers: [{
+    name: 'console',
+    type: 'ConsoleHandler',
+    level: SyslogSeverities.INFO,
+    formatter: rfc5424Formatter({
+      facility: SyslogFacilities.LOCAL0,
+      messageId: 'API',
+    }),
+  }],
+});
+
+logger.info('user logged in');
+// Output: <134>1 <isoDate> <hostname> my-app <pid> API - user logged in
+```
+
+### Options
+
+- `facility` (`SyslogFacilities` | number) - RFC 5424 facility code
+  0-23 (default: `USER` = 1).
+- `appName`, `hostname` - override the `SlogObject`'s own fields; RFC
+  5424 caps APP-NAME at 48 and HOSTNAME at 255 printable-ASCII octets
+  (truncated, not rejected, if longer).
+- `procId` (string | number) - defaults to the current process PID
+  (or `-` where unavailable); capped at 128 octets.
+- `messageId` (string) - names the kind of message (e.g. `'AUDIT'`);
+  capped at 32 octets; NILVALUE `-` when omitted.
+- `appendContext` (`(context) => string`) - MSG is `log.message` alone
+  by default and `context` is dropped; pass a function to render
+  context into the message tail (the STRUCTURED-DATA slot itself is
+  intentionally left as NILVALUE — populating it needs a registered
+  SD-ID enterprise number, out of scope here).
+
+> **MSG is sanitised against embedded control bytes, including `\n`.**
+> Without this, a `'\n<134>1 ...'` substring in an attacker-controlled
+> message could forge a second syslog record once framed with a
+> trailing newline (the UNIX-socket default). Sanitisation is applied
+> unconditionally, so it protects every framing mode, not just the
+> vulnerable one.
+
+## OpenTelemetry Formatter
+
+Renders a record as an OpenTelemetry log-record JSON line —
+`timeUnixNano`/`severityNumber`/`severityText`/`body`/`attributes`/`resource`
+— ready for HTTP push to an OTel collector's `/v1/logs`, or any
+aggregator that consumes OTel logs as NDJSON.
+
+### Usage
+
+```typescript
+import {
+  otelLogFormatter,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
+const logger = new Slogger({
+  appName: 'orders',
+  level: SyslogSeverities.INFO,
+  handlers: [{
+    name: 'otel',
+    type: 'ConsoleHandler', // an HTTPHandler to a collector in production
+    level: SyslogSeverities.INFO,
+    formatter: otelLogFormatter({
+      resource: { 'deployment.environment': 'prod' },
+    }),
+  }],
+});
+
+logger.info('user signed in', { userId: 'u_42', plan: 'pro' });
+// Output: {"timeUnixNano":"<ms>000000","severityNumber":9,"severityText":"INFO",
+//          "body":"user signed in","attributes":{"userId":"u_42","plan":"pro"},
+//          "resource":{"service.name":"orders","host.name":"<hostname>","deployment.environment":"prod"}}
+```
+
+### Severity Mapping
+
+| Syslog        | SeverityNumber | severityText |
+| ------------- | -------------- | ------------ |
+| DEBUG (7)     | 5              | DEBUG        |
+| INFO (6)      | 9              | INFO         |
+| NOTICE (5)    | 10             | INFO2        |
+| WARNING (4)   | 13             | WARN         |
+| ERROR (3)     | 17             | ERROR        |
+| CRITICAL (2)  | 18             | ERROR2       |
+| ALERT (1)     | 21             | FATAL        |
+| EMERGENCY (0) | 22             | FATAL2       |
+
+### Options
+
+- `resource` (`Record<string, unknown>`) - extra `resource` attributes
+  merged with the auto-derived `service.name` (from `appName`) and
+  `host.name` (from `hostname`); caller-supplied keys win on collision.
+- `traceFields` (`{traceId?, spanId?, traceFlags?}` | `null`) -
+  override which `context` keys get hoisted to top-level `traceId` /
+  `spanId` / `traceFlags` fields (default:
+  `{traceId:'traceId', spanId:'spanId', traceFlags:'traceFlags'}`);
+  pass `null` to disable hoisting.
+
+For the full request/trace correlation story — wiring `contextProvider`
+
+- `ambient` + `tracer` so `traceId`/`spanId` land in `context` in the
+  first place — see
+  [Slogger-Correlation](../docs/Slogger-Correlation.md).
 
 ## Masking Formatter
 
@@ -570,7 +775,12 @@ const logger = new Slogger({
 });
 
 logger.info('Contact user@example.com for support');
-// Output: [timestamp] INFO App: Contact u***@example.com for support
+// Output: [timestamp] [INFO] Contact u**************m for support
+//
+// PARTIAL masks the WHOLE matched span (first + last character of the
+// entire "user@example.com" match, not just the local part before
+// `@`) — the strategy has no notion of email structure. standardFormat
+// has no appName in its template, so "App:" never appears either.
 ```
 
 #### Production Security Setup
@@ -643,8 +853,9 @@ interface SlogObject {
   levelName: string; // String severity
   message: string; // Log message
   context?: Record<string, unknown>; // Optional context
-  timestamp: number; // Unix timestamp (ms)
-  isoDate: string; // ISO 8601 timestamp
+  date: Date; // The record's instant, as a Date
+  timestamp: number; // Unix timestamp (ms) — same instant as `date`
+  isoDate: string; // ISO 8601 timestamp — same instant as `date`
 }
 ```
 

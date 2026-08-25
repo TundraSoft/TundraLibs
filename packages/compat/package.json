@@ -1,8 +1,22 @@
 {
   "name": "@tundralibs/compat",
-  "version": "2.5.0",
+  "version": "2.7.0",
   "type": "module",
   "description": "Compatibility layer smoothing API differences across Deno, Bun, and Node.js",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "compatibility",
+    "polyfill",
+    "runtime",
+    "fetch",
+    "filesystem",
+    "webserver",
+    "websocket"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -26,7 +40,9 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@std/path": "npm:@jsr/std__path@^1.0.0",
+    "@std/media-types": "npm:@jsr/std__media-types@^1.1.0",
+    "@std/path": "npm:@jsr/std__path@^1.1.6",
+    "@std/testing": "npm:@jsr/std__testing@^1.0.20",
     "ws": "^8.21.0"
   },
   "devDependencies": {

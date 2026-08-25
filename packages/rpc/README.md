@@ -4,19 +4,19 @@ RPC + pub/sub framework over WebSocket. `Server` + `Client` with
 id-correlated request/response, Koa-style middleware on both ends,
 channels with pluggable adapters, and a stable JSON wire protocol.
 
+[![JSR](https://jsr.io/badges/@tundralibs/rpc)](https://jsr.io/@tundralibs/rpc)
+[![JSR Score](https://jsr.io/badges/@tundralibs/rpc/score)](https://jsr.io/@tundralibs/rpc)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
 
-No Browser/Workers badge for the package as a whole: `Server` depends
-on `@tundralibs/compat/websocket`, whose Node path loads the `ws` npm
-package — a hard bundler failure for a browser/Workers target, not
-just bloat. `Client` itself has no such dependency (it talks to the
-native global `WebSocket` directly) and would be genuinely edge-safe
-on its own, but `mod.ts` re-exports `Server` and `Client` from the
-same barrel with no separate `./client` subpath, so importing
-`@tundralibs/rpc` at all currently pulls `Server` in regardless of
-which one you use.
+No Browser badge: `Server` needs a request-driven WebSocket upgrade,
+which no browser has. `Client` alone would be genuinely browser-safe
+(it talks to the native global `WebSocket` directly), but `mod.ts`
+re-exports `Server` and `Client` from the same barrel with no separate
+`./client` subpath, so importing `@tundralibs/rpc` at all pulls
+`Server` in regardless of which one you use.
 
 ## Overview
 
@@ -33,20 +33,36 @@ Built on top of [`@tundralibs/compat/websocket`](../compat/websocket/Compat-WebS
   another cross-process adapter when you need fan-out across instances.
 
 It is transport-agnostic: the same `Server` instance can be mounted
-via `server.handlers()` or run standalone via `server.listen()`.
+via `server.handlers()`, run standalone via `server.listen()`, or
+answer one upgrade at a time via `server.handleUpgrade(request)`.
 
 ## Browser / Worker compatibility
 
-`@tundralibs/rpc` is a WebSocket-oriented server package. The runtime is
-intended for Deno, Bun, and Node server environments, and the
-conformance adapter test path is intentionally excluded from the public
-barrel because it pulls in a test framework that browser and edge-worker
-bundlers cannot resolve.
+`Server` runs wherever it can get at a WebSocket upgrade. On Deno, Bun
+and Node that is a listening socket (`listen()` / `handlers()`); on
+Cloudflare Workers it is `handleUpgrade(request)` from a `fetch`
+handler — see [Cloudflare Workers](#cloudflare-workers). A browser has
+neither, so `Server` cannot run there; `Client` is what a browser uses.
 
-The supported runtime shape is a server process with real WebSocket
-lifecycle and socket state. Browser and worker bundles should use the
-package only for non-test client-side integrations, and should not rely
-on the internal test adapter or server-only path in a worker script.
+Two things do not travel to Workers, both verified on workerd rather
+than inferred:
+
+- **Cross-connection fan-out.** Each connection belongs to the I/O
+  context of the request that upgraded it, and workerd refuses I/O
+  across contexts, so `publish()` reaches only the subscriber whose
+  request is currently on the stack — every other subscriber's send
+  throws. That throw is no longer silent: the connection is still
+  `OPEN` when it happens, so it's routed to `ServerOptions.onSendError`
+  instead of being swallowed like an ordinary closed-socket send. The
+  hook only makes the drop observable — real fan-out on Workers needs a
+  Durable Object owning the sockets, which this package does not
+  provide.
+- **`backpressureThreshold`.** Workerd's `WebSocket` has no
+  `bufferedAmount`, so the hook never fires.
+
+The `./conformance` sub-path is excluded from the public barrel because
+it pulls in a test framework that browser and edge-worker bundlers
+cannot resolve — keep it in test files only.
 
 ## Modules
 
@@ -197,6 +213,14 @@ const server = new Server<Conn>({
   onBackpressure: (ws, bufferedAmount) => {
     console.warn('slow consumer', ws.data.userId, bufferedAmount);
   },
+
+  // Fires when a server-initiated send throws on a connection that is
+  // still OPEN — not the ordinary closed-mid-flight case, which stays
+  // silent. The one place this fires today: `publish()` fan-out on
+  // Cloudflare Workers (see Browser / Worker compatibility above).
+  onSendError: (ws, err) => {
+    console.error('send failed on live connection', ws.data.userId, err);
+  },
 });
 ```
 
@@ -257,6 +281,11 @@ server.channel('news', {});
 const handlers: WebSocketHandler<unknown> = server.handlers();
 console.log('mount these on WebServer.websocket:', handlers);
 
+// …or answer upgrades from a `fetch` handler — see the Cloudflare
+// Workers scenario below.
+const upgrade = (req: Request): Promise<Response> => server.handleUpgrade(req);
+console.log(typeof upgrade);
+
 // …or run standalone on an internally-managed WebServer.
 await server.listen({ port: 8080 });
 
@@ -308,6 +337,57 @@ await server.listen({ port: 8080 });
 // Later
 await server.close();
 ```
+
+### Cloudflare Workers
+
+Workers can accept a WebSocket but can never `listen()`. Build the
+`Server` once at module scope and hand each upgrade to it — commands,
+validators, middleware and channels all behave exactly as they do
+behind `listen()`.
+
+```ts
+import { Server } from '@tundralibs/rpc';
+
+const rpc = new Server();
+rpc.command('add', undefined, (ctx) => {
+  const { a, b } = ctx.payload as { a: number; b: number };
+  return a + b;
+});
+rpc.channel('news', {});
+
+export default {
+  fetch: (request: Request): Promise<Response> =>
+    rpc.handleUpgrade(request, {
+      remoteAddress: request.headers.get('CF-Connecting-IP'),
+    }),
+};
+```
+
+A request that is not an upgrade gets a `426` back, and one the
+`upgrade` hook refused gets a `403` — check `response.status` if you
+would rather answer either yourself. Read
+[Browser / Worker compatibility](#browser--worker-compatibility)
+first: `publish()` does **not** fan out across connections on Workers.
+
+The same method works inside a `Deno.serve` you already own:
+
+```ts
+import { Server } from '@tundralibs/rpc';
+
+const rpc = new Server();
+rpc.command('ping', undefined, () => 'pong');
+
+Deno.serve({ port: 8080 }, (request, info) =>
+  rpc.handleUpgrade(request, {
+    remoteAddress: info.remoteAddr.transport === 'tcp'
+      ? info.remoteAddr.hostname
+      : null,
+  }));
+```
+
+Bun and Node cannot answer an upgrade with a `Response` at all, so
+`handleUpgrade` rejects with compat's `UnsupportedRuntimeError` there —
+use `handlers()` or `listen()`, which do work.
 
 ## Client
 
@@ -966,6 +1046,46 @@ The three client-side codes above are the exception: they have no wire
 frame behind them and carry their code in the `Error`'s `message`
 only, so branch on `err.message` for those.
 
+### Local errors (thrown synchronously, never cross the wire)
+
+Everything above is a _wire_ error — something a remote peer reported
+back over the protocol. Both `Server` and `Client` also throw plain
+JS errors synchronously for local misuse, before any frame is sent.
+All four classes extend `RpcError` (itself extending
+`@tundralibs/utils`'s `BaseError`), so a single `instanceof RpcError`
+catches any of them:
+
+| Class                  | Thrown by                                                             | When                                        |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------------------- |
+| `RpcConfigError`       | `new Client(opts)`                                                    | `opts.url` is missing or not a string       |
+| `RpcRegistrationError` | `server.command(name, …)` / `server.channel(name, …)`                 | `name` is already registered                |
+| `RpcStateError`        | `server.use()` / `.command()` / `.channel()` / `.handleUpgrade()`     | called after `server.close()`               |
+| `RpcStateError`        | `client.command()` / `.subscribe()` / `.publish()`                    | called while `client.state !== 'CONNECTED'` |
+| `RpcStateError`        | any `Middleware` / `ClientSendMiddleware` / `ClientReceiveMiddleware` | its `next()` is called more than once       |
+
+```ts
+import { Client, RpcConfigError, RpcStateError, Server } from '@tundralibs/rpc';
+
+try {
+  new Client({ url: '' });
+} catch (err) {
+  console.error(err instanceof RpcConfigError, (err as Error).message);
+  // true 'Client: `url` is required and must be a string'
+}
+
+const server = new Server();
+await server.close();
+try {
+  server.command('late', undefined, () => 'never runs');
+} catch (err) {
+  console.error(err instanceof RpcStateError); // true
+}
+```
+
+These never reach a remote peer — a duplicate `command()` registration
+or a closed-server call is a bug in the process calling it, not
+something the other end of the wire could observe or recover from.
+
 ## Runtime support
 
 Pure JS on top of `@tundralibs/compat/websocket` — this package inherits whatever
@@ -974,8 +1094,25 @@ that primitive supports. Today that means:
 - **Bun**: native WebSocket
 - **Deno**: native WebSocket via `Deno.upgradeWebSocket()`
 - **Node**: WebSocket via the `ws` npm package
+- **Cloudflare Workers**: `WebSocketPair`, reached through
+  `handleUpgrade()` only
 
-`Server` itself has no runtime branches.
+`Server` itself has no runtime branches — the wire-up you pick is what
+decides where it runs:
+
+| Wire-up           | Bun | Deno | Node | Workers |
+| ----------------- | --- | ---- | ---- | ------- |
+| `listen()`        | ✅  | ✅   | ✅   | ❌      |
+| `handlers()`      | ✅  | ✅   | ✅   | ❌      |
+| `handleUpgrade()` | ❌  | ✅   | ❌   | ✅      |
+
+`listen()` and `handlers()` both need a listening socket, which Workers
+never has — `listen()` rejects there with compat's
+`UnsupportedRuntimeError`, and `handlers()` still returns handlers but
+has no `WebServer` to mount them on. `handleUpgrade()` needs an upgrade
+that answers with a `Response`, which Bun and Node do not have, so it
+rejects there with the same typed error naming the two that do work —
+never a raw `TypeError`.
 
 ## Related Documentation
 

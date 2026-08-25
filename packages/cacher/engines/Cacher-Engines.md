@@ -10,8 +10,9 @@ Built-in cache engine implementations for the Cacher package.
 
 > **Runtime note:** `MemoryCacher` is process-local and works on every
 > runtime, including Cloudflare Workers and the browser. `RedisCacher` and
-> `MemCacher` need a reachable TCP target — available on Workers via
-> `cloudflare:sockets` (under `nodejs_compat`), but not in a plain browser.
+> `MemCacher` need a reachable TCP target — on Workers that's real TCP via
+> `@tundralibs/compat/net`'s `cloudflare:sockets` backend, no `nodejs_compat`
+> flag needed, but a plain browser has no raw TCP at all.
 
 ## Overview
 
@@ -148,7 +149,12 @@ await cache.delete('user:1');
 
 ### `clear()`
 
-Removes all entries in this instance's namespace.
+Removes all entries in this instance's namespace. The mechanism is
+backend-specific — Memory and Redis delete outright (Redis via `KEYS` +
+`DEL`, not `SCAN`-based), Memcached bumps a version counter instead of
+deleting — see each engine's own doc for the tradeoffs:
+[Cacher-Redis.md#notes](redis/Cacher-Redis.md#notes),
+[Cacher-Memcached.md#notes](memcached/Cacher-Memcached.md#notes).
 
 ```typescript
 import { MemoryCacher } from '@tundralibs/cacher/engines';

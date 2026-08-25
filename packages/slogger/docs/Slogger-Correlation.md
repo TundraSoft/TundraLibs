@@ -92,7 +92,7 @@ matching `traceFields` override.
 
 `otelLogFormatter` emits each record as an OpenTelemetry log record — and it
 **hoists** `context.traceId` / `context.spanId` / `context.traceFlags` out of
-the attributes and into the log record's **first-class `TraceId` / `SpanId`
+the attributes and into the log record's **first-class `traceId` / `spanId`
 fields**:
 
 ```typescript ignore
@@ -110,7 +110,7 @@ handlers: [{
 ```
 
 First-class fields are what OTel backends key their log↔trace linking on — an
-id sitting in `attributes` is just a string, an id in `TraceId` is a **link**.
+id sitting in `attributes` is just a string, an id in `traceId` is a **link**.
 With the wiring above, logs arrive in the backend already attached to their
 traces. Severity is mapped for you (syslog 0–7 → OTel `SeverityNumber` 1–24),
 and `service.name` / `host.name` are derived from the logger's

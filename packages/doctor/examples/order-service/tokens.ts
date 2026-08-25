@@ -4,7 +4,7 @@
  * augmentation, and a test replaces them with `revoke` + `stock`.
  * @module
  */
-import { label } from '../../mod.ts';
+import { label } from '@tundralibs/doctor';
 
 export type ServiceConfig = {
   readonly currency: string;

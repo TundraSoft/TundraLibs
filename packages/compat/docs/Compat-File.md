@@ -12,16 +12,19 @@ Cross-runtime file system operations with a unified API.
 - [Installation](#installation)
 - [API Reference](#api-reference)
   - [Path Checking](#path-checking)
-  - [File Reading](#file-reading)
-  - [File Writing](#file-writing)
+  - [File Statistics](#file-statistics)
+  - [Reading Files](#reading-files)
+  - [Writing Files](#writing-files)
   - [File Handles](#file-handles)
   - [Directory Operations](#directory-operations)
-  - [File/Directory Removal](#filedirectory-removal)
+  - [Removal Operations](#removal-operations)
+  - [Copy Operations](#copy-operations)
   - [Move Operations](#move-operations)
   - [Temporary Files and Directories](#temporary-files-and-directories)
   - [URL Conversion](#url-conversion)
 - [Examples](#examples)
 - [Error Handling](#error-handling)
+- [Best Practices](#best-practices)
 
 ## Overview
 
@@ -37,17 +40,68 @@ The File module provides a unified interface for file system operations across D
 
 ### Features
 
-| Feature                | Bun | Deno | Node.js |
-| ---------------------- | --- | ---- | ------- |
-| Read files             | ✅  | ✅   | ✅      |
-| Write files            | ✅  | ✅   | ✅      |
-| Low-level file handles | ✅  | ✅   | ✅      |
-| Path checks            | ✅  | ✅   | ✅      |
-| File stats             | ✅  | ✅   | ✅      |
-| JSON operations        | ✅  | ✅   | ✅      |
-| Directory ops          | ✅  | ✅   | ✅      |
-| Directory filtering    | ✅  | ✅   | ✅      |
-| Remove files/dirs      | ✅  | ✅   | ✅      |
+| Feature                | Bun | Deno | Node.js | Workers |
+| ---------------------- | --- | ---- | ------- | ------- |
+| Read files             | ✅  | ✅   | ✅      | ✅†     |
+| Write files            | ✅  | ✅   | ✅      | ✅†     |
+| Low-level file handles | ✅  | ✅   | ✅      | ❌      |
+| Path checks            | ✅  | ✅   | ✅      | ✅†     |
+| File stats             | ✅  | ✅   | ✅      | ✅†     |
+| JSON operations        | ✅  | ✅   | ✅      | ❌      |
+| Directory ops          | ✅  | ✅   | ✅      | ❌      |
+| Directory filtering    | ✅  | ✅   | ✅      | ❌      |
+| Remove files/dirs      | ✅  | ✅   | ✅      | ✅†§    |
+| Temp file/dir creation | ✅  | ✅   | ✅      | opt-in  |
+
+†Under `/tmp` only — see
+[Cloudflare Workers](#cloudflare-workers) below.\
+§`deleteFile` / `deleteFileSync` only; `remove` and the directory
+removers still throw.
+
+### Cloudflare Workers
+
+Under `nodejs_compat`, workerd resolves `node:fs` and the path-based
+operations run on it — but **only under `/tmp`**. Every other location is
+refused by the platform itself (`operation not permitted` for a relative
+path, `no such file or directory` for `/var/...`), so the path you pass
+is the boundary and compat adds no guard of its own.
+
+Workerd's `/tmp` is in-memory and **does not survive the request that
+created it** — a file written in one request is already gone in the next.
+Stage, read back and relay within a single request; never treat it as
+storage.
+
+Available on Workers:
+
+- `readFile`, `readFileSync`, `readTextFile`, `readTextFileSync`,
+  `readFileStream`
+- `writeFile`, `writeFileSync`, `writeTextFile`, `writeTextFileSync`
+- `stat`, `statSync`, `pathExists`, `pathExistsSync`
+- `deleteFile`, `deleteFileSync`
+
+`makeTempFile`, `makeTempFileSync`, `makeTempDir` and `makeTempDirSync`
+choose the location themselves, so the ephemerality would be invisible at
+the call site. They keep throwing `UnsupportedRuntimeError` on Workers
+unless you pass `allowEphemeral: true`:
+
+```ts
+import {
+  deleteFile,
+  makeTempFile,
+  readFile,
+  writeFile,
+} from '@tundralibs/compat/file';
+
+// Stage an upload, read it back, relay it, clean up — all in one request.
+const scratch = await makeTempFile({ allowEphemeral: true, suffix: '.bin' });
+await writeFile(scratch, new Uint8Array([1, 2, 3]));
+const staged = await readFile(scratch);
+await deleteFile(scratch);
+```
+
+Everything else — directory operations, `copyFile` / `moveFile` /
+`renameFile`, `ensureFile`, `realPath`, `remove`, the JSON helpers and the
+`openFile` handle API — still throws `UnsupportedRuntimeError`.
 
 ## Installation
 
@@ -70,6 +124,16 @@ npx jsr add @tundralibs/compat
 ```
 
 ## API Reference
+
+> Every function below that takes a `path` validates it first: empty or
+> whitespace-only strings and paths containing a null byte (`\0`) throw
+> `FileInvalidPath` immediately, before touching the filesystem. Paths
+> longer than 4096 characters (260 on Windows) throw the same error.
+> **Path traversal (`../..`) and absolute paths are never blocked** — this
+> is a general-purpose primitive with no notion of an "allowed root".
+> Code that must confine access to a directory has to resolve and check
+> paths against its own root before calling in; a malicious `../../etc/passwd`
+> passed straight through from user input will be read without complaint.
 
 ### Path Checking
 
@@ -125,6 +189,35 @@ function isDirectorySync(path: string): boolean;
 ```
 
 **Aliases:** `isDir()`, `isDirSync()`
+
+#### `realPath()` / `realPathSync()`
+
+Resolves a path to its absolute, canonical form — following symlinks and
+collapsing `.`/`..` segments against the real filesystem. Unlike
+`path.resolve()` from `@tundralibs/compat/path` (string-only, no I/O and no
+symlink resolution), this one touches disk and the path must exist.
+
+```typescript ignore
+async function realPath(path: string): Promise<string>;
+function realPathSync(path: string): string;
+```
+
+**Example:**
+
+```typescript
+import { realPath } from '@tundralibs/compat/file';
+
+// Resolve a symlinked or relative path to its canonical absolute form.
+const absolute = await realPath('./src');
+console.log(absolute); // e.g. '/home/user/project/src'
+```
+
+> Reach for `realPath` when you need the canonical location on disk (e.g.
+> to compare two paths for identity, or to log where a symlink actually
+> points). Reach for `path.resolve()` instead when you just need a
+> syntactically absolute path and the target may not exist yet — `realPath`
+> throws `FileNotFound` for a missing path, `path.resolve()` never touches
+> the filesystem.
 
 ### File Statistics
 
@@ -342,6 +435,40 @@ import { writeJSONFile } from '@tundralibs/compat/file';
 const config = { port: 3000, host: 'localhost' };
 await writeJSONFile('./config.json', config, { space: 2 });
 ```
+
+#### `ensureFile()` / `ensureFileSync()`
+
+Makes sure a file exists: a no-op (content untouched) if it's already
+there, or an empty file — plus any missing parent directories — if not.
+
+```typescript ignore
+async function ensureFile(
+  path: string,
+  options?: { mode?: number },
+): Promise<void>;
+
+function ensureFileSync(
+  path: string,
+  options?: { mode?: number },
+): void;
+```
+
+**Example:**
+
+```typescript
+import { ensureFile } from '@tundralibs/compat/file';
+
+// Creates ./data/cache/ and ./data/cache/session.json if either is
+// missing; leaves an existing session.json's content untouched.
+await ensureFile('./data/cache/session.json');
+```
+
+> Unlike `writeFile(path, data, { create: true })`, `ensureFile` never
+> writes or truncates an existing file's content — it only ever creates an
+> empty one when nothing is there. Use it to guarantee a file is present
+> before opening it for append, not to reset it.
+
+**Throws:** `FileTypeMismatch` if the path exists but is a directory.
 
 ### File Handles
 
@@ -610,6 +737,43 @@ import { makeDir } from '@tundralibs/compat/file';
 await makeDir('./data/logs/2024', { recursive: true });
 ```
 
+> `makeDir` throws `FileAlreadyExists` if the directory is already there —
+> even with `recursive: true`, which only means "create missing parents",
+> not "ignore an existing target". Use `ensureDir()` below when "already
+> there" should be a no-op instead of an error.
+
+#### `ensureDir()` / `ensureDirSync()`
+
+Makes sure a directory exists: a no-op if it's already there, or creates
+it — and any missing parents — if not. This is `makeDir` with
+`recursive: true` plus a swallowed "already exists" error, so it's the
+one to reach for when you just want a directory to be present rather than
+to detect whether you created it.
+
+```typescript ignore
+async function ensureDir(
+  path: string,
+  options?: { mode?: number },
+): Promise<void>;
+
+function ensureDirSync(
+  path: string,
+  options?: { mode?: number },
+): void;
+```
+
+**Example:**
+
+```typescript
+import { ensureDir } from '@tundralibs/compat/file';
+
+// Safe to call on every startup — creates the tree once, no-ops after.
+await ensureDir('./data/logs/2024', { mode: 0o755 });
+```
+
+**Throws:** `FileTypeMismatch` if the path exists but is a file, not a
+directory.
+
 #### `readDir()` / `readDirSync()`
 
 Lists directory contents with optional filtering.
@@ -691,6 +855,27 @@ for (const entry of readDirSync('./config', { exts: ['.json', '.yaml'] })) {
 
 ### Removal Operations
 
+#### `deleteFile()` / `deleteFileSync()`
+
+Deletes a single file. Unlike `remove()` below, this refuses a directory
+target instead of recursing into it — a `FileTypeMismatch` guard against
+accidentally deleting a whole tree when you meant to delete one file.
+
+```typescript ignore
+async function deleteFile(path: string): Promise<void>;
+function deleteFileSync(path: string): void;
+```
+
+**Example:**
+
+```typescript
+import { deleteFile } from '@tundralibs/compat/file';
+
+await deleteFile('./temp.txt');
+```
+
+**Throws:** `FileTypeMismatch` if `path` is a directory.
+
 #### `remove()` / `removeSync()`
 
 Removes a file or directory.
@@ -711,6 +896,40 @@ await remove('./temp.txt');
 // Remove directory and contents (directories are always removed recursively)
 await remove('./temp-dir');
 ```
+
+#### `removeDir()` / `removeDirSync()`
+
+Removes a directory. Empty-only unless `recursive: true` — the directory
+counterpart to `deleteFile()`'s "don't recurse by accident" stance, just
+inverted: here recursion is opt-in rather than always-on the way it is in
+`remove()`.
+
+```typescript ignore
+async function removeDir(
+  path: string,
+  options?: { recursive?: boolean },
+): Promise<void>;
+
+function removeDirSync(
+  path: string,
+  options?: { recursive?: boolean },
+): void;
+```
+
+**Example:**
+
+```typescript
+import { removeDir } from '@tundralibs/compat/file';
+
+await removeDir('./empty-cache-dir');
+await removeDir('./build-output', { recursive: true });
+```
+
+> Without `recursive: true`, a non-empty directory throws — verified as
+> `ENOTEMPTY` on both Deno and Node/Bun, which isn't in the mapped-error
+> list, so it surfaces as a generic `FileOperationError`, not
+> `FileTypeMismatch` or `FileAlreadyExists`. Reach for `emptyDir()` above
+> instead when you want to clear contents but keep the directory itself.
 
 #### `emptyDir()` / `emptyDirSync()`
 
@@ -754,6 +973,239 @@ import { copyFile } from '@tundralibs/compat/file';
 
 await copyFile('./source.txt', './backup/source.txt');
 ```
+
+> `copyFile` **silently overwrites** an existing `dest` — it maps directly
+> onto `Deno.copyFile()` / `fs.promises.copyFile()`, neither of which
+> checks for an existing destination first. There is no `overwrite` option
+> at the single-file level (unlike `copyDir` below, which has one).
+
+#### `copyDir()` / `copyDirSync()`
+
+Recursively copies a directory and everything under it, creating the
+destination (and any missing parents) automatically.
+
+```typescript ignore
+async function copyDir(
+  src: string,
+  dest: string,
+  options?: { overwrite?: boolean },
+): Promise<void>;
+
+function copyDirSync(
+  src: string,
+  dest: string,
+  options?: { overwrite?: boolean },
+): void;
+```
+
+**Example:**
+
+```typescript
+import { copyDir } from '@tundralibs/compat/file';
+
+// Fails fast on the first file that already exists in dest.
+await copyDir('./templates', './build/templates');
+
+// Overwrite instead of failing.
+await copyDir('./templates', './build/templates', { overwrite: true });
+```
+
+> Unlike `copyFile`, `copyDir` defaults to **not** overwriting: with
+> `overwrite: false` (the default) it throws `FileAlreadyExists` on the
+> first pre-existing file it walks into, leaving a partial copy behind —
+> it does not roll back what it already copied. Pass `overwrite: true` to
+> copy over an existing tree, or `emptyDir(dest)` first for a clean copy.
+
+### Move Operations
+
+> **`moveFile`/`renameFile`/`moveDir`/`renameDir` silently overwrite an
+> existing destination on POSIX (Linux/macOS) — verified against source:
+> all four map straight onto `Deno.rename()` / `fs.promises.rename()`,
+> and POSIX `rename(2)` replaces an existing destination without error.
+> None of them pre-check `dest` the way `copyDir`/`move` do. If you need
+> "fail instead of clobber" semantics, check `pathExists(dest)` yourself
+> first, or use the generic `move()` below, which does that check for you.
+> (Windows `rename` semantics are not verified here — treat them as
+> unconfirmed rather than assuming POSIX behavior.)
+
+#### `moveFile()` / `moveFileSync()`
+
+Moves a file to a new path, including across directories. A thin wrapper
+over rename — see the overwrite callout above.
+
+```typescript ignore
+async function moveFile(src: string, dest: string): Promise<void>;
+function moveFileSync(src: string, dest: string): void;
+```
+
+**Example:**
+
+```typescript
+import { moveFile } from '@tundralibs/compat/file';
+
+await moveFile('./inbox/report.csv', './archive/2024/report.csv');
+```
+
+**Throws:** `FileNotFound` if `src` doesn't exist.
+
+#### `renameFile()` / `renameFileSync()`
+
+Renames a file within its current directory. `newName` is a bare file
+name, not a path — it's joined onto `dirname(filePath)` for you, so
+passing a path with its own separators produces a nested/incorrect result
+rather than an error.
+
+```typescript ignore
+async function renameFile(filePath: string, newName: string): Promise<void>;
+function renameFileSync(filePath: string, newName: string): void;
+```
+
+**Example:**
+
+```typescript
+import { renameFile } from '@tundralibs/compat/file';
+
+await renameFile('/data/reports/draft.csv', 'final.csv');
+// Result: /data/reports/final.csv
+```
+
+**Throws:** `FileNotFound` if `filePath` doesn't exist.
+
+#### `moveDir()` / `renameDir()` and their sync forms
+
+Directory counterparts of `moveFile`/`renameFile` — same rename-based
+implementation, same silent-overwrite-on-POSIX caveat above, same
+bare-name contract for `renameDir`'s second argument.
+
+```typescript ignore
+async function moveDir(src: string, dest: string): Promise<void>;
+function moveDirSync(src: string, dest: string): void;
+
+async function renameDir(dirPath: string, newName: string): Promise<void>;
+function renameDirSync(dirPath: string, newName: string): void;
+```
+
+**Example:**
+
+```typescript
+import { moveDir, renameDir } from '@tundralibs/compat/file';
+
+await moveDir('./build/staging', './releases/v2');
+await renameDir('/data/projects/old-name', 'new-name');
+// renameDir result: /data/projects/new-name
+```
+
+#### `move()` / `moveSync()`
+
+The one to reach for when you want a **safe** move: unlike the four
+functions above, `move` checks `dest` first and throws `FileAlreadyExists`
+if anything is already there — it never silently overwrites. It also
+handles moving across filesystems/devices, where a plain rename fails
+with `EXDEV`: on that specific error it transparently falls back to
+copy-then-delete (`copyFile`+`deleteFile`, or `copyDir`+`removeDir` for a
+directory `src`). Works for both files and directories — `moveFile` and
+`moveDir` are separate functions because their JSDoc/signatures target one
+kind each, but `move` inspects `src` via `stat()` and dispatches itself.
+
+```typescript ignore
+async function move(src: string, dest: string): Promise<void>;
+function moveSync(src: string, dest: string): void;
+```
+
+**Example:**
+
+```typescript
+import { move } from '@tundralibs/compat/file';
+
+// Same device: fast rename. Different device (e.g. src on a mounted
+// volume): falls back to copy+delete automatically.
+await move('/mnt/incoming/upload.bin', '/data/processed/upload.bin');
+
+// Works for directories too.
+await move('./staging-dir', './final-dir');
+```
+
+> Reach for `move()` when the destination might already exist and you
+> want that to be an error, or when `src`/`dest` might be on different
+> filesystems (e.g. `/tmp` vs. a mounted volume, or two separate Docker
+> volumes). Reach for `moveFile`/`moveDir` when you specifically want
+> rename-or-clobber semantics and both paths are guaranteed to be on the
+> same device.
+
+**Throws:** `FileNotFound` if `src` doesn't exist; `FileAlreadyExists` if
+`dest` already exists.
+
+### Temporary Files and Directories
+
+```typescript ignore
+type TempOptions = {
+  /** Directory to create the temp file/dir in. Defaults to the system temp directory. */
+  dir?: string;
+  /** Prefix for the generated name. */
+  prefix?: string;
+  /** Suffix for the generated name (e.g. an extension). */
+  suffix?: string;
+  /** Required to be `true` on Cloudflare Workers — see below. Ignored elsewhere. */
+  allowEphemeral?: boolean;
+};
+```
+
+#### `makeTempFile()` / `makeTempFileSync()`
+
+Creates a new, empty, uniquely-named file and returns its path.
+
+```typescript ignore
+async function makeTempFile(options?: TempOptions): Promise<string>;
+function makeTempFileSync(options?: TempOptions): string;
+```
+
+**Example:**
+
+```typescript
+import { makeTempFile } from '@tundralibs/compat/file';
+
+const tempFile = await makeTempFile({ prefix: 'upload-', suffix: '.tmp' });
+// e.g. '/tmp/upload-a1b2c3d4-....tmp'
+```
+
+#### `makeTempDir()` / `makeTempDirSync()`
+
+Creates a new, empty, uniquely-named directory and returns its path.
+
+```typescript ignore
+async function makeTempDir(options?: TempOptions): Promise<string>;
+function makeTempDirSync(options?: TempOptions): string;
+```
+
+**Example:**
+
+```typescript
+import { makeTempDir, removeDir } from '@tundralibs/compat/file';
+
+const workDir = await makeTempDir({ prefix: 'build-' });
+try {
+  // ... write intermediate build output into workDir ...
+} finally {
+  await removeDir(workDir, { recursive: true });
+}
+```
+
+> On Deno, `dir`/`prefix`/`suffix` pass straight through to
+> `Deno.makeTempFile`/`Deno.makeTempDir`. On Bun/Node there is no native
+> equivalent, so compat builds the name itself from `crypto.randomUUID()`
+> (collision-free and unguessable — an earlier `Date.now()+Math.random()`
+> scheme was a locally-guessable-path footgun and was replaced). Neither
+> runtime path auto-cleans the result: **you are responsible for deleting
+> what you create**, typically in a `finally` block via `deleteFile()` /
+> `removeDir({ recursive: true })`.
+>
+> On **Cloudflare Workers**, all four of these throw `UnsupportedRuntimeError`
+> unless you pass `allowEphemeral: true` — see
+> [Cloudflare Workers](#cloudflare-workers) above for why: the location is
+> workerd's in-memory `/tmp`, which does not survive the request that
+> created it, and unlike the path-based operations you never chose that
+> location yourself, so the ephemerality would otherwise be invisible at
+> the call site.
 
 ## Examples
 
@@ -1056,9 +1508,16 @@ All file operations throw specific error types:
 
 - **`FileNotFound`** - File or directory doesn't exist
 - **`FileAccessDenied`** - Permission denied
-- **`FileInvalidPath`** - Invalid path format
+- **`FileInvalidPath`** - Invalid path format: empty/whitespace, contains a
+  null byte, or longer than 4096 characters (260 on Windows). **Not**
+  thrown for path traversal (`../..`) or absolute paths — those are never
+  rejected; see the callout at the top of [API Reference](#api-reference).
 - **`FileAlreadyExists`** - File already exists
 - **`FileTypeMismatch`** - Path exists but is a different type than expected (e.g. directory where a file was expected)
+- **`FileOperationError`** - Base class every error above extends, and
+  also the catch-all for a runtime error code compat doesn't map to a more
+  specific class (e.g. `ENOTEMPTY` from `removeDir()` without `recursive`).
+  `error instanceof FileOperationError` catches all of the above at once.
 
 **Example:**
 
@@ -1116,138 +1575,6 @@ const unguardedFile = await openFile('./data.txt', {
 });
 await unguardedFile.write(data);
 unguardedFile.close(); // Might not execute
-```
-
----
-
-[← Back to Compat](../README.md)
-
-![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
-![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
-![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
-
-## Usage
-
-```typescript
-import {
-  isDirectory,
-  isDirectorySync,
-  isFile,
-  isFileSync,
-  pathExists,
-  pathExistsSync,
-  readTextFile,
-  readTextFileSync,
-  remove,
-  removeSync,
-  writeTextFile,
-  writeTextFileSync,
-} from '@tundralibs/compat/file';
-```
-
-## API
-
-### Read Operations
-
-```typescript
-import { readTextFile, readTextFileSync } from '@tundralibs/compat/file';
-
-// Async
-const content = await readTextFile('./config.json');
-
-// Sync
-const contentSync = readTextFileSync('./config.json');
-```
-
-### Write Operations
-
-```typescript
-import { writeTextFile, writeTextFileSync } from '@tundralibs/compat/file';
-
-// Async
-await writeTextFile('./output.txt', 'Hello World');
-
-// Sync
-writeTextFileSync('./output.txt', 'Hello World');
-```
-
-### Path Checking
-
-```typescript
-import {
-  isDirectory,
-  isDirectorySync,
-  isFile,
-  isFileSync,
-  pathExists,
-  pathExistsSync,
-} from '@tundralibs/compat/file';
-
-// Check if path exists
-const exists = await pathExists('./data');
-const existsSync = pathExistsSync('./data');
-
-// Check if path is a file
-const file = await isFile('./config.json');
-const fileSync = isFileSync('./config.json');
-
-// Check if path is a directory
-const dir = await isDirectory('./data');
-const dirSync = isDirectorySync('./data');
-```
-
-### Remove Operations
-
-```typescript
-import { remove, removeSync } from '@tundralibs/compat/file';
-
-// Async
-await remove('./temp.txt');
-
-// Sync
-removeSync('./temp.txt');
-```
-
-## Examples
-
-### Configuration Loading
-
-```typescript
-import { pathExists, readTextFile } from '@tundralibs/compat/file';
-
-async function loadConfig(path: string) {
-  if (!(await pathExists(path))) {
-    throw new Error(`Config not found: ${path}`);
-  }
-
-  const content = await readTextFile(path);
-  return JSON.parse(content);
-}
-```
-
-### Safe File Writing
-
-```typescript
-import {
-  isDirectory,
-  pathExists,
-  writeTextFile,
-} from '@tundralibs/compat/file';
-import * as path from '@tundralibs/compat/path';
-
-async function safeWrite(filePath: string, content: string) {
-  const dir = path.dirname(filePath);
-
-  if (!(await pathExists(dir))) {
-    throw new Error(`Directory does not exist: ${dir}`);
-  }
-
-  if (!(await isDirectory(dir))) {
-    throw new Error(`Not a directory: ${dir}`);
-  }
-
-  await writeTextFile(filePath, content);
-}
 ```
 
 ---

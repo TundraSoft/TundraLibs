@@ -60,16 +60,6 @@ router.post('/users', [async (ctx: AppCtx) => {
   ctx.response.body = { created: true, body };
 }]);
 
-const METHODS: HTTPMethod[] = [
-  'GET',
-  'POST',
-  'PUT',
-  'DELETE',
-  'PATCH',
-  'HEAD',
-  'OPTIONS',
-];
-
 // The adapter: one Oak middleware that consults RadRouter and runs
 // the matched chain. Because both signatures are `(ctx, next) =>
 // Promise<void>`, the bridge is just a chain runner.
@@ -79,7 +69,8 @@ const radHandler: AppMw = async (ctx, next) => {
   const match = router.find(method, path);
 
   if (!match) {
-    const allowed = METHODS.filter((m) => router.find(m, path));
+    // Distinguish 404 from 405 without hand-rolling a method list.
+    const allowed = router.allowedMethods(path);
     if (allowed.length) {
       ctx.response.status = 405;
       ctx.response.headers.set('Allow', allowed.join(', '));

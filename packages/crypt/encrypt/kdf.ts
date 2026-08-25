@@ -11,7 +11,13 @@
  * @module
  */
 
-/** PBKDF2 iteration count. Tracks current OWASP guidance for SHA-256. */
+/**
+ * PBKDF2 iteration count for **key derivation** (an AES key from a passphrase).
+ * Kept at 210 000: the AES envelope does not record the count, so raising it
+ * would break decryption of ciphertexts already written. Password *storage*
+ * uses the higher, digest-aware {@link PBKDF2_PASSWORD_ITERATIONS} instead —
+ * a stored password hash records its own count, so raising that is safe.
+ */
 export const PBKDF2_ITERATIONS = 210_000;
 
 /** Per-message salt length in bytes. */
@@ -74,6 +80,20 @@ const HASH_BITS: Record<PBKDF2Hash, number> = {
   'SHA-384': 384,
   'SHA-512': 512,
 };
+
+/**
+ * Default PBKDF2 iteration counts for **password storage**, per current OWASP
+ * guidance. The count is digest-aware because SHA-256 needs more rounds than
+ * the SHA-512 family for equivalent brute-force cost: SHA-256 → 600 000,
+ * SHA-384/512 → 210 000. {@link pbkdf2Hash} selects the count from the chosen
+ * digest; the stored string records it, so raising a default here never breaks
+ * verification of hashes written under an older count.
+ */
+export const PBKDF2_PASSWORD_ITERATIONS: Record<PBKDF2Hash, number> = {
+  'SHA-256': 600_000,
+  'SHA-384': 210_000,
+  'SHA-512': 210_000,
+};
 const HASH_BY_LABEL: Record<string, PBKDF2Hash> = {
   sha256: 'SHA-256',
   sha384: 'SHA-384',
@@ -135,7 +155,9 @@ export const pbkdf2 = async (
 /**
  * Hash a password with **salted** PBKDF2 for at-rest storage. Returns a
  * self-describing string — `pbkdf2-<hash>$<iterations>$<salt-hex>$<hash-hex>`
- * — that carries everything {@link pbkdf2Verify} needs.
+ * — that carries everything {@link pbkdf2Verify} needs. Iterations default to
+ * the digest-aware {@link PBKDF2_PASSWORD_ITERATIONS} (600 000 for the default
+ * SHA-256); override with `opts.iterations` / `opts.hash`.
  *
  * Unlike a bare {@link ../digest/digest.ts | digest}, the random salt makes
  * every hash of the same password unique, so the output **cannot be matched
@@ -153,8 +175,8 @@ export const pbkdf2Hash = async (
   password: string,
   opts?: { iterations?: number; hash?: PBKDF2Hash },
 ): Promise<string> => {
-  const iterations = opts?.iterations ?? PBKDF2_ITERATIONS;
   const hash = opts?.hash ?? 'SHA-256';
+  const iterations = opts?.iterations ?? PBKDF2_PASSWORD_ITERATIONS[hash];
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const derived = await pbkdf2(
     password,

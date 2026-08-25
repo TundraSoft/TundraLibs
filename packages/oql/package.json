@@ -2,6 +2,19 @@
   "name": "@tundralibs/oql",
   "version": "1.1.1",
   "description": "Object Query Language — type-safe, database-agnostic query definitions",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "query-builder",
+    "sql",
+    "mongodb",
+    "query",
+    "database-agnostic",
+    "type-safe"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": {

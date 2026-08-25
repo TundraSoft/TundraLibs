@@ -3,7 +3,7 @@
  * Resolving it with no scope (explicit or ambient) throws
  * `ScopeRequiredError`; `Doctor.discharge(scope)` drops it. @module
  */
-import { inject, Vial } from '../../mod.ts';
+import { inject, Vial } from '@tundralibs/doctor';
 import { Logger } from './Logger.ts';
 
 let next = 0;

@@ -13,6 +13,10 @@ Built-in log handlers for various output destinations.
 - [Console Handler](#console-handler)
 - [File Handler](#file-handler)
 - [HTTP Handler](#http-handler)
+- [Syslog Handler](#syslog-handler)
+- [TCP Handler](#tcp-handler)
+- [Stream Handler](#stream-handler)
+- [Memory Handler](#memory-handler)
 - [Blackhole Handler](#blackhole-handler)
 - [Custom Handlers](#custom-handlers)
 - [Handler Options](#handler-options)
@@ -29,12 +33,16 @@ Handlers control where and how logs are output. Each handler can have its own:
 
 ## Handler Types
 
-| Handler          | Description              | Use Case                | Bun | Deno | Node.js |
-| ---------------- | ------------------------ | ----------------------- | --- | ---- | ------- |
-| ConsoleHandler   | Colorized console output | Development, debugging  | ✅  | ✅   | ✅      |
-| FileHandler      | Buffered file writing    | Production logging      | ✅  | ✅   | ✅      |
-| HTTPHandler      | Batched HTTP delivery    | Remote logging services | ✅  | ✅   | ✅      |
-| BlackholeHandler | No-op handler            | Testing, benchmarking   | ✅  | ✅   | ✅      |
+| Handler          | Description                               | Use Case                                 | Bun | Deno | Node.js |
+| ---------------- | ----------------------------------------- | ---------------------------------------- | --- | ---- | ------- |
+| ConsoleHandler   | Colorized console output                  | Development, debugging                   | ✅  | ✅   | ✅      |
+| FileHandler      | Buffered file writing                     | Production logging                       | ✅  | ✅   | ✅      |
+| HTTPHandler      | Batched HTTP delivery                     | Remote logging services                  | ✅  | ✅   | ✅      |
+| SyslogHandler    | RFC 5424 over TCP, UDP, or UNIX socket    | Syslog daemons (rsyslog, journald)       | ✅  | ✅   | ✅      |
+| TCPHandler       | Line-delimited or octet-counted TCP       | Logstash, Fluentd, Vector                | ✅  | ✅   | ✅      |
+| StreamHandler    | Write to any `WritableStream`             | gzip, stdout, in-memory test sinks       | ✅  | ✅   | ✅      |
+| MemoryHandler    | In-process ring buffer of structured logs | Test assertions, dev tools, panic replay | ✅  | ✅   | ✅      |
+| BlackholeHandler | No-op handler                             | Testing, benchmarking                    | ✅  | ✅   | ✅      |
 
 ## Console Handler
 
@@ -91,13 +99,14 @@ Writes logs to files with automatic rotation and buffering.
 
 > **A successful write is not persistence.** On Cloudflare Workers only
 > `/tmp` is writable, and it is an in-memory filesystem: writes succeed,
-> read back, and report a size — then vanish when the isolate recycles.
-> (Every other path there, `./app.log` or `/var/log/app.log`, fails loudly
-> at open instead.) When the handler opens its log file it asks the
-> filesystem for its capacity, and a filesystem that reports none gets one
-> `console.error` per handler. It is a warning, not an error: a scratch
-> path may well be deliberate. If in-process buffering is what you
-> actually want, use `MemoryHandler`.
+> read back, and report a size — then vanish by the very next request
+> (workerd's own guarantee on `/tmp` is per-request, not "eventually,
+> when the isolate recycles"). (Every other path there, `./app.log` or
+> `/var/log/app.log`, fails loudly at open instead.) When the handler
+> opens its log file it asks the filesystem for its capacity, and a
+> filesystem that reports none gets one `console.error` per handler. It
+> is a warning, not an error: a scratch path may well be deliberate. If
+> in-process buffering is what you actually want, use `MemoryHandler`.
 
 ### Configuration
 
@@ -296,6 +305,309 @@ logger.info('Application event', {
   formatter: 'json'
 }
 ```
+
+## Syslog Handler
+
+Ships logs to a syslog daemon (rsyslog, syslog-ng, journald) in RFC
+5424 wire format, over TCP, UDP, or a UNIX socket. Setting `formatter`
+on this handler has no effect — the wire shape is fixed at RFC 5424;
+use `appendContext` (below) to control how `context` flows into the
+MSG body.
+
+> **No retry, no queue, no backoff.** TCP/UNIX open one persistent
+> connection on first log and re-dial on the next write after any
+> failure; UDP is fire-and-forget with no acknowledgement at all
+> (matching the classic rsyslog `*.* @host:514` config). Pair with a
+> wrapping handler if you need delivery guarantees. UDP has no
+> datagram sockets on Cloudflare Workers — use TCP there.
+
+### Configuration
+
+```typescript ignore
+{
+  name: 'syslog',
+  type: 'SyslogHandler',
+  level: SyslogSeverities.INFO,
+  transport: { type: 'tcp', host: 'logs.example.com', port: 514 },
+  // transport: { type: 'udp', host: 'logs.example.com', port: 514 },
+  // transport: { type: 'unix', path: '/dev/log' },
+  facility: SyslogFacilities.LOCAL3,   // RFC 5424 facility (default: USER)
+  appName: 'api-gateway',              // overrides SlogObject.appName in the frame
+  framing: 'octet-count',              // 'octet-count' (TCP default) | 'lf' (UNIX default)
+  appendContext: (ctx) => JSON.stringify(ctx), // fold context into MSG (default: dropped)
+}
+```
+
+### Options
+
+- `transport` (`{type:'tcp',host,port}` | `{type:'udp',host,port}` |
+  `{type:'unix',path}`) - required. TCP/UDP for a remote daemon (often
+  port 514, or 6514 with TLS); UNIX socket for the local daemon
+  (`/dev/log` on Linux, `/var/run/syslog` on macOS).
+- `facility` (`SyslogFacilities` | number) - RFC 5424 facility code
+  (0-23), encoded into PRI alongside severity (default: `USER` = 1).
+- `appName`, `hostname`, `procId`, `messageId` - override the
+  corresponding RFC 5424 header field; `procId` defaults to the
+  current PID, the rest default to the `SlogObject`'s own fields (or
+  the NILVALUE `-` for `messageId`).
+- `appendContext` (`(context) => string`) - by default MSG is just
+  `log.message` and `context` is dropped; pass a function to render
+  context into the message tail.
+- `framing` (`'octet-count'` | `'lf'`) - RFC 6587 TCP framing.
+  `'octet-count'` (default for TCP) prefixes `<byte-length>`, binary
+  safe; `'lf'` (default for UNIX) appends `\n`. Ignored for UDP (the
+  datagram boundary IS the framing).
+- `level` (SyslogSeverities) - Minimum log level.
+
+### Example
+
+```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+const logger = new Slogger({
+  appName: 'api-gateway',
+  level: SyslogSeverities.INFO,
+  handlers: [{
+    name: 'syslog',
+    type: 'SyslogHandler',
+    level: SyslogSeverities.INFO,
+    transport: { type: 'tcp', host: 'logs.example.com', port: 514 },
+    appName: 'api-gateway',
+  }],
+});
+
+logger.info('Request handled', { path: '/api/users', status: 200 });
+```
+
+### Features
+
+- RFC 5424-compliant framing (`<PRI>1 TIMESTAMP HOSTNAME APP-NAME
+  PROCID MSGID STRUCTURED-DATA MSG`), verified against strict parsers
+  (rsyslog `mmnormalize`, syslog-ng `flags(syslog-protocol)`)
+- Header fields are truncated to their RFC 5424 length caps
+  (APP-NAME 48, HOSTNAME 255, PROCID 128, MSGID 32 octets) rather than
+  rejected
+- The MSG body is sanitised against embedded control bytes (including
+  `\n`), closing a log-forging hole where attacker-controlled text
+  could otherwise inject a second forged frame under `'lf'` framing
+
+## TCP Handler
+
+Opens a persistent TCP connection and writes formatted log records to
+it — the same wire primitive as `SyslogHandler`, minus the RFC 5424
+framing opinion. Pick any formatter (JSON, logfmt, plain text —
+anything returning a string).
+
+> **No retry, no queue, no backoff.** Lazy connect on first log; a
+> write failure drops the connection so the next record re-dials.
+> Typical targets: Logstash TCP input (5044/5000), Fluentd
+> `in_forward`/`in_tcp` (24224/5170), Vector `socket` source, or any
+> generic line-delimited TCP sink.
+
+### Configuration
+
+```typescript ignore
+{
+  name: 'logstash',
+  type: 'TCPHandler',
+  level: SyslogSeverities.INFO,
+  host: 'logstash.internal',
+  port: 5044,
+  framing: 'lf',        // 'lf' (default) | 'octet-count'
+  formatter: 'json',
+}
+```
+
+### Options
+
+- `host` (string) - Remote host (DNS name or IP). Required.
+- `port` (number) - Remote port, 1-65535. Required.
+- `framing` (`'lf'` | `'octet-count'`) - `'lf'` (default) appends
+  `\n`, the line-delimited convention Logstash/Fluentd/Vector expect.
+  `'octet-count'` prefixes `<byte-length>` (RFC 6587 §3.4.1) —
+  binary-safe, pick this if records can contain newlines.
+- `level` (SyslogSeverities) - Minimum log level.
+- `formatter` (string | SloggerFormatter) - Output formatter (any
+  formatter; unlike `SyslogHandler`, nothing is fixed here).
+
+### Example
+
+```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+const logger = new Slogger({
+  appName: 'MyApp',
+  level: SyslogSeverities.INFO,
+  handlers: [{
+    name: 'logstash',
+    type: 'TCPHandler',
+    level: SyslogSeverities.INFO,
+    host: 'logstash.internal',
+    port: 5044,
+    formatter: 'json',
+  }],
+});
+
+logger.info('order placed', { orderId: 'o_1001' });
+```
+
+## Stream Handler
+
+Writes formatted log records to any web-standard `WritableStream` —
+the most primitive transport handler in the package: zero opinion
+about the destination, just plumbs strings/bytes into a stream.
+Backpressure is honoured via `writer.ready`, so a slow consumer slows
+the producer down rather than growing an unbounded in-memory queue.
+
+### Configuration
+
+```typescript ignore
+{
+  name: 'capture',
+  type: 'StreamHandler',
+  level: SyslogSeverities.INFO,
+  stream: someWritableStream,  // WritableStream<Uint8Array> by default
+  useTextMode: false,          // true for a WritableStream<string> sink
+  terminator: '\n',            // per-record separator; '' to disable
+  closeOnFinalize: true,       // false to only release the writer lock
+  formatter: 'json',
+}
+```
+
+### Options
+
+- `stream` (`WritableStream`) - The destination. Required. Byte mode
+  by default (`WritableStream<Uint8Array>` — a file, stdout, a
+  `CompressionStream`, a socket); set `useTextMode: true` for a
+  `WritableStream<string>` sink.
+- `useTextMode` (boolean) - Treat the stream as accepting `string`
+  chunks, skipping UTF-8 encoding (default: `false`).
+- `terminator` (string) - Per-record separator appended after each
+  formatted line (default: `'\n'`, NDJSON-friendly; `''` disables it).
+- `closeOnFinalize` (boolean) - `finalize()` calls `writer.close()` by
+  default; set `false` if the stream is shared with other writers and
+  this handler shouldn't own its lifecycle (only the writer lock is
+  released instead).
+- `level` (SyslogSeverities) - Minimum log level.
+- `formatter` (string | SloggerFormatter) - Output formatter.
+
+### Example: in-memory capture for tests
+
+Fully portable — no runtime-specific stream source needed:
+
+```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+const chunks: string[] = [];
+const stream = new WritableStream<string>({
+  write: (chunk) => {
+    chunks.push(chunk);
+  },
+});
+
+const logger = new Slogger({
+  appName: 'TestApp',
+  level: SyslogSeverities.INFO,
+  handlers: [{
+    name: 'capture',
+    type: 'StreamHandler',
+    level: SyslogSeverities.INFO,
+    stream,
+    useTextMode: true,
+    formatter: 'json',
+  }],
+});
+
+logger.info('captured');
+await logger.finalize();
+// chunks now holds the formatted NDJSON lines
+```
+
+### Composing with web-streams primitives
+
+```ts ignore
+// Gzipped log file (Deno)
+const file = await Deno.open('logs.gz', { write: true, create: true });
+const gzip = new CompressionStream('gzip');
+gzip.readable.pipeTo(file.writable);
+new StreamHandler('gz', {
+  level: SyslogSeverities.INFO,
+  stream: gzip.writable,
+});
+```
+
+## Memory Handler
+
+An append-only ring buffer holding the last `capacity` **structured**
+`SlogObject` records — not formatted strings — so callers can re-format
+or inspect specific fields. Zero I/O, zero policy.
+
+### Configuration
+
+```typescript ignore
+{
+  name: 'recent',
+  type: 'MemoryHandler',
+  level: SyslogSeverities.DEBUG,
+  capacity: 500, // max records retained; oldest evicted first (default: 100)
+}
+```
+
+### Options
+
+- `capacity` (number) - Maximum records retained; a positive integer
+  (default: `100`). Allocated up front, so memory use is fixed for the
+  handler's lifetime — it never grows past `capacity` records.
+- `level` (SyslogSeverities) - Minimum log level.
+
+### Methods
+
+Beyond the common handler surface, `MemoryHandler` exposes:
+
+- `getLogs(): SlogObject[]` - Snapshot the buffer, oldest-first. Returns
+  a fresh array; mutating it does not affect the underlying buffer.
+- `size: number` - Current record count (`0..capacity`).
+- `capacity: number` - The configured maximum.
+- `clear(): void` - Drop all stored records.
+
+### Example: test assertions
+
+```typescript
+import {
+  LogManager,
+  MemoryHandler,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
+const memory = LogManager.createHandler('MemoryHandler', 'recent', {
+  level: SyslogSeverities.DEBUG,
+  capacity: 50,
+}) as MemoryHandler;
+
+const logger = new Slogger({
+  appName: 'TestApp',
+  level: SyslogSeverities.DEBUG,
+});
+logger.registerHandler(memory);
+
+logger.info('user signed in', { userId: 'u_1' });
+
+const logs = memory.getLogs();
+if (logs.length !== 1 || logs[0]!.message !== 'user signed in') {
+  throw new Error('expected exactly one captured record');
+}
+```
+
+### Use Cases
+
+- **Test assertions** - register a `MemoryHandler`, exercise code,
+  then inspect the buffer for the records you expect
+- **Dev tooling / debug pages** - expose the last N logs over an admin
+  endpoint (`/admin/recent-logs`)
+- **Panic replay** - route normal traffic to disk at WARNING+; install
+  a `MemoryHandler` at DEBUG capturing the last 500 records; on
+  EMERGENCY/ALERT, flush the buffer as a postmortem dump
 
 ## Blackhole Handler
 

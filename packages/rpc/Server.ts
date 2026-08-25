@@ -9,13 +9,16 @@
  * - Channel registry with subscribe / publish / unsubscribe
  * - Pluggable {@link PubSubAdapter} for cross-process broadcast
  *
- * Two ways to use it:
+ * Three ways to use it:
  *
  * 1. **Mounted** into an existing `WebServer`: pass `server.handlers()`
  *    as the `websocket` option. Your HTTP routes and realtime layer
  *    share one server, one port, one TLS config.
  * 2. **Standalone**: call `server.listen({ port })`. The Server creates
  *    its own internal `WebServer`.
+ * 3. **Request-driven**: return `server.handleUpgrade(request)` from a
+ *    `fetch` handler. For runtimes that never listen — Cloudflare
+ *    Workers — or when you are already inside `Deno.serve`.
  *
  * The wire protocol is a JSON envelope — see {@link "./types/mod.ts"}
  * for the frame shapes and {@link "./protocol.ts"} for the codec.
@@ -81,8 +84,9 @@ type _ConnState = {
  * 1. Construct: `new Server<T>(options?)`
  * 2. Configure: `.use(middleware)`, `.command(name, schema, handler)`,
  *    `.channel(name, options)` — chainable, all return `this`.
- * 3. Wire up: either `.listen(opts)` standalone, or pass `.handlers()`
- *    to a `WebServer`'s `websocket` option.
+ * 3. Wire up: `.listen(opts)` standalone, `.handlers()` into a
+ *    `WebServer`'s `websocket` option, or `.handleUpgrade(request)`
+ *    from a `fetch` handler.
  * 4. Tear down: `await server.close()`.
  *
  * @typeParam T - Connection-state type carried on each `ws.data`. Set
@@ -358,6 +362,74 @@ export class Server<T = unknown> {
    */
   handlers(): WebSocketHandler<T> {
     return this._wss.handlers();
+  }
+
+  /**
+   * Serve one already-arrived WebSocket upgrade and hand back the
+   * response — the wire-up for runtimes that never listen. Cloudflare
+   * Workers can accept a WebSocket but can never `listen()`, and a Deno
+   * app may already be inside `Deno.serve`; both express an upgrade as
+   * "given this `Request`, return a `Response`".
+   *
+   * Delegates to the same dispatch {@link handlers} builds, so commands,
+   * middleware, channels and the {@link adapter} behave identically
+   * however the socket arrived.
+   *
+   * **Runtime support.** Workers and Deno only. Bun's `server.upgrade()`
+   * returns a boolean and needs the `Bun.serve` object, and Node upgrades
+   * a raw socket — neither can answer with a `Response`, so both reject
+   * with compat's `UnsupportedRuntimeError` naming {@link handlers} and
+   * {@link listen}, which do work there.
+   *
+   * **Fan-out does not work on Workers** (verified on workerd, not
+   * inferred). Each connection belongs to the I/O context of the request
+   * that upgraded it, and workerd refuses I/O across contexts. Serving a
+   * connection's own traffic is unaffected, but writing to a *different*
+   * one throws there: {@link publish} reaches only the subscriber whose
+   * request is on the stack, and every other subscriber is dropped. That
+   * drop is no longer silent — the connection is still `OPEN` when the
+   * throw happens, so it's routed to {@link ServerOptions.onSendError}
+   * rather than swallowed like an ordinary closed-socket send. The hook
+   * only makes the failure observable; fan-out itself still needs a
+   * Durable Object owning the sockets, which this does not provide.
+   * `backpressureThreshold` never fires either — workerd's `WebSocket`
+   * has no `bufferedAmount`.
+   *
+   * @param request - The upgrade request, straight from your handler.
+   * @param info - Peer address and port when your runtime exposes them
+   *   (Deno: `info.remoteAddr`; Workers: the `CF-Connecting-IP` header).
+   *   Reaches {@link ServerOptions.upgrade} and `ws.remoteAddress`; both
+   *   default to `null`.
+   * @returns A `101` upgrade response; a `426` when `request` is not an
+   *   upgrade; a `403` when {@link ServerOptions.upgrade} refused.
+   * @throws {@link RpcStateError} When the Server has been closed.
+   * @throws {Error} compat's `UnsupportedRuntimeError` on Bun and Node.
+   *
+   * @example Cloudflare Workers
+   * ```ts
+   * import { Server } from '@tundralibs/rpc';
+   *
+   * const rpc = new Server();
+   * rpc.command('ping', undefined, () => 'pong');
+   *
+   * export default {
+   *   fetch: (request: Request): Promise<Response> =>
+   *     rpc.handleUpgrade(request, {
+   *       remoteAddress: request.headers.get('CF-Connecting-IP'),
+   *     }),
+   * };
+   * ```
+   */
+  async handleUpgrade(
+    request: Request,
+    info?: { remoteAddress?: string | null; remotePort?: number | null },
+  ): Promise<Response> {
+    // The primitive throws a bare `Error` once closed; front-run it so a
+    // closed Server fails the same typed way `use` / `command` /
+    // `channel` do, and so the window between `_closed = true` and
+    // `_wss.close()` resolving refuses too.
+    if (this._closed) throw new RpcStateError('Server is closed');
+    return await this._wss.handleUpgrade(request, info);
   }
 
   /**
@@ -803,13 +875,19 @@ export class Server<T = unknown> {
   /**
    * Encode and send one frame, then poll back-pressure so
    * {@link ServerOptions.onBackpressure} fires for Server-originated
-   * traffic. A socket that closed mid-send is swallowed, not thrown.
+   * traffic. A socket that closed mid-send is swallowed, not thrown;
+   * one that's still `OPEN` and threw anyway is routed to
+   * {@link ServerOptions.onSendError} instead — see its doc for why
+   * that distinction matters on Workers.
    */
   protected _send(ws: ServerWebSocket<T>, frame: OutboundFrame): void {
     try {
       ws.send(encodeFrame(frame));
-    } catch {
-      // ws closed mid-flight; nothing to do.
+    } catch (err) {
+      if (ws.readyState === 1 /* OPEN */) {
+        void this._opts.onSendError?.(ws, err);
+      }
+      // Otherwise: closed/closing mid-flight; nothing to do.
       return;
     }
     // Mirror the observability that `wss.send`/`wss.broadcast` give for

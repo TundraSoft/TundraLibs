@@ -31,17 +31,31 @@ The main configuration object for creating a Slogger instance.
 ```typescript
 import type {
   HandlerConfig,
+  LogContext,
   SamplingOptions,
   SyslogSeverities,
 } from '@tundralibs/slogger';
 
 interface SloggerOptions {
-  appName: string; // Application identifier
+  appName: string; // Application identifier, max 30 chars
   level: SyslogSeverities; // Global minimum log level
-  handlers: HandlerConfig[]; // Array of handler configurations
+  handlers?: HandlerConfig[]; // Handler configurations (omit for a silent no-op logger)
   sampling?: SamplingOptions; // Optional global sampling
+  interpolateMessage?: boolean; // Resolve ${path} in the MESSAGE against context (default: false — see below)
+  contextProvider?: () => LogContext; // Per-record context merged UNDER call/scope context
 }
 ```
+
+`handlers` is optional — a `Slogger` built without it silently discards
+everything, which is occasionally useful as a test/placeholder logger
+(equivalent to a single `BlackholeHandler`, minus even the sampling
+check). `interpolateMessage` and `contextProvider` are covered in the
+README's
+[Message interpolation](../README.md#message-interpolation) and
+[Automatic context](../README.md#automatic-context-contextprovider)
+sections — not repeated here, since `interpolateMessage`'s security
+rationale is the kind of thing that drifts if maintained in two
+places.
 
 ### appName
 
@@ -141,10 +155,10 @@ import type {
 } from '@tundralibs/slogger';
 
 interface HandlerConfig {
-  name: string; // Unique handler identifier
-  type: string; // Handler type
-  level?: SyslogSeverities; // Minimum level for this handler
-  formatter?: string | SloggerFormatter; // Output formatter
+  name: string; // Unique handler identifier, max 30 chars
+  type: string; // Handler type (a name registered on LogManager)
+  level: SyslogSeverities; // Minimum level for this handler — required, no default
+  formatter?: string | SloggerFormatter; // Output formatter (default: standardFormat)
   sampling?: SamplingOptions; // Per-handler sampling
   [key: string]: unknown; // Handler-specific options
 }
@@ -155,8 +169,56 @@ interface HandlerConfig {
 - `'ConsoleHandler'` - Console output
 - `'FileHandler'` - File output
 - `'HTTPHandler'` - HTTP endpoint
+- `'SyslogHandler'` - RFC 5424 syslog over TCP/UDP/UNIX socket
+- `'TCPHandler'` - Raw line-delimited or octet-counted TCP
+- `'StreamHandler'` - Any web-standard `WritableStream`
+- `'MemoryHandler'` - In-process ring buffer of structured records
 - `'BlackholeHandler'` - No output
 - Custom types registered via `LogManager.addHandler()`
+
+Full option lists and runnable examples for every type live in
+[Handlers](../handlers/Slogger-Handlers.md) — the four newer handlers
+below (`SyslogHandler`, `TCPHandler`, `StreamHandler`, `MemoryHandler`)
+are only summarised here.
+
+```typescript ignore
+// SyslogHandler — see Slogger-Handlers.md#syslog-handler
+{
+  name: 'syslog',
+  type: 'SyslogHandler',
+  level: SyslogSeverities.INFO,
+  transport: { type: 'tcp', host: 'logs.example.com', port: 514 }, // or 'udp' | 'unix'
+  facility: SyslogFacilities.LOCAL3,   // default: USER
+}
+
+// TCPHandler — see Slogger-Handlers.md#tcp-handler
+{
+  name: 'tcp',
+  type: 'TCPHandler',
+  level: SyslogSeverities.INFO,
+  host: 'logstash.internal',
+  port: 5044,
+  framing: 'lf',                       // default: 'lf'; or 'octet-count'
+  formatter: 'json',
+}
+
+// StreamHandler — see Slogger-Handlers.md#stream-handler
+{
+  name: 'stream',
+  type: 'StreamHandler',
+  level: SyslogSeverities.INFO,
+  stream: someWritableStream,          // WritableStream<Uint8Array> by default
+  useTextMode: false,                  // true for WritableStream<string>
+}
+
+// MemoryHandler — see Slogger-Handlers.md#memory-handler
+{
+  name: 'recent',
+  type: 'MemoryHandler',
+  level: SyslogSeverities.DEBUG,
+  capacity: 500,                       // default: 100 records
+}
+```
 
 ### ConsoleHandler Options
 
@@ -165,7 +227,7 @@ interface HandlerConfig {
   name: 'console',
   type: 'ConsoleHandler',
   level: SyslogSeverities.DEBUG,
-  useColor: true,                            // Enable colored output
+  useColor: true,                            // Enable colored output (default: false)
   formatter: 'standard',
 }
 ```
@@ -202,8 +264,9 @@ interface HandlerConfig {
   type: 'HTTPHandler',
   level: SyslogSeverities.WARNING,
   url: 'https://logs.example.com/ingest',    // Endpoint URL
-  method: 'POST',                            // HTTP method (default: POST)
-  batchSize: 50,                             // Batch size (default: 10)
+  method: 'POST',                            // 'POST' | 'PUT' — required, no default
+  batchSize: 50,                             // Batch size (default: 1)
+  maxBufferSize: 10_000,                     // Queue cap, records; drop-oldest (default: 10_000)
   headers: {                                 // Custom headers
     'Authorization': 'Bearer TOKEN',
     'Content-Type': 'application/json'
@@ -211,6 +274,16 @@ interface HandlerConfig {
   formatter: 'json',
 }
 ```
+
+> `method` has no default — omitting it (or passing anything besides
+> `'POST'`/`'PUT'`) throws `SloggerConfigError` at construction.
+> `batchSize` defaults to `1` (send immediately), not a pre-batched
+> value — set it explicitly for actual batching. `maxBufferSize`
+> bounds the pending-batch-plus-retry queue so a persistently down
+> endpoint drops the oldest records instead of growing memory
+> unboundedly; see
+> [Handlers → HTTP Handler](../handlers/Slogger-Handlers.md#http-handler)
+> for the full option list.
 
 ### BlackholeHandler Options
 

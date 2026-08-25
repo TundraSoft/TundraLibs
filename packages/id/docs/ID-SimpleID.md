@@ -45,18 +45,25 @@ SimpleID generates human-readable sequential IDs that combine the current date w
 - **Automatic reset**: Counter resets daily for clean daily sequences
 - **Customizable**: Adjust counter length and precision to your needs
 
+> **Security note:** SimpleID has **no cryptographic or random component** —
+> the date is public and the counter is a small, sequential integer that's
+> trivial to guess or enumerate. Never use it for session tokens,
+> password-reset links, API keys, or anywhere the value must be hard to
+> guess — use [NanoID](./ID-NanoID.md), [ulid](./ID-ULID.md), or
+> [cuid2](./ID-CUID2.md) for those.
+
 ## Features
 
-| Feature               | Support | Description                                    |
-| --------------------- | ------- | ---------------------------------------------- |
-| Date-based            | ✅      | YYYYMMDD format for immediate date recognition |
-| Sequential Counter    | ✅      | Incrementing counter with customizable length  |
-| Daily Reset           | ✅      | Counter automatically resets at midnight       |
-| Microsecond Precision | ✅      | Optional high-precision timestamps             |
-| BigInt Output         | ✅      | Native BigInt for large numbers and precision  |
-| Zero-padded           | ✅      | Consistent length for sorting and alignment    |
-| Custom Seed           | ✅      | Start sequences at any number                  |
-| Runtime Agnostic      | ✅      | Works on Deno, Bun, and Node.js                |
+| Feature               | Support | Description                                                                                 |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| Date-based            | ✅      | YYYYMMDD format for immediate date recognition                                              |
+| Sequential Counter    | ✅      | Incrementing counter with customizable length                                               |
+| Daily Reset           | ✅      | Counter automatically resets at midnight                                                    |
+| Microsecond Precision | ✅      | Optional high-precision timestamps                                                          |
+| BigInt Output         | ✅      | Native BigInt for large numbers and precision                                               |
+| Zero-padded           | ✅      | Consistent length for sorting and alignment                                                 |
+| Custom Seed           | ✅      | Start sequences at any number                                                               |
+| Runtime Agnostic      | ✅      | Works on Deno, Bun, Node.js, Cloudflare Workers, and browsers (no runtime-specific globals) |
 
 ## Installation
 

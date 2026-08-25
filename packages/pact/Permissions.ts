@@ -1,15 +1,15 @@
 /**
- * @fileoverview The PACT bitmask permission engine.
+ * @fileoverview The pact bitmask permission engine.
  *
- * `Permissions` is the pure, storage-agnostic core of PACT's authorization.
+ * `Permissions` is the pure, storage-agnostic core of pact's authorization.
  * It holds the base permission registry (name → BigInt bit) and an optional
  * module catalog (module → applicable permissions), and evaluates a
  * principal's grants (module → mask) against required permissions using
  * BigInt bitwise math — so the permission count is unbounded (no 31-bit JS
  * `number` ceiling).
  *
- * Exported standalone for authorization-only use; the `PACT` facade composes
- * it with tokens, groups, and login.
+ * Exported standalone (`@tundralibs/pact/authz`) for authorization-only
+ * use; the `Pact` engine composes it.
  *
  * @example
  * ```ts
@@ -26,14 +26,14 @@
 
 import { PactDefinitionError, PactDeniedError } from './errors/mod.ts';
 import type {
-  PACTGrants,
-  PACTModulePermissions,
-  PACTPermissionBits,
-  PACTPermissionRef,
+  PactGrants,
+  PactModulePermissions,
+  PactPermissionBits,
+  PactPermissionRef,
 } from './types/mod.ts';
 
 /** Precomputed catalog entry for one module. */
-type ModuleEntry<P extends PACTPermissionBits> = {
+type ModuleEntry<P extends PactPermissionBits> = {
   /** Union mask of every permission applicable to the module. */
   mask: bigint;
   /** Applicable permission names, in declared order. */
@@ -41,32 +41,33 @@ type ModuleEntry<P extends PACTPermissionBits> = {
 };
 
 /**
- * BigInt bitmask permission engine. Construct with a permission registry and
- * an optional module catalog; evaluate grants with {@link Permissions.has}
- * and friends.
+ * BigInt bitmask permission engine. Construct with a permission registry
+ * and an optional module catalog; evaluate grants with
+ * {@link Permissions.has} and friends.
  *
  * @typeParam P - the permission registry type (name → bit).
  */
-export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
+export class Permissions<P extends PactPermissionBits = PactPermissionBits> {
   private readonly __bits: P;
   private readonly __modules: Map<string, ModuleEntry<P>> | undefined;
 
   /**
    * Build the engine from a permission registry and an optional module
-   * catalog. With a catalog, every check is additionally validated against the
-   * module's applicable set — an unknown module, or a permission the module
-   * does not declare, is a configuration error rather than a denial. Without
-   * one, any registered permission is checkable against any module name.
+   * catalog. With a catalog, every check is additionally validated against
+   * the module's applicable set — an unknown module, or a permission the
+   * module does not declare, is a configuration error rather than a denial.
+   * Without one, any registered permission is checkable against any module
+   * name.
    *
-   * @param bits - the permission registry (name → positive, unique BigInt bit).
-   * @param modules - optional module catalog (module → applicable permissions).
+   * @param bits - the permission registry (name → positive, unique bit).
+   * @param modules - optional module catalog (module → applicable names).
    *
    * @throws {@link PactDefinitionError} when a bit is non-positive
    *   (`INVALID_PERMISSION_BIT`), two names share a bit
-   *   (`DUPLICATE_PERMISSION_BIT`), or a module references a permission not in
-   *   the registry (`UNKNOWN_PERMISSION`).
+   *   (`DUPLICATE_PERMISSION_BIT`), or a module references a permission not
+   *   in the registry (`UNKNOWN_PERMISSION`).
    */
-  constructor(bits: P, modules?: PACTModulePermissions<P>) {
+  constructor(bits: P, modules?: PactModulePermissions<P>) {
     // Validate the registry: each bit a positive, unique BigInt.
     const seen = new Map<bigint, string>();
     for (const [name, value] of Object.entries(bits)) {
@@ -92,12 +93,12 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
       seen.set(value, name);
     }
     // Null-prototype registry so a permission name that collides with an
-    // `Object.prototype` member ('toString', 'constructor', 'hasOwnProperty',
-    // 'valueOf', '__proto__') resolves to `undefined` (→ UNKNOWN_PERMISSION)
-    // instead of an inherited function — which would otherwise slip past the
+    // `Object.prototype` member ('toString', 'constructor', '__proto__', …)
+    // resolves to `undefined` (→ UNKNOWN_PERMISSION) instead of an
+    // inherited function — which would otherwise slip past the
     // `=== undefined` guards and poison the BigInt bit math with a raw
-    // `TypeError: Cannot mix BigInt and other types`. Mirrors the null-proto
-    // accumulators the grants helpers already use. [F2]
+    // `TypeError: Cannot mix BigInt and other types`. Mirrors the
+    // null-proto accumulators the grants helpers use. [F2]
     const registry: P = Object.create(null);
     this.__bits = Object.freeze(Object.assign(registry, bits));
 
@@ -142,7 +143,7 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
    * @throws {@link PactDefinitionError} (`UNKNOWN_PERMISSION`) when
    *   `permission` is a name absent from the registry.
    */
-  resolve(permission: PACTPermissionRef<P>): bigint {
+  resolve(permission: PactPermissionRef<P>): bigint {
     if (typeof permission === 'bigint') return permission;
     const bit = this.__bits[permission];
     if (bit === undefined) {
@@ -164,34 +165,56 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
    */
   has(
     module: string,
-    permission: PACTPermissionRef<P>,
-    grants: PACTGrants,
+    permission: PactPermissionRef<P>,
+    grants: PactGrants,
   ): boolean {
     const bit = this.__requireApplicable(module, permission);
-    if (bit === 0n) return true; // vacuous — nothing required
-    // `grants` is a caller-supplied plain object; read it own-property-safe so
-    // a module named 'constructor'/'toString'/'__proto__'/… reads an actual
-    // grant (or nothing) rather than an inherited `Object.prototype` member,
-    // which would corrupt the bit math below with a `TypeError`. [F2]
+    if (bit === 0n) {
+      // A zero/empty required permission ("nothing required" — a raw `0n`
+      // ref, or a mask built from no permissions) is almost always a bug.
+      // Fail LOUD rather than silently satisfy every principal, incl. one
+      // that holds nothing.
+      throw new PactDefinitionError(
+        `Authorization check on '${module}' required no permissions ` +
+          `(a 0n/empty requirement) — this is almost always a bug`,
+        { code: 'EMPTY_REQUIREMENT', module },
+      );
+    }
+    // `grants` is a caller-supplied plain object; read it own-property-safe
+    // so a module named 'constructor'/'__proto__'/… reads an actual grant
+    // (or nothing) rather than an inherited `Object.prototype` member. [F2]
     const held = Object.hasOwn(grants, module) ? grants[module] ?? 0n : 0n;
+    if (typeof held !== 'bigint') {
+      // Grant VALUES must be BigInt masks (produced by `deserializeGrants`).
+      // A type-violating value (a string from raw JSON, say) would otherwise
+      // throw a raw `TypeError: Cannot mix BigInt and other types` from the
+      // bit math below — surface a typed error instead. [F2 for values]
+      throw new PactDefinitionError(
+        `Grant mask for module '${module}' must be a BigInt (got ${typeof held}) ` +
+          `— run stored grants through deserializeGrants first`,
+        { code: 'INVALID_GRANTS', module },
+      );
+    }
     return (held & bit) === bit;
   }
 
   /** True when `grants` include *any* of `permissions` on `module`. */
   any(
     module: string,
-    permissions: ReadonlyArray<PACTPermissionRef<P>>,
-    grants: PACTGrants,
+    permissions: ReadonlyArray<PactPermissionRef<P>>,
+    grants: PactGrants,
   ): boolean {
+    this.__requireNonEmpty(module, permissions);
     return permissions.some((p) => this.has(module, p, grants));
   }
 
   /** True when `grants` include *all* of `permissions` on `module`. */
   all(
     module: string,
-    permissions: ReadonlyArray<PACTPermissionRef<P>>,
-    grants: PACTGrants,
+    permissions: ReadonlyArray<PactPermissionRef<P>>,
+    grants: PactGrants,
   ): boolean {
+    this.__requireNonEmpty(module, permissions);
     return permissions.every((p) => this.has(module, p, grants));
   }
 
@@ -199,13 +222,13 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
    * Assert `grants` include `permission` on `module`.
    *
    * @throws {@link PactDeniedError} (`PERMISSION_DENIED`) when they do not.
-   * @throws {@link PactDefinitionError} on the catalog-validation conditions
-   *   documented on {@link Permissions.has}.
+   * @throws {@link PactDefinitionError} on the catalog-validation
+   *   conditions documented on {@link Permissions.has}.
    */
   assert(
     module: string,
-    permission: PACTPermissionRef<P>,
-    grants: PACTGrants,
+    permission: PactPermissionRef<P>,
+    grants: PactGrants,
   ): void {
     if (!this.has(module, permission, grants)) {
       throw new PactDeniedError(module, this.__label(permission));
@@ -213,12 +236,12 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
   }
 
   /** Return a new mask with `permissions` added (bitwise OR). */
-  grant(mask: bigint, ...permissions: PACTPermissionRef<P>[]): bigint {
+  grant(mask: bigint, ...permissions: PactPermissionRef<P>[]): bigint {
     return permissions.reduce<bigint>((m, p) => m | this.resolve(p), mask);
   }
 
   /** Return a new mask with `permissions` removed (bitwise AND-NOT). */
-  revoke(mask: bigint, ...permissions: PACTPermissionRef<P>[]): bigint {
+  revoke(mask: bigint, ...permissions: PactPermissionRef<P>[]): bigint {
     return permissions.reduce<bigint>((m, p) => m & ~this.resolve(p), mask);
   }
 
@@ -227,7 +250,7 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
     return { added: b & ~a, removed: a & ~b };
   }
 
-  /** Decompose a `module` mask into the applicable permission names it holds. */
+  /** Decompose a `module` mask into the applicable names it holds. */
   toNames(module: string, mask: bigint): Array<keyof P & string> {
     return this.__namesFor(module).filter((name) => {
       const bit = this.__bits[name]!;
@@ -245,10 +268,29 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
 
   // ── internals ──────────────────────────────────────────────────────
 
+  /**
+   * Reject an empty permission list on `any`/`all` — a check that lists no
+   * permissions is a bug (an empty `all` would be vacuously true, fail-open).
+   *
+   * @throws {@link PactDefinitionError} (`EMPTY_REQUIREMENT`) when empty.
+   */
+  private __requireNonEmpty(
+    module: string,
+    permissions: ReadonlyArray<PactPermissionRef<P>>,
+  ): void {
+    if (permissions.length === 0) {
+      throw new PactDefinitionError(
+        `Authorization check on '${module}' listed no permissions — an empty ` +
+          `any()/all() is almost always a bug`,
+        { code: 'EMPTY_REQUIREMENT', module },
+      );
+    }
+  }
+
   /** Resolve, and verify applicability to `module` when a catalog exists. */
   private __requireApplicable(
     module: string,
-    permission: PACTPermissionRef<P>,
+    permission: PactPermissionRef<P>,
   ): bigint {
     const bit = this.resolve(permission);
     if (this.__modules !== undefined) {
@@ -275,7 +317,7 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
     return bit;
   }
 
-  /** Applicable names for a module (catalog) or all registry names (no catalog). */
+  /** Applicable names for a module (catalog) or all names (no catalog). */
   private __namesFor(module: string): ReadonlyArray<keyof P & string> {
     if (this.__modules === undefined) {
       return Object.keys(this.__bits) as Array<keyof P & string>;
@@ -291,7 +333,7 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
   }
 
   /** Human label for a permission ref (name, or `0b…` for a raw bit). */
-  private __label(permission: PACTPermissionRef<P>): string {
+  private __label(permission: PactPermissionRef<P>): string {
     return typeof permission === 'bigint'
       ? `0b${permission.toString(2)}`
       : String(permission);

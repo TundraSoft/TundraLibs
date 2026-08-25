@@ -1,5 +1,5 @@
 /**
- * Norm facade edges: engine/database config resolution per dialect,
+ * Norm facade edges: database config resolution per dialect,
  * lifecycle proxies, transaction capability + commit/rollback failure
  * paths, and crypto helpers without a secret.
  */
@@ -11,6 +11,13 @@ import type {
   EngineQueryResult,
   EngineTransactionOptions,
 } from '@tundralibs/drivers';
+// The barrel no longer eagerly registers `sqlite` (it is the one dialect
+// with a native binding on every runtime, so it stays out of the
+// bundle-safe default set — see `mod.ts`). This suite exercises it for
+// real (connect/query/disconnect), which no other dialect can do without
+// a live external database, so it registers it explicitly like any other
+// consumer would.
+import '@tundralibs/norm/engines/sqlite';
 import {
   Column,
   compileRuntime,
@@ -138,15 +145,11 @@ describe('norm.Norm (config + lifecycle + tx edges)', () => {
     await removeDir(dir, { recursive: true });
   });
 
-  it('rejects engine AND database together, and unknown dialects', () => {
+  it('requires a database config, and rejects unknown dialects', () => {
     asserts.assertThrows(
-      () =>
-        new Norm({
-          engine: {} as never,
-          database: { dialect: 'sqlite', path: dir },
-        }),
+      () => new Norm({}),
       Error,
-      "exactly one of 'engine' or 'database'",
+      "a 'database' config is required",
     );
     asserts.assertThrows(
       () =>

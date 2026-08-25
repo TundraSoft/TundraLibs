@@ -130,6 +130,23 @@ export type BenchOptions = {
    * still repeats batches until the budget, so percentiles remain.
    */
   n?: number;
+  /**
+   * Measure STEADY-STATE THROUGHPUT instead of per-iteration latency:
+   * keep `concurrency` invocations in flight at once (each worker awaits
+   * its `fn` and immediately starts the next), count completions over
+   * the budget window, and report **operations/second** as the headline
+   * plus the per-op latency-under-load percentiles. This is the right
+   * model for a server / I/O op, where cost only appears under
+   * concurrency (a sequential latency bench under-represents it).
+   *
+   * Default `1` (or unset) keeps the sequential latency behavior
+   * unchanged. Each worker gets its OWN {@link BenchContext}, so
+   * `b.start()`/`b.end()` sectioning still works per op. Async only in
+   * spirit — a sync `fn` is simply run back-to-back per worker. Because
+   * a stable throughput read needs a longer window, `warmupMs`/`budgetMs`
+   * default higher when this is set (override to tune).
+   */
+  concurrency?: number;
 };
 
 /** One bench's measured statistics (all times in nanoseconds). */
@@ -137,6 +154,19 @@ export type BenchStats = {
   name: string;
   group?: string;
   baseline: boolean;
+  /**
+   * Concurrent invocations kept in flight (`1` = sequential latency
+   * bench). When `> 1`, {@link opsPerSec} is the headline and the
+   * latency stats are per-op UNDER LOAD.
+   */
+  concurrency: number;
+  /**
+   * Throughput — operations/second. For a sequential bench this equals
+   * {@link itersPerSec} (`1 / avgNs`); for a concurrent one it is the
+   * measured steady-state completion rate (higher than `1 / latency`,
+   * because {@link concurrency} run at once).
+   */
+  opsPerSec: number;
   /** Weighted mean: total measured time / total iterations. */
   avgNs: number;
   itersPerSec: number;
@@ -184,12 +214,21 @@ type Registered = {
   warmupMs: number;
   budgetMs: number;
   n?: number;
+  concurrency: number;
 };
 
 /** Warmup duration when the bench doesn't override it. */
 const DEFAULT_WARMUP_MS = 100;
 /** Sampling budget when the bench doesn't override it. */
 const DEFAULT_BUDGET_MS = 500;
+/** Warmup default for a concurrency bench (a server needs longer to settle). */
+const DEFAULT_CONC_WARMUP_MS = 300;
+/** Sampling budget default for a concurrency bench (throughput needs a window). */
+const DEFAULT_CONC_BUDGET_MS = 2000;
+/** A concurrency measurement window aims for ~this many samples across the budget. */
+const CONC_TARGET_SAMPLES = 10;
+/** Cap on retained per-op latencies (throughput can produce millions). */
+const CONC_LATENCY_CAP = 20000;
 /** A measured batch must span at least this long to out-noise the timer. */
 const MIN_BATCH_MS = 2;
 /** Sampling stops early after this many batch samples. */
@@ -295,14 +334,21 @@ export function bench(
     throw new TypeError(`bench('${name}') requires a function`);
   }
   if (!enabled(options) || options.ignore === true) return;
+  const concurrency = Math.max(1, Math.floor(options.concurrency ?? 1));
+  const concurrent = concurrency > 1;
   registry.push({
     name,
     fn,
     group: options.group,
     baseline: options.baseline === true,
     only: options.only === true,
-    warmupMs: options.warmupMs ?? DEFAULT_WARMUP_MS,
-    budgetMs: options.budgetMs ?? DEFAULT_BUDGET_MS,
+    // Concurrency benches default to a longer warmup/budget — a stable
+    // throughput read needs a window; a per-op latency bench does not.
+    warmupMs: options.warmupMs ??
+      (concurrent ? DEFAULT_CONC_WARMUP_MS : DEFAULT_WARMUP_MS),
+    budgetMs: options.budgetMs ??
+      (concurrent ? DEFAULT_CONC_BUDGET_MS : DEFAULT_BUDGET_MS),
+    concurrency,
     ...(options.n !== undefined ? { n: options.n } : {}),
   });
   // First registration arms the auto-run; it fires once module
@@ -463,8 +509,104 @@ const hintGC = (): void => {
   }
 };
 
+/**
+ * Measure STEADY-STATE THROUGHPUT: keep `entry.concurrency` invocations
+ * in flight, count completions over the budget window, and report ops/s
+ * plus latency-under-load percentiles. Each worker owns its context so
+ * `b.start()`/`b.end()` sectioning stays correct (a worker runs one op to
+ * completion before its next).
+ */
+const measureConcurrent = async (entry: Registered): Promise<BenchStats> => {
+  const { fn } = entry;
+  const smoke = smokeMode();
+  const warmupMs = smoke ? 1 : entry.warmupMs;
+  const budgetMs = smoke ? 20 : entry.budgetMs;
+  const C = entry.concurrency;
+  const workers = Array.from({ length: C }, () => makeContext(entry.name));
+
+  // One op on a worker: measure the sectioned span if the fn used
+  // b.start()/b.end(), else the whole call. Returns milliseconds.
+  const runOp = async (w: { ctx: BenchContext; state: SpanState }) => {
+    w.state.startAt = -1;
+    w.state.endAt = -1;
+    const t0 = performance.now();
+    sink = await fn(w.ctx);
+    const now = performance.now();
+    return w.state.startAt === -1
+      ? now - t0
+      : (w.state.endAt !== -1 ? w.state.endAt : now) - w.state.startAt;
+  };
+
+  // Warmup: all workers run flat out for warmupMs.
+  const warmEnd = performance.now() + warmupMs;
+  await Promise.all(
+    workers.map(async (w) => {
+      while (performance.now() < warmEnd) await runOp(w);
+    }),
+  );
+
+  const windowMs = Math.max(MIN_BATCH_MS, budgetMs / CONC_TARGET_SAMPLES);
+  const latMs: number[] = [];
+  const perWindowOps: number[] = [];
+  let totalOps = 0;
+  let totalWallMs = 0;
+  while (
+    perWindowOps.length < MIN_SAMPLES ||
+    (totalWallMs < budgetMs && perWindowOps.length < MAX_SAMPLES)
+  ) {
+    hintGC();
+    let ops = 0;
+    const wStart = performance.now();
+    const wEnd = wStart + windowMs;
+    await Promise.all(
+      workers.map(async (w) => {
+        while (performance.now() < wEnd) {
+          const ms = await runOp(w);
+          ops++;
+          // Stride-cap retained latencies so throughput can't OOM the array.
+          if (latMs.length < CONC_LATENCY_CAP) latMs.push(ms);
+        }
+      }),
+    );
+    const wall = performance.now() - wStart;
+    perWindowOps.push(ops);
+    totalOps += ops;
+    totalWallMs += wall;
+  }
+
+  (globalThis as Record<string, unknown>).__compatBenchSink = sink;
+  const toNs = (ms: number): number => ms * 1e6;
+  latMs.sort((a, b) => a - b);
+  const opsPerSec = totalWallMs > 0 ? totalOps / (totalWallMs / 1000) : 0;
+  const avgMs = latMs.length > 0
+    ? latMs.reduce((s, v) => s + v, 0) / latMs.length
+    : 0;
+  const p50 = _percentile(latMs, 50);
+  const deviations = latMs.map((s) => Math.abs(s - p50)).sort((a, b) => a - b);
+  return {
+    name: entry.name,
+    ...(entry.group !== undefined ? { group: entry.group } : {}),
+    baseline: entry.baseline,
+    concurrency: C,
+    opsPerSec,
+    avgNs: toNs(avgMs),
+    // The throughput column shows real ops/s (not 1/latency) for a
+    // concurrency bench.
+    itersPerSec: opsPerSec,
+    minNs: toNs(latMs[0] ?? 0),
+    maxNs: toNs(latMs[latMs.length - 1] ?? 0),
+    p50Ns: toNs(p50),
+    p75Ns: toNs(_percentile(latMs, 75)),
+    p99Ns: toNs(_percentile(latMs, 99)),
+    madNs: toNs(_percentile(deviations, 50)),
+    samples: perWindowOps.length,
+    iters: totalOps,
+  };
+};
+
 /** Measure one registered bench. */
 const measure = async (entry: Registered): Promise<BenchStats> => {
+  if (entry.concurrency > 1) return measureConcurrent(entry);
   const { fn } = entry;
   const smoke = smokeMode();
   const warmupMs = smoke ? 1 : entry.warmupMs;
@@ -561,6 +703,8 @@ const measure = async (entry: Registered): Promise<BenchStats> => {
     name: entry.name,
     ...(entry.group !== undefined ? { group: entry.group } : {}),
     baseline: entry.baseline,
+    concurrency: 1,
+    opsPerSec: avgNs > 0 ? 1e9 / avgNs : 0,
     avgNs,
     itersPerSec: avgNs > 0 ? 1e9 / avgNs : 0,
     minNs: toNs(samples[0]!),
@@ -589,17 +733,20 @@ const fmtIters = (n: number): string => {
 /** Print the human-readable report. */
 const printReport = (report: BenchReport): void => {
   const rows = report.benches.map((b) => [
-    b.name,
+    b.concurrency > 1 ? `${b.name} (c=${b.concurrency})` : b.name,
     fmtTime(b.avgNs),
     fmtIters(b.itersPerSec),
     `(${fmtTime(b.minNs)} … ${fmtTime(b.maxNs)})`,
     fmtTime(b.p75Ns),
     fmtTime(b.p99Ns),
   ]);
+  // A concurrency bench's "time/iter" is per-op latency UNDER LOAD and its
+  // "ops/s" is real throughput; a sequential one's are latency and 1/latency.
+  const anyConcurrent = report.benches.some((b) => b.concurrency > 1);
   const head = [
     'benchmark',
-    'time/iter (avg)',
-    'iters/s',
+    anyConcurrent ? 'latency (avg)' : 'time/iter (avg)',
+    anyConcurrent ? 'ops/s' : 'iters/s',
     '(min … max)',
     'p75',
     'p99',
@@ -636,10 +783,20 @@ const printReport = (report: BenchReport): void => {
     console.log(`\nsummary [${group}] — baseline: ${base.name}`);
     for (const m of members) {
       if (m === base) continue;
-      const factor = m.avgNs / base.avgNs;
-      const verdict = factor >= 1
-        ? `${factor.toFixed(2)}x slower`
-        : `${(1 / factor).toFixed(2)}x faster`;
+      // Concurrency groups compare by THROUGHPUT (higher ops/s = faster);
+      // latency groups compare by time/iter (lower = faster).
+      let verdict: string;
+      if (base.concurrency > 1) {
+        const r = base.opsPerSec > 0 ? m.opsPerSec / base.opsPerSec : 0;
+        verdict = r >= 1
+          ? `${r.toFixed(2)}x faster`
+          : `${(1 / r).toFixed(2)}x slower`;
+      } else {
+        const factor = m.avgNs / base.avgNs;
+        verdict = factor >= 1
+          ? `${factor.toFixed(2)}x slower`
+          : `${(1 / factor).toFixed(2)}x faster`;
+      }
       console.log(`  ${m.name}: ${verdict}`);
     }
   }

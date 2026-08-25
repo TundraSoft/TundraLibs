@@ -6,15 +6,24 @@ authentication, content-type (de)serialization, timeouts, events, and
 errors — over a runtime-aware `fetch` that also supports Unix sockets and
 TLS client authentication.
 
+> **Not** [Microsoft's RESTler](https://github.com/microsoft/restler-fuzzer)
+> (an API fuzz-testing tool). This RESTler is a client base class for
+> building typed, per-vendor API SDKs.
+
+[![JSR](https://jsr.io/badges/@tundralibs/restler)](https://jsr.io/@tundralibs/restler)
+[![JSR Score](https://jsr.io/badges/@tundralibs/restler/score)](https://jsr.io/@tundralibs/restler)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
 ![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
-Built on the standard `fetch` global, so it runs unchanged on Workers
-and in the browser too — Unix-socket and TLS-client-auth transport is
-opt-in per endpoint and simply unused there.
+Built on the standard `fetch` global, so it runs unchanged on Workers and in
+the browser too. Unix-socket and TLS-client-auth transport (`socketPath` /
+`tls`) is opt-in per **client instance** — neither has a per-endpoint override
+— and only works on Deno and Bun; configuring either on Node, Workers, or in
+the browser throws `UnsupportedRuntimeError` rather than being silently
+ignored. Plain HTTP/HTTPS needs neither and works everywhere.
 
 ## Table of Contents
 
@@ -34,6 +43,7 @@ opt-in per endpoint and simply unused there.
 - [Vendor Response Handling](#vendor-response-handling)
 - [Error Handling](#error-handling)
 - [API Reference](#api-reference)
+- [Documentation](#documentation)
 - [License](#license)
 
 ## Overview
@@ -52,24 +62,26 @@ sets a `vendor` identifier and exposes domain methods (e.g. `getUser`,
 - maps failures onto typed errors.
 
 Requests run over [`@tundralibs/compat`](../compat/README.md)'s runtime-aware
-`fetch`, so the same client works on Deno, Bun, and Node — including its Unix
-socket and TLS client-auth extensions where the runtime supports them.
+`fetch`, so the same client works on Deno, Bun, Node, Workers, and in the
+browser — including, on Deno and Bun, its Unix socket and TLS client-auth
+extensions.
 
 ## Features
 
-| Feature                                     | Deno | Bun | Node.js |
-| ------------------------------------------- | ---- | --- | ------- |
-| HTTP / HTTPS requests                       | ✅   | ✅  | ✅      |
-| JSON / XML / FORM / TEXT / BLOB bodies      | ✅   | ✅  | ✅      |
-| BASIC / BEARER / custom authentication      | ✅   | ✅  | ✅      |
-| Per-request timeout                         | ✅   | ✅  | ✅      |
-| Lifecycle events & rate-limit parsing       | ✅   | ✅  | ✅      |
-| Unix domain socket transport (`socketPath`) | ✅   | ✅  | ❌\*    |
-| TLS client authentication (`tls`)           | ✅   | ✅  | ❌\*    |
+| Feature                                     | Deno | Bun | Node.js | Workers | Browser |
+| ------------------------------------------- | ---- | --- | ------- | ------- | ------- |
+| HTTP / HTTPS requests                       | ✅   | ✅  | ✅      | ✅      | ✅      |
+| JSON / XML / FORM / TEXT / BLOB bodies      | ✅   | ✅  | ✅      | ✅      | ✅      |
+| BASIC / BEARER / custom authentication      | ✅   | ✅  | ✅      | ✅      | ✅      |
+| Per-request timeout                         | ✅   | ✅  | ✅      | ✅      | ✅      |
+| Lifecycle events & rate-limit parsing       | ✅   | ✅  | ✅      | ✅      | ✅      |
+| Unix domain socket transport (`socketPath`) | ✅   | ✅  | ❌\*    | ❌\*    | ❌\*    |
+| TLS client authentication (`tls`)           | ✅   | ✅  | ❌\*    | ❌\*    | ❌\*    |
 
 \* Unix sockets and TLS client auth are provided by compat's `fetch` and are
-only available on Deno and Bun; using them on Node throws
-`UnsupportedRuntimeError`. Plain HTTP/HTTPS works everywhere.
+only available on Deno and Bun; configuring either on Node, Cloudflare
+Workers, or in the browser throws `UnsupportedRuntimeError`. Plain HTTP/HTTPS
+needs neither and works everywhere.
 
 ## Installation
 
@@ -436,8 +448,8 @@ Set `socketPath` to route requests over a Unix domain socket instead of TCP —
 ideal for the Docker Engine API, container runtimes, and local daemons. The
 `baseURL` host is ignored for transport but still used to build the path.
 
-> Available on Deno and Bun only (provided by compat's `fetch`). On Node this
-> throws `UnsupportedRuntimeError`.
+> Available on Deno and Bun only (provided by compat's `fetch`). On Node,
+> Cloudflare Workers, or in the browser, this throws `UnsupportedRuntimeError`.
 
 ```typescript
 import { RESTler } from '@tundralibs/restler';
@@ -474,8 +486,9 @@ inline PEM (`cert` / `key` / `ca`) **or** file paths (`certFile` / `keyFile` /
 `caFile`) — the two styles are mutually exclusive — plus the optional
 `rejectUnauthorized` flag.
 
-> Available on Deno and Bun only. On Node this throws `UnsupportedRuntimeError`.
-> Plain HTTPS against public CAs needs no `tls` option and works everywhere.
+> Available on Deno and Bun only. On Node, Cloudflare Workers, or in the
+> browser, this throws `UnsupportedRuntimeError`. Plain HTTPS against public
+> CAs needs no `tls` option and works everywhere.
 
 ```typescript
 import { RESTler } from '@tundralibs/restler';
@@ -512,37 +525,16 @@ On a `rateLimit`, RESTler reads `x-ratelimit-limit` / `-remaining` / `-reset`
 (and the unprefixed variants) from the response headers.
 
 The `request` handed to `call` and `authFailure` — and the copy stored on a
-`RESTlerError`'s `context` — is redacted so nothing sensitive leaks into logs:
+`RESTlerError`'s `context` (including one thrown by your own
+`_responseHandler`) — is credential-redacted before it reaches a listener or
+an error context: sensitive header values, `url` query-string values and
+userinfo, and the `payload` (omitted entirely) never leak into a log. The
+request actually sent over the wire is unaffected.
 
-- Sensitive header values (`Authorization`, `Cookie`, `Proxy-Authorization`,
-  `X-Api-Key`, `X-Auth-Token`, `PRIVATE-TOKEN`, `X-Amz-Security-Token`) are
-  replaced with `[REDACTED]`.
-- `url` query-string values are replaced with `[REDACTED]` (keys are kept) and
-  any `user:pass@` userinfo is stripped — so an API key injected via the query
-  string (see [Authentication](#authentication)) never appears. The same
-  redaction is applied to the `url` on the `response` copy handed to those
-  events.
-- The `payload` is omitted entirely (a request body is arbitrary in shape and
-  may itself carry credentials).
-
-This also covers an error your `_responseHandler` throws: the `request`
-recorded in a thrown `RESTlerError`'s `context` is redacted the same way
-before the error is re-thrown to the caller or handed to `call`. (A credential
-you place under a different `context` key, or interpolate into the error
-message text yourself, is outside what the library can redact.)
-
-When `fetch` itself fails (DNS, TLS, connection refused), some runtimes embed
-the full request URL — query-string credential and all — in the transport
-error's `message` and `stack` (Deno nests it inside `TypeError: fetch failed`).
-That transport error is preserved as the wrapped `RESTlerRequestError`'s
-`cause`, but the request URL is scrubbed from its whole chain first, so even a
-cause-expanding logger — `console.error(err)`, `util.inspect`,
-`Deno.inspect(err, { depth })` — never prints the credential. The error's type
-and stack are otherwise unchanged (`err.cause instanceof TypeError` still
-holds), and a failure carrying no query-string/userinfo secret is left intact
-for debugging.
-
-The request actually sent over the wire is unaffected.
+> See [Restler-Security](docs/Restler-Security.md) for the full redaction
+> contract — exactly what is and isn't covered, how a transport failure's
+> `cause` chain is scrubbed, and how to extend the sensitive-header set for a
+> vendor-specific credential header via `_isSensitiveHeader`.
 
 A throwing or rejecting event listener never corrupts a request. Each `call`,
 `authFailure`, and `rateLimit` listener runs in isolation: a listener's
@@ -835,6 +827,13 @@ throws, or a [response schema](#responseschema) rejects the response.
 | `RESTlerRequestError`            | Any other failure while making the request. `RESTlerTimeoutError` and `RESTlerResponseValidationError` are both subclasses.                            |
 | `RESTlerError`                   | Base class for all of the above.                                                                                                                       |
 
+> Every error's `context.request` is credential-redacted the same way as the
+> `call` event's copy (see [Restler-Security](docs/Restler-Security.md)) — but
+> `RESTlerTimeoutError.message` is currently a literal, un-interpolated string
+> (it reads `Request timed out after ${request.timeout}s` verbatim, with the
+> placeholder text and not the actual number). Match on `instanceof`, not on
+> the message text, until this is fixed upstream.
+
 ```typescript
 import {
   RESTlerError,
@@ -944,6 +943,13 @@ validates and stores options; `defaults` are applied where `options` omit them.
 - `RESTlerEvents` — the event handler signatures.
 - `RESTlerErrorMeta` — metadata carried by every `RESTlerError`: `vendor` plus
   error-specific fields (e.g. `key`/`value`, `request`).
+
+## Documentation
+
+- [Security](docs/Restler-Security.md) - The credential-redaction contract:
+  what's covered, what isn't, and extending it for a vendor-specific header
+- [Examples](examples/) - A runnable, end-to-end vendor client (auth +
+  response handling + events + error mapping)
 
 ## License
 

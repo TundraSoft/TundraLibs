@@ -28,7 +28,14 @@ MongoDB-**inspired** mixed-radix identifiers with embedded timestamp, machine, p
 
 ## Overview
 
-ObjectID generates unique identifiers **inspired by** MongoDB's ObjectId, but they are **not** the canonical 24-character hex format. The output is a fixed-length mixed-radix string (26 characters with the default `machineIdLength`) that embeds a timestamp, machine identifier, process ID, worker ID, and an incrementing counter. This ensures global uniqueness across distributed systems while maintaining chronological sortability. To store one as a MongoDB BSON `ObjectId`, truncate to 24 hex chars first (see [Converting to MongoDB](#converting-to-mongodb)).
+ObjectID generates unique identifiers **inspired by** MongoDB's ObjectId, but they are **not** the canonical 24-character hex format. The output is a fixed-length mixed-radix string (26 characters with the default `machineIdLength`) that embeds a timestamp, machine identifier, process ID, worker ID, and an incrementing counter. This ensures global uniqueness across distributed systems while maintaining chronological sortability. It is **not** safely convertible to a MongoDB BSON `ObjectId` by truncation — see [Converting to MongoDB](#converting-to-mongodb) for why and what to do instead.
+
+> **Security note:** this is a _traceable_ identifier, not an unguessable
+> token. Its timestamp, machine/process ID, and counter are largely
+> predictable. Do **not** use it for session tokens, password-reset links,
+> API keys, or anywhere the value must be hard to guess — use
+> [NanoID](./ID-NanoID.md) or another CSPRNG-backed generator
+> ([ulid](./ID-ULID.md), [cuid2](./ID-CUID2.md)) for those.
 
 **Key Characteristics:**
 
@@ -587,7 +594,7 @@ if (!isValidObjectId(id)) {
 
 ## MongoDB Compatibility
 
-ObjectID is **inspired by** MongoDB's ObjectId but is **not** a drop-in replacement — the output is 26 mixed-radix characters, not a 24-char hex BSON ObjectId. Truncate to 24 hex chars before handing it to a MongoDB driver (see [Converting to MongoDB](#converting-to-mongodb)).
+ObjectID is **inspired by** MongoDB's ObjectId but is **not** a drop-in replacement — the output is 26 mixed-radix characters, not a 24-char hex BSON ObjectId, and it cannot be safely truncated into one (see [Converting to MongoDB](#converting-to-mongodb)).
 
 ### Similarities
 
@@ -613,23 +620,31 @@ ObjectID is **inspired by** MongoDB's ObjectId but is **not** a drop-in replacem
 
 ### Converting to MongoDB
 
-To use with MongoDB, you can adapt the format:
+> **Truncation does not produce a valid hex `ObjectId`.** By default,
+> `machineId` and the worker-ID segment are drawn from the 62-character
+> `ALPHA_NUMERIC` alphabet (`a-z`, `A-Z`, `0-9`) — most of which fall
+> outside `0-9a-fA-F`. Since both segments sit inside the first 24
+> characters, `id.substring(0, 24)` contains a non-hex character on all but
+> a small fraction of generated IDs, and passing that to `new ObjectId(...)`
+> throws (`Argument passed in must be a string of 12 bytes or a string of 24
+> hex characters`). There is no supported way to adapt the default output
+> into a real BSON `ObjectId` by truncating it.
+
+If you need a genuine MongoDB `ObjectId`, generate one with the driver
+itself. Use TundraLibs `ObjectID` only when you want a traceable string
+`_id` field — store it as a plain string, not as a BSON `ObjectId`:
 
 ```typescript
 import { ObjectID } from '@tundralibs/id';
 
-// Generate TundraLibs ObjectID
+declare const collection: { insertOne(doc: unknown): Promise<unknown> };
+
 const generateId = ObjectID(0, 'srv', 3);
 const id = generateId();
 
-// For MongoDB: Use the first 24 characters
-const mongoId = id.substring(0, 24);
-
-// Or create a custom generator with MongoDB-compatible length
-function MongoCompatibleObjectID() {
-  const gen = ObjectID();
-  return () => gen().substring(0, 24);
-}
+// Store as a plain string _id — do NOT attempt to convert it into a BSON
+// ObjectId (see the truncation warning above).
+await collection.insertOne({ _id: id, name: 'John Doe' });
 ```
 
 ### Using with MongoDB Drivers

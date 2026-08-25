@@ -135,6 +135,11 @@ const base64Hash = await sha256('my data', 'base64');
 console.log(base64Hash); // SHA-256 hash in base64
 ```
 
+> The root package barrel also exports a `hash()` alias — `hash(data)` is
+> exactly `sha256(data)`, hex-encoded. It exists **only** on
+> `@tundralibs/crypt`, not on this `@tundralibs/crypt/digest` subpath:
+> `import { hash } from '@tundralibs/crypt'`.
+
 ### `sha512()`
 
 Convenience function for SHA-512 hashing.

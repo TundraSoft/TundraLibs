@@ -96,6 +96,10 @@ lifecycle plus the factory hook:
   `Doctor.prescribe(Class, { mode, factory })` for a class that
   needs constructor arguments
 
+`@Vial` always calls `Doctor.prescribe` on the **global** registry, never on
+a container you happen to be inside — see [containers](Doctor-Container.md)
+for what that means once child containers are involved.
+
 ---
 
 [← Back to Doctor](../README.md)

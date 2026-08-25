@@ -3,6 +3,21 @@
   "version": "1.0.6",
   "type": "module",
   "description": "Prometheus-compatible in-process metrics: Counter, Gauge, Histogram, Summary, and a central registry (MetroMan).",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "metrics",
+    "prometheus",
+    "counter",
+    "gauge",
+    "histogram",
+    "summary",
+    "monitoring",
+    "observability"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -13,7 +28,9 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@tundralibs/compat": "workspace:*",
     "@tundralibs/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
   }
 }

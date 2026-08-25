@@ -35,6 +35,8 @@ import {
   type Session,
   use,
 } from './mod.ts';
+import '@tundralibs/norm/engines/sqlite';
+import { registerEngine, resolveEngineFactory } from './engines/mod.ts';
 import { defaultHash } from './crypto.ts';
 
 type Row = Record<string, unknown>;
@@ -743,13 +745,13 @@ describe('norm.runtime (compile + repos over mock executor)', () => {
   });
 
   it(
-    'Norm facade: engine xor database enforced; use() composes and ' +
+    'Norm facade: database config required; use() composes and ' +
       'shares the pool; crypto helpers roundtrip',
     async () => {
       asserts.assertThrows(
         () => new Norm({}),
         Error,
-        "pass one of 'engine' or 'database'",
+        "a 'database' config is required",
       );
 
       // Duck-typed SQL engine — exercises resolveEngine + sqlExecutor.
@@ -770,7 +772,19 @@ describe('norm.runtime (compile + repos over mock executor)', () => {
         connect: () => Promise.resolve(),
         disconnect: () => Promise.resolve(),
       };
-      const norm = new Norm({ engine: fakeEngine as never, secret: SECRET });
+      // `new Norm({ engine })` is gone; pin the sqlite factory to the fake
+      // engine for the single synchronous construction, then restore it.
+      const stock = resolveEngineFactory('sqlite');
+      registerEngine('sqlite', () => fakeEngine as never);
+      let norm: Norm;
+      try {
+        norm = new Norm({
+          database: { dialect: 'sqlite', path: ':memory:' },
+          secret: SECRET,
+        });
+      } finally {
+        registerEngine('sqlite', stock as never);
+      }
       const db = norm.use(Schema('Blog', { Users, Posts }));
       // Posts alone would NOT compose — its FK key 'Users' must resolve.
       asserts.assertThrows(

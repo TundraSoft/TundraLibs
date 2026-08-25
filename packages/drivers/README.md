@@ -1,7 +1,9 @@
 # Drivers
 
-Cross-runtime connection drivers for databases and key-value stores.
+Cross-runtime connection drivers and pooling for PostgreSQL, MariaDB/MySQL, SQLite, MongoDB, Redis, and Memcached — plus edge/serverless HTTP dialects (Neon, Turso, Cloudflare D1) — on Deno, Bun, and Node.js.
 
+[![JSR](https://jsr.io/badges/@tundralibs/drivers)](https://jsr.io/@tundralibs/drivers)
+[![JSR Score](https://jsr.io/badges/@tundralibs/drivers/score)](https://jsr.io/@tundralibs/drivers)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
@@ -22,12 +24,21 @@ The result is a uniform API across services — you connect, run operations,
 disconnect — with the same shape whether you're talking to Memcached, a SQL
 database, or anything else.
 
-For socket-less edge/serverless runtimes (Cloudflare Workers, Vercel Edge, Deno
-Deploy), `NeonHttpEngine` speaks Postgres over HTTPS `fetch`, and `TursoEngine`
-and `D1Engine` speak SQLite (Turso / libSQL, and Cloudflare D1) over HTTPS
+For socket-less edge/serverless runtimes (Vercel Edge and the browser),
+`NeonHttpEngine` speaks Postgres over HTTPS `fetch`, and `TursoEngine` and
+`D1Engine` speak SQLite (Turso / libSQL, and Cloudflare D1) over HTTPS
 `fetch` — instead of a TCP socket or a native binding, same engine surface, no
-sockets. See the [compatibility matrix](docs/Drivers-Compatibility.md) for how
-every engine compares on transport, edge-safety, and capabilities.
+sockets. Two edge runtimes aren't actually socket-less: Deno Deploy runs the
+real Deno runtime, so every TCP engine (`PostgresEngine`, `MariaEngine`,
+`RedisEngine`, `MemcachedEngine`) connects there natively via `Deno.connect`;
+Cloudflare Workers connects `PostgresEngine`, `RedisEngine` and
+`MemcachedEngine` through `@tundralibs/compat`'s `net` module running on
+`cloudflare:sockets` — no `nodejs_compat` flag needed. `MariaEngine` also
+connects on Workers, but by a different path: it wraps the third-party
+`mariadb` driver directly (not `compat/net`), so it needs Wrangler's
+`nodejs_compat` flag to shim `node:net` underneath it. See the
+[compatibility matrix](docs/Drivers-Compatibility.md) for how every engine
+compares on transport, edge-safety, and capabilities.
 
 ## Modules
 

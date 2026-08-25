@@ -59,9 +59,16 @@ throw new RequestError('Request ${requestId} failed', { requestId: 'r-1' });
 
 ### Methods
 
-- `toJson()`: Serialize error to JSON
-- `getRootCause()`: Get the deepest cause in the chain
-- `getCodeSnippet()`: Extract code from stack trace
+- `getContextValue(key)`: Strongly-typed read of one `context` entry
+- `toJSON()`: Serialize to a plain `BaseErrorJson` object — `message` is
+  the pre-template text (after `${var}` substitution, before
+  `_messageTemplate` wrapping), `formattedMessage` mirrors
+  `error.message`; a `BaseError` cause nests recursively, a plain
+  `Error` cause becomes a `"Name: message"` string
+- `getRootCause()`: Walk `cause` chains and return the deepest error
+- `getCodeSnippet(contextLines?)`: Read the throw site from the stack
+  trace and return `±contextLines` lines of source (default `3`),
+  walking into a `BaseError` cause first so the deepest frame is shown
 
 ## Usage Examples
 
@@ -134,13 +141,22 @@ throw new ValidationError('', {
 ```typescript
 import { BaseError } from '@tundralibs/utils';
 
-const error = new BaseError('Something went wrong', { line: 42 });
+const error = new BaseError('Something went wrong', { component: 'auth' });
 
-const snippet = error.getCodeSnippet(2);
-
+const snippet = error.getCodeSnippet(2); // 2 lines of context each side
 console.log(snippet);
-// Shows 2 lines before and after the error line
+// >    41 | ...
+// >    42 | const error = new BaseError(...)
+// >    43 | ...
 ```
+
+> `getCodeSnippet()` reads the source file named in the stack trace off
+> disk — it needs a real filesystem. On Cloudflare Workers or in a
+> browser that read fails; rather than throwing, the method catches the
+> failure and returns a human-readable string (`'Could not fetch code
+> snippet: ...'`) instead. It never throws, so it's always safe to log
+> unconditionally, but on those two runtimes the returned string carries
+> no code — check for that prefix before relying on the content.
 
 ### JSON Serialization
 

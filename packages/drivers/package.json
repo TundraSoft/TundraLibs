@@ -1,7 +1,26 @@
 {
   "name": "@tundralibs/drivers",
-  "version": "1.1.1",
+  "version": "1.1.4",
   "description": "Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached — plus edge/serverless HTTP dialects (Neon, Turso, Cloudflare D1)",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "database",
+    "postgresql",
+    "mariadb",
+    "mysql",
+    "sqlite",
+    "mongodb",
+    "redis",
+    "memcached",
+    "connection-pool",
+    "neon",
+    "turso",
+    "cloudflare-d1"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -29,8 +48,12 @@
     "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*",
     "@tundralibs/id": "workspace:*",
-    "$maria": "npm:mariadb@^3.4.5",
-    "$mongo": "npm:mongodb@^6.10.0"
+    "$maria": "npm:mariadb@^3.5.3",
+    "$mongo": "npm:mongodb@^6.21.0"
+  },
+  "devDependencies": {
+    "pg": "npm:pg@^8.23.0",
+    "postgres": "npm:postgres@^3.4.9"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0"

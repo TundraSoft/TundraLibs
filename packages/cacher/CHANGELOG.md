@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.8](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.7...cacher-v1.0.8) (2026-08-23)
+
+
+### Documentation
+
+* **cacher:** correct Workers TCP mechanism, drop unverified nodejs_compat claim ([#544](https://github.com/TundraSoft/TundraLibs/issues/544)) ([d8ae082](https://github.com/TundraSoft/TundraLibs/commit/d8ae0821e717abf8d40dc72ccd93a1dcb867f637))
+
 ## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.6...cacher-v1.0.7) (2026-08-21)
 
 

@@ -2,7 +2,7 @@
  * A SINGLETON with a label dependency: built once, on first resolve;
  * `inject(CONFIG)` runs while the constructor runs. @module
  */
-import { inject, Vial } from '../../mod.ts';
+import { inject, Vial } from '@tundralibs/doctor';
 import { CONFIG } from './tokens.ts';
 
 @Vial('SINGLETON')

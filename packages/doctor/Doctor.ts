@@ -473,8 +473,9 @@ class Container implements DoctorContainer {
   /**
    * Construct an instance of `type` with the given `scope` as the
    * ambient fallback for its dependencies. Honours a registered
-   * `factory` when one exists — parity with {@link dispense} —
-   * otherwise a bare `new` is used.
+   * `factory` when one exists — found via this container then its
+   * parent, the same read-through {@link dispense} uses — otherwise a
+   * bare `new` is used.
    *
    * Use this when you need an **unregistered** class wired under a
    * specific scope — typically per-request handlers:
@@ -496,7 +497,7 @@ class Container implements DoctorContainer {
    */
   public resolve<T>(type: Vial<T>, scope?: string): T {
     return this.__run(scope, () => {
-      const reg = this.__services.get(type);
+      const reg = this.__findRegistration(type);
       return reg ? reg.factory() as T : Reflect.construct(type, []) as T;
     });
   }

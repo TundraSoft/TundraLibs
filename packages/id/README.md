@@ -1,7 +1,9 @@
 # ID
 
-Comprehensive ID generation library supporting multiple formats for different use cases.
+Cross-runtime ID generators for Deno, Bun, and Node.js — NanoID, CUID, CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs.
 
+[![JSR](https://jsr.io/badges/@tundralibs/id)](https://jsr.io/@tundralibs/id)
+[![JSR Score](https://jsr.io/badges/@tundralibs/id/score)](https://jsr.io/@tundralibs/id)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
@@ -21,7 +23,7 @@ The ID package provides high-performance ID generators optimized for different s
 - ✅ **Sortable options** - Timestamp-based ordering with ULID and SequenceID
 - ✅ **MongoDB-inspired** - ObjectID uses a MongoDB-style layout (not the canonical 24-char hex — see [ObjectID docs](docs/ID-ObjectID.md))
 - ✅ **Dependency-light** - only the `@tundralibs/compat` and `@tundralibs/utils` workspace siblings, no third-party runtime deps
-- ✅ **Runtime agnostic** - Works on Deno, Bun, and Node.js
+- ✅ **Runtime agnostic** - Works on Deno, Bun, Node.js, Cloudflare Workers, and browsers
 
 ## Documentation
 

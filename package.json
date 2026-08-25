@@ -16,15 +16,14 @@
     "test:bun": "bun test packages/",
     "test:deno": "deno test --allow-all --parallel",
     "test:node": "node --import tsx --test 'packages/**/*.test.ts'",
+    "test:coverage:bun": "bun test --coverage packages/",
+    "test:coverage:node": "node --import tsx --test --experimental-test-coverage 'packages/**/*.test.ts'",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
-  "dependencies": {
-    "@std/asserts": "npm:@jsr/std__assert@^1.0.0",
-    "@std/media-types": "npm:@jsr/std__media-types@^1.1.0",
-    "@std/testing": "npm:@jsr/std__testing@^1.0.0"
-  },
   "devDependencies": {
+    "@std/asserts": "npm:@jsr/std__assert@^1.0.19",
+    "@std/testing": "npm:@jsr/std__testing@^1.0.20",
     "tsx": "^4.21.0"
   },
   "license": "MIT"

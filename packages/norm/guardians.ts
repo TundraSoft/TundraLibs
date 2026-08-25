@@ -46,7 +46,11 @@ const STRING_TYPES: ReadonlySet<string> = new Set([
   'UUID',
   'XML',
 ]);
-const DATE_TYPES: ReadonlySet<string> = new Set([
+/** Column types whose JS value is `Date`. Exported for reuse by
+ * {@link Repo}'s read-path date decode — SQLite has no native
+ * date/time storage, so these come back as the ISO string norm wrote,
+ * not a `Date` instance. */
+export const DATE_TYPES: ReadonlySet<string> = new Set([
   'DATE',
   'TIME',
   'DATETIME',

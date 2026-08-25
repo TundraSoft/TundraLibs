@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.2.0...slogger-v1.2.1) (2026-08-23)
+
+
+### Documentation
+
+* **slogger:** correct stale Workers/cross-runtime claims ([#543](https://github.com/TundraSoft/TundraLibs/issues/543)) ([2211193](https://github.com/TundraSoft/TundraLibs/commit/2211193acd7e50fafc71c591f45d2dab590dbafd))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.9...slogger-v1.2.0) (2026-08-20)
 
 

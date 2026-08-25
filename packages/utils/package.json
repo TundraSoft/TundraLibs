@@ -3,6 +3,21 @@
   "version": "1.2.0",
   "type": "module",
   "description": "Core TypeScript building blocks — the typed Options + Events base class, BaseError, Singleton, and shared helpers (config/env, memoize, IP/subnet, free-port)",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "utilities",
+    "options",
+    "events",
+    "error-handling",
+    "memoize",
+    "throttle",
+    "singleton",
+    "config"
+  ],
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -19,9 +34,9 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@std/toml": "npm:@jsr/std__toml@^1.0.1",
-    "@std/yaml": "npm:@jsr/std__yaml@^1.0.5",
-    "@std/jsonc": "npm:@jsr/std__jsonc@^1.0.1",
+    "@std/toml": "npm:@jsr/std__toml@^1.0.11",
+    "@std/yaml": "npm:@jsr/std__yaml@^1.2.0",
+    "@std/jsonc": "npm:@jsr/std__jsonc@^1.0.2",
     "@tundralibs/compat": "workspace:*"
   }
 }

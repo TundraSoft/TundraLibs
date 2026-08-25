@@ -25,20 +25,9 @@ PostgreSQL, MariaDB, SQLite, and MongoDB unchanged.
 deno add @tundralibs/norm       # or: bunx / npx jsr add @tundralibs/norm
 ```
 
-`Norm` needs an engine (bring your own, or let it build one from a
-`database` config) and, if you use encrypted columns, a `secret`.
-
-```typescript
-import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
-
-const engine = new SQLiteEngine('shortly', { path: './data' });
-const norm = new Norm({ engine, secret: Deno.env.get('APP_SECRET') });
-```
-
-For a server engine, skip the manual engine and pass a `database`
-config instead:
+`Norm` needs an engine — let it build one from a `database` config,
+the way every example in this guide does — and, if you use encrypted
+columns, a `secret`.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
@@ -59,8 +48,12 @@ const norm = new Norm({
 `dialect` is one of `postgres`, `maria`, `sqlite`, `mongo` (self-hosted)
 or `neon`, `turso`, `d1` (fetch-only, for edge/serverless runtimes). This
 guide imports the root `@tundralibs/norm` barrel throughout, which
-registers all seven and is server-only; on an edge runtime import
-`@tundralibs/norm/core` plus the single engine module you need — see
+registers six of the seven — every dialect except `sqlite`, which needs
+its own explicit `@tundralibs/norm/engines/sqlite` import. See
+**[Browser / Worker compatibility](../README.md#browser--worker-compatibility)**
+for which of those six actually run on an edge runtime; either way,
+prefer `@tundralibs/norm/core` plus the single engine module you need
+there instead of the root barrel — see
 **[Choosing an entry point](../README.md#choosing-an-entry-point)**.
 
 ## 2. Model the schema
@@ -121,6 +114,14 @@ export const Profiles = Entity('profiles', {
 });
 ```
 
+Both `Users` and `Profiles` above are plain tables. The third `Entity()`
+options argument also takes `temporal` (keep every version of a row,
+insert-only) and `audit` (a generated read-only history replica beside
+a normally-mutable table) — mutually exclusive with each other — plus a
+`cache: <minutes>` TTL for join-free reads. See
+[Temporal](NORM-Temporal.md), [Audit](NORM-Audit.md), and
+[Caching](NORM-Caching.md).
+
 Group entities into a schema and compose the schemas into a typed
 database handle. `use()` resolves foreign keys across schema
 boundaries, so `Links.ownerId → Users` works even though they live in
@@ -149,17 +150,17 @@ import { Migrator } from '@tundralibs/norm/migrations';
 
 const mig = new Migrator(db, { dir: './migrations' });
 
-await mig.snapshot(); // writes 0001.json (.sql opt-in: renderSql / renderPlans())
+await mig.snapshot(); // writes 0001.json (reviewable .sql plans are opt-in)
 await mig.plan(); // inspect the DDL before you run it
 await mig.apply(); // execute + record in _norm_migrations
 ```
 
 Day 2, you change a model. `snapshot()` writes `0002.json`; `plan()`
 shows the diff; `apply()` runs it. A rename is a one-line hint
-(`renamedFrom: 'oldName'`) so data survives; a forgotten rename shows
-up as a **blocked drop** and `apply()` refuses rather than silently
-losing a column. See [Migrations](NORM-Migrations.md) for rebuilds,
-stored plans, and the advisory lock.
+(`.renamedFrom('oldName')` on the column) so data survives; a forgotten
+rename shows up as a **blocked drop** and `apply()` refuses rather than
+silently losing a column. See [Migrations](NORM-Migrations.md) for
+rebuilds, stored plans, and the advisory lock.
 
 ## 4. Insert and read
 
@@ -392,12 +393,14 @@ default, and the Migrator applies your actual definitions, so you test
 the real schema:
 
 ```typescript ignore
+import '@tundralibs/norm/engines/sqlite';
 import { Migrator } from '@tundralibs/norm/migrations';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
-const engine = new SQLiteEngine('test', { path: await Deno.makeTempDir() });
-const db = new Norm({ engine, secret: 'test' }).use(Identity, Shortener);
+const tempDir = await Deno.makeTempDir();
+const db = new Norm({
+  database: { dialect: 'sqlite', path: tempDir },
+  secret: 'test',
+}).use(Identity, Shortener);
 await new Migrator(db, { dir: tempDir }).snapshot();
 await new Migrator(db, { dir: tempDir }).apply();
 // ...run your app code against `db`, assert on the NormResult envelopes.

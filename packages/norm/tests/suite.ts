@@ -17,20 +17,30 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import { Migrator } from '../migrations/mod.ts';
+import '@tundralibs/norm/engines/sqlite';
 import {
+  type DatabaseConfig,
   Norm,
-  type NormConfig,
   type NormDb,
   NormQueryError,
   NormValidationError,
   use,
 } from '../mod.ts';
+import {
+  type NormDialect,
+  registerEngine,
+  resolveEngineFactory,
+} from '../engines/mod.ts';
+import type { MongoEngine } from '@tundralibs/drivers/mongo';
+import type { AnySQLEngine } from '../executor.ts';
 import { Audit, Blog, Identity, Shortener } from './models/mod.ts';
 
 const SECRET = 'shortly-live-secret-key-32-bytes!';
 
-/** The engine union `Norm` accepts. */
-export type LiveEngine = NonNullable<NormConfig['engine']>;
+/** The engine union a fixture hands back — pinned into Norm through the
+ * engine registry (see {@link runLiveSuite}), now that `new Norm({ engine })`
+ * has been removed. */
+export type LiveEngine = AnySQLEngine | MongoEngine;
 
 /** Readback normalizers for the engine's dialect. */
 export type LiveDialect = {
@@ -103,12 +113,23 @@ export function runLiveSuite(fixture: LiveFixture): void {
   describe(`norm.live-${fixture.name} — the Shortly app, end to end`, () => {
     beforeAll(async () => {
       const engine = await fixture.setup();
-      norm = new Norm({
-        engine,
-        secret: SECRET,
-        _oncall: (entity, op, _t, isSlow, id) =>
-          void calls.push({ entity, op, id, isSlow }),
-      });
+      // `new Norm({ engine })` is gone. The fixture owns this engine — it
+      // applied the DDL / indexes / views and cleans it up — so pin the
+      // dialect's factory to it for the single synchronous construction (no
+      // `await` between pin and restore), then restore the stock factory.
+      const dialect = fixture.name as NormDialect;
+      const stock = resolveEngineFactory(dialect);
+      registerEngine(dialect, () => engine as never);
+      try {
+        norm = new Norm({
+          database: { dialect } as unknown as DatabaseConfig,
+          secret: SECRET,
+          _oncall: (entity, op, _t, isSlow, id) =>
+            void calls.push({ entity, op, id, isSlow }),
+        });
+      } finally {
+        registerEngine(dialect, stock as never);
+      }
       db = norm.use(Identity, Shortener, Blog, Audit);
       if (fixture.migrate !== false) {
         // The Migrator OWNS the schema — no hand-written DDL anywhere:

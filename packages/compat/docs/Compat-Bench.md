@@ -43,6 +43,7 @@ call.
 | `only` / `ignore` / runtime+OS skip flags     | ✅  | ✅   | ✅      |
 | `BENCH_FILTER` (substring or `/regex/`)       | ✅  | ✅   | ✅      |
 | `b.start()` / `b.end()` sectioned timing      | ✅  | ✅   | ✅      |
+| `concurrency` throughput mode (ops/s)         | ✅  | ✅   | ✅      |
 | Fixed batch size (`n`)                        | ✅  | ✅   | ✅      |
 | async benches (auto-detected)                 | ✅  | ✅   | ✅      |
 | stats: avg, iter/s, min/max, p50/p75/p99, MAD | ✅  | ✅   | ✅      |
@@ -80,6 +81,39 @@ bench('parse (excluding fixture build)', (b) => {
 bench('deno-only path', { node: false, bun: false }, () => 1);
 bench('cache-sensitive', { n: 1000 }, () => 2);
 ```
+
+### Throughput (concurrency mode)
+
+The default is a per-operation **latency** measure (one call at a time). For a
+server or any I/O-bound op, the cost that matters shows up **under
+concurrency** — pass `concurrency` to switch to a **steady-state throughput**
+measure: the harness keeps N invocations in flight, counts completions over the
+budget, and reports **operations/second** as the headline plus the per-op
+latency-under-load percentiles.
+
+```typescript
+import { bench } from '@tundralibs/compat/bench';
+
+// Keep 50 requests in flight; the headline becomes ops/s.
+bench(
+  'GET /users/:id',
+  { group: 'route', baseline: true, concurrency: 50 },
+  async () => {
+    const r = await fetch('http://localhost:8080/users/42');
+    await r.arrayBuffer();
+  },
+);
+```
+
+- The printed table shows `latency (avg)` (per-op, **under load**) and `ops/s`
+  (real throughput, not `1 / latency`); the row is tagged `(c=N)`.
+- Group summaries compare by **throughput** (higher ops/s = _faster_), the
+  inverse of a latency group.
+- Each concurrent worker gets its own {@link BenchContext}, so `b.start()` /
+  `b.end()` sectioning still works per op.
+- `warmupMs` / `budgetMs` default higher when `concurrency` is set (a stable
+  throughput read needs a window); override to tune.
+- Default `1` (or unset) keeps the latency behavior exactly as before.
 
 Programmatic use returns the typed report instead of printing:
 
@@ -121,6 +155,11 @@ Direct invocation takes files, directories, or `--all`, plus:
 `--save-baseline=<file>`, `--baseline=<file>` (compares on p50, flags ≥10%
 changes, e.g. `⚠ path.join [NODE]: 31.2% SLOWER since a1b2c3d`), and
 `--smoke`.
+
+> `--smoke` and the baseline flags are mutually exclusive: passing
+> `--smoke` together with `--save-baseline` or `--baseline` exits 1 with an
+> error rather than silently saving or comparing against meaningless
+> numbers.
 
 ## Notes
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.2.0...crypt-v1.3.0) (2026-08-25)
+
+
+### Features
+
+* **crypt:** CBOR/COSE decoder + ecdsaDerToRaw (WebAuthn primitives) ([#609](https://github.com/TundraSoft/TundraLibs/issues/609)) ([2edc076](https://github.com/TundraSoft/TundraLibs/commit/2edc07619eb980daf33491bcfe91d50a8d20bb6f))
+* **crypt:** digest-aware default PBKDF2 iterations for password storage ([#615](https://github.com/TundraSoft/TundraLibs/issues/615)) ([453ba1d](https://github.com/TundraSoft/TundraLibs/commit/453ba1d6a354340d4256b606f71916933e929341))
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.1.1...crypt-v1.2.0) (2026-08-24)
+
+
+### Features
+
+* **crypt:** export constantTimeEqual as a public primitive ([#601](https://github.com/TundraSoft/TundraLibs/issues/601)) ([ff5bbc3](https://github.com/TundraSoft/TundraLibs/commit/ff5bbc3b06de4c5955a5bf3bb164fe112f25aecd))
+
+
+### Documentation
+
+* **crypt:** document generators random/preset gaps, fix RSA/EC option types ([#562](https://github.com/TundraSoft/TundraLibs/issues/562)) ([2d9e479](https://github.com/TundraSoft/TundraLibs/commit/2d9e4798963b28003b823dae2d949c08b1b6aae4))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.1.0...crypt-v1.1.1) (2026-08-21)
 
 

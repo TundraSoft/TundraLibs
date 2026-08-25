@@ -26,6 +26,18 @@ aggregate cleanly across instances, use
 [Histogram](MetroMan-Histogram.md) instead — summaries don't
 combine across processes.
 
+> **Memory scales with traffic, not just cardinality.** A Summary
+> keeps every raw observation from the last `window` seconds per
+> label combination, so a high-throughput series retains far more
+> data than a low-throughput one — unlike
+> [Histogram](MetroMan-Histogram.md), whose per-series memory is
+> fixed by its bucket count regardless of traffic. Combine high
+> traffic with high label cardinality and the windowed sample buffer
+> grows accordingly between purges (see
+> [Sliding Window](#sliding-window)). See
+> [Labels](../README.md#labels) for the cardinality-growth caveat that
+> applies to every metric kind.
+
 ## Quick Start
 
 ```typescript
@@ -51,7 +63,10 @@ console.log(latency.toPrometheus());
 - `options.name` — Required. Metric identifier.
 - `options.help` — Optional. Human description.
 - `options.quantiles` — Optional `number[]`. Defaults to
-  `[0.5, 0.9, 0.99]`. Each value must be a finite number in `[0, 1]`.
+  `[0.5, 0.9, 0.99]`. Each value must be a finite number in `[0, 1]`;
+  duplicate values are silently de-duplicated (see
+  [Quantile Calculation](#quantile-calculation)) and the result sorted
+  ascending internally.
 - `options.window` — Optional retention window in seconds. Defaults
   to `600` (the maximum) so retention is always bounded. Must be a
   finite number in `[1, 600]` when provided (`NaN`/`Infinity` are
@@ -80,6 +95,20 @@ purge old samples from the quantile buffer.
 - `InvalidLabelError` — when `labels` contains `quantile`
   (reserved for the rendered quantile lines), or a name outside
   `[A-Za-z_][A-Za-z0-9_]*`.
+
+### `reset()` / `remove(labels?)`
+
+`reset()` drops every series **and** the cumulative lifetime
+`sum`/`count` totals — lifetime accounting starts over from zero (see
+[Cumulative totals vs windowed quantiles](#cumulative-totals-vs-windowed-quantiles)).
+`remove(labels?)` drops a single series' totals and windowed quantile
+buffer together, returning `true` if a series was actually removed.
+Both overridden from `BaseMetric` to also clear the raw-sample state.
+
+**Throws:**
+
+- `InvalidLabelError` — `remove(labels)` rejects a label name outside
+  `[A-Za-z_][A-Za-z0-9_]*`, the same validation `observe` applies.
 
 ### `toJSON()` / `toString()` / `toPrometheus()` / `dump(mode)`
 
@@ -143,7 +172,17 @@ value = sorted[base] + frac * (sorted[base + 1] - sorted[base])
 empty window, the quantile is `0` (a finite value — many scrapers
 reject `NaN`).
 
+> **Duplicate quantiles are silently collapsed.** `quantiles` is
+> de-duplicated with `new Set()` before sorting, so
+> `[0.5, 0.5, 0.9]` renders two quantile lines, not three. A repeated
+> `quantile` value would otherwise render the same series twice,
+> which a strict Prometheus scraper rejects outright.
+
 ## Output
+
+For the [Quick Start](#quick-start) example above.
+
+### Prometheus text (`toPrometheus()` / `dump('PROMETHEUS')`)
 
 ```
 # HELP http_request_seconds
@@ -153,6 +192,24 @@ http_request_seconds{route="/users",quantile="0.9"} 0.3863
 http_request_seconds{route="/users",quantile="0.99"} 0.41663
 http_request_seconds_sum{route="/users"} 0.503
 http_request_seconds_count{route="/users"} 2
+```
+
+### JSON (`toJSON()` / `dump('JSON')`)
+
+```json
+{
+  "name": "http_request_seconds",
+  "help": "",
+  "type": "SUMMARY",
+  "labels": ["route"],
+  "data": {
+    "route=\"/users\"": {
+      "quantile": { "0.5": 0.2515, "0.9": 0.3863, "0.99": 0.41663 },
+      "count": 2,
+      "sum": 0.503
+    }
+  }
+}
 ```
 
 ---

@@ -20,6 +20,8 @@ import {
   type Witness,
   type WitnessInfo,
 } from './mod.ts';
+import '@tundralibs/norm/engines/sqlite';
+import { registerEngine, resolveEngineFactory } from './engines/mod.ts';
 import { Migrator } from './migrations/mod.ts';
 
 const Users = Entity('users', {
@@ -36,6 +38,7 @@ type Log =
 let dir = '';
 let migDir = '';
 let norm: Norm;
+let sharedEngine: SQLiteEngine;
 // deno-lint-ignore no-explicit-any
 let db: any;
 const log: Log[] = [];
@@ -50,33 +53,46 @@ const witness: Witness = async (info, fn) => {
   }
 };
 
+/**
+ * A Norm bound to the shared SQLite engine (`new Norm({ engine })` is
+ * gone). The migration handle, the witnessed handle, and the no-witness
+ * handle all read/write ONE physical database, so pin the sqlite factory
+ * to `sharedEngine` for the single synchronous `new Norm` call — no
+ * `await` between pin and restore — then restore the stock factory.
+ */
+function normWith(withWitness: boolean): Norm {
+  const stock = resolveEngineFactory('sqlite');
+  registerEngine('sqlite', () => sharedEngine as never);
+  try {
+    return new Norm({
+      database: { dialect: 'sqlite', path: dir },
+      secret: 'witness-secret',
+      ...(withWitness ? { witness } : {}),
+    });
+  } finally {
+    registerEngine('sqlite', stock as never);
+  }
+}
+
 describe('norm.witness — observability wrap hook (live SQLite)', () => {
   beforeAll(async () => {
     dir = await makeTempDir({ prefix: 'norm-witness-db-' });
     migDir = await makeTempDir({ prefix: 'norm-witness-mig-' });
+    sharedEngine = new SQLiteEngine('witness', { path: dir });
+    await sharedEngine.connect();
     // Migrations run on an UN-witnessed handle — the hook wraps repo
     // operations, and DDL noise would only muddy the assertions below.
-    const setupNorm = new Norm({
-      engine: new SQLiteEngine('witness', { path: dir }),
-      secret: 'witness-secret',
-    });
-    const setup = setupNorm.use(Schema('App', { Users }));
+    const setup = normWith(false).use(Schema('App', { Users }));
     await new Migrator(setup, { dir: migDir }).snapshot();
     await new Migrator(setup, { dir: migDir }).apply();
-    // Same db file (engine name = filename); release the setup handle.
-    await setupNorm.disconnect();
 
-    norm = new Norm({
-      engine: new SQLiteEngine('witness', { path: dir }),
-      secret: 'witness-secret',
-      witness,
-    });
+    norm = normWith(true);
     norm.on('query', () => void log.push({ kind: 'query-event' }));
     db = norm.use(Schema('App', { Users }));
   });
 
   afterAll(async () => {
-    await norm.disconnect();
+    await sharedEngine.disconnect();
     await removeDir(dir, { recursive: true });
     await removeDir(migDir, { recursive: true });
   });
@@ -151,16 +167,11 @@ describe('norm.witness — observability wrap hook (live SQLite)', () => {
   });
 
   it('operations work identically with no witness configured', async () => {
-    const plain = new Norm({
-      engine: new SQLiteEngine('witness', { path: dir }),
-      secret: 'witness-secret',
-    });
-    try {
-      const pdb = plain.use(Schema('App', { Users }));
-      const res = await pdb.repo('Users').count();
-      asserts.assertEquals(res.count, 1);
-    } finally {
-      await plain.disconnect();
-    }
+    // A no-witness handle over the SAME shared engine — do NOT disconnect
+    // it here; the shared engine outlives this test and afterAll closes it.
+    const plain = normWith(false);
+    const pdb = plain.use(Schema('App', { Users }));
+    const res = await pdb.repo('Users').count();
+    asserts.assertEquals(res.count, 1);
   });
 });

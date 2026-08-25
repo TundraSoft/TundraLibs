@@ -368,7 +368,7 @@ package (which used a 16-byte GCM IV) continue to decrypt unchanged.
 
 ### Key Derivation
 
-The AES key is derived from the caller-supplied `secret` using **PBKDF2-SHA-256 at 210,000 iterations** (current OWASP guidance for SHA-256) with a fresh 16-byte random salt generated per encryption. The salt is embedded in the ciphertext envelope so `decryptAES()` can re-derive the same key from `secret`.
+The AES key is derived from the caller-supplied `secret` using **PBKDF2-SHA-256 at 210,000 iterations** with a fresh 16-byte random salt generated per encryption. The salt is embedded in the ciphertext envelope so `decryptAES()` can re-derive the same key from `secret`. (The envelope does not record the iteration count, so this is fixed; **password storage** via `pbkdf2Hash` instead uses the higher, digest-aware `PBKDF2_PASSWORD_ITERATIONS` — 600,000 for SHA-256, per current OWASP guidance — because a stored hash records its own count.)
 
 Implications:
 
@@ -380,10 +380,15 @@ Implications:
 For raw, deterministic key derivation (e.g., to derive AES key material once and reuse a `CryptoKey` across many ciphertexts in the same process), use the exported `pbkdf2` from `@tundralibs/crypt/encrypt`. With a fixed salt it derives the same bytes every call, so you import the key once and reuse it:
 
 ```typescript
-import { pbkdf2, PBKDF2_ITERATIONS } from '@tundralibs/crypt/encrypt';
+import {
+  pbkdf2,
+  PBKDF2_ITERATIONS,
+  SALT_BYTES,
+} from '@tundralibs/crypt/encrypt';
 
 // A fixed salt makes derivation deterministic — store it alongside the secret.
-const salt = new Uint8Array(16).fill(7);
+// SALT_BYTES (16) is the same salt length encryptAES generates per message.
+const salt = new Uint8Array(SALT_BYTES).fill(7);
 const raw = await pbkdf2('mySecret', salt, PBKDF2_ITERATIONS, 256); // 32 bytes
 
 const key = await crypto.subtle.importKey(

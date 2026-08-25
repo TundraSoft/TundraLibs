@@ -50,9 +50,12 @@ The Net module provides a unified interface for networking operations across Den
 | Hostname resolution         | ✅  | ✅   | ✅      |
 | Read from socket            | ✅  | ✅   | ✅      |
 | Write to socket             | ✅  | ✅   | ✅      |
-| Address info                | ✅  | ✅   | ✅      |
+| Address info                | ✅† | ✅†  | ✅†     |
 
-*Deno requires the `--unsafely-ignore-certificate-errors=hostname` CLI flag instead.
+*Deno requires the `--unsafely-ignore-certificate-errors=hostname` CLI flag instead.\
+†TCP/TLS only. A UNIX-socket `Connection` — from either `listen()` or
+`connect()` — always has `remoteAddr: undefined` and `localAddr:
+undefined`, on every runtime; UNIX sockets have no host/port to report.
 
 ## Installation
 
@@ -228,8 +231,8 @@ type Connection = {
 
 **Properties:**
 
-- `remoteAddr` - Information about the remote endpoint (hostname and port)
-- `localAddr` - Information about the local endpoint (hostname and port)
+- `remoteAddr` - Information about the remote endpoint (hostname and port). `undefined` for a UNIX-socket connection on every runtime — there's no host/port to report.
+- `localAddr` - Information about the local endpoint (hostname and port). Same UNIX-socket caveat as `remoteAddr`.
 - `_raw` - The underlying runtime-specific socket handle. Used internally by `upgradeTls()` to perform in-place TLS negotiation (e.g. Postgres `SSLRequest`, SMTP `STARTTLS`). Treat as opaque — do not call methods on this object directly.
 
 #### `UpgradeTlsOptions`
@@ -269,16 +272,23 @@ async function listen(options: ListenOptions): Promise<Listener>;
 **Throws:**
 
 - `Error` - If the port is already in use or if binding fails
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format
-- `UnsupportedRuntimeError` - If called in an unsupported runtime
+- `UnsupportedRuntimeError` - If called in an unsupported runtime (on
+  Workers, always — there is no way to accept an inbound connection)
 
 **Runtime Implementation:**
 
 - **Deno**: Uses `Deno.listen()` for TCP/Unix, `Deno.listenTls()` for TLS
 - **Bun**: Uses Node.js-compatible `net.createServer()` for TCP/Unix, `tls.createServer()` for TLS
 - **Node.js**: Uses `net.createServer()` for TCP/Unix, `tls.createServer()` for TLS
+- **Cloudflare Workers**: Throws `UnsupportedRuntimeError`. Not a gap in
+  compat — workerd's request/response model has no way to accept an
+  inbound TCP connection, so there is nothing to bind. Outbound
+  connections do work; see [`connect()`](#connect).
 
 **Example - Basic TCP server:**
 
@@ -415,17 +425,41 @@ async function connect(options: ConnectOptions): Promise<Connection>;
 
 **Throws:**
 
-- `Error` - If the connection fails
+- `Error` - If the connection fails. On Deno specifically, also thrown
+  (plain `Error`, not a `CompatError` subclass) when
+  `tls.rejectUnauthorized` is `false` — Deno has no in-process
+  verification bypass; run with `--unsafely-ignore-certificate-errors`
+  or supply `tls.ca`/`tls.caFile` instead. Bun and Node honor the flag.
 - `ConnectionTimeoutError` - If the connection times out (when `timeout` is specified)
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format
+- `UnsupportedRuntimeError` - If called in an unsupported runtime, or on
+  Workers for a UNIX-socket `path` or TLS material `cloudflare:sockets`
+  can't honour (see the Workers notes below)
 
 **Runtime Implementation:**
 
 - **Deno**: Uses `Deno.connect()` for TCP/Unix, `Deno.connectTls()` for TLS
 - **Bun**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
 - **Node.js**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
+- **Cloudflare Workers**: Uses `cloudflare:sockets`' `connect()` — the
+  same primitive Hyperdrive is built on. Plain TCP opens with
+  `secureTransport: 'starttls'` so [`upgradeTls()`](#upgradetls) stays
+  available (the socket is still in the clear until you call it);
+  `tls` opens with `secureTransport: 'on'`. Three things workerd cannot
+  do, each an `UnsupportedRuntimeError` rather than a silent drop:
+  - **UNIX sockets** — `cloudflare:sockets` dials TCP only.
+  - **TLS material** — `cert`, `key`, `ca` and their `*File` forms all
+    throw, as does `rejectUnauthorized: false`. workerd's `SocketOptions`
+    has nowhere to put certificates and verifies the peer against its own
+    trust store with no bypass, so the server needs a publicly-trusted
+    certificate. For a private CA, route through Hyperdrive.
+  - **`timeout` / `signal`** are honoured, but by racing the abort against
+    the socket opening and closing it — `cloudflare:sockets` has no
+    signal parameter of its own.
 
 **Example - TCP connection:**
 
@@ -667,14 +701,30 @@ async function upgradeTls(
 
 - `Error` - If `conn._raw` is missing (connection was not created by `connect()`).
 - `Error` - On Deno, if `rejectUnauthorized: false` is requested (not supported — use `--unsafely-ignore-certificate-errors` instead).
+- `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
+  file-path (`certFile`/`keyFile`/`caFile`) styles.
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences.
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist.
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format.
+- `UnsupportedRuntimeError` - On an unrecognized runtime, and on
+  Workers when the socket didn't come from `connect()`, when `hostname`
+  differs from the one `connect()` dialed, or for TLS material workerd
+  can't honour.
 
 **Runtime Implementation:**
 
 - **Deno**: Uses `Deno.startTls()`
 - **Bun / Node.js**: Uses `tls.connect({ socket: rawSocket, ... })`
+- **Cloudflare Workers**: Uses the socket's own `startTls()`. The same
+  no-TLS-material rule as [`connect()`](#connect) applies, plus two
+  workerd-specific constraints:
+  - The connection must have come from `connect()` — workerd only
+    upgrades a socket it opened with `secureTransport: 'starttls'`.
+  - `hostname` must match the one `connect()` dialed. `startTls()` takes
+    no arguments (its `expectedServerHostname` option is declared in
+    `@cloudflare/workers-types` but rejected by the runtime), so workerd
+    verifies against the dialed name. Rather than verify a different name
+    than you asked for, a mismatch throws `UnsupportedRuntimeError`.
 
 **Example — PostgreSQL-style STARTTLS:**
 

@@ -11,14 +11,25 @@ class.
 
 - **Kind** — SQL (relational), document, or KV (key/value).
 - **Dialect** — the OQL translator family. The public `engine.Dialect` getter
-  is defined only on `SQLEngine` subclasses; document/KV engines
-  (`MongoEngine`, `RedisEngine`, `MemcachedEngine`) extend a non-SQL base and
-  expose **no** `engine.Dialect` getter (reading it is `undefined`), so their
-  cell is `—`. (`MongoEngine` still translates OQL to Mongo operations
-  internally — it just carries no public SQL-dialect getter.)
+  is defined on `SQLConnectionEngine` — the pool-free base shared by
+  `SQLEngine` (the pooled SQL engines) **and** the three pool-free HTTP
+  engines (`NeonHttpEngine`, `TursoEngine`, `D1Engine`), so every SQL engine
+  in the matrix has it. Document/KV engines (`MongoEngine`, `RedisEngine`,
+  `MemcachedEngine`) extend a different, non-SQL base (`ConnectionEngine` /
+  `BaseEngine`) that declares no `Dialect` property at all — `engine.Dialect`
+  on one of them is a **compile-time** `TS2339`, not a value that reads as
+  `undefined` at runtime, so their cell is `—`. (`MongoEngine` still
+  translates OQL to Mongo operations internally — it just carries no public
+  SQL-dialect getter.) A consumer holding a mixed union of engine types
+  should narrow with `'Dialect' in engine` rather than reading the property
+  directly — see
+  [Branching on capabilities at runtime](#branching-on-capabilities-at-runtime)
+  below.
 - **Transport** — how bytes leave the process.
-- **Edge-safe** — runs on socket-less edge/serverless runtimes (Cloudflare
-  Workers, Vercel Edge, Deno Deploy) because it uses only global `fetch`.
+- **Edge-safe** — runs on every edge/serverless runtime, including ones with
+  no socket primitive at all (Vercel Edge), because it uses only global
+  `fetch`. Cloudflare Workers and Deno Deploy are partial exceptions to the ❌
+  column — see [Edge / serverless](#edge--serverless) below.
 - ✅ supported · ❌ not supported · — not applicable (capability is
   SQL-only; KV/document engines don't declare it).
 
@@ -71,6 +82,40 @@ Notes:
   support transactions (Mongo sessions, Redis `MULTI`/`EXEC`) but the surface
   isn't wired through yet, so both declare `transactions: false` honestly.
 
+## Branching on capabilities at runtime
+
+Every value in the matrix above is read straight off `engine.Capabilities`
+(and, for SQL engines, `engine.Dialect`) — no engine-specific `instanceof`
+checks needed. `Capabilities` is present on every engine type, so it's
+always safe to read; `Dialect` is not (see the Legend note above), so narrow
+with `'Dialect' in engine` rather than reading it directly on a value whose
+static type might be a non-SQL engine:
+
+```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { RedisEngine } from '@tundralibs/drivers/redis';
+
+type AnyEngine = PostgresEngine | RedisEngine;
+
+/** SQL dialect when the engine has one, `undefined` for document/KV engines. */
+function dialectOf(engine: AnyEngine): string | undefined {
+  // `Dialect` only exists on SQL engines (`SQLConnectionEngine` subclasses,
+  // covering every SQL row in the matrix above). `'Dialect' in engine` both
+  // checks its presence and narrows the type — reading `engine.Dialect`
+  // directly on a `RedisEngine`-typed value is a compile error, not a
+  // runtime `undefined`.
+  return 'Dialect' in engine ? engine.Dialect : undefined;
+}
+
+const pg = new PostgresEngine('app', { host: 'localhost', database: 'app' });
+const cache = new RedisEngine('cache', { host: 'localhost' });
+
+console.log(pg.Capabilities.transactions); // true — safe to call pg.transaction(fn)
+console.log(cache.Capabilities.transactions); // false — RedisEngine has no transaction() at all
+console.log(dialectOf(pg)); // 'postgres'
+console.log(dialectOf(cache)); // undefined
+```
+
 ## Edge / serverless
 
 Three edge/HTTP drivers ship today — all pool-free, one request per query, each a
@@ -97,6 +142,23 @@ All three POST over RESTler → the runtime's native global `fetch`, never openi
 a socket (and, for Turso and D1, never loading a native SQLite driver), so they
 run unchanged on Cloudflare Workers, Vercel Edge, and Deno Deploy — only the
 transport differs from their socket/embedded siblings.
+
+**Cloudflare Workers and Deno Deploy are not socket-less, despite the ❌ in
+the Edge-safe column above.** `PostgresEngine`, `MariaEngine`, `RedisEngine`,
+and `MemcachedEngine` open real TCP connections on both, but not identically:
+on Deno Deploy all four connect natively, since it runs the real Deno runtime
+and `Deno.connect` works unchanged. On Workers, `PostgresEngine`,
+`RedisEngine` and `MemcachedEngine` connect via `@tundralibs/compat`'s
+`net.connect()`, which runs on `cloudflare:sockets` — workerd's
+outbound-socket primitive — with no `nodejs_compat` compatibility flag
+required; `MariaEngine` connects too, but by a different path, since it wraps
+the third-party `mariadb` driver directly instead of `compat/net` — it needs
+the `nodejs_compat` flag to shim `node:net` underneath that driver. Every one
+of the four works the same as on Deno/Bun/Node, as long as the target is
+reachable from them. The Edge-safe column tracks _fetch-only_ portability
+across every edge runtime, including Vercel Edge, which has no socket
+primitive at all; Workers and Deno Deploy are the two edge targets where the
+TCP engines also happen to work.
 
 Still **planned** (see [`ROADMAP.md`](../ROADMAP.md) → _Planned / deferred_), a
 thin transport swap over its existing translator:

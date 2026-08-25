@@ -18,6 +18,21 @@ Cross-runtime testing framework with unified API.
 
 The Test module provides a unified testing API that works seamlessly across Deno, Bun, and Node.js. It wraps each runtime's native test framework with a consistent interface.
 
+> `describe`, `it`, and every hook delegate to the detected runtime's own
+> framework (`@std/testing/bdd` on Deno, `bun:test` on Bun, `node:test` on
+> Node). Outside those three — browsers, Cloudflare Workers, any other
+> runtime — every one of them throws `UnsupportedRuntimeError` (from
+> `@tundralibs/compat`) instead of silently no-op'ing: there's no native
+> test framework to delegate to.
+
+Reach for this when a suite has to run unmodified under `deno test`,
+`bun test`, and `node --test`. It only covers the shape common to all
+three — no parametrized/`.each` tests, no built-in mocking (Node's
+`test.mock`), no snapshot testing or `.todo` (Bun), no test-context
+`t.step()` sub-steps (Deno). If a suite only ever runs on one runtime, or
+needs one of those runtime-specific features, importing that runtime's
+native test module directly is the better fit.
+
 ### Features
 
 | Feature            | Bun | Deno | Node.js |
@@ -143,7 +158,57 @@ it({
 });
 ```
 
+#### `.skip` / `.only` shortcuts
+
+`describe` and `it` each carry `.skip` and `.only` static methods —
+shorthand for `{ ignore: true }` / `{ only: true }` on the options form.
+They only accept the `(name, fn)` string shape; for the options-object
+form, pass `ignore`/`only` directly instead.
+
+```typescript ignore
+function skip(name: string, fn: () => void | Promise<void>): void;
+function only(name: string, fn: () => void | Promise<void>): void;
+```
+
+**Example:**
+
+```typescript
+import { describe, it } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+
+describe('Feature flags', () => {
+  it.skip('not implemented yet', () => {
+    throw new Error('unreachable — skipped');
+  });
+
+  it('still runs normally', () => {
+    assert(true);
+  });
+});
+
+// Parked for later — the whole suite (and its children) is skipped.
+describe.skip('Legacy importer', () => {
+  it('never runs', () => {
+    throw new Error('unreachable — suite skipped');
+  });
+});
+```
+
+> `only: true` — including via `.only` — restricts that suite/runtime's
+> run to the marked tests, exactly like the native runners' own focus
+> mode. Don't leave an `.only` committed: nothing in this module flags it
+> the way `compat/bench`'s `only` does for CI (which exits non-zero on an
+> auto-run).
+
 ### Lifecycle Hooks
+
+> Hook functions are handed straight to the underlying runtime's own
+> runner, so whatever `this` resolves to inside one is that runner's
+> behavior — not something this module normalizes. Don't rely on `this`
+> for a hook meant to run portably; close over local variables instead, as
+> the examples below do.
 
 #### `beforeAll()`
 

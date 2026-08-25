@@ -31,9 +31,13 @@ export type {
   UpgradeDecision,
   WebSocketData,
   WebSocketHandler,
-  WebSocketReadyState,
   WebSocketUpgradeContext,
 } from './types/mod.ts';
+// `WebSocketReadyState` is a real `const` object (numeric readyState
+// values), not a type — re-exporting it via `export type` would erase
+// it, leaving consumers with no way to read `.OPEN`/`.CLOSED`/etc. at
+// runtime.
+export { WebSocketReadyState } from './types/mod.ts';
 export {
   ServerAlreadyRunningError,
   ServerConfigurationError,

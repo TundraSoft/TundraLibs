@@ -48,7 +48,7 @@ import { type CompiledEntity, decryptCell, type Runtime } from './compile.ts';
 import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
-import { isExpressionValue, validateRows } from './guardians.ts';
+import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
 import {
   canonicalizePlain,
   type HashAlgorithm,
@@ -58,6 +58,7 @@ import {
   NormCryptoError,
   NormHookError,
   NormQueryError,
+  NormUnsupportedError,
   NormValidationError,
   type ValidationIssue,
 } from './errors/mod.ts';
@@ -65,6 +66,27 @@ import {
 /** Erased row shape used internally. Typed generics apply at the
  * public method boundaries only. */
 type Row = Record<string, unknown>;
+
+/**
+ * Strictly-monotonic wall-clock for temporal cutovers. `Date.now()` has
+ * millisecond resolution, so several supersedes of the same key inside one
+ * millisecond would otherwise share an `EffectiveFrom` — producing
+ * zero-length periods and a non-deterministic version order. Flooring each
+ * cutover at `previous + 1ms` guarantees strictly-increasing, orderable
+ * periods within a process. (Cross-process same-millisecond contention is
+ * caught by the `UNIQUE(key…, EffectiveTo)` constraint — the loser errors
+ * and the caller retries at a later instant.)
+ */
+let __temporalClockMs = 0;
+function nextTemporalCutover(): string {
+  __temporalClockMs = Math.max(Date.now(), __temporalClockMs + 1);
+  return new Date(__temporalClockMs).toISOString();
+}
+
+/** Clock-skew tolerance for a caller-supplied `EffectiveFrom`: a value up
+ * to this far in the "past" is accepted as "now" (covers app↔DB skew and
+ * the moment between building a payload and executing it). */
+const TEMPORAL_SKEW_MS = 1000;
 
 /** Loose structural bound shared by the repo generics. */
 type AnyDef = { readonly columns: Record<string, ColumnSpec> };
@@ -106,6 +128,10 @@ export type FindOptions = {
    * surface it as `result.total` — the answer to "how many match in
    * TOTAL" when limit/offset paginate `data`. */
   total?: boolean;
+  /** `true` = bypass the read cache for THIS call entirely: do not read
+   * a cached value and do not populate one (the query still runs against
+   * the database). No effect when caching is not configured. */
+  noCache?: boolean;
 };
 
 /** Resolved projection plan (join planner output). */
@@ -123,6 +149,13 @@ type ProjectionPlan = {
    * refs to unprojected to-many relations lifted into `$exists`
    * subqueries (identical reference when nothing needed lifting). */
   where: Row | undefined;
+  /** Aliases of unprojected to-many relations whose filters were lifted
+   * into `$exists` correlated subqueries. Empty for a plain read. A
+   * lifted `$exists` is a cross-table dependency that never surfaces in
+   * `oqlJoins`, so — like a join — it makes the read non-cacheable
+   * (per-table pruning cannot invalidate it when the related table is
+   * written). */
+  existsAliases: readonly string[];
   /** Output key → `<registryKey>.<col>` provenance. */
   aliasMap: Map<string, string>;
   relations: Array<{
@@ -165,6 +198,7 @@ export type RepoFor<
   : R[K] extends { readonly type: 'VIEW' } ? ReadRepo<R, K>
   : R[K] extends { readonly type: 'QUERY' }
     ? QueryAccessor<Extract<R[K], AnyDef>>
+  : R[K] extends { readonly type: 'AUDIT' } ? ReadRepo<R, K>
   : never;
 
 // =============================================================================
@@ -194,6 +228,13 @@ export class ReadRepo<
    * repo was reached through, and not yet narrowed — _scopeForOp
    * filters it to THIS entity's columns. undefined = unscoped. */
   protected readonly _scope: NormScope | undefined;
+  /** The enclosing transaction's written-entity accumulator (TABLE
+   * repos only), or undefined outside a transaction. A write records
+   * its entity key here and the prune fires at commit. */
+  protected readonly _txDirty: Set<string> | undefined;
+  /** Subset of `_txDirty` that also needs CASCADE-dependent pruning at
+   * commit (delete/truncate only — see {@link _invalidateCache}). */
+  protected readonly _txCascadeDirty: Set<string> | undefined;
 
   /**
    * Internal — constructed by the runtime, not by user code; reach a
@@ -203,6 +244,9 @@ export class ReadRepo<
    * @param executor - The engine seam it issues queries against.
    * @param txId - Set when the repo runs inside a transaction.
    * @param scope - The active `db.scope(...)` filter, if any.
+   * @param txDirty - The transaction's dirty-entity set (writes only).
+   * @param txCascadeDirty - The transaction's cascade-dirty subset (see
+   *   {@link _txCascadeDirty}).
    */
   public constructor(
     runtime: Runtime,
@@ -210,12 +254,106 @@ export class ReadRepo<
     executor: Executor,
     txId?: string,
     scope?: NormScope,
+    txDirty?: Set<string>,
+    txCascadeDirty?: Set<string>,
   ) {
     this._runtime = runtime;
     this._compiled = compiled;
     this._executor = executor;
     this._txId = txId;
     this._scope = scope;
+    this._txDirty = txDirty;
+    this._txCascadeDirty = txCascadeDirty;
+  }
+
+  /**
+   * Cache-read helper for the read methods: returns the cached value for
+   * `q` (already-built query IR) or `undefined` when caching is off for
+   * this entity, the read is transaction-scoped, `noCache` was passed,
+   * or the query joins / aggregates (which are never cached — a
+   * `cache-skip` warning is emitted so the miss is diagnosable). On a
+   * miss when caching WOULD apply, returns the cache key so the caller
+   * can populate it; otherwise the key is undefined.
+   */
+  protected async _cacheLookup(
+    op: string,
+    q: unknown,
+    opts: { noCache?: boolean; decrypt?: boolean; joined: boolean },
+  ): Promise<{ hit: true; value: unknown } | { hit: false; key?: string }> {
+    const cache = this._runtime.cache;
+    if (
+      cache === undefined || !cache.enabledFor(this._compiled.key) ||
+      this._txId !== undefined || opts.noCache === true
+    ) {
+      return { hit: false };
+    }
+    if (opts.joined) {
+      this._runtime.emit(
+        'warning',
+        this._compiled.key,
+        op,
+        'cache-skip',
+        `${this._compiled.key}.${op.toLowerCase()}() not cached — the query ` +
+          `joins another table. Model a cached multi-table read as a VIEW.`,
+      );
+      return { hit: false };
+    }
+    const key = await cache.keyFor(
+      this._compiled.key,
+      q,
+      opts.decrypt !== false,
+    );
+    const value = await cache.get<unknown>(this._compiled.key, key);
+    return value === undefined ? { hit: false, key } : { hit: true, value };
+  }
+
+  /** Store a read result under the key from a prior {@link _cacheLookup}
+   * miss. No-op when `key` is undefined (caching did not apply). */
+  protected async _cacheStore(
+    key: string | undefined,
+    value: unknown,
+  ): Promise<void> {
+    if (key === undefined) return;
+    await this._runtime.cache!.set(this._compiled.key, key, value);
+  }
+
+  /**
+   * Prune the cache after a write to THIS entity: outside a transaction,
+   * clear its namespace (and any dependent VIEW/QUERY) immediately;
+   * inside one, defer to the commit-time prune by recording the key.
+   * Always runs (independent of whether THIS entity is itself cacheable)
+   * so a write to a table still invalidates views built over it.
+   *
+   * @param cascading - Pass `true` from `delete()`/`truncate()`: the
+   *   database removes CASCADE-FK-dependent rows in OTHER tables too, so
+   *   their caches need pruning even though norm never called their own
+   *   write methods. `insert()`/`update()`/`upsert()` never cascade —
+   *   leave it `false` (the default).
+   */
+  protected async _invalidateCache(cascading = false): Promise<void> {
+    const cache = this._runtime.cache;
+    if (cache === undefined) return;
+    if (this._txId !== undefined && this._txDirty !== undefined) {
+      this._txDirty.add(this._compiled.key);
+      if (cascading) this._txCascadeDirty?.add(this._compiled.key);
+      return;
+    }
+    if (cascading) {
+      await cache.invalidateCascading(this._compiled.key);
+    } else {
+      await cache.invalidate(this._compiled.key);
+    }
+  }
+
+  /**
+   * Manually drop this entity's cached reads — the same invalidation a
+   * write performs: this entity's namespace plus any VIEW / QUERY whose
+   * stored query reads from it. No-op when the `Norm` has no `cache`
+   * configured. Use {@link NormDb.clearCache} to drop every entity.
+   */
+  public clearCache(): Promise<void> {
+    return this._runtime.cache?.invalidate(this._compiled.key) ??
+      Promise.resolve();
   }
 
   /** The subset of the scope whose columns EXIST on this entity —
@@ -450,6 +588,43 @@ export class ReadRepo<
       ...(typeof options.offset === 'number' ? { offset: options.offset } : {}),
     } as NormDMLQuery;
 
+    // 3b. Read cache: JOINED reads are never cached (a joined entry
+    //     would depend on more than one table, breaking per-table
+    //     pruning) — model those as a VIEW. A single-table aggregate is
+    //     fine: it still depends on exactly one table. A joined aggregate
+    //     is caught by the join check. A filter on an unprojected to-many
+    //     relation lifts to an `$exists` subquery (never a join), so it
+    //     too depends on the related table — exclude it the same way.
+    //     (`total: true` rides the key so a paginated read and its total
+    //     stay distinct.)
+    const joined = Object.keys(plan.oqlJoins).length > 0 ||
+      plan.existsAliases.length > 0;
+    const lookup = await this._cacheLookup(
+      'SELECT',
+      { q, total: options.total === true },
+      { noCache: options.noCache, decrypt: options.decrypt, joined },
+    );
+    if (lookup.hit) {
+      const cached = lookup.value as {
+        data: Row[];
+        count: number;
+        total?: number;
+      };
+      this._runtime.emit('cacheHit', c.key, 'SELECT', id);
+      return makeResult<Row[]>({
+        id,
+        op: 'SELECT',
+        txId: this._txId,
+        count: cached.count,
+        time: 0,
+        isSlow: false,
+        total: cached.total,
+        scoped: this._scopedEnvelope(scopeApplied),
+        data: cached.data,
+      });
+    }
+    const cacheKey = lookup.key;
+
     // 4. Execute (tx-bound when this repo is tx-scoped).
     const res = await this._executor.execute<Row>(q);
     this._emitCall('SELECT', res.time, res.isSlow, id);
@@ -478,6 +653,10 @@ export class ReadRepo<
 
     // 5. JSON-parse relation values (SQLite returns aggregates as text).
     this._parseJoinJson(rows, plan);
+
+    // 5b. Decode raw DATE_TYPES columns SQLite returned as ISO strings
+    //     back to `Date` (Postgres/MariaDB/Mongo already return one).
+    this._decodeDateColumns(rows);
 
     // 6. Decrypt encrypted result columns — top-level and inside
     //    relation values.
@@ -521,6 +700,10 @@ export class ReadRepo<
       this._emitCall('COUNT', cres.time, cres.isSlow, id);
       total = coerceCount(cres.data[0]?.Count);
     }
+
+    // 11. Populate the cache on a miss (no-op when caching did not apply
+    //     to this read). Store the fully-processed rows + counts.
+    await this._cacheStore(cacheKey, { data: rows, count: rows.length, total });
 
     return makeResult<Row[]>({
       id,
@@ -584,7 +767,10 @@ export class ReadRepo<
    *   or misuses a hashed/encrypted one, or a scoped handle's guard is
    *   violated.
    */
-  public async count(filter?: FilterOf<R, Self>): Promise<NormResult> {
+  public async count(
+    filter?: FilterOf<R, Self>,
+    options: { noCache?: boolean } = {},
+  ): Promise<NormResult> {
     const id = ulid();
     const c = this._compiled;
     // Same guard + hashed rewrite as find(); joined refs plan their
@@ -602,23 +788,53 @@ export class ReadRepo<
       (plan?.where ?? where) as QueryFilter | undefined,
       scopeApplied,
     );
+    // Two DISTINCT signals, deliberately not merged: `hasJoins` controls
+    // whether the query IR carries a (non-empty) `joins` block — an
+    // unprojected to-many lifts to `$exists` in `plan.where` instead, so
+    // it must NOT attach an empty `joins: {}` (the translator rejects
+    // that). `cacheIneligible` is the broader one for the cache guard
+    // below: an `$exists` subquery is still a cross-table dependency
+    // that per-table pruning can't invalidate, even though it carries no
+    // join.
+    const hasJoins = plan !== undefined &&
+      Object.keys(plan.oqlJoins).length > 0;
+    const cacheIneligible = plan !== undefined &&
+      (hasJoins || plan.existsAliases.length > 0);
     const q = {
       type: 'COUNT',
       ...this._irBase(),
       columns: c.columnNames,
-      ...(plan !== undefined && Object.keys(plan.oqlJoins).length > 0
-        ? { joins: plan.oqlJoins }
-        : {}),
+      ...(hasJoins ? { joins: plan!.oqlJoins } : {}),
       ...(effWhere ? { where: effWhere } : {}),
     } as NormDMLQuery;
+
+    const lookup = await this._cacheLookup('COUNT', q, {
+      noCache: options.noCache,
+      joined: cacheIneligible,
+    });
+    if (lookup.hit) {
+      this._runtime.emit('cacheHit', c.key, 'COUNT', id);
+      return makeResult({
+        id,
+        op: 'COUNT',
+        txId: this._txId,
+        count: lookup.value as number,
+        time: 0,
+        isSlow: false,
+        scoped: this._scopedEnvelope(scopeApplied),
+      });
+    }
+
     const res = await this._executor.execute<Row>(q);
     this._emitCall('COUNT', res.time, res.isSlow, id);
+    // Postgres/MariaDB return COUNT() as BIGINT-string; coerce.
+    const count = coerceCount(res.data[0]?.Count);
+    await this._cacheStore(lookup.key, count);
     return makeResult({
       id,
       op: 'COUNT',
       txId: this._txId,
-      // Postgres/MariaDB return COUNT() as BIGINT-string; coerce.
-      count: coerceCount(res.data[0]?.Count),
+      count,
       time: res.time,
       isSlow: res.isSlow,
       scoped: this._scopedEnvelope(scopeApplied),
@@ -748,6 +964,17 @@ export class ReadRepo<
     for (const [key, value] of Object.entries(node as Row)) {
       if (!key.startsWith('@')) {
         out[key] = await this.__rewriteWhereNode(value);
+        continue;
+      }
+      // Virtual temporal point-in-time key: `@AsOf: T` → the version in
+      // force at T, i.e. `EffectiveFrom <= T AND EffectiveTo > T`.
+      const temporal = this._compiled.temporal;
+      if (temporal !== undefined && key.slice(1) === temporal.asOf) {
+        const range = await this.__rewriteWhereNode({
+          [`@${temporal.from}`]: { $lte: value },
+          [`@${temporal.to}`]: { $gt: value },
+        }) as Row;
+        Object.assign(out, range);
         continue;
       }
       const ref = this.__resolveWhereRef(key.slice(1));
@@ -1503,6 +1730,7 @@ export class ReadRepo<
       where: existsAliases.size > 0
         ? this.__liftToExists(where, existsAliases) as Row
         : where,
+      existsAliases: [...existsAliases],
       aliasMap,
       relations,
       masks,
@@ -1589,6 +1817,30 @@ export class ReadRepo<
             // Leave the raw string in place — caller can decode it.
           }
         }
+      }
+    }
+  }
+
+  /** Decode a raw driver value back to `Date` for every top-level
+   * DATE_TYPES column that came back as a string — SQLite has no
+   * native date/time storage class, so it returns the ISO string norm
+   * wrote on `.encrypt()`-less columns, unlike Postgres/MariaDB/Mongo
+   * (already real `Date` objects; this is a no-op there) and unlike an
+   * `.encrypt()`ed date column (its type is restored by `decryptCell`
+   * in crypto.ts, which is why encrypted columns are skipped here —
+   * running this first would try to parse ciphertext as a date, and
+   * with `decrypt: false` the ciphertext must survive untouched). Only
+   * top-level row columns; a date column nested inside a joined
+   * relation value is not decoded here. */
+  protected _decodeDateColumns(rows: Row[]): void {
+    if (rows.length === 0) return;
+    const c = this._compiled;
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    for (const [key, spec] of Object.entries(specs)) {
+      if (!DATE_TYPES.has(spec.type) || c.localEncrypted.has(key)) continue;
+      for (const row of rows) {
+        const v = row[key];
+        if (typeof v === 'string') row[key] = new Date(v);
       }
     }
   }
@@ -1935,14 +2187,14 @@ export class Repo<
   /** Fetch one row by primary key (composite keys: all columns). */
   public getByPK(
     pk: PrimaryKeyOf<D>,
-    options?: { decrypt?: boolean },
+    options?: { decrypt?: boolean; noCache?: boolean },
   ): Promise<NormResult<DefaultRowOf<R, Self> | null>>;
   /** Fetch one row by primary key under an explicit projection. */
   public getByPK<
     const P extends ProjectionInput & ValidProjection<R, Self, P>,
   >(
     pk: PrimaryKeyOf<D>,
-    options: { project: P; decrypt?: boolean },
+    options: { project: P; decrypt?: boolean; noCache?: boolean },
   ): Promise<NormResult<ProjectedRowOf<R, Self, P> | null>>;
   /**
    * @throws {@link NormQueryError} Propagated from {@link find} — e.g. an
@@ -1950,7 +2202,11 @@ export class Repo<
    */
   public async getByPK(
     pk: PrimaryKeyOf<D>,
-    options: { project?: ProjectionInput; decrypt?: boolean } = {},
+    options: {
+      project?: ProjectionInput;
+      decrypt?: boolean;
+      noCache?: boolean;
+    } = {},
     // deno-lint-ignore no-explicit-any
   ): Promise<NormResult<any>> {
     const r = await (this.find as (
@@ -1960,6 +2216,7 @@ export class Repo<
       limit: 1,
       decrypt: options.decrypt,
       project: options.project,
+      noCache: options.noCache,
     });
     const row = r.data[0] ?? null;
     const out: NormResult<Row | null> = {
@@ -1999,13 +2256,29 @@ export class Repo<
     const id = ulid();
     const isBatch = Array.isArray(data);
     const callerRows = isBatch ? [...(data as Row[])] : [data as Row];
+    const scopeApplied = this._scopeForOp();
+    const c = this._compiled;
+    // Temporal: a caller MAY supply `EffectiveFrom` to date/schedule the
+    // new version. It is a norm-managed column the guardian ignores, so
+    // pull the raw value out (on a copy — never mutate the caller's
+    // object) BEFORE validation, and drive the supersede's cutover with it.
+    let suppliedFroms: unknown[] | undefined;
+    if (c.temporal !== undefined) {
+      const fromCol = c.temporal.from;
+      suppliedFroms = callerRows.map((r) => r[fromCol]);
+      for (let i = 0; i < callerRows.length; i++) {
+        if (fromCol in (callerRows[i] as Row)) {
+          const copy = { ...callerRows[i] };
+          delete copy[fromCol];
+          callerRows[i] = copy;
+        }
+      }
+    }
     // Scope: a scoped insert must land IN the scope. Reject a payload
     // that contradicts the scope; auto-fill the value so callers
     // can't forget the tenant key. Insertable scope columns are set
     // PRE-validation (they flow through beforeWrite + WIN over the
     // column default); norm-owned ones are injected post-validation.
-    const scopeApplied = this._scopeForOp();
-    const c = this._compiled;
     if (scopeApplied !== null) {
       for (const row of callerRows) {
         for (const [col, value] of scopeApplied) {
@@ -2040,14 +2313,41 @@ export class Repo<
         }
       }
     }
+    // Temporal entity: an insert SUPERSEDES the current version rather
+    // than appending a plain row (close-current + insert-new, atomic).
+    if (c.temporal !== undefined) {
+      return await this.__temporalSupersede(
+        rows,
+        suppliedFroms ?? [],
+        id,
+        scopeApplied,
+        opts.decrypt !== false,
+      );
+    }
     const q = {
       type: 'INSERT',
       ...this._irBase(),
       columns: this._compiled.columnNames,
       data: rows as never,
     } as Query<'INSERT'>;
-    const res = await this._executor.execute<Row>(q);
+    let res: { data: Row[]; time: number; isSlow: boolean };
+    if (c.audit !== undefined) {
+      res = await this._withTx(async (txId) => {
+        const r = await this._executor.execute<Row>(q, txId);
+        let time = r.time;
+        let isSlow = r.isSlow;
+        for (const row of r.data) {
+          const m = await this._auditMirror(this._pkValuesOf(row), row, txId);
+          time += m.time;
+          isSlow ||= m.isSlow;
+        }
+        return { data: r.data, time, isSlow };
+      });
+    } else {
+      res = await this._executor.execute<Row>(q);
+    }
     this._emitCall('INSERT', res.time, res.isSlow, id);
+    await this._invalidateCache();
     const returned = await this.__finishReturning(
       res.data,
       opts.decrypt !== false,
@@ -2062,6 +2362,282 @@ export class Repo<
       scoped: this._scopedEnvelope(scopeApplied),
       data: returned,
     });
+  }
+
+  /**
+   * Run `fn` inside a transaction when the executor supports one and
+   * this repo is not already tx-scoped; otherwise run it directly
+   * (already atomic via the enclosing transaction, or best-effort on a
+   * no-transaction engine). Used ONLY for audited writes — a write on a
+   * non-audited entity never pays for a transaction it doesn't need.
+   */
+  private async _withTx<T>(
+    fn: (txId: string | undefined) => Promise<T>,
+  ): Promise<T> {
+    if (this._executor.capabilities.transactions && this._txId === undefined) {
+      return await this._executor.transaction((session) => fn(session.id));
+    }
+    return await fn(this._txId);
+  }
+
+  /** This entity's primary-key columns, picked off an already-fetched
+   * row (raw or decrypted — pk columns are never encrypted, so either
+   * form carries the same value). */
+  private _pkValuesOf(row: Row): Row {
+    const out: Row = {};
+    for (
+      const col of (this._compiled.def as { primaryKeys: readonly string[] })
+        .primaryKeys
+    ) {
+      out[col] = row[col];
+    }
+    return out;
+  }
+
+  /**
+   * Mirror one write into this entity's audit replica, keyed by the
+   * SOURCE's primary key: close the version currently open for
+   * `keyValues` (a no-op UPDATE when none is open — covers the
+   * first-ever version for that key) and, when `newRow` is given, open
+   * a new one populated from it. `newRow === undefined` is the DELETE
+   * case: close only, no successor — a closed version with no successor
+   * unambiguously means the source row was deleted, so no separate
+   * op-type column is needed to record that. The cutover is always
+   * "now" (the monotonic supersede clock) — unlike a temporal table,
+   * audit never accepts a caller-supplied `EffectiveFrom`; nothing ever
+   * calls this from outside a `Repo` write path. Runs with the caller's
+   * `txId` (or autocommit outside one) — the caller decides atomicity
+   * via {@link _withTx}.
+   */
+  private async _auditMirror(
+    keyValues: Row,
+    newRow: Row | undefined,
+    txId: string | undefined,
+  ): Promise<{ time: number; isSlow: boolean }> {
+    const replica = this._runtime.compiled.get(
+      this._compiled.audit!.replicaKey,
+    )!;
+    const t = replica.temporal!;
+    const cutover = new Date(nextTemporalCutover());
+    let time = 0;
+    let isSlow = false;
+    const base = {
+      table: replica.def.name,
+      ...((replica.def as { dbSchema?: string }).dbSchema !== undefined
+        ? { schema: (replica.def as { dbSchema?: string }).dbSchema }
+        : {}),
+    };
+    const keyWhere: Row = { [`@${t.to}`]: t.sentinel };
+    for (const [col, v] of Object.entries(keyValues)) keyWhere[`@${col}`] = v;
+    const closeQ = {
+      type: 'UPDATE',
+      ...base,
+      columns: replica.columnNames,
+      data: { [t.to]: cutover } as never,
+      where: keyWhere,
+    } as Query<'UPDATE'>;
+    const cres = await this._executor.execute<Row>(closeQ, txId);
+    time += cres.time;
+    isSlow ||= cres.isSlow;
+    if (newRow === undefined) return { time, isSlow };
+    // Pick only the replica's OWN declared columns out of `newRow` — a
+    // raw row straight from the driver can carry engine-internal extras
+    // the replica never declared (e.g. MongoDB's own `_id` alongside
+    // norm's columns), which the translator rejects outright.
+    const merged: Row = { ...keyValues, ...newRow };
+    const insertRow: Row = { [t.from]: cutover, [t.to]: t.sentinel };
+    for (const col of replica.columnNames) {
+      if (col in merged) insertRow[col] = merged[col];
+    }
+    for (const [col, d] of replica.postInsertDefaults) {
+      if (insertRow[col] !== undefined) continue;
+      insertRow[col] = typeof d === 'function' ? (d as () => unknown)() : d;
+    }
+    const insQ = {
+      type: 'INSERT',
+      ...base,
+      columns: replica.columnNames,
+      data: [insertRow] as never,
+    } as Query<'INSERT'>;
+    const ires = await this._executor.execute<Row>(insQ, txId);
+    time += ires.time;
+    isSlow ||= ires.isSlow;
+    return { time, isSlow };
+  }
+
+  /**
+   * The effective-dating write primitive: for each already-validated row,
+   * SPLIT the version in force at the cutover instant — close it at the
+   * cutover and open a new version `[cutover, thatVersion'sEffectiveTo)`.
+   * The cutover is a caller-supplied `EffectiveFrom` (validated: not in the
+   * past, and strictly after the split version's own start) or a monotonic
+   * "now". A plain insert is the same operation with cutover = now, so this
+   * one path handles both the common supersede and back/future-dated
+   * versions (future-scheduling included). Runs in ONE transaction on a
+   * transaction-capable engine; best-effort on a no-transaction engine
+   * (Mongo / edge HTTP). The `UNIQUE(key…, EffectiveTo)` constraint keeps
+   * concurrent supersedes safe.
+   */
+  private async __temporalSupersede(
+    rows: Row[],
+    suppliedFroms: unknown[],
+    id: string,
+    scopeApplied: Map<string, unknown> | null,
+    decrypt: boolean,
+  ): Promise<NormResult<ReadRowOf<D>[]>> {
+    const c = this._compiled;
+    const t = c.temporal!;
+    // The period columns are set as `Date` VALUES (never pre-formatted
+    // strings): each dialect's driver renders a Date to its own datetime
+    // literal — an ISO-8601 string is rejected by MariaDB and mis-typed
+    // by MongoDB.
+    const returned: Row[] = [];
+    let time = 0;
+    let isSlow = false;
+
+    // Per row: resolve the cutover (validated) and the version it splits,
+    // so the new version can INHERIT that version's end boundary.
+    const plans: Array<
+      { row: Row; cutover: Date; newTo: Date; close: boolean }
+    > = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cutover = this.__temporalCutover(suppliedFroms[i]);
+      const active = await this.__versionAt(rows[i]!, cutover);
+      let newTo = t.sentinel;
+      if (active !== undefined) {
+        const activeFrom = new Date(active[t.from] as string).getTime();
+        if (cutover.getTime() <= activeFrom) {
+          throw new NormQueryError(
+            `${c.key}.insert(): ${t.from} must be strictly after the current ` +
+              `version's ${t.from} — cannot start a version before the one ` +
+              `it supersedes.`,
+            { entity: c.key, subject: t.from, code: 'TEMPORAL_OVERLAP' },
+          );
+        }
+        newTo = new Date(active[t.to] as string);
+      }
+      plans.push({
+        row: rows[i]!,
+        cutover,
+        newTo,
+        close: active !== undefined,
+      });
+    }
+
+    const run = async (txId: string | undefined): Promise<void> => {
+      for (const { row, cutover, newTo, close } of plans) {
+        // 1. Close the version in force at the cutover (the `@AsOf`
+        //    predicate selects exactly it — the current version in the
+        //    common case). Skipped when the key has no version yet.
+        if (close) {
+          const keyFilter: Row = {};
+          for (const col of t.key) keyFilter[`@${col}`] = row[col];
+          keyFilter[`@${t.asOf}`] = cutover;
+          const closeWhere = await this._mergeScopeWhere(
+            await this._prepareWhere(keyFilter),
+            scopeApplied,
+          );
+          const closeQ = {
+            type: 'UPDATE',
+            ...this._irBase(),
+            columns: c.columnNames,
+            data: { [t.to]: cutover } as never,
+            ...(closeWhere !== undefined ? { where: closeWhere } : {}),
+          } as Query<'UPDATE'>;
+          const cres = await this._executor.execute<Row>(closeQ, txId);
+          time += cres.time;
+          isSlow ||= cres.isSlow;
+        }
+        // 2. Insert the new version, inheriting the split version's end.
+        const insertRow = { ...row, [t.from]: cutover, [t.to]: newTo };
+        const insQ = {
+          type: 'INSERT',
+          ...this._irBase(),
+          columns: c.columnNames,
+          data: [insertRow] as never,
+        } as Query<'INSERT'>;
+        const ires = await this._executor.execute<Row>(insQ, txId);
+        time += ires.time;
+        isSlow ||= ires.isSlow;
+        returned.push(...ires.data);
+      }
+    };
+
+    if (this._executor.capabilities.transactions && this._txId === undefined) {
+      await this._executor.transaction((session) => run(session.id));
+    } else {
+      // Already inside a transaction (atomic), OR a no-tx engine (best-
+      // effort — see the doc comment).
+      await run(this._txId);
+    }
+
+    this._emitCall('INSERT', time, isSlow, id);
+    await this._invalidateCache();
+    const out = await this.__finishReturning(returned, decrypt);
+    return makeResult<ReadRowOf<D>[]>({
+      id,
+      op: 'INSERT',
+      txId: this._txId,
+      count: out.length,
+      time,
+      isSlow,
+      scoped: this._scopedEnvelope(scopeApplied),
+      data: out,
+    });
+  }
+
+  /**
+   * Resolve a temporal cutover from a caller-supplied `EffectiveFrom` (or
+   * a monotonic "now" when omitted). A supplied value is validated: it
+   * must parse, and it must not be in the past (beyond the skew tolerance)
+   * — history is immutable.
+   *
+   * @throws {@link NormQueryError} `TEMPORAL_PAST` when the value is a past
+   *   instant.
+   */
+  private __temporalCutover(supplied: unknown): Date {
+    const t = this._compiled.temporal!;
+    if (supplied === undefined || supplied === null) {
+      return new Date(nextTemporalCutover());
+    }
+    const d = supplied instanceof Date
+      ? supplied
+      : new Date(supplied as string);
+    if (Number.isNaN(d.getTime())) {
+      throw new NormQueryError(
+        `${this._compiled.key}.insert(): '${t.from}' is not a valid date.`,
+        { entity: this._compiled.key, subject: t.from, code: 'TEMPORAL_PAST' },
+      );
+    }
+    if (d.getTime() < Date.now() - TEMPORAL_SKEW_MS) {
+      throw new NormQueryError(
+        `${this._compiled.key}.insert(): '${t.from}' is in the past — a ` +
+          `temporal version can only start now or in the future (history is ` +
+          `immutable).`,
+        { entity: this._compiled.key, subject: t.from, code: 'TEMPORAL_PAST' },
+      );
+    }
+    return d;
+  }
+
+  /** The version in force at `at` for `row`'s temporal key (via the `@AsOf`
+   * predicate), or undefined when the key has no version yet. Runs
+   * inside the caller's transaction when the repo is tx-scoped; otherwise
+   * a committed read. */
+  private async __versionAt(row: Row, at: Date): Promise<Row | undefined> {
+    const t = this._compiled.temporal!;
+    const filter: Row = {};
+    for (const col of t.key) filter[`@${col}`] = row[col];
+    filter[`@${t.asOf}`] = at;
+    const res = await (this.find as (
+      f?: QueryFilter,
+      o?: FindOptions,
+    ) => Promise<NormResult<Row[]>>)(filter as QueryFilter, {
+      limit: 1,
+      noCache: true,
+      decrypt: false,
+    });
+    return res.data[0];
   }
 
   /**
@@ -2115,6 +2691,17 @@ export class Repo<
   ): Promise<NormResult<ReadRowOf<D>[]>> {
     const id = ulid();
     const c = this._compiled;
+    // Temporal entity: insert-or-update-on-conflict has no meaning when
+    // every insert already supersedes the current version. Disable it —
+    // callers add a version via insert() (which supersedes) instead.
+    if (c.temporal !== undefined) {
+      throw new NormUnsupportedError({
+        feature: `upsert on the temporal table '${c.key}' — a temporal ` +
+          `table is insert-only (insert() already supersedes the current ` +
+          `version); use insert() instead`,
+        dialect: this._executor.capabilities.dialect,
+      });
+    }
     // Ciphertext is IV-randomized — an encrypted conflict key can
     // never match an existing row by value; the upsert would silently
     // duplicate or fail with a confusing dialect error.
@@ -2289,8 +2876,24 @@ export class Repo<
         ? { updateOnConflict: updateOnConflict.map((k) => `@${k}`) }
         : {}),
     } as Query<'UPSERT'>;
-    const res = await this._executor.execute<Row>(q);
+    let res: { data: Row[]; time: number; isSlow: boolean };
+    if (c.audit !== undefined) {
+      res = await this._withTx(async (txId) => {
+        const r = await this._executor.execute<Row>(q, txId);
+        let time = r.time;
+        let isSlow = r.isSlow;
+        for (const row of r.data) {
+          const m = await this._auditMirror(this._pkValuesOf(row), row, txId);
+          time += m.time;
+          isSlow ||= m.isSlow;
+        }
+        return { data: r.data, time, isSlow };
+      });
+    } else {
+      res = await this._executor.execute<Row>(q);
+    }
     this._emitCall('UPSERT', res.time, res.isSlow, id);
+    await this._invalidateCache();
     const returned = await this.__finishReturning(
       res.data,
       opts.decrypt !== false,
@@ -2320,6 +2923,19 @@ export class Repo<
     data: UpdateOf<D>,
     filter?: FilterOf<R, Self>,
   ): Promise<NormResult> {
+    // Temporal entity: fields are never mutated in place, and routing a
+    // PARTIAL update payload to insert() would validate it against the
+    // non-partial insert guardian (silently dropping every column the
+    // caller did not repeat). A version is added ONLY via insert() —
+    // update() is disabled so the caller supplies a full new version.
+    if (this._compiled.temporal !== undefined) {
+      throw new NormUnsupportedError({
+        feature: `in-place update on the temporal table ` +
+          `'${this._compiled.key}' — a temporal table is insert-only; call ` +
+          `insert() to add a new version`,
+        dialect: this._executor.capabilities.dialect,
+      });
+    }
     const id = ulid();
     let where: QueryFilter | undefined;
     if (filter === undefined) {
@@ -2379,8 +2995,42 @@ export class Repo<
       data: ready as never,
       ...(where !== undefined ? { where } : {}),
     } as Query<'UPDATE'>;
-    const res = await this._executor.execute<Row>(q);
+    const c = this._compiled;
+    let res: { count: unknown; time: number; isSlow: boolean };
+    if (c.audit !== undefined) {
+      // UPDATE never RETURNs rows — the full post-update state the
+      // replica needs is re-read (same WHERE, same transaction) right
+      // after the write. An unbounded update() re-reads every row it
+      // touched; that cost is the documented price of an audited
+      // unfiltered update.
+      const selQ = {
+        type: 'SELECT',
+        ...this._irBase(),
+        columns: c.columnNames,
+        // Every column, hidden ones included — the replica needs the
+        // FULL row state, not the default-read projection.
+        projection: Object.fromEntries(
+          c.columnNames.map((col) => [`@${col}`, true]),
+        ),
+        ...(where !== undefined ? { where } : {}),
+      } as Query<'SELECT'>;
+      res = await this._withTx(async (txId) => {
+        const r = await this._executor.execute<Row>(q, txId);
+        const affected = await this._executor.execute<Row>(selQ, txId);
+        let time = r.time + affected.time;
+        let isSlow = r.isSlow || affected.isSlow;
+        for (const row of affected.data) {
+          const m = await this._auditMirror(this._pkValuesOf(row), row, txId);
+          time += m.time;
+          isSlow ||= m.isSlow;
+        }
+        return { count: r.count, time, isSlow };
+      });
+    } else {
+      res = await this._executor.execute<Row>(q);
+    }
     this._emitCall('UPDATE', res.time, res.isSlow, id);
+    await this._invalidateCache();
     return makeResult({
       id,
       op: 'UPDATE',
@@ -2415,6 +3065,15 @@ export class Repo<
    *   hashed/encrypted column illegally.
    */
   public async delete(filter?: FilterOf<R, Self>): Promise<NormResult> {
+    // Temporal entity: history is never removed — delete is disabled.
+    if (this._compiled.temporal !== undefined) {
+      throw new NormUnsupportedError({
+        feature: `delete on the temporal table '${this._compiled.key}' — a ` +
+          `temporal table retains every version; supersede with a tombstone ` +
+          `value via insert() instead of deleting`,
+        dialect: this._executor.capabilities.dialect,
+      });
+    }
     const id = ulid();
     let where: QueryFilter | undefined;
     if (filter === undefined) {
@@ -2452,8 +3111,45 @@ export class Repo<
       columns: this._compiled.columnNames,
       ...(where !== undefined ? { where } : {}),
     } as Query<'DELETE'>;
-    const res = await this._executor.execute<Row>(q);
+    const c = this._compiled;
+    let res: { count: unknown; time: number; isSlow: boolean };
+    if (c.audit !== undefined) {
+      // DELETE never RETURNs rows — the pk values it is ABOUT to remove
+      // are read first (same WHERE, same transaction) so the replica's
+      // current versions can be closed.
+      const pkCols = (c.def as { primaryKeys: readonly string[] })
+        .primaryKeys;
+      const selQ = {
+        type: 'SELECT',
+        ...this._irBase(),
+        columns: [...pkCols],
+        projection: Object.fromEntries(pkCols.map((col) => [`@${col}`, true])),
+        ...(where !== undefined ? { where } : {}),
+      } as Query<'SELECT'>;
+      res = await this._withTx(async (txId) => {
+        const doomed = await this._executor.execute<Row>(selQ, txId);
+        const r = await this._executor.execute<Row>(q, txId);
+        let time = doomed.time + r.time;
+        let isSlow = doomed.isSlow || r.isSlow;
+        for (const row of doomed.data) {
+          const m = await this._auditMirror(
+            this._pkValuesOf(row),
+            undefined,
+            txId,
+          );
+          time += m.time;
+          isSlow ||= m.isSlow;
+        }
+        return { count: r.count, time, isSlow };
+      });
+    } else {
+      res = await this._executor.execute<Row>(q);
+    }
     this._emitCall('DELETE', res.time, res.isSlow, id);
+    // Cascading: an ON DELETE CASCADE FK removes rows in OTHER tables
+    // too, so their caches need pruning even though norm never called
+    // their own delete().
+    await this._invalidateCache(true);
     return makeResult({
       id,
       op: 'DELETE',
@@ -2490,6 +3186,17 @@ export class Repo<
    */
   public async truncate(opts: { cascade?: boolean } = {}): Promise<NormResult> {
     const id = ulid();
+    // Temporal entity: TRUNCATE erases the entire history in one shot —
+    // exactly what a temporal table exists to prevent. Disabled, like
+    // delete().
+    if (this._compiled.temporal !== undefined) {
+      throw new NormUnsupportedError({
+        feature: `truncate on the temporal table '${this._compiled.key}' — ` +
+          `a temporal table retains every version; its history is never ` +
+          `bulk-erased`,
+        dialect: this._executor.capabilities.dialect,
+      });
+    }
     // A scoped handle promises "every read and write is confined to the
     // scope" — but TRUNCATE takes no WHERE, so it would silently destroy
     // EVERY scope's rows, not just this one. Refuse rather than perform
@@ -2511,8 +3218,37 @@ export class Repo<
       ...this._irBase(),
       ...(opts.cascade ? { cascade: true } : {}),
     } as Query<'TRUNCATE'> as ExecutorQuery;
-    const res = await this._executor.execute<Row>(q);
+    const c = this._compiled;
+    let res: { time: number; isSlow: boolean };
+    if (c.audit !== undefined) {
+      // Every main row vanishes — no per-key correlation needed (unlike
+      // delete()): one bulk UPDATE closes every currently-open replica
+      // version, no successors.
+      const replica = this._runtime.compiled.get(c.audit.replicaKey)!;
+      const t = replica.temporal!;
+      const cutover = new Date(nextTemporalCutover());
+      const closeAllQ = {
+        type: 'UPDATE',
+        table: replica.def.name,
+        ...((replica.def as { dbSchema?: string }).dbSchema !== undefined
+          ? { schema: (replica.def as { dbSchema?: string }).dbSchema }
+          : {}),
+        columns: replica.columnNames,
+        data: { [t.to]: cutover } as never,
+        where: { [`@${t.to}`]: t.sentinel },
+      } as Query<'UPDATE'>;
+      res = await this._withTx(async (txId) => {
+        const r = await this._executor.execute<Row>(q, txId);
+        const cres = await this._executor.execute<Row>(closeAllQ, txId);
+        return { time: r.time + cres.time, isSlow: r.isSlow || cres.isSlow };
+      });
+    } else {
+      res = await this._executor.execute<Row>(q);
+    }
     this._emitCall('TRUNCATE', res.time, res.isSlow, id);
+    // Cascading — same reason as delete(); doubly so when `cascade:
+    // true` itself asked the database to cascade.
+    await this._invalidateCache(true);
     return makeResult({
       id,
       op: 'TRUNCATE',
@@ -2927,16 +3663,17 @@ export class Repo<
     return out;
   }
 
-  /** RETURNING pipeline: decrypt → masks → hidden strip → afterRead
-   * column transforms → afterRead row hook. Masks compute from the
-   * DECODED stored value (before the source's own afterRead — same
-   * input as the read path) and survive the hidden strip even when
-   * their source does not. */
+  /** RETURNING pipeline: date decode → decrypt → masks → hidden strip →
+   * afterRead column transforms → afterRead row hook. Masks compute
+   * from the DECODED stored value (before the source's own afterRead —
+   * same input as the read path) and survive the hidden strip even
+   * when their source does not. */
   private async __finishReturning(
     rows: Row[],
     decrypt: boolean,
   ): Promise<ReadRowOf<D>[]> {
     const c = this._compiled;
+    this._decodeDateColumns(rows);
     if (decrypt) rows = await this._decryptRows(rows);
     this._applyEntityMasks(c, rows, decrypt);
     if (c.returningStrip !== undefined) {
@@ -3012,6 +3749,15 @@ export class QueryAccessor<D extends AnyDef> {
   }
 
   /**
+   * Manually drop this stored query's cached reads (and any VIEW / QUERY
+   * that reads from it). No-op when the `Norm` has no `cache` configured.
+   */
+  public clearCache(): Promise<void> {
+    return this.__runtime.cache?.invalidate(this.__compiled.key) ??
+      Promise.resolve();
+  }
+
+  /**
    * Re-issue the stored SELECT, optionally overriding pagination.
    * Result rows come back RAW — stored queries lack column
    * provenance, so ciphertext is not decrypted. The afterRead row
@@ -3020,7 +3766,7 @@ export class QueryAccessor<D extends AnyDef> {
    * @throws {@link NormHookError} When the entity's `afterRead` hook throws.
    */
   public async find(
-    opts: { limit?: number; offset?: number } = {},
+    opts: { limit?: number; offset?: number; noCache?: boolean } = {},
   ): Promise<NormResult<RowOf<D>[]>> {
     const id = ulid();
     const base = (this.__compiled.def as unknown as QueryDefinition).query;
@@ -3046,6 +3792,36 @@ export class QueryAccessor<D extends AnyDef> {
       ...(effLimit !== 0 ? { limit: effLimit } : {}),
       ...(typeof opts.offset === 'number' ? { offset: opts.offset } : {}),
     };
+
+    // Read cache: a stored QUERY is a single terminal read (never norm-
+    // joined) whose namespace is pruned when any of its source tables is
+    // written. Rows come back raw (no decrypt), so the decrypt flag is a
+    // constant here.
+    const cache = this.__runtime.cache;
+    const cacheable = cache !== undefined &&
+      cache.enabledFor(this.__compiled.key) && this.__txId === undefined &&
+      opts.noCache !== true;
+    let cacheKey: string | undefined;
+    if (cacheable) {
+      cacheKey = await cache!.keyFor(this.__compiled.key, q, false);
+      const cached = await cache!.get<{ data: Row[]; count: number }>(
+        this.__compiled.key,
+        cacheKey,
+      );
+      if (cached !== undefined) {
+        this.__runtime.emit('cacheHit', this.__compiled.key, 'SELECT', id);
+        return makeResult<RowOf<D>[]>({
+          id,
+          op: 'SELECT',
+          txId: this.__txId,
+          count: cached.count,
+          time: 0,
+          isSlow: false,
+          data: cached.data as RowOf<D>[],
+        });
+      }
+    }
+
     const res = await this.__executor.execute<Row>(q);
     this.__runtime.emit(
       'call',
@@ -3074,6 +3850,12 @@ export class QueryAccessor<D extends AnyDef> {
           );
         }
       }
+    }
+    if (cacheKey !== undefined) {
+      await cache!.set(this.__compiled.key, cacheKey, {
+        data: rows,
+        count: rows.length,
+      });
     }
     return makeResult<RowOf<D>[]>({
       id,

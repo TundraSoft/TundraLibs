@@ -6,9 +6,41 @@ drives your types, validation, migrations, and **at-rest column
 encryption**, across PostgreSQL, MariaDB/MySQL, SQLite, and MongoDB —
 and, on edge runtimes, Neon, Turso, and Cloudflare D1 over HTTP.
 
+[![JSR](https://jsr.io/badges/@tundralibs/norm)](https://jsr.io/@tundralibs/norm)
+[![JSR Score](https://jsr.io/badges/@tundralibs/norm/score)](https://jsr.io/@tundralibs/norm)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+
+## Standout features
+
+What sets NORM apart from a typical TypeScript ORM — each links to the
+full guide:
+
+- **Row-level / at-rest encryption** — `.encrypt()` any column; filter
+  and enforce uniqueness on ciphertext via a digest sibling. See
+  [Security](docs/NORM-Security.md).
+- **Audit trail / change history** — a generated, read-only replica that
+  mirrors every insert/update/delete with no change to the source table.
+  See [Audit tables](docs/NORM-Audit.md).
+- **Temporal / effective-dated tables** — norm keeps every version of a
+  row in place, with point-in-time (`@AsOf`) reads and scheduled
+  changes. See [Temporal tables](docs/NORM-Temporal.md).
+- **Multi-tenant / row-level scoping** — one call wraps every read and
+  write of a handle in an always-on equality filter, enforced against
+  cross-tenant writes too. See [Scoping](docs/NORM-Scoping.md).
+- **Opt-in read-query caching** — per-entity TTLs, per-table invalidation
+  on write, any `@tundralibs/cacher` backend. See
+  [Read caching](docs/NORM-Caching.md).
+- **Zero-codegen types** — `RowOf`, `InsertOf`, `UpdateOf`, and typed
+  filters/projections read straight off the entity declaration; no
+  generated files, no build step. See
+  [Schema definition](docs/NORM-Schema.md).
+- **Cross-runtime** — Deno, Bun, Node.js, Cloudflare Workers, and (six of
+  seven dialects) the browser, from one codebase. See [Browser / Worker compatibility](#browser--worker-compatibility) below.
+
+See the [subscription-billing example](examples/subscription-billing/) for several of these working
+together in one runnable app.
 
 ## Overview
 
@@ -33,25 +65,38 @@ dialects are exercised end-to-end by the live test suite.
 
 ## Browser / Worker compatibility
 
-This package is intentionally **server-side first**. The root barrel,
-`@tundralibs/norm`, side-effect-registers all seven dialects for the
-convenience of a single import — including `maria` and `mongo` (real
-npm clients, `mariadb`/`mongodb`, with unconditional Node-builtin
-imports) and `sqlite` (needs `bun:sqlite` / a Deno-only dynamic
-import). None of those three resolve outside their own runtime —
-confirmed directly with esbuild — so the root barrel cannot be bundled
-for a browser or Worker.
+The root barrel, `@tundralibs/norm`, side-effect-registers six of the
+seven dialects for a single import — every one except `sqlite`.
+`sqlite` needs a native binding on every runtime (`bun:sqlite`, a
+Deno-only `@db/sqlite` import-map alias, `node:sqlite`), none of which
+resolve in a bundled target, so it's the one dialect the barrel
+doesn't import eagerly — register it yourself with
+`import '@tundralibs/norm/engines/sqlite'` (Deno/Bun/Node only, never
+at the edge). The other six carry no such specifier, and the barrel
+itself now bundles cleanly for a Worker or browser build with them all
+present — confirmed with a real esbuild/wrangler build, not just a
+module-graph check.
 
-Use `@tundralibs/norm/core` plus the single engine you need instead.
-`neon`, `turso`, and `d1` are the fetch-only dialects meant for the
-edge. `postgres` is worth calling out separately: it's a hand-rolled
-wire-protocol implementation over `@tundralibs/compat/net`, not a
-third-party client, so `core` + `engines/postgres` bundles and
-_imports_ cleanly everywhere too (verified in a workerd-shaped
-environment) — it just can't _connect_ anywhere without a real TCP
-socket, which a browser or standard Worker doesn't have. Only `maria`,
-`mongo`, and `sqlite` are genuinely npm/runtime-bound; reach for those
-on Deno/Bun/Node, not at the edge.
+Bundling isn't the same as running, though:
+
+- `neon`, `turso`, and `d1` are fetch-only (HTTP, no sockets needed) —
+  they work in a Worker and in a browser.
+- `postgres` is a hand-rolled wire protocol over
+  `@tundralibs/compat/net`, which now has a real Workers backend
+  (`cloudflare:sockets`) — confirmed connecting there. It still can't
+  reach anywhere from a browser: there's no raw-socket API there at
+  all.
+- `maria` wraps the third-party `mariadb` driver directly (bypassing
+  `compat` entirely) and has been confirmed connecting over real TCP
+  on Workers too. It assumes Node globals (`process`, etc.) the driver
+  needs, so it doesn't run in a browser either.
+- `mongo`'s Workers behavior hasn't been verified — treat it as
+  server-only until someone checks.
+
+Use `@tundralibs/norm/core` plus the specific engines you need when
+you want to be explicit about what ships to an edge/browser build; the
+root barrel no longer forces an unbundlable dependency on you except
+for `sqlite`.
 
 ## Modules
 
@@ -87,28 +132,46 @@ npx jsr add @tundralibs/norm
 
 ## Choosing an entry point
 
-**`@tundralibs/norm` — server (Deno, Bun, Node).** The root barrel
-registers all seven dialects, so any `database` config constructs with
-no extra import. The price is that it pulls the **native** SQLite
-adapter, whose per-runtime bindings no edge bundler can resolve: the
-barrel cannot be built for Cloudflare Workers or a browser.
+**`@tundralibs/norm` — server (Deno, Bun, Node), and now Workers/browser
+builds too.** The root barrel registers six of the seven dialects, so
+any `database` config other than `sqlite` constructs with no extra
+import. `sqlite` is the one held back: it needs a **native** binding on
+every runtime (`jsr:@db/sqlite` on Deno, `bun:sqlite`, `node:sqlite`),
+none of which an edge bundler can resolve, so it stays out of the
+barrel's eager imports rather than making the barrel itself unbundlable
+for everyone.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
 
+declare const host: string, database: string, username: string;
+
 const norm = new Norm({
-  database: { dialect: 'sqlite', path: './data' },
+  database: { dialect: 'postgres', host, database, username },
   secret: process.env.SECRET,
 });
 ```
 
-**`@tundralibs/norm/core` — edge/serverless.** Identical exports with
-nothing registered; you import the one engine you need and no other
-driver enters the bundle. `core` + `engines/d1` is verified running on
-workerd.
+`sqlite` needs its own explicit import before use, on any runtime:
 
 ```typescript
-import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
+import '@tundralibs/norm/engines/sqlite';
+import { Norm } from '@tundralibs/norm';
+
+const norm = new Norm({ database: { dialect: 'sqlite', path: './data' } });
+```
+
+**`@tundralibs/norm/core` — edge/serverless.** Identical exports with
+nothing registered; you import the one engine you need and no other
+driver enters the bundle. Verified running on workerd: `core` +
+`engines/d1` (fetch-only, no pooling); `core` + `engines/postgres` (a
+real TCP connection via `compat/net`'s `cloudflare:sockets` backend —
+pooling and transactions both work, unlike the fetch dialects below);
+`core` + `engines/maria` (wraps the third-party `mariadb` driver
+directly, independent of `compat`).
+
+```typescript
+import '@tundralibs/norm/engines/d1'; // or /neon, /turso, /postgres, /maria
 import { Norm } from '@tundralibs/norm/core';
 
 declare const env: Record<string, string>; // the Worker's bindings
@@ -123,19 +186,22 @@ const norm = new Norm({
 });
 ```
 
-Only `neon` (Postgres over HTTP) and `turso` / `d1` (SQLite over HTTP)
-run on an edge runtime, and they are one-shot fetch calls — no pooling,
-no transactions, as `executor.capabilities` reports. A dialect whose
-module was never imported throws `ENGINE_NOT_REGISTERED` at
-construction, naming the import to add; the registry behind all of this
+`neon`, `turso` and `d1` are one-shot fetch calls — no pooling, no
+transactions, as `executor.capabilities` reports. `postgres` and
+`maria` are real connections and don't carry that limit. `mongo`'s
+Workers behavior is unverified; `sqlite` cannot run there at all (no
+native binding). A dialect whose module was never imported throws
+`ENGINE_NOT_REGISTERED` at construction, naming the import to add; the
+registry behind all of this
 is documented in [`engines/registry.ts`](engines/registry.ts).
 
 ## Quick Start
 
 ```typescript
+// sqlite needs its own explicit import before use, on any runtime —
+// the other six dialects don't (see "Choosing an entry point" below).
+import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 // 1. Define entities with the Column builders.
 const Users = Entity('users', {
@@ -152,9 +218,12 @@ const Users = Entity('users', {
 // 2. Group entities into a named schema.
 const Identity = Schema('Identity', { Users });
 
-// 3. Open a connection and compose the schema(s).
-const engine = new SQLiteEngine('app', { path: './data' });
-const norm = new Norm({ engine, secret: process.env.SECRET });
+// 3. Open a connection and compose the schema(s) — norm constructs and
+//    owns the engine from a dialect config; you never see the instance.
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: './data' },
+  secret: process.env.SECRET,
+});
 const db = norm.use(Identity);
 
 // 4. CRUD — typed, validated, encrypted.
@@ -387,22 +456,72 @@ await db.raw('SELECT count(*) AS n FROM users WHERE role = :role:', {
 `raw()` and `query()` bypass the typed pipeline (no decrypt, no scope,
 no validation) and emit a `warning` event when used.
 
+## Read caching
+
+OFF by default. Pass a `cache` config to `new Norm({...})` and give
+each entity a `cache` TTL in **minutes**; then non-transactional
+`find` / `findOne` / `count` / `getByPK` reads are served from
+`@tundralibs/cacher`, keyed by the query. The TTL is **windowed** —
+each hit resets the clock.
+
+```typescript ignore
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: ':memory:' },
+  cache: { engine: 'MEMORY', name: 'app' }, // or REDIS/MEMCACHED + options
+});
+
+// Per-entity opt-in (minutes; 0/omitted = off):
+Entity('users', {/* columns */}, { pk: ['id'], cache: 5 });
+
+await users.find(); // miss → DB, then cached
+await users.find(); // hit  → emits `cacheHit`
+await users.find(undefined, { noCache: true }); // bypass for this call
+await users.insert({/* ... */}); // any write prunes the table's cache
+await db.repo('Users').clearCache(); // drop one entity (and dependent views)
+await db.clearCache(); // drop every entity's cache
+```
+
+- **Per-table invalidation.** Each entity gets its own cache namespace
+  (`name__Entity`), so a write to `TableA` prunes only `TableA` — and two
+  `Norm`s sharing one cache engine stay isolated as long as their `name`s
+  differ. Inside a transaction, reads bypass the cache and the prune is
+  deferred to **commit** (a rollback prunes nothing).
+- **Never cached:** reads that **join** another table (a `cache-skip`
+  `warning` fires so it's diagnosable) — a joined entry would depend on
+  more than one table, breaking per-table pruning; model those as a
+  **VIEW** instead. A single-table aggregate (`GROUP BY` on one table) is
+  cached normally. A VIEW / QUERY _is_ cacheable: norm resolves its stored
+  query's source tables (transitively) and prunes it when any is written.
+- **Encryption guard.** Caching decrypted rows on an external store would
+  leak the plaintext of `encrypt()` columns, so an entity with encrypted
+  columns may only be cached on the in-process `MEMORY` engine — otherwise
+  `use()` throws at compose time.
+- **Backend-failure safe.** A cache-backend hiccup (Redis/Memcached
+  unreachable) degrades to a database read — a failed `get` is a miss, a
+  failed `set`/prune is skipped — and surfaces a `cache-error` `warning`;
+  it never fails the query.
+- **Any cacher engine.** `MEMORY`, `REDIS`, and `MEMCACHED` all work —
+  norm goes through cacher's unified API, and each engine's `clear()` is
+  correctly namespace-scoped (Memcached uses version bumping, not a
+  server-wide flush).
+- **Caveats.** Prune-on-write is not atomic with the DB write (bounded,
+  one-read-window staleness); `raw()` and external writes do **not**
+  invalidate.
+
 ## Events
 
 Wire the metadata-only event surface to your logger — it never carries
 row data, plaintext, or secrets:
 
 ```typescript
+import '@tundralibs/norm/engines/sqlite';
 import { Norm } from '@tundralibs/norm';
-// Needs a separate install: deno add @tundralibs/drivers
-import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
-const engine = new SQLiteEngine('app', { path: './data' });
 const secret = process.env.SECRET;
 const log = console;
 
 const norm = new Norm({
-  engine,
+  database: { dialect: 'sqlite', path: './data' },
   secret,
   _oncall: (entity, op, ms, isSlow, id) => log.info({ entity, op, ms, id }),
   _onwarning: (entity, op, code, msg) => log.warn({ entity, op, code, msg }),
@@ -414,9 +533,13 @@ const norm = new Norm({
 });
 ```
 
-The surface: `call`, `warning`, `decryptError` (an encrypted cell failed
-to decrypt on read — a data-integrity / key-rotation signal, metadata
-only), `transactionBegin` / `transactionCommit` / `transactionRollback`,
+The surface: `call`, `cacheHit` (a read served from the cache — no
+`call` fires for it), `warning` (codes include `cache-skip` for a
+joined read that could not be cached, and `cache-error` when a cache
+backend failed and the query fell back to the database), `decryptError` (an
+encrypted cell failed to decrypt on read — a data-integrity /
+key-rotation signal, metadata only), `transactionBegin` /
+`transactionCommit` / `transactionRollback`,
 plus the engine's own events proxied from the driver — `connect`,
 `disconnect`, `connectionFailed`, `error`, `transactionTimeout`, `query`,
 and `slowQuery`. All subscribe inline via `_on<event>` keys (or
@@ -432,7 +555,11 @@ fire, and their spans parent to it automatically via
 [ambient](../ambient/README.md).
 
 ```typescript ignore
-const norm = new Norm({ engine, secret, witness: tracer.wrap });
+const norm = new Norm({
+  database: { dialect: 'postgres', host, database, username },
+  secret,
+  witness: tracer.wrap,
+});
 ```
 
 `tracer.wrap` (tracer ≥ 0.4) is the ready-made Witness-shaped adapter: it
@@ -481,6 +608,12 @@ not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
   relations, hooks, validators.
 - **[Querying](docs/NORM-Querying.md)** — filters, projections,
   relations, aggregates, pagination.
+- **[Read caching](docs/NORM-Caching.md)** — per-entity TTLs, per-table
+  invalidation, engines, and backend-failure behavior.
+- **[Temporal tables](docs/NORM-Temporal.md)** — effective-dated version
+  history, `@AsOf` point-in-time reads, scheduling.
+- **[Audit tables](docs/NORM-Audit.md)** — a generated, versioned
+  replica that mirrors every write, with no change to the source table.
 - **[Security](docs/NORM-Security.md)** — encryption, digests, masks.
 - **[Migrations](docs/NORM-Migrations.md)** — the `Migrator` workflow.
 - **[Scoping](docs/NORM-Scoping.md)** — tenant scoping & default filters.

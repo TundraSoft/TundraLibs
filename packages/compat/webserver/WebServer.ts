@@ -78,7 +78,6 @@ import type {
   ServerOptions,
   ServerState,
   ServerWebSocket,
-  UpgradeDecision,
   WebSocketData,
   WebSocketUpgradeContext,
 } from './types/mod.ts';
@@ -91,6 +90,8 @@ import {
 } from './Error.ts';
 import { UnsupportedRuntimeError } from '../Error.ts';
 import { assertBuiltin } from '../_guards.ts';
+import { type ResolvedUpgrade, resolveUpgrade } from './_resolveUpgrade.ts';
+import { nodeLightRequest } from './_lightRequest.ts';
 import { hasPermissionSync } from '../permissions.ts';
 // Local aliases for runtime-only types — see _runtime-globals.ts. Using
 // `any` decouples us from Deno's lib types (no clash on the consumer
@@ -113,6 +114,20 @@ const nodeHttps: typeof import('node:https') = loadBuiltin(
   'node:https',
   isNode,
 );
+const nodeOs: typeof import('node:os') = loadBuiltin('node:os', isNode);
+
+// Platforms whose kernel exposes `SO_REUSEPORT`, so Node's
+// `server.listen({ reusePort: true })` binds instead of throwing `ENOTSUP`.
+// Node added the option in 22.12.0 (harmlessly ignored on 22.0–22.11) but
+// raises on unsupported platforms — macOS and Windows among them. Deno and
+// Bun silently tolerate `reusePort` everywhere, so we gate it to the same
+// effect: real port reuse where the OS supports it, a no-op elsewhere.
+const REUSEPORT_PLATFORMS: ReadonlySet<string> = new Set([
+  'linux',
+  'freebsd',
+  'sunos',
+  'aix',
+]);
 
 // Runtimes that can actually host a port-listening HTTP server. Used to
 // skip the constructor's filesystem-touching option validation (UNIX
@@ -186,20 +201,13 @@ type _RuntimeAdapter = {
 };
 
 /**
- * Discriminated union returned by {@link WebServer._resolveUpgrade}.
- * Either the upgrade was rejected (caller falls through to HTTP) or
- * the resolved upgrade carries the user-supplied `T`, the chosen
- * subprotocol, optional response headers, and the upgrade context.
+ * Local alias for {@link ResolvedUpgrade}, shared with `websocket`'s
+ * request-driven `handleUpgrade` so both read an
+ * {@link UpgradeDecision} the same way. Kept as a name here because
+ * {@link WebServer._resolveUpgrade} is `protected` and subclasses
+ * reference it.
  */
-type _ResolvedUpgrade<T> =
-  | { accepted: false }
-  | {
-    accepted: true;
-    userData: T;
-    protocol: string;
-    extraHeaders: HeadersInit | undefined;
-    upgradeContext: WebSocketUpgradeContext;
-  };
+type _ResolvedUpgrade<T> = ResolvedUpgrade<T>;
 
 /**
  * Best-effort stringification of an unknown thrown value. Used to
@@ -239,10 +247,14 @@ const _stringifyThrown = (err: unknown): string => {
  * | UNIX sockets    | ✅  | ✅   | ✅      |
  * | WebSocket       | ✅  | ✅   | ✅*     |
  * | Backlog option  | ❌  | ✅   | ✅      |
- * | ReusePort       | ❌  | ✅   | ✅      |
+ * | ReusePort       | ❌  | ✅   | ✅†     |
  *
  * *Node.js WebSocket is provided via the `ws` npm package, loaded
  * lazily on first use; Bun and Deno use their native implementations.
+ *
+ * †Node honors `reusePort` only where the kernel exposes `SO_REUSEPORT`
+ * (Linux, FreeBSD, illumos/Solaris, AIX) and on Node ≥ 22.12; elsewhere
+ * (macOS, Windows) it is a no-op, matching Deno/Bun rather than raising.
  *
  * @example TCP server with metrics monitoring (collection is opt-in)
  * ```typescript
@@ -1452,38 +1464,17 @@ export class WebServer<T = unknown> {
    *
    * @internal
    */
-  protected async _resolveUpgrade(
+  protected _resolveUpgrade(
     request: Request,
     remoteAddress: string | null,
     remotePort: number | null,
   ): Promise<_ResolvedUpgrade<T>> {
-    const wsHandler = this.options.websocket;
-    // Snapshot to a fresh Request: on Bun, `server.upgrade()`
-    // invalidates the original request's `url` after upgrade — the
-    // open handler then sees `ctx.request.url === ''`. Headers and
-    // method survive, but URL doesn't. Capturing into a new Request
-    // here gives users a stable object across runtimes.
-    const snapshotRequest = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-    });
-    const upgradeContext: WebSocketUpgradeContext = {
-      request: snapshotRequest,
+    return resolveUpgrade<T>(
+      request,
+      this.options.websocket?.upgrade,
       remoteAddress,
       remotePort,
-    };
-    const decision: UpgradeDecision<T> = wsHandler?.upgrade
-      ? await wsHandler.upgrade(request, { remoteAddress, remotePort })
-      : true;
-    if (decision === false) return { accepted: false };
-    const isObj = typeof decision === 'object' && decision !== null;
-    return {
-      accepted: true,
-      userData: isObj ? decision.data : (upgradeContext as unknown as T),
-      protocol: isObj ? (decision.protocol ?? '') : '',
-      extraHeaders: isObj ? decision.headers : undefined,
-      upgradeContext,
-    };
+    );
   }
 
   //#endregion Shared upgrade resolution
@@ -2246,19 +2237,35 @@ export class WebServer<T = unknown> {
     const ready = new Promise<void>((resolve) => {
       if (this.mode === 'TCP') {
         const tcpOptions = this.options as ServerOptions<'TCP'>;
-        server.listen(
-          tcpOptions.port,
-          tcpOptions.hostname,
-          tcpOptions.backlog,
-          () => {
-            // `address()` is an AddressInfo object once listening on TCP.
-            const bound = server.address();
-            if (bound !== null && typeof bound === 'object') {
-              this.__boundPort = bound.port;
-            }
-            resolve();
-          },
-        );
+        // Options-object form (not the positional one) so `reusePort` can be
+        // threaded through — the positional signature has no slot for it.
+        // Only pass it where the kernel honors `SO_REUSEPORT`; on macOS /
+        // Windows Node raises `ENOTSUP`, whereas Deno and Bun no-op, so
+        // gating keeps every runtime consistent.
+        const listenOptions: {
+          port?: number;
+          host?: string;
+          backlog?: number;
+          reusePort?: boolean;
+        } = {
+          port: tcpOptions.port,
+          host: tcpOptions.hostname,
+          backlog: tcpOptions.backlog,
+        };
+        if (
+          tcpOptions.reusePort === true &&
+          REUSEPORT_PLATFORMS.has(nodeOs.platform())
+        ) {
+          listenOptions.reusePort = true;
+        }
+        server.listen(listenOptions, () => {
+          // `address()` is an AddressInfo object once listening on TCP.
+          const bound = server.address();
+          if (bound !== null && typeof bound === 'object') {
+            this.__boundPort = bound.port;
+          }
+          resolve();
+        });
       } else {
         const unixOptions = this.options as ServerOptions<'UNIX'>;
         server.listen(unixOptions.unixSocketPath, () => resolve());
@@ -2387,12 +2394,22 @@ export class WebServer<T = unknown> {
               });
             }
             if (wsHandler.drain) {
-              // ws emits 'drain' on the underlying net.Socket; the
-              // `drain` here refers to the WebSocket-level event we
-              // expose. ws-the-library doesn't have a direct equivalent;
-              // best approximation: when bufferedAmount returns to 0
-              // after being non-zero. We poll on send via the wrapper's
-              // send shim — see __wrapNodeWebSocket.
+              // The `ws` library exposes no WebSocket-level drain event, but
+              // its underlying `net.Socket` emits 'drain' when a write buffer
+              // that had filled (send backpressure) empties again — exactly
+              // the drain semantic. `ws.bufferedAmount` polling (as on Deno)
+              // is unreliable here: it stays 0 on a loopback flush. The
+              // socket exists once the upgrade has completed.
+              const sock = wsConn._socket as
+                | { on(ev: 'drain', cb: () => void): void }
+                | undefined;
+              sock?.on('drain', () => {
+                try {
+                  wsHandler.drain?.(wrapper);
+                } catch {
+                  // Drain handlers shouldn't throw; swallow if they do.
+                }
+              });
             }
           });
         },
@@ -2652,7 +2669,7 @@ export class WebServer<T = unknown> {
         headers.push([key, value]);
       }
     }
-    let body: BodyInit | null | undefined = undefined;
+    let body: ReadableStream<Uint8Array> | null = null;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       body = new ReadableStream({
         start(controller) {
@@ -2662,13 +2679,12 @@ export class WebServer<T = unknown> {
         },
       });
     }
-    return new Request(url, {
-      method: req.method || 'GET',
-      headers,
-      body,
-      // @ts-expect-error - duplex required for streaming request bodies
-      duplex: 'half',
-    });
+    // A LIGHTWEIGHT Request: method/url/headers/body are cheap own state; a real
+    // `Request` (undici's ~1.8µs constructor) is built only if a handler touches
+    // a heavy member. Full fidelity — `instanceof Request` holds. Measured
+    // +4.3% Node throughput (paired A/B); see _lightRequest.ts and
+    // bench/OPTIMIZATION-NOTES.md.
+    return nodeLightRequest(req.method || 'GET', url, headers, body);
   }
 
   /**

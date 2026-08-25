@@ -2452,6 +2452,77 @@ h87g/qBXJrxZ7o+w+KxL/Q==
   // is our supported floor.
   // ===========================================================================
 
+  describe('reusePort binding (Node)', () => {
+    it({
+      // Regression guard: threading `reusePort` naively into Node's
+      // `listen()` raises `ENOTSUP` on macOS/Windows (no `SO_REUSEPORT`),
+      // where Deno/Bun no-op. The Node path must gate it by platform so
+      // `start()` succeeds everywhere — a no-op off Linux/FreeBSD/etc.
+      name: 'reusePort: true starts cleanly on Node on any platform',
+      deno: false,
+      bun: false,
+      fn: async () => {
+        const port = getNextPort();
+        const server = new WebServer('RPClean', {
+          mode: 'TCP',
+          port,
+          hostname: '127.0.0.1',
+          reusePort: true,
+          handler: () => new Response('ok'),
+        });
+        activeServer = server;
+        await server.start();
+        if (server.state !== 'RUNNING') {
+          throw new Error('server with reusePort:true failed to start');
+        }
+        await server.stop(false);
+        activeServer = null;
+      },
+    });
+
+    it({
+      // The real bind-behavior test: two servers binding the SAME port
+      // both start only because `reusePort` took effect — without it the
+      // second bind throws EADDRINUSE. Gated to SO_REUSEPORT platforms
+      // (skips macOS/Windows, where the option is a no-op); CI runs Linux,
+      // so this actually exercises the feature.
+      name: 'reusePort lets two Node servers bind the same port',
+      deno: false,
+      bun: false,
+      darwin: false,
+      windows: false,
+      fn: async () => {
+        const port = getNextPort();
+        const make = (n: string) =>
+          new WebServer(`RPShare-${n}`, {
+            mode: 'TCP',
+            port,
+            hostname: '127.0.0.1',
+            reusePort: true,
+            handler: () => new Response(n),
+          });
+        const a = make('a');
+        const b = make('b');
+        try {
+          await a.start();
+          // Second bind on the same port — succeeds only with reusePort.
+          await b.start();
+          if (a.state !== 'RUNNING' || b.state !== 'RUNNING') {
+            throw new Error('both servers should be RUNNING on the same port');
+          }
+          if (a.port !== port || b.port !== port) {
+            throw new Error(
+              `expected both on ${port}, got ${a.port}/${b.port}`,
+            );
+          }
+        } finally {
+          await a.stop(false).catch(() => {});
+          await b.stop(false).catch(() => {});
+        }
+      },
+    });
+  });
+
   describe('WebSocket support', () => {
     it({
       name: 'should handle WebSocket upgrade',
@@ -2561,6 +2632,84 @@ h87g/qBXJrxZ7o+w+KxL/Q==
           activeServer = null;
           await delay(50);
         }
+      },
+    });
+
+    it({
+      // Node-only: the drain callback is wired to the `ws` package's
+      // underlying `net.Socket` 'drain' event, which only exists on the
+      // Node path. (Bun surfaces drain natively; Deno best-effort polls
+      // `bufferedAmount`.) The `ws` client is used deliberately so its
+      // underlying socket can be paused to build real send backpressure —
+      // `bufferedAmount` never rises on a loopback flush, so a plain fast
+      // reader could never exercise this. Regression guard: before the fix
+      // the Node upgrade path had an empty `if (wsHandler.drain)` block and
+      // the callback was never invoked.
+      name: 'fires drain on Node once send backpressure clears',
+      deno: false,
+      bun: false,
+      fn: async () => {
+        const port = getNextPort();
+        let drainFired = 0;
+
+        activeServer = new WebServer('Test', {
+          mode: 'TCP',
+          port,
+          hostname: 'localhost',
+          handler: () => new Response('Not a WebSocket'),
+          websocket: {
+            // ~200 MB burst: guarantees the server socket's write buffer
+            // fills while the client is paused, so a later 'drain' fires.
+            open: (ws) => {
+              const chunk = 'x'.repeat(256 * 1024);
+              for (let i = 0; i < 800; i++) ws.send(chunk);
+            },
+            drain: () => {
+              drainFired++;
+            },
+          },
+        });
+
+        await activeServer.start();
+        await delay(100);
+
+        const wsPkg = await import('ws');
+        const client = new wsPkg.WebSocket(`ws://localhost:${port}/`);
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('drain test timed out')),
+            8000,
+          );
+          client.on('open', () => {
+            // Pause reads to build backpressure, then resume to force drain.
+            const sock =
+              (client as unknown as { _socket: import('node:net').Socket })
+                ._socket;
+            sock.pause();
+            setTimeout(() => sock.resume(), 600);
+          });
+          client.on('error', () => {
+            clearTimeout(timer);
+            reject(new Error('drain test connection errored'));
+          });
+          // Poll for the drain callback; resolve as soon as it fires.
+          const check = setInterval(() => {
+            if (drainFired > 0) {
+              clearInterval(check);
+              clearTimeout(timer);
+              resolve();
+            }
+          }, 50);
+        });
+
+        client.close();
+        if (drainFired === 0) {
+          throw new Error('drain callback never fired after backpressure');
+        }
+
+        await activeServer.stop(false);
+        activeServer = null;
+        await delay(50);
       },
     });
 

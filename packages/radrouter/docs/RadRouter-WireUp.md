@@ -191,27 +191,22 @@ const timing: AppMw = async (ctx, next) => {
 ## Method discovery on miss
 
 `router.find('POST', '/users/42')` returning `undefined` doesn't tell
-the caller whether the path is wrong or just the method is wrong. If
-you want a `405 Method Not Allowed` on path matches with mismatched
-methods, probe each method:
+the caller whether the path is wrong or just the method is wrong. Use
+`router.allowedMethods(path)` for a `405 Method Not Allowed` on path
+matches with mismatched methods — it probes the full `HTTPMethod`
+union (including `TRACE`/`CONNECT`, which have no shorthand) using the
+same lookup and version fallback as `find`, so a route registered via
+`addRoute('TRACE', …)` can't silently vanish from a hand-maintained
+method list. See
+[API → `allowedMethods()`](RadRouter-API.md#allowedmethods--building-a-405-response):
 
 ```ts
-import { type HTTPMethod, RadRouter } from '@tundralibs/radrouter';
+import { RadRouter } from '@tundralibs/radrouter';
 
 const router = new RadRouter();
 
-const METHODS: HTTPMethod[] = [
-  'GET',
-  'POST',
-  'PUT',
-  'DELETE',
-  'PATCH',
-  'HEAD',
-  'OPTIONS',
-];
-
 const onMiss = (pathname: string): Response => {
-  const allowed = METHODS.filter((m) => router.find(m, pathname));
+  const allowed = router.allowedMethods(pathname);
   if (allowed.length) {
     return new Response('Method Not Allowed', {
       status: 405,
@@ -222,8 +217,8 @@ const onMiss = (pathname: string): Response => {
 };
 ```
 
-This is N lookups instead of 1; do it only on miss, not on every
-request. Each `find()` is constant-time relative to path length.
+This is 9 lookups instead of 1; do it only on miss, not on every
+request. Each probe is constant-time relative to path length.
 
 ## More examples
 

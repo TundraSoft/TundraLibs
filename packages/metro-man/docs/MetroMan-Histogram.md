@@ -23,6 +23,18 @@ cleanly across instances (the bucket counts add). For exact quantiles
 on a single instance, use [Summary](MetroMan-Summary.md) — but those
 don't aggregate.
 
+> **Memory is fixed per series, not traffic-proportional.** A
+> Histogram series stores one counter per configured bucket —
+> `buckets.length` numbers — regardless of how many observations it
+> receives. [Summary](MetroMan-Summary.md)'s per-series memory instead
+> grows with observation _rate_ (it retains raw samples for the whole
+> `window`). Cardinality still multiplies either way: each label
+> combination gets its own full bucket ladder, so 7 buckets × 100
+> distinct label combinations is 700 stored counters (and 700
+> rendered `_bucket` lines, plus `+Inf`/`_sum`/`_count` per series).
+> See [Labels](../README.md#labels) for the cardinality-growth caveat
+> that applies to every metric kind.
+
 ## Quick Start
 
 ```typescript
@@ -47,7 +59,9 @@ latency.observe(0.420, { route: '/users' });
 - `options.name` — Required. Metric identifier.
 - `options.help` — Optional. Human description.
 - `options.buckets` — Optional `number[]`. Defaults to
-  `[1, 1.5, 2, 5, 10]`. Each bound must be a finite number; sorted
+  `[1, 1.5, 2, 5, 10]`. Each bound must be a finite number; duplicate
+  bounds are silently de-duplicated (see
+  [Bucket Semantics](#bucket-semantics)) and the result sorted
   ascending internally.
 
 **Throws:**
@@ -78,6 +92,11 @@ stays correct when observations exceed the largest finite bucket).
 and returns `true` if a series was actually removed. Both inherited from
 `BaseMetric`.
 
+**Throws:**
+
+- `InvalidLabelError` — `remove(labels)` rejects a label name outside
+  `[A-Za-z_][A-Za-z0-9_]*`, the same validation `observe` applies.
+
 ### `toJSON()` / `toString()` / `toPrometheus()` / `dump(mode)`
 
 Inherited from `BaseMetric`. `toPrometheus()` is overridden to emit
@@ -97,7 +116,20 @@ the JSON payload carries them as an ordered
 `Array<{ le: number; count: number }>` (a numeric-keyed record
 would list integer bounds before decimal ones).
 
+> **Duplicate bounds are silently collapsed.** `buckets` is
+> de-duplicated with `new Set()` before sorting, so `[1, 1, 2]`
+> becomes two buckets, not three — `0` and `-0` also collapse to a
+> single bound. A repeated `le` value would otherwise render the same
+> series twice, which a strict Prometheus scraper rejects outright.
+> If your bucket list is concatenated from more than one config
+> source, expect fewer buckets than the combined input length
+> whenever they overlap.
+
 ## Output
+
+For the [Quick Start](#quick-start) example above.
+
+### Prometheus text (`toPrometheus()` / `dump('PROMETHEUS')`)
 
 ```
 # HELP http_request_seconds HTTP request latency
@@ -110,6 +142,32 @@ http_request_seconds_bucket{route="/users",le="0.5"} 2
 http_request_seconds_bucket{route="/users",le="+Inf"} 2
 http_request_seconds_sum{route="/users"} 0.503
 http_request_seconds_count{route="/users"} 2
+```
+
+### JSON (`toJSON()` / `dump('JSON')`)
+
+```json
+{
+  "name": "http_request_seconds",
+  "help": "HTTP request latency",
+  "type": "HISTOGRAM",
+  "labels": ["route"],
+  "data": {
+    "route=\"/users\"": {
+      "buckets": [
+        { "le": 0.05, "count": 0 },
+        { "le": 0.1, "count": 1 },
+        { "le": 0.25, "count": 1 },
+        { "le": 0.5, "count": 2 },
+        { "le": 1, "count": 2 },
+        { "le": 2.5, "count": 2 },
+        { "le": 5, "count": 2 }
+      ],
+      "sum": 0.503,
+      "count": 2
+    }
+  }
+}
 ```
 
 ---

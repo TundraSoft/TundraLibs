@@ -55,16 +55,6 @@ router.get('/users/:id:', [
   },
 ]);
 
-const METHODS: HTTPMethod[] = [
-  'GET',
-  'POST',
-  'PUT',
-  'DELETE',
-  'PATCH',
-  'HEAD',
-  'OPTIONS',
-];
-
 const server = new WebServer<unknown>('demo', {
   mode: 'TCP',
   port: 8080,
@@ -74,8 +64,8 @@ const server = new WebServer<unknown>('demo', {
     const match = router.find(method, url.pathname);
 
     if (!match) {
-      // Probe other methods on the same path to distinguish 404 from 405.
-      const allowed = METHODS.filter((m) => router.find(m, url.pathname));
+      // Distinguish 404 from 405 without hand-rolling a method list.
+      const allowed = router.allowedMethods(url.pathname);
       if (allowed.length) {
         return new Response('Method Not Allowed', {
           status: 405,

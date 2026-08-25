@@ -4,6 +4,8 @@ A cross-runtime structured logger that fans a single log record out to
 many wire formats in-process — console, JSON, syslog, file, HTTP, TCP —
 without external workers, transports, or sidecar processes.
 
+[![JSR](https://jsr.io/badges/@tundralibs/slogger)](https://jsr.io/@tundralibs/slogger)
+[![JSR Score](https://jsr.io/badges/@tundralibs/slogger/score)](https://jsr.io/@tundralibs/slogger)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
@@ -44,14 +46,6 @@ delegated to worker threads via `pino-pretty` / `pino-roll` /
 `pino-transport`. Slogger keeps everything in-process so one log call
 can fan out to many destination shapes; that's the trade.
 
-| Logger      | Model                                          | Cross-runtime? | Tier         |
-| ----------- | ---------------------------------------------- | -------------- | ------------ |
-| **Slogger** | Multi-handler, multi-format, in-process        | ✅             | Winston-tier |
-| Winston     | Multi-transport, format pipeline, in-process   | Node only      | Winston-tier |
-| log4js-node | Multi-appender, multi-layout, in-process       | Node only      | Winston-tier |
-| Pino        | JSON-only in-process, worker-thread transports | Node only      | Pino-tier    |
-| Bunyan      | JSON-only multi-stream                         | Node only      | Pino-tier    |
-
 **When to use Slogger:** you need one record to fan out to multiple
 destinations of different shapes (console + syslog + DB + OTEL), you
 want to run on Deno/Bun/Node from one codebase, you don't want to
@@ -72,15 +66,24 @@ honest per-call cost breakdown.
 `@tundralibs/slogger` is designed for server-side application logging
 and is not a browser/worker-first runtime, so there's no blanket
 badge — but the handler-level split is sharper than "server-only":
-`TCPHandler`, `SyslogHandler`, and `FileHandler` genuinely need a raw
-socket or real filesystem and won't work at the edge. `ConsoleHandler`,
-`MemoryHandler`, `BlackholeHandler`, and `StreamHandler` (any
-web-standard `WritableStream` — compose it with `CompressionStream`,
-a browser's own stdout-equivalent, or an in-memory sink) have no such
-dependency and are genuinely portable. `HTTPHandler` ships logs over
-`fetch`, so it's edge-safe too, modulo one Deno-specific pre-flight
-permission check that no-ops elsewhere. Restrict a browser/Worker
-bundle to those handlers and avoid the three server-only ones.
+`FileHandler` genuinely needs a real filesystem and won't work in a
+browser. On Workers it does work — reads/writes land in workerd's
+`/tmp` — but a record is gone by the very next request, not merely
+when the isolate eventually recycles; the handler detects this at
+open and warns once per instance. `TCPHandler` and `SyslogHandler`'s
+TCP transport dial out through `@tundralibs/compat/net`, which
+connects directly on Cloudflare Workers via `cloudflare:sockets` — no
+`nodejs_compat` flag needed — but still has nothing to dial from a
+browser. `SyslogHandler`'s UDP transport (no datagram sockets on
+Workers) and UNIX-socket transport (workerd's `connect()` dials TCP
+only) stay host-runtime-only everywhere else. `ConsoleHandler`, `MemoryHandler`,
+`BlackholeHandler`, and `StreamHandler` (any web-standard
+`WritableStream` — compose it with `CompressionStream`, a browser's
+own stdout-equivalent, or an in-memory sink) have no such dependency
+and are genuinely portable. `HTTPHandler` ships logs over `fetch`, so
+it's edge-safe too, modulo one Deno-specific pre-flight permission
+check that no-ops elsewhere. Restrict a browser/Worker bundle to the
+handlers your target actually supports.
 
 ## Modules
 

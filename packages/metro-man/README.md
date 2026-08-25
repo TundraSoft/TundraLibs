@@ -3,6 +3,8 @@
 Prometheus-compatible in-process metrics for Deno, Bun, Node.js,
 Cloudflare Workers, and browsers.
 
+[![JSR](https://jsr.io/badges/@tundralibs/metro-man)](https://jsr.io/@tundralibs/metro-man)
+[![JSR Score](https://jsr.io/badges/@tundralibs/metro-man/score)](https://jsr.io/@tundralibs/metro-man)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
@@ -143,8 +145,8 @@ families by `collect('PROMETHEUS')`.
 
 Every mutation method (`inc`, `set`, `observe`) accepts an optional
 `labels: Record<string, string>`. Each distinct label combination
-produces a distinct series — be mindful of cardinality. The
-unlabelled series is keyed as `'no_label'`.
+produces a distinct series. The unlabelled series is keyed as
+`'no_label'`.
 
 ```typescript
 import { Counter } from '@tundralibs/metro-man';
@@ -156,6 +158,16 @@ counter.inc({ method: 'GET', status: '500' });
 counter.inc(); // unlabelled series
 ```
 
+> **Cardinality is unbounded and permanent.** Every distinct label
+> combination allocates a new series that stays in memory until you
+> call `remove(labels)` or `reset()` — there is no automatic
+> eviction, TTL, or maximum-series cap. Never label with a value drawn
+> from an unbounded set (user ID, raw request path, timestamp): a
+> counter labelled by `user_id` keeps one series per user, forever.
+> Keep label values to a small, bounded set (`status`, `method`, a
+> route _template_ rather than the raw path) and push high-cardinality
+> data to logs or traces instead.
+
 **Canonicalisation.** Label entries are sorted alphabetically by
 name when the canonical key is built, so `{b:'2', a:'1'}` and
 `{a:'1', b:'2'}` resolve to the same series.
@@ -166,6 +178,11 @@ literal `\n`. Label _names_ cannot be escaped into validity, so they
 are validated instead: a name outside
 `[A-Za-z_][A-Za-z0-9_]*` throws `InvalidLabelError` wherever labels
 enter (`inc`, `dec`, `set`, `observe`, `remove`).
+
+`help` is escaped the same way on the `# HELP` line, with one
+difference: double quotes are left unescaped there — a `# HELP` line
+isn't quoted, so `"` needs no escaping — only `\` and newlines are
+rewritten.
 
 **Reserved names.** `Histogram.observe` rejects a label called `le`
 and `Summary.observe` rejects `quantile` — both clash with the
@@ -238,6 +255,22 @@ A name repeated in the list is emitted **once** — the selection is
 de-duplicated, so `collect('PROMETHEUS', ['x', 'x'])` never produces
 two `# HELP`/`# TYPE` blocks for the same family (which a Prometheus
 scrape would reject).
+
+```typescript
+import { MetroMan } from '@tundralibs/metro-man';
+
+const metrics = new MetroMan();
+metrics.counter({ name: 'http_requests_total' });
+metrics.counter({ name: 'app_errors_total' });
+
+// Filter to one family by name; an unregistered name ('missing') is
+// skipped rather than throwing.
+console.log(metrics.collect('PROMETHEUS', ['http_requests_total', 'missing']));
+
+// An empty selection yields empty output, not the whole registry —
+// omit `metrics` entirely to dump everything.
+console.log(metrics.collect('JSON', [])); // {}
+```
 
 ### `remove(name) → boolean`
 
