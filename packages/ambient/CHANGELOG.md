@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.8](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.7...ambient-v0.2.8) (2026-08-25)
+
+
+### Documentation
+
+* **ambient:** deepen concept & integration docs, add runnable example ([#586](https://github.com/TundraSoft/TundraLibs/issues/586)) ([f3af21a](https://github.com/TundraSoft/TundraLibs/commit/f3af21a97dfe0a6d5578de10a0e4f9841e185d1e))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [0.2.7](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.6...ambient-v0.2.7) (2026-08-21)
 
 
