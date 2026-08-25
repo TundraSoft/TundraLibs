@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.3.1...guardian-v1.3.2) (2026-08-25)
+
+
+### Documentation
+
+* **guardian:** fix confirmed-wrong claims found by executing examples ([#570](https://github.com/TundraSoft/TundraLibs/issues/570)) ([2bcd874](https://github.com/TundraSoft/TundraLibs/commit/2bcd87495a256720f685c5834092ec6242a00f55))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.3.0...guardian-v1.3.1) (2026-08-21)
 
 
