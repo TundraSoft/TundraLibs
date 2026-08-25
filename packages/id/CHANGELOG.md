@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/id-v1.1.2...id-v1.1.3) (2026-08-25)
+
+
+### Documentation
+
+* **id:** fix stale perf claims, missing security callouts, and MongoDB truncation myth ([#564](https://github.com/TundraSoft/TundraLibs/issues/564)) ([73c4d0a](https://github.com/TundraSoft/TundraLibs/commit/73c4d0ad2df3b888a4dbcbbea58f0523f98a227c))
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/id-v1.1.1...id-v1.1.2) (2026-08-21)
 
 
