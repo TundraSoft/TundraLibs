@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.3.2...norm-v1.4.0) (2026-08-25)
+
+
+### Features
+
+* **norm:** add opt-in read-query caching layer ([#554](https://github.com/TundraSoft/TundraLibs/issues/554)) ([c92b3b0](https://github.com/TundraSoft/TundraLibs/commit/c92b3b0fe3d8fb8c5cfbc6ef06f6b6e11d0dd8ec))
+* **norm:** construct from a database config only; remove the engine option ([#599](https://github.com/TundraSoft/TundraLibs/issues/599)) ([3da2ff6](https://github.com/TundraSoft/TundraLibs/commit/3da2ff684962e4938d761fee03cd8b8599f1785f))
+* **norm:** temporal tables and audit (versioned-replica) tables ([#556](https://github.com/TundraSoft/TundraLibs/issues/556)) ([b611c8f](https://github.com/TundraSoft/TundraLibs/commit/b611c8fe3ef63b7cebede16ff807673f7e64a932))
+
+
+### Bug Fixes
+
+* **norm:** decode SQLite date-typed columns back to Date on read ([#559](https://github.com/TundraSoft/TundraLibs/issues/559)) ([6363805](https://github.com/TundraSoft/TundraLibs/commit/6363805fcd7bbf392af30774f069dd79b3c7f465))
+
+
+### Documentation
+
+* JSR/CI badges + discoverability pass (READMEs, keywords) ([#612](https://github.com/TundraSoft/TundraLibs/issues/612)) ([734e111](https://github.com/TundraSoft/TundraLibs/commit/734e1111517c452288bd7b78413abdf3899b1e6d))
+* **norm:** deepen every option's docs, add a runnable example, fix stale claims ([#557](https://github.com/TundraSoft/TundraLibs/issues/557)) ([7fd4499](https://github.com/TundraSoft/TundraLibs/commit/7fd44996cf4df6a2b3f6dbc1aaef57e0b0167d1a))
+* **norm:** use the database config for init everywhere, not a driver instance ([#573](https://github.com/TundraSoft/TundraLibs/issues/573)) ([db52c66](https://github.com/TundraSoft/TundraLibs/commit/db52c663409d0680fc40329b3874c693410fb885))
+
 ## [1.3.2](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.3.1...norm-v1.3.2) (2026-08-23)
 
 
