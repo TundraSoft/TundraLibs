@@ -336,10 +336,22 @@ export class OAuthClient extends RESTler {
         Date.now() - this.__discoveredAt > DISCOVERY_TTL_MS
       ) {
         const issuer = this.__config.issuer!.replace(/\/$/, '');
-        const doc = await this.__getJson(
-          `${issuer}/.well-known/openid-configuration`,
-          'OIDC discovery',
-        );
+        let doc: Record<string, unknown>;
+        try {
+          doc = await this.__getJson(
+            `${issuer}/.well-known/openid-configuration`,
+            'OIDC discovery',
+          );
+        } catch (err) {
+          // A refetch that fails must not discard a still-valid cached
+          // document: its endpoints are typically unchanged and reachable
+          // even when the discovery endpoint is transiently down. Serve the
+          // stale copy — and, since `__discoveredAt` is left unadvanced,
+          // retry on the next call. Only a cold cache is fatal. Mirrors the
+          // JWKS degrade-on-refetch policy in IdTokenVerifier.
+          if (this.__discovered !== undefined) return this.__discovered;
+          throw err;
+        }
         this.__discoveredAt = Date.now();
         this.__discovered = {
           authorization: this.__requireHttps(

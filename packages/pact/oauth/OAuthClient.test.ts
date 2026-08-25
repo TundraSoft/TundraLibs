@@ -122,6 +122,38 @@ describe('pact.OAuthClient authorizationUrl', () => {
     asserts.assertEquals(parsed.searchParams.get('scope'), 'openid');
   });
 
+  it('config authParams / options.params cannot override generated state or PKCE', async () => {
+    const client = new OAuthClient('google', {
+      ...GOOGLE_CONFIG,
+      // A hostile (or careless) config must not be able to pin state/PKCE.
+      authParams: {
+        state: 'attacker-state',
+        code_challenge: 'attacker-challenge',
+        code_challenge_method: 'plain',
+        redirect_uri: 'https://evil.example.com/cb',
+        prompt: 'consent', // a legitimate non-colliding param survives
+      },
+    });
+    const { url, state } = await client.authorizationUrl({
+      params: {
+        response_type: 'token', // implicit-flow downgrade attempt
+        state: 'also-attacker',
+      },
+    });
+    const p = new URL(url).searchParams;
+    // Generated security params win over both app-supplied channels.
+    asserts.assertEquals(p.get('state'), state);
+    asserts.assertNotEquals(state, 'attacker-state');
+    asserts.assertNotEquals(state, 'also-attacker');
+    asserts.assertEquals(p.get('response_type'), 'code');
+    asserts.assertEquals(p.get('code_challenge_method'), 'S256');
+    asserts.assertNotEquals(p.get('code_challenge'), 'attacker-challenge');
+    asserts.assert(p.get('code_challenge') !== null);
+    asserts.assertEquals(p.get('redirect_uri'), 'https://app.example.com/cb');
+    // A non-colliding custom param still rides along.
+    asserts.assertEquals(p.get('prompt'), 'consent');
+  });
+
   it('a non-OIDC provider (GitHub) gets no nonce/claims params', async () => {
     const client = new OAuthClient('github', {
       ...GOOGLE_CONFIG,
@@ -326,6 +358,38 @@ describe('pact.OAuthClient OIDC discovery', () => {
       (err as PactOAuthError).code,
       'OAUTH_EXCHANGE_FAILED',
     );
+  });
+
+  it('serves stale endpoints when a past-TTL rediscovery fails', async () => {
+    const client = new OAuthClient('sso', {
+      ...GOOGLE_CONFIG,
+      provider: 'OIDC',
+      issuer: ISSUER,
+    });
+    let discoveryUp = true;
+    const { fn, seen } = mockFetch([
+      [
+        `${ISSUER}/.well-known`,
+        () => (discoveryUp ? json(DISCOVERY) : json({}, 503)),
+      ],
+      [`${ISSUER}/token`, () => json({ access_token: 'at' })],
+      [`${ISSUER}/userinfo`, () => json({ sub: 'sso-1' })],
+    ]);
+    setFetch(client, fn);
+    // First login discovers + caches the endpoints.
+    await client.callback({ code: 'c', verifier: 'v' });
+    // Age the cache past the TTL and take discovery down.
+    (client as unknown as { __discoveredAt: number }).__discoveredAt = 0;
+    discoveryUp = false;
+    // Rediscovery is attempted and fails (503); the still-valid cached
+    // endpoints must carry the login rather than hard-failing it.
+    const profile = await client.callback({ code: 'c2', verifier: 'v2' });
+    asserts.assertEquals(profile.id, 'sso-1');
+    // Rediscovery was re-attempted (not silently pinned to stale) — the
+    // unadvanced `__discoveredAt` keeps each __endpoints() call trying while
+    // it degrades, so the count climbs past the single initial discovery.
+    const discoveries = seen.filter((s) => s.url.includes('.well-known'));
+    asserts.assert(discoveries.length >= 2);
   });
 });
 
