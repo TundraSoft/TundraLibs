@@ -73,7 +73,7 @@ later listeners.
 ```typescript
 import { Pact } from '@tundralibs/pact';
 
-const pact = new Pact({
+const pact = Pact.create({
   bits: { READ: 1n },
   _onrefreshReuse: (userId, familyId) => {
     console.warn(`refresh reuse: user=${userId} family=${familyId}`);

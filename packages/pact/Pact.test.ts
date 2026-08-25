@@ -88,13 +88,13 @@ function makeStore() {
 describe('pact.Pact construction', () => {
   it('throws MISSING_OPTION when bits are omitted', () => {
     // deno-lint-ignore no-explicit-any
-    const err = asserts.assertThrows(() => new Pact({} as any));
+    const err = asserts.assertThrows(() => Pact.create({} as any));
     asserts.assertEquals((err as { code?: string }).code, 'MISSING_OPTION');
   });
 
   it('gates capability hooks: password without getUser → MISSING_HOOK', () => {
     const err = asserts.assertThrows(() =>
-      new Pact({ bits: BITS, secret: SECRET, password: true })
+      Pact.create({ bits: BITS, secret: SECRET, password: true })
     );
     asserts.assertEquals((err as { code?: string }).code, 'MISSING_HOOK');
   });
@@ -106,7 +106,9 @@ describe('pact.Pact construction', () => {
         { refresh: {} },
       ]
     ) {
-      const err = asserts.assertThrows(() => new Pact({ bits: BITS, session }));
+      const err = asserts.assertThrows(() =>
+        Pact.create({ bits: BITS, session })
+      );
       asserts.assertEquals((err as { code?: string }).code, 'MISSING_HOOK');
     }
   });
@@ -114,18 +116,18 @@ describe('pact.Pact construction', () => {
   it('JWT sessions with a minting method require secret → MISSING_OPTION', () => {
     const { hooks } = makeStore();
     const err = asserts.assertThrows(() =>
-      new Pact({ bits: BITS, password: true, hooks })
+      Pact.create({ bits: BITS, password: true, hooks })
     );
     asserts.assertEquals((err as { code?: string }).code, 'MISSING_OPTION');
   });
 
   it('validates secret shape/length against the algorithm', () => {
     const short = asserts.assertThrows(() =>
-      new Pact({ bits: BITS, secret: 'too-short' })
+      Pact.create({ bits: BITS, secret: 'too-short' })
     );
     asserts.assertEquals((short as { code?: string }).code, 'INVALID_OPTION');
     const pair = asserts.assertThrows(() =>
-      new Pact({
+      Pact.create({
         bits: BITS,
         secret: { privateKey: 'a', publicKey: 'b' },
       })
@@ -134,7 +136,10 @@ describe('pact.Pact construction', () => {
   });
 
   it('authorization-only construction needs zero hooks', () => {
-    const pact = new Pact({ bits: BITS, modules: { Post: ['READ', 'EDIT'] } });
+    const pact = Pact.create({
+      bits: BITS,
+      modules: { Post: ['READ', 'EDIT'] },
+    });
     asserts.assert(
       pact.can(
         { id: 'x', grants: { Post: 1n }, status: 'ACTIVE', metadata: {} },
@@ -148,7 +153,7 @@ describe('pact.Pact construction', () => {
 describe('pact.Pact register + password login + JWT sessions', () => {
   const setup = () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       modules: { Post: ['READ', 'EDIT', 'DELETE'] },
       secret: SECRET,
@@ -232,7 +237,7 @@ describe('pact.Pact register + password login + JWT sessions', () => {
 
   it('custom identifierField renames the credential key', async () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: { identifierField: 'email' },
@@ -256,7 +261,7 @@ describe('pact.Pact register + password login + JWT sessions', () => {
         return store.hooks.getUser!(q);
       },
     };
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: true,
@@ -304,7 +309,7 @@ describe('pact.Pact register + password login + JWT sessions', () => {
   it('isRevoked vetoes a signature-valid token (TOKEN_REVOKED)', async () => {
     const store = makeStore();
     const blocked = new Set<string>();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: true,
@@ -335,7 +340,7 @@ describe('pact.Pact register + password login + JWT sessions', () => {
 describe('pact.Pact OPAQUE sessions', () => {
   const setup = () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       password: true,
       session: { strategy: 'OPAQUE', ttl: 60 },
@@ -388,7 +393,7 @@ describe('pact.Pact OPAQUE sessions', () => {
 describe('pact.Pact refresh rotation', () => {
   const setup = (grace = 5) => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: true,
@@ -490,7 +495,7 @@ describe('pact.Pact refresh rotation', () => {
 describe('pact.Pact logout edge cases', () => {
   it('stateless JWT logout is a no-op (nothing to revoke)', async () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: true,
@@ -508,7 +513,7 @@ describe('pact.Pact logout edge cases', () => {
 
   it('OPAQUE logout of an unknown token is a silent no-op', async () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       password: true,
       session: { strategy: 'OPAQUE' },
@@ -519,7 +524,7 @@ describe('pact.Pact logout edge cases', () => {
 
   it('refresh() throws when refresh rotation is not configured', async () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: true,
@@ -536,7 +541,7 @@ describe('pact.Pact logout edge cases', () => {
 describe('pact.Pact authenticate schemes', () => {
   const setup = () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       password: true,
@@ -713,7 +718,7 @@ describe('pact.Pact authenticate schemes', () => {
 describe('pact.Pact OAuth login', () => {
   const setup = () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       oauth: {
@@ -775,7 +780,7 @@ describe('pact.Pact OAuth login', () => {
 describe('pact.Pact otp + strategies + authZ', () => {
   it('enrollOtp stores a seed; verifyOtp accepts a live TOTP code', async () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       issuer: 'test.pact',
       hooks: store.hooks,
@@ -796,7 +801,7 @@ describe('pact.Pact otp + strategies + authZ', () => {
 
   it('custom strategies mint sessions through the same pipeline', async () => {
     const store = makeStore();
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       secret: SECRET,
       strategies: {
@@ -819,7 +824,7 @@ describe('pact.Pact otp + strategies + authZ', () => {
   });
 
   it('can/assert gate on status and emit denied before throwing', () => {
-    const pact = new Pact({
+    const pact = Pact.create({
       bits: BITS,
       modules: { Post: ['READ', 'EDIT', 'DELETE'] },
     });
@@ -847,7 +852,7 @@ describe('pact.Pact otp + strategies + authZ', () => {
   });
 
   it('call-time hook gating throws MISSING_HOOK', async () => {
-    const pact = new Pact({ bits: BITS });
+    const pact = Pact.create({ bits: BITS });
     const err = await asserts.assertRejects(
       () => pact.register({ identifier: 'x' }),
       PactDefinitionError,
@@ -860,7 +865,7 @@ describe('pact.Pact otp + strategies + authZ', () => {
 });
 
 describe('pact.Pact content signing', () => {
-  const pact = new Pact({ bits: BITS, secret: SECRET });
+  const pact = Pact.create({ bits: BITS, secret: SECRET });
 
   it('sign → verifySignature round-trips (string and bytes)', async () => {
     const sig = await pact.sign('the response body');
@@ -895,7 +900,7 @@ describe('pact.Pact content signing', () => {
   });
 
   it('derived signing requires a shared secret (RSA/none → MISSING_OPTION)', async () => {
-    const rsa = new Pact({
+    const rsa = Pact.create({
       bits: BITS,
       algorithm: 'RS256',
       secret: { privateKey: 'x', publicKey: 'y' },
@@ -910,7 +915,7 @@ describe('pact.Pact content signing', () => {
       await rsa.verifySignature('x', await rsa.sign('x', 'k'), 'k'),
     );
 
-    const authzOnly = new Pact({ bits: BITS });
+    const authzOnly = Pact.create({ bits: BITS });
     await asserts.assertRejects(() => authzOnly.sign('x'), PactDefinitionError);
   });
 });

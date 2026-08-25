@@ -9,7 +9,7 @@ check is one bitwise AND.
 ```typescript
 import { Pact } from '@tundralibs/pact';
 
-const pact = new Pact({
+const pact = Pact.create({
   // the registry: permission name → bit (BigInt, so no 31-bit ceiling)
   bits: { READ: 1n, EDIT: 2n, DELETE: 4n, PUBLISH: 8n },
   // the optional catalog: which permissions apply to which module.

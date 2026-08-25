@@ -81,7 +81,7 @@ declare const db: {
   };
 };
 
-const pact = new Pact({
+const pact = Pact.create({
   // authorization: module × action over BigInt masks
   bits: { READ: 1n, EDIT: 2n, DELETE: 4n, PUBLISH: 8n },
   modules: { Post: ['READ', 'EDIT', 'DELETE', 'PUBLISH'], Billing: ['READ'] },

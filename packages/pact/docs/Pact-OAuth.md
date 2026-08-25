@@ -29,7 +29,7 @@ declare const db: {
   byId(id: string): Promise<PactStoredUser | null>;
 };
 
-const pact = new Pact({
+const pact = Pact.create({
   bits: { READ: 1n },
   secret: 'a-256-bit-shared-secret-for-hs256!',
   oauth: {

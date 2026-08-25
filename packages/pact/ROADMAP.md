@@ -66,11 +66,13 @@ resource-server once its principal-model design is settled.
   Add `revokeApiKey(keyId)` (wires the already-defined hook) and
   `revokeToken(token)` (a new `revokeToken(tokenHash)` hook, symmetric with
   `revokeApiKey`).
-- **Compile-time hook gating.** The capability→hook table is enforced at
-  construction (a thrown `PactDefinitionError`). A static `Pact.create(options)`
-  factory lifts it to a _compile_ error (e.g. `password` on ⇒ `getUser`
-  required in `hooks`), added **alongside** the runtime-checked `new Pact(…)`
-  so it stays additive. The only construction-API-shaping item.
+- **Compile-time hook gating.** `Pact.create(options)` is already the sole
+  entry point (the constructor is private) — that landed in the overhaul so the
+  construction API is final from the first release. What remains is lifting the
+  capability→hook table from a runtime `PactDefinitionError` to a _compile_
+  error on `create`'s signature (e.g. `password` on ⇒ `getUser` required in
+  `hooks`) via conditional types — pure type-tightening on the settled entry
+  point, no runtime or API change.
 
 ## Backlog — bounds the feature set, not yet committed
 

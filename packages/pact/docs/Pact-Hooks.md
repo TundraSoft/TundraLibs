@@ -31,7 +31,7 @@ declare const db: {
   byOAuth(provider: string, subject: string): Promise<PactStoredUser | null>;
 };
 
-const pact = new Pact({
+const pact = Pact.create({
   bits: { READ: 1n },
   hooks: {
     getUser: (q) =>

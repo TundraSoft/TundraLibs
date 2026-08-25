@@ -21,7 +21,7 @@
  *   >;
  * };
  *
- * const pact = new Pact({
+ * const pact = Pact.create({
  *   bits: { READ: 1n, EDIT: 2n, DELETE: 4n },
  *   modules: { Post: ['READ', 'EDIT', 'DELETE'] },
  *   secret: 'a-256-bit-shared-secret-for-hs256!',
@@ -116,7 +116,9 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
   private __contentSignKey?: string;
 
   /**
-   * Build the engine. Encodes the capability→hook requiredness table:
+   * Build the engine. **The sole entry point** — the constructor is private,
+   * so `Pact.create(options)` is the only way to construct a `Pact`. Encodes
+   * the capability→hook requiredness table:
    *
    * | capability                          | required hooks                            |
    * | ----------------------------------- | ----------------------------------------- |
@@ -133,6 +135,8 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
    * `'JWT'` strategy + any session-minting login method (password, oauth,
    * strategies) also requires `secret`.
    *
+   * @param options - engine configuration.
+   * @returns the constructed engine.
    * @throws {@link PactDefinitionError} when `bits` is missing or JWT
    *   sessions lack `secret` (`MISSING_OPTION`), an enabled capability
    *   lacks its hook (`MISSING_HOOK`), the `secret` shape/length
@@ -140,7 +144,14 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
    *   malformed (via {@link Permissions}), or an `oauth` entry is
    *   misconfigured (via {@link OAuthClient}).
    */
-  constructor(options: EventOptionKeys<PactOptions<P>, PactEvents>) {
+  static create<P extends PactPermissionBits = PactPermissionBits>(
+    options: EventOptionKeys<PactOptions<P>, PactEvents>,
+  ): Pact<P> {
+    return new Pact<P>(options);
+  }
+
+  /** Private — build a `Pact` through {@link Pact.create}. */
+  private constructor(options: EventOptionKeys<PactOptions<P>, PactEvents>) {
     super();
     // Keep the signing secret / RSA private key out of the public option
     // store; hold it privately so getOptions() can never leak it.
