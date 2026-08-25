@@ -51,6 +51,31 @@ cryptography, and ID generation — each independent and dependency-light.
 Each package's README is its main documentation; deeper guides live in
 the [wiki](https://github.com/TundraSoft/TundraLibs/wiki).
 
+## Looking for a familiar tool?
+
+Coming from another ecosystem? Here's the TundraLibs equivalent of tools
+you may already know — every one is cross-runtime (Deno, Bun, Node).
+
+| If you want…                                                       | Reach for               |
+| ------------------------------------------------------------------ | ----------------------- |
+| A **Zod / Yup / Joi** alternative (schema validation)              | `@tundralibs/guardian`  |
+| A **Prisma / Drizzle / TypeORM** alternative (ORM)                 | `@tundralibs/norm`      |
+| A **Knex**-style query builder (SQL + MongoDB)                     | `@tundralibs/oql`       |
+| Unified **pg / mysql2 / ioredis / mongodb** connection drivers     | `@tundralibs/drivers`   |
+| An **InversifyJS / tsyringe** alternative (dependency injection)   | `@tundralibs/doctor`    |
+| A **Winston / Pino** alternative (structured logging)              | `@tundralibs/slogger`   |
+| An **OpenTelemetry**-style tracing SDK                             | `@tundralibs/tracer`    |
+| A **prom-client** alternative (Prometheus metrics)                 | `@tundralibs/metro-man` |
+| A **node-cron / croner** alternative (cron scheduler)              | `@tundralibs/cronus`    |
+| **nanoid / uuid / cuid / ulid / ObjectID** in one library          | `@tundralibs/id`        |
+| A **Keyv / node-cache** alternative (Memory/Redis/Memcached)       | `@tundralibs/cacher`    |
+| A **jose / bcrypt / node:crypto** toolkit (JWT, OTP, AES, hashing) | `@tundralibs/crypt`     |
+| A **Passport / Lucia / Auth.js** alternative (auth)                | `@tundralibs/pact`      |
+| An **Axios / Ky**-style base for building typed API SDKs           | `@tundralibs/restler`   |
+| A **socket.io**-style typed RPC + pub/sub over WebSocket           | `@tundralibs/rpc`       |
+| A **find-my-way**-style radix-tree HTTP router                     | `@tundralibs/radrouter` |
+| An **AsyncLocalStorage / cls-hooked** request context              | `@tundralibs/ambient`   |
+
 ## Runtime support
 
 Every package runs on **Deno**, **Bun** and **Node.js**. Most also run on

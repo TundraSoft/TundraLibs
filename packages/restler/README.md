@@ -6,6 +6,10 @@ authentication, content-type (de)serialization, timeouts, events, and
 errors — over a runtime-aware `fetch` that also supports Unix sockets and
 TLS client authentication.
 
+> **Not** [Microsoft's RESTler](https://github.com/microsoft/restler-fuzzer)
+> (an API fuzz-testing tool). This RESTler is a client base class for
+> building typed, per-vendor API SDKs.
+
 [![JSR](https://jsr.io/badges/@tundralibs/restler)](https://jsr.io/@tundralibs/restler)
 [![JSR Score](https://jsr.io/badges/@tundralibs/restler/score)](https://jsr.io/@tundralibs/restler)
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
