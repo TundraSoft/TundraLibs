@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.5.0...pact-v0.6.0) (2026-08-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pact:** Pact.can() and Pact.assert() swap their 2nd and 3rd parameters — (principal, permission, module) is now (principal, module, permission). The `denied` event listener signature changes the same way: (principal, module, permission).
+
+### Features
+
+* **pact:** add signAs() for response signing, reorder can()/assert() to (module, permission) ([#618](https://github.com/TundraSoft/TundraLibs/issues/618)) ([e2623e5](https://github.com/TundraSoft/TundraLibs/commit/e2623e517963725a5c5df4d9517ef2f6e8201f38))
+
 ## [0.5.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.8...pact-v0.5.0) (2026-08-25)
 
 
