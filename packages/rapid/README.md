@@ -415,9 +415,10 @@ app.get(
 );
 ```
 
-The `jwt(pact)` and `permission(perms, module, perm)` helpers build a `verify`
-and an `authorize` check from a `@tundralibs/pact` instance (again type-only —
-no runtime dependency until passed).
+For `@tundralibs/pact`, use the dedicated adapter at
+`@tundralibs/rapid/middlewares/pact` instead — `pact(options)` once at boot,
+then `authenticate(schemes?)` + `authorize(module, permission)` on routes. See
+[Authentication & authorization](docs/Rapid-Auth.md) for the full guide.
 
 ## Cookies, sessions & CSRF
 
@@ -650,10 +651,14 @@ Guides:
 - [Database access & connection pooling](./docs/Rapid-Database.md) — sharing one
   pool across modules and middleware (with or without Norm), and staying safe
   under concurrency and pool limits.
+- [Authentication & authorization](./docs/Rapid-Auth.md) — the generic
+  `ctx.auth` seam for bring-your-own auth, and the opt-in `@tundralibs/pact`
+  adapter (five credential schemes, permission checks, response signing).
 
 Every public symbol carries JSDoc; the subpath exports are `.` (root),
 `./cli`, `./context`, `./decorators`, `./endpoints`, `./errors`,
-`./middlewares`, `./modules`, `./testing`, and `./types`.
+`./middlewares`, `./middlewares/pact`, `./modules`, `./testing`, and
+`./types`.
 
 ## License
 

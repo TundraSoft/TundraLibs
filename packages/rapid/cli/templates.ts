@@ -401,14 +401,16 @@ using it — do not guess.
   \`type User = Guardian.infer<typeof UserSchema>\`; \`UserSchema.parse(input)\`
   throws, \`safeParse\` returns \`[err, value]\`. In rapid a guardian failure is
   automatically a 400 — bind it with \`payload(UserSchema.parse)\`.
-- **Auth — \`@tundralibs/pact\`.** Bitmask authorization + JWT + API keys.
-  \`new PACT({ bits: { READ: 1n, EDIT: 2n }, modules: { Post: ['READ','EDIT'] },
-  groupResolver, secret, issuer, expiry })\`. rapid's \`jwt(pact)\` builds an
-  \`authenticate\` verify and \`permission(pact, 'Post', 'EDIT')\` an \`authorize\`
-  check; the result lands in \`ctx.auth\` (read-only, set once per request).
-  API keys: \`generateAPIKey()\` → \`{ id, secret, secretHash }\` (persist id +
-  hash ONLY, show the secret once), \`verifyAPIKey(secret, hash)\`. HMAC over
-  any content: \`pact.sign(content, key?)\` / \`pact.verify(content, sig, key?)\`.
+- **Auth — \`@tundralibs/pact\`.** Bitmask authorization + credential schemes
+  (BASIC/BEARER/TOKEN/APIKEY/HMAC) + OAuth. \`Pact.create({ bits: { READ: 1n,
+  EDIT: 2n }, modules: { Post: ['READ','EDIT'] }, apiKeys: true, hooks:
+  { getUser, getApiKey, saveApiKey } })\`. rapid's own adapter,
+  \`@tundralibs/rapid/middlewares/pact\`, wires it in: \`pact(options)\` once at
+  boot, then \`authenticate(schemes?)\` + \`authorize(module, permission)\` on
+  routes; the result lands in \`ctx.auth\` (read-only, set once per request).
+  API keys: \`pact.issueApiKey(userId)\` → \`{ id, secret }\` (persist only the
+  hash, show the secret once). HMAC over any content: \`pact.sign(content,
+  key?)\` / \`pact.verifySignature(content, sig, key?)\`.
 - **ORM — \`@tundralibs/norm\`.** \`Entity('users', { id: Column.uuid(), email:
   Column.varchar(255).encrypt().hash() }, { pk: ['id'] })\` → \`Schema('Identity',
   { Users })\` → \`new Norm({ engine, secret })\` → \`norm.use(Identity)\` →

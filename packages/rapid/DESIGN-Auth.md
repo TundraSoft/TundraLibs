@@ -146,9 +146,8 @@ export function authorize(module: string, permission: string): RapidMiddleware {
 
 Built on core's existing `authorize(check)` internally (single source of
 truth for the 401/403 enforcement logic), but exposed as one ready call — no
-separate `can()` export. **Parameter order is `(module, permission)`** —
-deliberately the reverse of pact's own `can(principal, permission, module)`.
-Noted, not a mistake.
+separate `can()` export. **Parameter order is `(module, permission)`**,
+matching pact's own `can(principal, module, permission)` (pact 0.6.0+).
 
 Core's bare `authorize()` (no args) is reused as-is for "must be logged in,
 whichever scheme" — no new function needed for that case.

@@ -16,6 +16,10 @@
  */
 
 import { Norm } from '@tundralibs/norm';
+// The root barrel deliberately does NOT register sqlite (its native
+// binding per runtime would make the barrel unbundlable for everyone
+// else) — this example uses it, so it registers explicitly.
+import '@tundralibs/norm/engines/sqlite';
 import { Migrator } from '@tundralibs/norm/migrations';
 import { makeTempDir } from '@tundralibs/compat/file';
 import { BlogSchema } from './models/mod.ts';

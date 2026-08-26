@@ -16,7 +16,9 @@ export type VersioningConfig = {
   default?: string;
 };
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Escape a string for safe embedding in a `RegExp` literal. */
+export const escapeRegExp = (s: string) =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Version patterns come from config (constant per app), so compile each
 // distinct source string ONCE and reuse it — the resolver runs per request.

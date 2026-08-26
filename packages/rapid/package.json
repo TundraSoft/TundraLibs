@@ -13,6 +13,7 @@
     "./endpoints": "./endpoints/mod.ts",
     "./errors": "./errors/mod.ts",
     "./middlewares": "./middlewares/mod.ts",
+    "./middlewares/pact": "./middlewares/pact/mod.ts",
     "./modules": "./modules/mod.ts",
     "./testing": "./testing/mod.ts",
     "./types": "./types/mod.ts"
@@ -30,6 +31,7 @@
     "@tundralibs/doctor": "workspace:*",
     "@tundralibs/id": "workspace:*",
     "@tundralibs/metro-man": "workspace:*",
+    "@tundralibs/pact": "workspace:*",
     "@tundralibs/radrouter": "workspace:*",
     "@tundralibs/rpc": "workspace:*",
     "@tundralibs/slogger": "workspace:*",

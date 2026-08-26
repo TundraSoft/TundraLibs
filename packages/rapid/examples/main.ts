@@ -66,6 +66,13 @@
  * TOKEN=$(curl -s -X POST localhost:3100/login -H 'content-type: application/json' \
  *   -d '{"username":"ada","password":"lovelace"}' | jq -r .token)
  * curl -s localhost:3100/admin/summary -H "authorization: Bearer $TOKEN" | jq
+ *
+ * # the pact-backed counterpart — same shape, real @tundralibs/pact via
+ * # @tundralibs/rapid/middlewares/pact instead of the generic seam.
+ * # Boot logs the demo key/secret to use here.
+ * curl -si localhost:3100/admin/pact-summary   # 401 — needs an api key
+ * curl -s localhost:3100/admin/pact-summary \
+ *   -H "x-api-key: <id from the boot log>" -H "x-api-secret: <secret from the boot log>" | jq
  * ```
  *
  * Websocket (same port, rpc protocol on /ws) — the module's `namespace`
@@ -98,10 +105,15 @@ import {
   secureHeaders,
   serveStatic,
 } from '../middlewares/mod.ts';
+import {
+  authenticate as pactAuthenticate,
+  authorize as pactAuthorize,
+} from '../middlewares/pact/mod.ts';
 import { health, login, metrics, openapi } from '../endpoints/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
 import { authService, type BlogAuth, verifyToken } from './auth.ts';
+import { registerPactAuth } from './pactAuth.ts';
 import { BlogSchema } from './models/mod.ts';
 import * as blog from './modules/mod.ts';
 
@@ -170,12 +182,38 @@ app.get(
   },
 );
 
+// The pact-backed counterpart to /admin/summary above — same job, real
+// @tundralibs/pact via @tundralibs/rapid/middlewares/pact instead of the
+// generic seam. authenticate()/authorize() resolve the Pact instance
+// registerPactAuth() registered via inject(PACT) — see DESIGN-Auth.md.
+const demoApiKey = await registerPactAuth();
+app.get(
+  '/admin/pact-summary',
+  pactAuthenticate(),
+  pactAuthorize('Admin', 'READ'),
+  async (ctx) => {
+    const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
+    // grants are BigInt masks — pick the fields that JSON can carry
+    // rather than serializing ctx.auth whole.
+    const { id, authMode, keyId } = ctx.auth as {
+      id: string;
+      authMode: string;
+      keyId: string;
+    };
+    return { content: { posts: count, you: { id, authMode, keyId } } };
+  },
+);
+
 // Stock the label the modules inject(), THEN boot them — the inject()
 // field initializers resolve during construction, so the label must be
 // bound first. app.modules() constructs, wires events, mounts routes.
 registerBlogServices(database.norm);
 const { modules } = await app.modules({ modules: [blog] });
 await app.start();
+app.log.info(
+  `pact demo key — curl -s localhost:${app.port}/admin/pact-summary ` +
+    `-H "x-api-key: ${demoApiKey.id}" -H "x-api-secret: ${demoApiKey.secret}"`,
+);
 app.log.info(
   `blog example listening — try: curl -s localhost:${app.port}/posts | jq`,
   { modules: Object.keys(modules) },

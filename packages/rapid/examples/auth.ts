@@ -2,8 +2,9 @@
  * A TINY, self-contained stand-in for `@tundralibs/pact` — just enough to
  * drive the `login()` endpoint and the `authenticate`/`authorize`
  * middleware without pulling a real auth dependency into the example. A
- * production app deletes this file and passes a real `pact` instead:
- * `login({ pact })` and `authenticate({ verify: jwt(pact) })`.
+ * production app deletes this file and uses
+ * `@tundralibs/rapid/middlewares/pact` with a real `pact` instance instead
+ * — see `pactAuth.ts` for the runnable version.
  *
  * The "token" here is a plain `username.id` string — readable, NOT signed.
  * Never ship this; it exists so the demo is runnable with zero setup.
