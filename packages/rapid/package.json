@@ -28,6 +28,7 @@
     "@tundralibs/ambient": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/cronus": "workspace:*",
+    "@tundralibs/crypt": "workspace:*",
     "@tundralibs/doctor": "workspace:*",
     "@tundralibs/id": "workspace:*",
     "@tundralibs/metro-man": "workspace:*",
