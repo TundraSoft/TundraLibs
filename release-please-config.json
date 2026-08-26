@@ -208,6 +208,18 @@
         }
       ]
     },
+    "packages/rapid": {
+      "release-type": "node",
+      "component": "rapid",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
     "packages/restler": {
       "release-type": "node",
       "component": "restler",

@@ -23,6 +23,7 @@ body:
         - oql
         - pact
         - radrouter
+        - rapid
         - restler
         - rpc
         - slogger

@@ -150,6 +150,14 @@ component_management:
         - type: project
           target: auto
           threshold: 1%
+    - component_id: rapid
+      name: rapid
+      paths:
+        - packages/rapid/**
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
     - component_id: restler
       name: restler
       paths:
