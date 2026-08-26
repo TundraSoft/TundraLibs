@@ -38,5 +38,9 @@
     "@tundralibs/slogger": "workspace:*",
     "@tundralibs/tracer": "workspace:*",
     "@tundralibs/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@tundralibs/guardian": "workspace:*",
+    "@tundralibs/norm": "workspace:*"
   }
 }
