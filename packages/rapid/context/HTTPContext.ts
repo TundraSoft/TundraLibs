@@ -19,6 +19,7 @@ import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import { contentTypeFor } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
+import { isSwap } from '../ui/represent.ts';
 import {
   type CookieOptions,
   negotiate,
@@ -45,6 +46,7 @@ import type {
   RapidContextResponse,
   RapidContextState,
   RapidHTTPRequestBody,
+  RapidRouteTemplate,
 } from '../types/mod.ts';
 import { Context } from './Context.ts';
 
@@ -68,6 +70,8 @@ export type HTTPContextInit = {
    * validates it through `app.newRequestId()`. Minted when absent.
    */
   requestId?: string;
+  /** The matched route's template config (see {@link HTTPContext.routeTemplate}). */
+  template?: RapidRouteTemplate;
 };
 
 /**
@@ -165,6 +169,12 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /** Route params from the matched pattern (`/users/:id:` → `{ id }`). */
   public readonly params: Readonly<Record<string, string>>;
   /**
+   * The matched route's normalized template config, when it declared
+   * one — read by the representer and the HTML error path; informative
+   * for middleware.
+   */
+  public readonly routeTemplate?: RapidRouteTemplate;
+  /**
    * Whether a registered route matched this request. When `false`,
    * {@link Context.action} is the RAW pathname — attacker-controlled
    * input; middleware feeding action into metrics/log labels should
@@ -192,6 +202,17 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /** The inbound request headers. */
   get headers(): Headers {
     return this.request.headers;
+  }
+
+  /**
+   * Whether THIS request asked for the fragment representation — the
+   * exact decision the UI representer uses (`app.ui()`'s `swapHeader`
+   * present and no `swapUnless` name is), so handlers varying side
+   * effects by representation never re-derive it against the wrong
+   * header names. Meaningful on any route; `false` for plain requests.
+   */
+  public get isSwap(): boolean {
+    return isSwap(this);
   }
 
   /**
@@ -238,6 +259,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     });
     this.request = request;
     this.params = init.params ?? {};
+    this.routeTemplate = init.template;
     this.matched = init.matched ?? false;
     this.__rawRemoteAddress = remoteAddress;
   }
@@ -345,7 +367,11 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    *
    * The body is STREAMED (compat `readFileStream`) — the file is never
    * buffered; `content-length` comes from a stat. Range requests are the
-   * `serveStatic` middleware's job, not this method's. A missing or
+   * `serveStatic` middleware's job, not this method's — and so are the
+   * TRAVERSAL/SYMLINK GUARDS: `serve` streams whatever path it is
+   * handed, so the path must come from trusted handler code, NEVER from
+   * request input (`ctx.serve(ctx.params.file)` is a traversal bug —
+   * use `serveStatic` for request-derived paths). A missing or
    * non-file path is a 404.
    *
    * @throws {RapidError} RAPID_NOT_FOUND when `path` is not an existing

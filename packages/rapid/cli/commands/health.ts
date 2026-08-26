@@ -12,7 +12,9 @@ export async function healthCommand(
   const target = new URL(opts.path ?? '/health', url).href;
   try {
     const res = await fetch(target);
-    const body = await res.text();
+    // The body is remote-controlled — collapse control characters so a
+    // crafted response cannot forge extra log lines.
+    const body = (await res.text()).replace(/[\r\n\t]+/g, ' ');
     const ok = res.status >= 200 && res.status < 300;
     console.log(`${ok ? '✓' : '✗'} ${target} → ${res.status} ${body}`.trim());
     return ok ? 0 : 1;

@@ -29,10 +29,10 @@ export async function generateBarrel(dir: string): Promise<string> {
       files.push(entry.name);
     }
   }
-  files.sort();
+  files.sort((a, b) => a.localeCompare(b));
   for (const file of files) {
     const classes = exportedClasses(await readTextFile(`${dir}/${file}`));
-    for (const name of classes.sort()) {
+    for (const name of classes.sort((a, b) => a.localeCompare(b))) {
       lines.push(`export { ${name} } from './${file}';`);
     }
   }

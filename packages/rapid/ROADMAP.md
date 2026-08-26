@@ -117,6 +117,24 @@ Core and the current capability set are built and green on Deno / Bun / Node
   the new `redirect` key (string → 302, `{ url, permanent }` → 301, `location`
   set, precedence over `status`), the Module HTTP ergonomics item is done:
   input binders (`cookie`/`auth`/`session`) in, cookies/redirect/stream out.
+- **UI layer (`./ui`) — SHIPPED 2026-08-27** (design DESIGN-ui.md, decided
+  2026-08-23): a route names a **template by function** (`@GET('/users',
+  { template: UserList })`, plain-API verb helpers gained the same options
+  slot); the handler keeps returning JSON-shaped data. Deterministic
+  representation — `rapid-swap` header → fragment, else route/app `prefer`
+  → JSON (default) or layout-wrapped page; `Accept` never consulted;
+  `Vary: rapid-swap` stamped. Auto-escaping `html`/`raw`/`render`/
+  `template` primitives (symbol-branded `Html`); layouts resolve route →
+  `@Module` → `app.ui()`; the frozen `view` bag exposes NOTHING from
+  `ctx.auth` without the opt-in projection. The ~80-line `data-*` runtime
+  is served from a string at `/__rapid/ui.js` (content-keyed ETag,
+  always-revalidate no-cache, Workers-safe), echoes the `csrf` cookie, follows
+  `rapid-redirect` same-origin only, emits `rapid:swapped`/`rapid:error`.
+  Swap-side redirects become `200` + `rapid-redirect`; HTML error pages via
+  `app.ui({ errorTemplate })` under the same disclosure rules; templated
+  routes advertise both media types in OpenAPI. Docs: docs/Rapid-UI.md +
+  README "UI"; runnable `examples/ui.ts`. Polling/history/transitions
+  stay deferred.
 - **OpenAPI from the decorators (2026-08-23)** — routes take `summary` /
   `description` / `tags` / `operationId` / `security`; `@Module` takes
   `description` / `tags` / `security` as the defaults its routes inherit. A
@@ -223,6 +241,17 @@ No 1.0-vs-later split — everything here is in scope. A few items note a real
 technical **dependency** (e.g. "needs the streaming model"); that is a
 sequencing fact, not a deferral.
 
+### UI follow-ups
+
+- **`live: 'sse'`** — a Server-Sent-Events variant of the live bridge
+  (server: one `ctx.sse()` endpoint fanning in from `app.channel()`s;
+  client: `EventSource`, same `rapid:push`/`rapid:live` events) so live
+  updates work on Cloudflare Workers, where the rpc WebSocket cannot
+  listen. Documented as a known limit in docs/Rapid-UI.md until then.
+- **`rapid init --ui`** — scaffold a starter shell (`htmlDocument` +
+  layout + one templated page + the runtime wired) in the CLI templates;
+  the mechanism the design doc deferred it behind has shipped.
+
 ### Tooling & DX
 
 - **CLI `build`** — a scaffolded deno task wrapping `deno compile` / the
@@ -308,20 +337,6 @@ One item left from the HMAC-auth discussion (its two rapid-only siblings —
   - Later: drain-aware rolling deploys, fleet cron pause / remote trigger,
     config & feature-flag broadcast, alerting webhooks, a TUI `reqId`→trace
     jump, multi-master HA via rpc's Redis `PubSubAdapter`.
-- **Simple UI module. 🔍 design DECIDED 2026-08-23 — see
-  [DESIGN-ui.md](DESIGN-ui.md); build pending.** A route names a
-  **template by function** (`@GET('/users', { template: UserList })`); the
-  handler keeps returning JSON-shaped data; a `rapid-swap` request header picks fragment vs not, and the route's
-  `prefer` (`json` default, app-wide settable) picks JSON vs layout-wrapped
-  page — `Accept` is NOT consulted (user decision); a ~80-line `data-*` client runtime
-  (served from a string, Workers-safe) fetches and swaps fragments, auto-
-  echoes the `csrf` cookie, and honours `rapid-redirect`. Auto-escaping
-  `html`/`raw`/`render` primitives under a new `./ui` subpath; the
-  representer runs at the innermost onion point so `etag`/`compress` see the
-  final HTML; HTML error pages via `app.ui({ errorTemplate })` on the
-  post-onion error path. Mechanism proven by the standalone
-  `rapid-ui-demo` prototype (XSS-escaping verified). Not a React/Vite-class
-  framework — polling/history/transitions explicitly deferred.
 
 ## Parked
 

@@ -23,8 +23,10 @@ const bodyBytes = (content: RapidContextResponse['content']): Uint8Array => {
 };
 
 const computeTag = async (bytes: Uint8Array): Promise<string> => {
+  // Content-keying only, but SHA-256 costs the same as SHA-1 here and
+  // keeps scanners quiet about weak-hash use.
   const digest = new Uint8Array(
-    await crypto.subtle.digest('SHA-1', bytes as unknown as BufferSource),
+    await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource),
   );
   let hex = '';
   for (let i = 0; i < 10; i++) hex += digest[i]!.toString(16).padStart(2, '0');

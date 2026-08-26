@@ -40,6 +40,12 @@ import {
 } from '../schemas.ts';
 import { validated } from '../../mod.ts';
 import { BlogModule } from './BlogModule.ts';
+import {
+  BlogShell,
+  CommentsView,
+  PostDetailView,
+  PostListView,
+} from './views.ts';
 
 /** A stored posts row as norm hands it back (tags is JSON text). */
 type PostRow = {
@@ -51,6 +57,17 @@ type PostRow = {
   createdAt: Date | string;
 };
 
+/** The fake commenters the demo cron draws from. */
+const FAKE_AUTHORS = ['Ada', 'Grace', 'Edsger', 'Barbara', 'Donald', 'Radia'];
+const FAKE_QUIPS = [
+  'Shipping this to prod right now.',
+  'Same route gave me JSON a second ago. Witchcraft.',
+  'The escaping caught my <script> — rude, but fair.',
+  'htmx drives this too? Take my money.',
+  'Cron wrote this comment. Beep boop.',
+  'Fragments over the wire, like it is 2004 again — but typed.',
+];
+
 /** Published by this module; subscribers name them `posts:Posts:<Event>`. */
 const POST_EVENTS = {
   PostCreated: event<{ id: string; title: string }>(),
@@ -60,7 +77,9 @@ const POST_EVENTS = {
 // `namespace` turns the bare @JOB('digest') below into the flat
 // "posts.digest" job name; `prefix: '/posts'` joins onto HTTP paths only.
 // `version: 'v1'` is the module DEFAULT — `find()` inherits it below.
-@Module({ prefix: '/posts', version: 'v1' })
+// `layout` is the module-wide page shell — every templated route in the
+// class inherits it (route's own `layout` would win; app.ui() is below).
+@Module({ prefix: '/posts', version: 'v1', layout: BlogShell })
 export class Posts extends BlogModule<typeof POST_EVENTS> {
   readonly name = 'Posts';
   readonly namespace = 'posts';
@@ -89,38 +108,68 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
     }
   }
 
+  // TWO registrations, ONE method, ONE data shape: `/posts` stays
+  // API-first (JSON unless swapped — `prefer` defaults to 'json'),
+  // while `/posts/ui` is the browsable PAGE (`prefer: 'html'`, wrapped
+  // in the module layout). Decorators are metadata-only, so stacking
+  // them just records two routes.
   @GET('/', {
     bind: [query(), paging()],
     description: 'List posts, filterable/sortable/paginated.',
     response: PostSummary,
+    template: PostListView,
+  })
+  @GET('/ui', {
+    bind: [query(), paging()],
+    description: 'The blog page — same handler, HTML representation.',
+    template: {
+      render: PostListView,
+      prefer: 'html',
+      title: 'The Library — a rAPId demo',
+    },
   })
   async list(
-    _query: RapidContextQuery,
+    query: RapidContextQuery,
     paging: RapidContextPaging,
   ): Promise<RapidContextResponse> {
     // Paging is pushed down to SQLite (LIMIT/OFFSET + a COUNT for the
-    // total) rather than sliced in memory. A real app would also map
-    // `_query.filters`/`.sorting` onto norm's own filter API.
+    // total) rather than sliced in memory. The `?level=` filter (the
+    // page's chips use it via withQuery) is applied post-fetch on the
+    // page window — demo-sized, with the consequences that implies: a
+    // filtered page can come back EMPTY while later windows still hold
+    // matches, and `total` counts the window, not the table. A real app
+    // pushes the predicate into norm's filters.
     const { page, size } = paging;
+    // Optional-chained: direct unit-test calls may hand a bare query.
+    // Truthiness on purpose — an empty `?level=` means "no filter".
+    const level = (query?.filters?.['level'] as { $eq?: string } | undefined)
+      ?.$eq;
     const found = await this.db.repo('Posts').find(undefined, {
       orderBy: { '@createdAt': 'DESC' },
       limit: size,
       offset: (page - 1) * size,
     });
-    const { count: total } = await this.db.repo('Posts').count();
-    return {
-      content: {
-        rows: (found.data as PostRow[]).map((r) => this.__present(r)),
-        total,
-        paging,
-      },
-    };
+    let rows = (found.data as PostRow[]).map((r) => this.__present(r));
+    let total: number;
+    if (level) {
+      // The SAME fallback the views' level badge renders — a post with a
+      // missing level tag wears "beginner" and must match that chip too.
+      rows = rows.filter((post) => (post.tags[1] ?? 'beginner') === level);
+      total = rows.length;
+    } else {
+      total = (await this.db.repo('Posts').count()).count as number;
+    }
+    return { content: { rows, total, paging, ...(level ? { level } : {}) } };
   }
 
   // No explicit `version` — inherits the @Module default ('v1'), which is
   // ALSO `server.versioning.default`, so a plain request (no header)
   // resolves here too.
-  @GET('/:id:', { bind: [param('id')], description: 'Fetch one post by id.' })
+  @GET('/:id:', {
+    bind: [param('id')],
+    description: 'Fetch one post by id.',
+    template: PostDetailView,
+  })
   async find(id: string): Promise<RapidContextResponse> {
     return { content: await this.get(id) };
   }
@@ -201,15 +250,24 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
   @GET('/:id:/comments', {
     bind: [param('id')],
     description: "List a post's comments.",
+    template: CommentsView,
   })
   async comments(postId: string): Promise<RapidContextResponse> {
     await this.get(postId);
+    // NEWEST first with an explicit window — a limit-less find() pages
+    // at norm's default (10), which would silently freeze a live
+    // comments stream at the ten OLDEST rows. `total` rides along so
+    // the view's count survives the window.
     const found = await this.db.repo('Comments').find({ '@postId': postId }, {
-      orderBy: { '@createdAt': 'ASC' },
+      orderBy: { '@createdAt': 'DESC' },
+      limit: 20,
+    });
+    const { count: total } = await this.db.repo('Comments').count({
+      '@postId': postId,
     });
     // content must be an object/string/Uint8Array, never a bare array.
     // Dates serialize to ISO through JSON.stringify, so rows go as-is.
-    return { content: { rows: found.data } };
+    return { content: { rows: found.data, total } };
   }
 
   @POST('/:id:/comments', {
@@ -227,6 +285,29 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
       body: body.body,
     });
     return { status: 201, content: res.data[0] };
+  }
+
+  // The live-demo commenter: a REAL cron job (every minute) that drops a
+  // canned comment on a random post. main.ts also triggers it on a short
+  // interval (a demo can't wait a minute) and broadcasts the outcome on
+  // the 'comments' channel — the blog page's websocket subscriber then
+  // refreshes its comments fragment via rapid.swap().
+  @JOB('fakeComment', '* * * * *')
+  async fakeComment(): Promise<RapidContextResponse> {
+    const found = await this.db.repo('Posts').find(undefined, {
+      orderBy: { '@createdAt': 'DESC' },
+      limit: 50,
+    });
+    const rows = found.data as PostRow[];
+    if (rows.length === 0) return { status: 204, content: '' };
+    const post = rows[Math.floor(Math.random() * rows.length)]!;
+    const author = FAKE_AUTHORS[Math.floor(Math.random() * FAKE_AUTHORS.length)]!;
+    const body = FAKE_QUIPS[Math.floor(Math.random() * FAKE_QUIPS.length)]!;
+    await this.db.repo('Comments').insert({ postId: post.id, author, body });
+    return {
+      status: 201,
+      content: { postId: post.id, postTitle: post.title, author, body },
+    };
   }
 
   // Flat namespace: mounts as "posts.digest" (no HTTP path). @JOB has no

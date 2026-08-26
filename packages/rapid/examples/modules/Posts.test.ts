@@ -134,4 +134,39 @@ describe('blog.Posts (unit — fake Norm via the testing harness)', () => {
     asserts.assertEquals(b2.rows.length, 1);
     asserts.assert(b1.rows[0]!.id !== b2.rows[0]!.id); // distinct pages
   });
+
+  it("list() ?level= filter matches the views' badge fallback (missing level tag = beginner)", async () => {
+    await using h = await boot();
+    await h.modules.Posts.create({
+      title: 'deep',
+      body: 'b',
+      tags: ['psychology', 'advanced', '20 min'],
+    });
+    // No tags at all — the page renders its level badge as 'beginner',
+    // so the beginner chip must surface it too.
+    await h.modules.Posts.create({ title: 'untagged', body: 'b' });
+    const filtered = await h.modules.Posts.list(
+      {
+        filters: { level: { $eq: 'beginner' } },
+      } as unknown as RapidContextQuery,
+      { page: 1, size: 10 } as RapidContextPaging,
+    );
+    const body = filtered.content as {
+      rows: Post[];
+      total: number;
+      level?: string;
+    };
+    asserts.assertEquals(body.rows.map((r) => r.title), ['untagged']);
+    asserts.assertEquals(body.total, 1);
+    asserts.assertEquals(body.level, 'beginner');
+    // An EMPTY ?level= means no filter — not "match nothing".
+    const unfiltered = await h.modules.Posts.list(
+      { filters: { level: { $eq: '' } } } as unknown as RapidContextQuery,
+      { page: 1, size: 10 } as RapidContextPaging,
+    );
+    asserts.assertEquals(
+      (unfiltered.content as { rows: Post[] }).rows.length,
+      2,
+    );
+  });
 });

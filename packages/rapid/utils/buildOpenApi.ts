@@ -172,7 +172,14 @@ export function buildOpenApi(
       responses: {
         '200': {
           description: 'OK',
-          content: { 'application/json': { schema: responseSchema } },
+          // A templated route serves BOTH representations — JSON by
+          // default, HTML on a swap / `prefer: 'html'` (see ./ui).
+          content: route.template !== undefined
+            ? {
+              'application/json': { schema: responseSchema },
+              'text/html': { schema: { type: 'string' } },
+            }
+            : { 'application/json': { schema: responseSchema } },
         },
         '400': errorResponse('Bad request'),
         '401': errorResponse('Unauthenticated'),

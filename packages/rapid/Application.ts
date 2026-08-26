@@ -25,6 +25,9 @@ import {
   setContainerProvider,
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
+import { isTemplate, normalizeRouteTemplate } from './ui/represent.ts';
+import { UI_LIVE, UI_LIVE_ETAG } from './ui/live.ts';
+import { UI_RUNTIME, UI_RUNTIME_ETAG } from './ui/ui.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
 import {
@@ -58,10 +61,11 @@ import type {
   RapidModuleInitResult,
   RapidModuleSources,
   RapidRouteEntry,
-  RapidRouteOpenApi,
+  RapidRouteOptions,
   RapidSocketEntry,
   RapidSOCKETHandler,
   RapidSOCKETMiddleware,
+  RapidUiOptions,
 } from './types/mod.ts';
 
 /**
@@ -168,6 +172,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private readonly __container: DoctorContainer = Doctor.createContainer();
   /** The optional per-request error hook (see {@link onError}). */
   private __onError?: RapidErrorHandler<S>;
+  /** The app.ui() configuration (see {@link ui}); frozen once set. */
+  private __ui?: Readonly<RapidUiOptions & { runtimePath: string }>;
   private readonly __meter?: Meter;
   /**
    * The upload temp dir THIS instance created (`uploads.path` left
@@ -688,7 +694,7 @@ export class Application<S extends RapidContextState = RapidContextState>
   public route(
     method: HTTPMethod,
     path: string,
-    options: { version?: string; openapi?: RapidRouteOpenApi },
+    options: RapidRouteOptions,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
   public route(
@@ -704,17 +710,47 @@ export class Application<S extends RapidContextState = RapidContextState>
     }
     const hasOptions = args.length > 0 && typeof args[0] === 'object' &&
       args[0] !== null;
-    const opts = hasOptions
-      ? (args[0] as { version?: string; openapi?: RapidRouteOpenApi })
-      : {};
+    const opts = hasOptions ? (args[0] as RapidRouteOptions) : {};
     const version = opts.version;
+    // Fail-fast: a wrong template import dies at registration, never at
+    // first request.
+    const template = opts.template !== undefined
+      ? normalizeRouteTemplate(
+        opts.template,
+        opts.layout,
+        `${method} ${path}`,
+      )
+      : undefined;
+    // A first-arg OBJECT that carries none of the option keys is a
+    // mistake, not options — most likely a bare template where
+    // `{ template }` was meant. Loud, not a silently untemplated route.
+    if (
+      hasOptions && Object.keys(opts).length > 0 &&
+      opts.version === undefined && opts.openapi === undefined &&
+      opts.template === undefined && opts.layout === undefined
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'unrecognized route options object — a template goes under { template: ... }',
+        details: { method, path, keys: Object.keys(opts) },
+      });
+    }
+    if (opts.layout !== undefined && opts.template === undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: "route option 'layout' does nothing without 'template'",
+        details: { method, path },
+      });
+    }
     const chain = (hasOptions ? args.slice(1) : args) as [
       ...RapidHTTPMiddleware[],
       RapidHTTPHandler<S>,
     ];
-    if (chain.length === 0) {
+    if (
+      chain.length === 0 ||
+      typeof chain[chain.length - 1] !== 'function'
+    ) {
       throw new RapidError('RAPID_CONFIG', {
-        message: 'route needs a handler',
+        message: 'route needs a handler (the last argument must be a function)',
         details: { method, path },
       });
     }
@@ -725,6 +761,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
       ...(version !== undefined ? { version } : {}),
       ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
+      ...(template !== undefined ? { template } : {}),
     });
     return this;
   }
@@ -732,32 +769,71 @@ export class Application<S extends RapidContextState = RapidContextState>
   public get(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
-  ): this {
-    return this.route('GET', path, ...chain);
+  ): this;
+  public get(
+    path: string,
+    options: RapidRouteOptions,
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public get(path: string, ...args: unknown[]): this {
+    return this.__verb('GET', path, args);
   }
   public post(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
-  ): this {
-    return this.route('POST', path, ...chain);
+  ): this;
+  public post(
+    path: string,
+    options: RapidRouteOptions,
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public post(path: string, ...args: unknown[]): this {
+    return this.__verb('POST', path, args);
   }
   public put(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
-  ): this {
-    return this.route('PUT', path, ...chain);
+  ): this;
+  public put(
+    path: string,
+    options: RapidRouteOptions,
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public put(path: string, ...args: unknown[]): this {
+    return this.__verb('PUT', path, args);
   }
   public patch(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
-  ): this {
-    return this.route('PATCH', path, ...chain);
+  ): this;
+  public patch(
+    path: string,
+    options: RapidRouteOptions,
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public patch(path: string, ...args: unknown[]): this {
+    return this.__verb('PATCH', path, args);
   }
   public delete(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
-  ): this {
-    return this.route('DELETE', path, ...chain);
+  ): this;
+  public delete(
+    path: string,
+    options: RapidRouteOptions,
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public delete(path: string, ...args: unknown[]): this {
+    return this.__verb('DELETE', path, args);
+  }
+
+  /** Shared verb-helper body — `route()` shape-detects the options object. */
+  private __verb(method: HTTPMethod, path: string, args: unknown[]): this {
+    return this.route(
+      method,
+      path,
+      ...args as [...RapidHTTPMiddleware[], RapidHTTPHandler<S>],
+    );
   }
 
   /**
@@ -956,6 +1032,135 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * Configure the UI layer (see `@tundralibs/rapid/ui`): the app-default
+   * `layout` and `prefer`, the opt-in `view` identity projection, the
+   * HTML `errorTemplate`, and the client runtime's route — registered
+   * here at `runtimePath` (default `/__rapid/ui.js`) with a strong
+   * content-keyed `ETag` and always-revalidate caching (304s when
+   * unchanged — never a stale runtime after an upgrade); no file read, so it
+   * works on Workers and with {@link fetch}. Call at most ONCE, before
+   * `start()`. An API-only app never calls this and pays nothing.
+   *
+   * @throws {RapidError} RAPID_CONFIG on a second call, a non-template
+   *   `layout`/`errorTemplate`, an invalid `prefer`, or a `runtimePath`
+   *   not starting with `/` (or colliding with the live bridge's path).
+   */
+  public ui(options: RapidUiOptions = {}): this {
+    if (this.__ui !== undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.ui() was already configured — call it once',
+      });
+    }
+    if (this.__started || this.__http !== undefined) {
+      // The router snapshots routes at prepare(): configured now, the
+      // runtime route would 404 while uiOptions took effect — the
+      // half-applied state the JSDoc forbids. Fail loud, like channel().
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.ui() must be called before start() / the first fetch()',
+      });
+    }
+    if (options.layout !== undefined && !isTemplate(options.layout)) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.ui(): layout is not a RapidTemplate',
+      });
+    }
+    if (
+      options.errorTemplate !== undefined && !isTemplate(options.errorTemplate)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.ui(): errorTemplate is not a RapidTemplate',
+      });
+    }
+    if (
+      options.prefer !== undefined && options.prefer !== 'json' &&
+      options.prefer !== 'html'
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `app.ui(): prefer must be 'json' or 'html'`,
+      });
+    }
+    const runtimePath = options.runtimePath ?? '/__rapid/ui.js';
+    if (!runtimePath.startsWith('/')) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `app.ui(): runtimePath must start with '/'`,
+      });
+    }
+    if (options.live === true && runtimePath === '/__rapid/live.js') {
+      // Caught HERE, attributed — not as a duplicate-route error two
+      // registrations later.
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `app.ui(): runtimePath collides with the live bridge's /__rapid/live.js`,
+      });
+    }
+    const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    for (
+      const [key, value] of [
+        ['swapHeader', options.swapHeader],
+        ['redirectHeader', options.redirectHeader],
+        ['csrfCookie', options.csrfCookie],
+        ...(options.swapUnless ?? []).map((
+          name,
+        ): [string, string] => ['swapUnless', name]),
+      ] as [string, string | undefined][]
+    ) {
+      if (value !== undefined && !HEADER_NAME.test(value)) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            `app.ui(): ${key} must be a valid header name (got '${value}')`,
+        });
+      }
+    }
+    this.__ui = Object.freeze({
+      ...options,
+      // Deep-frozen copy: the caller's array must not steer swap/Vary
+      // behavior after registration.
+      ...(options.swapUnless !== undefined
+        ? { swapUnless: Object.freeze([...options.swapUnless]) }
+        : {}),
+      runtimePath,
+    });
+    this.__scriptRoute(runtimePath, UI_RUNTIME, UI_RUNTIME_ETAG);
+    if (options.live === true) {
+      this.__scriptRoute('/__rapid/live.js', UI_LIVE, UI_LIVE_ETAG);
+    }
+    return this;
+  }
+
+  /**
+   * Serve one string-constant script with a strong content ETag and
+   * always-revalidate caching (no-cache: the path never changes, so
+   * `immutable` would pin a stale script across package upgrades — a
+   * changed ETag is never consulted on an immutable entry; an unchanged
+   * script still costs only a 304). Liberal If-None-Match — `*`, comma
+   * lists, W/ prefixes — and the 304 re-carries its validators per
+   * RFC 9110.
+   */
+  private __scriptRoute(path: string, source: string, etag: string): void {
+    this.get(path, (ctx) => {
+      const inm = ctx.headers.get('if-none-match');
+      const matches = inm !== null && (
+        inm.trim() === '*' ||
+        inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)
+      );
+      const headers = { etag, 'cache-control': 'no-cache' };
+      if (matches) return { status: 304, content: '', headers };
+      return {
+        content: source,
+        headers: {
+          ...headers,
+          'content-type': 'text/javascript; charset=UTF-8',
+        },
+      };
+    });
+  }
+
+  /** The {@link ui} configuration, or `undefined` — read by the representer. */
+  public get uiOptions(): Readonly<RapidUiOptions> | undefined {
+    return this.__ui;
+  }
+
+  /**
    * Boot-time invariants shared by {@link start} and {@link fetch}.
    * @throws {RapidError} RAPID_CONFIG on an unsafe option combination.
    */
@@ -1073,6 +1278,14 @@ export class Application<S extends RapidContextState = RapidContextState>
       });
     }
     this.__assertBootConfig();
+    if (this.__ui?.live === true) {
+      // The rpc socket mounts only in start()'s listening server — on a
+      // fetch()-only deployment (Workers, tests, any embedder) the
+      // bridge has no server end and can never connect. Loud, once.
+      this.log.warn(
+        'app.ui({ live: true }) on the fetch()-only path: /ws never mounts here, so the live bridge cannot connect',
+      );
+    }
     const http = new HTTPTransport<S>(this);
     http.prepare();
     this.__http = http;

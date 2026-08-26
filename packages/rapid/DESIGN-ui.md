@@ -1,7 +1,8 @@
 # rAPId UI module — design (2026-08-23)
 
-Status: **DECIDED 2026-08-23 — build pending.** The four open questions were
-settled (see the final section); nothing is built yet. Grounded in the real
+Status: **BUILT 2026-08-27** (branch `feat/rapid-ui`; docs/Rapid-UI.md is
+the consumer-facing contract). The four open questions were settled (see
+the final section). Grounded in the real
 rapid source (every seam named below was verified to exist) and in the
 mechanism the standalone `rapid-ui-demo` prototype proved clickable. The
 ROADMAP one-liner ("Simple UI module — a deliberately MINIMAL client-side UI
@@ -419,6 +420,67 @@ Each step is independently shippable and tested on all three runtimes.
 - i18n / locale in `view`.
 - A `rapid ui` CLI scaffold (templates + layout + a first page) — after the
   mechanism ships.
+
+## Post-build addition (user call, 2026-08-27)
+
+`window.rapid.swap(url, target, opts?)` — the runtime's single
+programmatic hook, added so app code can trigger swaps (multi-region
+updates from a `rapid:swapped` listener) without synthesizing clicks. The
+disciplined alternative to htmx-style out-of-band attributes: the
+attribute surface stays frozen; everything beyond it is app JS over the
+events.
+
+Second addition, same day (user call): the swap contract's three header
+names became configuration — `swapHeader` (presence = fragment),
+`swapUnless` (presence CANCELS the swap; the escape htmx needs because it
+sends `HX-Request` on boosted/history-restore navigations that expect the
+page), and `redirectHeader` (htmx honours `HX-Redirect` natively). All
+names join `Vary`; validated as header tokens at `app.ui()`. This is the
+htmx-interop lever: their mature client drives rapid's server model
+unchanged — docs/Rapid-UI.md "Bring your own client".
+
+## Adversarial-review hardening (2026-08-27)
+
+Eight-reviewer pass (runtime, representer, API/types, security, examples,
+whole-package sweeps, feature scout); ~30 verified findings, zero
+vulnerabilities, all fixed. The behavior-shaping ones: the layout's
+`title?` slot is now WIRED (object-form `title: string | (data) =>
+string`); `representError` stamps the same `Vary` as the success path
+and is isolated in disclosure (a throwing errorTemplate falls back to
+the JSON envelope, never an empty 204); a handler-set `vary` MERGES with
+the swap names; templated routes returning `null` stay a 204;
+`normalizeRouteTemplate` freezes its result (ctx.routeTemplate is
+immutable); `app.ui()` before start()/fetch() is enforced loud, so is
+`layout`-without-`template` and a non-function handler; non-`Html`
+template returns throw `RAPID_RESPONSE_INVALID`; the runtime gained
+per-target last-write-wins aborts, modifier-click and inner-link
+carve-outs, real multipart for file inputs, submitter values, an
+`outer`-swap event on the REPLACEMENT node, and try/catch around
+redirect/cookie parsing; `view.csrfToken`'s cookie name is configurable
+(`csrfCookie`). Docs now state the escaper's context boundaries (quoted
+attributes + text only — URL/script contexts need app validation).
+
+## Feature round (user call, 2026-08-27 — suggestions 1-7 built)
+
+`UI_LIVE` (`app.ui({ live: true })` → `/__rapid/live.js`; `rapid.live.
+connect/disconnect`, `rapid:push`/`rapid:live` document events, capped
+backoff, resubscribe; both scripts now MERGE onto `window.rapid` so load
+order is free); `ctx.isSwap` (the representer's decision, exported +
+surfaced on HTTPContext); render diagnostics (`RAPID_TEMPLATE_RENDER`
+naming the template, + a DEVELOPMENT-only built-in error fragment when
+`app.ui()` is on with no errorTemplate — PRODUCTION always JSON);
+typed projections (`template<D, Extra>` types `view` fields cast-free);
+`htmlDocument()` + `view.runtimePath` (standards-mode preamble, no more
+hand-written doctype/head); testing fixtures (`view()` factory,
+`client` `swap: true` using the RESOLVED swap header); recipes docs
+(pagination via `withQuery` + outer self-replacement, PRG/no-JS, CSP
+nonce via projection, i18n via projection). A same-day polish round
+added View Transitions on every swap (animation promises observed — a
+hidden document's rejections never surface), focus restore by id
+across a swap, and `rapid.refresh(target)` backed by a per-node GET
+source memory (replace/outer only; non-GET outer swaps carry the
+source forward). Suggestion 8's rejections stand: no attribute growth,
+no async templates, no SPA history.
 
 ## Decisions taken (user, 2026-08-23)
 

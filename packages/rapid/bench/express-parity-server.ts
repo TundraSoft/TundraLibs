@@ -25,6 +25,8 @@ const mintId = (): string => idgen === 'ulid' ? ulid() : String(seq());
 let counter = 0;
 
 const app = express();
+// Parity: rapid sends no x-powered-by, so the bench must not either.
+app.disable('x-powered-by');
 app.use(
   (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const id = (req.headers['x-request-id'] as string | undefined) ??

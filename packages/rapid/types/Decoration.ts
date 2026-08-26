@@ -7,6 +7,8 @@
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { RapidBinder } from './Binder.ts';
+import type { RapidRouteTemplate } from './RouteTemplate.ts';
+import type { RapidTemplate } from './Template.ts';
 
 /**
  * One recorded decoration — pure registration DATA held in the
@@ -47,6 +49,10 @@ export type RapidDecoration =
      * `toOpenAPI()` as the 200 schema.
      */
     response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
+    /** Raw `template` route option — normalized + validated at mount. */
+    template?: RapidTemplate<unknown> | RapidRouteTemplate;
+    /** Raw `layout` route option (the object form's `layout` wins). */
+    layout?: RapidRouteTemplate['layout'];
   }
   | {
     kind: 'SOCKET';

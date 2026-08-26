@@ -55,6 +55,8 @@ export type ModuleDecoratorOptions = {
    * own `security` (including `[]` = public) wins.
    */
   security?: readonly string[];
+  /** Default page layout for the class's templated routes (see `RapidModuleMeta`). */
+  layout?: RapidModuleMeta['layout'];
 };
 
 /**
@@ -64,7 +66,7 @@ export type ModuleDecoratorOptions = {
  */
 export type ModuleMountOptions = Pick<
   ModuleDecoratorOptions,
-  'prefix' | 'version' | 'description' | 'tags' | 'security'
+  'prefix' | 'version' | 'description' | 'tags' | 'security' | 'layout'
 >;
 
 type ModuleClassDecorator = <
@@ -139,6 +141,7 @@ export function Module(
       : {}),
     ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
     ...(opts.security !== undefined ? { security: opts.security } : {}),
+    ...(opts.layout !== undefined ? { layout: opts.layout } : {}),
   };
   return (target, context): void => {
     assertClassContext(context, 'Module');

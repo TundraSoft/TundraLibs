@@ -3,6 +3,8 @@ import { SpanKind } from '@tundralibs/tracer';
 import type { Application } from '../Application.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import { representError } from '../ui/represent.ts';
+import type { HTTPContext } from '../context/HTTPContext.ts';
 import type { Meter } from '../utils/Meter.ts';
 import { attachContainer } from '../utils/requestContainer.ts';
 import type {
@@ -197,12 +199,42 @@ export abstract class Transport<
               ctx.response = override;
             } else {
               const payload = err.payload(this._app.mode);
-              ctx.response = {
-                status: err.status,
-                content: typeof payload === 'object' && payload !== null
-                  ? { ...payload, requestId: ctx.requestId }
-                  : payload,
-              };
+              const content = typeof payload === 'object' && payload !== null
+                ? { ...payload, requestId: ctx.requestId }
+                : payload;
+              // HTML error page/fragment when `app.ui({ errorTemplate })`
+              // is set AND the representation resolves to HTML for this
+              // request — same disclosure payload, themed; the JSON
+              // envelope otherwise (and always off-HTTP). Isolated like
+              // the errorHook above: a throwing errorTemplate/layout/
+              // view projection must never break disclosure — logged,
+              // and the JSON envelope goes out instead (the outer catch
+              // would otherwise swallow it into an empty 204).
+              let htmlError: RapidContextResponse | undefined;
+              if (
+                ctx.type === 'HTTP' && typeof content === 'object' &&
+                content !== null
+              ) {
+                try {
+                  htmlError = representError(
+                    err.status,
+                    content as Record<string, unknown>,
+                    ctx as unknown as HTTPContext<S>,
+                    this._app.mode,
+                  );
+                } catch (templateError) {
+                  this._app.log.error(
+                    'errorTemplate render failed — using the JSON envelope',
+                    {
+                      requestId: ctx.requestId,
+                      error: templateError instanceof Error
+                        ? templateError.message
+                        : String(templateError),
+                    },
+                  );
+                }
+              }
+              ctx.response = htmlError ?? { status: err.status, content };
             }
           } catch {
             // The context was already finalized (a middleware called
