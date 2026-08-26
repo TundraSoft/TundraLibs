@@ -39,7 +39,7 @@
  * });
  * if (result !== null) {
  *   const principal = await pact.verify(result.token);
- *   pact.assert(principal, 'EDIT', 'Post');
+ *   pact.assert(principal, 'Post', 'EDIT');
  * }
  * ```
  *
@@ -836,8 +836,8 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
    */
   can(
     principal: PactPrincipal | null,
-    permission: PactPermissionRef<P>,
     module: string,
+    permission: PactPermissionRef<P>,
   ): boolean {
     if (principal === null || principal.status !== 'ACTIVE') return false;
     return this.__permissions.has(module, permission, principal.grants);
@@ -854,11 +854,11 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
    */
   assert(
     principal: PactPrincipal | null,
-    permission: PactPermissionRef<P>,
     module: string,
+    permission: PactPermissionRef<P>,
   ): void {
-    if (this.can(principal, permission, module)) return;
-    this._emit('denied', principal, permission, module);
+    if (this.can(principal, module, permission)) return;
+    this._emit('denied', principal, module, permission);
     throw new PactDeniedError(module, String(permission));
   }
 
@@ -991,6 +991,37 @@ export class Pact<P extends PactPermissionBits = PactPermissionBits>
     } catch {
       return false;
     }
+  }
+
+  /**
+   * HMAC-sign `content` with the *same* secret behind API key `keyId` —
+   * for a server responding to an `HMAC`-authenticated caller, so that
+   * caller (and only that caller) can verify the response with the secret
+   * they already hold. Unlike {@link Pact.sign}, this never hands the
+   * secret itself back to the caller; it re-fetches the key record via
+   * `getApiKey` and signs internally. Resolves `null` — never throws — for
+   * an unknown, revoked, or presented-secret-only (no `secret`) key, the
+   * same never-throw contract {@link Pact.authenticate}'s `HMAC` case uses.
+   *
+   * @param keyId - the API key whose secret signs `content`
+   * @param content - the content to sign
+   * @returns the base64 signature, or `null` when `keyId` can't sign
+   * @throws {@link PactDefinitionError} (`MISSING_HOOK`) when the
+   *   `getApiKey` hook is not wired.
+   */
+  async signAs(
+    keyId: string,
+    content: string | Uint8Array,
+  ): Promise<string | null> {
+    const getApiKey = this.__hook('getApiKey', 'signAs()');
+    const record = await getApiKey(keyId);
+    if (
+      record === null || record.revokedAt !== undefined ||
+      record.secret === undefined
+    ) {
+      return null;
+    }
+    return await signHMAC(content, record.secret);
   }
 
   // ── power-user escape hatch ──────────────────────────────────────────

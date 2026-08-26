@@ -80,7 +80,7 @@ const principal = await pact.authenticate({
   payload,
 });
 console.log('valid signature → principal', principal?.id, principal?.status);
-console.log('can CALL Webhook?', pact.can(principal, 'CALL', 'Webhook')); // true
+console.log('can CALL Webhook?', pact.can(principal, 'Webhook', 'CALL')); // true
 
 // Tampered payload (same signature) → null. The recomputed signature no
 // longer matches, so pact rejects it — uniformly, never a throw.

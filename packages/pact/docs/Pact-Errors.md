@@ -21,7 +21,7 @@ declare const pact: Pact;
 declare const principal: Parameters<typeof pact.assert>[0];
 
 try {
-  pact.assert(principal, 'EDIT', 'Post');
+  pact.assert(principal, 'Post', 'EDIT');
 } catch (error) {
   if (error instanceof PactDeniedError) {
     // error.context: { code: 'PERMISSION_DENIED', module, permission }
@@ -92,7 +92,7 @@ const pact = Pact.create({
     console.warn(`refresh reuse: user=${userId} family=${familyId}`);
   },
 });
-pact.on('denied', (_principal, permission, module) => {
+pact.on('denied', (_principal, module, permission) => {
   console.warn(`denied ${String(permission)} on ${module}`);
 });
 ```
