@@ -26,8 +26,8 @@ export type PactEvents = {
   /** An `assert()` was denied (fires just before the throw). */
   denied: (
     principal: PactPrincipal | null,
-    permission: string | bigint,
     module: string,
+    permission: string | bigint,
   ) => void;
   /** A stale refresh generation was replayed — family revoked. ALERT. */
   refreshReuse: (userId: string, familyId: string) => void;

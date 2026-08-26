@@ -100,10 +100,10 @@ console.log(
 const principal = await pact.verify(login.token);
 console.log('verified principal', principal?.id, principal?.status);
 
-console.log('can READ Post?  ', pact.can(principal, 'READ', 'Post')); // true
-console.log('can DELETE Post?', pact.can(principal, 'DELETE', 'Post')); // false
+console.log('can READ Post?  ', pact.can(principal, 'Post', 'READ')); // true
+console.log('can DELETE Post?', pact.can(principal, 'Post', 'DELETE')); // false
 try {
-  pact.assert(principal, 'DELETE', 'Post');
+  pact.assert(principal, 'Post', 'DELETE');
 } catch (err) {
   console.log('assert DELETE denied:', (err as Error).message);
 }

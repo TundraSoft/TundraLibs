@@ -144,8 +144,8 @@ describe('pact.Pact construction', () => {
     asserts.assert(
       pact.can(
         { id: 'x', grants: { Post: 1n }, status: 'ACTIVE', metadata: {} },
-        'READ',
         'Post',
+        'READ',
       ),
     );
   });
@@ -716,6 +716,58 @@ describe('pact.Pact authenticate schemes', () => {
       null,
     );
   });
+
+  it("signAs signs with the key's stored secret — matches signHMAC directly", async () => {
+    const { store, pact } = setup();
+    const p = await pact.register({
+      identifier: 'a@x.io',
+      password: 'pw-123456789',
+    });
+    store.apiKeys.set('sign_ak_2', {
+      id: 'sign_ak_2',
+      userId: p.id,
+      secret: 'the-signing-secret',
+    });
+    const content = 'the response body';
+    const signature = await pact.signAs('sign_ak_2', content);
+    asserts.assertEquals(
+      signature,
+      await signHMAC(content, 'the-signing-secret'),
+    );
+  });
+
+  it('signAs resolves null for unknown, revoked, or presented-secret-only keys', async () => {
+    const { store, pact } = setup();
+    const p = await pact.register({
+      identifier: 'a@x.io',
+      password: 'pw-123456789',
+    });
+    asserts.assertEquals(await pact.signAs('ghost', 'x'), null);
+
+    store.apiKeys.set('revoked_ak', {
+      id: 'revoked_ak',
+      userId: p.id,
+      secret: 's',
+      revokedAt: Date.now(),
+    });
+    asserts.assertEquals(await pact.signAs('revoked_ak', 'x'), null);
+
+    store.apiKeys.set('presented_ak', {
+      id: 'presented_ak',
+      userId: p.id,
+      secretHash: 'deadbeef',
+    });
+    asserts.assertEquals(await pact.signAs('presented_ak', 'x'), null);
+  });
+
+  it('signAs requires the getApiKey hook (MISSING_HOOK at call time without it)', async () => {
+    const pact = Pact.create({ bits: BITS });
+    const err = await asserts.assertRejects(
+      () => pact.signAs('any', 'x'),
+      PactDefinitionError,
+    );
+    asserts.assertEquals((err as PactDefinitionError).code, 'MISSING_HOOK');
+  });
 });
 
 describe('pact.Pact OAuth login', () => {
@@ -832,7 +884,7 @@ describe('pact.Pact otp + strategies + authZ', () => {
       modules: { Post: ['READ', 'EDIT', 'DELETE'] },
     });
     const denied: string[] = [];
-    pact.on('denied', (_p, permission, module) => {
+    pact.on('denied', (_p, module, permission) => {
       denied.push(`${module}:${String(permission)}`);
     });
     const active = {
@@ -841,14 +893,14 @@ describe('pact.Pact otp + strategies + authZ', () => {
       status: 'ACTIVE' as const,
       metadata: {},
     };
-    asserts.assert(pact.can(active, 'READ', 'Post'));
-    asserts.assertFalse(pact.can(null, 'READ', 'Post'));
+    asserts.assert(pact.can(active, 'Post', 'READ'));
+    asserts.assertFalse(pact.can(null, 'Post', 'READ'));
     asserts.assertFalse(
-      pact.can({ ...active, status: 'LOCKED' }, 'READ', 'Post'),
+      pact.can({ ...active, status: 'LOCKED' }, 'Post', 'READ'),
     );
-    pact.assert(active, 'EDIT', 'Post');
+    pact.assert(active, 'Post', 'EDIT');
     asserts.assertThrows(
-      () => pact.assert(active, 'DELETE', 'Post'),
+      () => pact.assert(active, 'Post', 'DELETE'),
       PactDeniedError,
     );
     asserts.assertEquals(denied, ['Post:DELETE']);

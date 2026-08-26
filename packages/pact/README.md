@@ -124,8 +124,8 @@ const login = await pact.login('password', {
 }); // { principal, token, refreshToken, expiresAt } | null
 
 const principal = await pact.verify(login!.token); // Principal | null
-pact.can(principal, 'EDIT', 'Post'); // boolean
-pact.assert(principal, 'DELETE', 'Post'); // throws PactDeniedError
+pact.can(principal, 'Post', 'EDIT'); // boolean
+pact.assert(principal, 'Post', 'DELETE'); // throws PactDeniedError
 
 // rotate the session without re-authenticating
 const next = await pact.refresh(login!.refreshToken!);
@@ -173,8 +173,8 @@ export const canEditPost = async (ctx: Ctx, next: Next): Promise<void> => {
   try {
     pact.assert(
       (ctx.principal ?? null) as Parameters<typeof pact.assert>[0],
-      'EDIT',
       'Post',
+      'EDIT',
     );
   } catch (error) {
     if (error instanceof PactDeniedError) {

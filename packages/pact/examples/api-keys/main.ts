@@ -61,8 +61,8 @@ console.log('store holds only the hash:', apiKeys.get(key.id)?.secretHash?.slice
 // grants (the key had none of its own, so it inherits READ on Post).
 const principal = await pact.authenticate({ scheme: 'APIKEY', keyId: key.id, secret: key.secret });
 console.log('authenticated principal', principal?.id);
-console.log('can READ Post? ', pact.can(principal, 'READ', 'Post')); // true
-console.log('can EDIT Post? ', pact.can(principal, 'EDIT', 'Post')); // false — user is READ-only
+console.log('can READ Post? ', pact.can(principal, 'Post', 'READ')); // true
+console.log('can EDIT Post? ', pact.can(principal, 'Post', 'EDIT')); // false — user is READ-only
 
 // A wrong secret resolves to null (constant-time compare), never an exception.
 console.log(
@@ -84,8 +84,8 @@ const scopedPrincipal = await pact.authenticate({
   keyId: scoped.id,
   secret: scoped.secret,
 });
-console.log('scoped key can EDIT Post? ', pact.can(scopedPrincipal, 'EDIT', 'Post')); // true
-console.log('scoped key can DELETE Post?', pact.can(scopedPrincipal, 'DELETE', 'Post')); // false
+console.log('scoped key can EDIT Post? ', pact.can(scopedPrincipal, 'Post', 'EDIT')); // true
+console.log('scoped key can DELETE Post?', pact.can(scopedPrincipal, 'Post', 'DELETE')); // false
 
 // Revoke the key (stamp `revokedAt` in the store) — authentication now fails.
 console.log('before revoke →', (await pact.authenticate({
