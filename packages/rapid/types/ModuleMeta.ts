@@ -6,6 +6,9 @@
  * @module
  */
 
+import type { Html } from '../ui/html.ts';
+import type { RapidTemplate } from './Template.ts';
+
 /**
  * Metadata recorded by `@Module` against a class constructor. Only
  * `name` is required — a class with no `@Module` at all is still
@@ -57,4 +60,10 @@ export type RapidModuleMeta = {
    * own `security` (including `[]` = public) wins.
    */
   security?: readonly string[];
+  /**
+   * Default page layout for every templated route in the class; a
+   * route's own `layout` (either form) wins, `app.ui({ layout })` is the
+   * fallback below this.
+   */
+  layout?: RapidTemplate<{ body: Html; title?: string }>;
 };

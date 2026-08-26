@@ -26,7 +26,11 @@ import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
 import { RapidModule } from '../modules/RapidModule.ts';
 import { getSession } from '../middlewares/session.ts';
 import { isStreamBody } from './streams.ts';
-import type { RapidRouteOpenApi } from '../types/mod.ts';
+import type {
+  RapidModuleMeta,
+  RapidRouteOpenApi,
+  RapidRouteOptions,
+} from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
   RapidBinder,
@@ -54,7 +58,7 @@ export type ModuleMountTarget<S extends RapidContextState> = {
   route(
     method: HTTPMethod,
     path: string,
-    options: { version?: string; openapi?: RapidRouteOpenApi },
+    options: RapidRouteOptions,
     handler: RapidHTTPHandler<S>,
   ): unknown;
   socket(command: string, handler: RapidSOCKETHandler<S>): unknown;
@@ -215,6 +219,8 @@ type ModuleDoc = {
   tags: readonly string[];
   security: readonly string[] | undefined;
   description: string | undefined;
+  /** The `@Module` layout default (route's own wins). */
+  layout: RapidModuleMeta['layout'];
 };
 
 /** Build the per-transport closure `route`/`socket`/`job` receives. */
@@ -293,6 +299,19 @@ function registerDecoration<S extends RapidContextState>(
       target.route(decoration.method, prefix + decoration.path, {
         ...(version !== undefined ? { version } : {}),
         openapi,
+        // Raw forms pass through; Application.route normalizes and
+        // fail-fast-validates them (RAPID_CONFIG on a wrong import).
+        ...(decoration.template !== undefined
+          ? { template: decoration.template }
+          : {}),
+        // The module-wide layout default applies only to TEMPLATED
+        // routes (a layout without a template is a loud config error at
+        // route()); an explicit per-route layout still surfaces so the
+        // same error fires for `@GET(path, { layout })` with no template.
+        ...(decoration.layout !== undefined ||
+            (decoration.template !== undefined && doc.layout !== undefined)
+          ? { layout: decoration.layout ?? doc.layout }
+          : {}),
       }, invoker);
       break;
     }
@@ -363,7 +382,7 @@ export function mountModule<S extends RapidContextState>(
     throw new RapidError('RAPID_CONFIG', {
       message: `${ctorName} is a RapidModule — its name/namespace come ` +
         `from the class fields; @Module on it takes only ` +
-        `{ prefix, version, description, tags, security }`,
+        `{ prefix, version, description, tags, security, layout }`,
       details: { class: ctorName, meta },
     });
   }
@@ -379,6 +398,7 @@ export function mountModule<S extends RapidContextState>(
     tags: meta?.tags ?? (moduleName !== undefined ? [moduleName] : []),
     security: meta?.security,
     description: meta?.description,
+    layout: meta?.layout,
   };
 
   const seen = new Set<PropertyKey>();

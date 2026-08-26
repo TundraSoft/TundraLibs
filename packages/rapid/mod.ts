@@ -148,10 +148,15 @@ export type {
   RapidModuleReply,
   RapidRouteEntry,
   RapidRouteOpenApi,
+  RapidRouteOptions,
+  RapidRouteTemplate,
   RapidSocketEntry,
   RapidSOCKETHandler,
   RapidSOCKETMiddleware,
+  RapidTemplate,
+  RapidUiOptions,
   RapidUploadedFile,
+  RapidView,
 } from './types/mod.ts';
 export type {
   RapidModuleClass,

@@ -11,6 +11,7 @@
  *   modules/BlogModule.ts   the project's RapidModule base (db via doctor)
  *   modules/Posts.ts   HTTP + JOB module, publishes PostCreated/PostDeleted
  *   modules/CommentsSocket.ts   SOCKET-only module; invoke()s Posts.get
+ *   modules/views.ts   the blog's HTML templates (pure functions, ./ui)
  *   modules/Audit.ts   event-only module — subscribes, logs, no transport
  *   modules/mod.ts     the static barrel app.modules() boots from
  *   schemas.ts         guardian request schemas (validated() bridges 400s)
@@ -34,12 +35,19 @@
  * deno run -A packages/rapid/examples/main.ts
  * ```
  *
+ * THE LIVE PAGE — the same routes, HTML representation: open
+ * http://localhost:3100/ (→ /posts/ui). The list/detail/comments you see
+ * are the very routes curl'd below; a cron job (posts.fakeComment) drops
+ * comments and the page streams them in over the websocket 'comments'
+ * channel (public/blog.js subscribes, then rapid.swap()s the fragment).
+ *
  * Ids are UUIDs (norm generates them), so LIST first to grab one:
  *
  * ```bash
- * curl -sL localhost:3100/                               # GET / → 302 → the static landing page
+ * curl -sL localhost:3100/                               # GET / → 302 → the blog page (/posts/ui)
  * curl -s  localhost:3100/public/style.css               # a static file (text/css)
  * curl -s  localhost:3100/posts | jq                     # list, paged (LIMIT/OFFSET in SQLite)
+ * curl -s 'localhost:3100/posts?level=advanced' | jq     # the page chips' filter — same route
  * ID=$(curl -s localhost:3100/posts | jq -r '.rows[0].id')
  * curl -s localhost:3100/posts/$ID | jq                  # no header → server.versioning.default (v1)
  * curl -s localhost:3100/posts/$ID -H 'x-api-version: v2' | jq   # findV2() — same path, adds _links
@@ -140,9 +148,20 @@ app.use(
 );
 
 // A plain function route alongside the modules: GET / redirects to the
-// static landing page (302). Shows `ctx.redirect` and that function-API
-// and module-API routes coexist.
-app.get('/', (ctx) => ctx.redirect('/public/'));
+// blog PAGE (the /posts/ui route the Posts module registers — same
+// handler as the /posts JSON API). The old static landing page stays at
+// /public/. Shows `ctx.redirect` and that function-API and module-API
+// routes coexist.
+app.get('/', (ctx) => ctx.redirect('/posts/ui'));
+
+// ── the UI layer + the live channel ──────────────────────────────────
+// app.ui() serves the swap runtime at /__rapid/ui.js; the module's own
+// @Module({ layout }) shells its pages. The 'comments' channel is a
+// server-broadcast lane — app.channel() lanes are one-way, clients can
+// never publish into them; the blog page subscribes over /ws and
+// refreshes fragments on 'msg'.
+app.ui({ live: true }); // + /__rapid/live.js — the rapid.live bridge
+app.channel('comments');
 
 // ── platform endpoints (the ./endpoints catalog) ─────────────────────
 // Each is a plain handler you mount where you like — nothing here is
@@ -209,12 +228,82 @@ app.get(
 // bound first. app.modules() constructs, wires events, mounts routes.
 registerBlogServices(database.norm);
 const { modules } = await app.modules({ modules: [blog] });
+
+// Seed the library. Titles nod to real published guides (the demo's
+// muse); every blurb below is this example's own two-line summary —
+// tags follow the [category, level, 'NN min'] convention the views
+// read. The two opener rows from openBlogDatabase() are replaced so
+// the shelf starts clean. Seeded PER TITLE (not a row count): against
+// a persisted db, present guides never duplicate and a missing one
+// heals. The demo db is a fresh temp dir per boot anyway.
+const postsRepo = database.norm.use(BlogSchema).repo('Posts');
+await postsRepo.delete({ '@title': 'Welcome' });
+await postsRepo.delete({ '@title': 'Draft in progress' });
+{
+  for (
+    const [title, body, tags] of [
+      [
+        'Why Would a Luxury Brand Burn $37M of Unsold Coats?',
+        'Engineered scarcity, in plain terms: why a luxury house may prefer destroying stock to discounting it, and what that says about the thing actually being sold.',
+        ['psychology', 'advanced', '20 min'],
+      ],
+      [
+        'The Architecture of the Deal',
+        'Every purchase runs two ledgers at once — what the thing is worth to you, and how good the deal feels. The second ledger moves more money than we like to admit.',
+        ['psychology', 'advanced', '25 min'],
+      ],
+      [
+        'Should UPI Remain Free?',
+        'A payment rail can move half the world\'s real-time volume and still not pay for itself. Somebody covers the gap — the interesting question is who should.',
+        ['banking', 'intermediate', '10 min'],
+      ],
+      [
+        'The Six Rupee Meal',
+        'What a school lunch budget of a few rupees a day buys, and why countries that treated the meal as infrastructure rather than charity got different results.',
+        ['economy', 'intermediate', '9 min'],
+      ],
+      [
+        'The Unnatural Value of Canvas',
+        'When a painting outprices a hospital: how provenance, prestige, and auction mechanics can bend a demand curve the wrong way round.',
+        ['psychology', 'advanced', '29 min'],
+      ],
+      [
+        'The 80-Year Divergence of Brazil and India',
+        'Two economies that started level in 1950 and took opposite roads — a demo-sized tour of the usual suspects, from resource booms to bureaucracy.',
+        ['economy', 'advanced', '33 min'],
+      ],
+    ] as const
+  ) {
+    if (((await postsRepo.count({ '@title': title })).count as number) === 0) {
+      await postsRepo.insert({ title, body, tags: JSON.stringify(tags) });
+    }
+  }
+}
+
 await app.start();
+
+// LIVE demo loop — posts.fakeComment is a real cron job (every minute),
+// but a demo can't wait that long: trigger it on a short interval too
+// and broadcast the outcome on the 'comments' channel, which the blog
+// page's websocket subscription turns into a fragment refresh.
+// Keep the handle: an embedder shutting down gracefully must
+// `clearInterval(_liveDemo)` BEFORE `app.stop()` + `database.close()` —
+// the loop would otherwise keep firing jobs against disposed modules.
+// (This standalone demo just dies with the process on Ctrl-C.) The
+// callback never rejects: triggerJob wraps handler failures into a 500
+// OUTCOME, and publish resolves even with nobody subscribed.
+const _liveDemo = setInterval(async () => {
+  const fired = await app.triggerJob('posts.fakeComment');
+  if (fired.handlerRan && fired.status === 201) {
+    await app.publish('comments', fired.content);
+  }
+}, 8000);
 app.log.info(
   `pact demo key — curl -s localhost:${app.port}/admin/pact-summary ` +
     `-H "x-api-key: ${demoApiKey.id}" -H "x-api-secret: ${demoApiKey.secret}"`,
 );
 app.log.info(
-  `blog example listening — try: curl -s localhost:${app.port}/posts | jq`,
+  `blog example listening — the LIVE page: http://localhost:${app.port}/posts/ui ` +
+    `(same data as: curl -s localhost:${app.port}/posts | jq)`,
   { modules: Object.keys(modules) },
 );

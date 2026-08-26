@@ -354,6 +354,60 @@ release a cursor. Stream bodies are HTTP-only (a job or socket reply rejects
 one) and opaque to body-inspecting middleware: `etag` skips them (a content
 hash would need the whole body) and `compress` pipes them chunk-wise.
 
+## UI (`./ui`)
+
+A route can name an HTML **template**; the handler keeps returning
+JSON-shaped data and never learns about HTML. Two deterministic signals pick
+the representation — `Accept` is never consulted: a `rapid-swap` request
+header (sent by the bundled client runtime) always gets the **fragment**;
+otherwise the route's `prefer` decides between **JSON** (the default — an API
+route that can also render) and the layout-wrapped **page**. Same route, same
+handler, same data — two representations.
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { html, template } from '@tundralibs/rapid/ui';
+
+const UserList = template<{ items: string[] }>((data) =>
+  html`<ul>${data.items.map((u) => html`<li>${u}</li>`)}</ul>`
+);
+const Shell = template<{ body: unknown }>((data) =>
+  html`<main>${data.body}</main>`
+);
+
+const app = await Application.initialize({ name: 'ui' });
+app.ui({ layout: Shell }); // app defaults + serves /__rapid/ui.js
+app.get(
+  '/users',
+  { template: { render: UserList, prefer: 'html' } },
+  () => ({ content: { items: ['ada'] } }),
+);
+```
+
+`` html`…` `` escapes **every** interpolated value (`raw()` is the single,
+greppable opt-out); templates are pure `(data, view) => Html` functions, so
+they unit-test with `render(UserList.render(data, view))` and no server. The
+frozen `view` bag carries `requestId`/`path`/`query`/`csrfToken` — **nothing
+from `ctx.auth`** unless `app.ui({ view })` names the fields that may cross.
+Layouts resolve route → `@Module` → app. The small (~200-line) runtime
+(`GET /__rapid/ui.js`, ETag-revalidated) swaps fragments via `data-action` /
+`data-target` / `data-swap` attributes — no inline handlers
+(`script-src 'self'` suffices) — echoes the `csrf` cookie as `x-csrf-token`,
+follows the `rapid-redirect` header same-origin only, emits
+`rapid:swapped` / `rapid:error` DOM events, and exposes a two-function
+API — `window.rapid.swap(url, target)` and `window.rapid.refresh(target)`
+— for app JS to drive multi-region updates from those events. The three contract headers are configurable, so
+htmx can drive the same routes (`app.ui({ swapHeader: 'hx-request',
+swapUnless: ['hx-boosted', 'hx-history-restore-request'], redirectHeader:
+'HX-Redirect' })`). `app.ui({ errorTemplate })` themes
+error responses under the same disclosure rules as the JSON envelope, and
+`app.ui({ live: true })` adds the live bridge — `rapid.live.connect()`
+turns `app.publish()` broadcasts into `rapid:push` DOM events that app JS
+maps to swaps. `htmlDocument()`, `withQuery()`, `ctx.isSwap`, typed view
+projections, and `testing`'s `view()` / `swap: true` round out the layer. See
+[docs/Rapid-UI.md](docs/Rapid-UI.md) for the full contract and
+[`examples/ui.ts`](examples/ui.ts) for a runnable page.
+
 ## Endpoints
 
 Ready-made handlers you mount where you like — nothing is auto-registered:

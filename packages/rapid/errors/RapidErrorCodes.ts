@@ -24,6 +24,8 @@ export const RAPID_ERROR_CODES = {
   RAPID_QUERY_INVALID: { status: 400, message: 'Invalid query' },
   /** Outbound response failed its declared shape — a server bug. */
   RAPID_RESPONSE_INVALID: { status: 500, message: 'Internal server error' },
+  /** A UI template/layout threw while rendering — a server bug. */
+  RAPID_TEMPLATE_RENDER: { status: 500, message: 'Internal server error' },
   /** No/invalid principal — could not establish who is calling. */
   RAPID_UNAUTHENTICATED: { status: 401, message: 'Authentication required' },
   /** Valid principal, insufficient grants (distinct from 401 by design). */

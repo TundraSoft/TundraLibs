@@ -24,7 +24,11 @@
  */
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
-import type { RapidBinds, RapidModuleReply } from '../types/mod.ts';
+import type {
+  RapidBinds,
+  RapidModuleReply,
+  RapidRouteOptions,
+} from '../types/mod.ts';
 import { assertMethodContext, recordDecoration } from './registry.ts';
 
 /** Options for the HTTP route decorators. */
@@ -74,6 +78,17 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * OBJECT — validates and documents the body at once).
    */
   response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
+  /**
+   * HTML template for this route (see `@tundralibs/rapid/ui`): a bare
+   * `RapidTemplate` or the `{ render, layout?, prefer? }` object form.
+   * Validated at MOUNT time (`RAPID_CONFIG` on a wrong import), applied
+   * on HTTP only — a method also decorated `@SOCKET`/`@JOB` carries it
+   * harmlessly there (same rule as the reply envelope's `cookies`/
+   * `redirect`).
+   */
+  template?: RapidRouteOptions['template'];
+  /** Page layout — sugar for the object form's `layout` (which wins). */
+  layout?: RapidRouteOptions['layout'];
 };
 
 /** The decorator signature every route factory returns. */
@@ -136,6 +151,8 @@ function route<This, A extends readonly unknown[]>(
         : {}),
       ...(options.security !== undefined ? { security: options.security } : {}),
       ...(options.response !== undefined ? { response: options.response } : {}),
+      ...(options.template !== undefined ? { template: options.template } : {}),
+      ...(options.layout !== undefined ? { layout: options.layout } : {}),
     });
   };
 }

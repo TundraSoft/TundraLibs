@@ -337,6 +337,16 @@ Run the relevant ones before you consider a change done.
 - **Secrets:** the app \`secret\` option (≥ 32 chars, from the environment —
   never committed) is the one HMAC key for signed cookies, \`session()\` and
   \`csrf()\`.
+- **UI (optional, \`@tundralibs/rapid/ui\`):** a route may name an HTML
+  template — \`app.get('/x', { template: MyView }, handler)\` — while the
+  handler keeps returning JSON-shaped data. A \`rapid-swap\` request header
+  gets the fragment; otherwise the route's \`prefer\` (\`'json'\` default)
+  picks JSON or the layout-wrapped page — \`Accept\` is never consulted.
+  \`html\` escapes every interpolation (\`raw()\` is the only opt-out);
+  \`app.ui({ layout, errorTemplate, view })\` sets app defaults and serves
+  the swap runtime at \`/__rapid/ui.js\`. Templates never see \`ctx\` — the
+  frozen \`view\` bag exposes nothing from \`ctx.auth\` unless the \`view\`
+  projection names the fields.
 {{aiModules}}
 ## Testing
 

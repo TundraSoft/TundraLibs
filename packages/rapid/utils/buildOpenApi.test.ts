@@ -104,6 +104,37 @@ describe('rapid.utils.buildOpenApi', () => {
     asserts.assertEquals(fallback, { type: 'object' });
   });
 
+  it("a templated route's 200 lists BOTH application/json and text/html; a plain route only JSON", () => {
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'GET',
+          path: '/page',
+          middlewares: [],
+          handler: () => ({}),
+          template: { render: { name: 'T', render: () => '' } },
+        },
+        { method: 'GET', path: '/api', middlewares: [], handler: () => ({}) },
+      ] as never,
+      {},
+    );
+    const paths = doc.paths as Record<
+      string,
+      Record<
+        string,
+        { responses: Record<string, { content: Record<string, unknown> }> }
+      >
+    >;
+    asserts.assertEquals(
+      Object.keys(paths['/page']!['get']!.responses['200']!.content).sort(),
+      ['application/json', 'text/html'],
+    );
+    asserts.assertEquals(
+      Object.keys(paths['/api']!['get']!.responses['200']!.content),
+      ['application/json'],
+    );
+  });
+
   it('info.description passes through to the document', () => {
     const doc = buildOpenApi([], { info: { description: 'The blog API' } });
     asserts.assertEquals(

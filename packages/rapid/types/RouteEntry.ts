@@ -10,6 +10,7 @@ import type { RapidHTTPHandler } from './HTTPHandler.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
 import type { RapidContextState } from './context/State.ts';
 import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
+import type { RapidRouteTemplate } from './RouteTemplate.ts';
 
 /** A registered route — stored by the app, consumed by HTTPTransport. */
 export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
@@ -28,4 +29,6 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
   version?: string;
   /** OpenAPI metadata (decorated routes only); read by the assembler. */
   openapi?: RapidRouteOpenApi;
+  /** Normalized template config; presence makes the route representable. */
+  template?: RapidRouteTemplate;
 };

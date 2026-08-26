@@ -23,6 +23,7 @@ import type {
   RapidModuleInitOptions,
   RapidModuleInitResult,
   RapidModuleSources,
+  RapidView,
 } from '../types/mod.ts';
 import type { RapidModule } from '../modules/mod.ts';
 import type { Application } from '../Application.ts';
@@ -140,12 +141,41 @@ export type ClientOptions = {
   body?: unknown;
   headers?: Record<string, string>;
   query?: Record<string, string>;
+  /**
+   * Send the request as a SWAP — sets the app's RESOLVED swap header
+   * (`app.ui({ swapHeader })` or the `rapid-swap` default), so tests of
+   * the fragment/page/JSON matrix never hardcode a header name that a
+   * later htmx config would silently miss.
+   */
+  swap?: boolean;
 };
 
 type ClientMethod = (
   path: string,
   options?: ClientOptions,
 ) => Promise<TestResponse>;
+
+/**
+ * A frozen {@link RapidView} for template unit tests — the same shape
+ * `buildView` hands real renders (`render(MyTemplate.render(data,
+ * view()))`), with sane defaults so the pairing test never hand-builds
+ * the bag. Overrides (and projection extras) merge over the defaults.
+ */
+export function view(
+  overrides: Partial<RapidView> & Record<string, unknown> = {},
+): RapidView {
+  return Object.freeze({
+    requestId: 'test-request',
+    runtimePath: '/__rapid/ui.js',
+    path: '/',
+    ...overrides,
+    // Frozen even when OVERRIDDEN — buildView deep-freezes query, so a
+    // template mutating it must fail here, not first in production.
+    query: Object.freeze({ ...overrides.query }) as Readonly<
+      Record<string, string>
+    >,
+  });
+}
 
 /** A route client over `app.fetch` — no port, JSON in/out, parsed responses. */
 export function client(app: Application): Record<
@@ -159,6 +189,9 @@ export function client(app: Application): Record<
     }
     const init: RequestInit = { method };
     const headers: Record<string, string> = { ...options.headers };
+    if (options.swap === true) {
+      headers[app.uiOptions?.swapHeader ?? 'rapid-swap'] ??= '1';
+    }
     if (options.body !== undefined) {
       init.body = JSON.stringify(options.body);
       headers['content-type'] ??= 'application/json';

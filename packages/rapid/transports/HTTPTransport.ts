@@ -11,6 +11,7 @@ import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import { represent } from '../ui/represent.ts';
 import { compose, resolveVersion, socketOutcome } from '../utils/mod.ts';
 import type {
   RapidChannelOptions,
@@ -412,6 +413,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       // fallback (a second `new URL`) never runs.
       action: `${method} ${entry !== undefined ? entry.path : pathname}`,
       matched: entry !== undefined,
+      ...(entry?.template !== undefined ? { template: entry.template } : {}),
       // The transport knows WHERE to look; the app owns the POLICY.
       requestId: this._app.newRequestId(request.headers.get(requestIdHeader)),
     });
@@ -423,10 +425,17 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // The return-value channel: applied only when nothing was set. A
     // SYNC handler stays sync (no await) — the whole request then
     // finalizes without allocating a promise; an async handler takes
-    // the thenable branch, same behaviour as before.
+    // the thenable branch, same behaviour as before. A templated route
+    // runs the representer here — the innermost onion point, so every
+    // middleware's post-next() view sees the final HTML (represent() is
+    // synchronous, preserving the sync fast path).
     const apply = (returned: RapidContextResponse | void): void => {
       if (returned !== undefined && ctx.response === null) {
-        ctx.response = returned;
+        // A `null` return means "no body" (→ 204) on templated routes
+        // too — only a real reply is represented.
+        ctx.response = returned !== null && entry?.template !== undefined
+          ? represent(returned, entry.template, ctx)
+          : returned;
       }
     };
     const dispatch: () => void | Promise<void> = entry !== undefined
