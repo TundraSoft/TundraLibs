@@ -96,7 +96,7 @@ console.log('no refresh token for OPAQUE:', login.refreshToken === undefined);
 
 const principal = await pact.verify(login.token);
 console.log('verified principal', principal?.id, principal?.status);
-console.log('can EDIT Post?', pact.can(principal, 'EDIT', 'Post')); // true
+console.log('can EDIT Post?', pact.can(principal, 'Post', 'EDIT')); // true
 
 // logout deletes the store record — the token dies THE INSTANT it is gone,
 // with no wait for expiry. This is the key contrast with a signed JWT.

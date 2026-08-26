@@ -19,8 +19,8 @@ const pact = Pact.create({
 });
 
 declare const principal: Parameters<typeof pact.can>[0];
-pact.can(principal, 'EDIT', 'Post'); // boolean
-pact.assert(principal, 'DELETE', 'Post'); // throws PactDeniedError (emits `denied`)
+pact.can(principal, 'Post', 'EDIT'); // boolean
+pact.assert(principal, 'Post', 'DELETE'); // throws PactDeniedError (emits `denied`)
 ```
 
 `can`/`assert` gate on the principal too: `null` or a non-`ACTIVE`

@@ -71,8 +71,8 @@ console.log('logged in as', login.principal.id, '— session minted');
 
 const principal = await pact.verify(login.token);
 console.log('verified principal', principal?.id, principal?.status);
-console.log('can READ Post?  ', pact.can(principal, 'READ', 'Post')); // true
-console.log('can DELETE Post?', pact.can(principal, 'DELETE', 'Post')); // false
+console.log('can READ Post?  ', pact.can(principal, 'Post', 'READ')); // true
+console.log('can DELETE Post?', pact.can(principal, 'Post', 'DELETE')); // false
 
 // ── the link is single-use — replaying it fails cleanly ──────────────
 // A strategy that returns `{ ok: false }` resolves to null and emits

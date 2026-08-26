@@ -59,9 +59,9 @@ console.log(
   '(a) authenticated:',
   principal?.id,
   '— can READ Post?',
-  pact.can(principal, 'READ', 'Post'), // true
+  pact.can(principal, 'Post', 'READ'), // true
   '— can EDIT Post?',
-  pact.can(principal, 'EDIT', 'Post'), // false (grant is READ-only)
+  pact.can(principal, 'Post', 'EDIT'), // false (grant is READ-only)
 );
 
 // ── (b) an already-past expiry gates to null ──────────────────────────
