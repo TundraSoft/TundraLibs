@@ -32,7 +32,7 @@
  * Run (from the repo root):
  *
  * ```bash
- * deno run -A packages/rapid/examples/main.ts
+ * deno run -A packages/rapid/examples/blog/main.ts
  * ```
  *
  * THE LIVE PAGE — the same routes, HTML representation: open
@@ -102,7 +102,7 @@
  * @module
  */
 
-import { Application } from '../mod.ts';
+import { Application } from '../../mod.ts';
 import {
   authenticate,
   authorize,
@@ -112,12 +112,12 @@ import {
   responseTimer,
   secureHeaders,
   serveStatic,
-} from '../middlewares/mod.ts';
+} from '../../middlewares/mod.ts';
 import {
   authenticate as pactAuthenticate,
   authorize as pactAuthorize,
-} from '../middlewares/pact/mod.ts';
-import { health, login, metrics, openapi } from '../endpoints/mod.ts';
+} from '../../middlewares/pact/mod.ts';
+import { health, login, metrics, openapi } from '../../endpoints/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
 import { authService, type BlogAuth, verifyToken } from './auth.ts';

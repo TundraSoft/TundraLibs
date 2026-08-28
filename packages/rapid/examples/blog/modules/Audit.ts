@@ -7,11 +7,11 @@
  *
  * @module
  */
-import { On } from '../../decorators/mod.ts';
+import { On } from '../../../decorators/mod.ts';
 import type {
   EventContext,
   RapidModuleEventPayload,
-} from '../../modules/mod.ts';
+} from '../../../modules/mod.ts';
 import { BlogModule } from './BlogModule.ts';
 import type { Posts } from './Posts.ts';
 

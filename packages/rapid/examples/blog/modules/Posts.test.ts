@@ -9,11 +9,11 @@
  *
  * @module
  */
-import { describe, harness, it } from '../../testing/mod.ts';
+import { describe, harness, it } from '../../../testing/mod.ts';
 import * as asserts from '@std/asserts';
 import type { Norm } from '@tundralibs/norm';
-import { RapidError } from '../../errors/mod.ts';
-import type { RapidContextPaging, RapidContextQuery } from '../../types/mod.ts';
+import { RapidError } from '../../../errors/mod.ts';
+import type { RapidContextPaging, RapidContextQuery } from '../../../types/mod.ts';
 import { NORM } from '../di.ts';
 import type { Post } from '../types.ts';
 import { Audit } from './Audit.ts';

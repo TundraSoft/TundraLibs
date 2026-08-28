@@ -133,7 +133,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   Swap-side redirects become `200` + `rapid-redirect`; HTML error pages via
   `app.ui({ errorTemplate })` under the same disclosure rules; templated
   routes advertise both media types in OpenAPI. Docs: docs/Rapid-UI.md +
-  README "UI"; runnable `examples/ui.ts`. Polling/history/transitions
+  README "UI"; runnable `examples/dashboard/main.ts`. Polling/history/transitions
   stay deferred.
 - **OpenAPI from the decorators (2026-08-23)** — routes take `summary` /
   `description` / `tags` / `operationId` / `security`; `@Module` takes

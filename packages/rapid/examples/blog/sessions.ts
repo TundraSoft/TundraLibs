@@ -7,7 +7,7 @@
  * Run: `deno run -A packages/rapid/examples/sessions.ts`
  * @module
  */
-import { Application, csrf, getSession, session } from '../mod.ts';
+import { Application, csrf, getSession, session } from '../../mod.ts';
 
 const app = await Application.initialize({
   name: 'sessions-example',

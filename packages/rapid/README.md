@@ -406,7 +406,7 @@ turns `app.publish()` broadcasts into `rapid:push` DOM events that app JS
 maps to swaps. `htmlDocument()`, `withQuery()`, `ctx.isSwap`, typed view
 projections, and `testing`'s `view()` / `swap: true` round out the layer. See
 [docs/Rapid-UI.md](docs/Rapid-UI.md) for the full contract and
-[`examples/ui.ts`](examples/ui.ts) for a runnable page.
+[`examples/dashboard/main.ts`](examples/dashboard/main.ts) for a runnable page.
 
 ## Endpoints
 
@@ -698,7 +698,7 @@ A full module-based blog API (posts + nested comments over `@tundralibs/norm`,
 DI via `@tundralibs/doctor`, versioning, a cron digest job, a WebSocket module,
 and the endpoint + auth catalog) lives in
 [`examples/`](./examples/) — run it with
-`deno run -A packages/rapid/examples/main.ts`.
+`deno run -A packages/rapid/examples/blog/main.ts`.
 
 Guides:
 

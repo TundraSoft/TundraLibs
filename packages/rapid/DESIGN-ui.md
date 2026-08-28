@@ -403,7 +403,7 @@ whatever the handler returned.
    `rapid-redirect`, `errorTemplate` in the error path, `rapid:error` /
    `rapid:swapped`, `buildOpenApi` media types.
 5. **Docs + example** — README "UI" section (between Streaming responses and
-   Endpoints), `examples/ui.ts` (the demo's Users/Billing cards rebuilt on the
+   Endpoints), `examples/dashboard/main.ts` (the demo's Users/Billing cards rebuilt on the
    real API), ROADMAP entry moved to Shipped, AGENTS.md template row.
 
 Each step is independently shippable and tested on all three runtimes.

@@ -201,29 +201,76 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   in CSS — the default cross-fade lives on the old/new pseudos, not the
   group:
   `::view-transition-old(root), ::view-transition-new(root) { animation: none }`.
+  For a MORPH instead of a cross-fade, give repeated items a stable
+  per-id `view-transition-name` (`style="view-transition-name: t-${id}"`):
+  items that persist across a swap then GLIDE to their new position —
+  a list reorder or a kanban move animates for one inline style. The
+  flicker to avoid is the opposite mistake: a CSS entry animation ON the
+  swapped-in items replays for every card on every swap, because to the
+  DOM they are all new.
 - **Script placement:** load the runtime (and your own script) at the end
   of `<body>` or with `defer` — the `<body data-…>` config overrides are
   read once at evaluation.
 - **Programmatic:** `window.rapid.swap(url, target, { method?, swap?,
   body? })` — `target` a selector or Element; resolves `true` when the swap
   happened. `window.rapid.refresh(target)` re-fetches the last GET
-  fragment swapped into `target` — multi-region refreshes without the
-  listener carrying URLs (POST sources are never replayed, and
+  fragment swapped into `target` (POST sources are never replayed, and
   `append`/`prepend` swaps never register — a "refresh" would re-append;
   refresh on a target with no recorded source resolves `false`). These
-  two functions are the runtime's whole public API, and the sanctioned
-  answer to **multi-region updates**: when one action invalidates
-  another fragment, refresh it from a `rapid:swapped` listener instead
-  of wishing for a declarative attribute —
+  two functions are the runtime's whole public API — they exist for the
+  **dynamic-update patterns** below. Everything further (polling,
+  history) stays app JS over the runtime's events — the attribute
+  surface is deliberately frozen.
 
-  ```js ignore
-  document.addEventListener('rapid:swapped', (e) => {
-    if (e.target.id === 'card-users') rapid.swap('/cards/stats', '#card-stats');
-  });
-  ```
+## Dynamic updates — one action, many regions
 
-  Everything further (polling, history, transitions) stays app JS over
-  these events — the attribute surface is deliberately frozen.
+One user action often invalidates more than one region of the page.
+rapid deliberately ships NO declarative attribute for this
+(`data-also-update="…"` grows without bound); the runtime emits events
+and exposes two functions, and the reaction lives in a few lines of
+YOUR page script — visible, debuggable, yours. Three patterns, by how
+much the reacting code has to know:
+
+**1. Chain a swap off `rapid:swapped`** — when the page script knows the
+reacting region's URL. Every successful swap bubbles `rapid:swapped`
+from the swapped node, so one document listener routes on `e.target.id`:
+
+```js ignore
+document.addEventListener('rapid:swapped', (e) => {
+  if (e.target.id === 'card-users') rapid.swap('/cards/stats', '#card-stats');
+});
+```
+
+The sales-dashboard example wires its bookings table this way: the
+log-a-sale POST swaps the form, and the listener fetches fresh orders.
+
+**2. `rapid.refresh(target)`** — the same chain, URL-free: it re-fetches
+whatever GET fragment last landed in the target, filters and query
+intact, so the listener names REGIONS, not routes:
+
+```js ignore
+document.addEventListener('rapid:swapped', (e) => {
+  if (e.target.id === 'board') rapid.refresh('#stats');
+});
+```
+
+This is also how a region keeps its FILTER through an update: the
+dashboard refreshes `#dash` after a logged sale, and the active
+`?days=` period survives because refresh re-fetches the recorded URL.
+A region has a recorded source only after its FIRST swap — on a freshly
+loaded page fall back to an explicit `rapid.swap` when `refresh`
+resolves `false` (the kanban example's `freshen()` helper).
+
+**3. The live channel** — updates this user did NOT initiate: another
+tab, another user, a cron job. Broadcast server-side and map
+`rapid:push` to the same refreshes (next section). The kanban example
+composes all three: a move button's own swap replaces the board, the
+`rapid:swapped` listener refreshes the stats rail, and the broadcast
+refreshes every OTHER window.
+
+Server-side bookkeeping that must vary by representation belongs behind
+`ctx.isSwap` — the dashboard's fragments-served meta stat counts
+exactly this way instead of re-deriving header checks.
 
 ## Bring your own client (htmx)
 
@@ -252,7 +299,11 @@ With that config, `hx-get`/`hx-post`/`hx-target` attributes work against
 templated routes as-is; give page routes `prefer: 'html'` so boosted
 navigations and address-bar visits render pages. The bundled runtime
 follows renamed headers via `data-swap-header` / `data-redirect-header` on
-`<body>` — but if you adopt htmx you simply don't serve it.
+`<body>` — but if you adopt htmx you simply don't serve it. Runnable:
+[`examples/htmx/main.ts`](../examples/htmx/main.ts) drives a poll
+entirely through htmx — `hx-swap-oob` multi-region responses,
+declarative polling, a boosted page proving `swapUnless`, and a reply
+`redirect` landing as `HX-Redirect`.
 
 ## Live updates (`app.ui({ live: true })`)
 
@@ -359,5 +410,10 @@ passes through untouched).
 
 A templated route's `200` lists both `application/json` and `text/html`.
 
-Runnable example: [`examples/ui.ts`](../examples/ui.ts) — run
-`deno run -A packages/rapid/examples/ui.ts` and open the printed URL.
+Runnable examples: [`examples/dashboard/main.ts`](../examples/dashboard/main.ts)
+(a sales dashboard: period chips, both swapped-chain patterns,
+`ctx.isSwap`), [`examples/kanban/main.ts`](../examples/kanban/main.ts)
+(all three dynamic-update patterns, live channel, View-Transition
+morphs), and [`examples/htmx/main.ts`](../examples/htmx/main.ts) (the
+same contract driven by htmx) — run any with `deno run -A` and open the
+printed URL.

@@ -12,7 +12,7 @@
  */
 
 import type { PactStoredApiKey, PactStoredUser } from '@tundralibs/pact';
-import { pact } from '../middlewares/pact/mod.ts';
+import { pact } from '../../middlewares/pact/mod.ts';
 
 /**
  * Register the app's `Pact` instance (see `pact()` — exactly once, here)

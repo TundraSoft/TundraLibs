@@ -195,5 +195,5 @@ pact owns no storage — its hooks are just queries. For the full pattern
 (sharing one pool, backing `getUser`/`getApiKey` with norm repos, caching
 `getUser` safely), see
 [Database access & connection pooling](./Rapid-Database.md); a runnable
-version lives in [`examples/pactAuth.ts`](../examples/pactAuth.ts) and
-`examples/main.ts`'s `/admin/pact-summary` route.
+version lives in [`examples/blog/pactAuth.ts`](../examples/blog/pactAuth.ts) and
+`examples/blog/main.ts`'s `/admin/pact-summary` route.

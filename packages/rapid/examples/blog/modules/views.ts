@@ -20,8 +20,8 @@ import {
   htmlDocument,
   template,
   withQuery,
-} from '../../ui/mod.ts';
-import type { RapidContextPaging } from '../../types/mod.ts';
+} from '../../../ui/mod.ts';
+import type { RapidContextPaging } from '../../../types/mod.ts';
 import type { Comment, Post } from '../types.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {
