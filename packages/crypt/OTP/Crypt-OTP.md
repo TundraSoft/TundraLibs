@@ -19,6 +19,7 @@ RFC-compliant OTP implementation for two-factor authentication.
 | TOTP (RFC 6238) | ✅  | ✅   | ✅      | ✅      | ✅      |
 | HOTP (RFC 4226) | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Base32 secrets  | ✅  | ✅   | ✅      | ✅      | ✅      |
+| otpauth URLs    | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 
@@ -160,6 +161,32 @@ const url = generateOTPAuthURL({
   issuer: 'MyApp',
 });
 // otpauth://totp/MyApp:user%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp&algorithm=SHA1&digits=6&period=30
+```
+
+### `parseOTPAuthURL()`
+
+The inverse of `generateOTPAuthURL()` — parses an `otpauth://` URL (from
+another app's QR code or a stored provisioning URL) into the same shape the
+generator takes, with the Key-Uri defaults resolved (`SHA-1`, 6 digits,
+30-second period, counter 0). When the label (`Issuer:account`) and the
+`issuer` parameter disagree, the parameter wins. Throws on anything that is
+not a well-formed `totp`/`hotp` URL with a secret.
+
+```typescript ignore
+function parseOTPAuthURL(url: string): ParsedOTPAuthURL;
+```
+
+**Example:**
+
+```typescript
+import { parseOTPAuthURL } from '@tundralibs/crypt/OTP';
+
+const parsed = parseOTPAuthURL(
+  'otpauth://totp/MyApp:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp',
+);
+console.log(parsed.type); // 'totp'
+console.log(parsed.accountName); // 'user@example.com'
+console.log(parsed.period); // 30 (default)
 ```
 
 ## Examples

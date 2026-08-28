@@ -2,7 +2,7 @@
   "name": "@tundralibs/crypt",
   "version": "1.3.0",
   "type": "module",
-  "description": "Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random",
+  "description": "Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA/ECDSA/Ed25519 signing, JWT, OTP, key derivation, and secure random",
   "keywords": [
     "typescript",
     "deno",

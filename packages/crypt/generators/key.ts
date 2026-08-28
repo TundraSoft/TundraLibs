@@ -23,8 +23,14 @@ import { encodeBase64 } from '@std/encoding';
  * - `RSA-PSS`: RSA with PSS padding for signing/verification
  * - `ECDSA`: Elliptic Curve Digital Signature Algorithm
  * - `ECDH`: Elliptic Curve Diffie-Hellman for key exchange
+ * - `Ed25519`: Edwards-curve signatures (EdDSA, RFC 8032)
  */
-export type KeyAlgorithm = 'RSA-OAEP' | 'RSA-PSS' | 'ECDSA' | 'ECDH';
+export type KeyAlgorithm =
+  | 'RSA-OAEP'
+  | 'RSA-PSS'
+  | 'ECDSA'
+  | 'ECDH'
+  | 'Ed25519';
 
 /**
  * Supported elliptic curves for ECDSA and ECDH algorithms.
@@ -382,6 +388,9 @@ export const generateKeyPair = async (
         format,
       });
 
+    case 'Ed25519':
+      return await generateEd25519Keys(format);
+
     default:
       throw new Error(`Unsupported algorithm: ${algorithm}`);
   }
@@ -491,3 +500,78 @@ export const generateECDHKeys = (
     curve,
     format,
   });
+
+/**
+ * Generates an Ed25519 key pair for `signEd25519`/`verifyEd25519` and the
+ * JWT `EdDSA` algorithm. Nothing is configurable — the curve and digest are
+ * fixed by Ed25519 itself (RFC 8032). The keys are always extractable.
+ *
+ * @param format - Encoding for the `*Exported` fields. Omit and only the {@link CryptoKey} handles come back. `'RAW'` exports the public key alone (its 32 bytes), leaving `privateKeyExported` undefined.
+ *
+ * @example
+ * ```ts
+ * const { publicKeyExported } = await generateEd25519Keys('PEM');
+ * console.log(publicKeyExported); // -----BEGIN PUBLIC KEY----- …
+ * ```
+ */
+export const generateEd25519Keys = async (
+  format?: KeyFormat,
+): Promise<GeneratedKeyPair> => {
+  const keyPair = await crypto.subtle.generateKey(
+    'Ed25519',
+    true,
+    ['sign', 'verify'],
+  ) as CryptoKeyPair;
+
+  const result: GeneratedKeyPair = {
+    publicKey: keyPair.publicKey,
+    privateKey: keyPair.privateKey,
+  };
+
+  if (format) {
+    if (format === 'PEM') {
+      const publicDER = await crypto.subtle.exportKey(
+        'spki',
+        keyPair.publicKey,
+      );
+      const privateDER = await crypto.subtle.exportKey(
+        'pkcs8',
+        keyPair.privateKey,
+      );
+      result.publicKeyExported = derToPem(publicDER, 'PUBLIC KEY');
+      result.privateKeyExported = derToPem(privateDER, 'PRIVATE KEY');
+    } else if (format === 'DER') {
+      result.publicKeyExported = await crypto.subtle.exportKey(
+        'spki',
+        keyPair.publicKey,
+      );
+      result.privateKeyExported = await crypto.subtle.exportKey(
+        'pkcs8',
+        keyPair.privateKey,
+      );
+    } else if (format === 'JWK') {
+      result.publicKeyExported = await crypto.subtle.exportKey(
+        'jwk',
+        keyPair.publicKey,
+      );
+      result.privateKeyExported = await crypto.subtle.exportKey(
+        'jwk',
+        keyPair.privateKey,
+      );
+    } else if (format === 'RAW') {
+      // RAW is public-key-only, same as EC: the raw form is the 32-byte
+      // public point; a private key has no raw export.
+      result.publicKeyExported = await crypto.subtle.exportKey(
+        'raw',
+        keyPair.publicKey,
+      );
+    } else {
+      throw new Error(
+        'Unsupported format for Ed25519 keys. Use "PEM", "DER", "JWK", or ' +
+          '"RAW" (public key only)',
+      );
+    }
+  }
+
+  return result;
+};

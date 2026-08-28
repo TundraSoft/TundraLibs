@@ -23,6 +23,7 @@ JWT implementation supporting HMAC, RSA and ECDSA signing algorithms.
 | PS256                | ✅  | ✅   | ✅      | ✅      | ✅      |
 | ES256                | ✅  | ✅   | ✅      | ✅      | ✅      |
 | ES384 / ES512        | ✅  | ✅   | ✅      | ✅      | ✅      |
+| EdDSA (Ed25519)      | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Claims               | ✅  | ✅   | ✅      | ✅      | ✅      |
 | RFC 9068 `at+jwt`    | ✅  | ✅   | ✅      | ✅      | ✅      |
 | `CryptoKey` / JWK in | ✅  | ✅   | ✅      | ✅      | ✅      |
@@ -35,6 +36,7 @@ JWT implementation supporting HMAC, RSA and ECDSA signing algorithms.
 | RSA    | `RS256` `RS384` `RS512` | RSA key pair (PKCS#1 v1.5)           |
 | RSA    | `PS256` `PS384` `PS512` | RSA key pair (PSS)                   |
 | ECDSA  | `ES256` `ES384` `ES512` | EC key pair on P-256 / P-384 / P-521 |
+| EdDSA  | `EdDSA`                 | Ed25519 key pair (RFC 8037)          |
 
 Each `ES*` algorithm is bound to exactly one curve (RFC 7518 §3.4). Note that
 **`ES512` uses P-521**, not a nonexistent "P-512" — see
@@ -91,7 +93,7 @@ const issueJWT: <T extends JWTPayload = JWTPayload>(
 
 **Parameters:**
 
-- `algo` — The signing algorithm (`'HS256'`, `'HS384'`, `'HS512'`, `'RS256'`, `'RS384'`, `'RS512'`, `'PS256'`, `'PS384'`, `'PS512'`, `'ES256'`, `'ES384'`, `'ES512'`)
+- `algo` — The signing algorithm (`'HS256'`, `'HS384'`, `'HS512'`, `'RS256'`, `'RS384'`, `'RS512'`, `'PS256'`, `'PS384'`, `'PS512'`, `'ES256'`, `'ES384'`, `'ES512'`, `'EdDSA'`)
 - `payload` — The JWT payload object
 - `key` — The signing key: an HMAC secret, or an asymmetric private key as a PEM string, `CryptoKey` or JWK (`SigningKey`)
 - `options` — Optional header metadata. A bare string is treated as the Key ID (`kid`); pass a `JWTIssueOptions` object for `{ kid, typ }`.

@@ -22,7 +22,13 @@ import {
   type JWTIssueOptions,
   type JWTPayload,
 } from './types/mod.ts';
-import { signEC, signHMAC, type SigningKey, signRSA } from '../sign/mod.ts';
+import {
+  signEC,
+  signEd25519,
+  signHMAC,
+  type SigningKey,
+  signRSA,
+} from '../sign/mod.ts';
 import {
   algorithmCurve,
   algorithmFamily,
@@ -180,15 +186,19 @@ export const issueJWT = async <T extends JWTPayload = JWTPayload>(
     const payloadBase64 = encodeBase64Url(JSON.stringify(normalizedPayload));
     const data = `${headerBase64}.${payloadBase64}`;
 
-    const hashAlgorithm = JWT_ALGORITHM_MAP[algo];
-    if (!hashAlgorithm) {
+    const family = algorithmFamily(algo);
+
+    // Ed25519 fixes its own digest (SHA-512, internal to the algorithm); the
+    // map covers the hash-parameterised algorithms.
+    const hashAlgorithm = family === 'Ed25519'
+      ? undefined
+      : JWT_ALGORITHM_MAP[algo as Exclude<typeof algo, 'EdDSA'>];
+    if (family !== 'Ed25519' && !hashAlgorithm) {
       throw new JWTError('UNSUPPORTED_ALGORITHM', {
         causeMessage: `Unsupported algorithm: ${algo}`,
         algorithm: algo,
       });
     }
-
-    const family = algorithmFamily(algo);
 
     let signature: string;
     if (family === 'HMAC') {
@@ -196,7 +206,7 @@ export const issueJWT = async <T extends JWTPayload = JWTPayload>(
       // so any string is a legal secret — including one that happens to look
       // like PEM. Algorithm confusion is defended on the *verify* side, where
       // the attacker-controlled `alg` header actually gets a vote.
-      signature = await signHMAC(data, key, { hashAlgorithm });
+      signature = await signHMAC(data, key, { hashAlgorithm: hashAlgorithm! });
     } else if (family === 'EC') {
       // SECURITY: `ES*` binds one curve (RFC 7518 §3.4), so unlike the other
       // families the key's shape has to be checked before signing. Minting an
@@ -226,11 +236,18 @@ export const issueJWT = async <T extends JWTPayload = JWTPayload>(
           actualCurve: supplied,
         });
       }
-      signature = await signEC(data, key, { hashAlgorithm, curve });
+      signature = await signEC(data, key, {
+        hashAlgorithm: hashAlgorithm!,
+        curve,
+      });
+    } else if (family === 'Ed25519') {
+      // EdDSA (RFC 8037) — no hash or curve to choose; signEd25519 itself
+      // refuses a key of the wrong family with a message naming the mismatch.
+      signature = await signEd25519(data, key);
     } else {
       // RSA signature — RS* (PKCS#1 v1.5) or PS* (PSS)
       signature = await signRSA(data, key, {
-        hashAlgorithm,
+        hashAlgorithm: hashAlgorithm!,
         scheme: rsaScheme(algo),
       });
     }

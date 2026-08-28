@@ -1,6 +1,6 @@
 # Crypt-Generators
 
-Cryptographic key pair generation, random secrets, and BIP39 mnemonics.
+Cryptographic key pair generation, key derivation (PBKDF2, HKDF), random secrets, and BIP39 mnemonics.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
@@ -10,7 +10,7 @@ Cryptographic key pair generation, random secrets, and BIP39 mnemonics.
 
 ## Overview
 
-Secure generation of cryptographic keys, random secrets, and mnemonic phrases.
+Secure generation of cryptographic keys, derived keys (PBKDF2, HKDF), random secrets, and mnemonic phrases.
 
 ### Features
 
@@ -18,10 +18,12 @@ Secure generation of cryptographic keys, random secrets, and mnemonic phrases.
 | --------------- | --- | ---- | ------- | ------- | ------- |
 | RSA key pairs   | ✅  | ✅   | ✅      | ✅      | ✅      |
 | EC key pairs    | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Ed25519 pairs   | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Random secrets  | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Random numbers  | ✅  | ✅   | ✅      | ✅      | ✅      |
 | BIP39 mnemonics | ✅  | ✅   | ✅      | ✅      | ✅      |
 | PEM/JWK export  | ✅  | ✅   | ✅      | ✅      | ✅      |
+| PBKDF2 / HKDF   | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 
@@ -116,6 +118,27 @@ const { publicKeyExported, privateKeyExported } = await generateECKeyPair({
   curve: 'P-256',
   format: 'JWK',
 });
+```
+
+#### `generateEd25519Keys()`
+
+Generates an Ed25519 key pair for `signEd25519`/`verifyEd25519` and the JWT
+`EdDSA` algorithm. Nothing is configurable — curve and digest are fixed by
+Ed25519 itself (RFC 8032); the keys are always extractable.
+
+```typescript ignore
+generateEd25519Keys(format?: KeyFormat): Promise<GeneratedKeyPair>
+```
+
+`'RAW'` exports the public key alone (its 32 bytes), leaving
+`privateKeyExported` undefined. Also reachable as
+`generateKeyPair('Ed25519', format)`.
+
+```typescript
+import { generateEd25519Keys } from '@tundralibs/crypt/generators';
+
+const { publicKeyExported } = await generateEd25519Keys('PEM');
+console.log(publicKeyExported); // -----BEGIN PUBLIC KEY----- …
 ```
 
 #### Convenience presets
@@ -370,6 +393,88 @@ const validateSeedPhrase = validateBIP39Mnemonic;
 import { validateBIP39Mnemonic } from '@tundralibs/crypt/generators';
 
 const isValid = await validateBIP39Mnemonic('abandon ability able...');
+```
+
+### Key Derivation
+
+#### `derivePBKDF2Key()`
+
+Derives a non-extractable AES `CryptoKey` from a secret + salt using
+PBKDF2-SHA-256 at `PBKDF2_ITERATIONS` (210,000) — the same derivation
+`encryptAES` / `decryptAES` run per message. The key is bound to a single AES
+algorithm + length, ready for `crypto.subtle.encrypt` / `decrypt`.
+
+```typescript ignore
+derivePBKDF2Key(
+  secret: string,
+  salt: Uint8Array,
+  algorithm: 'AES-GCM' | 'AES-CBC' | 'AES-CTR',
+  keyLengthBits: 128 | 192 | 256,
+): Promise<CryptoKey>
+```
+
+**Example:**
+
+```typescript
+import { derivePBKDF2Key } from '@tundralibs/crypt/generators';
+
+// A fixed salt makes derivation deterministic — store it with the secret.
+const salt = new Uint8Array(16).fill(7);
+const key = await derivePBKDF2Key('mySecret', salt, 'AES-GCM', 256);
+// Reuse `key` across many crypto.subtle.encrypt/decrypt calls.
+```
+
+#### `hkdf()`
+
+Derive independent sub-keys from a single high-entropy secret using HKDF
+(RFC 5869). Unlike PBKDF2 — a deliberately slow password stretcher — HKDF
+is fast and is the correct primitive for **domain separation**: vary the
+`info` label to get keys for distinct purposes from the same secret, with
+the guarantee that no derived key reveals the secret or any sibling key.
+Prefer it over ad-hoc `secret + label` concatenation.
+
+```typescript ignore
+hkdf(
+  ikm: string | Uint8Array,
+  options?: {
+    salt?: string | Uint8Array;
+    info?: string | Uint8Array;
+    length?: number; // bytes, default 32
+    hash?: 'SHA-256' | 'SHA-384' | 'SHA-512'; // default 'SHA-256'
+  },
+): Promise<Uint8Array>
+```
+
+**Parameters:**
+
+- `ikm` - Input keying material (the shared high-entropy secret). Not for
+  low-entropy passwords — use `pbkdf2Hash` from
+  [Digest](../digest/Crypt-Digest.md) for those.
+- `options.salt` - Optional salt (HKDF-Extract). Defaults to empty, which is
+  fine when `ikm` is already high-entropy.
+- `options.info` - Context/application label; the domain-separation tag. Two
+  calls that differ only in `info` yield independent keys.
+- `options.length` - Output length in **bytes** (default 32; max
+  255 × hash-length).
+- `options.hash` - Underlying digest (default `'SHA-256'`).
+
+**Returns:** The derived key material as a `Uint8Array`.
+
+**Throws:**
+
+- `RangeError` - When `length` is not an integer in `1..255×hashLen`.
+
+**Example:**
+
+```typescript
+import { hkdf } from '@tundralibs/crypt/generators';
+
+declare const secret: Uint8Array;
+
+// Two independent keys from one secret — signing vs MAC.
+const signKey = await hkdf(secret, { info: 'jwt' });
+const macKey = await hkdf(secret, { info: 'hmac' });
+// signKey and macKey are unrelated; neither leaks `secret`.
 ```
 
 ## Examples

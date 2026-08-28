@@ -17,17 +17,6 @@
 
 export { decryptAES, decryptRSA } from './decrypt.ts';
 export { encryptAES, encryptRSA } from './encrypt.ts';
-export {
-  hkdf,
-  type HKDFHash,
-  pbkdf2,
-  PBKDF2_ITERATIONS,
-  PBKDF2_PASSWORD_ITERATIONS,
-  type PBKDF2Hash,
-  pbkdf2Hash,
-  pbkdf2Verify,
-  SALT_BYTES,
-} from './kdf.ts';
 export type {
   AESKeyLength,
   AESMode,

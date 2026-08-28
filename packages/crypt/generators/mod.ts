@@ -2,7 +2,7 @@
  * @fileoverview Generators module exports.
  *
  * Re-exports cryptographic generators for secrets, keys, random values,
- * passphrases, and BIP39 mnemonics.
+ * passphrases, and BIP39 mnemonics, plus key derivation (PBKDF2, HKDF).
  *
  * @module
  *
@@ -38,6 +38,7 @@ export {
   generateECDHKeys,
   generateECDSAKeys,
   generateECKeyPair,
+  generateEd25519Keys,
   generateKeyPair,
   generateRSAEncryptionKeys,
   generateRSAKeyPair,
@@ -70,3 +71,11 @@ export {
   randomNumber,
   type RandomNumberOptions,
 } from './random.ts';
+
+// Export key derivation functions
+export {
+  derivePBKDF2Key,
+  hkdf,
+  type HKDFHash,
+  PBKDF2_ITERATIONS,
+} from './derive.ts';

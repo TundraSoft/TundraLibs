@@ -7,6 +7,7 @@ import {
   importSigningKey,
   type SigningKey,
   verifyEC,
+  verifyEd25519,
   verifyHMAC,
   verifyRSA,
 } from '../sign/mod.ts';
@@ -309,6 +310,7 @@ export const verifyJWT = async <T extends JWTPayload = JWTPayload>(
     'ES256',
     'ES384',
     'ES512',
+    'EdDSA',
   ];
   if (!supportedAlgorithms.includes(header.alg)) {
     throw new JWTError('UNSUPPORTED_ALGORITHM', {
@@ -363,8 +365,8 @@ export const verifyJWT = async <T extends JWTPayload = JWTPayload>(
       causeMessage:
         `Algorithm confusion detected: a ${keyFamily} key cannot verify a ` +
         `${headerFamily} token (alg '${header.alg}'). RSA keys may only ` +
-        `verify RS*/PS* tokens, EC keys only ES* tokens, and secrets only ` +
-        `HS* tokens.`,
+        `verify RS*/PS* tokens, EC keys only ES* tokens, Ed25519 keys only ` +
+        `EdDSA tokens, and secrets only HS* tokens.`,
       algorithm: header.alg,
       keyFamily,
       headerFamily,
@@ -396,7 +398,11 @@ export const verifyJWT = async <T extends JWTPayload = JWTPayload>(
   // (validated above to equal the header family), never from the header alone,
   // so the trust anchor is the key the caller supplied — not the token.
   const data = `${headerBase64}.${payloadBase64}`;
-  const hashAlgorithm = JWT_ALGORITHM_MAP[header.alg];
+  // Ed25519 fixes its own digest; the map covers the hash-parameterised
+  // algorithms.
+  const hashAlgorithm = headerFamily === 'Ed25519'
+    ? undefined
+    : JWT_ALGORITHM_MAP[header.alg as Exclude<typeof header.alg, 'EdDSA'>];
 
   // Import the key *before* the signature block, so a problem with the key is
   // reported as INVALID_SECRET rather than being swallowed by the catch below
@@ -416,6 +422,8 @@ export const verifyJWT = async <T extends JWTPayload = JWTPayload>(
           hash: hashAlgorithm,
           curve: requiredCurve,
         }
+        : keyFamily === 'Ed25519'
+        ? { family: 'Ed25519', purpose: 'verify' }
         : {
           family: 'RSA',
           purpose: 'verify',
@@ -447,6 +455,8 @@ export const verifyJWT = async <T extends JWTPayload = JWTPayload>(
         hashAlgorithm,
         curve: requiredCurve,
       });
+    } else if (keyFamily === 'Ed25519') {
+      isValid = await verifyEd25519(data, sig, verificationKey);
     } else {
       isValid = await verifyRSA(data, sig, verificationKey, {
         hashAlgorithm,

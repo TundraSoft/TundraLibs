@@ -2,9 +2,11 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import {
   signEC,
+  signEd25519,
   signHMAC,
   signRSA,
   verifyEC,
+  verifyEd25519,
   verifyHMAC,
   verifyRSA,
 } from './mod.ts';
@@ -209,7 +211,7 @@ describe('crypt.verify', () => {
         );
       },
       Error,
-      'Invalid HMAC hash',
+      'Invalid hash algorithm',
     );
   });
 
@@ -1129,6 +1131,142 @@ InvalidBase64Characters!@#$%^&*()
         keys.publicKeyExported as JsonWebKey,
       ),
       true,
+    );
+  });
+});
+
+describe('crypt.ed25519', () => {
+  const generate = () =>
+    crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']) as Promise<
+      CryptoKeyPair
+    >;
+  const toPem = async (key: CryptoKey, pub: boolean): Promise<string> => {
+    const der = await crypto.subtle.exportKey(pub ? 'spki' : 'pkcs8', key);
+    const b64 = btoa(String.fromCodePoint(...new Uint8Array(der)));
+    const label = pub ? 'PUBLIC KEY' : 'PRIVATE KEY';
+    return `-----BEGIN ${label}-----\n${b64}\n-----END ${label}-----`;
+  };
+
+  it('round-trips with CryptoKey handles; tampering fails', async () => {
+    const { privateKey, publicKey } = await generate();
+    const sig = await signEd25519('the message', privateKey);
+    asserts.assertEquals(
+      await verifyEd25519('the message', sig, publicKey),
+      true,
+    );
+    asserts.assertEquals(
+      await verifyEd25519('The message', sig, publicKey),
+      false,
+    );
+  });
+
+  it('signing is deterministic (RFC 8032 — no per-signature nonce)', async () => {
+    const { privateKey } = await generate();
+    const a = await signEd25519('same input', privateKey);
+    const b = await signEd25519('same input', privateKey);
+    asserts.assertEquals(a, b);
+  });
+
+  it('accepts PKCS#8/SPKI PEM and OKP JWK key forms', async () => {
+    const { privateKey, publicKey } = await generate();
+    const privPem = await toPem(privateKey, false);
+    const pubPem = await toPem(publicKey, true);
+    const sig = await signEd25519('pem-keyed', privPem);
+    asserts.assertEquals(await verifyEd25519('pem-keyed', sig, pubPem), true);
+
+    const privJwk = await crypto.subtle.exportKey('jwk', privateKey);
+    const pubJwk = await crypto.subtle.exportKey('jwk', publicKey);
+    const sig2 = await signEd25519('jwk-keyed', privJwk as JsonWebKey);
+    asserts.assertEquals(
+      await verifyEd25519('jwk-keyed', sig2, pubJwk as JsonWebKey),
+      true,
+    );
+  });
+
+  it('output verifies under raw Web Crypto (interop)', async () => {
+    const { privateKey, publicKey } = await generate();
+    const sig = await signEd25519('interop', privateKey);
+    const bytes = Uint8Array.from(atob(sig), (c) => c.codePointAt(0) ?? 0);
+    asserts.assertEquals(bytes.length, 64);
+    const ok = await crypto.subtle.verify(
+      'Ed25519',
+      publicKey,
+      bytes as BufferSource,
+      new TextEncoder().encode('interop') as BufferSource,
+    );
+    asserts.assertEquals(ok, true);
+  });
+
+  it('SECURITY: refuses keys of the wrong family, in both directions', async () => {
+    const { privateKey, publicKey } = await generate();
+    // Non-Ed25519 keys into the Ed25519 primitives → refused, not false.
+    await asserts.assertRejects(
+      () => signEd25519('x', 'raw-secret'),
+      Error,
+      'a raw secret or HMAC key',
+    );
+    const ecPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify'],
+    ) as CryptoKeyPair;
+    await asserts.assertRejects(
+      () => verifyEd25519('x', 'AA==', ecPair.publicKey),
+      Error,
+      'an EC key on P-256',
+    );
+    // Ed25519 keys into the EC primitives → refused there too.
+    await asserts.assertRejects(
+      () => signEC('x', privateKey),
+      Error,
+      'an Ed25519 key',
+    );
+    // Wrong key type for the operation.
+    await asserts.assertRejects(
+      () => signEd25519('x', publicKey),
+      Error,
+      "'public' key but sign needs a 'private' key",
+    );
+  });
+
+  it('wrong-width or undecodable signatures return false / throw cleanly', async () => {
+    const { publicKey } = await generate();
+    // Valid base64, wrong width → false (not an Ed25519 signature).
+    asserts.assertEquals(await verifyEd25519('x', 'AAAA', publicKey), false);
+    // Not base64 → explicit format error.
+    await asserts.assertRejects(
+      () => verifyEd25519('x', '!!not-base64!!', publicKey),
+      Error,
+      'Invalid signature format',
+    );
+    await asserts.assertRejects(
+      () => verifyEd25519('x', '', publicKey),
+      Error,
+      'Signature must be a non-empty string',
+    );
+  });
+});
+
+describe('crypt.ed25519.jwk-alg', () => {
+  it("accepts both registered alg spellings ('EdDSA' and 'Ed25519')", async () => {
+    const pair = await crypto.subtle.generateKey('Ed25519', true, [
+      'sign',
+      'verify',
+    ]) as CryptoKeyPair;
+    const priv = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    const pub = await crypto.subtle.exportKey('jwk', pair.publicKey);
+    for (const alg of ['EdDSA', 'Ed25519']) {
+      const sig = await signEd25519('spelling', { ...priv, alg } as JsonWebKey);
+      asserts.assertEquals(
+        await verifyEd25519('spelling', sig, { ...pub, alg } as JsonWebKey),
+        true,
+      );
+    }
+    // A genuinely wrong alg is still refused.
+    await asserts.assertRejects(
+      () => signEd25519('x', { ...priv, alg: 'ES256' } as JsonWebKey),
+      Error,
+      "JWK 'alg' is 'ES256'",
     );
   });
 });

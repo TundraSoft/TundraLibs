@@ -49,6 +49,9 @@ const OID_EC_PUBLIC_KEY = new Uint8Array([
   0x01,
 ]);
 
+/** OID `1.3.101.112` (id-Ed25519, RFC 8410), DER content octets. */
+const OID_ED25519 = new Uint8Array([0x2b, 0x65, 0x70]);
+
 /**
  * Named-curve OIDs, DER content octets, keyed by the Web Crypto curve name.
  *
@@ -155,7 +158,7 @@ const curveFromOid = (oid: Uint8Array): ECCurve | undefined =>
  */
 export type DerKeyInfo = {
   /** Key family the `AlgorithmIdentifier` names. */
-  family: 'RSA' | 'EC';
+  family: 'RSA' | 'EC' | 'Ed25519';
   /** Named curve, present only for EC keys. */
   curve?: ECCurve;
 };
@@ -209,9 +212,15 @@ export const describeDerKey = (der: Uint8Array): DerKeyInfo | undefined => {
   }
   const oid = der.subarray(algorithm.contentStart, algorithm.end);
 
+  if (bytesEqual(oid, OID_ED25519)) {
+    // RFC 8410: id-Ed25519 has no parameters — the OID alone settles it.
+    return { family: 'Ed25519' };
+  }
+
   if (!bytesEqual(oid, OID_EC_PUBLIC_KEY)) {
-    // Anything that is not id-ecPublicKey is treated as RSA, which is what
-    // every PEM reaching this package meant before EC support existed.
+    // Anything that is not id-ecPublicKey or id-Ed25519 is treated as RSA,
+    // which is what every PEM reaching this package meant before EC support
+    // existed.
     return { family: 'RSA' };
   }
 
