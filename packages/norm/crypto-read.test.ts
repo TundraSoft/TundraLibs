@@ -118,3 +118,56 @@ describe('norm.crypto read-path failure policy', () => {
     }
   });
 });
+
+describe('norm.crypto envelope generations (live)', () => {
+  it('writes the fast key-based envelope; legacy cells still read', async () => {
+    const migDir = await makeTempDir({ prefix: 'norm-crypto-env-' });
+    const norm = new Norm({
+      database: { dialect: 'sqlite', path: ':memory:' },
+      secret: SECRET,
+    });
+    const db = norm.use(Schema('App', { Vaults }));
+    try {
+      await norm.connect();
+      await new Migrator(db, { dir: migDir }).snapshot();
+      await new Migrator(db, { dir: migDir }).apply();
+      await db.repo('Vaults').insert([{ id: 1, secret: 'alpha', label: 'a' }]);
+
+      // New writes: k1.<fp>. stamp over a 2-part data:iv body — no salt,
+      // because the cell key is derived once per process, not per cell.
+      const raw = await db.raw<{ secret: string }>(
+        'SELECT "secret" FROM "vaults" WHERE "id" = 1',
+      );
+      const stored = raw.data[0]!.secret;
+      asserts.assertEquals(stored.startsWith('k1.'), true);
+      const body = stored.split('.').slice(2).join('.');
+      asserts.assertEquals(body.split(':').length, 2);
+
+      // Plant a LEGACY cell: stamped k1 envelope over the old 3-part
+      // per-message-salt body — what pre-fast-path versions wrote.
+      const { encryptAES } = await import('@tundralibs/crypt/encrypt');
+      const { keyFingerprint } = await import('./crypto.ts');
+      const legacyBody = await encryptAES('bravo', SECRET, {
+        mode: 'GCM',
+        keyLength: 256,
+      });
+      asserts.assertEquals(legacyBody.split(':').length, 3);
+      const fp = await keyFingerprint(SECRET);
+      await db.raw(
+        'INSERT INTO "vaults" ("id", "secret", "secret_hash", "label") ' +
+          'VALUES (:id:, :v:, :h:, :l:)',
+        { id: 2, v: `k1.${fp}.${legacyBody}`, h: 'x', l: 'b' },
+      );
+
+      // Both generations decrypt through one read path.
+      const res = await db.repo('Vaults').find(undefined, {
+        orderBy: { '@id': 'ASC' },
+      });
+      asserts.assertEquals(res.data[0]!.secret, 'alpha');
+      asserts.assertEquals(res.data[1]!.secret, 'bravo');
+    } finally {
+      await norm.disconnect();
+      await removeDir(migDir, { recursive: true });
+    }
+  });
+});

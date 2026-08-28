@@ -25,6 +25,13 @@
  *
  * So a crashed run resumes safely: re-running skips what already moved.
  *
+ * ## Rotation also upgrades the envelope
+ * Cells written before the derived-cell-key fast path carry a
+ * per-message salt and pay a full PBKDF2 on every read. Rotation
+ * re-encrypts through the current default cipher, so rotated cells come
+ * out in the fast `data:iv` envelope — after a rotation, every cell
+ * reads at plain AES-GCM cost.
+ *
  * ## Searchable hashes are rotation-invariant
  * `.hash()` sibling digests are derived from PLAINTEXT, not ciphertext —
  * rotation never touches them, and hashed-equality filters keep working

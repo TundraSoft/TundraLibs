@@ -22,6 +22,7 @@ import {
   decryptAES,
   encryptAES,
 } from '@tundralibs/crypt/encrypt';
+import { derivePBKDF2Key } from '@tundralibs/crypt/generators';
 import {
   digest,
   type DigestAlgorithms,
@@ -122,12 +123,69 @@ function parseAlgorithm(
   };
 }
 
+// ─── Instance cell key (GCM fast path) ───────────────────────────────────
+//
+// PBKDF2 at 210k iterations costs ~22 ms; paying it per CELL made bulk
+// writes and reads measurably heavy. The GCM path now derives one
+// non-extractable AES key per secret+keyLength per process and hands
+// it to encryptAES/decryptAES directly, so each cell is a plain AES-GCM
+// operation. The derivation salt comes from the secret itself
+// (domain-separated SHA-256, first 16 bytes): with ONE secret serving
+// every cell, a per-message salt added no brute-force cost — an
+// attacker guessing passphrases pays the same 210k iterations per
+// candidate either way — while a deterministic salt lets every process
+// re-derive the identical key with nothing extra stored.
+//
+// Envelope shapes tell the two generations apart: key-based cells are
+// 2-part `data:iv`, legacy per-message-salt cells are 3-part
+// `data:iv:salt` — 4-part with a MAC for CBC/CTR — and keep decrypting
+// through the per-cell path. `rotateKey()` re-encrypts, so it also
+// upgrades legacy cells to the fast envelope as it runs.
+
+const CELL_KEY_CACHE = new Map<string, Promise<CryptoKey>>();
+/** Rotation holds two keys; a generous cap keeps pathological
+ * many-secret usage (test suites) from growing the cache unbounded. */
+const CELL_KEY_CACHE_MAX = 32;
+
+function cellKey(
+  secret: string,
+  keyLength: AESKeyLength,
+): Promise<CryptoKey> {
+  const id = `${keyLength}\u0000${secret}`;
+  const hit = CELL_KEY_CACHE.get(id);
+  if (hit !== undefined) return hit;
+  const derived = (async () => {
+    const salt = new Uint8Array(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(
+          `norm-cell-key\u0000${secret}`,
+        ) as BufferSource,
+      ),
+    ).slice(0, 16);
+    return await derivePBKDF2Key(secret, salt, 'AES-GCM', keyLength);
+  })();
+  // A failed derivation must not stick as a poisoned cache entry.
+  derived.catch(() => CELL_KEY_CACHE.delete(id));
+  CELL_KEY_CACHE.set(id, derived);
+  if (CELL_KEY_CACHE.size > CELL_KEY_CACHE_MAX) {
+    const oldest = CELL_KEY_CACHE.keys().next().value;
+    if (oldest !== undefined) CELL_KEY_CACHE.delete(oldest);
+  }
+  return derived;
+}
+
 export async function defaultEncrypt(
   plaintext: string,
   secret: string,
   algorithm: EncryptAlgorithm,
 ): Promise<string> {
   const { mode, keyLength } = parseAlgorithm(algorithm);
+  if (mode === 'GCM') {
+    return await encryptAES(plaintext, await cellKey(secret, keyLength));
+  }
+  // CBC needs encrypt-then-MAC keyed off the string secret — crypt
+  // restricts CryptoKey secrets to GCM, so this stays per-cell PBKDF2.
   return await encryptAES(plaintext, secret, { mode, keyLength });
 }
 
@@ -137,6 +195,11 @@ export async function defaultDecrypt(
   algorithm: EncryptAlgorithm,
 ): Promise<string> {
   const { mode, keyLength } = parseAlgorithm(algorithm);
+  // 2-part = key-based envelope; 3-part = legacy per-message-salt cell
+  // written before the fast path existed (still decrypted per-cell).
+  if (mode === 'GCM' && ciphertext.split(':').length === 2) {
+    return await decryptAES(ciphertext, await cellKey(secret, keyLength));
+  }
   return await decryptAES(ciphertext, secret, { mode, keyLength });
 }
 
@@ -158,7 +221,7 @@ export async function defaultHash(
 // `k1` is the scheme version; `<fp>` is 8 hex of a domain-separated
 // SHA-256 of the secret (one-way, and far too short to help brute-force
 // a high-entropy key); `<cipher-body>` is whatever the underlying cipher
-// produced (colon-delimited base64 — never contains a dot, so the split
+// produced (colon-delimited hex — never contains a dot, so the split
 // is unambiguous). Ciphertext WITHOUT the `k1.` prefix is "legacy" —
 // written before rotation support — and is decrypted with the current
 // key directly. `rotateKey()` upgrades legacy cells to the stamped form

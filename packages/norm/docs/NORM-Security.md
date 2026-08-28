@@ -49,10 +49,11 @@ markers, all read from one schema:
 [Password columns](#password-columns--columnpassword).
 
 Encryption is **per cell**: every encrypted value carries its own
-random salt and IV, so two equal plaintexts never produce equal
-ciphertext. That is the security property — and the reason equality
-filters, uniqueness, joins, and upsert keys need a deterministic
-_digest_ rather than the ciphertext itself.
+random IV (and, for cells written by older versions, a per-message
+salt), so two equal plaintexts never produce equal ciphertext. That is
+the security property — and the reason equality filters, uniqueness,
+joins, and upsert keys need a deterministic _digest_ rather than the
+ciphertext itself.
 
 The whole surface is correct-by-construction. `.hash()` exists only
 after `.encrypt()`, validators (`pattern` / `lov` / `min` / `max` /
@@ -165,18 +166,28 @@ Encode binary to a text form and encrypt that if you need it.
 
 ### Per-cell cost
 
-Be honest with yourself about bulk writes. The default AES helper
-derives the encryption key from your secret with **PBKDF2-SHA-256
-(210,000 iterations, random per-message salt)** on _every_ encrypt and
-_every_ decrypt call. That is deliberate — it makes brute-forcing a
-short secret expensive — but it means each encrypted cell pays a full
-key derivation in both directions. On commodity hardware that is
-**~22 ms per encrypt and ~22 ms per decrypt** (see `rotate.bench.ts`),
-so encrypting or reading back tens of thousands of rows is measurably
-heavy.
+For GCM algorithms (the default), the encryption key is derived from
+your secret with **PBKDF2-SHA-256 (210,000 iterations)** **once per
+process**, then reused for every cell — each encrypt/decrypt is a
+plain AES-GCM operation (microseconds), so bulk writes and reads are
+no longer dominated by key derivation. The derivation salt is computed
+from the secret itself (domain-separated SHA-256), which costs nothing
+against brute force here — one secret serves every cell, so an
+attacker guessing passphrases pays the full 210,000 iterations per
+candidate either way — and lets every process re-derive the identical
+key with nothing extra stored.
 
-If that cost dominates a workload, the [crypto override seam](#crypto-overrides) lets you supply a cheaper KDF (e.g. a derived
-key cached per secret) or delegate to a KMS.
+Two older cell generations remain readable and are told apart by
+envelope shape: cells written before this fast path carry a
+per-message salt and pay the **~22 ms** PBKDF2 on _every_ read of that
+cell, and CBC/CTR configurations still derive per cell (their
+encrypt-then-MAC is keyed off the string secret). Running
+[`rotateKey()`](#key-rotation--rotatekey) re-encrypts old cells, which
+also upgrades them to the fast envelope.
+
+If you need different key handling entirely, the
+[crypto override seam](#crypto-overrides) still lets you supply your
+own KDF or delegate to a KMS.
 
 ## Digest siblings — `.encrypt().hash()`
 
