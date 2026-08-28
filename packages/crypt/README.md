@@ -1,6 +1,6 @@
 # Crypt
 
-Cross-runtime cryptography for Deno, Bun, and Node.js — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP (TOTP/HOTP), key derivation, and secure random.
+Cross-runtime cryptography for Deno, Bun, and Node.js — hashing, AES/RSA encryption, HMAC/RSA/ECDSA/Ed25519 signing, JWT, OTP (TOTP/HOTP), key derivation, and secure random.
 
 [![JSR](https://jsr.io/badges/@tundralibs/crypt)](https://jsr.io/@tundralibs/crypt)
 [![JSR Score](https://jsr.io/badges/@tundralibs/crypt/score)](https://jsr.io/@tundralibs/crypt)
@@ -16,16 +16,16 @@ The Crypt package provides battle-tested cryptographic operations using the nati
 
 ## Modules
 
-| Module                                       | Description                                            | Documentation                          |
-| -------------------------------------------- | ------------------------------------------------------ | -------------------------------------- |
-| [Digest](digest/Crypt-Digest.md)             | Cryptographic hashing (SHA-1, SHA-256, etc.)           | [Docs](digest/Crypt-Digest.md)         |
-| [Encrypt](encrypt/Crypt-Encrypt.md)          | AES/RSA encryption + key derivation (PBKDF2, HKDF)     | [Docs](encrypt/Crypt-Encrypt.md)       |
-| [Sign](sign/Crypt-Sign.md)                   | HMAC, RSA and ECDSA digital signatures                 | [Docs](sign/Crypt-Sign.md)             |
-| [Generators](generators/Crypt-Generators.md) | Key pairs, secrets, and BIP39 mnemonics                | [Docs](generators/Crypt-Generators.md) |
-| [JWT](JWT/Crypt-JWT.md)                      | JSON Web Token creation and verification (HS/RS/PS/ES) | [Docs](JWT/Crypt-JWT.md)               |
-| [JWT Errors](JWT/errors/Crypt-JWT-Errors.md) | `JWTError` and its 12 stable error codes               | [Docs](JWT/errors/Crypt-JWT-Errors.md) |
-| [OTP](OTP/Crypt-OTP.md)                      | Time-based and HMAC-based one-time passwords           | [Docs](OTP/Crypt-OTP.md)               |
-| [CBOR](cbor/Crypt-CBOR.md)                   | Minimal CBOR decoder + COSE-key → JWK (WebAuthn)       | [Docs](cbor/Crypt-CBOR.md)             |
+| Module                                       | Description                                                  | Documentation                          |
+| -------------------------------------------- | ------------------------------------------------------------ | -------------------------------------- |
+| [Digest](digest/Crypt-Digest.md)             | Hashing (SHA-1/256/384/512) + PBKDF2 password storage        | [Docs](digest/Crypt-Digest.md)         |
+| [Encrypt](encrypt/Crypt-Encrypt.md)          | AES/RSA encryption                                           | [Docs](encrypt/Crypt-Encrypt.md)       |
+| [Sign](sign/Crypt-Sign.md)                   | HMAC, RSA, ECDSA and Ed25519 digital signatures              | [Docs](sign/Crypt-Sign.md)             |
+| [Generators](generators/Crypt-Generators.md) | Key pairs, key derivation (PBKDF2, HKDF), secrets, BIP39     | [Docs](generators/Crypt-Generators.md) |
+| [JWT](JWT/Crypt-JWT.md)                      | JSON Web Token creation and verification (HS/RS/PS/ES/EdDSA) | [Docs](JWT/Crypt-JWT.md)               |
+| [JWT Errors](JWT/errors/Crypt-JWT-Errors.md) | `JWTError` and its 12 stable error codes                     | [Docs](JWT/errors/Crypt-JWT-Errors.md) |
+| [OTP](OTP/Crypt-OTP.md)                      | Time-based and HMAC-based one-time passwords                 | [Docs](OTP/Crypt-OTP.md)               |
+| [CBOR](cbor/Crypt-CBOR.md)                   | Minimal CBOR decoder + COSE-key → JWK (WebAuthn)             | [Docs](cbor/Crypt-CBOR.md)             |
 
 ## Installation
 
@@ -81,7 +81,8 @@ console.log(decrypted); // 'secret message'
 ### Key Derivation
 
 ```typescript
-import { hkdf, pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/encrypt';
+import { pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/digest';
+import { hkdf } from '@tundralibs/crypt/generators';
 
 declare const masterSecret: Uint8Array;
 

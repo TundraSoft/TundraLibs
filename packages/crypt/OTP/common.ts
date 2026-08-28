@@ -502,3 +502,148 @@ export const generateOTPAuthURL = (options: OTPAuthURLOptions): string => {
   // Build the final URL
   return `otpauth://${type}/${label}?${params.toString()}`;
 };
+
+/**
+ * What {@link parseOTPAuthURL} read out of an `otpauth://` URL — the same
+ * shape {@link generateOTPAuthURL} takes, with defaults resolved.
+ */
+export type ParsedOTPAuthURL = {
+  /** OTP flavour the URL configures. */
+  type: OTPType;
+  /** Base32 secret, exactly as carried in the URL (padding and all). */
+  secret: string;
+  /** Account name from the label, URI-decoded. */
+  accountName: string;
+  /** Issuer — the `issuer` parameter when present, else the label prefix,
+   * else `''` (the Key-Uri format makes both optional). */
+  issuer: string;
+  /** Hash algorithm (default `'SHA-1'`, per the Key-Uri format). */
+  algorithm: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+  /** Code length (default `6`). */
+  digits: number;
+  /** Time step in seconds — `totp` URLs only (default `30`). */
+  period?: number;
+  /** Starting counter — `hotp` URLs only (default `0`). */
+  counter?: number;
+};
+
+/** `algorithm` parameter spellings → this package's hyphenated names. The
+ * Key-Uri format writes `SHA1`; the hyphenated forms are accepted too since
+ * some issuers emit them. */
+const OTPAUTH_ALGORITHMS: Record<
+  string,
+  'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512'
+> = {
+  SHA1: 'SHA-1',
+  SHA256: 'SHA-256',
+  SHA384: 'SHA-384',
+  SHA512: 'SHA-512',
+  'SHA-1': 'SHA-1',
+  'SHA-256': 'SHA-256',
+  'SHA-384': 'SHA-384',
+  'SHA-512': 'SHA-512',
+};
+
+/**
+ * Parses an `otpauth://` URL — the inverse of {@link generateOTPAuthURL}, for
+ * importing an account from another app's QR code or stored provisioning URL.
+ *
+ * Absent parameters resolve to the Key-Uri defaults (`SHA-1`, 6 digits,
+ * 30-second period, counter 0), so the result can be handed straight to
+ * `generateTOTP`/`generateHOTP` or back to {@link generateOTPAuthURL}. The
+ * secret is returned verbatim — the OTP engine already interprets base32 the
+ * same way in both places.
+ *
+ * When the label (`Issuer:account`) and the `issuer` parameter disagree, the
+ * parameter wins — it is the newer, canonical carrier; the label prefix is a
+ * compatibility fallback.
+ *
+ * @param url The `otpauth://` URL to parse.
+ * @returns The parsed configuration with defaults resolved.
+ *
+ * @throws {Error} When the URL is not an `otpauth://` URL, its type is not
+ *   `totp`/`hotp`, the secret is missing/empty, the algorithm is
+ *   unrecognised, or `digits`/`period`/`counter` are not valid numbers.
+ *
+ * @example
+ * ```typescript
+ * const parsed = parseOTPAuthURL(
+ *   'otpauth://totp/MyApp:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp',
+ * );
+ * console.log(parsed.type); // 'totp'
+ * console.log(parsed.accountName); // 'user@example.com'
+ * console.log(parsed.period); // 30 (default)
+ * ```
+ *
+ * @see {@link generateOTPAuthURL} for the inverse
+ * @see {@link https://github.com/google/google-authenticator/wiki/Key-Uri-Format} Key URI Format
+ */
+export const parseOTPAuthURL = (url: string): ParsedOTPAuthURL => {
+  // Hand-parsed rather than `new URL()`: WHATWG parsing of non-special
+  // schemes differs across runtimes in edge cases (empty host, backslashes),
+  // and the Key-Uri grammar is simple enough to match exactly.
+  const m = /^otpauth:\/\/([^/?#]+)\/([^?#]*)(?:\?([^#]*))?/.exec(url.trim());
+  if (m === null) {
+    throw new Error(
+      'Invalid otpauth URL: expected "otpauth://TYPE/LABEL?secret=..."',
+    );
+  }
+  const type = m[1]!.toLowerCase();
+  if (type !== 'totp' && type !== 'hotp') {
+    throw new Error('Type must be either "totp" or "hotp"');
+  }
+
+  const params = new URLSearchParams(m[3] ?? '');
+  const secret = params.get('secret') ?? '';
+  if (secret.length === 0) {
+    throw new Error('Secret is required and cannot be empty');
+  }
+
+  // Label is `issuer:account` or bare `account`; the raw ':' separates the
+  // two because encodeURIComponent escapes any ':' inside either part.
+  const label = m[2]!;
+  const colon = label.indexOf(':');
+  const labelIssuer = colon === -1
+    ? ''
+    : decodeURIComponent(label.slice(0, colon));
+  const accountName = decodeURIComponent(
+    colon === -1 ? label : label.slice(colon + 1),
+  );
+  const issuer = params.get('issuer') ?? labelIssuer;
+
+  const algoParam = params.get('algorithm') ?? 'SHA1';
+  const algorithm = OTPAUTH_ALGORITHMS[algoParam.toUpperCase()];
+  if (algorithm === undefined) {
+    throw new Error(
+      `Unsupported otpauth algorithm '${algoParam}': expected SHA1, SHA256, ` +
+        'SHA384 or SHA512',
+    );
+  }
+
+  const digits = Number(params.get('digits') ?? '6');
+  if (!Number.isInteger(digits) || digits < 1) {
+    throw new Error('Digits must be a positive integer');
+  }
+
+  const base: ParsedOTPAuthURL = {
+    type,
+    secret,
+    accountName,
+    issuer,
+    algorithm,
+    digits,
+  };
+
+  if (type === 'totp') {
+    const period = Number(params.get('period') ?? '30');
+    if (!Number.isInteger(period) || period < 1) {
+      throw new Error('Period must be a positive integer (at least 1)');
+    }
+    return { ...base, period };
+  }
+  const counter = Number(params.get('counter') ?? '0');
+  if (!Number.isInteger(counter) || counter < 0) {
+    throw new Error('Counter must be a non-negative integer');
+  }
+  return { ...base, counter };
+};

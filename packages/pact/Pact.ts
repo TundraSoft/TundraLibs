@@ -47,7 +47,7 @@
  */
 
 import { constantTimeEqual, hash, hkdf } from '@tundralibs/crypt';
-import { pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/encrypt';
+import { pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/digest';
 import {
   issueJWT,
   type JWTAlgorithm,

@@ -10,7 +10,7 @@ HMAC, RSA (PSS / PKCS#1 v1.5) and ECDSA digital signatures using the Web Crypto 
 
 ## Overview
 
-Digital signature functions for message authentication and integrity verification.
+Digital signature functions — HMAC, RSA (PSS / PKCS#1 v1.5), ECDSA and Ed25519 — for message authentication and integrity verification.
 
 ### Features
 
@@ -21,6 +21,7 @@ Digital signature functions for message authentication and integrity verificatio
 | RSA-PSS               | ✅  | ✅   | ✅      | ✅      | ✅      |
 | RSA-PKCS#1 v1.5       | ✅  | ✅   | ✅      | ✅      | ✅      |
 | ECDSA (P-256/384/521) | ✅  | ✅   | ✅      | ✅      | ✅      |
+| Ed25519 (EdDSA)       | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Binary data           | ✅  | ✅   | ✅      | ✅      | ✅      |
 | `CryptoKey` / JWK in  | ✅  | ✅   | ✅      | ✅      | ✅      |
 
@@ -208,6 +209,46 @@ const publicKey = `-----BEGIN PUBLIC KEY-----...`;
 const isValid = await verifyEC('my data', signature, publicKey);
 ```
 
+### `signEd25519()`
+
+Signs data using Ed25519 (EdDSA, RFC 8032). Nothing to configure — the curve,
+the digest and the 64-byte signature width are fixed by the algorithm, and
+signing is **deterministic** (no per-signature nonce to mismanage). Accepts a
+PKCS#8 PEM, an `Ed25519` `CryptoKey`, or a private `OKP` JWK.
+
+```typescript ignore
+async function signEd25519(
+  data: string | Uint8Array,
+  privateKey: SigningKey,
+): Promise<string>; // base64 of the 64-byte signature
+```
+
+### `verifyEd25519()`
+
+Verifies a `signEd25519` signature. A key of the wrong family is **refused**
+(thrown) rather than reported as `false`; a malformed or wrong-width
+signature returns `false`.
+
+```typescript ignore
+async function verifyEd25519(
+  data: string | Uint8Array,
+  signature: string,
+  publicKey: SigningKey,
+): Promise<boolean>;
+```
+
+**Example:**
+
+```typescript
+import { signEd25519, verifyEd25519 } from '@tundralibs/crypt/sign';
+import { generateEd25519Keys } from '@tundralibs/crypt/generators';
+
+const { privateKey, publicKey } = await generateEd25519Keys();
+const signature = await signEd25519('important document', privateKey);
+const valid = await verifyEd25519('important document', signature, publicKey);
+console.log(valid); // true
+```
+
 ### `ecdsaDerToRaw()`
 
 Converts an ASN.1/DER ECDSA signature — `SEQUENCE { INTEGER r, INTEGER s }`, as
@@ -273,7 +314,7 @@ rounds up to 66 bytes per half, hence 132 rather than 128.
 | PEM `PUBLIC KEY` (SPKI)        | —    | ✅     |                                    |
 | PEM `EC PRIVATE KEY` (SEC1)    | ✅   | —      | Rewrapped as PKCS#8 automatically  |
 | `CryptoKey`                    | ✅   | ✅     | Used as-is; may be non-extractable |
-| JWK (`JsonWebKey`)             | ✅   | ✅     | `EC`, `RSA` and `oct`              |
+| JWK (`JsonWebKey`)             | ✅   | ✅     | `EC`, `RSA`, `OKP` and `oct`       |
 | Raw secret string              | ✅   | ✅     | HMAC only                          |
 | PEM `ENCRYPTED PRIVATE KEY`    | ❌   | ❌     | Decrypt first — see below          |
 | PEM `RSA PRIVATE KEY` (PKCS#1) | ❌   | ❌     | Not importable by Web Crypto       |

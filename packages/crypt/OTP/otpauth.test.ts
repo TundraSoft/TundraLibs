@@ -5,6 +5,7 @@ import {
   generateHOTP,
   generateOTPAuthURL,
   generateTOTP,
+  parseOTPAuthURL,
   verifyHOTP,
   verifyTOTP,
 } from './mod.ts';
@@ -570,6 +571,143 @@ describe('crypt.OTP.generateOTPAuthURL', () => {
     asserts.assertEquals(
       await generateTOTP('12345678901234567890', { epoch: 59000 }),
       '287082',
+    );
+  });
+});
+
+describe('crypt.OTP.parseOTPAuthURL', () => {
+  it('round-trips generateOTPAuthURL output (TOTP)', () => {
+    const url = generateOTPAuthURL({
+      type: 'totp',
+      secret: 'JBSWY3DPEHPK3PXP',
+      accountName: 'user@example.com',
+      issuer: 'MyApp',
+      algorithm: 'SHA-256',
+      digits: 8,
+      period: 60,
+    });
+    const parsed = parseOTPAuthURL(url);
+    asserts.assertEquals(parsed, {
+      type: 'totp',
+      secret: 'JBSWY3DPEHPK3PXP',
+      accountName: 'user@example.com',
+      issuer: 'MyApp',
+      algorithm: 'SHA-256',
+      digits: 8,
+      period: 60,
+    });
+  });
+
+  it('round-trips generateOTPAuthURL output (HOTP, defaults)', () => {
+    const url = generateOTPAuthURL({
+      type: 'hotp',
+      secret: 'JBSWY3DPEHPK3PXP',
+      accountName: 'user@example.com',
+      issuer: 'MyApp',
+      counter: 5,
+    });
+    const parsed = parseOTPAuthURL(url);
+    asserts.assertEquals(parsed.type, 'hotp');
+    asserts.assertEquals(parsed.counter, 5);
+    asserts.assertEquals(parsed.algorithm, 'SHA-1'); // default
+    asserts.assertEquals(parsed.digits, 6); // default
+    asserts.assertEquals(parsed.period, undefined); // totp-only
+  });
+
+  it('resolves Key-Uri defaults on a minimal external URL', () => {
+    const parsed = parseOTPAuthURL(
+      'otpauth://totp/user@example.com?secret=JBSWY3DPEHPK3PXP',
+    );
+    asserts.assertEquals(parsed.accountName, 'user@example.com');
+    asserts.assertEquals(parsed.issuer, ''); // both carriers absent
+    asserts.assertEquals(parsed.algorithm, 'SHA-1');
+    asserts.assertEquals(parsed.digits, 6);
+    asserts.assertEquals(parsed.period, 30);
+  });
+
+  it('label issuer is the fallback; issuer parameter wins', () => {
+    const labelOnly = parseOTPAuthURL(
+      'otpauth://totp/Acme%20Co:user?secret=AA',
+    );
+    asserts.assertEquals(labelOnly.issuer, 'Acme Co');
+    asserts.assertEquals(labelOnly.accountName, 'user');
+    const paramWins = parseOTPAuthURL(
+      'otpauth://totp/OldName:user?secret=AA&issuer=NewName',
+    );
+    asserts.assertEquals(paramWins.issuer, 'NewName');
+  });
+
+  it('decodes URI-encoded label parts (colon inside a component)', () => {
+    const parsed = parseOTPAuthURL(
+      'otpauth://totp/My%3AApp:user%40host?secret=AA',
+    );
+    asserts.assertEquals(parsed.issuer, 'My:App');
+    asserts.assertEquals(parsed.accountName, 'user@host');
+  });
+
+  it('accepts hyphenless and hyphenated algorithm spellings', () => {
+    asserts.assertEquals(
+      parseOTPAuthURL('otpauth://totp/a?secret=AA&algorithm=SHA512').algorithm,
+      'SHA-512',
+    );
+    asserts.assertEquals(
+      parseOTPAuthURL('otpauth://totp/a?secret=AA&algorithm=sha-256').algorithm,
+      'SHA-256',
+    );
+  });
+
+  it('the parsed secret verifies against codes the engine generates', async () => {
+    const url = generateOTPAuthURL({
+      type: 'totp',
+      secret: 'JBSWY3DPEHPK3PXP',
+      accountName: 'user',
+      issuer: 'App',
+    });
+    const parsed = parseOTPAuthURL(url);
+    const code = await generateTOTP(parsed.secret, {
+      algo: parsed.algorithm,
+      length: parsed.digits,
+      period: parsed.period,
+    });
+    const ok = await verifyTOTP(code, 'JBSWY3DPEHPK3PXP');
+    asserts.assertEquals(ok, true);
+  });
+
+  it('throws on malformed input, never returns garbage', () => {
+    asserts.assertThrows(
+      () => parseOTPAuthURL('https://example.com/x?secret=AA'),
+      Error,
+      'Invalid otpauth URL',
+    );
+    asserts.assertThrows(
+      () => parseOTPAuthURL('otpauth://steam/a?secret=AA'),
+      Error,
+      'Type must be either "totp" or "hotp"',
+    );
+    asserts.assertThrows(
+      () => parseOTPAuthURL('otpauth://totp/a'),
+      Error,
+      'Secret is required',
+    );
+    asserts.assertThrows(
+      () => parseOTPAuthURL('otpauth://totp/a?secret=AA&algorithm=MD5'),
+      Error,
+      "Unsupported otpauth algorithm 'MD5'",
+    );
+    asserts.assertThrows(
+      () => parseOTPAuthURL('otpauth://totp/a?secret=AA&digits=abc'),
+      Error,
+      'Digits must be a positive integer',
+    );
+    asserts.assertThrows(
+      () => parseOTPAuthURL('otpauth://totp/a?secret=AA&period=0'),
+      Error,
+      'Period must be a positive integer',
+    );
+    asserts.assertThrows(
+      () => parseOTPAuthURL('otpauth://hotp/a?secret=AA&counter=-1'),
+      Error,
+      'Counter must be a non-negative integer',
     );
   });
 });

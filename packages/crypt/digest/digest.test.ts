@@ -96,7 +96,7 @@ describe('crypt.digest', () => {
         await digest(data, { algorithm: 'INVALID-ALGO' as DigestAlgorithms });
       },
       Error,
-      'The provided algorithm name is not supported',
+      'Invalid hash algorithm',
     );
   });
 

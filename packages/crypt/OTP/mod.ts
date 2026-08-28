@@ -23,6 +23,8 @@ export {
   type HOTPOptions,
   type OTPAuthURLOptions,
   type OTPType,
+  type ParsedOTPAuthURL,
+  parseOTPAuthURL,
   type TOTPOptions,
   type TOTPVerifyOptions,
 } from './common.ts';

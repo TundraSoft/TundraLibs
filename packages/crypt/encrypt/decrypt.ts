@@ -21,7 +21,10 @@
 
 import { decodeHex } from '@std/encoding';
 import type { AESOptions, RSAOptions } from './types/mod.ts';
-import { deriveMacSecret, derivePBKDF2Key } from './kdf.ts';
+import { deriveMacSecret } from './mac.ts';
+import { validateAESKey } from './aesKey.ts';
+import { validateDigestAlgorithm } from '../digest/mod.ts';
+import { derivePBKDF2Key } from '../generators/mod.ts';
 import { verifyHMAC } from '../sign/mod.ts';
 
 /**
@@ -53,6 +56,11 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  * `data:iv:salt` for `GCM`, or `data:iv:salt:mac` for `CBC`/`CTR`. The AES key
  * is re-derived from the supplied secret + embedded salt with PBKDF2-SHA-256.
  *
+ * With an AES-GCM `CryptoKey` as `secret`, no derivation runs and the
+ * envelope is the 2-part `data:iv` form {@link encryptAES} emits for keys —
+ * key-based and string-based envelopes are not interchangeable, and only
+ * `GCM` is supported with a key (see the encrypt-side docs).
+ *
  * Security — all modes are authenticated:
  * `GCM` rejects tampered ciphertext natively (AEAD). For `CBC`/`CTR` this
  * function verifies the encrypt-then-MAC HMAC-SHA-256 (constant-time, via
@@ -61,23 +69,26 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  * rejected rather than returning corrupted plaintext.
  *
  * @param {string} data - The ciphertext envelope from {@link encryptAES}
- * @param {string} secret - The secret used at encryption time
+ * @param {string | CryptoKey} secret - The secret used at encryption time, or
+ *   the same AES-GCM `CryptoKey` the envelope was encrypted with
  * @param {AESOptions} [options] - Optional decryption settings (mode, keyLength, returnBinary)
  * @returns {Promise<string>} A promise that resolves to the decrypted data as a string
  *
  * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
  * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
  * @throws {Error} When the envelope shape is wrong (`data:iv:salt` for GCM,
- *   `data:iv:salt:mac` for CBC/CTR)
+ *   `data:iv:salt:mac` for CBC/CTR, `data:iv` for a `CryptoKey` secret)
  * @throws {Error} When CBC/CTR authentication fails (tampered ciphertext or wrong secret)
  * @throws {Error} When the IV/counter or salt is empty
+ * @throws {Error} When a `CryptoKey` secret is combined with CBC/CTR, is not
+ *   an AES-GCM key, or contradicts an explicit `keyLength` option
  *
  * @see {@link encryptAES} for encryption
  * @see {@link AESOptions} for available options
  */
 export async function decryptAES(
   data: string,
-  secret: string,
+  secret: string | CryptoKey,
   options?: AESOptions,
 ): Promise<string>;
 
@@ -103,7 +114,7 @@ export async function decryptAES(
  */
 export async function decryptAES(
   data: string,
-  secret: string,
+  secret: string | CryptoKey,
   options: AESOptions & { returnBinary: true },
 ): Promise<Uint8Array>;
 
@@ -112,7 +123,7 @@ export async function decryptAES(
  */
 export async function decryptAES(
   data: string,
-  secret: string,
+  secret: string | CryptoKey,
   options?: AESOptions & { returnBinary?: boolean },
 ): Promise<string | Uint8Array> {
   const mode = options?.mode ?? 'GCM';
@@ -129,6 +140,35 @@ export async function decryptAES(
     throw new Error(
       'Invalid AES key length. Must be 128, 192, or 256',
     );
+  }
+
+  // Pre-derived CryptoKey: the envelope is the 2-part `data:iv` form
+  // encryptAES emits for keys — GCM (AEAD) authenticates it natively.
+  if (typeof secret !== 'string') {
+    validateAESKey(secret, mode, options?.keyLength, 'decrypt');
+    const keyParts = data.split(':');
+    if (keyParts.length !== 2) {
+      throw new Error(
+        'Invalid encrypted data format. Expected "data:iv" for a CryptoKey ' +
+          'secret (a string-secret envelope must be decrypted with its ' +
+          'string secret)',
+      );
+    }
+    const [encrypted, iv] = keyParts.map((x) => decodeHex(x)) as [
+      Uint8Array,
+      Uint8Array,
+    ];
+    if (iv.length === 0) {
+      throw new Error('Initialization vector (IV) or counter is undefined');
+    }
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      secret,
+      encrypted as BufferSource,
+    );
+    return returnBinary
+      ? new Uint8Array(decrypted)
+      : new TextDecoder().decode(decrypted);
   }
 
   const parts = data.split(':');
@@ -269,11 +309,7 @@ export async function decryptRSA(
   const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
   const returnBinary = options?.returnBinary ?? false;
 
-  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(hashAlgorithm)) {
-    throw new Error(
-      'Invalid hash algorithm. Must be SHA-1, SHA-256, SHA-384, or SHA-512',
-    );
-  }
+  validateDigestAlgorithm(hashAlgorithm);
 
   // Parse the PEM private key
   const keyData = parsePEMPrivateKey(privateKey);

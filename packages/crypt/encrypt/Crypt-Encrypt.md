@@ -18,7 +18,7 @@ AES and RSA encryption and decryption using the Web Crypto API.
 
 ## Overview
 
-The Encrypt module provides symmetric (AES) and asymmetric (RSA) encryption for secure data protection, plus the package's key-derivation functions: **PBKDF2** (slow, salted password stretching) and **HKDF** (RFC 5869, fast sub-key derivation for domain separation).
+The Encrypt module provides symmetric (AES) and asymmetric (RSA) encryption for secure data protection. AES keys are derived internally with PBKDF2 (see [Key Derivation](#key-derivation)); the exported key-derivation functions live in [Generators](../generators/Crypt-Generators.md) (`derivePBKDF2Key`, `hkdf`) and [Digest](../digest/Crypt-Digest.md) (`pbkdf2Hash` / `pbkdf2Verify` for password storage).
 
 ### Features
 
@@ -30,8 +30,6 @@ The Encrypt module provides symmetric (AES) and asymmetric (RSA) encryption for 
 | RSA-OAEP        | ✅  | ✅   | ✅      | ✅      | ✅      |
 | 128/192/256-bit | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Binary data     | ✅  | ✅   | ✅      | ✅      | ✅      |
-| PBKDF2          | ✅  | ✅   | ✅      | ✅      | ✅      |
-| HKDF (RFC 5869) | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 
@@ -64,7 +62,7 @@ Encrypts data using AES encryption.
 ```typescript ignore
 async function encryptAES(
   data: string | Uint8Array,
-  secret: string,
+  secret: string | CryptoKey,
   options?: AESOptions,
 ): Promise<string>;
 ```
@@ -72,12 +70,12 @@ async function encryptAES(
 **Parameters:**
 
 - `data` - Data to encrypt
-- `secret` - Secret of any length; the AES key is derived from it with PBKDF2-SHA-256 + a fresh per-message salt (see [Key Derivation](#key-derivation))
+- `secret` - Secret of any length; the AES key is derived from it with PBKDF2-SHA-256 + a fresh per-message salt (see [Key Derivation](#key-derivation)). Or an **AES-GCM `CryptoKey`** (e.g. from `derivePBKDF2Key`), which skips the per-message derivation entirely — GCM only, and a `keyLength` option that contradicts the key throws.
 - `options`:
-  - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode (default: `'GCM'`)
+  - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode (default: `'GCM'`; a `CryptoKey` secret permits only `'GCM'`)
   - `keyLength?: 128 | 192 | 256` - Key length in bits (default: `256`)
 
-**Returns:** Encrypted data as a hex-string envelope — `{ciphertext}:{iv}:{salt}` for GCM, and `{ciphertext}:{iv}:{salt}:{mac}` for CBC/CTR (the 4th part is the encrypt-then-MAC HMAC)
+**Returns:** Encrypted data as a hex-string envelope — `{ciphertext}:{iv}:{salt}` for GCM, `{ciphertext}:{iv}:{salt}:{mac}` for CBC/CTR (the 4th part is the encrypt-then-MAC HMAC), and `{ciphertext}:{iv}` for a `CryptoKey` secret (no salt — no derivation ran)
 
 > The output includes a fresh random salt for key derivation, so repeated encryptions with the same secret produce different ciphertexts. Both the IV and the salt are required to decrypt and are embedded in the envelope — store the returned string verbatim.
 
@@ -101,21 +99,21 @@ Decrypts AES-encrypted data.
 ```typescript ignore
 async function decryptAES(
   data: string,
-  secret: string,
+  secret: string | CryptoKey,
   options?: AESOptions,
 ): Promise<string>;
 
 async function decryptAES(
   data: string,
-  secret: string,
+  secret: string | CryptoKey,
   options: AESOptions & { returnBinary: true },
 ): Promise<Uint8Array>;
 ```
 
 **Parameters:**
 
-- `data` - Encrypted data from `encryptAES()`; expects the full hex envelope verbatim — `ciphertext:iv:salt` for GCM, or `ciphertext:iv:salt:mac` for CBC/CTR.
-- `secret` - Secret key (must match encryption key)
+- `data` - Encrypted data from `encryptAES()`; expects the full hex envelope verbatim — `ciphertext:iv:salt` for GCM, `ciphertext:iv:salt:mac` for CBC/CTR, or `ciphertext:iv` when decrypting with a `CryptoKey`.
+- `secret` - Secret key (must match encryption: a string-secret envelope needs its string, a key-based envelope needs the same AES-GCM `CryptoKey` — the two are not interchangeable)
 - `options`:
   - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode
   - `keyLength?: 128 | 192 | 256` - Key length in bits
@@ -211,61 +209,6 @@ declare const encrypted: string;
 const privateKey = `-----BEGIN PRIVATE KEY-----...`;
 const decrypted = await decryptRSA(encrypted, privateKey);
 ```
-
-### `hkdf()`
-
-Derive independent sub-keys from a single high-entropy secret using HKDF
-(RFC 5869). Unlike `pbkdf2` — a deliberately slow password stretcher — HKDF
-is fast and is the correct primitive for **domain separation**: vary the
-`info` label to get keys for distinct purposes from the same secret, with
-the guarantee that no derived key reveals the secret or any sibling key.
-Prefer it over ad-hoc `secret + label` concatenation.
-
-```typescript ignore
-hkdf(
-  ikm: string | Uint8Array,
-  options?: {
-    salt?: string | Uint8Array;
-    info?: string | Uint8Array;
-    length?: number; // bytes, default 32
-    hash?: 'SHA-256' | 'SHA-384' | 'SHA-512'; // default 'SHA-256'
-  },
-): Promise<Uint8Array>
-```
-
-**Parameters:**
-
-- `ikm` - Input keying material (the shared high-entropy secret). Not for
-  low-entropy passwords — use `pbkdf2Hash` for those.
-- `options.salt` - Optional salt (HKDF-Extract). Defaults to empty, which is
-  fine when `ikm` is already high-entropy.
-- `options.info` - Context/application label; the domain-separation tag. Two
-  calls that differ only in `info` yield independent keys.
-- `options.length` - Output length in **bytes** (default 32; max
-  255 × hash-length).
-- `options.hash` - Underlying digest (default `'SHA-256'`).
-
-**Returns:** The derived key material as a `Uint8Array`.
-
-**Throws:**
-
-- `RangeError` - When `length` is not an integer in `1..255×hashLen`.
-
-**Example:**
-
-```typescript
-import { hkdf } from '@tundralibs/crypt/encrypt';
-
-declare const secret: Uint8Array;
-
-// Two independent keys from one secret — signing vs MAC.
-const signKey = await hkdf(secret, { info: 'jwt' });
-const macKey = await hkdf(secret, { info: 'hmac' });
-// signKey and macKey are unrelated; neither leaks `secret`.
-```
-
-For low-entropy passwords, reach for the salted, slow `pbkdf2Hash` /
-`pbkdf2Verify` instead — see [Key Derivation](#key-derivation).
 
 ## Examples
 
@@ -377,34 +320,28 @@ Implications:
 - **Decryption requires the full envelope.** The `salt` is not optional and not recoverable from `secret` alone; if the envelope is truncated to `ciphertext:iv`, decrypt will reject it with `Invalid encrypted data format`.
 - **Cost is intentional.** PBKDF2 derivation is the dominant cost of each `encryptAES`/`decryptAES` call (tens of milliseconds). If you are encrypting many small values with the same secret, batching at a higher layer is recommended.
 
-For raw, deterministic key derivation (e.g., to derive AES key material once and reuse a `CryptoKey` across many ciphertexts in the same process), use the exported `pbkdf2` from `@tundralibs/crypt/encrypt`. With a fixed salt it derives the same bytes every call, so you import the key once and reuse it:
+To pay that cost once instead of per message, derive an AES `CryptoKey` with `derivePBKDF2Key` from `@tundralibs/crypt/generators` — the same derivation `encryptAES` runs internally — and pass the key straight to `encryptAES`/`decryptAES` as the secret. With a fixed salt it derives the same key every call:
 
 ```typescript
-import {
-  pbkdf2,
-  PBKDF2_ITERATIONS,
-  SALT_BYTES,
-} from '@tundralibs/crypt/encrypt';
+import { decryptAES, encryptAES } from '@tundralibs/crypt/encrypt';
+import { SALT_BYTES } from '@tundralibs/crypt/digest';
+import { derivePBKDF2Key } from '@tundralibs/crypt/generators';
 
 // A fixed salt makes derivation deterministic — store it alongside the secret.
 // SALT_BYTES (16) is the same salt length encryptAES generates per message.
 const salt = new Uint8Array(SALT_BYTES).fill(7);
-const raw = await pbkdf2('mySecret', salt, PBKDF2_ITERATIONS, 256); // 32 bytes
+const key = await derivePBKDF2Key('mySecret', salt, 'AES-GCM', 256);
 
-const key = await crypto.subtle.importKey(
-  'raw',
-  raw as BufferSource,
-  { name: 'AES-GCM', length: 256 },
-  false,
-  ['encrypt', 'decrypt'],
-);
-// Reuse `key` directly with crypto.subtle.encrypt/decrypt across many messages.
+// One derivation, many messages — each call is now just an AES-GCM operation.
+const a = await encryptAES('first', key); // "…:…" (data:iv, no salt part)
+const b = await encryptAES('second', key);
+console.log(await decryptAES(a, key)); // "first"
 ```
 
-**Choosing a KDF.** The module exports two derivation families for different jobs — pick by the entropy of your input, not by convenience:
+**Choosing a KDF.** The package ships two derivation families for different jobs — pick by the entropy of your input, not by convenience:
 
-- **PBKDF2 (`pbkdf2Hash` / `pbkdf2Verify`, `pbkdf2`)** — for **low-entropy secrets** (user passwords). Deliberately slow and salted so brute-forcing a stolen hash stays expensive. `pbkdf2Hash` returns a self-describing `pbkdf2-<hash>$<iterations>$<salt>$<derived>` string that `pbkdf2Verify` checks (and never throws on malformed input, returning `false`).
-- **HKDF (`hkdf`)** — for **high-entropy secrets** you already trust (a master key, a shared secret). Fast, and built for **domain separation**: derive many independent sub-keys from one secret by varying `info`. Do **not** use it to stretch passwords — it provides no work factor.
+- **PBKDF2** (`pbkdf2Hash` / `pbkdf2Verify` / `pbkdf2` in [Digest](../digest/Crypt-Digest.md), `derivePBKDF2Key` in [Generators](../generators/Crypt-Generators.md)) — for **low-entropy secrets** (user passwords). Deliberately slow and salted so brute-forcing a stolen hash stays expensive.
+- **HKDF** (`hkdf` in [Generators](../generators/Crypt-Generators.md)) — for **high-entropy secrets** you already trust (a master key, a shared secret). Fast, and built for **domain separation**: derive many independent sub-keys from one secret by varying `info`. Do **not** use it to stretch passwords — it provides no work factor.
 
 ### RSA Considerations
 

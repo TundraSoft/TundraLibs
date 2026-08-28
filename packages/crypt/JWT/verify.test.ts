@@ -526,11 +526,11 @@ describe('crypt.JWT.verify', () => {
   });
 
   it('verifyJWT - Unsupported algorithm', async () => {
-    // Test with a truly unsupported algorithm (not HS*, RS*, PS* or ES*).
-    // `EdDSA` (RFC 8037) is a real JOSE algorithm this package does not
-    // implement. (This slot used to hold `ES256`, now supported.)
+    // Test with a truly unsupported algorithm. `ES256K` (secp256k1,
+    // RFC 8812) is a real JOSE algorithm this package does not implement.
+    // (This slot used to hold `ES256`, then `EdDSA` — both now supported.)
     const unsupportedHeader = btoa(
-      JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }),
+      JSON.stringify({ alg: 'ES256K', typ: 'JWT' }),
     );
     const unsupportedToken =
       `${unsupportedHeader}.eyJzdWIiOiJ0ZXN0In0.signature`;
@@ -540,7 +540,7 @@ describe('crypt.JWT.verify', () => {
         await verifyJWT(unsupportedToken, TEST_SECRET);
       },
       JWTError,
-      'Unsupported algorithm: EdDSA',
+      'Unsupported algorithm: ES256K',
     );
   });
 
@@ -1232,11 +1232,12 @@ describe('crypt.JWT.verify', () => {
   });
 
   it('verifyJWT - Unsupported algorithm throws UNSUPPORTED_ALGORITHM', async () => {
-    // Craft a JWT with an unsupported algorithm header manually. `EdDSA`
-    // (RFC 8037) is a real JOSE algorithm this package does not implement.
+    // Craft a JWT with an unsupported algorithm header manually. `ES256K`
+    // (secp256k1, RFC 8812) is a real JOSE algorithm this package does not
+    // implement.
     const { encodeBase64Url } = await import('@std/encoding');
     const header = encodeBase64Url(
-      JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }),
+      JSON.stringify({ alg: 'ES256K', typ: 'JWT' }),
     );
     const payload = encodeBase64Url(JSON.stringify({ sub: 'test' }));
     const fakeToken = `${header}.${payload}.fakesig`;
@@ -2410,6 +2411,86 @@ describe('crypt.JWT.verify', () => {
     asserts.assertEquals(
       (await verifyJWT(token, TEST_SECRET, wrongKeys)).sub,
       'u1',
+    );
+  });
+});
+
+describe('JWT EdDSA (Ed25519)', () => {
+  const generate = () =>
+    crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']) as Promise<
+      CryptoKeyPair
+    >;
+  const payload: JWTPayload = { sub: 'user-1', iss: 'test-issuer' };
+
+  it('issues and verifies an EdDSA token (CryptoKey)', async () => {
+    const { privateKey, publicKey } = await generate();
+    const token = await issueJWT('EdDSA', payload, privateKey);
+    const header = JSON.parse(atob(token.split('.')[0]!));
+    asserts.assertEquals(header.alg, 'EdDSA');
+    const claims = await verifyJWT(token, publicKey, { algorithm: 'EdDSA' });
+    asserts.assertEquals(claims.sub, 'user-1');
+  });
+
+  it('issues and verifies with PEM keys', async () => {
+    const { privateKey, publicKey } = await generate();
+    const der = await crypto.subtle.exportKey('pkcs8', privateKey);
+    const pubDer = await crypto.subtle.exportKey('spki', publicKey);
+    const pem = (label: string, buf: ArrayBuffer) =>
+      `-----BEGIN ${label}-----\n${
+        btoa(String.fromCodePoint(...new Uint8Array(buf)))
+      }\n-----END ${label}-----`;
+    const token = await issueJWT('EdDSA', payload, pem('PRIVATE KEY', der));
+    const claims = await verifyJWT(token, pem('PUBLIC KEY', pubDer));
+    asserts.assertEquals(claims.iss, 'test-issuer');
+  });
+
+  it('a tampered EdDSA token fails verification', async () => {
+    const { privateKey, publicKey } = await generate();
+    const token = await issueJWT('EdDSA', payload, privateKey);
+    const [h, p, s] = token.split('.') as [string, string, string];
+    const forged = `${h}.${
+      btoa(JSON.stringify({ sub: 'attacker' }))
+        .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+    }.${s}`;
+    await asserts.assertRejects(
+      () => verifyJWT(forged, publicKey),
+      JWTError,
+    );
+    // Untampered control
+    asserts.assertEquals((await verifyJWT(token, publicKey)).sub, 'user-1');
+    void p;
+  });
+
+  it('SECURITY: algorithm confusion between EdDSA and other families is refused', async () => {
+    const { privateKey, publicKey } = await generate();
+    const token = await issueJWT('EdDSA', payload, privateKey);
+    // EdDSA token + HMAC secret → refused by key-shape binding.
+    await asserts.assertRejects(
+      () => verifyJWT(token, TEST_SECRET),
+      JWTError,
+      'Algorithm confusion detected',
+    );
+    // HS256 token + Ed25519 key → refused the other way.
+    const hsToken = await issueJWT('HS256', payload, TEST_SECRET);
+    await asserts.assertRejects(
+      () => verifyJWT(hsToken, publicKey),
+      JWTError,
+      'Algorithm confusion detected',
+    );
+    // Issuing EdDSA with a non-Ed25519 key is refused at signing time.
+    await asserts.assertRejects(
+      () => issueJWT('EdDSA', payload, TEST_SECRET),
+      JWTError,
+    );
+  });
+
+  it('pinning a different algorithm rejects an EdDSA token', async () => {
+    const { privateKey, publicKey } = await generate();
+    const token = await issueJWT('EdDSA', payload, privateKey);
+    await asserts.assertRejects(
+      () => verifyJWT(token, publicKey, { algorithm: 'ES256' }),
+      JWTError,
+      'Algorithm mismatch',
     );
   });
 });

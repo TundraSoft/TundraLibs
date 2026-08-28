@@ -19,7 +19,14 @@
 
 import { encodeHex } from '@std/encoding';
 import type { AESOptions, RSAOptions } from './types/mod.ts';
-import { deriveMacSecret, derivePBKDF2Key, SALT_BYTES } from './kdf.ts';
+import { deriveMacSecret } from './mac.ts';
+import { validateAESKey } from './aesKey.ts';
+import {
+  DIGEST_OUTPUT_BYTES,
+  SALT_BYTES,
+  validateDigestAlgorithm,
+} from '../digest/mod.ts';
+import { derivePBKDF2Key } from '../generators/mod.ts';
 import { signHMAC } from '../sign/mod.ts';
 
 /**
@@ -47,11 +54,27 @@ const CBC_IV_BYTES = 16;
  * - `GCM` (default, AEAD): `{dataHex}:{ivHex}:{saltHex}`.
  * - `CBC` / `CTR`: `{dataHex}:{ivHex}:{saltHex}:{macHex}` — a 4th
  *   encrypt-then-MAC part.
+ * - `GCM` with a `CryptoKey` secret: `{dataHex}:{ivHex}` — no salt part,
+ *   because no derivation ran.
  *
  * IV lengths: GCM uses the standard 12-byte (96-bit) nonce; CBC uses a
  * 16-byte block IV; CTR uses a 16-byte counter block. {@link decryptAES}
  * takes the IV length from the envelope, so ciphertexts written when GCM
  * still used a 16-byte IV continue to decrypt.
+ *
+ * ## Pre-derived keys — skipping PBKDF2
+ *
+ * Passing an AES-GCM `CryptoKey` as `secret` (e.g. from `derivePBKDF2Key` in
+ * `@tundralibs/crypt/generators`, or `crypto.subtle.importKey`) skips the
+ * per-message PBKDF2 derivation — the dominant cost of a string-secret call —
+ * so one derived key can encrypt many messages cheaply. Key-based envelopes
+ * are `data:iv` (no salt) and MUST be decrypted with the same `CryptoKey`,
+ * not the original string secret (each string-secret envelope derives its key
+ * from a fresh salt, so the two flows are not interchangeable). Only `GCM` is
+ * supported with a `CryptoKey`: it is AEAD, while `CBC`/`CTR` need an
+ * encrypt-then-MAC secret that a lone key cannot provide — passing a key with
+ * `mode: 'CBC'`/`'CTR'` throws. A `keyLength` option that contradicts the
+ * key's own length also throws rather than being silently ignored.
  *
  * Security — all modes are authenticated:
  * `GCM` is authenticated on its own (AEAD: it embeds an auth tag). `CBC` and
@@ -64,13 +87,16 @@ const CBC_IV_BYTES = 16;
  * AEAD primitive); reach for `CBC`/`CTR` only for external-format compatibility.
  *
  * @param {string | Uint8Array} data - The data to encrypt
- * @param {string} secret - The secret used to derive the AES key
+ * @param {string | CryptoKey} secret - The secret to derive the AES key from,
+ *   or an AES-GCM `CryptoKey` to use directly (skips derivation)
  * @param {AESOptions} [options] - Optional encryption settings (mode and keyLength)
  * @returns {Promise<string>} Hex-encoded envelope: `data:iv:salt` for GCM,
- *   `data:iv:salt:mac` for CBC/CTR
+ *   `data:iv:salt:mac` for CBC/CTR, `data:iv` for a `CryptoKey` secret
  *
  * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
  * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
+ * @throws {Error} When a `CryptoKey` secret is combined with CBC/CTR, is not
+ *   an AES-GCM key, or contradicts an explicit `keyLength` option
  *
  * @example
  * ```typescript
@@ -83,7 +109,7 @@ const CBC_IV_BYTES = 16;
  */
 export const encryptAES = async (
   data: string | Uint8Array,
-  secret: string,
+  secret: string | CryptoKey,
   options?: AESOptions,
 ): Promise<string> => {
   const mode = options?.mode ?? 'GCM';
@@ -101,13 +127,20 @@ export const encryptAES = async (
     );
   }
 
-  const algorithm: 'AES-GCM' | 'AES-CBC' | 'AES-CTR' = `AES-${mode}`;
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const key = await derivePBKDF2Key(secret, salt, algorithm, keyLength);
-
   const dataToEncrypt = typeof data === 'string'
     ? new TextEncoder().encode(data)
     : data;
+
+  // Pre-derived CryptoKey: no PBKDF2, no salt part — GCM (AEAD) only, since
+  // CBC/CTR's encrypt-then-MAC needs a string secret to derive the MAC key.
+  if (typeof secret !== 'string') {
+    validateAESKey(secret, mode, options?.keyLength, 'encrypt');
+    return await encryptAESGCMCBC(secret, 'AES-GCM', dataToEncrypt);
+  }
+
+  const algorithm: 'AES-GCM' | 'AES-CBC' | 'AES-CTR' = `AES-${mode}`;
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const key = await derivePBKDF2Key(secret, salt, algorithm, keyLength);
 
   const blob = mode === 'CTR'
     ? await encryptAESCTR(key, dataToEncrypt)
@@ -169,11 +202,7 @@ export const encryptRSA = async (
   // Apply defaults
   const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
 
-  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(hashAlgorithm)) {
-    throw new Error(
-      'Invalid hash algorithm. Must be SHA-1, SHA-256, SHA-384, or SHA-512',
-    );
-  }
+  validateDigestAlgorithm(hashAlgorithm);
 
   // Remove PEM headers and decode base64
   const pemContents = publicKey
@@ -212,17 +241,7 @@ export const encryptRSA = async (
   // its full 446-byte (SHA-256) capacity and an oversized payload against a
   // 2048-bit key is rejected here with a clear message instead of surfacing
   // as an opaque DataError from the Web Crypto API.
-  // Determine hash output size based on algorithm
-  let hashOutputSize: number;
-  if (hashAlgorithm === 'SHA-1') {
-    hashOutputSize = 20;
-  } else if (hashAlgorithm === 'SHA-256') {
-    hashOutputSize = 32;
-  } else if (hashAlgorithm === 'SHA-384') {
-    hashOutputSize = 48;
-  } else {
-    hashOutputSize = 64; // SHA-512
-  }
+  const hashOutputSize = DIGEST_OUTPUT_BYTES[hashAlgorithm];
 
   const { modulusLength } = cryptoKey.algorithm as RsaHashedKeyAlgorithm;
   const maxDataSize = Math.floor(modulusLength / 8) - 2 * hashOutputSize - 2;

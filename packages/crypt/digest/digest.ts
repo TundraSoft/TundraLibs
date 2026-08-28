@@ -17,6 +17,7 @@
 
 import { encodeBase64, encodeHex } from '@std/encoding';
 import type { DigestOptions } from './types/mod.ts';
+import { validateDigestAlgorithm } from './helper.ts';
 
 /**
  * Generates a cryptographic hash of the given data using the specified algorithm.
@@ -64,9 +65,7 @@ export async function digest(
 ): Promise<string> {
   const { algorithm = 'SHA-256', encoding = 'hex' } = options ?? {};
 
-  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(algorithm)) {
-    throw new Error('The provided algorithm name is not supported');
-  }
+  validateDigestAlgorithm(algorithm);
 
   const dataToHash = typeof data === 'string'
     ? new TextEncoder().encode(data)
