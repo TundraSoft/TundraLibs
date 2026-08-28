@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.4.0...norm-v1.5.0) (2026-08-28)
+
+
+### Features
+
+* **crypt:** reorganize KDF exports, add Ed25519, key-based AES, otpauth parser ([#621](https://github.com/TundraSoft/TundraLibs/issues/621)) ([a5ea357](https://github.com/TundraSoft/TundraLibs/commit/a5ea357579abbb4fe48bc268738a7360dab64bd8))
+* **norm:** derive the cell-encryption key once per process ([#625](https://github.com/TundraSoft/TundraLibs/issues/625)) ([e8e7b79](https://github.com/TundraSoft/TundraLibs/commit/e8e7b790a12c6b1c6624436a3c7971a32ce45527))
+
 ## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.3.2...norm-v1.4.0) (2026-08-25)
 
 
