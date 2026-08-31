@@ -24,6 +24,7 @@ import {
   template,
   withQuery,
 } from '../../../ui/mod.ts';
+import type { RapidFormError } from '../../../types/mod.ts';
 import type { Activity, Lane, Task } from '../types.ts';
 import { LANES } from '../types.ts';
 
@@ -35,13 +36,9 @@ export type BoardData = {
 };
 
 /** The composer's union — errors are STATE at 200, never a status. */
-export type ComposerData =
-  | { state: 'clean' }
-  | {
-    state: 'error';
-    message: string;
-    values: { title: string; owner: string; tag: string };
-  };
+// The composer's union: `formState()`'s error arm IS the error state —
+// message + per-field problems + the submitted values to re-fill.
+export type ComposerData = { state: 'clean' } | RapidFormError;
 
 const LANE_LABELS: Record<Lane, string> = {
   todo: 'To do',
@@ -93,11 +90,15 @@ export const BoardView = template<BoardData>((data, view) =>
     <nav class="chips">
       <button class="chip${data.owner === undefined ? ' chip-on' : ''}"
         data-action="${withQuery('/board', view.query, { owner: undefined })}"
-        data-target="#board" data-swap="outer">Everyone</button>${
+        data-target="#board" data-swap="outer"
+        data-push="${withQuery('/board/ui', view.query, { owner: undefined })}"
+      >Everyone</button>${
     data.owners.map((owner) =>
       html`<button class="chip${owner === data.owner ? ' chip-on' : ''}"
         data-action="${withQuery('/board', view.query, { owner })}"
-        data-target="#board" data-swap="outer">${owner}</button>`
+        data-target="#board" data-swap="outer"
+        data-push="${withQuery('/board/ui', view.query, { owner })}"
+      >${owner}</button>`
     )
   }
     </nav>
@@ -124,7 +125,7 @@ export const BoardView = template<BoardData>((data, view) =>
  */
 export const ComposerView = template<ComposerData>((data) => {
   const values = data.state === 'error'
-    ? data.values
+    ? { title: '', owner: '', tag: 'feature', ...data.values }
     : { title: '', owner: '', tag: 'feature' };
   return html`<form id="composer" data-action="/board/tasks" data-swap="outer">
     <input id="composer-title" name="title" placeholder="File a card…"
@@ -190,124 +191,58 @@ export const AppView = template<
     </aside>
   </div>`, 'AppView');
 
-/** The page shell — set via `@Module({ layout })`; htmlDocument preamble. */
-export const Shell = template<{ body: Html; title?: string }>((data, view) =>
-  htmlDocument({
-    title: data.title ?? 'Flightdeck — a rAPId demo',
-    head: html`<style>
-      * { box-sizing: border-box; }
-      body { margin: 0; background: #10151c; color: #dce3ec;
-             font: 15px/1.45 system-ui, sans-serif; }
-      main { max-width: 78rem; margin: 0 auto; padding: 0 1.2rem 3rem; }
-      @keyframes rise { from { opacity: 0; transform: translateY(8px); }
-                        to { opacity: 1; transform: none; } }
-      @keyframes ping { 0% { box-shadow: 0 0 0 0 rgb(240 180 41 / .45); }
-                        100% { box-shadow: 0 0 0 8px rgb(240 180 41 / 0); } }
-
-      header.top { display: flex; align-items: baseline; gap: .8rem;
-        max-width: 78rem; margin: 0 auto; padding: 1.3rem 1.2rem; }
-      header.top h1 { margin: 0; font-size: 1.15rem; letter-spacing: .18em;
-        text-transform: uppercase; color: #f0b429; }
-      header.top p { margin: 0; color: #8b96a5; font-size: .85rem; }
-      .live { display: inline-flex; align-items: center; gap: .35rem;
-        margin-left: auto; font-size: .68rem; font-weight: 600;
-        letter-spacing: .12em; color: #8b96a5;
-        border: 1px solid #2b3644; border-radius: 999px; padding: .2rem .6rem; }
-      .live i { width: .45rem; height: .45rem; border-radius: 50%;
-        background: #55606e; }
-      .live.on { color: #f0b429; border-color: #6d5a1f; }
-      .live.on i { background: #f0b429; animation: ping 1.6s ease-out infinite; }
-
-      .deck { display: grid; gap: 1.2rem;
-        grid-template-columns: minmax(0, 1fr) 15rem; }
-      @media (max-width: 56rem) { .deck { grid-template-columns: 1fr; } }
-
-      #composer { display: flex; gap: .5rem; flex-wrap: wrap;
-        margin-bottom: 1.1rem; }
-      #composer input, #composer select { background: #1a222c; color: inherit;
-        border: 1px solid #2b3644; border-radius: 8px; padding: .5rem .7rem;
-        font: inherit; }
-      #composer input[name=title], #composer #composer-title { flex: 1;
-        min-width: 12rem; }
-      #composer button { background: #f0b429; color: #10151c; border: 0;
-        border-radius: 8px; padding: .5rem 1rem; font: 600 .9rem system-ui;
-        cursor: pointer; }
-      #composer .err { flex-basis: 100%; margin: 0; color: #ff9d87;
-        font-size: .85rem; }
-
-      .chips { display: flex; gap: .4rem; flex-wrap: wrap;
-        margin-bottom: .9rem; }
-      .chip { background: none; color: #8b96a5; border: 1px solid #2b3644;
-        border-radius: 999px; padding: .3rem .8rem; font: .8rem system-ui;
-        cursor: pointer; }
-      .chip:hover { border-color: #f0b429; color: #dce3ec; }
-      .chip-on { background: #f0b429; border-color: #f0b429; color: #10151c;
-        font-weight: 600; }
-
-      .lanes { display: grid; gap: .8rem;
-        grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      @media (max-width: 72rem) {
-        .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      }
-      .lane { background: #151c25; border: 1px solid #222c38;
-        border-radius: 12px; padding: .7rem .7rem .4rem; min-height: 10rem; }
-      .lane h2 { margin: 0 0 .6rem; font-size: .72rem; letter-spacing: .14em;
-        text-transform: uppercase; color: #8b96a5; display: flex;
-        justify-content: space-between; }
-      .count { color: #dce3ec; font-variant-numeric: tabular-nums; }
-      .lane ul { list-style: none; margin: 0; padding: 0; }
-
-      .card { background: #1a222c; border: 1px solid #2b3644;
-        border-radius: 10px; padding: .6rem .7rem; margin-bottom: .55rem; }
-      .card p { margin: .25rem 0 .45rem; font-size: .88rem; line-height: 1.35; }
-      .card .tag { font: 600 .62rem system-ui; letter-spacing: .1em;
-        text-transform: uppercase; border-radius: 4px; padding: .1rem .35rem; }
-      .tag-bug .tag { background: #3a1f24; color: #ff9d87; }
-      .tag-feature .tag { background: #16323a; color: #6fd3e8; }
-      .tag-ops .tag { background: #2c2440; color: #b8a3f5; }
-      .card footer { display: flex; justify-content: space-between;
-        align-items: center; }
-      .owner { color: #8b96a5; font-size: .75rem; }
-      .nav button { background: #222c38; color: #8b96a5; border: 0;
-        border-radius: 6px; padding: .15rem .5rem; margin-left: .25rem;
-        cursor: pointer; font-size: .7rem; }
-      .nav button:hover { background: #f0b429; color: #10151c; }
-
-      .rail { display: flex; flex-direction: column; gap: 1.2rem; }
-      .panel { background: #151c25; border: 1px solid #222c38;
-        border-radius: 12px; padding: .9rem 1rem; }
-      .panel h2 { margin: 0 0 .6rem; font-size: .72rem; letter-spacing: .14em;
-        text-transform: uppercase; color: #8b96a5; }
-      .panel dl { margin: 0; }
-      .stat { display: flex; justify-content: space-between;
-        padding: .18rem 0; }
-      .stat dt { color: #8b96a5; font-size: .82rem; }
-      .stat dd { margin: 0; font-variant-numeric: tabular-nums;
-        font-weight: 600; }
-      .panel ol { list-style: none; margin: 0; padding: 0; }
-      .panel li { padding: .3rem 0; font-size: .78rem; line-height: 1.4;
-        border-top: 1px solid #1d2632; animation: rise .3s ease-out both;
-        animation-delay: calc(var(--i, 0) * 40ms); }
-      .panel li:first-child { border-top: 0; }
-      .panel time { display: block; color: #55606e; font-size: .68rem;
-        font-variant-numeric: tabular-nums; }
-      .quiet { color: #55606e; font-style: italic; font-size: .8rem; }
-
-      #toast { position: fixed; bottom: 1.1rem; right: 1.1rem;
-        background: #f0b429; color: #10151c; border-radius: 10px;
-        padding: .6rem 1rem; font: 600 .82rem system-ui; opacity: 0;
-        transform: translateY(10px); pointer-events: none;
-        transition: opacity .25s, transform .25s; max-width: 20rem; }
-      #toast.show { opacity: 1; transform: none; }
-    </style>`,
-    body: html`<header class="top">
-      <h1>Flightdeck</h1>
-      <p>every region is a fragment — a rAPId demo</p>
-      <span id="live" class="live"><i></i> LIVE</span>
-    </header>
-    <main>${data.body}</main>
+/**
+ * The CORE — the document: head (fingerprinted stylesheet via
+ * `view.asset()`), toast slot, and the three scripts (swap runtime,
+ * live bridge, history module). Chrome is tier 2 below; the print view
+ * (`layout: false`) renders straight in here.
+ */
+export const BoardCore = template<{ body: Html; title?: string }>(
+  (data, view) =>
+    htmlDocument({
+      title: data.title ?? 'Flightdeck — a rAPId demo',
+      head: html`<link rel="stylesheet" href="${
+        view.asset('/public/board.css')
+      }">`,
+      body: html`${data.body}
     <div id="toast"></div>
     <script src="${view.runtimePath}"></script>
     <script src="/__rapid/live.js"></script>
+    <script src="/__rapid/history.js"></script>
     <script src="/public/app.js"></script>`,
-  }), 'Shell');
+    }),
+  'BoardCore',
+);
+
+/**
+ * The board CHROME — the module's tier-2 layout (`@Module({ layout })`):
+ * masthead + LIVE badge + the print link. The print route opts out of
+ * this tier entirely (`layout: false`).
+ */
+export const Chrome = template<{ body: Html; title?: string }>((data) =>
+  html`<header class="top">
+      <h1>Flightdeck</h1>
+      <p>every region is a fragment — a rAPId demo</p>
+      <span id="live" class="live"><i></i> LIVE</span>
+      <a class="plain" href="/board/print">print</a>
+    </header>
+    <main>${data.body}</main>`, 'Chrome');
+
+/**
+ * The print view — lanes only, no chrome, no buttons: served by
+ * /board/print with `layout: false`, so it renders straight into the
+ * core (document + css, none of the board chrome).
+ */
+export const PrintView = template<BoardData>((data) =>
+  html`<div class="printboard">
+    <h1>Flightdeck${data.owner ? html` — ${data.owner}` : ''}</h1>
+    <div class="lanes">${
+    LANES.map((lane) =>
+      html`<section><h2>${LANE_LABELS[lane]}</h2><ul>${
+        data.lanes[lane].map((task) =>
+          html`<li>${task.title} · ${task.owner}</li>`
+        )
+      }</ul></section>`
+    )
+  }</div>
+  </div>`, 'PrintView');

@@ -41,7 +41,7 @@ import {
 import { validated } from '../../../mod.ts';
 import { BlogModule } from './BlogModule.ts';
 import {
-  BlogShell,
+  PublicChrome,
   CommentsView,
   PostDetailView,
   PostListView,
@@ -77,9 +77,10 @@ const POST_EVENTS = {
 // `namespace` turns the bare @JOB('digest') below into the flat
 // "posts.digest" job name; `prefix: '/posts'` joins onto HTTP paths only.
 // `version: 'v1'` is the module DEFAULT — `find()` inherits it below.
-// `layout` is the module-wide page shell — every templated route in the
-// class inherits it (route's own `layout` would win; app.ui() is below).
-@Module({ prefix: '/posts', version: 'v1', layout: BlogShell })
+// `layout` is the module-wide TIER-2 chrome — every templated route in
+// the class inherits it, nesting inside the app core (a route's own
+// `layout` — or `layout: false` — would win).
+@Module({ prefix: '/posts', version: 'v1', layout: PublicChrome })
 export class Posts extends BlogModule<typeof POST_EVENTS> {
   readonly name = 'Posts';
   readonly namespace = 'posts';
@@ -122,10 +123,18 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
   @GET('/ui', {
     bind: [query(), paging()],
     description: 'The blog page — same handler, HTML representation.',
+    // `title`/`meta` are the CORE's per-page edits — the <title> for the
+    // tab, description/og for a shared link. Static here; a per-content
+    // page would compute them from the reply (`title: (data) => …`) —
+    // the dashboard example does.
     template: {
       render: PostListView,
       prefer: 'html',
       title: 'The Library — a rAPId demo',
+      meta: {
+        description: 'Money, explained slowly — a rAPId demo library.',
+        'og:title': 'The Library',
+      },
     },
   })
   async list(

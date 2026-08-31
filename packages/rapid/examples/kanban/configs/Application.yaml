@@ -7,5 +7,7 @@ server:
     /public:
       root: ../public
       maxAge: 3600
+      fingerprint: true # view.asset() lazily hashes; ?v= serves immutable
 ui:
   live: true
+  history: true # /__rapid/history.js — push-state for the data-push chips

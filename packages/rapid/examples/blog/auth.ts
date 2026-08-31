@@ -28,6 +28,16 @@ export type BlogAuth = { id: string; username: string; roles: string[] };
 const mint = (username: string, id: string): string => `${username}.${id}`;
 
 /**
+ * The demo token for a KNOWN username (`undefined` otherwise) — what the
+ * /login/as/:username: browser convenience sets as its cookie; the same
+ * value POST /login returns for that user's credentials.
+ */
+export function demoTokenFor(username: string): string | undefined {
+  const user = USERS[username];
+  return user === undefined ? undefined : mint(username, user.id);
+}
+
+/**
  * A `PactLoginLike`-shaped service for `login({ pact: authService })`:
  * check the password, hand back `{ principal, token }` or `null`.
  */

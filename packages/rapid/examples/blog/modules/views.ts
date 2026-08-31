@@ -21,7 +21,7 @@ import {
   template,
   withQuery,
 } from '../../../ui/mod.ts';
-import type { RapidContextPaging } from '../../../types/mod.ts';
+import type { RapidContextPaging, RapidView } from '../../../types/mod.ts';
 import type { Comment, Post } from '../types.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -148,121 +148,51 @@ export const PostListView = template<{
 }, 'PostListView');
 
 /**
- * The page shell — set module-wide via `@Module({ layout })`. The dark
- * library hero (with the LIVE badge), the toast slot, and the three
- * scripts (swap runtime via `view.runtimePath`, the live bridge, and
- * the app's own blog.js).
+ * The nav data BOTH chromes render — computed server-side by the app's
+ * `ui.view` projection from `ctx.auth` (permission-based navigation:
+ * the backend sends different menu items per caller; templates never
+ * decide access, they just render what crossed the projection).
  */
-export const BlogShell = template<{ body: Html; title?: string }>((
-  data,
-  view,
-) =>
+export type BlogView = {
+  user?: { username: string };
+  menu: readonly { label: string; href: string }[];
+};
+
+/** One menu bar, chrome-agnostic — items are whatever the projection sent. */
+const menuBar = (view: RapidView<BlogView>): Html =>
+  html`<nav class="menu">${
+    view.menu.map((item) => html`<a href="${item.href}">${item.label}</a>`)
+  }</nav>`;
+
+/**
+ * The CORE — the document tier: head (fingerprinted stylesheet via
+ * `view.asset()`, per-page `meta`), the toast slot, and the three
+ * scripts. Chrome lives in the tier-2 layouts below; every page —
+ * public, admin, and the 404 — renders inside this one document.
+ */
+export const BlogCore = template<
+  { body: Html; title?: string; meta?: Readonly<Record<string, string>> }
+>((data, view) =>
   htmlDocument({
     title: data.title ?? 'The Library — a rAPId demo',
-    head: html`<style>
-      * { box-sizing: border-box; }
-      body { margin: 0; background: #f4f1e9; color: #221f1a;
-             font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif; }
-      main { max-width: 66rem; margin: 0 auto; padding: 0 1.5rem 3rem; }
-      @keyframes rise { from { opacity: 0; transform: translateY(10px); }
-                        to { opacity: 1; transform: none; } }
-      @keyframes ping { 0% { box-shadow: 0 0 0 0 rgb(134 197 111 / .5); }
-                        100% { box-shadow: 0 0 0 8px rgb(134 197 111 / 0); } }
-      @keyframes glow { from { background: #fdf0d5; } to { background: #fff; } }
+    meta: data.meta,
+    head: html`<link rel="stylesheet" href="${view.asset('/public/blog.css')}">`,
+    body: html`${data.body}
+    <div id="toast"></div>
+    <script src="${view.runtimePath}"></script>
+    <script src="/__rapid/live.js"></script>
+    <script src="/public/blog.js"></script>`,
+  }), 'BlogCore');
 
-      header.hero { background: linear-gradient(160deg, #17301f, #2a5138);
-        color: #f4f1e9; text-align: center; padding: 3.2rem 1.5rem 2.6rem;
-        margin-bottom: 2rem; animation: rise .5s ease-out both; }
-      .hero .kicker { font: 600 .72rem system-ui, sans-serif;
-        letter-spacing: .35em; text-transform: uppercase; color: #c8a24d; }
-      .hero h1 { margin: .5rem auto .4rem; font-size: 2.9rem; max-width: 34rem;
-        line-height: 1.15; font-weight: 700; }
-      .hero h1 em { color: #d8b76a; }
-      .hero p { margin: 0; color: #cfd8c8; font: .95rem system-ui, sans-serif; }
-      .live { display: inline-flex; align-items: center; gap: .4rem;
-        font: 600 .68rem system-ui, sans-serif; letter-spacing: .12em;
-        color: #9fb3a0; border: 1px solid #4a6b52; border-radius: 999px;
-        padding: .25rem .7rem; vertical-align: middle; margin-left: .6rem; }
-      .live i { width: .5rem; height: .5rem; border-radius: 50%;
-        background: #74856f; }
-      .live.on { color: #a9e08b; border-color: #6f9a5d; }
-      .live.on i { background: #86c56f; animation: ping 1.6s ease-out infinite; }
-
-      .chips { display: flex; align-items: center; gap: .5rem;
-        flex-wrap: wrap; margin-bottom: 1.4rem; }
-      .chip { border: 1px solid #d9d2c0; background: #fff; color: #221f1a;
-        border-radius: 999px; padding: .4rem 1rem; cursor: pointer;
-        font: .85rem system-ui, sans-serif; text-transform: capitalize;
-        transition: border-color .2s, background .2s; }
-      .chip:hover { border-color: #2a5138; }
-      .chip-on { background: #17301f; color: #f4f1e9; border-color: #17301f; }
-      .tally { margin-left: auto; color: #98917f;
-        font: .8rem system-ui, sans-serif; }
-
-      .shelves { display: grid; gap: 2rem;
-        grid-template-columns: minmax(19rem, 5fr) 7fr; }
-      @media (max-width: 46rem) { .shelves { grid-template-columns: 1fr; } }
-
-      ul.guides { list-style: none; padding: 0; margin: 0; }
-      .guide { background: #fff; border: 1px solid #e6e0d1;
-        border-radius: 14px; padding: 1.1rem 1.3rem; margin-bottom: 1rem;
-        animation: rise .45s cubic-bezier(.2, .7, .3, 1) both;
-        animation-delay: calc(var(--i, 0) * 60ms); }
-      .eyebrow { display: block; font: 700 .62rem system-ui, sans-serif;
-        letter-spacing: .22em; text-transform: uppercase; color: #8a6d2f;
-        margin-bottom: .35rem; }
-      .guide button { background: none; border: 0; padding: 0;
-        font: 700 1.12rem inherit; font-family: inherit; color: #221f1a;
-        cursor: pointer; text-align: left; line-height: 1.3;
-        background-image: linear-gradient(#8a3b24, #8a3b24);
-        background-size: 0% 2px; background-position: 0 100%;
-        background-repeat: no-repeat; transition: background-size .25s; }
-      .guide button:hover { background-size: 100% 2px; color: #8a3b24; }
-      .blurb { margin: .45rem 0 .5rem; color: #55503f; font-size: .92rem;
-        line-height: 1.5; }
-      .meta { color: #98917f; font: .78rem system-ui, sans-serif; }
-      .level { border-radius: 999px; padding: .1rem .55rem;
-        text-transform: capitalize; font-weight: 600; }
-      .level-beginner { background: #e7f4e4; color: #2f6b3a; }
-      .level-intermediate { background: #fdf0d5; color: #8a6014; }
-      .level-advanced { background: #f6e3dc; color: #8a3b24; }
-
-      .placeholder { color: #b3ac9a; font-style: italic;
-        border: 1px dashed #d9d2c0; border-radius: 14px;
-        padding: 3rem 1.5rem; text-align: center; }
-      article.post { background: #fff; border: 1px solid #e6e0d1;
-        border-radius: 14px; padding: 1.6rem 1.9rem;
-        box-shadow: 0 10px 28px rgb(23 48 31 / .08);
-        animation: rise .45s cubic-bezier(.2, .7, .3, 1) both; }
-      article.post h2 { margin: .2rem 0 .4rem; font-size: 1.75rem;
-        line-height: 1.2; }
-      article.post .body { line-height: 1.7; font-size: 1.05rem; }
-
-      #comments { margin-top: 1.5rem; border-top: 1px solid #e6e0d1;
-        padding-top: .8rem; }
-      #comments h3 { margin: 0 0 .5rem; font-size: 1rem; }
-      #comments .count { background: #17301f; color: #f4f1e9;
-        border-radius: 999px; font: 600 .7rem system-ui, sans-serif;
-        padding: .1rem .5rem; vertical-align: 2px; }
-      ul.comments { list-style: none; padding: 0; margin: 0; }
-      .comment { padding: .6rem .8rem; border-radius: 8px;
-        animation: rise .4s ease-out both;
-        animation-delay: calc(var(--i, 0) * 50ms); }
-      .comment:first-child { animation: rise .4s ease-out both,
-        glow 2.5s ease-out both; }
-      .comment b { font-family: system-ui, sans-serif; font-size: .85rem; }
-      .comment time { color: #b3ac9a; font: .72rem system-ui, sans-serif;
-        margin-left: .5rem; }
-      .comment p { margin: .2rem 0 0; }
-
-      #toast { position: fixed; bottom: 1.2rem; right: 1.2rem;
-        background: #17301f; color: #f4f1e9; border-radius: 10px;
-        padding: .7rem 1.1rem; font: .85rem system-ui, sans-serif;
-        opacity: 0; transform: translateY(12px); pointer-events: none;
-        transition: opacity .3s, transform .3s; max-width: 22rem; }
-      #toast.show { opacity: 1; transform: none; }
-    </style>`,
-    body: html`<header class="hero">
+/**
+ * PUBLIC chrome — the Posts module's tier-2 layout (`@Module({ layout })`):
+ * the library hero + the projection-fed menu. An anonymous visitor sees
+ * the public items; a signed-in author's menu gains Admin — same
+ * template, different data.
+ */
+export const PublicChrome = template<{ body: Html; title?: string }, BlogView>(
+  (data, view) =>
+    html`<header class="hero">
       <span class="kicker">The library</span>
       <h1>Money, explained slowly. <em>Wander freely.</em></h1>
       <p>
@@ -270,10 +200,49 @@ export const BlogShell = template<{ body: Html; title?: string }>((
         stream over the websocket · education only
         <span id="live" class="live"><i></i> LIVE</span>
       </p>
+      ${menuBar(view)}
     </header>
-    <main>${data.body}</main>
-    <div id="toast"></div>
-    <script src="${view.runtimePath}"></script>
-    <script src="/__rapid/live.js"></script>
-    <script src="/public/blog.js"></script>`,
-  }), 'BlogShell');
+    <main>${data.body}</main>`,
+  'PublicChrome',
+);
+
+/**
+ * ADMIN chrome — a DIFFERENT page shape under the same core, attached
+ * route-level (`layout: AdminChrome` on /admin/ui): a compact bar naming
+ * the caller (`view.user` — the projection again) instead of the hero.
+ */
+export const AdminChrome = template<{ body: Html; title?: string }, BlogView>(
+  (data, view) =>
+    html`<header class="adminbar">
+      <b>Admin</b>
+      <span class="who">${view.user?.username ?? 'anonymous'}</span>
+      ${menuBar(view)}
+    </header>
+    <main>${data.body}</main>`,
+  'AdminChrome',
+);
+
+/** The admin summary page — same data the /admin/summary API serves. */
+export const AdminSummaryView = template<
+  { posts: number; you: { username?: string; roles?: string[] } }
+>((data) =>
+  html`<div class="stat-cards">
+    <div class="card"><div class="n">${data.posts}</div><p>guides on the shelf</p></div>
+    <div class="card"><div class="n">${data.you.roles?.length ?? 0}</div>
+      <p>roles on ${data.you.username ?? 'you'} (${
+    data.you.roles?.join(', ') ?? '—'
+  })</p></div>
+  </div>`, 'AdminSummaryView');
+
+/**
+ * The 404 page — `ui.errorTemplates[404]`. Renders inside the CORE
+ * (module tier skipped), so it keeps the site's document and css.
+ */
+export const NotFoundView = template<Record<string, unknown>>((e) =>
+  html`<div class="notfound">
+    <h2>That shelf is empty.</h2>
+    <p>${String(e.message ?? 'Not found')} · request ${
+    String(e.requestId ?? '')
+  }</p>
+    <p><a href="/posts/ui">Back to the library</a></p>
+  </div>`, 'NotFoundView');

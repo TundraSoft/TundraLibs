@@ -20,5 +20,6 @@ server:
     /public:
       root: ../public
       maxAge: 3600
+      fingerprint: true # view.asset() lazily hashes; ?v= serves immutable
 ui:
   live: true

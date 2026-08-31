@@ -300,9 +300,15 @@ const Page = template<
     <div class="panel">${LogForm.render(data.log, view)}</div>
   </div>`, 'Page');
 
-const Shell = template<{ body: Html; title?: string }>((data, view) =>
+// The CORE (single-file app: no tier-2 layout — pages render straight
+// into the document). `title`/`meta` arrive from the route's template
+// options, computed from the reply data below.
+const Shell = template<
+  { body: Html; title?: string; meta?: Readonly<Record<string, string>> }
+>((data, view) =>
   htmlDocument({
     title: data.title ?? 'Northlight — a rAPId sales dashboard',
+    meta: data.meta,
     head: html`<style>
       * { box-sizing: border-box; }
       body { margin: 0; background: #f2f4f7; color: #182230;
@@ -420,7 +426,7 @@ const APP_JS = `(() => {
 const app = await Application.initialize({
   name: 'sales-dashboard',
   server: { port: 8002 },
-  ui: { layout: Shell }, // one bag: data + code halves (programmatic app)
+  ui: { core: Shell }, // one bag: data + code halves (programmatic app)
 });
 
 app.get('/app.js', () => ({
@@ -434,8 +440,19 @@ const daysOf = (ctx: { url: string }): number => {
   return raw === '7' || raw === '90' ? Number(raw) : 30;
 };
 
-// The page IS a route whose template is the page.
-app.get('/', { template: { render: Page, prefer: 'html' } }, (ctx) => ({
+// The page IS a route whose template is the page. `title`/`meta` are
+// computed FROM the reply — the core-tier edits, data-driven (the blog
+// example shows the static form).
+app.get('/', {
+  template: {
+    render: Page,
+    prefer: 'html',
+    title: (d) => `Northlight — last ${(d as { dash: DashData }).dash.days}d`,
+    meta: (d) => ({
+      description: `Sales, last ${(d as { dash: DashData }).dash.days} days.`,
+    }),
+  },
+}, (ctx) => ({
   content: {
     dash: dashboard(daysOf(ctx)),
     orders: { rows: orders.slice(-8).reverse() },

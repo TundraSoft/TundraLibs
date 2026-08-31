@@ -59,9 +59,16 @@ import {
 } from '../../middlewares/mod.ts';
 import { registerKanbanServices, TaskStore } from './store.ts';
 import * as kanban from './modules/mod.ts';
+import { BoardCore } from './modules/views.ts';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await Application.initialize(configDir, {});
+// DATA half (live/history) in configs/Application.yaml; the CODE half —
+// the core document — here. The Board module brings its own tier-2
+// chrome (`@Module({ layout: Chrome })`).
+const app = await Application.initialize({
+  path: configDir,
+  ui: { core: BoardCore },
+}, {});
 
 app.use(
   requestLogger(),
@@ -71,7 +78,7 @@ app.use(
 // Static serving is CONFIG now — configs/Application.yaml `server.static`.
 
 // The swap runtime + the live bridge, and the one broadcast lane.
-// ui: { live: true } lives in configs/Application.yaml now — per replica.
+// ui data half lives in configs/Application.yaml — per replica.
 app.channel('board');
 
 app.get('/', (ctx) => ctx.redirect('/board/ui'));

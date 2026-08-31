@@ -102,7 +102,7 @@
  * @module
  */
 
-import { Application } from '../../mod.ts';
+import { Application, RapidError } from '../../mod.ts';
 import {
   authenticate,
   authorize,
@@ -119,16 +119,56 @@ import {
 import { health, login, metrics, openapi } from '../../endpoints/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
-import { authService, type BlogAuth, verifyToken } from './auth.ts';
+import { authService, type BlogAuth, demoTokenFor, verifyToken } from './auth.ts';
 import { registerPactAuth } from './pactAuth.ts';
 import { BlogSchema } from './models/mod.ts';
 import * as blog from './modules/mod.ts';
+import {
+  AdminChrome,
+  AdminSummaryView,
+  BlogCore,
+  type BlogView,
+  NotFoundView,
+} from './modules/views.ts';
 
 // ── app + database ────────────────────────────────────────────────────
 const database = await openBlogDatabase();
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await Application.initialize(configDir, {});
+// The ui DATA half (live: true) is YAML — configs/Application.yaml.
+// The CODE half rides the factory: the core document, the 404 page, and
+// the `view` projection — the ONE channel through which identity
+// reaches templates. It computes the MENU server-side from ctx.auth
+// (permission-based navigation: an author's menu gains Admin; nobody
+// else's does — templates just render what crossed).
+const app = await Application.initialize({
+  path: configDir,
+  ui: {
+    core: BlogCore,
+    // The registry fires when the representation resolves to HTML: the
+    // 401 lands on any signed-out visit to /admin/ui (prefer html), the
+    // 404 on swap requests for a missing post (curl it: -H 'rapid-swap:
+    // 1' /posts/nope). API-first plain GETs keep the JSON envelope.
+    errorTemplates: { 404: NotFoundView },
+    view: (ctx): BlogView => {
+      const auth = ctx.auth as BlogAuth | undefined;
+      const menu: { label: string; href: string }[] = [
+        { label: 'The library', href: '/posts/ui' },
+        { label: 'OpenAPI', href: '/openapi.json' },
+      ];
+      if (auth?.roles.includes('author')) {
+        menu.push({ label: 'Admin', href: '/admin/ui' });
+        menu.push({ label: 'Sign out', href: '/logout' });
+      } else {
+        menu.push({ label: 'Sign in (demo)', href: '/login/as/ada' });
+      }
+      return {
+        menu,
+        ...(auth !== undefined ? { user: { username: auth.username } } : {}),
+      };
+    },
+  },
+}, {});
 
 app.use(
   requestLogger(),
@@ -136,6 +176,18 @@ app.use(
   secureHeaders(),
   cors(),
   requestId({ socketEcho: true }),
+  // IDENTIFICATION only, app-wide (gating stays per-route via
+  // authorize): bearer header first, else the demo `reader` cookie —
+  // the cookie is what lets a BROWSER be signed in, so the projection
+  // above can vary the nav per caller on ordinary page loads.
+  authenticate({
+    extract: (ctx) =>
+      ctx.type === 'HTTP'
+        ? (ctx.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
+          ctx.cookies['reader'] ?? null)
+        : null,
+    verify: verifyToken,
+  }),
 );
 // Static serving is CONFIG now — see configs/Application.yaml's
 // `server.static` (`/public` → ../public): served framework-side on
@@ -185,6 +237,52 @@ app.get(
 // authenticate() fills ctx.auth from the bearer token, authorize() gates.
 // A real app swaps auth.ts for `@tundralibs/pact` — see login({ pact }).
 app.post('/login', login({ pact: authService }));
+
+// DEMO-ONLY browser sign-in: mint the same token /login would and set it
+// as the `reader` cookie, so the permission-based nav is clickable
+// (visit /login/as/ada → the menu gains Admin). A real app does this in
+// its login handler with a SIGNED cookie or a session.
+app.get('/login/as/:username:', (ctx) => {
+  const token = demoTokenFor(ctx.params.username);
+  if (token === undefined) throw new RapidError('RAPID_NOT_FOUND');
+  return {
+    content: '',
+    cookies: [{ name: 'reader', value: token, options: { path: '/' } }],
+    redirect: '/posts/ui',
+  };
+});
+app.get('/logout', (ctx) => {
+  ctx.deleteCookie('reader', { path: '/' });
+  return { content: '', redirect: '/posts/ui' };
+});
+
+// The ADMIN PAGE — the /admin/summary data as a page. Route-level
+// `layout: AdminChrome` swaps the tier-2 chrome (different nav, same
+// core document); authorize() gates it exactly like the API twin below.
+app.get(
+  '/admin/ui',
+  {
+    template: {
+      render: AdminSummaryView,
+      layout: AdminChrome,
+      prefer: 'html',
+      title: 'Admin — The Library',
+    },
+  },
+  authorize((auth) =>
+    (auth as BlogAuth | undefined)?.roles.includes('author') === true
+  ),
+  async (ctx) => {
+    const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
+    const you = ctx.auth as BlogAuth;
+    return {
+      content: {
+        posts: count,
+        you: { username: you.username, roles: you.roles },
+      },
+    };
+  },
+);
 app.get(
   '/admin/summary',
   authenticate({ verify: verifyToken }),

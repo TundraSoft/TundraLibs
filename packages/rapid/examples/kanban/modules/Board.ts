@@ -9,6 +9,7 @@
  * @module
  */
 
+import { Guardian } from '@tundralibs/guardian';
 import { inject } from '@tundralibs/doctor';
 import {
   GET,
@@ -20,6 +21,7 @@ import {
   query,
 } from '../../../decorators/mod.ts';
 import { RapidError } from '../../../errors/mod.ts';
+import { formState } from '../../../ui/mod.ts';
 import { RapidModule } from '../../../modules/mod.ts';
 import type {
   RapidContextQuery,
@@ -32,7 +34,8 @@ import {
   AppView,
   BoardView,
   ComposerView,
-  Shell,
+  Chrome,
+  PrintView,
   StatsView,
 } from './views.ts';
 
@@ -44,7 +47,19 @@ const BOT_CARDS = [
   'Refresh the on-call runbook',
 ];
 
-@Module({ prefix: '/board', layout: Shell })
+/** What a filed card must look like — validates AND documents the body. */
+const TaskBody = Guardian.object({
+  title: Guardian.string().trim().minLength(1, 'A card needs a title.'),
+  owner: Guardian.string().trim().optional(),
+  tag: Guardian.string().test(
+    (t) => ['feature', 'bug', 'ops'].includes(t),
+    'tag must be feature, bug or ops',
+  ).optional(),
+});
+
+// `layout` is the module's TIER-2 chrome, nesting inside the app core
+// (main.ts's `ui: { core: BoardCore }`); /print below opts out of it.
+@Module({ prefix: '/board', layout: Chrome })
 export class Board extends RapidModule {
   readonly name = 'Board';
   readonly namespace = 'board';
@@ -96,6 +111,23 @@ export class Board extends RapidModule {
     };
   }
 
+  // The PRINT view: `layout: false` opts this one route out of the
+  // module chrome — straight into the core (document + css, no
+  // masthead, no composer). Same board data, same ?owner= filter.
+  @GET('/print', {
+    bind: [query()],
+    description: 'A print-friendly board snapshot.',
+    template: {
+      render: PrintView,
+      prefer: 'html',
+      layout: false,
+      title: 'Flightdeck — print',
+    },
+  })
+  print(query: RapidContextQuery): RapidContextResponse {
+    return { content: this.__board(query) };
+  }
+
   @GET('/stats', {
     description: 'Lane tallies (the stats rail).',
     template: StatsView,
@@ -117,26 +149,26 @@ export class Board extends RapidModule {
   // non-2xx, so recoverable input problems are state, not failures);
   // success returns a clean form. app.js then chains the board + stats
   // refreshes off the form's own rapid:swapped.
+  // The composer POST answers with the COMPOSER fragment: `formState()`
+  // runs the schema and, on failure, hands back the union's error arm
+  // ready to render (message + per-field problems + the values kept, as
+  // a 200 — the runtime never swaps a non-2xx, so recoverable input
+  // problems are state, not failures). Success returns a clean form;
+  // app.js chains the board + stats refreshes off rapid:swapped.
   @POST('/tasks', {
     bind: [payload()],
     description: 'File a card. Fields: title, owner, tag.',
     template: ComposerView,
   })
-  addTask(body: unknown): RapidContextResponse {
-    const { title = '', owner = '', tag = '' } =
-      (body ?? {}) as Record<string, string>;
-    if (title.trim() === '') {
-      return {
-        content: {
-          state: 'error',
-          message: 'A card needs a title.',
-          values: { title, owner, tag },
-        },
-      };
-    }
-    const safeTag = (['bug', 'feature', 'ops'] as const).find((t) => t === tag) ??
-      'feature';
-    this._store.add(title.trim(), owner.trim() || 'Unassigned', safeTag);
+  async addTask(body: unknown): Promise<RapidContextResponse> {
+    const form = await formState(TaskBody, body);
+    if (!form.ok) return { content: form.error };
+    const { title, owner, tag } = form.data;
+    this._store.add(
+      title,
+      owner || 'Unassigned',
+      (tag ?? 'feature') as 'feature' | 'bug' | 'ops', // test() proved it
+    );
     return { content: { state: 'clean' } };
   }
 

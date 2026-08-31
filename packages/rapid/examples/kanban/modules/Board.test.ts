@@ -59,18 +59,26 @@ describe('kanban.Board (unit — fresh store via the testing harness)', () => {
 
   it('addTask() answers the composer union: error keeps values, success lands in todo', async () => {
       await using h = await boot();
-      const rejected = h.modules.Board.addTask({ title: '  ', owner: 'Ada' })
-        .content as ComposerData;
+      // formState()'s error arm IS the union's error state — per-field
+      // problems under `fields`, the submitted primitives under `values`.
+      const rejected = (await h.modules.Board.addTask({
+        title: '  ',
+        owner: 'Ada',
+      })).content as ComposerData;
       asserts.assertEquals(rejected.state, 'error');
       asserts.assertEquals(
-        (rejected as { values: { owner: string } }).values.owner,
+        (rejected as { values: Record<string, string> }).values.owner,
         'Ada',
       );
-      const accepted = h.modules.Board.addTask({
+      asserts.assert(
+        'title' in (rejected as { fields: Record<string, string> }).fields,
+        'the failing field is named',
+      );
+      const accepted = (await h.modules.Board.addTask({
         title: 'Ship it',
         owner: 'Ada',
         tag: 'bug',
-      }).content as ComposerData;
+      })).content as ComposerData;
       asserts.assertEquals(accepted.state, 'clean');
       const board = h.modules.Board.list({} as RapidContextQuery)
         .content as BoardData;
