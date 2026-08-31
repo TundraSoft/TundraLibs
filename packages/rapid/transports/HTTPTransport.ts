@@ -12,7 +12,12 @@ import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
 import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
-import { compose, resolveVersion, socketOutcome } from '../utils/mod.ts';
+import {
+  compose,
+  resolveVersion,
+  serveStaticFile,
+  socketOutcome,
+} from '../utils/mod.ts';
 import { isStreamBody } from '../utils/streams.ts';
 import type {
   RapidChannelOptions,
@@ -514,9 +519,19 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         }
         return apply(returned as RapidContextResponse | void);
       }
-      : () => {
+      : async () => {
         // A catch-all middleware still wins (preserve the old `??=`).
         if (ctx.response !== null) return;
+        // Config-driven static (`server.static`) serves HERE — on route
+        // miss, before the 404 — so routes always win a collision, every
+        // outer middleware has already run, and routed requests never
+        // pay a stat(). Entries try in declaration order.
+        const mounts = this._app.staticMounts;
+        if (mounts.length > 0 && (method === 'GET' || method === 'HEAD')) {
+          for (const mount of mounts) {
+            if (await serveStaticFile(ctx, mount)) return;
+          }
+        }
         // 405 / generic OPTIONS: the PATH exists under other methods. Gated
         // by server.methodNotAllowed (off → a wrong method is a plain 404,
         // hiding the path's existence). One radrouter walk, miss-path only.

@@ -118,12 +118,16 @@ export function buildView<S extends RapidContextState>(
   // template reach.
   const extra = ctx.app.uiOptions?.view?.(ctx as never);
   const assets = ctx.app.uiOptions?.assets;
+  const app = ctx.app;
   return Object.freeze({
     requestId: ctx.requestId,
     runtimePath: ctx.app.uiOptions?.runtimePath ?? '/__rapid/ui.js',
-    // Unmapped paths pass through unchanged, so templates never branch.
+    // Resolution: the explicit manifest map (bundler/Workers path) wins,
+    // then the LAZY content hash from a fingerprint-enabled
+    // `server.static` mount, then passthrough — so templates never
+    // branch and an unmapped path is simply itself.
     asset: (p: string): string => {
-      const version = assets?.[p];
+      const version = assets?.[p] ?? app.assetVersion(p);
       return version === undefined ? p : `${p}?v=${version}`;
     },
     path: url.pathname,

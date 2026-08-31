@@ -57,7 +57,7 @@ export function etag(): RapidMiddleware {
     // tag would then vary by transfer encoding.
     if (ctx.responseHeaders.has('content-encoding')) return;
     // A STREAM body cannot be content-hashed without buffering it, which
-    // would defeat streaming — skip. (File streams from serveStatic carry a
+    // would defeat streaming — skip. (File streams from static serving carry a
     // cheap stat-based weak ETag already.)
     if (isStreamBody(res.content)) return;
 

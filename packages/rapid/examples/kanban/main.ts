@@ -56,7 +56,6 @@ import {
   requestId,
   requestLogger,
   secureHeaders,
-  serveStatic,
 } from '../../middlewares/mod.ts';
 import { registerKanbanServices, TaskStore } from './store.ts';
 import * as kanban from './modules/mod.ts';
@@ -68,12 +67,8 @@ app.use(
   requestLogger(),
   secureHeaders(),
   requestId(),
-  serveStatic({
-    root: new URL('./public', import.meta.url).pathname,
-    prefix: '/public',
-    maxAge: 3600,
-  }),
 );
+// Static serving is CONFIG now — configs/Application.yaml `server.static`.
 
 // The swap runtime + the live bridge, and the one broadcast lane.
 app.ui({ live: true });

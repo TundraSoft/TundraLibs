@@ -1,5 +1,11 @@
 import { ambient } from '@tundralibs/ambient';
-import { makeTempDirSync, remove, removeSync } from '@tundralibs/compat/file';
+import {
+  makeTempDirSync,
+  readFileSync,
+  remove,
+  removeSync,
+  statSync,
+} from '@tundralibs/compat/file';
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 import {
   exit,
@@ -35,9 +41,18 @@ import {
   buildState,
   currentContainer,
   hasDecorations,
+  hashBytes,
   Meter,
   mountModule,
+  normalizeStaticConfig,
+  serveStaticFile,
+  type StaticMount,
 } from './utils/mod.ts';
+import {
+  isAbsolute as _pathIsAbsolute,
+  join as joinPath,
+  SEPARATOR as PATH_SEPARATOR,
+} from '@tundralibs/compat/path';
 import {
   initModules,
   type ModuleRuntime,
@@ -174,6 +189,18 @@ export class Application<S extends RapidContextState = RapidContextState>
   private readonly __container: DoctorContainer = Doctor.createContainer();
   /** The optional per-request error hook (see {@link onError}). */
   private __onError?: RapidErrorHandler<S>;
+  /** `server.static` normalized to ordered mounts (empty = none). */
+  private __staticMounts: readonly StaticMount[] = [];
+  /**
+   * `view.asset()`'s lazy version cache: URL path → content hash (djb2),
+   * plus the mtime it was computed at (DEVELOPMENT re-checks it so a
+   * changed file re-hashes; PRODUCTION caches forever).
+   */
+  private readonly __assetVersions = new Map<
+    string,
+    { version: string; mtimeMs: number }
+  >();
+
   /** The app.ui() configuration (see {@link ui}); frozen once set. */
   private __ui?: Readonly<
     & RapidUiConfigOptions
@@ -317,6 +344,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         >,
         defaultState,
         loaded,
+        typeof loadOptions.path === 'string' ? loadOptions.path : undefined,
       );
       if (uiData !== undefined || uiCode !== undefined) {
         app.__configureUi(
@@ -384,6 +412,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     options: EventOptionKeys<RapidApplicationOptions, RapidApplicationEvents>,
     defaultState?: S,
     config?: ConfigType,
+    configDir?: string,
   ) {
     super();
     if (brand !== INIT_BRAND) {
@@ -466,6 +495,13 @@ export class Application<S extends RapidContextState = RapidContextState>
         shutdownTimeout: 25_000, // under Cloud Run's 30s SIGTERM window
       });
       this.__validate();
+      // server.static → ordered mounts, boot-loud. Relative roots anchor
+      // to the config directory (a deployment's YAML means the same
+      // thing from any working directory), else the CWD.
+      const staticConfig = this.option('server')?.static;
+      if (staticConfig !== undefined) {
+        this.__staticMounts = normalizeStaticConfig(staticConfig, configDir);
+      }
     } catch (error) {
       if (ownedUploadPath !== undefined) {
         try {
@@ -1300,6 +1336,59 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   public get uiEnabled(): boolean {
     return this.__ui?.enabled !== false;
+  }
+
+  /** The normalized `server.static` mounts, in declaration order. */
+  public get staticMounts(): readonly StaticMount[] {
+    return this.__staticMounts;
+  }
+
+  /**
+   * The content-hash version for a static asset URL path, or
+   * `undefined` when no fingerprint-enabled `server.static` mount
+   * covers it (or the file is unreadable — Workers included, where
+   * `view.asset()` then passes the path through unchanged). LAZY: the
+   * file is read and hashed on first reference and cached —
+   * DEVELOPMENT re-checks the mtime per call so an edited file gets a
+   * fresh hash on the next render; PRODUCTION caches forever. Sync by
+   * necessity (templates render synchronously).
+   */
+  public assetVersion(urlPath: string): string | undefined {
+    for (const mount of this.__staticMounts) {
+      if (!mount.fingerprint) continue;
+      if (
+        mount.prefix !== '' && urlPath !== mount.prefix &&
+        !urlPath.startsWith(mount.prefix + '/')
+      ) continue;
+      const rel = urlPath.slice(mount.prefix.length);
+      if (rel === '' || rel.endsWith('/')) return undefined;
+      // Lexical guard only — this HASHES (never serves) and a template
+      // author writes these paths, but `..` must still not escape.
+      const filePath = joinPath(mount.root, rel);
+      if (
+        filePath !== mount.root &&
+        !filePath.startsWith(mount.root + PATH_SEPARATOR)
+      ) return undefined;
+      const dev = this.mode === 'DEVELOPMENT';
+      const cached = this.__assetVersions.get(urlPath);
+      try {
+        if (cached !== undefined) {
+          if (!dev) return cached.version;
+          if (statSync(filePath).mtime?.getTime() === cached.mtimeMs) {
+            return cached.version;
+          }
+        }
+        const version = hashBytes(readFileSync(filePath));
+        this.__assetVersions.set(urlPath, {
+          version,
+          mtimeMs: statSync(filePath).mtime?.getTime() ?? 0,
+        });
+        return version;
+      } catch {
+        return undefined; // unreadable / no fs → passthrough
+      }
+    }
+    return undefined;
   }
 
   /**

@@ -16,3 +16,7 @@ server:
     mode: header # one of: header | accept | path
     identifier: x-api-version # header name (accept: vnd.<id>.; path: first segment)
     default: v1 # a plain request (no header) resolves here — find() also has a v2
+  static:
+    /public:
+      root: ../public
+      maxAge: 3600

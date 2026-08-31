@@ -19,6 +19,12 @@ export {
 } from './cookies.ts';
 export { negotiate } from './negotiate.ts';
 export { attachContainer, currentContainer } from './requestContainer.ts';
+export {
+  hashBytes,
+  normalizeStaticConfig,
+  serveStaticFile,
+  type StaticMount,
+} from './staticFiles.ts';
 export { validated } from './validated.ts';
 export {
   hasDecorations,

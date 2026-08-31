@@ -111,7 +111,6 @@ import {
   requestLogger,
   responseTimer,
   secureHeaders,
-  serveStatic,
 } from '../../middlewares/mod.ts';
 import {
   authenticate as pactAuthenticate,
@@ -137,15 +136,10 @@ app.use(
   secureHeaders(),
   cors(),
   requestId({ socketEcho: true }),
-  // Serve examples/public/ (a landing page + stylesheet) at
-  // /public/* — no route/handler; content-types come from the file
-  // extensions. A missing file falls through to routing/404.
-  serveStatic({
-    root: new URL('./public', import.meta.url).pathname,
-    prefix: '/public',
-    maxAge: 3600,
-  }),
 );
+// Static serving is CONFIG now — see configs/Application.yaml's
+// `server.static` (`/public` → ../public): served framework-side on
+// route miss, so routes always win and secureHeaders/cors still apply.
 
 // A plain function route alongside the modules: GET / redirects to the
 // blog PAGE (the /posts/ui route the Posts module registers — same

@@ -5,6 +5,7 @@
  * @module
  */
 
+import type { RapidApplicationStaticConfig } from './StaticConfig.ts';
 import type { TLSOptions } from '@tundralibs/compat/common';
 import type { RapidApplicationPagingOptions } from './PagingOptions.ts';
 import type { RapidApplicationQueryOptions } from './QueryOptions.ts';
@@ -37,6 +38,13 @@ export type RapidApplicationServerOptions = {
    * Unix domain socket path — replaces TCP entirely when set.
    */
   unixSocketPath?: string;
+  /**
+   * Config-driven static file serving — URL prefix → directory (see
+   * {@link RapidApplicationStaticConfig}). Served framework-side at a
+   * fixed position (route miss, before the 404); no middleware to
+   * mount.
+   */
+  static?: RapidApplicationStaticConfig;
   /**
    * TLS for the TCP listener (PEM inline or file paths — compat's
    * `TLSOptions`).

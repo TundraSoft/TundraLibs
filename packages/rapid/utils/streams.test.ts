@@ -119,7 +119,7 @@ describe('streaming response model', () => {
     asserts.assertEquals(cleaned, true);
   });
 
-  it('compat readFileStream (consumed by serve/serveStatic) streams a whole file and a byte range', async () => {
+  it('compat readFileStream (consumed by serve/server.static) streams a whole file and a byte range', async () => {
     const dir = await makeTempDir({ prefix: 'rapid-fs-' });
     try {
       await writeTextFile(`${dir}/f.txt`, '0123456789');

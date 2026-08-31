@@ -18,6 +18,8 @@ export type { RapidApplicationOptions } from './application/Options.ts';
 export type { RapidApplicationPagingOptions } from './application/PagingOptions.ts';
 export type { RapidApplicationQueryOptions } from './application/QueryOptions.ts';
 export type { RapidApplicationServerOptions } from './application/ServerOptions.ts';
+export type { RapidApplicationStaticConfig } from './application/StaticConfig.ts';
+export type { RapidApplicationStaticEntry } from './application/StaticEntry.ts';
 export type { RapidApplicationUploadOptions } from './application/UploadOptions.ts';
 export type { RapidChannelOptions } from './ChannelOptions.ts';
 export type { RapidClusterMember } from './cluster/Member.ts';

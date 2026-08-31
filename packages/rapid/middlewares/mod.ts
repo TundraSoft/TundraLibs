@@ -40,7 +40,6 @@ export {
   onlySOCKET,
 } from './scope.ts';
 export { secureHeaders, type SecureHeadersOptions } from './secureHeaders.ts';
-export { serveStatic, type ServeStaticOptions } from './serveStatic.ts';
 export {
   getSession,
   type RapidSession,

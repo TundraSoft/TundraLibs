@@ -105,8 +105,6 @@ export {
   type ResponseTimerOptions,
   secureHeaders,
   type SecureHeadersOptions,
-  serveStatic,
-  type ServeStaticOptions,
   session,
   type SessionData,
   type SessionOptions,

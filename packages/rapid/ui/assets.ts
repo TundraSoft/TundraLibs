@@ -1,14 +1,13 @@
 /**
  * @fileoverview `fingerprintAssets` — build the content-keyed version
- * map `app.ui({ assets })` consumes and `view.asset()` reads: every file
- * under a directory, keyed by its URL path, valued by a djb2 hash of its
- * bytes (the same cheap content-keying the served runtime's ETag uses).
- * Call it once at boot, BEFORE `app.ui()`; pair with
- * `serveStatic({ fingerprint: true })` so the versioned URLs come back
- * `immutable`.
+ * map the `ui.assets` option consumes and `view.asset()` reads — the
+ * MANIFEST path (a bundler build, Workers). Every file under a
+ * directory, keyed by its URL path, valued by a djb2 hash of its bytes.
+ * With `server.static` + `fingerprint: true`, none of this is needed:
+ * `view.asset()` lazily hashes referenced files itself.
  *
- * Filesystem-backed by design — a helper for the server runtimes that
- * also `serveStatic` their assets. On a runtime with no filesystem
+ * Filesystem-backed by design — a boot-time helper for server
+ * runtimes. On a runtime with no filesystem
  * (Workers, browser) the compat file layer rejects with its typed
  * error; an app there has no static directory to fingerprint anyway.
  *
@@ -17,21 +16,13 @@
 
 import { readDir, readFile } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
-
-/** djb2 over bytes — cheap, sync, content-keyed (not cryptographic). */
-const hashBytes = (bytes: Uint8Array): string => {
-  let hash = 5381;
-  for (let i = 0; i < bytes.length; i++) {
-    hash = ((hash << 5) + hash + bytes[i]!) >>> 0;
-  }
-  return hash.toString(16);
-};
+import { hashBytes } from '../utils/staticFiles.ts';
 
 /**
  * Hash every file under `root` (recursively; symlinks are skipped, so a
  * link can neither loop nor escape) into a `URL path → version` map.
  * Keys always use `/` separators and are prefixed with
- * `options.prefix` — mirror the `serveStatic` mount so the keys ARE the
+ * `options.prefix` — mirror the serving prefix so the keys ARE the
  * request paths: `root: './public', prefix: '/static'` maps
  * `./public/app.css` to `'/static/app.css'`.
  *
@@ -42,9 +33,9 @@ const hashBytes = (bytes: Uint8Array): string => {
  * ```ts ignore
  * import { fingerprintAssets } from '@tundralibs/rapid/ui';
  *
+ * // a build step, or a Workers app with a bundled manifest:
  * const assets = await fingerprintAssets('./public');
- * app.ui({ assets });
- * app.use(serveStatic({ root: './public', fingerprint: true }));
+ * const app = await Application.initialize({ name: 'x', ui: { assets } });
  * // a template: html`<link rel="stylesheet" href="${view.asset('/style.css')}">`
  * ```
  */

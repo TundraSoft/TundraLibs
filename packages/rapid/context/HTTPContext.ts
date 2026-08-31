@@ -369,11 +369,11 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    *
    * The body is STREAMED (compat `readFileStream`) — the file is never
    * buffered; `content-length` comes from a stat. Range requests are the
-   * `serveStatic` middleware's job, not this method's — and so are the
+   * `server.static` config's job, not this method's — and so are the
    * TRAVERSAL/SYMLINK GUARDS: `serve` streams whatever path it is
    * handed, so the path must come from trusted handler code, NEVER from
    * request input (`ctx.serve(ctx.params.file)` is a traversal bug —
-   * use `serveStatic` for request-derived paths). A missing or
+   * use `server.static` for request-derived paths). A missing or
    * non-file path is a 404.
    *
    * @throws {RapidError} RAPID_NOT_FOUND when `path` is not an existing

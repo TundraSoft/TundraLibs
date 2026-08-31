@@ -3,3 +3,7 @@ mode: DEVELOPMENT
 server:
   port: 8004
   hostname: localhost
+  static:
+    /public:
+      root: ../public
+      maxAge: 3600
