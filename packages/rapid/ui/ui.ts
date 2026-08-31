@@ -30,7 +30,10 @@
  * `data-csrf-header` on `<body>`; a renamed `app.ui({ swapHeader,
  * redirectHeader })` is followed via `data-swap-header` /
  * `data-redirect-header` likewise). Emits `rapid:swapped` after a
- * successful swap and `rapid:error` (with `{ status, body }`) when the
+ * successful swap — detail `{ status, url, method, swap, title? }`, the
+ * full swap identity (`title` decoded from the server's `rapid-title`
+ * header when present) so listeners and the history module never
+ * re-derive it — and `rapid:error` (with `{ status, body }`) when the
  * response is not swappable HTML; honours `rapid-redirect` to relative /
  * same-origin URLs only.
  *
@@ -202,7 +205,22 @@ export const UI_RUNTIME: string = `(() => {
         const source = sources.get(target);
         if (source) sources.set(swapped, source);
       }
-      emit(swapped, 'rapid:swapped', { status: res.status });
+      // The full swap identity rides the event so listeners (multi-region
+      // chains, the history module) never re-derive it: url, method, the
+      // effective swap mode, and — when the server stamped rapid-title —
+      // the page title this fragment carries.
+      const detail = {
+        status: res.status,
+        url,
+        method: init.method,
+        swap: opts.swap || 'replace',
+      };
+      const title = res.headers.get('rapid-title');
+      if (title) {
+        try { detail.title = decodeURIComponent(title); }
+        catch { detail.title = title; }
+      }
+      emit(swapped, 'rapid:swapped', detail);
       return true;
     } finally {
       // Cleared only NOW: an entry deleted at the headers phase would

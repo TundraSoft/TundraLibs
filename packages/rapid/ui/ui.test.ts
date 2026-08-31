@@ -618,5 +618,18 @@ describe('rapid.ui.app', () => {
     // The two-function public API, frozen — app code swaps without
     // fake clicks.
     asserts.assertStringIncludes(UI_RUNTIME, 'window.rapid = Object.freeze(');
+    // rapid:swapped carries the full swap identity — url, method, the
+    // EFFECTIVE swap mode, and the server-stamped title when present —
+    // so listeners (and the history module) never re-derive it.
+    asserts.assertStringIncludes(UI_RUNTIME, "swap: opts.swap || 'replace'");
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "res.headers.get('rapid-title')",
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, 'decodeURIComponent(title)');
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "emit(swapped, 'rapid:swapped', detail)",
+    );
   });
 });
