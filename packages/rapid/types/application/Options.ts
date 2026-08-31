@@ -9,6 +9,8 @@ import type { SpanExporter, TracerOptions } from '@tundralibs/tracer';
 import type { RapidApplicationExporterConfig } from './ExporterConfig.ts';
 import type { RapidApplicationJobsOptions } from './JobsOptions.ts';
 import type { RapidApplicationServerOptions } from './ServerOptions.ts';
+import type { RapidUiConfigOptions } from '../UiConfigOptions.ts';
+import type { RapidUiTemplateOptions } from '../UiTemplateOptions.ts';
 import type { RapidApplicationUploadOptions } from './UploadOptions.ts';
 
 /** The `Application` constructor options — every field but `name` optional and defaulted. */
@@ -60,6 +62,17 @@ export type RapidApplicationOptions = {
 
   /** Web server + request-cycle configuration. */
   server?: RapidApplicationServerOptions;
+
+  /**
+   * UI configuration. YAML/config files can express only the
+   * serializable DATA half ({@link RapidUiConfigOptions} — `enabled`,
+   * `runtimePath`, `live`, `history`, the contract headers, `prefer`);
+   * the CODE half ({@link RapidUiTemplateOptions} — `core`, `layout`,
+   * `view`, error templates, `assets`) rides here only from
+   * PROGRAMMATIC options objects, or via the factory options of a
+   * config-driven app. Config names code, never imports it.
+   */
+  ui?: RapidUiConfigOptions & RapidUiTemplateOptions;
 
   /** Upload handling configuration. */
   uploads?: RapidApplicationUploadOptions;

@@ -27,7 +27,8 @@ export type RapidRouteOptions = {
   template?: RapidTemplate<unknown> | RapidRouteTemplate;
   /**
    * Page layout for this route — sugar for the object form's `layout`;
-   * the object form wins when both are given.
+   * the object form wins when both are given. `false` opts this route
+   * out of the module tier entirely (straight into the core).
    */
-  layout?: RapidTemplate<{ body: Html; title?: string }>;
+  layout?: RapidTemplate<{ body: Html; title?: string }> | false;
 };

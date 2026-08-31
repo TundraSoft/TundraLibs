@@ -212,7 +212,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * header names. Meaningful on any route; `false` for plain requests.
    */
   public get isSwap(): boolean {
-    return isSwap(this);
+    // A ui.enabled:false replica never swaps — handlers branching side
+    // effects on the representation must see the representer's truth.
+    return this.app.uiEnabled && isSwap(this);
   }
 
   /**

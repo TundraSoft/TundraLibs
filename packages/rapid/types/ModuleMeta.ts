@@ -61,9 +61,12 @@ export type RapidModuleMeta = {
    */
   security?: readonly string[];
   /**
-   * Default page layout for every templated route in the class; a
-   * route's own `layout` (either form) wins, `app.ui({ layout })` is the
-   * fallback below this.
+   * Default MODULE-tier layout for every templated route in the class —
+   * the page shape that nests inside the app `core`; a route's own
+   * `layout` (either form, `false` included) wins, the app-default
+   * `layout` is the fallback below this. `false` opts the whole module
+   * out of the tier (every page straight into the core) even when an
+   * app default exists.
    */
-  layout?: RapidTemplate<{ body: Html; title?: string }>;
+  layout?: RapidTemplate<{ body: Html; title?: string }> | false;
 };

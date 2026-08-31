@@ -462,7 +462,7 @@ describe('rapid.ui.app', () => {
     await app.stop();
   });
 
-  it('DEVELOPMENT + app.ui() with no errorTemplate: HTML requests get the built-in error fragment; PRODUCTION keeps JSON', async () => {
+  it('no errorTemplate: DefaultErrorPage is the terminal fallback in BOTH modes — DEV shows detail, PROD ships the collapsed disclosure as HTML', async () => {
     const dev = await Application.initialize({
       name: 'ui-dev-overlay',
       mode: 'DEVELOPMENT',
@@ -491,7 +491,15 @@ describe('rapid.ui.app', () => {
     const res = await prod.fetch(
       new Request('http://prod/boom', { headers: { 'rapid-swap': '1' } }),
     );
-    asserts.assertEquals(res.headers.get('content-type'), 'application/json');
+    // A UI-configured app never shows a browser the raw JSON envelope —
+    // but the payload arrives PRODUCTION-collapsed, so nothing leaks.
+    asserts.assertEquals(
+      res.headers.get('content-type'),
+      'text/html; charset=UTF-8',
+    );
+    const prodBody = await res.text();
+    asserts.assertStringIncludes(prodBody, 'rapid-error');
+    asserts.assertEquals(prodBody.includes('kaput'), false);
     await dev.stop();
     await prod.stop();
   });

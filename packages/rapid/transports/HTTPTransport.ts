@@ -456,7 +456,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       // A `null` return means "no body" (→ 204) on templated routes
       // too — only a real reply is represented.
       const commit = (): void => {
-        ctx.response = returned !== null && entry?.template !== undefined
+        // A ui.enabled:false replica short-circuits representation
+        // entirely — templated routes serve their content as JSON.
+        ctx.response = returned !== null && entry?.template !== undefined &&
+            this._app.uiEnabled
           ? represent(returned, entry.template, ctx)
           : returned;
       };

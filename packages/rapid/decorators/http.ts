@@ -91,7 +91,10 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
   };
   /**
    * HTML template for this route (see `@tundralibs/rapid/ui`): a bare
-   * `RapidTemplate` or the `{ render, layout?, prefer? }` object form.
+   * `RapidTemplate` or the `{ render, layout?, title?, meta?, prefer? }`
+   * object form — `title` reaches both wrapper tiers (and swap replies
+   * as the `rapid-title` header), `meta` the core's `<head>` only, and
+   * `layout: false` opts out of the module tier.
    * Validated at MOUNT time (`RAPID_CONFIG` on a wrong import), applied
    * on HTTP only — a method also decorated `@SOCKET`/`@JOB` carries it
    * harmlessly there (same rule as the reply envelope's `cookies`/

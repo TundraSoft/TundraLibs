@@ -8,6 +8,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
+import { RapidError } from '../errors/mod.ts';
 import { GET } from '../decorators/mod.ts';
 import { Module } from '../decorators/mod.ts';
 import type { RapidContextResponse, RapidTemplate } from '../types/mod.ts';
@@ -226,5 +227,224 @@ describe('rapid.ui.represent', () => {
     asserts.assertEquals(swap.headers.get('location'), null);
     asserts.assertEquals(await swap.text(), '');
     await app.stop();
+  });
+});
+
+// =============================================================================
+// The three tiers — core (document) ▸ module/route layout (page shape) ▸
+// content — plus meta and the rapid-title swap stamp.
+// =============================================================================
+
+const Core = template<
+  { body: unknown; title?: string; meta?: Record<string, string> }
+>(
+  (d) =>
+    html`<html-doc title="${d.title ?? ''}" meta="${
+      JSON.stringify(d.meta ?? {})
+    }">${d.body}</html-doc>`,
+  'Core',
+);
+const PageShape = template<{ body: unknown; title?: string }>(
+  (d) => html`<shape title="${d.title ?? ''}">${d.body}</shape>`,
+  'PageShape',
+);
+
+describe('rapid.ui.tiers', () => {
+  const makeTiered = async () => {
+    const app = await Application.initialize({
+      name: 'tiers',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { prefer: 'html', core: Core, layout: PageShape },
+    });
+    return app;
+  };
+
+  it('a page renders core(layout(fragment)) with the title handed to BOTH tiers', async () => {
+    const app = await makeTiered();
+    app.get(
+      '/p',
+      { template: { render: UserList, title: 'Users' } },
+      () => ({ content: { items: ['a'] } }),
+    );
+    const out = await (await app.fetch(new Request('http://app/p'))).text();
+    asserts.assertEquals(
+      out,
+      '<html-doc title="Users" meta="{}"><shape title="Users"><ul><li>a</li></ul></shape></html-doc>',
+    );
+    await app.stop();
+  });
+
+  it('layout: false goes straight into the core, even with an app default configured', async () => {
+    const app = await makeTiered();
+    app.get(
+      '/bare',
+      { template: { render: UserList, layout: false } },
+      () => ({ content: { items: ['x'] } }),
+    );
+    const out = await (await app.fetch(new Request('http://app/bare'))).text();
+    asserts.assertEquals(
+      out,
+      '<html-doc title="" meta="{}"><ul><li>x</li></ul></html-doc>',
+    );
+    await app.stop();
+  });
+
+  it('meta (record or fn-of-data) reaches the CORE only', async () => {
+    const app = await makeTiered();
+    app.get('/m', {
+      template: {
+        render: UserList,
+        title: (d) => `n=${(d as { items: string[] }).items.length}`,
+        meta: (d) => ({
+          description: `count ${(d as { items: string[] }).items.length}`,
+        }),
+      },
+    }, () => ({ content: { items: ['a', 'b'] } }));
+    const out = await (await app.fetch(new Request('http://app/m'))).text();
+    asserts.assertStringIncludes(
+      out,
+      'meta="{&quot;description&quot;:&quot;count 2&quot;}"',
+    );
+    asserts.assertStringIncludes(out, '<shape title="n=2">');
+    await app.stop();
+  });
+
+  it('a swap skips both tiers and stamps rapid-title for the history module', async () => {
+    const app = await makeTiered();
+    app.get(
+      '/p',
+      { template: { render: UserList, title: 'Später & so' } },
+      () => ({ content: { items: ['a'] } }),
+    );
+    const res = await app.fetch(
+      new Request('http://app/p', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(await res.text(), '<ul><li>a</li></ul>');
+    asserts.assertEquals(
+      decodeURIComponent(res.headers.get('rapid-title')!),
+      'Später & so',
+    );
+    await app.stop();
+  });
+
+  it('the error page renders inside the CORE with "{status} {message}" as its title — module tier skipped', async () => {
+    const app = await makeTiered();
+    app.get('/missing', { template: UserList }, () => {
+      throw new RapidError('RAPID_NOT_FOUND');
+    });
+    const res = await app.fetch(new Request('http://app/missing'));
+    asserts.assertEquals(res.status, 404);
+    const out = await res.text();
+    asserts.assertStringIncludes(out, '<html-doc title="404 Not found"');
+    asserts.assertEquals(out.includes('<shape'), false);
+    await app.stop();
+  });
+
+  it('errorTemplates: exact status beats class beats default; status and mode join the data', async () => {
+    const Exact = template<Record<string, unknown>>(
+      (e) => html`<e404 mode="${String(e.mode)}"></e404>`,
+      'Exact',
+    );
+    const ClassPage = template<Record<string, unknown>>(
+      (e) => html`<e5xx status="${String(e.status)}"></e5xx>`,
+      'ClassPage',
+    );
+    const Fallback = template<Record<string, unknown>>(
+      () => html`<edefault></edefault>`,
+      'Fallback',
+    );
+    const app = await Application.initialize({
+      name: 'tiers-errors',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: {
+        prefer: 'html',
+        errorTemplates: { 404: Exact, '5xx': ClassPage, default: Fallback },
+      },
+    });
+    app.get('/nf', { template: UserList }, () => {
+      throw new RapidError('RAPID_NOT_FOUND');
+    });
+    app.get('/boom', { template: UserList }, () => {
+      throw new Error('kaput');
+    });
+    app.get('/teapot', { template: UserList }, () => {
+      throw new RapidError('RAPID_VALIDATION_FAILED');
+    });
+    asserts.assertEquals(
+      await (await app.fetch(new Request('http://app/nf'))).text(),
+      '<e404 mode="PRODUCTION"></e404>',
+    );
+    asserts.assertEquals(
+      await (await app.fetch(new Request('http://app/boom'))).text(),
+      '<e5xx status="500"></e5xx>',
+    );
+    // 400 has no exact and no '4xx' entry → default.
+    asserts.assertEquals(
+      await (await app.fetch(new Request('http://app/teapot'))).text(),
+      '<edefault></edefault>',
+    );
+    await app.stop();
+  });
+
+  it('ui.enabled false: JSON everywhere, no runtime route, JSON errors — per replica', async () => {
+    const app = await Application.initialize({
+      name: 'tiers-disabled',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { enabled: false, prefer: 'html', core: Core, layout: PageShape },
+    });
+    app.get(
+      '/p',
+      { template: { render: UserList, prefer: 'html' } },
+      () => ({ content: { items: ['a'] } }),
+    );
+    const page = await app.fetch(new Request('http://app/p'));
+    asserts.assertEquals(page.headers.get('content-type'), 'application/json');
+    asserts.assertEquals(await page.json(), { items: ['a'] });
+    // The swap header is ignored too — JSON unconditionally.
+    const swap = await app.fetch(
+      new Request('http://app/p', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(swap.headers.get('content-type'), 'application/json');
+    await swap.body?.cancel();
+    const runtime = await app.fetch(new Request('http://app/__rapid/ui.js'));
+    asserts.assertEquals(runtime.status, 404);
+    await runtime.body?.cancel();
+    await app.stop();
+  });
+
+  it('configuring twice (initialize ui + app.ui) is a loud config error', async () => {
+    const app = await Application.initialize({
+      name: 'tiers-double',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { prefer: 'html' },
+    });
+    asserts.assertThrows(
+      () => app.ui({}),
+      Error,
+      'already configured',
+    );
+    await app.stop();
+  });
+
+  it('a registry key outside the closed grammar fails at boot', async () => {
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'tiers-badkey',
+          server: { port: 0, hostname: '127.0.0.1' },
+          logger: { handlers: [] },
+          ui: {
+            errorTemplates: {
+              '3xx': template(() => html``, 'nope'),
+            } as never,
+          },
+        }),
+      Error,
+      'closed grammar',
+    );
   });
 });

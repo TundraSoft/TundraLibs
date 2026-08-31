@@ -86,6 +86,30 @@ describe('rapid.ui.html', () => {
     asserts.assertEquals(render(T.render({ n: 1 }, view)), '1:Ada');
   });
 
+  it('htmlDocument renders page meta: canonical as a link, og:/twitter: as property, the rest as name — all escaped', () => {
+    const out = render(htmlDocument({
+      title: 'x',
+      meta: {
+        description: 'a "quoted" summary',
+        'og:title': 'Share <me>',
+        canonical: 'https://x.test/p?a=1&b=2',
+      },
+      body: html`ok`,
+    }));
+    asserts.assertStringIncludes(
+      out,
+      '<meta name="description" content="a &quot;quoted&quot; summary">',
+    );
+    asserts.assertStringIncludes(
+      out,
+      '<meta property="og:title" content="Share &lt;me&gt;">',
+    );
+    asserts.assertStringIncludes(
+      out,
+      '<link rel="canonical" href="https://x.test/p?a=1&amp;b=2">',
+    );
+  });
+
   it('htmlDocument emits a standards-mode document with an escaped title', () => {
     const out = render(htmlDocument({
       title: 'A <b>title</b>',

@@ -37,6 +37,8 @@ export type { RapidContextResponse } from './context/Response.ts';
 export type { RapidContextState } from './context/State.ts';
 export type { RapidContextType } from './context/Type.ts';
 export type { RapidContext } from './Context.ts';
+export type { RapidCoreData } from './CoreData.ts';
+export type { RapidErrorTemplates } from './ErrorTemplates.ts';
 export type { RapidFormError } from './FormError.ts';
 export type { RapidFormResult } from './FormResult.ts';
 export type {
@@ -57,7 +59,9 @@ export type { RapidRouteTemplate } from './RouteTemplate.ts';
 export type { RapidSchema } from './Schema.ts';
 export type { RapidSocketEntry } from './SocketEntry.ts';
 export type { RapidTemplate } from './Template.ts';
+export type { RapidUiConfigOptions } from './UiConfigOptions.ts';
 export type { RapidUiOptions } from './UiOptions.ts';
+export type { RapidUiTemplateOptions } from './UiTemplateOptions.ts';
 export type { RapidView } from './View.ts';
 export type { RapidModuleClass } from './module/Class.ts';
 export type { RapidModuleContext } from './module/Context.ts';

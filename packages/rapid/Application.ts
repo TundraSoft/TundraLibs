@@ -65,7 +65,9 @@ import type {
   RapidSocketEntry,
   RapidSOCKETHandler,
   RapidSOCKETMiddleware,
+  RapidUiConfigOptions,
   RapidUiOptions,
+  RapidUiTemplateOptions,
 } from './types/mod.ts';
 
 /**
@@ -173,7 +175,11 @@ export class Application<S extends RapidContextState = RapidContextState>
   /** The optional per-request error hook (see {@link onError}). */
   private __onError?: RapidErrorHandler<S>;
   /** The app.ui() configuration (see {@link ui}); frozen once set. */
-  private __ui?: Readonly<RapidUiOptions & { runtimePath: string }>;
+  private __ui?: Readonly<
+    & RapidUiConfigOptions
+    & Omit<RapidUiTemplateOptions, 'errorTemplate'>
+    & { enabled: boolean; runtimePath: string }
+  >;
   private readonly __meter?: Meter;
   /**
    * The upload temp dir THIS instance created (`uploads.path` left
@@ -286,27 +292,72 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (typeof source === 'string' || 'path' in source) {
       const factoryOptions: RapidApplicationFactoryOptions =
         typeof source === 'string' ? { path: source, env: true } : source;
-      const { applicationSet = 'Application', ...loadOptions } = factoryOptions;
+      const { applicationSet = 'Application', ui: uiCode, ...loadOptions } =
+        factoryOptions;
       const loaded = await loadConfig(loadOptions);
       // loadConfig lowercases set names (Application.yaml → 'application').
       const setName = applicationSet.toLowerCase();
       const fromFile = loaded.has(setName)
         ? loaded.get<Partial<RapidApplicationOptions>>(setName)
         : {};
+      // The UI splits by NATURE here: the YAML `ui:` key is the DATA
+      // half, the factory's `ui` the CODE half (typed disjoint — nothing
+      // can be configured twice). Neither enters the Options store; the
+      // resolved `__ui` is their single home.
+      const { ui: uiData, ...appOptions } = fromFile as Partial<
+        RapidApplicationOptions
+      >;
       // The constructor validates — a bad Application file fails as loudly as
       // bad code-supplied options.
-      return new Application<S>(
+      const app = new Application<S>(
         INIT_BRAND,
-        fromFile as EventOptionKeys<
+        appOptions as EventOptionKeys<
           RapidApplicationOptions,
           RapidApplicationEvents
         >,
         defaultState,
         loaded,
       );
+      if (uiData !== undefined || uiCode !== undefined) {
+        app.__configureUi(
+          (uiData ?? {}) as RapidUiConfigOptions,
+          uiCode ?? {},
+        );
+      }
+      return app;
     }
     // Programmatic: plain options, no files read (config stays empty).
-    return new Application<S>(INIT_BRAND, source, defaultState);
+    // One `ui` bag carries both halves here (there is only one source, so
+    // the two-place hazard the split exists for cannot arise); destructure
+    // by nature before the Options store sees anything.
+    const { ui, ...rest } = source as
+      & EventOptionKeys<RapidApplicationOptions, RapidApplicationEvents>
+      & { ui?: RapidUiConfigOptions & RapidUiTemplateOptions };
+    const app = new Application<S>(
+      INIT_BRAND,
+      rest as EventOptionKeys<RapidApplicationOptions, RapidApplicationEvents>,
+      defaultState,
+    );
+    if (ui !== undefined) {
+      const {
+        core,
+        layout,
+        view,
+        errorTemplate,
+        errorTemplates,
+        assets,
+        ...data
+      } = ui;
+      app.__configureUi(data, {
+        ...(core !== undefined ? { core } : {}),
+        ...(layout !== undefined ? { layout } : {}),
+        ...(view !== undefined ? { view } : {}),
+        ...(errorTemplate !== undefined ? { errorTemplate } : {}),
+        ...(errorTemplates !== undefined ? { errorTemplates } : {}),
+        ...(assets !== undefined ? { assets } : {}),
+      });
+    }
+    return app;
   }
 
   /**
@@ -1032,23 +1083,59 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
-   * Configure the UI layer (see `@tundralibs/rapid/ui`): the app-default
-   * `layout` and `prefer`, the opt-in `view` identity projection, the
-   * HTML `errorTemplate`, and the client runtime's route — registered
-   * here at `runtimePath` (default `/__rapid/ui.js`) with a strong
-   * content-keyed `ETag` and always-revalidate caching (304s when
-   * unchanged — never a stale runtime after an upgrade); no file read, so it
-   * works on Workers and with {@link fetch}. Call at most ONCE, before
-   * `start()`. An API-only app never calls this and pays nothing.
+   * Configure the UI layer — DEPRECATED sugar over the initialize-time
+   * configuration: pass the serializable DATA half as the `ui:` options
+   * (or YAML) key and the CODE half (`core`, `layout`, `view`, error
+   * templates, `assets`) programmatically at
+   * `Application.initialize({ path, ui })`. This one-bag form maps onto
+   * the same machinery and keeps its exact old behavior (a legacy
+   * `layout` is the app-default module-tier layout; with no `core`, its
+   * output serves as the page).
    *
-   * @throws {RapidError} RAPID_CONFIG on a second call, a non-template
-   *   `layout`/`errorTemplate`, an invalid `prefer`, or a `runtimePath`
-   *   not starting with `/` (or colliding with the live bridge's path).
+   * @deprecated Configure the UI at `Application.initialize` instead.
+   * @throws {RapidError} RAPID_CONFIG on a second configuration or any
+   *   invalid option (see the initialize-time validation).
    */
   public ui(options: RapidUiOptions = {}): this {
+    const {
+      core,
+      layout,
+      view,
+      errorTemplate,
+      errorTemplates,
+      assets,
+      ...data
+    } = options;
+    this.__configureUi(data, {
+      ...(core !== undefined ? { core } : {}),
+      ...(layout !== undefined ? { layout } : {}),
+      ...(view !== undefined ? { view } : {}),
+      ...(errorTemplate !== undefined ? { errorTemplate } : {}),
+      ...(errorTemplates !== undefined ? { errorTemplates } : {}),
+      ...(assets !== undefined ? { assets } : {}),
+    });
+    return this;
+  }
+
+  /**
+   * The UI configuration funnel — both halves validated and frozen into
+   * `__ui`, the runtime/live routes registered (when `enabled`). Called
+   * by `initialize` (the sanctioned path) and the deprecated `app.ui()`.
+   *
+   * @throws {RapidError} RAPID_CONFIG on a second configuration, a call
+   *   after start, a non-template `core`/`layout`/error entry, both
+   *   `errorTemplate` and `errorTemplates`, a registry key outside the
+   *   closed grammar, an invalid `prefer`/`runtimePath`/header name, or
+   *   a bad `assets` map.
+   */
+  private __configureUi(
+    data: RapidUiConfigOptions,
+    code: RapidUiTemplateOptions,
+  ): void {
     if (this.__ui !== undefined) {
       throw new RapidError('RAPID_CONFIG', {
-        message: 'app.ui() was already configured — call it once',
+        message:
+          'the UI is already configured — one initialize ui / app.ui() per app',
       });
     }
     if (this.__started || this.__http !== undefined) {
@@ -1056,86 +1143,124 @@ export class Application<S extends RapidContextState = RapidContextState>
       // runtime route would 404 while uiOptions took effect — the
       // half-applied state the JSDoc forbids. Fail loud, like channel().
       throw new RapidError('RAPID_CONFIG', {
-        message: 'app.ui() must be called before start() / the first fetch()',
+        message: 'the UI must be configured before start() / the first fetch()',
       });
     }
-    if (options.layout !== undefined && !isTemplate(options.layout)) {
+    for (
+      const [name, value] of [
+        ['core', code.core],
+        ['layout', code.layout],
+        ['errorTemplate', code.errorTemplate],
+      ] as const
+    ) {
+      if (value !== undefined && !isTemplate(value)) {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `ui: ${name} is not a RapidTemplate`,
+        });
+      }
+    }
+    if (code.errorTemplate !== undefined && code.errorTemplates !== undefined) {
       throw new RapidError('RAPID_CONFIG', {
-        message: 'app.ui(): layout is not a RapidTemplate',
+        message:
+          'ui: errorTemplate and errorTemplates are mutually exclusive — errorTemplate is sugar for { default }',
       });
+    }
+    if (code.errorTemplates !== undefined) {
+      // The CLOSED grammar: an exact status (400-599), '4xx'/'5xx', or
+      // 'default'. Nothing else is ever a key.
+      for (const [key, value] of Object.entries(code.errorTemplates)) {
+        const exact = Number(key);
+        const valid = key === '4xx' || key === '5xx' || key === 'default' ||
+          (Number.isInteger(exact) && exact >= 400 && exact <= 599);
+        if (!valid) {
+          throw new RapidError('RAPID_CONFIG', {
+            message:
+              `ui: errorTemplates key '${key}' is outside the closed grammar (400-599, '4xx', '5xx', 'default')`,
+          });
+        }
+        if (!isTemplate(value)) {
+          throw new RapidError('RAPID_CONFIG', {
+            message: `ui: errorTemplates['${key}'] is not a RapidTemplate`,
+          });
+        }
+      }
     }
     if (
-      options.errorTemplate !== undefined && !isTemplate(options.errorTemplate)
+      data.prefer !== undefined && data.prefer !== 'json' &&
+      data.prefer !== 'html'
     ) {
       throw new RapidError('RAPID_CONFIG', {
-        message: 'app.ui(): errorTemplate is not a RapidTemplate',
+        message: `ui: prefer must be 'json' or 'html'`,
       });
     }
-    if (
-      options.prefer !== undefined && options.prefer !== 'json' &&
-      options.prefer !== 'html'
-    ) {
-      throw new RapidError('RAPID_CONFIG', {
-        message: `app.ui(): prefer must be 'json' or 'html'`,
-      });
-    }
-    if (options.assets !== undefined) {
-      for (const [key, value] of Object.entries(options.assets)) {
+    if (code.assets !== undefined) {
+      for (const [key, value] of Object.entries(code.assets)) {
         if (!key.startsWith('/') || typeof value !== 'string') {
           throw new RapidError('RAPID_CONFIG', {
             message:
-              "app.ui(): assets keys must start with '/' and map to version strings",
+              "ui: assets keys must start with '/' and map to version strings",
             details: { key },
           });
         }
       }
     }
-    const runtimePath = options.runtimePath ?? '/__rapid/ui.js';
+    const runtimePath = data.runtimePath ?? '/__rapid/ui.js';
     if (!runtimePath.startsWith('/')) {
       throw new RapidError('RAPID_CONFIG', {
-        message: `app.ui(): runtimePath must start with '/'`,
+        message: `ui: runtimePath must start with '/'`,
       });
     }
-    if (options.live === true && runtimePath === '/__rapid/live.js') {
+    if (data.live === true && runtimePath === '/__rapid/live.js') {
       // Caught HERE, attributed — not as a duplicate-route error two
       // registrations later.
       throw new RapidError('RAPID_CONFIG', {
         message:
-          `app.ui(): runtimePath collides with the live bridge's /__rapid/live.js`,
+          `ui: runtimePath collides with the live bridge's /__rapid/live.js`,
       });
     }
     const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
     for (
       const [key, value] of [
-        ['swapHeader', options.swapHeader],
-        ['redirectHeader', options.redirectHeader],
-        ['csrfCookie', options.csrfCookie],
-        ...(options.swapUnless ?? []).map((
+        ['swapHeader', data.swapHeader],
+        ['redirectHeader', data.redirectHeader],
+        ['csrfCookie', data.csrfCookie],
+        ...(data.swapUnless ?? []).map((
           name,
         ): [string, string] => ['swapUnless', name]),
       ] as [string, string | undefined][]
     ) {
       if (value !== undefined && !HEADER_NAME.test(value)) {
         throw new RapidError('RAPID_CONFIG', {
-          message:
-            `app.ui(): ${key} must be a valid header name (got '${value}')`,
+          message: `ui: ${key} must be a valid header name (got '${value}')`,
         });
       }
     }
+    const enabled = data.enabled !== false;
+    // `errorTemplate` folds into the registry as its `default` — one
+    // internal shape, one resolution path.
+    const errorTemplates = code.errorTemplate !== undefined
+      ? Object.freeze({ default: code.errorTemplate })
+      : code.errorTemplates !== undefined
+      ? Object.freeze({ ...code.errorTemplates })
+      : undefined;
+    const { errorTemplate: _fold, ...codeRest } = code;
     this.__ui = Object.freeze({
-      ...options,
+      ...data,
+      ...codeRest,
       // Deep-frozen copy: the caller's array must not steer swap/Vary
       // behavior after registration.
-      ...(options.swapUnless !== undefined
-        ? { swapUnless: Object.freeze([...options.swapUnless]) }
+      ...(data.swapUnless !== undefined
+        ? { swapUnless: Object.freeze([...data.swapUnless]) }
         : {}),
+      ...(errorTemplates !== undefined ? { errorTemplates } : {}),
+      enabled,
       runtimePath,
     });
+    if (!enabled) return; // API replica: no runtime, no live, no history
     this.__scriptRoute(runtimePath, UI_RUNTIME, UI_RUNTIME_ETAG);
-    if (options.live === true) {
+    if (data.live === true) {
       this.__scriptRoute('/__rapid/live.js', UI_LIVE, UI_LIVE_ETAG);
     }
-    return this;
   }
 
   /**
@@ -1166,9 +1291,31 @@ export class Application<S extends RapidContextState = RapidContextState>
     });
   }
 
-  /** The {@link ui} configuration, or `undefined` — read by the representer. */
-  public get uiOptions(): Readonly<RapidUiOptions> | undefined {
-    return this.__ui;
+  /**
+   * Whether this replica represents templated routes at all — `false`
+   * only when the UI was configured with `enabled: false` (the per-
+   * replica API-only gate). Distinct from "UI never configured": route-
+   * level templates work without any app-level UI configuration, but a
+   * disabled replica serves JSON unconditionally.
+   */
+  public get uiEnabled(): boolean {
+    return this.__ui?.enabled !== false;
+  }
+
+  /**
+   * The resolved UI configuration, or `undefined` when the UI is not
+   * configured OR this replica set `ui.enabled: false` — the single
+   * switch the representer (and `ctx.isSwap`) reads, so a disabled
+   * replica serves JSON everywhere with zero further gating.
+   */
+  public get uiOptions():
+    | Readonly<
+      & RapidUiConfigOptions
+      & Omit<RapidUiTemplateOptions, 'errorTemplate'>
+      & { runtimePath: string }
+    >
+    | undefined {
+    return this.__ui?.enabled === false ? undefined : this.__ui;
   }
 
   /**

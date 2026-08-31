@@ -22,7 +22,8 @@ import type {
 } from '../types/mod.ts';
 import { escapeRegExp } from '../utils/mod.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
-import { type Html, html, isHtml, render, template } from './html.ts';
+import { type Html, isHtml, render } from './html.ts';
+import { DefaultErrorPage } from './errorPage.ts';
 
 /** Structurally a `RapidTemplate` — `{ name: string, render: fn }`. */
 export const isTemplate = (value: unknown): value is RapidTemplate<unknown> =>
@@ -47,10 +48,13 @@ export function normalizeRouteTemplate(
   const given = bare ? undefined : template as RapidRouteTemplate;
   const config: RapidRouteTemplate = {
     render: bare ? template as RapidTemplate<unknown> : given!.render,
+    // `false` survives ?? — a route's explicit tier-2 opt-out must not
+    // be resurrected by the module/app default.
     ...(given?.layout ?? layout) !== undefined
       ? { layout: given?.layout ?? layout }
       : {},
     ...(given?.title !== undefined ? { title: given.title } : {}),
+    ...(given?.meta !== undefined ? { meta: given.meta } : {}),
     ...(given?.prefer !== undefined ? { prefer: given.prefer } : {}),
   };
   if (
@@ -67,9 +71,21 @@ export function normalizeRouteTemplate(
         `route '${label}': template is not a RapidTemplate (declare it via template() from @tundralibs/rapid/ui)`,
     });
   }
-  if (config.layout !== undefined && !isTemplate(config.layout)) {
+  if (
+    config.layout !== undefined && config.layout !== false &&
+    !isTemplate(config.layout)
+  ) {
     throw new RapidError('RAPID_CONFIG', {
-      message: `route '${label}': layout is not a RapidTemplate`,
+      message:
+        `route '${label}': layout is not a RapidTemplate (or false to opt out)`,
+    });
+  }
+  if (
+    config.meta !== undefined && typeof config.meta !== 'function' &&
+    (typeof config.meta !== 'object' || config.meta === null)
+  ) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `route '${label}': meta must be a record or (data) => record`,
     });
   }
   if (
@@ -316,17 +332,47 @@ export function represent<S extends RapidContextState>(
     view,
     `template '${template.render.name || 'for this route'}'`,
   );
-  const layout = template.layout ?? appUi?.layout;
-  if (!swap && layout !== undefined) {
-    const title = typeof template.title === 'function'
-      ? template.title(returned.content)
-      : template.title;
-    markup = renderChecked(
-      layout,
-      { body: markup, ...(title !== undefined ? { title } : {}) },
-      view,
-      `layout '${layout.name || 'for this route'}'`,
-    );
+  const title = typeof template.title === 'function'
+    ? template.title(returned.content)
+    : template.title;
+  if (!swap) {
+    // THE TWO WRAPPER TIERS (pages only — a swap is always the bare
+    // fragment). Module tier: route → @Module → app default, `false`
+    // opting out; its output nests inside the CORE (the document tier,
+    // app-level, never overridden below) when one is configured. `title`
+    // is handed to BOTH tiers; `meta` reaches only the core.
+    const layout = template.layout === false
+      ? undefined
+      : template.layout ?? appUi?.layout;
+    if (layout !== undefined) {
+      markup = renderChecked(
+        layout,
+        { body: markup, ...(title !== undefined ? { title } : {}) },
+        view,
+        `layout '${layout.name || 'for this route'}'`,
+      );
+    }
+    const core = appUi?.core;
+    if (core !== undefined) {
+      const meta = typeof template.meta === 'function'
+        ? template.meta(returned.content)
+        : template.meta;
+      markup = renderChecked(
+        core,
+        {
+          body: markup,
+          ...(title !== undefined ? { title } : {}),
+          ...(meta !== undefined ? { meta } : {}),
+        },
+        view,
+        `core '${core.name || ''}'`,
+      );
+    }
+  } else if (title !== undefined) {
+    // Swap replies carry the page title as a header so the history
+    // module can sync document.title on pushed navigations — the swap
+    // itself skips the core, which is where <title> lives.
+    ctx.setHeader('rapid-title', encodeURIComponent(title));
   }
   const headers = new Headers(
     returned.headers instanceof Headers
@@ -343,13 +389,15 @@ export function represent<S extends RapidContextState>(
 /**
  * The HTML error representation (D9) — called from the post-onion
  * disclosure path, AFTER `app.onError` declined to override. Returns
- * `undefined` (JSON envelope as always) unless an `errorTemplate` is
- * configured AND the representation resolves to HTML: a swap, or a
- * matched route / app `prefer` of `'html'`. A swap renders the bare
- * fragment; a page wraps in the route's layout (the app's as fallback).
- * The disclosure rules are the caller's: `payload` is exactly what the
- * JSON envelope would have carried (PRODUCTION-collapsed, `requestId`
- * included).
+ * `undefined` (JSON envelope as always) unless the representation
+ * resolves to HTML: a swap, or a matched route / app `prefer` of
+ * `'html'`. The page template resolves through the CLOSED
+ * `errorTemplates` registry (exact status → '4xx'/'5xx' → 'default' →
+ * the built-in `DefaultErrorPage`); a swap renders the bare fragment, a
+ * page wraps in the CORE only (module tier skipped). The disclosure
+ * rules are the caller's: `payload` is exactly what the JSON envelope
+ * would have carried (PRODUCTION-collapsed, `requestId` included), with
+ * `status` and `mode` joined for template branching.
  */
 export function representError<S extends RapidContextState>(
   status: number,
@@ -359,45 +407,45 @@ export function representError<S extends RapidContextState>(
 ): RapidContextResponse | undefined {
   const appUi = uiOf(ctx);
   if (appUi === undefined) return undefined;
-  // No errorTemplate: PRODUCTION keeps the JSON envelope; DEVELOPMENT
-  // gets a built-in escaped <pre> so a failed swap shows its failure
-  // IN the page instead of a silent rapid:error toast. The payload is
-  // the already-mode-collapsed disclosure — nothing extra leaks.
-  const errorTemplate = appUi.errorTemplate ??
-    (mode === 'DEVELOPMENT'
-      ? template<Record<string, unknown>>((data) =>
-        html`
-          <pre class="rapid-error"
-            style="background:#450a0a;color:#fecaca;padding:1rem;border-radius:8px;overflow:auto"
-          >${JSON.stringify(data, null, 2)}</pre>
-        `, 'rapid-dev-error')
-      : undefined);
-  if (errorTemplate === undefined) return undefined;
   const route = ctx.routeTemplate;
   const swap = isSwap(ctx, appUi);
   const prefer = route?.prefer ?? appUi.prefer ?? 'json';
-  // Same cache rule as the success path: with an errorTemplate in play
-  // this URL's error serves TWO representations, so the stamp lands
-  // BEFORE the JSON bail — errors (a heuristically-cacheable 404
-  // included) must say so in both shapes, or a shared cache would hand
-  // a stored JSON 404 to a swap. The ctx header survives into the JSON
-  // envelope at finalize.
+  // Same cache rule as the success path: with HTML errors in play this
+  // URL's error serves TWO representations, so the stamp lands BEFORE
+  // the JSON bail — errors (a heuristically-cacheable 404 included)
+  // must say so in both shapes, or a shared cache would hand a stored
+  // JSON 404 to a swap. The ctx header survives into the JSON envelope
+  // at finalize.
   const vary = stampVary(ctx, appUi);
   if (!swap && prefer !== 'html') return undefined;
+  // The CLOSED registry, fixed resolution: exact status → class
+  // ('4xx'/'5xx') → 'default' → the built-in DefaultErrorPage — so a
+  // UI-configured app never shows a browser a raw JSON envelope.
+  const templates = appUi.errorTemplates;
+  const errorTemplate = templates?.[status] ??
+    templates?.[status >= 500 ? '5xx' : '4xx'] ??
+    templates?.default ?? DefaultErrorPage;
   const view = buildView(ctx);
+  // The payload is the already-mode-collapsed disclosure — nothing
+  // extra can leak; `status`/`mode` join it so one template can branch
+  // without inferring from field absence.
+  const data = { ...payload, status, mode };
   let markup = renderChecked(
     errorTemplate,
-    payload,
+    data,
     view,
     `errorTemplate '${errorTemplate.name || ''}'`,
   );
-  const layout = route?.layout ?? appUi.layout;
-  if (!swap && layout !== undefined) {
+  // Error pages wrap in the CORE only — the module tier is skipped
+  // (errors are not module-scoped, and a module layout may depend on
+  // the very data that failed). The core's title: "{status} {message}".
+  if (!swap && appUi.core !== undefined) {
+    const message = typeof payload.message === 'string' ? payload.message : '';
     markup = renderChecked(
-      layout,
-      { body: markup },
+      appUi.core,
+      { body: markup, title: `${status} ${message}`.trim() },
       view,
-      `layout '${layout.name || ''}'`,
+      `core '${appUi.core.name || ''}'`,
     );
   }
   return {

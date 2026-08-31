@@ -136,16 +136,39 @@ export function render(markup: Html): string {
  * ```
  */
 export function htmlDocument(
-  doc: { lang?: string; title?: string; head?: Html; body: Html },
+  doc: {
+    lang?: string;
+    title?: string;
+    /**
+     * Per-page metadata: `canonical` renders `<link rel="canonical">`,
+     * an `og:`/`twitter:`-prefixed key renders `<meta property>`, and
+     * every other key `<meta name>` — all values escaped. This is where
+     * a core layout forwards the route's `meta` option.
+     */
+    meta?: Readonly<Record<string, string>>;
+    head?: Html;
+    body: Html;
+  },
 ): Html {
   // Built from SHORT pieces: a formatter reflowing a long template
   // literal would otherwise inject whitespace into the emitted document
   // (before the doctype included).
   const meta = '<meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">';
+  const pageMeta = Object.entries(doc.meta ?? {}).map(([key, value]) =>
+    key === 'canonical'
+      ? html`${raw('<link rel="canonical" href="')}${value}${raw('">')}`
+      : key.startsWith('og:') || key.startsWith('twitter:')
+      ? html`${raw('<meta property="')}${key}${raw('" content="')}${value}${
+        raw('">')
+      }`
+      : html`${raw('<meta name="')}${key}${raw('" content="')}${value}${
+        raw('">')
+      }`
+  );
   return html`${raw('<!doctype html><html lang="')}${doc.lang ?? 'en'}${
     raw('"><head>' + meta)
-  }<title>${doc.title ?? ''}</title>${doc.head ?? ''}${
+  }<title>${doc.title ?? ''}</title>${pageMeta}${doc.head ?? ''}${
     raw('</head><body>')
   }${doc.body}${raw('</body></html>')}`;
 }
