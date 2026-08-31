@@ -32,6 +32,7 @@ import {
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
 import { isTemplate, normalizeRouteTemplate } from './ui/represent.ts';
+import { UI_HISTORY, UI_HISTORY_ETAG } from './ui/history.ts';
 import { UI_LIVE, UI_LIVE_ETAG } from './ui/live.ts';
 import { UI_RUNTIME, UI_RUNTIME_ETAG } from './ui/ui.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
@@ -1254,6 +1255,12 @@ export class Application<S extends RapidContextState = RapidContextState>
           `ui: runtimePath collides with the live bridge's /__rapid/live.js`,
       });
     }
+    if (data.history === true && runtimePath === '/__rapid/history.js') {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `ui: runtimePath collides with the history module's /__rapid/history.js`,
+      });
+    }
     const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
     for (
       const [key, value] of [
@@ -1296,6 +1303,9 @@ export class Application<S extends RapidContextState = RapidContextState>
     this.__scriptRoute(runtimePath, UI_RUNTIME, UI_RUNTIME_ETAG);
     if (data.live === true) {
       this.__scriptRoute('/__rapid/live.js', UI_LIVE, UI_LIVE_ETAG);
+    }
+    if (data.history === true) {
+      this.__scriptRoute('/__rapid/history.js', UI_HISTORY, UI_HISTORY_ETAG);
     }
   }
 

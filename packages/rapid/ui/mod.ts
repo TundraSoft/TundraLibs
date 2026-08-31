@@ -12,6 +12,7 @@ export { fingerprintAssets } from './assets.ts';
 export { DefaultErrorPage } from './errorPage.ts';
 export { formState } from './formState.ts';
 export { Html, html, htmlDocument, raw, render, template } from './html.ts';
+export { UI_HISTORY, UI_HISTORY_ETAG } from './history.ts';
 export { UI_LIVE, UI_LIVE_ETAG } from './live.ts';
 export { UI_RUNTIME, UI_RUNTIME_ETAG } from './ui.ts';
 export { withQuery } from './withQuery.ts';
