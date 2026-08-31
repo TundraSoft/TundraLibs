@@ -168,6 +168,7 @@ export function view(
     requestId: 'test-request',
     runtimePath: '/__rapid/ui.js',
     path: '/',
+    asset: (p: string): string => p, // the no-map default: pass-through
     ...overrides,
     // Frozen even when OVERRIDDEN — buildView deep-freezes query, so a
     // template mutating it must fail here, not first in production.

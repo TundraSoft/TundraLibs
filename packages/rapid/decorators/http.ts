@@ -69,15 +69,26 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    */
   security?: readonly string[];
   /**
-   * The response body's shape — DOCUMENTATION ONLY: the method's actual
-   * return value is never checked against it; `buildOpenApi` emits its
-   * `toOpenAPI()` as the 200 schema. rapid takes NO dependency on
+   * The response body's shape. `buildOpenApi` emits its `toOpenAPI()` as
+   * the 200 schema, and — when the schema can also `parse` (a guardian
+   * schema qualifies as-is) — DEVELOPMENT mode ENFORCES it: a
+   * return-channel reply whose `content` fails the schema becomes a loud
+   * `RAPID_RESPONSE_INVALID` (500) instead of shipping a response the
+   * docs lie about. Scope of the check: success replies only (2xx or
+   * unset status, no `redirect`), data content only (bytes and streams
+   * skip), the DATA before any template renders it; enforce-only — a
+   * stripping/coercing schema never alters what is sent, and PRODUCTION
+   * never runs the parse. rapid takes NO dependency on
    * `@tundralibs/guardian` for this — anything structurally shaped like
-   * a guardian schema (a `.toOpenAPI()` / `.toJSONSchema()` emitter)
-   * works. The request side is `bind: [payload(Schema)]` (a schema
-   * OBJECT — validates and documents the body at once).
+   * a guardian schema works, emitter-only shapes stay documentation-only.
+   * The request side is `bind: [payload(Schema)]` (a schema OBJECT —
+   * validates and documents the body at once).
    */
-  response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
+  response?: {
+    parse?: (value: unknown) => unknown;
+    toOpenAPI?: () => unknown;
+    toJSONSchema?: () => unknown;
+  };
   /**
    * HTML template for this route (see `@tundralibs/rapid/ui`): a bare
    * `RapidTemplate` or the `{ render, layout?, prefer? }` object form.

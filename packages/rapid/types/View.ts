@@ -27,6 +27,13 @@ export type RapidView<
     runtimePath: string;
     /** URL pathname of the request. */
     path: string;
+    /**
+     * Version a static asset URL: `'/style.css'` →
+     * `'/style.css?v=<hash>'` when the path is in `app.ui({ assets })`
+     * (see `fingerprintAssets`), the path unchanged otherwise — safe to
+     * use unconditionally.
+     */
+    asset(path: string): string;
     /** Raw query params, decoded; the LAST value wins for a repeated key. */
     query: Readonly<Record<string, string>>;
     /** The `csrf()` cookie's token, when present on the request. */

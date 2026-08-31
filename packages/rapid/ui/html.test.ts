@@ -61,6 +61,7 @@ describe('rapid.ui.html', () => {
         requestId: 'r1',
         runtimePath: '/__rapid/ui.js',
         path: '/',
+        asset: (p: string) => p,
         query: {},
       })),
       '<ul><li>ada</li></ul>',
@@ -78,6 +79,7 @@ describe('rapid.ui.html', () => {
       requestId: 'r',
       runtimePath: '/__rapid/ui.js',
       path: '/',
+      asset: (p: string) => p,
       query: {},
       user: { name: 'Ada' },
     } as RapidView;

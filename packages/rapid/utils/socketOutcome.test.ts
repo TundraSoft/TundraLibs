@@ -69,10 +69,12 @@ describe('rapid.socketOutcome', () => {
       'RAPID_VALIDATION_FAILED',
     );
     asserts.assertEquals(
-      socketOutcome(409, null).code,
+      socketOutcome(422, null).code,
       'RAPID_VALIDATION_FAILED',
     );
     asserts.assertEquals(socketOutcome(503, null).code, 'RAPID_UNHANDLED');
+    // 409 is no longer a fallback: RAPID_CONFLICT maps it exactly.
+    asserts.assertEquals(socketOutcome(409, null).code, 'RAPID_CONFLICT');
   });
 
   it('null/undefined content adds no data field', () => {

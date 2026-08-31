@@ -180,8 +180,12 @@ app.use(
 
 Shipped middleware factories (all exported from the root and from
 `@tundralibs/rapid/middlewares`): `cors`, `secureHeaders`, `compress`, `etag`,
-`rateLimit`, `requestId`, `requestLogger`, `responseTimer`, `serveStatic`,
-`timeout`, and `healthCheck`.
+`idempotency`, `rateLimit`, `requestId`, `requestLogger`, `responseTimer`,
+`serveStatic`, `timeout`, and `healthCheck`. `idempotency()` makes client
+retries safe: a request bearing an `idempotency-key` header executes once —
+a retry replays the first attempt's stored reply (`idempotency-replayed:
+true`), a concurrent duplicate is a 409, and thrown/streamed attempts are
+never recorded, so those retries re-execute.
 
 Scope helpers turn a transport-specific middleware into a universal one:
 `onlyHTTP` / `onlySOCKET` / `onlyJOB` run it only on that transport (a no-op
@@ -236,7 +240,12 @@ its `namespace` their tag group (`x-tagGroups` — the namespace is the parent,
 the module the sub-module within it), its `description` the tag's. Bind the
 body with a schema **object** — `payload(UserSchema)` — and it is validated
 _and_ documented (`toOpenAPI()` becomes the request body); `payload(Schema.parse)`
-validates only. Only the body documents: `auth`/`session`/`cookie` binders are
+validates only. The same duality on the way out: give `response` a schema
+that can `parse` (a guardian schema as-is) and DEVELOPMENT mode enforces it —
+a success reply whose `content` fails the declared shape is a loud
+`RAPID_RESPONSE_INVALID` (500) instead of a response the docs lie about;
+PRODUCTION never runs the check, and an emitter-only `response` stays
+documentation-only. Only the body documents: `auth`/`session`/`cookie` binders are
 context-derived, not part of the request contract. `security: ['bearerAuth']`
 emits the requirement (the scheme is declared for you); `[]` marks a route
 deliberately public. `operationId` defaults to `<Module>_<method>`.
@@ -387,7 +396,9 @@ app.get(
 `` html`…` `` escapes **every** interpolated value (`raw()` is the single,
 greppable opt-out); templates are pure `(data, view) => Html` functions, so
 they unit-test with `render(UserList.render(data, view))` and no server. The
-frozen `view` bag carries `requestId`/`path`/`query`/`csrfToken` — **nothing
+frozen `view` bag carries `requestId`/`path`/`query`/`csrfToken` and
+`view.asset()` (cache-busting URLs from the `app.ui({ assets })` map —
+see [Rapid-UI](docs/Rapid-UI.md)) — **nothing
 from `ctx.auth`** unless `app.ui({ view })` names the fields that may cross.
 Layouts resolve route → `@Module` → app. The small (~200-line) runtime
 (`GET /__rapid/ui.js`, ETag-revalidated) swaps fragments via `data-action` /

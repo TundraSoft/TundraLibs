@@ -10,9 +10,10 @@ import { RadRouter } from '@tundralibs/radrouter';
 import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
-import { RapidError } from '../errors/mod.ts';
+import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
 import { compose, resolveVersion, socketOutcome } from '../utils/mod.ts';
+import { isStreamBody } from '../utils/streams.ts';
 import type {
   RapidChannelOptions,
   RapidContextResponse,
@@ -44,6 +45,25 @@ type SocketData = {
   /** Headers of the upgrade request. */
   headers: Headers;
 };
+
+/**
+ * Wrap a declared-response `parse` failure (the DEV-only response
+ * contract check) as the 500 it is — a SERVER bug, not a client error,
+ * so it must not reuse the 400 that `asValidationError` builds. A
+ * guardian failure's per-field detail is carried over; anything else
+ * keeps its message.
+ */
+function responseContractError(action: string, cause: unknown): RapidError {
+  const validation = asValidationError(cause);
+  const err = cause instanceof Error ? cause : undefined;
+  return new RapidError('RAPID_RESPONSE_INVALID', {
+    message:
+      `'${action}' returned a reply that fails its declared response schema`,
+    details: validation?.context.details ??
+      { reason: err?.message ?? String(cause) },
+    cause: err,
+  });
+}
 
 /**
  * The HTTP transport: owns the compat WebServer and the radrouter,
@@ -429,14 +449,51 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // runs the representer here — the innermost onion point, so every
     // middleware's post-next() view sees the final HTML (represent() is
     // synchronous, preserving the sync fast path).
-    const apply = (returned: RapidContextResponse | void): void => {
-      if (returned !== undefined && ctx.response === null) {
-        // A `null` return means "no body" (→ 204) on templated routes
-        // too — only a real reply is represented.
+    const apply = (
+      returned: RapidContextResponse | void,
+    ): void | Promise<void> => {
+      if (returned === undefined || ctx.response !== null) return;
+      // A `null` return means "no body" (→ 204) on templated routes
+      // too — only a real reply is represented.
+      const commit = (): void => {
         ctx.response = returned !== null && entry?.template !== undefined
           ? represent(returned, entry.template, ctx)
           : returned;
+      };
+      // DEV-only response contract: a parse-capable declared response
+      // schema (`@GET(..., { response: Schema })` / `openapi.response`)
+      // checks the DATA reply — before representation, on the success
+      // shape only (2xx or unset status, no redirect, not bytes/stream).
+      // Enforce, never transform: the reply goes out as returned, so a
+      // stripping/coercing schema cannot change PRODUCTION behavior.
+      // Ordered so PRODUCTION pays one `undefined` check per request.
+      const schema = entry?.openapi?.response;
+      if (
+        schema?.parse !== undefined && returned !== null &&
+        returned.redirect === undefined &&
+        (returned.status === undefined ||
+          (returned.status >= 200 && returned.status < 300)) &&
+        !(returned.content instanceof Uint8Array) &&
+        !isStreamBody(returned.content) &&
+        this._app.mode === 'DEVELOPMENT'
+      ) {
+        const fail = (cause: unknown): never => {
+          throw responseContractError(ctx.action, cause);
+        };
+        let parsed: unknown;
+        try {
+          parsed = schema.parse(returned.content);
+        } catch (cause) {
+          fail(cause);
+        }
+        if (
+          parsed !== null && typeof parsed === 'object' &&
+          typeof (parsed as { then?: unknown }).then === 'function'
+        ) {
+          return (parsed as Promise<unknown>).then(() => commit(), fail);
+        }
       }
+      commit();
     };
     const dispatch: () => void | Promise<void> = entry !== undefined
       ? () => {
@@ -452,7 +509,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         ) {
           return (returned as Promise<RapidContextResponse | void>).then(apply);
         }
-        apply(returned as RapidContextResponse | void);
+        return apply(returned as RapidContextResponse | void);
       }
       : () => {
         // A catch-all middleware still wins (preserve the old `??=`).

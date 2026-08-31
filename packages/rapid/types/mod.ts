@@ -37,6 +37,8 @@ export type { RapidContextResponse } from './context/Response.ts';
 export type { RapidContextState } from './context/State.ts';
 export type { RapidContextType } from './context/Type.ts';
 export type { RapidContext } from './Context.ts';
+export type { RapidFormError } from './FormError.ts';
+export type { RapidFormResult } from './FormResult.ts';
 export type {
   RapidHTTPRequestBody,
   RapidUploadedFile,

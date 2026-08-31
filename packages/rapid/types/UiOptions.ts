@@ -37,6 +37,16 @@ export type RapidUiOptions = {
    */
   errorTemplate?: RapidTemplate<Record<string, unknown>>;
   /**
+   * The asset version map `view.asset()` reads — `URL path → version`
+   * (leading-`/` keys), normally built at boot by `fingerprintAssets()`
+   * from `@tundralibs/rapid/ui`. `view.asset('/style.css')` returns
+   * `'/style.css?v=<version>'` for a mapped path and the path UNCHANGED
+   * for an unmapped one, so templates can use it unconditionally. Pair
+   * with `serveStatic({ fingerprint: true })` for immutable caching of
+   * the versioned URLs.
+   */
+  assets?: Readonly<Record<string, string>>;
+  /**
    * Where the client runtime is served. @default '/__rapid/ui.js'
    */
   runtimePath?: string;

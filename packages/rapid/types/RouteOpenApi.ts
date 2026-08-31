@@ -43,7 +43,13 @@ export type RapidRouteOpenApi = {
   /**
    * The declared response schema (from `@GET(..., { response })`) — either
    * emitter is honored (`toOpenAPI` preferred, then `toJSONSchema`), matching
-   * the request-body path.
+   * the request-body path. When it can also `parse` (a full guardian
+   * schema), DEVELOPMENT mode enforces it against the actual reply — see
+   * the decorator option's doc for the exact scope.
    */
-  response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
+  response?: {
+    parse?: (value: unknown) => unknown;
+    toOpenAPI?: () => unknown;
+    toJSONSchema?: () => unknown;
+  };
 };

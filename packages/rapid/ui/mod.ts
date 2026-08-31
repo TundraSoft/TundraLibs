@@ -8,11 +8,15 @@
  * @module
  */
 
+export { fingerprintAssets } from './assets.ts';
+export { formState } from './formState.ts';
 export { Html, html, htmlDocument, raw, render, template } from './html.ts';
 export { UI_LIVE, UI_LIVE_ETAG } from './live.ts';
 export { UI_RUNTIME, UI_RUNTIME_ETAG } from './ui.ts';
 export { withQuery } from './withQuery.ts';
 export type {
+  RapidFormError,
+  RapidFormResult,
   RapidRouteTemplate,
   RapidTemplate,
   RapidUiOptions,

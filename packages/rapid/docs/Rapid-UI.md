@@ -107,8 +107,9 @@ app.ui({
 ```
 
 Every template receives a frozen, read-only `view` as its second parameter:
-`{ requestId, runtimePath, path, query, csrfToken? }` (`csrfToken` reads the
-`csrf` cookie — set `app.ui({ csrfCookie })` if you renamed it in `csrf()`).
+`{ requestId, runtimePath, path, query, asset, csrfToken? }` (`csrfToken`
+reads the `csrf` cookie — set `app.ui({ csrfCookie })` if you renamed it in
+`csrf()`).
 **Nothing from `ctx.auth` is reachable by default** — the projection names
 exactly which fields cross, so identity exposure is safe by construction,
 not by discipline.
@@ -123,6 +124,22 @@ type AppView = { user?: { name: string } };
 const Nav = template<unknown, AppView>((_data, view) =>
   html`<nav>${view.user?.name ?? 'guest'}</nav>`
 );
+```
+
+`view.asset()` versions static-asset URLs so they can cache forever: build
+the content-keyed map once at boot with `fingerprintAssets()`, hand it to
+`app.ui({ assets })`, and serve with `serveStatic({ fingerprint: true })` —
+a mapped path renders as `/style.css?v=<hash>` (served
+`Cache-Control: … immutable`; a changed file gets a new URL), an unmapped
+path passes through unchanged, so templates never branch:
+
+```ts ignore
+import { fingerprintAssets } from '@tundralibs/rapid/ui';
+
+const assets = await fingerprintAssets('./public'); // '/style.css' → 'a1b2c3'
+app.ui({ assets });
+app.use(serveStatic({ root: './public', fingerprint: true }));
+// a template: html`<link rel="stylesheet" href="${view.asset('/style.css')}">`
 ```
 
 Handlers that vary SIDE EFFECTS by representation read `ctx.isSwap` — the
@@ -365,6 +382,21 @@ until then, live updates are a listening-server feature.
       `
     }`
   );
+  ```
+
+- **Validated forms** — the error arm of a form's union (message,
+  per-field problems, values to re-fill) is a primitive: `formState()`
+  runs any `.parse`-bearing schema and hands back typed data or the
+  render-ready `RapidFormError` — the template types its union as
+  `RapidFormError | { state: 'clean' } | …`:
+
+  ```ts ignore
+  import { formState } from '@tundralibs/rapid/ui';
+
+  const form = await formState(CreatePostBody, body);
+  if (!form.ok) return { content: form.error }; // 200 — the union's own state
+  posts.add(form.data);
+  return { content: { state: 'added' } };
   ```
 
 - **Post/Redirect/Get & no-JS forms** — give the form's route

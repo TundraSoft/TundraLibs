@@ -83,7 +83,19 @@ export type ServeStaticOptions = {
    * files.
    */
   maxAge?: number;
+  /**
+   * Serve fingerprinted requests — a URL carrying the `v` query param,
+   * as emitted by `view.asset()` over a `fingerprintAssets()` map — with
+   * `Cache-Control: public, max-age=31536000, immutable` (overriding
+   * `maxAge` for those requests). The content is keyed by the URL, so a
+   * changed file gets a new URL and the old one may cache forever.
+   * @default false
+   */
+  fingerprint?: boolean;
 };
+
+/** The Cache-Control a fingerprinted URL earns (1 year, immutable). */
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 
 /**
  * Serve static files from `options.root`. Register with `app.use(...)`.
@@ -111,6 +123,7 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
   const cacheControl = options.maxAge === undefined
     ? undefined
     : `public, max-age=${Math.floor(options.maxAge)}`;
+  const fingerprint = options.fingerprint === true;
   // The resolved root, computed once (lazily — `root` may not exist at
   // construction). If it can't resolve, fall back to the lexical root; no
   // file will resolve under a non-existent root anyway.
@@ -121,11 +134,14 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') return next();
 
     let pathname: string;
+    let fingerprinted = false;
     try {
       // `new URL().pathname` normalizes literal dot-segments; decoding
       // can REINTRODUCE `..` (from `%2e%2e`), which the guard below
       // re-checks after joining.
-      pathname = decodeURIComponent(new URL(ctx.url).pathname);
+      const url = new URL(ctx.url);
+      pathname = decodeURIComponent(url.pathname);
+      fingerprinted = fingerprint && url.searchParams.has('v');
     } catch {
       return next(); // malformed percent-encoding
     }
@@ -186,7 +202,10 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
       etag,
     };
     if (mtimeMs > 0) headers['last-modified'] = new Date(mtimeMs).toUTCString();
-    if (cacheControl !== undefined) headers['cache-control'] = cacheControl;
+    if (fingerprinted) headers['cache-control'] = IMMUTABLE_CACHE;
+    else if (cacheControl !== undefined) {
+      headers['cache-control'] = cacheControl;
+    }
 
     // Conditional request: If-None-Match (weak) → 304, no read.
     const inm = ctx.headers.get('if-none-match');

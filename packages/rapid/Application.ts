@@ -1079,6 +1079,17 @@ export class Application<S extends RapidContextState = RapidContextState>
         message: `app.ui(): prefer must be 'json' or 'html'`,
       });
     }
+    if (options.assets !== undefined) {
+      for (const [key, value] of Object.entries(options.assets)) {
+        if (!key.startsWith('/') || typeof value !== 'string') {
+          throw new RapidError('RAPID_CONFIG', {
+            message:
+              "app.ui(): assets keys must start with '/' and map to version strings",
+            details: { key },
+          });
+        }
+      }
+    }
     const runtimePath = options.runtimePath ?? '/__rapid/ui.js';
     if (!runtimePath.startsWith('/')) {
       throw new RapidError('RAPID_CONFIG', {

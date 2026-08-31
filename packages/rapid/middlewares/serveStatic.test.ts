@@ -232,3 +232,70 @@ describe('rapid.serveStatic (live)', () => {
     );
   });
 });
+
+describe('rapid.serveStatic fingerprint', () => {
+  let base = '';
+  let app: Application;
+  let url = '';
+
+  beforeAll(async () => {
+    base = await makeTempDir({ prefix: 'rapid-static-fp-' });
+    await ensureDir(`${base}/pub`);
+    await writeTextFile(`${base}/pub/app.css`, 'body{color:red}');
+    app = await Application.initialize({
+      name: 'static-fp',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    app.use(
+      serveStatic({
+        root: `${base}/pub`,
+        prefix: '/s',
+        maxAge: 60,
+        fingerprint: true,
+      }),
+    );
+    await app.start();
+    url = `http://127.0.0.1:${app.port}`;
+  });
+  afterAll(async () => {
+    await app.stop();
+    await removeDir(base, { recursive: true });
+  });
+
+  it('a ?v= URL earns the immutable Cache-Control, overriding maxAge', async () => {
+    const r = await fetch(`${url}/s/app.css?v=abc123`);
+    asserts.assertEquals(r.status, 200);
+    asserts.assertEquals(
+      r.headers.get('cache-control'),
+      'public, max-age=31536000, immutable',
+    );
+    asserts.assertEquals(await r.text(), 'body{color:red}');
+  });
+
+  it('an unversioned URL keeps the plain maxAge policy', async () => {
+    const r = await fetch(`${url}/s/app.css`);
+    asserts.assertEquals(r.headers.get('cache-control'), 'public, max-age=60');
+    await r.text();
+  });
+
+  it('with fingerprint off (the default), ?v= changes nothing', async () => {
+    const plain = await Application.initialize({
+      name: 'static-fp-off',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    plain.use(serveStatic({ root: `${base}/pub`, prefix: '/s', maxAge: 60 }));
+    await plain.start();
+    try {
+      const r = await fetch(
+        `http://127.0.0.1:${plain.port}/s/app.css?v=abc123`,
+      );
+      asserts.assertEquals(
+        r.headers.get('cache-control'),
+        'public, max-age=60',
+      );
+      await r.text();
+    } finally {
+      await plain.stop();
+    }
+  });
+});
