@@ -116,7 +116,7 @@ async function extractBind<S extends RapidContextState>(
       raw = ctx.auth; // base-context bag; any transport, undefined until set.
       break;
     case 'session':
-      raw = ctx.type === 'HTTP' ? getSession(ctx) : undefined; // HTTP-only.
+      raw = ctx.type === 'HTTP' ? await getSession(ctx) : undefined; // HTTP-only.
       break;
     case 'connection':
       raw = (ctx as Extract<RapidContext<S>, { type: 'SOCKET' }>).connection;

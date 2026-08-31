@@ -1,11 +1,15 @@
 /**
  * @fileoverview `session()` — cookie-keyed, store-backed per-client session
- * state. Reads a SIGNED session-id cookie, loads the record from an injected
- * {@link Store}, exposes a dirty-tracked {@link RapidSession} on the request
- * (read it with {@link getSession}), and writes back only when something
- * changed. HTTP-only (a no-op on SOCKET/JOB). The id is signed with
- * `@tundralibs/crypt` HMAC, so a tampered cookie is rejected. Two expiries: a
- * rolling idle TTL (refreshed each request) and a hard absolute cap.
+ * state, loaded LAZILY: the signed cookie is verified and the record
+ * fetched only when the request actually touches the session (the first
+ * `await getSession(ctx)`), and the save/rolling-refresh phase runs only
+ * for touched sessions. A request that never reads the session — an
+ * asset, `/healthz`, a session-free API route — costs ZERO store
+ * round-trips and zero HMAC work. HTTP-only (a no-op on SOCKET/JOB).
+ * The id is signed with `@tundralibs/crypt` HMAC, so a tampered cookie
+ * is rejected. Two expiries: a rolling idle TTL and a hard absolute cap
+ * — the idle window slides on requests that ACCESS the session, so real
+ * activity keeps a user signed in while a css fetch does not.
  *
  * @module
  */
@@ -35,9 +39,10 @@ export type SessionOptions = {
   /** Hard lifetime cap in ms regardless of activity. @default 43200000 (12h) */
   absoluteTtl?: number;
   /**
-   * Slide the idle window (re-store + re-cookie) on every request, not just
-   * writes — keeps active users signed in. Off → only a modified session
-   * persists. @default true
+   * Slide the idle window (re-store + re-cookie) on every request that
+   * TOUCHES the session, not just writes — keeps active users signed in
+   * (an untouched request never loads the session, so it never slides).
+   * Off → only a modified session persists. @default true
    */
   rolling?: boolean;
   /** `SameSite` of the id cookie. @default 'Lax' */
@@ -69,19 +74,23 @@ export type RapidSession = {
   destroy(): void;
 };
 
-/** Symbol under which the live session rides the (per-request) ctx instance. */
+/** Symbol under which the lazy session loader rides the (per-request) ctx. */
 const SESSION: unique symbol = Symbol('rapid.session');
-type WithSession = { [SESSION]?: RapidSession };
+type WithSession = { [SESSION]?: () => Promise<RapidSession> };
 
 /**
- * The session for the current request, or `undefined` when {@link session} is
- * not installed (or the invoke is not HTTP). Stored on the per-request context
- * instance — never `ctx.state` (which is shared under `stateMode: 'SHARE'`).
+ * The session for the current request — `await` it — or `undefined` when
+ * {@link session} is not installed (or the invoke is not HTTP). The first
+ * call verifies the cookie and loads the record (memoized per request);
+ * a request that never calls this never touches the store. Stored on the
+ * per-request context instance — never `ctx.state` (which is shared
+ * under `stateMode: 'SHARE'`). `await getSession(ctx)` reads naturally
+ * in both cases (awaiting `undefined` yields `undefined`).
  */
 export function getSession<S extends RapidContextState = RapidContextState>(
   ctx: Context<S>,
-): RapidSession | undefined {
-  return (ctx as unknown as WithSession)[SESSION];
+): Promise<RapidSession> | undefined {
+  return (ctx as unknown as WithSession)[SESSION]?.();
 }
 
 /**
@@ -96,7 +105,7 @@ export function getSession<S extends RapidContextState = RapidContextState>(
  * // The id cookie is signed with the app `secret` option — set that once.
  * app.use(session());
  * app.post('/login', async (ctx) => {
- *   const s = getSession(ctx)!;
+ *   const s = (await getSession(ctx))!;
  *   s.regenerate();               // new id, keep any anonymous data
  *   s.set('userId', await authenticate(ctx));
  *   return { content: { ok: true } };
@@ -119,54 +128,66 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
   return async (ctx, next) => {
     if (ctx.type !== 'HTTP') return await next();
 
-    // 1. LOAD — verify the signed id, fetch + validate the record.
-    const secret = ctx.app.secret;
-    let id = await verifySignedValue(ctx.cookies[name], secret);
+    // The dirty-tracked state, populated by the LAZY load below. Nothing
+    // — not the HMAC verify, not the store read — runs until the request
+    // actually asks for its session.
+    let id: string | undefined;
     let data: SessionData = {};
     let createdAt = Date.now();
-    if (id !== undefined) {
-      const rec = await store.get(id);
-      if (rec !== undefined && Date.now() - rec.createdAt < absoluteTtl) {
-        ({ data, createdAt } = rec);
-      } else {
-        id = undefined; // absent / past the absolute cap → start fresh, lazily
-      }
-    }
-
-    // 2. EXPOSE — a dirty-tracked wrapper on the per-request ctx instance.
     let dirty = false;
     let destroyed = false;
     let evict: string | undefined; // an old id to drop after regenerate()
-    const sess: RapidSession = {
-      get id() {
-        return id;
-      },
-      get: <T = unknown>(key: string) => data[key] as T | undefined,
-      set: (key, value) => {
-        data[key] = value;
-        dirty = true;
-      },
-      delete: (key) => {
-        delete data[key];
-        dirty = true;
-      },
-      keys: () => Object.keys(data),
-      regenerate: () => {
-        if (id !== undefined) evict = id; // drop the pre-login record at save
-        id = undefined; // new id minted at save
-        createdAt = Date.now(); // fresh absolute window post-login
-        dirty = true;
-      },
-      destroy: () => {
-        destroyed = true;
-      },
-    };
-    (ctx as unknown as WithSession)[SESSION] = sess;
 
-    // 3. RUN.
+    // LOAD — verify the signed id, fetch + validate the record, build the
+    // wrapper. Memoized: every getSession() call shares one promise.
+    const load = async (): Promise<RapidSession> => {
+      const secret = ctx.app.secret;
+      id = await verifySignedValue(ctx.cookies[name], secret);
+      if (id !== undefined) {
+        const rec = await store.get(id);
+        if (rec !== undefined && Date.now() - rec.createdAt < absoluteTtl) {
+          ({ data, createdAt } = rec);
+        } else {
+          id = undefined; // absent / past the absolute cap → start fresh, lazily
+        }
+      }
+      return {
+        get id() {
+          return id;
+        },
+        get: <T = unknown>(key: string) => data[key] as T | undefined,
+        set: (key, value) => {
+          data[key] = value;
+          dirty = true;
+        },
+        delete: (key) => {
+          delete data[key];
+          dirty = true;
+        },
+        keys: () => Object.keys(data),
+        regenerate: () => {
+          if (id !== undefined) evict = id; // drop the pre-login record at save
+          id = undefined; // new id minted at save
+          createdAt = Date.now(); // fresh absolute window post-login
+          dirty = true;
+        },
+        destroy: () => {
+          destroyed = true;
+        },
+      };
+    };
+    let loading: Promise<RapidSession> | undefined;
+    (ctx as unknown as WithSession)[SESSION] = () => (loading ??= load());
+
+    // RUN.
     await next();
 
-    // 4. SAVE — only touch store/cookie when something changed.
+    // SAVE — only for a TOUCHED session (loading set), and only when
+    // something changed (or rolling slides the window). An un-awaited
+    // getSession() (a handler that fired and forgot) still settles here
+    // before the state is read, so a half-loaded session can't save.
+    if (loading === undefined) return; // untouched — zero store I/O
+    await loading.catch(() => {}); // a failed load: nothing to save
     if (destroyed) {
       if (id !== undefined) await drop(id);
       ctx.deleteCookie(name, { path: options.path ?? '/' });
@@ -179,7 +200,7 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
       await store.set(id, { data, createdAt }, idleTtl);
       // Issue on a fresh/rotated id; re-issue to slide the rolling window.
       if (fresh || rolling) {
-        ctx.setCookie(name, await signValue(id, secret), {
+        ctx.setCookie(name, await signValue(id, ctx.app.secret), {
           httpOnly: true,
           secure: options.secure ?? true,
           sameSite: options.sameSite ?? 'Lax',

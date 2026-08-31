@@ -8,6 +8,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { getSession, session } from './session.ts';
+import { memoryStore } from './store.ts';
 
 const makeApp = async () => {
   const app = await Application.initialize({
@@ -19,21 +20,23 @@ const makeApp = async () => {
   app.use(session({ secure: false })); // http test → Secure off
   app.get(
     '/read',
-    (ctx) => ({ content: { hits: getSession(ctx)!.get<number>('hits') ?? 0 } }),
+    async (ctx) => ({
+      content: { hits: (await getSession(ctx))!.get<number>('hits') ?? 0 },
+    }),
   );
-  app.post('/hit', (ctx) => {
-    const s = getSession(ctx)!;
+  app.post('/hit', async (ctx) => {
+    const s = (await getSession(ctx))!;
     s.set('hits', (s.get<number>('hits') ?? 0) + 1);
     return { content: { hits: s.get<number>('hits') } };
   });
-  app.post('/login', (ctx) => {
-    const s = getSession(ctx)!;
+  app.post('/login', async (ctx) => {
+    const s = (await getSession(ctx))!;
     s.regenerate();
     s.set('userId', 'u1');
     return { content: { ok: true } };
   });
-  app.post('/logout', (ctx) => {
-    getSession(ctx)!.destroy();
+  app.post('/logout', async (ctx) => {
+    (await getSession(ctx))!.destroy();
     return { content: { ok: true } };
   });
   return app;
@@ -113,6 +116,53 @@ describe('rapid session()', () => {
       new Request('http://app/read', { headers: { cookie: `sid=${sid}` } }),
     );
     asserts.assertEquals((await r3.json()).hits, 0);
+  });
+
+  it('is LAZY: a request that never touches the session does zero store I/O and never slides the window', async () => {
+    let reads = 0;
+    let writes = 0;
+    const counting = {
+      get(key: string) {
+        reads++;
+        return backing.get(key);
+      },
+      set(
+        key: string,
+        value: { data: Record<string, unknown>; createdAt: number },
+        ttl?: number,
+      ) {
+        writes++;
+        backing.set(key, value, ttl);
+      },
+    };
+    const backing = memoryStore<
+      { data: Record<string, unknown>; createdAt: number }
+    >();
+    const app = await Application.initialize({
+      name: 'session-lazy',
+      secret: 'a'.repeat(32),
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(session({ secure: false, store: counting }));
+    app.get('/untouched', () => ({ content: { ok: true } }));
+    app.get('/touched', async (ctx) => ({
+      content: { id: (await getSession(ctx))!.id ?? null },
+    }));
+
+    // Mint a session first so a cookie exists to tempt an eager load.
+    const seed = await app.fetch(
+      new Request('http://app/touched', { method: 'GET' }),
+    );
+    await seed.body?.cancel();
+    const afterSeed = { reads, writes };
+
+    // An untouched request with NO session access: zero store I/O.
+    const r = await app.fetch(new Request('http://app/untouched'));
+    asserts.assertEquals((await r.json()).ok, true);
+    asserts.assertEquals(reads, afterSeed.reads);
+    asserts.assertEquals(writes, afterSeed.writes);
+    await app.stop();
   });
 
   it('rejects a tampered id (bad signature) as no session', async () => {

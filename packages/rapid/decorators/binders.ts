@@ -150,9 +150,10 @@ export function auth(
 }
 
 /**
- * Bind the request session (`getSession(ctx)`; `undefined` when the
- * {@link session} middleware is not installed or off-HTTP). Read/write it
- * in the method without touching `ctx`.
+ * Bind the request session (`await getSession(ctx)` — this binder is what
+ * LOADS the lazy session; `undefined` when the {@link session} middleware
+ * is not installed or off-HTTP). Read/write it in the method without
+ * touching `ctx`.
  */
 export function session(): RapidBinder<RapidSession | undefined> {
   return { source: 'session' };

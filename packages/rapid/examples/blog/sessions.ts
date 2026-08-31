@@ -22,8 +22,8 @@ const app = await Application.initialize({
 app.use(session({ secure: false }));
 app.use(csrf({ secure: false }));
 
-app.get('/me', (ctx) => {
-  const s = getSession(ctx)!;
+app.get('/me', async (ctx) => {
+  const s = (await getSession(ctx))!;
   return {
     content: {
       userId: s.get<string>('userId') ?? null,
@@ -32,23 +32,23 @@ app.get('/me', (ctx) => {
   };
 });
 
-app.post('/cart/add/:item:', (ctx) => {
-  const s = getSession(ctx)!;
+app.post('/cart/add/:item:', async (ctx) => {
+  const s = (await getSession(ctx))!;
   const cart = s.get<string[]>('cart') ?? [];
   cart.push(ctx.params.item);
   s.set('cart', cart); // persists to the session store
   return { content: { cart } };
 });
 
-app.post('/login', (ctx) => {
-  const s = getSession(ctx)!;
+app.post('/login', async (ctx) => {
+  const s = (await getSession(ctx))!;
   s.regenerate(); // new id (fixation-safe); the anonymous cart carries over
   s.set('userId', 'user-42');
   return { content: { ok: true } };
 });
 
-app.post('/logout', (ctx) => {
-  getSession(ctx)!.destroy();
+app.post('/logout', async (ctx) => {
+  (await getSession(ctx))!.destroy();
   return { content: { ok: true } };
 });
 
