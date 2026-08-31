@@ -366,6 +366,82 @@ describe('rapid.cli init scaffold', () => {
     asserts.assert(!('AGENTS.md' in off) && !('CLAUDE.md' in off));
   });
 
+  it('scaffold() --ui emits the three-tier views, static+ui config, and a templated home', () => {
+    const f = scaffold(
+      {
+        name: 'shop',
+        module: true,
+        norm: false,
+        runtime: 'deno',
+        docker: false,
+        github: false,
+        ai: false,
+        ui: true,
+        vendorCss: 'pico.min.css',
+      },
+      '1.0.0',
+    );
+    // The three tiers + components + starter css.
+    for (
+      const file of [
+        'views/core.ts',
+        'views/layout.ts',
+        'views/components.ts',
+        'views/mod.ts',
+        'public/site.css',
+        'modules/Home.ts',
+        'modules/Home.views.ts',
+      ]
+    ) {
+      asserts.assert(file in f, `missing ${file}`);
+    }
+    // Config: static under server (config-dir-relative root, fingerprint)
+    // and the ui data half at top level.
+    const yaml = f['configs/Application.yaml']!;
+    asserts.assertStringIncludes(yaml, 'static:');
+    asserts.assertStringIncludes(yaml, 'root: ../public');
+    asserts.assertStringIncludes(yaml, 'fingerprint: true');
+    asserts.assertStringIncludes(yaml, '\nui:\n');
+    asserts.assertStringIncludes(yaml, 'prefer: html');
+    // main.ts wires the CODE half at initialize.
+    asserts.assertStringIncludes(
+      f['main.ts']!,
+      'ui: { core: CoreShell, layout: PageShape }',
+    );
+    // The vendor stylesheet links BEFORE site.css, via view.asset.
+    asserts.assertStringIncludes(
+      f['views/core.ts']!,
+      "view.asset('/public/vendor/pico.min.css')",
+    );
+    // The barrel exports both modules.
+    asserts.assertStringIncludes(f['modules/mod.ts']!, 'export { Home }');
+    // The home module is a templated page route.
+    asserts.assertStringIncludes(f['modules/Home.ts']!, "prefer: 'html'");
+  });
+
+  it('scaffold() --ui without modules swaps the JSON sample for a templated page', () => {
+    const f = scaffold(
+      {
+        name: 'shop',
+        module: false,
+        norm: false,
+        runtime: 'deno',
+        docker: false,
+        github: false,
+        ai: false,
+        ui: true,
+      },
+      '1.0.0',
+    );
+    asserts.assertStringIncludes(f['main.ts']!, 'template: { render: HomePage');
+    asserts.assertEquals('modules/Home.ts' in f, false);
+    // No vendor css requested -> no vendor link in the core.
+    asserts.assertEquals(
+      f['views/core.ts']!.includes('/public/vendor/'),
+      false,
+    );
+  });
+
   it('scaffold() for workers emits wrangler.toml + worker.ts, never a Dockerfile', () => {
     const f = scaffold(
       {

@@ -90,6 +90,46 @@ export async function initCommand(
 
   const module = await pick('module', 'Include the module system?', true);
   const norm = await pick('norm', 'Include a database (norm)?', false);
+  // The UI scaffold is server-runtime only — Workers assets need a
+  // bundler manifest, so the combination is refused rather than half-built.
+  const ui = runtime === 'workers'
+    ? false
+    : await pick('ui', 'Include the UI layer (three-tier pages)?', false);
+  if (runtime === 'workers' && (args.ui === true || args.with !== undefined)) {
+    console.error(
+      '✗ --ui targets server runtimes (Workers assets need a bundler manifest)',
+    );
+    return 1;
+  }
+  // --with <css>: self-host a starter stylesheet under public/vendor/ —
+  // downloaded at scaffold time, never a CDN link at runtime.
+  const WITH_CSS: Record<string, { file: string; url: string }> = {
+    bootstrap: {
+      file: 'bootstrap.min.css',
+      url:
+        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+    },
+    pico: {
+      file: 'pico.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css',
+    },
+  };
+  let withCss: { file: string; url: string } | undefined;
+  if (args.with !== undefined) {
+    if (!ui) {
+      console.error('✗ --with needs --ui');
+      return 1;
+    }
+    withCss = WITH_CSS[String(args.with)];
+    if (withCss === undefined) {
+      console.error(
+        `✗ unknown --with '${String(args.with)}' (expected ${
+          Object.keys(WITH_CSS).join('|')
+        })`,
+      );
+      return 1;
+    }
+  }
   // No container for Workers — never offer a Dockerfile there.
   const docker = runtime === 'workers'
     ? false
@@ -111,11 +151,42 @@ export async function initCommand(
     return 1;
   }
 
+  // Fetch the vendor stylesheet FIRST — a failed download degrades to a
+  // scaffold without the link (warned), never a broken reference.
+  let vendorBody: string | undefined;
+  if (withCss !== undefined) {
+    try {
+      const res = await fetch(withCss.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      vendorBody = await res.text();
+    } catch (error) {
+      console.error(
+        `! could not download ${withCss.url} (${
+          error instanceof Error ? error.message : String(error)
+        }) — scaffolding without it`,
+      );
+      withCss = undefined;
+    }
+  }
+
   const rapidVersion = (await latestVersion('rapid')) ?? '1.0.0';
   const files = scaffold(
-    { name, module, norm, runtime, docker, github, ai },
+    {
+      name,
+      module,
+      norm,
+      runtime,
+      docker,
+      github,
+      ai,
+      ui,
+      ...(withCss !== undefined ? { vendorCss: withCss.file } : {}),
+    },
     rapidVersion,
   );
+  if (withCss !== undefined && vendorBody !== undefined) {
+    files[`public/vendor/${withCss.file}`] = vendorBody;
+  }
 
   for (const [rel, content] of Object.entries(files)) {
     const path = `${root}/${rel}`;

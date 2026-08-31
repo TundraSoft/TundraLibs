@@ -14,6 +14,19 @@ export type ScaffoldAnswers = {
   module: boolean;
   norm: boolean;
   /**
+   * The UI layer: three-tier views (core + module layout + components),
+   * a starter stylesheet under `public/`, `server.static` + `ui:` in the
+   * config, and a templated home page. Server runtimes only (Workers
+   * assets need a bundler manifest — `init` refuses the combination).
+   */
+  ui?: boolean;
+  /**
+   * A vendor stylesheet filename under `public/vendor/` the core should
+   * link BEFORE site.css — set by `init --with <css>` after a successful
+   * self-host download (never a CDN link at runtime).
+   */
+  vendorCss?: string;
+  /**
    * The project's runtime — a PROJECT-WIDE choice made first: it decides
    * which config file is primary (`deno.json` vs `package.json`), the
    * install/dev/start/test commands, and the deploy artifact. `workers`
@@ -575,6 +588,111 @@ const RUNTIME = {
  * The runtime decides the primary config file (never both), the run
  * commands, and the deploy artifact.
  */
+
+// ── the UI scaffold (init --ui): three tiers + a starter page ─────────
+
+const VIEWS_CORE = `import {
+  html,
+  htmlDocument,
+  template,
+} from '@tundralibs/rapid/ui';
+import type { RapidCoreData } from '@tundralibs/rapid';
+
+/**
+ * The CORE — the document tier: <head> (meta/css), body, the swap
+ * runtime. App-level and irreplaceable; module/route layouts nest
+ * inside it. \`title\`/\`meta\` arrive from the route's template options.
+ */
+export const CoreShell = template<RapidCoreData>((d, view) =>
+  htmlDocument({
+    title: d.title ?? '{{name}}',
+    meta: d.meta,
+    head: html\`{{vendorLink}}<link rel="stylesheet" href="\${
+      view.asset('/public/site.css')
+    }">\`,
+    body: html\`\${d.body}<script src="\${view.runtimePath}"></script>\`,
+  }), 'CoreShell');
+`;
+
+const VIEWS_LAYOUT =
+  `import { html, type Html, template } from '@tundralibs/rapid/ui';
+
+/**
+ * The default MODULE-tier layout — the page shape (header + content
+ * slot) nesting inside the core. A module brings its own with
+ * \`@Module({ layout })\`; \`layout: false\` on a route goes straight
+ * into the core.
+ */
+export const PageShape = template<{ body: Html; title?: string }>((d) =>
+  html\`<header class="site"><a href="/">{{name}}</a></header>
+    <main>\${d.title ? html\`<h1>\${d.title}</h1>\` : ''}\${d.body}</main>\`, 'PageShape');
+`;
+
+const VIEWS_COMPONENTS =
+  `import { html, type Html } from '@tundralibs/rapid/ui';
+
+/** A view component — a plain typed function; change it, every consumer follows. */
+export const Card = (p: { title: string; body: Html; footer?: Html }): Html =>
+  html\`<article class="card"><h3>\${p.title}</h3>
+    <div>\${p.body}</div>\${
+    p.footer ? html\`<footer>\${p.footer}</footer>\` : ''
+  }</article>\`;
+`;
+
+const VIEWS_BARREL = `export { Card } from './components.ts';
+export { CoreShell } from './core.ts';
+export { PageShape } from './layout.ts';
+`;
+
+const SITE_CSS =
+  `/* {{name}} — served via server.static; view.asset() fingerprints it. */
+:root { color-scheme: light dark; }
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; }
+header.site { padding: 1rem 1.5rem; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+header.site a { font-weight: 600; text-decoration: none; color: inherit; }
+main { max-width: 46rem; margin: 0 auto; padding: 1.5rem; }
+.card { border: 1px solid color-mix(in srgb, currentColor 15%, transparent); border-radius: 10px; padding: 1rem 1.2rem; margin: 1rem 0; }
+.card h3 { margin: 0 0 .5rem; }
+`;
+
+const HOME_MODULE = `import { GET } from '@tundralibs/rapid/decorators';
+import { event, RapidModule } from '@tundralibs/rapid/modules';
+import { HomePage } from './Home.views.ts';
+
+const EVENTS = { Visited: event<{ at: string }>() };
+
+/** The home page — same route serves JSON (curl it) and the HTML page. */
+export class Home extends RapidModule<typeof EVENTS> {
+  readonly name = 'Home';
+  readonly namespace = 'home';
+  protected readonly events = EVENTS;
+
+  @GET('/', {
+    template: { render: HomePage, prefer: 'html', title: 'Welcome' },
+  })
+  async index() {
+    await this.emit('Visited', { at: new Date().toISOString() });
+    return { content: { app: '{{name}}', ok: true } };
+  }
+}
+`;
+
+const HOME_VIEWS = `import { html, template } from '@tundralibs/rapid/ui';
+import { Card } from '../views/mod.ts';
+
+/** Co-located views: this module's fragments live beside the module. */
+export const HomePage = template<{ app: string; ok: boolean }>((d) =>
+  html\`\${
+    Card({
+      title: d.app,
+      body: html\`<p>Same handler, more than one representation: this
+        page, the bare fragment
+        (<code>curl -H 'rapid-swap: 1' localhost:3000/</code>), and pure
+        JSON on a replica with <code>ui.enabled: false</code>.</p>\`,
+    })
+  }\`, 'HomePage');
+`;
+
 export function scaffold(
   answers: ScaffoldAnswers,
   rapidVersion: string,
@@ -631,6 +749,90 @@ export function scaffold(
   if (answers.module) {
     files['modules/Greeter.ts'] = MODULE_SAMPLE;
     files['modules/mod.ts'] = MODULES_BARREL;
+  }
+  if (answers.ui === true && answers.runtime !== 'workers') {
+    const uiVars = {
+      ...vars,
+      vendorLink: answers.vendorCss !== undefined
+        ? `<link rel="stylesheet" href="\${
+          view.asset('/public/vendor/${answers.vendorCss}')
+        }">`
+        : '',
+    };
+    files['views/core.ts'] = render(VIEWS_CORE, uiVars);
+    files['views/layout.ts'] = render(VIEWS_LAYOUT, vars);
+    files['views/components.ts'] = VIEWS_COMPONENTS;
+    files['views/mod.ts'] = VIEWS_BARREL;
+    files['public/site.css'] = render(SITE_CSS, vars);
+    // The DATA half in YAML (per replica), inside the server block…
+    files['configs/Application.yaml'] = files['configs/Application.yaml']!
+      .replace(
+        '  hostname: localhost\n',
+        '  hostname: localhost\n' +
+          '  static: # framework-served on route miss; routes always win\n' +
+          '    /public:\n' +
+          '      root: ../public # relative to this config directory\n' +
+          '      fingerprint: true # immutable ?v= URLs via view.asset()\n',
+      ) + `
+ui:
+  enabled: true # false = API replica: JSON everywhere, no runtime routes
+  prefer: html # pages-first; an API route sets prefer: json to override
+  history: false # true serves /__rapid/history.js (opt-in push-state)
+`;
+    // …the CODE half at initialize.
+    const main = answers.module ? 'main.ts' : 'main.ts';
+    if (files[main] !== undefined) {
+      files[main] = files[main]!
+        .replace(
+          "import { Application } from '@tundralibs/rapid';",
+          "import { Application } from '@tundralibs/rapid';\n" +
+            "import { CoreShell, PageShape } from './views/mod.ts';",
+        )
+        .replace(
+          'await Application.initialize(configDir);',
+          'await Application.initialize({\n' +
+            '  path: configDir,\n' +
+            '  ui: { core: CoreShell, layout: PageShape }, // the CODE half\n' +
+            '});',
+        );
+    }
+    if (answers.module) {
+      files['modules/Home.ts'] = render(HOME_MODULE, vars);
+      files['modules/Home.views.ts'] = HOME_VIEWS;
+      files['modules/mod.ts'] =
+        `// Generated by \`rapid modules\` — do not edit by hand.
+export { Greeter } from './Greeter.ts';
+export { Home } from './Home.ts';
+`;
+    } else if (files['main.ts'] !== undefined) {
+      // Plain shape: swap the JSON sample for a templated page route.
+      files['main.ts'] = files['main.ts']!
+        .replace(
+          "import { CoreShell, PageShape } from './views/mod.ts';",
+          "import { Card, CoreShell, PageShape } from './views/mod.ts';\n" +
+            "import { html, template } from '@tundralibs/rapid/ui';",
+        )
+        .replace(
+          `app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));`
+            .replace('{{name}}', answers.name),
+          `const HomePage = template<{ app: string; ok: boolean }>((d) =>
+  html\`\${
+    Card({
+      title: d.app,
+      body: html\`<p>Same handler, more than one representation: this
+        page, the bare fragment
+        (<code>curl -H 'rapid-swap: 1' localhost:3000/</code>), and pure
+        JSON on a replica with <code>ui.enabled: false</code>.</p>\`,
+    })
+  }\`, 'HomePage');
+
+app.get(
+  '/',
+  { template: { render: HomePage, prefer: 'html', title: 'Welcome' } },
+  () => ({ content: { app: '${answers.name}', ok: true } }),
+);`,
+        );
+    }
   }
   if (answers.norm) {
     files['models/Users.ts'] = MODEL_SAMPLE;
