@@ -36,7 +36,7 @@
  * ```
  *
  * THE LIVE PAGE — the same routes, HTML representation: open
- * http://localhost:3100/ (→ /posts/ui). The list/detail/comments you see
+ * http://localhost:8001/ (→ /posts/ui). The list/detail/comments you see
  * are the very routes curl'd below; a cron job (posts.fakeComment) drops
  * comments and the page streams them in over the websocket 'comments'
  * channel (public/blog.js subscribes, then rapid.swap()s the fragment).
@@ -44,42 +44,42 @@
  * Ids are UUIDs (norm generates them), so LIST first to grab one:
  *
  * ```bash
- * curl -sL localhost:3100/                               # GET / → 302 → the blog page (/posts/ui)
- * curl -s  localhost:3100/public/style.css               # a static file (text/css)
- * curl -s  localhost:3100/posts | jq                     # list, paged (LIMIT/OFFSET in SQLite)
- * curl -s 'localhost:3100/posts?level=advanced' | jq     # the page chips' filter — same route
- * ID=$(curl -s localhost:3100/posts | jq -r '.rows[0].id')
- * curl -s localhost:3100/posts/$ID | jq                  # no header → server.versioning.default (v1)
- * curl -s localhost:3100/posts/$ID -H 'x-api-version: v2' | jq   # findV2() — same path, adds _links
+ * curl -sL localhost:8001/                               # GET / → 302 → the blog page (/posts/ui)
+ * curl -s  localhost:8001/public/style.css               # a static file (text/css)
+ * curl -s  localhost:8001/posts | jq                     # list, paged (LIMIT/OFFSET in SQLite)
+ * curl -s 'localhost:8001/posts?level=advanced' | jq     # the page chips' filter — same route
+ * ID=$(curl -s localhost:8001/posts | jq -r '.rows[0].id')
+ * curl -s localhost:8001/posts/$ID | jq                  # no header → server.versioning.default (v1)
+ * curl -s localhost:8001/posts/$ID -H 'x-api-version: v2' | jq   # findV2() — same path, adds _links
  *
- * curl -s -X POST localhost:3100/posts -H 'content-type: application/json' \
+ * curl -s -X POST localhost:8001/posts -H 'content-type: application/json' \
  *   -d '{"title":"Hello rAPId","body":"First post.","tags":["meta"]}' | jq
- * curl -s -X PATCH localhost:3100/posts/$ID -H 'content-type: application/json' \
+ * curl -s -X PATCH localhost:8001/posts/$ID -H 'content-type: application/json' \
  *   -d '{"published":true}' | jq
- * curl -si -X DELETE localhost:3100/posts/$ID            # its comments cascade in SQLite
- * curl -si -X POST localhost:3100/posts -d '{"title":""}'   # 400 — guardian rejects it
+ * curl -si -X DELETE localhost:8001/posts/$ID            # its comments cascade in SQLite
+ * curl -si -X POST localhost:8001/posts -d '{"title":""}'   # 400 — guardian rejects it
  *
- * curl -s localhost:3100/posts/$ID/comments | jq         # nested resource path
- * curl -s -X POST localhost:3100/posts/$ID/comments -H 'content-type: application/json' \
+ * curl -s localhost:8001/posts/$ID/comments | jq         # nested resource path
+ * curl -s -X POST localhost:8001/posts/$ID/comments -H 'content-type: application/json' \
  *   -d '{"author":"Ada","body":"Nice post!"}' | jq
  * ```
  *
  * Platform endpoints (the `./endpoints` catalog + auth middleware):
  *
  * ```bash
- * curl -s  localhost:3100/healthz | jq        # readiness — pings the DB
- * curl -s  localhost:3100/metrics             # Prometheus text (server.metrics)
- * curl -s  localhost:3100/openapi.json | jq   # the assembled OpenAPI 3.0.3 doc
- * curl -si localhost:3100/admin/summary       # 401 — needs an author token
- * TOKEN=$(curl -s -X POST localhost:3100/login -H 'content-type: application/json' \
+ * curl -s  localhost:8001/healthz | jq        # readiness — pings the DB
+ * curl -s  localhost:8001/metrics             # Prometheus text (server.metrics)
+ * curl -s  localhost:8001/openapi.json | jq   # the assembled OpenAPI 3.0.3 doc
+ * curl -si localhost:8001/admin/summary       # 401 — needs an author token
+ * TOKEN=$(curl -s -X POST localhost:8001/login -H 'content-type: application/json' \
  *   -d '{"username":"ada","password":"lovelace"}' | jq -r .token)
- * curl -s localhost:3100/admin/summary -H "authorization: Bearer $TOKEN" | jq
+ * curl -s localhost:8001/admin/summary -H "authorization: Bearer $TOKEN" | jq
  *
  * # the pact-backed counterpart — same shape, real @tundralibs/pact via
  * # @tundralibs/rapid/middlewares/pact instead of the generic seam.
  * # Boot logs the demo key/secret to use here.
- * curl -si localhost:3100/admin/pact-summary   # 401 — needs an api key
- * curl -s localhost:3100/admin/pact-summary \
+ * curl -si localhost:8001/admin/pact-summary   # 401 — needs an api key
+ * curl -s localhost:8001/admin/pact-summary \
  *   -H "x-api-key: <id from the boot log>" -H "x-api-secret: <secret from the boot log>" | jq
  * ```
  *
@@ -87,7 +87,7 @@
  * field ("comments") joins onto the bare command name:
  *
  * ```ts ignore
- * const ws = new Client({ url: 'ws://localhost:3100/ws' });
+ * const ws = new Client({ url: 'ws://localhost:8001/ws' });
  * await ws.connect();
  * await ws.command('comments.create', {
  *   postId: '<a post id>',
@@ -174,7 +174,7 @@ app.get(
 );
 
 // Prometheus scrape target — the Meter (server.metrics: true) collected
-// every invocation; this just serializes it. Try `curl :3100/metrics`.
+// every invocation; this just serializes it. Try `curl :8001/metrics`.
 app.get('/metrics', metrics());
 
 // The assembled OpenAPI 3.0.3 document, built from the mounted routes
@@ -183,7 +183,7 @@ app.get(
   '/openapi.json',
   openapi({
     info: { description: 'A tiny blog API — posts + nested comments.' },
-    servers: [{ url: 'http://localhost:3100', description: 'local dev' }],
+    servers: [{ url: 'http://localhost:8001', description: 'local dev' }],
   }),
 );
 

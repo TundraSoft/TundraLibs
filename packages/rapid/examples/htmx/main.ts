@@ -29,9 +29,9 @@
  * The same routes are an API — no HX-Request, no HTML:
  *
  * ```bash
- * curl -s localhost:8094/poll | jq                     # tallies (JSON)
- * curl -s -X POST localhost:8094/poll/vote/Ramen | jq
- * curl -s -X POST localhost:8094/poll/suggest -H 'content-type: application/json' \
+ * curl -s localhost:8003/poll | jq                     # tallies (JSON)
+ * curl -s -X POST localhost:8003/poll/vote/Ramen | jq
+ * curl -s -X POST localhost:8003/poll/suggest -H 'content-type: application/json' \
  *   -d '{"dish":"Bibimbap"}' | jq
  * ```
  *
@@ -228,7 +228,7 @@ const Shell = template<{ body: Html; title?: string }>((data) =>
 // ── the app: htmx headers ARE the whole adaptation ───────────────────
 const app = await Application.initialize({
   name: 'htmx-demo',
-  server: { port: 8094 },
+  server: { port: 8003 },
 });
 app.ui({
   layout: Shell,

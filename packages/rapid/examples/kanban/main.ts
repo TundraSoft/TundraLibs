@@ -13,7 +13,7 @@
  *   public/app.js      the dynamic-update wiring: rapid:swapped chains,
  *                      rapid.refresh(), the live channel
  *
- * What to try on the page (http://localhost:3200/ → /board/ui):
+ * What to try on the page (http://localhost:8004/ → /board/ui):
  *
  *   - Move a card (◀ ▶): the board outer-swaps — and the card GLIDES to
  *     its new lane (a stable per-card `view-transition-name` turns the
@@ -33,12 +33,12 @@
  * The same routes are an API — no headers, no HTML:
  *
  * ```bash
- * curl -s localhost:3200/board | jq            # lanes + owners (JSON)
- * curl -s 'localhost:3200/board?owner=Ada' | jq       # the chips' filter
- * curl -s localhost:3200/board/stats | jq
- * ID=$(curl -s localhost:3200/board | jq -r '.lanes.todo[0].id')
- * curl -s -X POST localhost:3200/board/tasks/$ID/move/fwd | jq
- * curl -s -X POST localhost:3200/board/tasks -H 'content-type: application/json' \
+ * curl -s localhost:8004/board | jq            # lanes + owners (JSON)
+ * curl -s 'localhost:8004/board?owner=Ada' | jq       # the chips' filter
+ * curl -s localhost:8004/board/stats | jq
+ * ID=$(curl -s localhost:8004/board | jq -r '.lanes.todo[0].id')
+ * curl -s -X POST localhost:8004/board/tasks/$ID/move/fwd | jq
+ * curl -s -X POST localhost:8004/board/tasks -H 'content-type: application/json' \
  *   -d '{"title":"Ship it","owner":"Ada","tag":"feature"}' | jq
  * ```
  *

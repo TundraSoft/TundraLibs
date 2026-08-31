@@ -1,5 +1,5 @@
 name: rapid-kanban-example
 mode: DEVELOPMENT
 server:
-  port: 3200
+  port: 8004
   hostname: localhost

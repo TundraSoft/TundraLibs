@@ -26,9 +26,9 @@
  * Every region is API-first — the "json" links on the page are these:
  *
  * ```bash
- * curl -s 'localhost:8093/dash?days=30' | jq     # KPIs/trend/regions/reps
- * curl -s localhost:8093/cards/orders | jq
- * curl -s -X POST localhost:8093/orders -H 'content-type: application/json' \
+ * curl -s 'localhost:8002/dash?days=30' | jq     # KPIs/trend/regions/reps
+ * curl -s localhost:8002/cards/orders | jq
+ * curl -s -X POST localhost:8002/orders -H 'content-type: application/json' \
  *   -d '{"product":"Growth","qty":3,"region":"EMEA","rep":"Priya"}' | jq
  * ```
  *
@@ -419,7 +419,7 @@ const APP_JS = `(() => {
 // ── the app: every region is API-first (JSON unless swapped) ─────────
 const app = await Application.initialize({
   name: 'sales-dashboard',
-  server: { port: 8093 },
+  server: { port: 8002 },
 });
 app.ui({ layout: Shell });
 
