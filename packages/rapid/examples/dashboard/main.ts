@@ -420,8 +420,8 @@ const APP_JS = `(() => {
 const app = await Application.initialize({
   name: 'sales-dashboard',
   server: { port: 8002 },
+  ui: { layout: Shell }, // one bag: data + code halves (programmatic app)
 });
-app.ui({ layout: Shell });
 
 app.get('/app.js', () => ({
   content: APP_JS,

@@ -248,9 +248,34 @@ sequencing fact, not a deferral.
   client: `EventSource`, same `rapid:push`/`rapid:live` events) so live
   updates work on Cloudflare Workers, where the rpc WebSocket cannot
   listen. Documented as a known limit in docs/Rapid-UI.md until then.
-- **`rapid init --ui`** — scaffold a starter shell (`htmlDocument` +
-  layout + one templated page + the runtime wired) in the CLI templates;
-  the mechanism the design doc deferred it behind has shipped.
+- **`rapid init --ui`** — scaffold the three-tier starter (core +
+  module layout + a page module + view components, `server.static`
+  wired) per DESIGN-ui D10/A3's conventions; `--with <css framework>`
+  emits an SRI-pinned link in the core (the sanctioned home for
+  bootstrap-style asks — never a framework API).
+- **`cores` registry** (YAML `ui.core: <name>` selecting the document
+  per replica) — DEFERRED from the tiers round: chrome moved to the
+  module tier, thinning the per-replica case; purely additive when a
+  real multi-core need appears.
+- **DEV asset watch** — `view.asset()` already re-hashes on mtime
+  change per render in DEVELOPMENT; a proper file watcher (instant
+  invalidation + a future live-reload nudge) rides the dev-console
+  work.
+- **Upload progress** — fetch-based submits can't report progress
+  cross-runtime; out of scope for the bundled runtime (app JS/XHR).
+- **A11y recipe** — `aria-live` on swap regions + focus guidance off
+  `rapid:swapped` (docs, not mechanism).
+
+### Middleware-as-config (direction set 2026-08-31)
+
+`server.static` is the PILOT: the default middlewares become YAML-
+configurable (per replica) the same way — data-only options in config,
+code-valued seams (stores, key extractors, verify fns) stay
+programmatic, "config names code, never imports it" throughout. The
+HARD problem to design first: **ordering** — the onion's sequence is
+semantics, and a config list must express or pin it. Per-middleware
+route/prefix scoping (e.g. session excluding asset prefixes) lands
+here too — never as a position knob on static.
 
 ### Tooling & DX
 

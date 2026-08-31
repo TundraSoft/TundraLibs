@@ -495,3 +495,115 @@ no async templates, no SPA history.
    templates only through an explicit `app.ui({ view })` projection naming
    the fields (D1). Chosen over "expose the whole bag" because it is safe by
    construction, not by discipline.
+
+## The tiers round (user-driven design, 2026-08-31 — built)
+
+A full design pass with the user settled the UI's second generation.
+Every decision below is BUILT; the rationale lines are the contract.
+
+### D10 — three layout tiers, fixed nesting
+
+**core** (the document: `<head>`, css/js, body-end scripts — app-level,
+optional, IRREPLACEABLE below the app) ▸ **module/route layout** (the
+page shape — swappable, resolution route → `@Module` → app default,
+`layout: false` opts out) ▸ **content** (the route's fragment, composed
+from view components — plain functions, no mechanism). `title` flows to
+both wrapper tiers; `meta` (description/og:*/canonical) to the core
+only. Swaps skip both tiers and carry `title` as the `rapid-title`
+response header. No deeper chaining mechanism exists or will: anything
+past two tiers is function composition. `within()` (an earlier
+opt-in-nesting sketch) was superseded by these semantics and never
+shipped. Migration: core is OPTIONAL — absent, tier-2 output serves as
+the page, so pre-tiers apps are unbroken.
+
+### D11 — UI configuration is split by NATURE, typed disjoint
+
+The serializable DATA half (`enabled`, `runtimePath`, `live`,
+`history`, `prefer`, contract headers, `csrfCookie`) lives in
+Application options — YAML for config-driven apps, per replica. The
+CODE half (`core`, `layout`, `view`, error templates, `assets`) is
+programmatic (factory options / the options object). Doctrine, from the
+exporter precedent: **config names code, never imports it** — no import
+paths in YAML or options, no views-folder scanning ("a string can't be
+a module edge": it breaks `deno compile` and Workers bundling and
+forfeits compile-time safety). `ui.enabled: false` is the per-replica
+API-only gate (`app.uiEnabled`); NOTE the exposure shift it implies —
+templates act as de-facto field filters on `prefer:'html'` routes, so
+handlers must only return what may serialize. `app.ui()` remains one
+release as deprecated sugar. A `cores` name registry (YAML picks a core
+per replica) was DEFERRED — chrome moved to tier 2, thinning its use;
+additive later.
+
+### D12 — error pages: a CLOSED registry ending in DefaultErrorPage
+
+`errorTemplate` (sugar for `{ default }`) XOR `errorTemplates`, keys
+limited to exact status (400–599), `'4xx'`, `'5xx'`, `'default'` —
+boot-validated, resolution fixed (exact → class → default → built-in
+`DefaultErrorPage`). Error pages render inside the CORE only (module
+tier skipped — a module layout may depend on the data that failed),
+title `"{status} {message}"`; the data is the mode-collapsed disclosure
+payload plus `status` and `mode`. A UI-configured app never shows a
+browser a raw JSON envelope — PRODUCTION ships the collapsed disclosure
+as HTML. Section-level error templates are a NON-GOAL: recoverable
+errors are the form union's own 200-state (`formState`), hard errors
+are `rapid:error` + app JS (auto-swapping an error into a region would
+destroy user state — the runtime refuses by design).
+
+### D13 — static serving is config (`server.static`), position fixed
+
+URL prefix → directory under `server`; framework serves on ROUTE MISS,
+before the 404 — routes always win a collision, every outer middleware
+applies (secureHeaders/cors/compress/logging — the mount-before-
+secureHeaders misconfiguration class is gone), routed requests never
+pay a `stat()`. Relative roots anchor to the config directory. The
+`serveStatic` middleware is REMOVED from the public surface. This is
+the PILOT for middleware-as-config (the default middlewares follow,
+later; ordering is that work's hard problem). Session cost note:
+static requests traverse the onion — the principled fix shipped
+alongside (lazy `session()` loading: untouched requests do zero store
+I/O); `rateLimit` exempts via `key: () => null`; per-middleware config
+scoping arrives with middleware-as-config, never a position knob.
+
+### D14 — assets version lazily; no boot walk
+
+`view.asset()` resolution: explicit `ui.assets` manifest (bundler/
+Workers path) → LAZY djb2 content hash for files under a
+`fingerprint: true` mount (first reference reads+hashes, cached;
+DEVELOPMENT re-checks mtime so edits re-hash; PRODUCTION caches
+forever) → passthrough. `?v=` URLs serve `immutable`. The hash is a
+CACHE KEY, not integrity (SRI is a different feature). The
+`immutable`-on-`?v=` stamp lives with static serving, never as an
+independent middleware: the promise is only true under the
+content-derived-URL contract, which only the minting/serving pair can
+vouch for ("never emit immutable for a URL you didn't fingerprint
+yourself").
+
+### D15 — the history module: no DOM cache, opt-in pushes
+
+`ui.history: true` → `/__rapid/history.js` (served like the live
+bridge). Push is PER-INTERACTION opt-in (`data-push` /
+`rapid.history.push()` — the runtime's frozen surface is never
+wrapped); contract: only push URLs that are themselves page routes —
+the same-route duality makes reload/deep-link land on the full page.
+popstate RE-FETCHES (marker-keyed state; full navigation when the
+region is gone); **a DOM snapshot cache is permanently out** — the
+moment one is proposed, this module has failed. One history-bearing
+region per page; pushes need an `id` on the swapped node;
+`document.title` syncs from `rapid-title` on pushed/restored swaps
+only.
+
+### Non-goals reaffirmed this round
+
+- **No curated css-framework API** (bootstrap/tailwind): version
+  treadmill + contradicts the self-host/CSP posture; the core's shared
+  `<head>` is the one-line answer; `init --ui --with X` scaffolds are
+  the sanctioned home (SRI-pinned).
+- **No `.html` template files / no template language**: no expression
+  evaluation in files, ever — the type checker is the template
+  compiler. The static bulk that wants to be a file is CSS/JS →
+  fingerprinted assets; a designer-handoff shell is a user-land
+  slot-split recipe (`<!--body-->` + `raw()`); `layoutFromFile()`
+  (exactly two slots, zero expressions) only if that recipe proves
+  demand.
+- **No `errorTemplates` key-grammar growth**: dispatch beyond
+  exact/class/default is a typed branch in one template.

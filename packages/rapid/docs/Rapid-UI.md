@@ -7,13 +7,13 @@ mechanism for server-rendered pages with fragment swaps.
 
 ## The decision table — deterministic, `Accept` is never consulted
 
-| Request                                        | Representation                       |
-| ---------------------------------------------- | ------------------------------------ |
-| `rapid-swap` header present (our runtime)      | HTML **fragment** — always           |
-| absent, resolved `prefer` = `'json'` (default) | **JSON**, the reply goes out as-is   |
-| absent, resolved `prefer` = `'html'`           | HTML **page**, wrapped in the layout |
+| Request                                        | Representation                     |
+| ---------------------------------------------- | ---------------------------------- |
+| `rapid-swap` header present (our runtime)      | HTML **fragment** — always         |
+| absent, resolved `prefer` = `'json'` (default) | **JSON**, the reply goes out as-is |
+| absent, resolved `prefer` = `'html'`           | HTML **page** (layout ▸ core)      |
 
-`prefer` resolves route → `app.ui({ prefer })` → `'json'`. A fragment and a
+`prefer` resolves route → `ui.prefer` → `'json'`. A fragment and a
 page are both `text/html`, so `Accept` could never tell them apart; ignoring
 it entirely makes the outcome readable off the route's declaration and needs
 no `Vary: Accept`. Every templated response instead carries
@@ -76,39 +76,135 @@ A wrong import or shape throws `RAPID_CONFIG` at registration/mount, never at
 first request. `template` is HTTP-only — ignored on `@SOCKET`/`@JOB`, the
 same documented rule as the reply envelope's `cookies`/`redirect`.
 
-**Layouts** (`RapidTemplate<{ body, title? }>`) wrap pages, never fragments;
-resolution is route (`layout` either form) → `@Module({ layout })` →
-`app.ui({ layout })` → none (the fragment serves as the page). Wrap the
-outermost layout's output in `htmlDocument({ lang?, title?, head?, body })`
-— the doctype/charset/viewport/`<title>` preamble every page needs (skip it
+**Layouts** (`RapidTemplate<{ body, title? }>`) wrap pages, never
+fragments — see [The three tiers](#the-three-tiers): resolution is route
+(`layout` either form, `false` to opt out) → `@Module({ layout })` → the
+app default → none (straight into the core). The CORE — not a layout —
+owns `htmlDocument({ lang?, title?, meta?, head?, body })`, the
+doctype/charset/viewport/`<title>` preamble every page needs (skip it
 and browsers quirks-mode the page); `view.runtimePath` is where the swap
-runtime is served, for the layout's script tag.
+runtime is served, for the core's script tag.
 
 A throwing template surfaces as `RAPID_TEMPLATE_RENDER` naming the
 template (`details.template` — the `template()` factory's name argument
 earns its keep here); the underlying throw rides `debug` — rendered in
 DEVELOPMENT, always in the server log — and PRODUCTION collapses the
-envelope. In DEVELOPMENT, an app that called `app.ui()` but set no
-`errorTemplate` gets a built-in escaped `<pre>` error fragment on HTML
-requests — the failure shows IN the page instead of a silent
-`rapid:error`; PRODUCTION always keeps the JSON envelope.
+envelope. HTML-resolving errors render through the error-page registry
+ending in the built-in `DefaultErrorPage` — see [Errors](#errors).
 
-## `app.ui()` and the view bag
+## Configuring the UI
+
+UI configuration is split by NATURE, typed disjoint, at
+`Application.initialize`:
+
+- **The DATA half** — serializable, so a config-driven app sets it in
+  `Application.yaml` under `ui:` (per replica): `enabled`, `runtimePath`,
+  `live`, `history`, `prefer`, `csrfCookie`, and the contract headers
+  (`swapHeader` / `swapUnless` / `redirectHeader`).
+- **The CODE half** — templates and functions YAML can never name
+  (config names code, never imports it): `core`, `layout`, `view`,
+  `errorTemplate`/`errorTemplates`, `assets`. Config-driven apps pass it
+  in the factory options; programmatic apps put both halves in one `ui`
+  bag.
+
+```yaml
+# configs/Application.yaml — the replica-level surface
+ui:
+  enabled: true # false = API replica: JSON everywhere, no runtime routes
+  prefer: html
+  live: true
+  history: true
+```
 
 ```ts ignore
-app.ui({
-  layout: Shell, // app default
-  prefer: 'html', // pages-first app; API routes override back
-  errorTemplate: ErrorPage,
-  view: (ctx) => ({ // OPT-IN identity projection
-    user: ctx.auth ? { name: ctx.auth.name as string } : undefined,
-  }),
+const app = await Application.initialize({
+  path: './configs',
+  ui: { // the CODE half
+    core: CoreShell,
+    layout: PageShape, // app-default module-tier layout
+    errorTemplates: { 404: NotFound, '5xx': ServerFault },
+    view: (ctx) => ({ // OPT-IN identity projection
+      user: ctx.auth ? { name: ctx.auth.name as string } : undefined,
+    }),
+  },
 });
 ```
 
+`ui.enabled: false` turns a replica API-only — templated routes serve
+JSON unconditionally, the runtime/live/history routes are not
+registered. One caution rides that switch: with the UI on, a
+`prefer: 'html'` route's template acts as a de-facto field filter —
+disabled, the handler's FULL content ships as JSON. Handlers must only
+ever return what may serialize; the representer never filters.
+
+Configuring the UI registers the client runtime at `runtimePath`
+(default `/__rapid/ui.js`) — served from a string constant (no file
+read: works on Workers and with `app.fetch()`), strong content-keyed
+`ETag`, `cache-control: no-cache` (a 304 when unchanged — never a stale
+runtime after an upgrade). Configure at most once; a second
+configuration (the deprecated `app.ui()` included) is `RAPID_CONFIG`.
+
+## The three tiers
+
+Pages compose from exactly three tiers — no deeper chaining exists:
+
+1. **The core** (`ui: { core }`) — the DOCUMENT: `<head>` (meta, css,
+   js), body open, body-end scripts. App-level, optional, and
+   irreplaceable below the app: every page renders inside it. Its
+   per-page "edits" are its data slots — `title` and `meta`.
+2. **The module/route layout** — the PAGE SHAPE (nav, header, footer, a
+   content slot), always nesting inside the core. Resolution: route
+   `layout` → the `@Module`'s → the app default → none (straight into
+   the core). `layout: false` at route or module level opts out of the
+   tier even when a default exists (the print/embed page inside a
+   chrome-heavy module).
+3. **The content** — the route's fragment, composed from view
+   components: plain typed functions (`Card({ title, body })`), no
+   mechanism. Change the component, every consumer follows.
+
+```ts ignore
+const CoreShell = template<RapidCoreData>((d, view) =>
+  htmlDocument({
+    title: d.title ?? 'Acme',
+    meta: d.meta,
+    head: html`<link rel="stylesheet" href="${view.asset('/site.css')}">`,
+    body: html`${d.body}<script src="${view.runtimePath}"></script>`,
+  })
+);
+
+const PageShape = template<{ body: Html; title?: string }>((d, view) =>
+  html`
+    <header>
+      <nav>…</nav>
+    </header>
+    <main>${d.body}</main>
+  `
+);
+```
+
+`title` (a string or `(data) => string` on the route's template options)
+flows to BOTH wrapper tiers — the core renders `<title>`, the layout may
+show a heading; either may ignore it. On swap replies it rides the
+`rapid-title` response header instead (the history module syncs
+`document.title` from it). `meta` (a record or `(data) => record` —
+`description`, `og:*`, `canonical`) reaches the CORE only;
+`htmlDocument` renders it escaped:
+
+```ts ignore
+@GET('/posts/:id:', {
+  template: { render: PostPage, title: (p) => p.title },
+  meta: (p) => ({ description: p.summary, 'og:title': p.title }),
+})
+```
+
+A swap always gets the bare fragment — both tiers apply to full pages
+only.
+
+## The view bag
+
 Every template receives a frozen, read-only `view` as its second parameter:
 `{ requestId, runtimePath, path, query, asset, csrfToken? }` (`csrfToken`
-reads the `csrf` cookie — set `app.ui({ csrfCookie })` if you renamed it in
+reads the `csrf` cookie — set `ui.csrfCookie` if you renamed it in
 `csrf()`).
 **Nothing from `ctx.auth` is reachable by default** — the projection names
 exactly which fields cross, so identity exposure is safe by construction,
@@ -126,50 +222,48 @@ const Nav = template<unknown, AppView>((_data, view) =>
 );
 ```
 
-`view.asset()` versions static-asset URLs so they can cache forever: build
-the content-keyed map once at boot with `fingerprintAssets()`, hand it to
-`app.ui({ assets })`, and serve with `serveStatic({ fingerprint: true })` —
-a mapped path renders as `/style.css?v=<hash>` (served
-`Cache-Control: … immutable`; a changed file gets a new URL), an unmapped
-path passes through unchanged, so templates never branch:
-
-```ts ignore
-import { fingerprintAssets } from '@tundralibs/rapid/ui';
-
-const assets = await fingerprintAssets('./public'); // '/style.css' → 'a1b2c3'
-app.ui({ assets });
-app.use(serveStatic({ root: './public', fingerprint: true }));
-// a template: html`<link rel="stylesheet" href="${view.asset('/style.css')}">`
-```
-
 Handlers that vary SIDE EFFECTS by representation read `ctx.isSwap` — the
 representer's own decision (config-aware: a renamed `swapHeader`/
-`swapUnless` keeps it correct) instead of re-deriving header checks.
-
-Pages can carry a `<title>`: the object form's `title` — a string or a
-`(data) => string` — is handed to the layout as its `{ body, title? }`
-data on non-swap pages:
-
-```ts ignore
-app.get(
-  '/posts/ui',
-  { template: { render: PostList, prefer: 'html', title: 'The Library' } },
-  list,
-);
-```
+`swapUnless` keeps it correct; always `false` on a `ui.enabled: false`
+replica) instead of re-deriving header checks.
 
 One divergence to know: the representer runs on the RETURN-VALUE channel
 only. A handler (or middleware) assigning `ctx.response` directly on a
 templated route bypasses the template AND the `Vary` stamp — return the
 reply instead.
 
-`app.ui()` also registers the client runtime at `runtimePath` (default
-`/__rapid/ui.js`) — served from a string constant (no file read: works on
-Workers and with `app.fetch()`), with a strong content-keyed `ETag`
-and `cache-control: no-cache` — every load revalidates (a `304` when
-unchanged), so a package upgrade can never leave a stale runtime cached
-under the constant path. Call `app.ui()` at most
-once; a second call is `RAPID_CONFIG`.
+## Static files & asset versioning
+
+Static serving is CONFIG — `server.static`, URL prefix → directory,
+served framework-side on ROUTE MISS (before the 404): routes always win
+a collision, `secureHeaders`/`cors`/`compress`/logging always apply,
+and there is no middleware to mount or position:
+
+```yaml
+server:
+  static:
+    /assets:
+      root: ../public # relative → anchored to the config directory
+      fingerprint: true
+    /files: ../uploads-public # string shorthand
+```
+
+`view.asset()` versions asset URLs so they can cache forever, LAZILY —
+no boot walk: the first template that references
+`view.asset('/assets/site.css')` reads and content-hashes the file
+under its `fingerprint: true` mount (cached; DEVELOPMENT re-checks the
+mtime so an edited file re-hashes on the next render). The rendered URL
+(`/assets/site.css?v=<hash>`) is served with
+`Cache-Control: public, max-age=31536000, immutable` — a changed file
+gets a new URL, so nothing is ever stale and repeat loads cost zero
+requests. Resolution order: an explicit `ui: { assets }` manifest entry
+(the bundler/Workers path — `fingerprintAssets()` builds one) → the
+lazy hash → passthrough, so templates never branch. The hash is a cache
+key, not integrity (SRI is a different feature).
+
+Extract your css/js into these files rather than inlining them in the
+core — an inline `<style>` re-ships with every page; a fingerprinted
+stylesheet caches forever.
 
 ## The client runtime
 
@@ -196,7 +290,9 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   301/302 — and that server-side `Location` is the handler's value verbatim:
   the same-origin guarantee is a SWAP-side property, so a handler building a
   redirect from request input (`?next=`) must validate it itself.
-- **Events:** `rapid:swapped` after a successful swap (re-init widgets
+- **Events:** `rapid:swapped` after a successful swap — detail
+  `{ status, url, method, swap, title? }`, the full swap identity, so
+  listeners (and the history module) never re-derive it (re-init widgets
   there — for `data-swap="outer"` it fires on the REPLACEMENT node, since
   the original was detached); `rapid:error` with `{ status, body }` when
   the response is not swappable HTML — a non-HTML body (the JSON error
@@ -295,12 +391,12 @@ The swap contract is three header names, all configurable — so a mature
 client like [htmx](https://htmx.org) can drive the same routes while rapid
 keeps its server model:
 
-```ts ignore
-app.ui({
-  swapHeader: 'hx-request', // htmx sends HX-Request: true on every request
-  swapUnless: ['hx-boosted', 'hx-history-restore-request'],
-  redirectHeader: 'HX-Redirect', // htmx follows this natively
-});
+```yaml
+# the contract headers are DATA — per replica, in Application.yaml
+ui:
+  swapHeader: hx-request # htmx sends HX-Request: true on every request
+  swapUnless: [hx-boosted, hx-history-restore-request]
+  redirectHeader: HX-Redirect # htmx follows this natively
 ```
 
 - `swapHeader` — presence selects the fragment (value ignored).
@@ -322,10 +418,10 @@ entirely through htmx — `hx-swap-oob` multi-region responses,
 declarative polling, a boosted page proving `swapUnless`, and a reply
 `redirect` landing as `HX-Redirect`.
 
-## Live updates (`app.ui({ live: true })`)
+## Live updates (`ui.live: true`)
 
-The opt-in **live bridge** (`/__rapid/live.js`, served exactly like the
-runtime) turns server broadcasts into DOM events — it renders nothing and
+The opt-in **live bridge** (`ui.live: true` → `/__rapid/live.js`, served
+exactly like the runtime) turns server broadcasts into DOM events — it renders nothing and
 swaps nothing, so fragments stay HTTP-fetched with auth/etag/`Vary` in the
 path:
 
@@ -356,6 +452,40 @@ in `app.start()`'s listening server — on ANY `fetch()`-only deployment
 `live: true` serves a script that can never connect, and the first
 `fetch()` logs a warning saying so. An SSE variant is on the roadmap;
 until then, live updates are a listening-server feature.
+
+## History (`ui.history: true`)
+
+The opt-in **history module** (`/__rapid/history.js`, served like the
+runtime) gives swap navigation a working address bar and back button —
+with **no DOM cache, ever**: back/forward RE-FETCHES the recorded URL
+into the recorded region (marker-keyed `history.state`; a full
+navigation when the region is gone), so what restore shows is always
+what the server would serve, with auth/etag/`Vary` in the path.
+
+Pushes are per-interaction opt-in, never automatic:
+
+```html
+<!-- declarative: push the fetched URL (needs an id on the region) -->
+<button data-action="/board?owner=Ada" data-target="#board"
+  data-swap="outer" data-push>Ada</button>
+<!-- or push a different page URL -->
+<a data-action="/cards/orders" data-target="#orders"
+  data-push="/orders">Orders</a>
+```
+
+```js ignore
+// programmatic: a rapid.swap that also pushes
+rapid.history.push('/board?owner=Ada', '#board', { swap: 'outer' });
+```
+
+The contract that keeps back/reload safe: **only push URLs that are
+themselves page routes** (`prefer: 'html'`) — the same route then serves
+the full page on a plain navigation, so a deep link or reload of a
+pushed URL just works. `document.title` syncs from the `rapid-title`
+response header (stamped on swap replies of routes with a `title`) on
+pushed and restored swaps only — an ordinary widget swap never retitles
+the tab. One history-bearing region per page; don't push URLs carrying
+secrets (they land in the address bar and browser history).
 
 ## Recipes
 
@@ -409,11 +539,53 @@ until then, live updates are a listening-server feature.
   style/script nonce is just a view field:
   `app.ui({ view: (ctx) => ({ nonce: mintNonce(ctx) }) })` and
   `html\`<style nonce="${view.nonce}">…\``— pair with your security
-  middleware emitting the matching header. Prefer external files via`serveStatic` where you can.
+  middleware emitting the matching header. Prefer external files via`server.static` where you can.
 - **i18n** — same pattern: negotiate the locale in the projection and hand
   templates a translator as data —
   `view: (ctx) => ({ t: makeT(ctx.headers.get('accept-language')) })`.
   Templates stay pure; `t` is per-request-constant.
+- **Layout composition** — the two wrapper tiers cover page structure;
+  anything fancier is a plain function call. A section wrapper shared by
+  a module's fragments is a component its views apply; a layout variant
+  that extends another passes through it explicitly (thread `title`
+  yourself past the first level):
+
+  ```ts ignore
+  const AdminShape = template<{ body: Html; title?: string }>((d, view) =>
+    PageShape.render({
+      body: html`<aside>${adminNav(view)}</aside>${d.body}`,
+      title: d.title,
+    }, view)
+  );
+  ```
+
+  The doctrine that keeps tiers honest: a module `layout:` means "this
+  module owns the page shape"; a module that only wants a strip INSIDE
+  the app's shape shouldn't set `layout:` at all — wrap in a component
+  and inherit the default. And module-specific css belongs in the
+  module's layout as a body-level
+  `<link rel="stylesheet" href="${view.asset(…)}">` (spec-legal) — the
+  core's head stays app-wide.
+- **View separation** — the convention the scaffold generates: shared
+  code (the core, error pages, cross-module components) in `views/`;
+  each module's fragments co-located as `<Module>.views.ts` beside the
+  module, its layout with them. Templates are plain values — organize
+  freely, but this shape keeps "edit the page" next to "edit the
+  module".
+- **Designer-handoff shells** — a truly static chrome file needs no
+  template language: read it at boot, split on a marker, `raw()` the
+  halves (server runtimes only):
+
+  ```ts ignore
+  const src = await readTextFile('./views/shell.html');
+  const [pre, post] = src.split('<!--body-->');
+  const FileShell = template<{ body: Html }>((d) =>
+    html`${raw(pre!)}${d.body}${raw(post!)}`
+  );
+  ```
+
+  Anything dynamic (title, nav, scripts) enters via composition around
+  it — never as expressions in the file.
 - **Template unit tests** — `import { view } from '@tundralibs/rapid/testing'`
   for the frozen bag (`render(UserList.render(data, view()))`), and
   `client(app).get('/x', { swap: true })` to drive the fragment/page/JSON
@@ -421,15 +593,42 @@ until then, live updates are a listening-server feature.
 
 ## Errors
 
-`app.ui({ errorTemplate })` receives exactly the disclosure payload the JSON
-envelope would carry (PRODUCTION collapses 5xx, never `debug`) plus
-`requestId`, and renders only when the representation resolves to HTML — a
-swap gets the bare fragment, a page is layout-wrapped, the status is
-preserved. Without it (or off-HTML), the JSON envelope is sent unchanged.
+Error pages resolve through a CLOSED registry — `ui: { errorTemplates }`
+keyed by exact status (400–599), `'4xx'`/`'5xx'`, or `'default'`
+(`errorTemplate` is sugar for `{ default }`; both together is a config
+error). Resolution is fixed: exact → class → `default` → the built-in
+`DefaultErrorPage` — so a UI-configured app never shows a browser a raw
+JSON envelope; PRODUCTION ships the collapsed disclosure as HTML.
+Dispatch beyond that grammar is a typed branch inside one template:
+
+```ts ignore
+const ErrorPage = template<Record<string, unknown>>((e, view) =>
+  (e.status as number) === 404
+    ? NotFound.render(e, view)
+    : (e.status as number) >= 500
+    ? ServerFault.render(e, view)
+    : BadRequest.render(e, view)
+);
+```
+
+Every entry receives exactly the disclosure payload the JSON envelope
+would carry (PRODUCTION collapses 5xx, never `debug`) plus `requestId`,
+`status`, and `mode`, and renders only when the representation resolves
+to HTML — a swap gets the bare fragment, a page renders inside the CORE
+(the module tier is skipped: errors are not module-scoped, and a module
+layout may depend on the very data that failed) with
+`"{status} {message}"` as the core's title. Off-HTML (and on a
+`ui.enabled: false` replica), the JSON envelope is sent unchanged.
 One asymmetry to know in a `prefer: 'html'` app: a NON-templated JSON
 route's successes stay JSON, but its errors resolve to HTML pages like
 everything else — `prefer` lives on templates, so there is no bare-route
 opt-out; keep `prefer: 'html'` scoped to page routes when that matters.
+
+For failed SECTIONS there is deliberately no error template: recoverable
+input problems are the form union's own 200-state (`formState`), and a
+hard swap failure fires `rapid:error` without touching the region
+(swapping an error page over a half-filled form would destroy it) — show
+a toast or badge from that event (see the blog example's `blog.js`).
 
 ## Bytes and streams
 

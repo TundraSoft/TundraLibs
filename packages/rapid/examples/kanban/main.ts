@@ -71,7 +71,7 @@ app.use(
 // Static serving is CONFIG now — configs/Application.yaml `server.static`.
 
 // The swap runtime + the live bridge, and the one broadcast lane.
-app.ui({ live: true });
+// ui: { live: true } lives in configs/Application.yaml now — per replica.
 app.channel('board');
 
 app.get('/', (ctx) => ctx.redirect('/board/ui'));

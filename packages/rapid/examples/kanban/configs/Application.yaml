@@ -7,3 +7,5 @@ server:
     /public:
       root: ../public
       maxAge: 3600
+ui:
+  live: true

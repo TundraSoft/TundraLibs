@@ -2,7 +2,7 @@
  * The BRING-YOUR-OWN-CLIENT demo: the exact same server model as every
  * other example — templated routes, fragment/page/JSON off one header,
  * `Vary` stamped — driven by [htmx](https://htmx.org) instead of the
- * bundled runtime. The whole adaptation is the `app.ui()` call below:
+ * bundled runtime. The whole adaptation is the `ui` options below:
  *
  *   swapHeader:     'hx-request'   htmx sends HX-Request on every request
  *   swapUnless:     hx-boosted + history restore — htmx sends its marker
@@ -229,12 +229,14 @@ const Shell = template<{ body: Html; title?: string }>((data) =>
 const app = await Application.initialize({
   name: 'htmx-demo',
   server: { port: 8003 },
-});
-app.ui({
-  layout: Shell,
-  swapHeader: 'hx-request',
-  swapUnless: ['hx-boosted', 'hx-history-restore-request'],
-  redirectHeader: 'HX-Redirect',
+  ui: {
+    layout: Shell,
+    // The contract headers are DATA — a config-driven app would put
+    // these three lines in Application.yaml, per replica.
+    swapHeader: 'hx-request',
+    swapUnless: ['hx-boosted', 'hx-history-restore-request'],
+    redirectHeader: 'HX-Redirect',
+  },
 });
 
 const tallies = () => [...votes.entries()] as [string, number][];

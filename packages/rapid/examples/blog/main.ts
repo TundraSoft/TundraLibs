@@ -149,12 +149,12 @@ app.use(
 app.get('/', (ctx) => ctx.redirect('/posts/ui'));
 
 // ── the UI layer + the live channel ──────────────────────────────────
-// app.ui() serves the swap runtime at /__rapid/ui.js; the module's own
-// @Module({ layout }) shells its pages. The 'comments' channel is a
+// The UI's data half is CONFIG — configs/Application.yaml's `ui:` set
+// (`live: true` serves /__rapid/ui.js + /__rapid/live.js); the module's
+// own @Module({ layout }) shells its pages. The 'comments' channel is a
 // server-broadcast lane — app.channel() lanes are one-way, clients can
 // never publish into them; the blog page subscribes over /ws and
 // refreshes fragments on 'msg'.
-app.ui({ live: true }); // + /__rapid/live.js — the rapid.live bridge
 app.channel('comments');
 
 // ── platform endpoints (the ./endpoints catalog) ─────────────────────

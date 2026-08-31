@@ -181,7 +181,11 @@ app.use(
 Shipped middleware factories (all exported from the root and from
 `@tundralibs/rapid/middlewares`): `cors`, `secureHeaders`, `compress`, `etag`,
 `idempotency`, `rateLimit`, `requestId`, `requestLogger`, `responseTimer`,
-`serveStatic`, `timeout`, and `healthCheck`. `idempotency()` makes client
+`timeout`, and `healthCheck`. Static file serving is CONFIG, not a
+middleware — `server.static` maps URL prefixes to directories, served
+framework-side on route miss (routes always win; `secureHeaders`/`cors`/
+logging always apply; traversal/symlink-guarded, weak-ETag 304s, byte
+ranges, and `immutable` fingerprinted URLs included). `idempotency()` makes client
 retries safe: a request bearing an `idempotency-key` header executes once —
 a retry replays the first attempt's stored reply (`idempotency-replayed:
 true`), a concurrent duplicate is a 409, and thrown/streamed attempts are
@@ -330,9 +334,9 @@ A handler's `content` can be a string, a plain object (serialized as JSON), a
 `Uint8Array` — or a **stream**: a `ReadableStream<Uint8Array>` or any async
 iterable of chunks (strings are UTF-8 encoded). A stream body is handed to the
 client as-is, never buffered, so large files, server-sent events, and proxy
-passthrough don't hold the body in memory. `ctx.serve()` and `serveStatic`
+passthrough don't hold the body in memory. `ctx.serve()` and `server.static`
 stream files this way (with a real `content-length` from the file's size), and
-`serveStatic` honours a single-range `Range: bytes=…` header — `206` with
+static serving honours a single-range `Range: bytes=…` header — `206` with
 `Content-Range`, or `416` when the range lies outside the file — so clients
 can resume downloads and seek media.
 
@@ -384,8 +388,10 @@ const Shell = template<{ body: unknown }>((data) =>
   html`<main>${data.body}</main>`
 );
 
-const app = await Application.initialize({ name: 'ui' });
-app.ui({ layout: Shell }); // app defaults + serves /__rapid/ui.js
+const app = await Application.initialize({
+  name: 'ui',
+  ui: { layout: Shell }, // + serves /__rapid/ui.js (data half is YAML-able)
+});
 app.get(
   '/users',
   { template: { render: UserList, prefer: 'html' } },
@@ -397,24 +403,32 @@ app.get(
 greppable opt-out); templates are pure `(data, view) => Html` functions, so
 they unit-test with `render(UserList.render(data, view))` and no server. The
 frozen `view` bag carries `requestId`/`path`/`query`/`csrfToken` and
-`view.asset()` (cache-busting URLs from the `app.ui({ assets })` map —
-see [Rapid-UI](docs/Rapid-UI.md)) — **nothing
-from `ctx.auth`** unless `app.ui({ view })` names the fields that may cross.
-Layouts resolve route → `@Module` → app. The small (~200-line) runtime
+`view.asset()` (cache-busting URLs, lazily content-hashed under
+`server.static`'s fingerprinted mounts — see [Rapid-UI](docs/Rapid-UI.md))
+— **nothing from `ctx.auth`** unless the `ui.view` projection names the
+fields that may cross. Pages compose from THREE tiers: an irreplaceable
+app `core` (the document — head/css/scripts; `title` + `meta` are its
+per-page slots), the swappable module/route `layout` nesting inside it
+(route → `@Module` → app default; `false` opts out), and the content
+fragment built from plain view components. The small (~200-line) runtime
 (`GET /__rapid/ui.js`, ETag-revalidated) swaps fragments via `data-action` /
 `data-target` / `data-swap` attributes — no inline handlers
 (`script-src 'self'` suffices) — echoes the `csrf` cookie as `x-csrf-token`,
 follows the `rapid-redirect` header same-origin only, emits
 `rapid:swapped` / `rapid:error` DOM events, and exposes a two-function
 API — `window.rapid.swap(url, target)` and `window.rapid.refresh(target)`
-— for app JS to drive multi-region updates from those events. The three contract headers are configurable, so
-htmx can drive the same routes (`app.ui({ swapHeader: 'hx-request',
-swapUnless: ['hx-boosted', 'hx-history-restore-request'], redirectHeader:
-'HX-Redirect' })`). `app.ui({ errorTemplate })` themes
-error responses under the same disclosure rules as the JSON envelope, and
-`app.ui({ live: true })` adds the live bridge — `rapid.live.connect()`
-turns `app.publish()` broadcasts into `rapid:push` DOM events that app JS
-maps to swaps. `htmlDocument()`, `withQuery()`, `ctx.isSwap`, typed view
+— for app JS to drive multi-region updates from those events. The three
+contract headers are configurable (YAML: `ui.swapHeader: hx-request` +
+`swapUnless` + `redirectHeader: HX-Redirect`), so htmx can drive the same
+routes. Error pages resolve through the `ui.errorTemplates` registry
+(exact status → `'4xx'`/`'5xx'` → `default` → the built-in
+`DefaultErrorPage`) under the same disclosure rules as the JSON envelope.
+`ui.live: true` adds the live bridge — `rapid.live.connect()` turns
+`app.publish()` broadcasts into `rapid:push` DOM events that app JS maps
+to swaps — and `ui.history: true` the history module: opt-in push-state
+per interaction (`data-push` / `rapid.history.push()`), no DOM cache
+(back re-fetches), `document.title` synced from `rapid-title`.
+`ui.enabled: false` turns a replica API-only from YAML. `htmlDocument()`, `withQuery()`, `ctx.isSwap`, typed view
 projections, and `testing`'s `view()` / `swap: true` round out the layer. See
 [docs/Rapid-UI.md](docs/Rapid-UI.md) for the full contract and
 [`examples/dashboard/main.ts`](examples/dashboard/main.ts) for a runnable page.
