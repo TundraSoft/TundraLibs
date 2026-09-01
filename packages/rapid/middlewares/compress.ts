@@ -101,6 +101,12 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     if (ctx.response === null) return;
     if (ctx.responseHeaders.has('content-encoding')) return; // already encoded
     if (NO_BODY.has(ctx.status)) return;
+    if (ctx.status === 206 || ctx.responseHeaders.has('content-range')) {
+      // A partial response's Content-Range describes IDENTITY byte
+      // positions — compressing the slice would hand resume/seek clients
+      // gzip bytes under identity offsets, reassembling garbage.
+      return;
+    }
 
     const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
     if (encoding === null) return;

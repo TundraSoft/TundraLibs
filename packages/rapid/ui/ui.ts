@@ -1,6 +1,6 @@
 /**
  * @fileoverview The client runtime — shipped as a STRING constant and
- * served by `app.ui()` at its `runtimePath` (no file read → works on
+ * served at the configured `ui.runtimePath` (no file read → works on
  * Workers and with `app.fetch()`). One delegated `click` + one `submit`
  * listener over `data-action` elements; no inline handlers anywhere
  * (`script-src 'self'` suffices). Requests carry `rapid-swap: 1` — the
@@ -21,14 +21,16 @@
  * @module
  */
 
+import { djb2 } from '../utils/hash.ts';
+
 /**
  * The swap runtime. Attributes: `data-action` (URL), `data-method`
  * (default `get`; forms default `post`), `data-target` (selector;
  * default: the element itself), `data-swap` = `replace` (default) |
  * `outer` | `append` | `prepend`. The `csrf` cookie is echoed as
  * `x-csrf-token` (names overridable via `data-csrf-cookie` /
- * `data-csrf-header` on `<body>`; a renamed `app.ui({ swapHeader,
- * redirectHeader })` is followed via `data-swap-header` /
+ * `data-csrf-header` on `<body>`; a renamed `ui.swapHeader` /
+ * `ui.redirectHeader` is followed via `data-swap-header` /
  * `data-redirect-header` likewise). Emits `rapid:swapped` after a
  * successful swap — detail `{ status, url, method, swap, title? }`, the
  * full swap identity (`title` decoded from the server's `rapid-title`
@@ -44,6 +46,7 @@
  * which re-fetches the last GET fragment swapped into `target`.
  */
 export const UI_RUNTIME: string = `(() => {
+  if (window.rapid && window.rapid.swap) return; // idempotent double load
   const doc = document;
   const cfg = doc.body ? doc.body.dataset : {};
   const CSRF_COOKIE = cfg.csrfCookie || 'csrf';
@@ -92,6 +95,17 @@ export const UI_RUNTIME: string = `(() => {
 
   const request = async (url, target, opts) => {
     if (!url || !target) return false;
+    // Same-origin ONLY, like the redirect guard below: a request-derived
+    // data-action must not ship the csrf header to a foreign host nor
+    // swap a foreign response into the page. Relative URLs resolve
+    // against the page and always pass; malformed ones are refused.
+    try {
+      if (new URL(url, location.href).origin !== location.origin) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
     const previous = inflight.get(target);
     if (previous) previous.abort();
     const controller = new AbortController();
@@ -295,18 +309,9 @@ export const UI_RUNTIME: string = `(() => {
 })();
 `;
 
-/** djb2 over a script source — cheap, sync, content-keyed. */
-const contentHash = (source: string): string => {
-  let hash = 5381;
-  for (let i = 0; i < source.length; i++) {
-    hash = ((hash << 5) + hash + source.charCodeAt(i)) >>> 0;
-  }
-  return hash.toString(16);
-};
-
 /** Strong content-keyed ETag for a served script (`live.ts` reuses it). */
 export const scriptEtag = (name: string, source: string): string =>
-  `"${name}-${contentHash(source)}"`;
+  `"${name}-${djb2(source)}"`;
 
 /**
  * Strong ETag for the served runtime — content-keyed, so a package

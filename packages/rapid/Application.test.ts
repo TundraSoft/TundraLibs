@@ -14,6 +14,7 @@ import {
   makeTempDir,
   makeTempDirSync,
   pathExists,
+  readDir,
   remove,
   removeDir,
   writeTextFile,
@@ -929,11 +930,13 @@ describe('rapid.Application', () => {
       const parse = ctx.payload;
       await ctx.cleanup();
       await parse;
-      // Every file the parse wrote is accounted for and gone.
-      asserts.assert(ctx.files.length > 0, 'the parse did write a file');
-      for (const file of ctx.files) {
-        asserts.assertEquals(await pathExists(file), false);
-      }
+      // cleanup() awaited the parse, DRAINED the tracked list (so the
+      // error finalize path can call it again harmlessly) and deleted
+      // every written file — the uploads dir is empty again.
+      asserts.assertEquals(ctx.files.length, 0);
+      const left: string[] = [];
+      for await (const entry of readDir(uploads)) left.push(entry.name);
+      asserts.assertEquals(left, [], 'no temp file left behind');
       await remove(uploads).catch(() => {});
     });
   });
@@ -3268,3 +3271,112 @@ describe('rapid.Application', () => {
     });
   });
 }
+
+// ==========================================================================
+// Boot-loud config (2026-09 review hardening)
+// ==========================================================================
+
+describe('rapid.Application boot-loud config', () => {
+  it("rejects an unknown ui data key at boot — a typo ('histroy') must not silently no-op", async () => {
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'ui-typo',
+          server: { port: 0, hostname: '127.0.0.1' },
+          logger: { handlers: [] },
+          ui: { histroy: true } as never,
+        }),
+      RapidError,
+      "unknown option 'histroy'",
+    );
+  });
+
+  it('rejects a code-half name arriving as ui data (the YAML core-as-path mistake)', async () => {
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'ui-code-data',
+          server: { port: 0, hostname: '127.0.0.1' },
+          logger: { handlers: [] },
+          ui: { core: './templates/core.ts' } as never,
+        }),
+      RapidError,
+      'not a RapidTemplate',
+    );
+  });
+
+  it('rejects a stringly boolean gate — ui.live: "true" must not leave the feature silently off', async () => {
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'ui-strbool',
+          server: { port: 0, hostname: '127.0.0.1' },
+          logger: { handlers: [] },
+          ui: { live: 'true' } as never,
+        }),
+      RapidError,
+      'live must be a boolean',
+    );
+  });
+
+  it("rejects an unknown server.static entry key at boot ('fingerprnt')", async () => {
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'static-typo',
+          server: {
+            port: 0,
+            hostname: '127.0.0.1',
+            static: { '/x': { root: './pub', fingerprnt: true } as never },
+          },
+          logger: { handlers: [] },
+        }),
+      RapidError,
+      "unknown key 'fingerprnt'",
+    );
+  });
+
+  it("normalizes mode casing ('development' runs as DEVELOPMENT) and rejects garbage", async () => {
+    const app = await Application.initialize({
+      name: 'mode-case',
+      mode: 'development' as never,
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    asserts.assertEquals(app.mode, 'DEVELOPMENT');
+    await app.stop();
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'mode-bad',
+          mode: 'dev' as never,
+          server: { port: 0, hostname: '127.0.0.1' },
+          logger: { handlers: [] },
+        }),
+      RapidError,
+      "mode must be 'DEVELOPMENT' or 'PRODUCTION'",
+    );
+  });
+
+  it('a route registered after the first fetch() throws instead of silently never serving', async () => {
+    const app = await Application.initialize({
+      name: 'late-route',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.get('/early', () => ({ content: { ok: true } }));
+    const r = await app.fetch(new Request('http://app/early'));
+    await r.body?.cancel();
+    asserts.assertThrows(
+      () => app.get('/late', () => ({ content: { ok: true } })),
+      RapidError,
+      'would never serve',
+    );
+    asserts.assertThrows(
+      () => app.use(async (_ctx, next) => await next()),
+      RapidError,
+      'would never serve',
+    );
+    await app.stop();
+  });
+});

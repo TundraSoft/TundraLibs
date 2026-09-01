@@ -25,7 +25,7 @@ export {
   type IdempotentReply,
 } from './idempotency.ts';
 export { rateLimit, type RateLimitOptions } from './rateLimit.ts';
-export { memoryStore, type Store } from './store.ts';
+export { memoryStore, type MemoryStoreOptions, type Store } from './store.ts';
 export { requestId, type RequestIdOptions } from './requestId.ts';
 export { requestLogger, type RequestLoggerOptions } from './requestLogger.ts';
 export { responseTimer, type ResponseTimerOptions } from './responseTimer.ts';

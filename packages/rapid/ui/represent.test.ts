@@ -448,3 +448,120 @@ describe('rapid.ui.tiers', () => {
     );
   });
 });
+
+describe('rapid.ui error negotiation + personal pages (2026-09 review)', () => {
+  const NotFound = template<Record<string, unknown>>(
+    (e) => html`<nf status="${String(e.status)}"></nf>`,
+    'NotFound',
+  );
+
+  it('a browser hitting an unknown URL gets the 404 page; API clients keep the envelope (Accept joins Vary)', async () => {
+    const app = await Application.initialize({
+      name: 'err-negotiate',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      // The documented per-route-prefer setup: NO app-wide 'html'. The
+      // unknown URL has no route to consult — Accept decides.
+      ui: { errorTemplates: { 404: NotFound } },
+    });
+    const browser = await app.fetch(
+      new Request('http://app/no-such-page', {
+        headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' },
+      }),
+    );
+    asserts.assertEquals(browser.status, 404);
+    asserts.assertStringIncludes(
+      browser.headers.get('content-type') ?? '',
+      'text/html',
+    );
+    asserts.assertStringIncludes(await browser.text(), '<nf status="404">');
+    asserts.assertStringIncludes(browser.headers.get('vary') ?? '', 'Accept');
+
+    const curl = await app.fetch(
+      new Request('http://app/no-such-page', { headers: { accept: '*/*' } }),
+    );
+    asserts.assertStringIncludes(
+      curl.headers.get('content-type') ?? '',
+      'application/json',
+    );
+    asserts.assertEquals((await curl.json()).code, 'RAPID_NOT_FOUND');
+    asserts.assertStringIncludes(curl.headers.get('vary') ?? '', 'Accept');
+    await app.stop();
+  });
+
+  it('without errorTemplates, a template-less 404 stays JSON — Accept is never consulted', async () => {
+    const app = await Application.initialize({
+      name: 'err-nonegotiate',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: {},
+    });
+    const browser = await app.fetch(
+      new Request('http://app/nope', { headers: { accept: 'text/html' } }),
+    );
+    asserts.assertStringIncludes(
+      browser.headers.get('content-type') ?? '',
+      'application/json',
+    );
+    await browser.body?.cancel();
+    await app.stop();
+  });
+
+  it('an identity-bearing page (csrf token in view) stamps Vary: Cookie + Cache-Control: private', async () => {
+    const Page = template<Record<string, unknown>>(
+      () => html`<p>hi</p>`,
+      'Page',
+    );
+    const app = await Application.initialize({
+      name: 'personal-page',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { prefer: 'html' },
+    });
+    app.get('/p', { template: Page }, () => ({ content: {} }));
+    // No csrf cookie, no view projection → cacheable exactly as before.
+    const anon = await app.fetch(new Request('http://app/p'));
+    asserts.assertEquals(/cookie/i.test(anon.headers.get('vary') ?? ''), false);
+    asserts.assertEquals(anon.headers.get('cache-control'), null);
+    await anon.body?.cancel();
+    // A csrf cookie exposes view.csrfToken → the page is per-user: a
+    // shared cache must never hand one user's token to another.
+    const identified = await app.fetch(
+      new Request('http://app/p', { headers: { cookie: 'csrf=tok' } }),
+    );
+    asserts.assertStringIncludes(
+      identified.headers.get('vary') ?? '',
+      'Cookie',
+    );
+    asserts.assertEquals(identified.headers.get('cache-control'), 'private');
+    await identified.body?.cancel();
+    await app.stop();
+  });
+
+  it('a view projection makes EVERY templated page personal (Vary: Cookie)', async () => {
+    const Page = template<Record<string, unknown>>(
+      (_d, view) =>
+        html`<who>${String((view as { who?: string }).who ?? 'guest')}</who>`,
+      'Who',
+    );
+    const app = await Application.initialize({
+      name: 'personal-view',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: {
+        prefer: 'html',
+        view: (ctx) => ({
+          who: ctx.type === 'HTTP' ? ctx.cookies['who'] : undefined,
+        }),
+      },
+    });
+    app.get('/p', { template: Page }, () => ({ content: {} }));
+    const res = await app.fetch(
+      new Request('http://app/p', { headers: { cookie: 'who=abhinav' } }),
+    );
+    asserts.assertStringIncludes(await res.text(), '<who>abhinav</who>');
+    asserts.assertStringIncludes(res.headers.get('vary') ?? '', 'Cookie');
+    asserts.assertEquals(res.headers.get('cache-control'), 'private');
+    await app.stop();
+  });
+});

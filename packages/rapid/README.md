@@ -185,11 +185,19 @@ Shipped middleware factories (all exported from the root and from
 middleware — `server.static` maps URL prefixes to directories, served
 framework-side on route miss (routes always win; `secureHeaders`/`cors`/
 logging always apply; traversal/symlink-guarded, weak-ETag 304s, byte
-ranges, and `immutable` fingerprinted URLs included). `idempotency()` makes client
-retries safe: a request bearing an `idempotency-key` header executes once —
-a retry replays the first attempt's stored reply (`idempotency-replayed:
-true`), a concurrent duplicate is a 409, and thrown/streamed attempts are
-never recorded, so those retries re-execute.
+ranges, and `immutable` fingerprinted URLs included). `idempotency({ scope })`
+makes client retries safe: a request bearing an `idempotency-key` header
+executes once — a retry replays the first attempt's stored reply
+(`idempotency-replayed: true`), a concurrent duplicate is a 409, and
+thrown/streamed attempts are never recorded, so those retries re-execute.
+`scope` is required and keys replays per caller identity (session id, auth
+subject); `scope: false` explicitly opts into a shared key space (e.g. a
+webhook receiver keyed by the provider's event id). Note the stateful
+middlewares (`session`, `rateLimit`, `idempotency`) default to a
+per-process in-memory store — correct on one replica, invisible across
+replicas: inject a shared `Store` (redis/cacher) the moment you scale
+out, and bound it yourself (the bundled default is bounded only for
+idempotency's attacker-mintable keys).
 
 Scope helpers turn a transport-specific middleware into a universal one:
 `onlyHTTP` / `onlySOCKET` / `onlyJOB` run it only on that transport (a no-op
@@ -525,7 +533,7 @@ const app = await Application.initialize({
 });
 
 app.get('/prefs', async (ctx) => {
-  await ctx.setCookie('theme', 'dark', { signed: true, httpOnly: true });
+  ctx.setCookie('theme', 'dark', { signed: true, httpOnly: true }); // queued; signed at finalize
   return { content: { theme: (await ctx.signedCookie('theme')) ?? null } };
 });
 
@@ -697,9 +705,11 @@ start the app from an **ENV contract** (`TASK=start` on Deno, with `ALLOW_*`
 mapped to `--allow-*` flags; `SCRIPT=start` on Bun/Node), so the generated
 Dockerfile deliberately has no `CMD`/`ENTRYPOINT`. `--github` (opt-in) adds a
 `.github/workflows/ci.yml` that runs fmt/lint/check/test on the chosen runtime.
-`--module` / `--norm` add the module system and a `norm` model; `--yes`
-accepts every default non-interactively. A `.gitignore` is written; `git init`
-is left to you.
+`--module` / `--norm` add the module system and a `norm` model; `--ui`
+scaffolds the three-tier UI starter (core + layout + a templated page on
+`server.static`), and `--with bootstrap|pico` adds a self-hosted CSS
+framework under `public/vendor/`; `--yes` accepts every default
+non-interactively. A `.gitignore` is written; `git init` is left to you.
 
 `--ai` (on by default) writes AI-assistant instructions so an agent building
 the project starts with rapid's conventions pre-loaded: **one** real guide,
@@ -736,8 +746,8 @@ Guides:
 
 Every public symbol carries JSDoc; the subpath exports are `.` (root),
 `./cli`, `./context`, `./decorators`, `./endpoints`, `./errors`,
-`./middlewares`, `./middlewares/pact`, `./modules`, `./testing`, and
-`./types`.
+`./middlewares`, `./middlewares/pact`, `./modules`, `./testing`,
+`./types`, and `./ui`.
 
 ## License
 

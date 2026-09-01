@@ -1,13 +1,17 @@
 /**
- * @fileoverview idempotency — replay, concurrent 409, key scoping, and
- * the never-record rules (throws, streams), driven through `app.fetch`.
+ * @fileoverview idempotency — replay, concurrent 409, key scoping (route
+ * + identity), the never-record rules (throws, streams), record cloning,
+ * and the abuse bounds (key cap, unmatched skip, bounded store), driven
+ * through `app.fetch`.
  * @module
  */
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
-import { idempotency } from './idempotency.ts';
+import { idempotency, type IdempotencyOptions } from './idempotency.ts';
+import { memoryStore, type Store } from './store.ts';
+import type { IdempotencyRecord } from './idempotency.ts';
 
 const KEY = { 'idempotency-key': 'k-1' };
 
@@ -29,7 +33,7 @@ describe('rapid.middlewares.idempotency', () => {
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
     });
-    app.use(idempotency());
+    app.use(idempotency({ scope: false })); // deliberately shared key space
     app.post('/orders', () => {
       count('orders');
       return {
@@ -155,16 +159,204 @@ describe('rapid.middlewares.idempotency', () => {
     asserts.assertEquals(await replay.json(), { done: true });
   });
 
+  it('a key longer than 255 characters is rejected 400', async () => {
+    const r = await post('/orders', { 'idempotency-key': 'x'.repeat(256) });
+    asserts.assertEquals(r.status, 400);
+    asserts.assertEquals((await r.json()).code, 'RAPID_VALIDATION_FAILED');
+    const ok = await post('/orders', { 'idempotency-key': 'y'.repeat(255) });
+    asserts.assertEquals(ok.status, 201);
+    await ok.body?.cancel();
+  });
+
   it('rejects a non-positive ttl at factory time', () => {
     asserts.assertThrows(
-      () => idempotency({ ttlMs: 0 }),
+      () => idempotency({ scope: false, ttlMs: 0 }),
       RapidError,
       'ttlMs must be a positive integer',
     );
     asserts.assertThrows(
-      () => idempotency({ pendingTtlMs: -1 }),
+      () => idempotency({ scope: false, pendingTtlMs: -1 }),
       RapidError,
       'pendingTtlMs must be a positive integer',
     );
+  });
+
+  it('refuses to build without a scope — shared replay must be an explicit choice', () => {
+    asserts.assertThrows(
+      () => idempotency({} as IdempotencyOptions),
+      RapidError,
+      'requires a scope',
+    );
+  });
+});
+
+describe('rapid.middlewares.idempotency (identity scope)', () => {
+  let app: Application;
+  let handled = 0;
+
+  const post = (headers: Record<string, string>) =>
+    app.fetch(
+      new Request('http://app/orders', { method: 'POST', headers }),
+    );
+
+  beforeAll(async () => {
+    app = await Application.initialize({
+      name: 'idempotency-scope',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({
+      scope: (ctx) => ctx.headers.get('x-user') ?? undefined,
+    }));
+    app.post('/orders', () => {
+      handled++;
+      return { content: { attempt: handled } };
+    });
+  });
+  afterAll(async () => {
+    await app.stop();
+  });
+
+  it('the same key from two identities is two records — never a cross-user replay', async () => {
+    const a1 = await post({ 'idempotency-key': 'shared', 'x-user': 'alice' });
+    asserts.assertEquals(await a1.json(), { attempt: 1 });
+    const b1 = await post({ 'idempotency-key': 'shared', 'x-user': 'bob' });
+    asserts.assertEquals(await b1.json(), { attempt: 2 }); // executed, not replayed
+    asserts.assertEquals(b1.headers.get('idempotency-replayed'), null);
+    const a2 = await post({ 'idempotency-key': 'shared', 'x-user': 'alice' });
+    asserts.assertEquals(await a2.json(), { attempt: 1 }); // alice's own record
+    asserts.assertEquals(a2.headers.get('idempotency-replayed'), 'true');
+  });
+
+  it('a scope of undefined (anonymous caller) skips idempotency — no replay, no record', async () => {
+    const before = handled;
+    await (await post({ 'idempotency-key': 'anon' })).body?.cancel();
+    await (await post({ 'idempotency-key': 'anon' })).body?.cancel();
+    asserts.assertEquals(handled, before + 2); // both executed
+  });
+});
+
+describe('rapid.middlewares.idempotency (bounds + store hygiene)', () => {
+  it('an unmatched request never touches the store — no keys minted for 404s', async () => {
+    let reads = 0;
+    const backing = memoryStore<IdempotencyRecord>();
+    const spy: Store<IdempotencyRecord> = {
+      get: (k) => {
+        reads++;
+        return backing.get(k);
+      },
+      set: (k, v, ttl) => backing.set(k, v, ttl),
+    };
+    const app = await Application.initialize({
+      name: 'idempotency-404',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({ scope: false, store: spy }));
+    const r = await app.fetch(
+      new Request('http://app/no-such-route', {
+        method: 'POST',
+        headers: { 'idempotency-key': 'k' },
+      }),
+    );
+    asserts.assertEquals(r.status, 404);
+    await r.body?.cancel();
+    asserts.assertEquals(reads, 0);
+    await app.stop();
+  });
+
+  it('maxRecords bounds the default store — the oldest record evicts, its retry re-executes', async () => {
+    let handled = 0;
+    const app = await Application.initialize({
+      name: 'idempotency-bound',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({ scope: false, maxRecords: 2 }));
+    app.post('/n', () => ({ content: { attempt: ++handled } }));
+    const post = (key: string) =>
+      app.fetch(
+        new Request('http://app/n', {
+          method: 'POST',
+          headers: { 'idempotency-key': key },
+        }),
+      );
+    await (await post('a')).body?.cancel();
+    await (await post('b')).body?.cancel();
+    await (await post('c')).body?.cancel(); // evicts 'a'
+    const c = await post('c');
+    asserts.assertEquals(c.headers.get('idempotency-replayed'), 'true'); // still held
+    await c.body?.cancel();
+    const a = await post('a');
+    asserts.assertEquals(a.headers.get('idempotency-replayed'), null); // evicted → re-ran
+    await a.body?.cancel();
+    await app.stop();
+  });
+
+  it('replayed content is cloned per replay — outer mutation never compounds into the store', async () => {
+    const app = await Application.initialize({
+      name: 'idempotency-clone',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    // OUTER of idempotency: mutates the reply content in place after
+    // next() — the classic enrichment stamp.
+    app.use(async (ctx, next) => {
+      await next();
+      const content = ctx.response?.content;
+      if (content !== null && typeof content === 'object') {
+        ((content as { trail?: string[] }).trail ??= []).push(ctx.requestId);
+      }
+    });
+    app.use(idempotency({ scope: false }));
+    app.post('/o', () => ({ content: { ok: true } }));
+    const post = () =>
+      app.fetch(
+        new Request('http://app/o', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'k' },
+        }),
+      );
+    await (await post()).body?.cancel(); // first attempt (stores pre-stamp clone)
+    const r2 = await (await post()).json();
+    const r3 = await (await post()).json();
+    // Aliased records would COMPOUND: each replay's stamp baked into the
+    // store, trail growing per replay. Cloned records: always exactly one.
+    asserts.assertEquals(r2.trail.length, 1);
+    asserts.assertEquals(r3.trail.length, 1);
+    asserts.assertNotEquals(r2.trail[0], r3.trail[0]); // each replay's own stamp
+    await app.stop();
+  });
+
+  it('a rejecting async release never masks the handler error nor crashes the process', async () => {
+    const backing = memoryStore<IdempotencyRecord>();
+    const failing: Store<IdempotencyRecord> = {
+      // deno-lint-ignore require-await
+      get: async (k) => backing.get(k),
+      // deno-lint-ignore require-await
+      set: async (k, v, ttl) => backing.set(k, v, ttl),
+      // deno-lint-ignore require-await
+      delete: async () => {
+        throw new Error('store outage');
+      },
+    };
+    const app = await Application.initialize({
+      name: 'idempotency-release',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({ scope: false, store: failing }));
+    app.post('/boom', () => {
+      throw new RapidError('RAPID_VALIDATION_FAILED');
+    });
+    const r = await app.fetch(
+      new Request('http://app/boom', {
+        method: 'POST',
+        headers: { 'idempotency-key': 'k' },
+      }),
+    );
+    asserts.assertEquals(r.status, 400); // the handler's error, not the store's
+    asserts.assertEquals((await r.json()).code, 'RAPID_VALIDATION_FAILED');
+    await app.stop();
   });
 });

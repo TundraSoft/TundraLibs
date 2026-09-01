@@ -27,8 +27,8 @@ const cookieValue = (res: Response, name: string) =>
 describe('signed cookies + reply cookies', () => {
   it('a signed cookie is tamper-evident: round-trips, a forgery reads as undefined', async () => {
     const app = await make(SECRET);
-    app.get('/set', async (ctx) => {
-      await ctx.setCookie('prefs', 'dark', { signed: true });
+    app.get('/set', (ctx) => {
+      ctx.setCookie('prefs', 'dark', { signed: true });
       return { content: { ok: true } };
     });
     app.get('/read', async (ctx) => ({
@@ -96,12 +96,30 @@ describe('signed cookies + reply cookies', () => {
 
   it('signing without any secret fails where it bites (RAPID_CONFIG, not a silent plain cookie)', async () => {
     const app = await make(); // no secret
-    app.get('/set', async (ctx) => {
-      await ctx.setCookie('a', 'b', { signed: true });
+    app.get('/set', (ctx) => {
+      ctx.setCookie('a', 'b', { signed: true });
       return { content: { ok: true } };
     });
     const res = await app.fetch(new Request('http://app/set'));
     asserts.assertEquals(res.status, 500);
     asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
+  });
+
+  it('a signed setCookie from a SYNC handler lands on the response — queued, never a dropped promise', async () => {
+    const app = await make(SECRET);
+    app.get('/sync', (ctx) => {
+      // No await possible — the handler is sync. The old promise-based
+      // apply resolved after the context froze: an unhandled rejection.
+      ctx.setCookie('sid', 'abc', { signed: true });
+      return { content: { ok: true } };
+    });
+    const res = await app.fetch(new Request('http://app/sync'));
+    asserts.assertEquals(res.status, 200);
+    await res.body?.cancel();
+    const sid = cookieValue(res, 'sid');
+    asserts.assert(
+      sid !== undefined && sid.startsWith('abc.'),
+      'signed cookie set',
+    );
   });
 });

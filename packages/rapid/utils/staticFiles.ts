@@ -5,8 +5,8 @@
  * every outer middleware (secureHeaders, cors, compress, logging)
  * applies. Path traversal is blocked two ways (lexical + symlink
  * guards); conditional (weak-ETag 304), single-range (206/416), and
- * fingerprinted-immutable serving included. Also home to the djb2
- * content hash `view.asset()`'s lazy versioning uses.
+ * fingerprinted-immutable serving included. (The djb2 content hash
+ * `view.asset()`'s lazy versioning uses lives in `utils/hash.ts`.)
  *
  * @module
  */
@@ -18,22 +18,14 @@ import {
   stat,
 } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
-import { contentTypeFor } from '@tundralibs/compat/http';
+import { contentTypeFor, parseRange } from '@tundralibs/compat/http';
 import { RapidError } from '../errors/mod.ts';
+import { ifNoneMatch } from './ifNoneMatch.ts';
 import type { HTTPContext } from '../context/HTTPContext.ts';
 import type {
   RapidApplicationStaticConfig,
   RapidContextState,
 } from '../types/mod.ts';
-
-/** djb2 over bytes — cheap, sync, content-keyed (cache key, NOT integrity). */
-export const hashBytes = (bytes: Uint8Array): string => {
-  let hash = 5381;
-  for (let i = 0; i < bytes.length; i++) {
-    hash = ((hash << 5) + hash + bytes[i]!) >>> 0;
-  }
-  return hash.toString(16);
-};
 
 /** One normalized static mount, in declaration order. */
 export type StaticMount = {
@@ -51,45 +43,12 @@ export type StaticMount = {
 /** The Cache-Control a fingerprinted URL earns (1 year, immutable). */
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 
-/** Strip a weak-validator prefix for RFC 7232 weak comparison. */
-const stripWeak = (tag: string): string => tag.trim().replace(/^W\//, '');
-
-/** Whether an `If-None-Match` header matches `etag` (weak comparison). */
-const ifNoneMatch = (header: string, etag: string): boolean => {
-  if (header.trim() === '*') return true;
-  const target = stripWeak(etag);
-  return header.split(',').some((t) => stripWeak(t) === target);
-};
-
 /**
- * Parse a single-range `Range: bytes=start-end` header against a file of
- * `size` bytes — inclusive slice, `undefined` (serve whole, 200) for
- * no/unparseable/multi-range headers, `'unsatisfiable'` (416) when the
- * range lies wholly outside the file.
+ * The closed key set a `server.static` entry accepts — a YAML typo
+ * (`fingerprnt:`) silently no-oping would lose the feature with no hint,
+ * against the "config fails as loudly as code" contract.
  */
-const parseRange = (
-  header: string | null,
-  size: number,
-): { start: number; end: number } | 'unsatisfiable' | undefined => {
-  if (header === null) return undefined;
-  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (m === null || size === 0) return undefined;
-  const [, a, b] = m;
-  let start: number;
-  let end: number;
-  if (a === '' && b === '') return undefined;
-  if (a === '') {
-    const n = Number(b);
-    if (n === 0) return 'unsatisfiable';
-    start = Math.max(0, size - n);
-    end = size - 1;
-  } else {
-    start = Number(a);
-    end = b === '' ? size - 1 : Math.min(Number(b), size - 1);
-  }
-  if (start >= size || start > end) return 'unsatisfiable';
-  return { start, end };
-};
+const STATIC_ENTRY_KEYS = new Set(['root', 'index', 'maxAge', 'fingerprint']);
 
 /**
  * Normalize (and boot-validate) a `server.static` stanza into ordered
@@ -98,7 +57,8 @@ const parseRange = (
  * same thing from any working directory.
  *
  * @throws {RapidError} RAPID_CONFIG on a prefix not starting with `/`,
- *   an empty root, or a negative maxAge.
+ *   an unknown entry key, an empty root, or a mistyped
+ *   `index`/`maxAge`/`fingerprint`.
  */
 export function normalizeStaticConfig(
   config: RapidApplicationStaticConfig,
@@ -112,14 +72,48 @@ export function normalizeStaticConfig(
       });
     }
     const entry = typeof value === 'string' ? { root: value } : value;
+    if (typeof value !== 'string') {
+      for (const key of Object.keys(value)) {
+        if (!STATIC_ENTRY_KEYS.has(key)) {
+          throw new RapidError('RAPID_CONFIG', {
+            message:
+              `server.static['${prefix}']: unknown key '${key}' (valid: ${
+                [...STATIC_ENTRY_KEYS].join(', ')
+              })`,
+          });
+        }
+      }
+    }
     if (typeof entry.root !== 'string' || entry.root === '') {
       throw new RapidError('RAPID_CONFIG', {
         message: `server.static['${prefix}']: root must be a directory path`,
       });
     }
-    if (entry.maxAge !== undefined && entry.maxAge < 0) {
+    if (
+      entry.index !== undefined && entry.index !== false &&
+      typeof entry.index !== 'string'
+    ) {
       throw new RapidError('RAPID_CONFIG', {
-        message: `server.static['${prefix}']: maxAge must be >= 0`,
+        message:
+          `server.static['${prefix}']: index must be a filename or false`,
+      });
+    }
+    if (
+      entry.maxAge !== undefined &&
+      (typeof entry.maxAge !== 'number' || Number.isNaN(entry.maxAge) ||
+        entry.maxAge < 0)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `server.static['${prefix}']: maxAge must be a number >= 0`,
+      });
+    }
+    if (
+      entry.fingerprint !== undefined && typeof entry.fingerprint !== 'boolean'
+    ) {
+      // `fingerprint: "true"` from YAML would otherwise leave hashing
+      // (and immutable caching) silently off.
+      throw new RapidError('RAPID_CONFIG', {
+        message: `server.static['${prefix}']: fingerprint must be a boolean`,
       });
     }
     const root = path.isAbsolute(entry.root)

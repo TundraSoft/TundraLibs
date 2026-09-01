@@ -5,31 +5,47 @@
  * the FIRST attempt's stored reply (marked `idempotency-replayed: true`)
  * instead of re-running the handler, and a concurrent duplicate is
  * rejected 409 while the first attempt is still in flight. Records live
- * in an injected {@link Store} — per-process memory by default; hand
- * over redis/cacher closures to share keys across replicas.
+ * in an injected {@link Store} — per-process memory (bounded to
+ * {@link IdempotencyOptions.maxRecords} entries) by default; hand over
+ * redis/cacher closures to share keys across replicas.
  *
- * HTTP-only (SOCKET/JOB invocations pass through). The key is scoped to
- * `ctx.action` (method + matched route pattern), so the same client key
- * on a different endpoint is a different record, never a cross-route
- * replay.
+ * HTTP-only (SOCKET/JOB invocations pass through, as do unmatched
+ * requests — a 404 has nothing to replay and its raw pathname would mint
+ * unbounded keys). The record key is `ctx.action` (method + matched
+ * route pattern) + the REQUIRED identity {@link IdempotencyOptions.scope}
+ * + the client key, so the same client key on another endpoint — or from
+ * another caller — is a different record, never a cross-route or
+ * cross-user replay. `scope: false` opts into a deliberately shared key
+ * space (a webhook receiver keyed by the provider's event id); a scope
+ * returning `undefined` skips idempotency for that request (an anonymous
+ * caller gets no replay, never someone else's).
  *
  * What a replay carries: the first attempt's `content`, `status`, and
  * the response headers its INNER chain added or changed (measured
  * against a pre-`next()` snapshot — per-request stamps like the
- * request-id echo are re-issued fresh, never resurrected). A reply
- * `redirect` survives as its interpreted status + `location`. NOT
- * replayed: `set-cookie` (a cookie is per-request state — don't put a
- * login behind an idempotency key) and STREAMED bodies, which cannot be
- * re-sent from a store — a stream passes through un-recorded (the key
- * is released, a retry re-executes). A THROWN error is never recorded
- * either: the key is released and the retry re-executes.
+ * request-id echo are re-issued fresh, never resurrected). The record is
+ * a structured clone taken at store AND replay time — later in-place
+ * mutation of the live reply can never leak into (or out of) the store.
+ * A reply `redirect` survives as its interpreted status + `location`.
+ * NOT replayed: `set-cookie` (a cookie is per-request state — don't put
+ * a login behind an idempotency key) and STREAMED or otherwise
+ * un-cloneable bodies, which cannot be re-sent from a store — those pass
+ * through un-recorded (the key is released, a retry re-executes). A
+ * THROWN error is never recorded either: the key is released and the
+ * retry re-executes.
  *
  * @module
  */
 
 import { RapidError } from '../errors/mod.ts';
-import type { RapidContextResponse, RapidMiddleware } from '../types/mod.ts';
+import type { HTTPContext } from '../context/mod.ts';
+import type {
+  RapidContextResponse,
+  RapidContextState,
+  RapidMiddleware,
+} from '../types/mod.ts';
 import { isStreamBody } from '../utils/streams.ts';
+import { isThenable } from '../utils/isThenable.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 import { memoryStore, type Store } from './store.ts';
 
@@ -52,6 +68,20 @@ export type IdempotencyRecord =
 /** Options for {@link idempotency}. */
 export type IdempotencyOptions = {
   /**
+   * Who a key belongs to — REQUIRED, because a key without an identity
+   * replays one caller's stored response to anyone who guesses (or
+   * sniffs) the header. Return a stable caller identity (auth subject,
+   * session id, API-key id); return `undefined` to skip idempotency for
+   * that request (no identity → no replay). Pass `false` — an explicit
+   * opt-out, never a default — for a deliberately shared key space, e.g.
+   * a webhook receiver keyed by the provider's event id.
+   */
+  scope:
+    | ((
+      ctx: HTTPContext<RapidContextState>,
+    ) => string | undefined | Promise<string | undefined>)
+    | false;
+  /**
    * How long a completed reply stays replayable, in milliseconds.
    * @default 86_400_000 (24h)
    */
@@ -66,24 +96,37 @@ export type IdempotencyOptions = {
   pendingTtlMs?: number;
   /**
    * The request header carrying the client's key. A request without it
-   * passes through untouched.
+   * passes through untouched; a key longer than 255 characters is
+   * rejected 400 (RAPID_VALIDATION_FAILED) — keys are opaque tokens, not
+   * payloads.
    * @default 'idempotency-key'
    */
   header?: string;
+  /**
+   * Cap on the default in-memory store's live records, oldest-first
+   * evicted beyond it — the bound that keeps attacker-minted keys from
+   * growing the process for `ttlMs` (an evicted record just means that
+   * retry re-executes). Ignored when `store` is injected: bound the
+   * shared store yourself (redis maxmemory, cacher limits).
+   * @default 10_000
+   */
+  maxRecords?: number;
   /**
    * Record backend. With a SYNCHRONOUS store (the default) the
    * check-and-claim runs without an await gap, so two concurrent
    * duplicates can never both claim the key; an async (shared) store
    * narrows but cannot fully close that window unless it provides
    * atomic writes.
-   * @default an in-process {@link memoryStore}
+   * @default an in-process {@link memoryStore} bounded to `maxRecords`
    */
   store?: Store<IdempotencyRecord>;
 };
 
-const isThenable = (v: unknown): v is Promise<unknown> =>
-  v !== null && typeof v === 'object' &&
-  typeof (v as { then?: unknown }).then === 'function';
+/** Longest accepted client key — beyond it the request is rejected 400. */
+const MAX_KEY_LENGTH = 255;
+
+/** Default bound on the in-memory store's live records. */
+const DEFAULT_MAX_RECORDS = 10_000;
 
 /**
  * Claim `key`: read the record and, when absent, write the `pending`
@@ -111,12 +154,21 @@ function claim(
   return isThenable(got) ? got.then(take) : take(got);
 }
 
-/** Release a claimed key so a retry re-executes (delete, or ~instant expiry). */
-function release(store: Store<IdempotencyRecord>, key: string): void {
-  if (store.delete !== undefined) {
-    void store.delete(key);
-  } else {
-    void store.set(key, { state: 'pending' }, 1);
+/**
+ * Release a claimed key so a retry re-executes (delete, or ~instant
+ * expiry). Awaitable and never-throwing: a store outage here must not
+ * mask the error being rethrown (the pending marker expires on its own),
+ * and an un-observed rejection would be process-fatal.
+ */
+async function release(
+  store: Store<IdempotencyRecord>,
+  key: string,
+): Promise<void> {
+  try {
+    if (store.delete !== undefined) await store.delete(key);
+    else await store.set(key, { state: 'pending' }, 1);
+  } catch {
+    // swallowed — pendingTtlMs expires the marker regardless
   }
 }
 
@@ -140,28 +192,47 @@ function headersAdded(
 /**
  * Build the middleware. Register EARLY (outer), before anything that
  * must NOT re-run on a replay — a replayed request answers from the
- * store without reaching inner middleware or the handler.
+ * store without reaching inner middleware or the handler. Note the
+ * `scope` callback IS reached on a replay (it builds the key), so keep
+ * it cheap and side-effect free.
  *
- * @throws {RapidError} RAPID_CONFIG when `ttlMs`/`pendingTtlMs` are not
- *   positive integers (factory time).
+ * @throws {RapidError} RAPID_CONFIG when `scope` is missing, or when
+ *   `ttlMs`/`pendingTtlMs`/`maxRecords` are not positive integers
+ *   (factory time).
+ * @throws {RapidError} RAPID_VALIDATION_FAILED (400) when the client key
+ *   exceeds 255 characters.
  * @throws {RapidError} RAPID_CONFLICT (409) as a rejection of the
  *   middleware's promise when the key's first attempt is still in
  *   flight.
  *
  * @example
  * ```ts ignore
- * import { idempotency } from '@tundralibs/rapid/middlewares';
+ * import { getSession, idempotency, session } from '@tundralibs/rapid/middlewares';
  *
- * app.use(idempotency()); // curl -H 'idempotency-key: order-42' ...
+ * app.use(session());
+ * app.use(idempotency({
+ *   scope: async (ctx) => (await getSession(ctx))?.id, // per-caller keys
+ * }));
+ * // curl -H 'idempotency-key: order-42' ...
  * ```
  */
-export function idempotency(options: IdempotencyOptions = {}): RapidMiddleware {
+export function idempotency(options: IdempotencyOptions): RapidMiddleware {
+  const scope = options?.scope;
+  if (scope === undefined) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'idempotency requires a scope — return a caller identity ' +
+        '(session id / auth subject / API-key id), or pass scope: false ' +
+        'for a deliberately shared key space',
+    });
+  }
   const ttlMs = options.ttlMs ?? 86_400_000;
   const pendingTtlMs = options.pendingTtlMs ?? 60_000;
+  const maxRecords = options.maxRecords ?? DEFAULT_MAX_RECORDS;
   for (
     const [name, value] of [
       ['ttlMs', ttlMs],
       ['pendingTtlMs', pendingTtlMs],
+      ['maxRecords', maxRecords],
     ] as const
   ) {
     if (!Number.isInteger(value) || value < 1) {
@@ -172,13 +243,25 @@ export function idempotency(options: IdempotencyOptions = {}): RapidMiddleware {
     }
   }
   const header = options.header ?? 'idempotency-key';
-  const store = options.store ?? memoryStore<IdempotencyRecord>();
+  const store = options.store ??
+    memoryStore<IdempotencyRecord>({ maxEntries: maxRecords });
 
   const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP') return next();
     const clientKey = ctx.headers.get(header);
     if (clientKey === null || clientKey === '') return next();
-    const key = `${ctx.action} ${clientKey}`;
+    if (!ctx.matched) return next(); // a 404 has nothing to replay
+    if (clientKey.length > MAX_KEY_LENGTH) {
+      throw new RapidError('RAPID_VALIDATION_FAILED', {
+        message:
+          `${header} must be at most ${MAX_KEY_LENGTH} characters (an opaque token, not a payload)`,
+      });
+    }
+    const scopeValue = scope === false ? '' : await scope(ctx);
+    if (scopeValue === undefined) return next(); // no identity → no replay
+    // NUL-separated: header values cannot carry \0, so a crafted key can
+    // never collide across (action, scope) boundaries.
+    const key = `${ctx.action}\u0000${scopeValue}\u0000${clientKey}`;
 
     const prior = await claim(store, key, pendingTtlMs);
     if (prior !== undefined) {
@@ -189,7 +272,9 @@ export function idempotency(options: IdempotencyOptions = {}): RapidMiddleware {
         });
       }
       ctx.setHeader('idempotency-replayed', 'true');
-      ctx.response = prior.reply === null ? null : { ...prior.reply };
+      // Cloned per replay: a mutation by outer middleware on one replay
+      // must not compound into the store or the next replay.
+      ctx.response = prior.reply === null ? null : structuredClone(prior.reply);
       return; // replayed — short-circuit the chain
     }
 
@@ -197,26 +282,35 @@ export function idempotency(options: IdempotencyOptions = {}): RapidMiddleware {
     try {
       await next();
     } catch (error) {
-      release(store, key); // never record a throw — a retry re-executes
+      // Never record a throw — a retry re-executes. Awaited so an
+      // immediate retry can't still find the pending marker.
+      await release(store, key);
       throw error;
     }
     const reply = ctx.response;
     if (reply !== null && isStreamBody(reply.content)) {
-      release(store, key); // a stream cannot replay — don't pretend it can
+      await release(store, key); // a stream cannot replay — don't pretend it can
       return;
     }
-    const added = reply === null
-      ? undefined
-      : headersAdded(before, ctx.responseHeaders);
-    const stored: IdempotencyRecord = {
-      state: 'done',
-      reply: reply === null ? null : {
-        content: reply.content,
+    let replayable: IdempotentReply | null = null;
+    if (reply !== null) {
+      let content: RapidContextResponse['content'];
+      try {
+        // Cloned at store time: the live reply object stays the app's to
+        // mutate; the record is frozen at what the handler answered.
+        content = structuredClone(reply.content);
+      } catch {
+        await release(store, key); // un-cloneable → un-replayable, like a stream
+        return;
+      }
+      const added = headersAdded(before, ctx.responseHeaders);
+      replayable = {
+        content,
         ...(reply.status !== undefined ? { status: reply.status } : {}),
         ...(added !== undefined ? { headers: added } : {}),
-      },
-    };
-    await store.set(key, stored, ttlMs);
+      };
+    }
+    await store.set(key, { state: 'done', reply: replayable }, ttlMs);
   };
   return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }

@@ -85,6 +85,16 @@ describe('rapid.parseBody', () => {
     );
   });
 
+  it('malformed multipart (no boundary) -> RAPID_VALIDATION_FAILED (400), never a fake 500', async () => {
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(req('not really multipart', 'multipart/form-data'), opts()),
+      RapidError,
+      'not a valid form payload',
+    );
+    asserts.assertEquals((err as RapidError).code, 'RAPID_VALIDATION_FAILED');
+  });
+
   it('text/* stays a string', async () => {
     const { value } = await parseBody(req('hello', 'text/plain'), opts());
     asserts.assertEquals(value, 'hello');

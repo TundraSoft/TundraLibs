@@ -12,6 +12,7 @@
 import { RapidError } from '../errors/mod.ts';
 import type { RapidContext, RapidMiddleware } from '../types/mod.ts';
 import { memoryStore, type Store } from './store.ts';
+import { isThenable } from '../utils/isThenable.ts';
 
 /** One fixed-window counter for a key. */
 type Window = { count: number; resetAt: number };
@@ -48,10 +49,6 @@ export type RateLimitOptions = {
    */
   headers?: boolean;
 };
-
-const isThenable = (v: unknown): v is Promise<unknown> =>
-  v !== null && typeof v === 'object' &&
-  typeof (v as { then?: unknown }).then === 'function';
 
 /**
  * One fixed-window hit: read the current window, increment (or start a

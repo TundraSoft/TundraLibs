@@ -11,11 +11,8 @@
  */
 
 import { asValidationError, RapidError } from '../errors/mod.ts';
+import { isThenable } from '../utils/isThenable.ts';
 import type { RapidFormError, RapidFormResult } from '../types/mod.ts';
-
-const isThenable = (v: unknown): v is Promise<unknown> =>
-  v !== null && typeof v === 'object' &&
-  typeof (v as { then?: unknown }).then === 'function';
 
 /**
  * The re-fill values: the submission's top-level primitive fields,
@@ -39,18 +36,28 @@ const keptValues = (body: unknown): Record<string, string> => {
   return values;
 };
 
-/** A parse failure → the error arm (fields via the guardian recognizer). */
+/**
+ * A parse failure → the error arm — RECOGNIZED validation failures only:
+ * a guardian throw, or a `RAPID_VALIDATION_FAILED` (what `validated()`
+ * mints for other validators). Anything else is a BUG in the validator,
+ * not bad user input — it RETHROWS and 500s opaquely, per the package's
+ * `validated()` policy, instead of shipping an internal exception
+ * message into production HTML as a form error.
+ */
 const toError = (cause: unknown, body: unknown): RapidFormError => {
   const recognized = cause instanceof RapidError &&
       cause.code === 'RAPID_VALIDATION_FAILED'
     ? cause // a validated()-wrapped throw already carries the fields
     : asValidationError(cause);
-  const fields =
-    (recognized?.context.details as { fields?: Record<string, string> })
-      ?.fields ??
-      {
-        '(root)': cause instanceof Error ? cause.message : String(cause),
-      };
+  if (recognized === undefined) throw cause;
+  const details = recognized.context.details as
+    | { fields?: Record<string, string>; message?: unknown }
+    | undefined;
+  const fields = details?.fields ?? {
+    '(root)': typeof details?.message === 'string'
+      ? details.message
+      : recognized.message,
+  };
   return {
     state: 'error',
     message: Object.values(fields)[0] ?? 'Validation failed',
@@ -62,13 +69,16 @@ const toError = (cause: unknown, body: unknown): RapidFormError => {
 /**
  * Validate one form submission against `schema` (anything with `.parse`
  * — a guardian schema as-is). Returns `{ ok: true, data }` on success;
- * on a validation failure, `{ ok: false, error }` with the
+ * on a RECOGNIZED validation failure, `{ ok: false, error }` with the
  * {@link RapidFormError} arm ready to hand to the form's template —
- * per-field messages extracted from a guardian failure (any other
- * validator's throw lands under `(root)`), the submitted top-level
- * primitives kept as `values`. Synchronous for a synchronous `parse`;
- * a promise-returning `parse` makes the result a promise — `await` it
- * either way.
+ * per-field messages extracted from a guardian failure, the submitted
+ * top-level primitives kept as `values`. An UNRECOGNIZED throw (a bug
+ * in a custom `parse`, not bad input) rethrows and 500s opaquely —
+ * wrap another validator with `validated()` to opt its throws into the
+ * error arm. Synchronous for a synchronous `parse`; a promise-returning
+ * `parse` makes the result a promise — `await` it either way.
+ *
+ * @throws Whatever an unrecognized `parse` throw was (see above).
  *
  * @example
  * ```ts ignore

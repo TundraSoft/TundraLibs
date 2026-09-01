@@ -39,6 +39,16 @@ describe('rapid.middlewares.compress', () => {
       content: big,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     }));
+    // A partial response: Content-Range describes IDENTITY byte
+    // positions — compression would corrupt resume/seek.
+    app.get('/partial', () => ({
+      status: 206,
+      content: big.slice(0, 2000),
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'content-range': `bytes 0-1999/${big.length}`,
+      },
+    }));
     await app.start();
     base = `http://127.0.0.1:${app.port}`;
   });
@@ -133,6 +143,15 @@ describe('rapid.middlewares.compress', () => {
     });
     await r.json();
     asserts.assertEquals(r.headers.get('content-encoding'), null);
+  });
+
+  it('skips a 206 partial response — Content-Range offsets are identity bytes', async () => {
+    const r = await fetch(`${base}/partial`, {
+      headers: { 'accept-encoding': 'gzip' },
+    });
+    asserts.assertEquals(r.status, 206);
+    asserts.assertEquals(r.headers.get('content-encoding'), null);
+    asserts.assertEquals((await r.text()).length, 2000);
   });
 
   it('skips a HEAD request even over the threshold', async () => {

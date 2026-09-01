@@ -81,6 +81,13 @@ export const UI_HISTORY: string = `(() => {
     if (!pending || pending.url !== detail.url) return;
     const armed = pending;
     pending = null;
+    if (detail.method && detail.method !== 'GET') {
+      // A POST's action URL is not an address — restoring the entry
+      // would GET the action (a 405, then a full-page error). Only GET
+      // swaps are pushable.
+      console.warn('[rapid.history] only GET swaps are pushable');
+      return;
+    }
     const region = e.target;
     if (!(region instanceof Element) || !region.id) {
       // No id, no restore address — refuse the push rather than mint an
@@ -89,18 +96,29 @@ export const UI_HISTORY: string = `(() => {
       return;
     }
     const target = '#' + region.id;
-    // First push: stamp the INITIAL entry so back-to-start restores too.
-    if (!history.state || !history.state.__rapidHistory) {
-      history.replaceState(
-        { __rapidHistory: { url: initial, target, swap: detail.swap } },
+    try {
+      // First push: stamp the INITIAL entry — page: true, because its
+      // URL is a full PAGE, and re-fetching a page as a fragment would
+      // nest the whole page inside the region. Back-to-start is an
+      // honest full navigation instead.
+      if (!history.state || !history.state.__rapidHistory) {
+        history.replaceState(
+          { __rapidHistory: { url: initial, page: true } },
+          '',
+        );
+      }
+      history.pushState(
+        { __rapidHistory: { url: detail.url, target, swap: detail.swap } },
         '',
+        armed.pushUrl || detail.url,
       );
+    } catch (error) {
+      // pushState throws on a cross-origin/invalid URL — the swap
+      // already landed; a refused address must not also kill back
+      // navigation for the rest of the session.
+      console.warn('[rapid.history] pushState refused:', error);
+      return;
     }
-    history.pushState(
-      { __rapidHistory: { url: detail.url, target, swap: detail.swap } },
-      '',
-      armed.pushUrl || detail.url,
-    );
     if (detail.title) doc.title = detail.title;
   });
 
@@ -109,6 +127,12 @@ export const UI_HISTORY: string = `(() => {
     // library's state) keeps the browser's default behavior.
     const entry = e.state && e.state.__rapidHistory;
     if (!entry) return;
+    if (entry.page) {
+      // A page entry (the pre-push start) restores by NAVIGATION — its
+      // URL serves a whole page, not a region's fragment.
+      location.assign(entry.url);
+      return;
+    }
     const region = doc.querySelector(entry.target);
     if (!region || !window.rapid || !window.rapid.swap) {
       // The region is gone (an outer swap replaced the shell) — a full

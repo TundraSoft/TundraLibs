@@ -255,7 +255,19 @@ export abstract class Context<
   /** The base setter's body — content storage + the freeze guard, in one place. */
   protected _setBaseResponse(response: RapidContextResponse | null): void {
     this._assertNotResponded();
+    const replaced = this._content;
     this._content = response?.content ?? null;
+    // A REPLACED stream body would otherwise never be read NOR cancelled
+    // — its file handle (ctx.serve, static) leaks per occurrence, e.g.
+    // every time an error path overrides a half-built stream response.
+    if (
+      replaced !== null && replaced !== this._content &&
+      replaced instanceof ReadableStream
+    ) {
+      replaced.cancel().catch(() => {
+        // already locked (being read) or errored — nothing left to free
+      });
+    }
   }
 
   /**

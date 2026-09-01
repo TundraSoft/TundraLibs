@@ -51,6 +51,7 @@ import type {
   RapidModuleInvokeSeed,
   RapidModuleMethodKeys,
 } from '../types/mod.ts';
+import { isThenable } from '../utils/isThenable.ts';
 
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => unknown;
@@ -90,10 +91,6 @@ type Bag = Record<string, unknown> & { [CURRENT]?: Ctx };
 const LIFECYCLE = new Set(['init', 'dispose']);
 const NOOP = (): void => {};
 const NO_CONTENT: Reply<null> = Object.freeze(new Reply(204, null));
-
-const isThenable = (v: unknown): v is Promise<unknown> =>
-  v !== null && typeof v === 'object' &&
-  typeof (v as { then?: unknown }).then === 'function';
 
 /** The in-flight context, if any. */
 const currentOf = (): Ctx | undefined =>

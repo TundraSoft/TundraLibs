@@ -4,8 +4,10 @@
  * Two deterministic signals decide (never `Accept`): the `rapid-swap`
  * request header (our client runtime) → the FRAGMENT, always; otherwise
  * the route's `prefer` → JSON unchanged (default) or the layout-wrapped
- * page. Runs before every middleware's post-`next()` view, so `etag`/
- * `compress`/loggers see the final HTML, not the data object.
+ * page. (One deliberate exception: `representError` consults `Accept`
+ * for template-less requests when `errorTemplates` are configured — see
+ * its doc.) Runs before every middleware's post-`next()` view, so
+ * `etag`/`compress`/loggers see the final HTML, not the data object.
  *
  * @module
  */
@@ -20,7 +22,7 @@ import type {
   RapidTemplate,
   RapidView,
 } from '../types/mod.ts';
-import { escapeRegExp } from '../utils/mod.ts';
+import { escapeRegExp, negotiate } from '../utils/mod.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
 import { type Html, isHtml, render } from './html.ts';
 import { DefaultErrorPage } from './errorPage.ts';
@@ -106,15 +108,15 @@ export function normalizeRouteTemplate(
  * The frozen per-request view bag (D1): `requestId`, `path`, raw `query`
  * (last value wins), and the `csrf` cookie's token when present. Nothing
  * from the auth bag — identity reaches templates only through the
- * `app.ui({ view })` projection (a later build step).
+ * `ui.view` projection configured at `Application.initialize`.
  */
 export function buildView<S extends RapidContextState>(
   ctx: HTTPContext<S>,
 ): RapidView {
   const url = new URL(ctx.url);
   const csrfToken = ctx.cookies[ctx.app.uiOptions?.csrfCookie ?? 'csrf'];
-  // The opt-in identity projection (`app.ui({ view })`) merges OVER the
-  // defaults — its fields, and only its fields, cross from ctx into
+  // The opt-in identity projection (`ui.view` at initialize) merges OVER
+  // the defaults — its fields, and only its fields, cross from ctx into
   // template reach.
   const extra = ctx.app.uiOptions?.view?.(ctx as never);
   const assets = ctx.app.uiOptions?.assets;
@@ -176,6 +178,25 @@ const replyHeader = (
 };
 
 /**
+ * Compiled member-tests for {@link mergeVary}, cached by name — the
+ * names come from app CONFIG (plus the fixed `Cookie`/`Accept` stamps),
+ * so the map is small and bounded; without it every templated request
+ * would recompile one RegExp per configured name.
+ */
+const VARY_NAME_PATTERNS = new Map<string, RegExp>();
+
+/** Merge one name into a `Vary` value (comma-set, case-insensitive). */
+const mergeVary = (vary: string | null, name: string): string => {
+  if (vary === null) return name;
+  let pattern = VARY_NAME_PATTERNS.get(name);
+  if (pattern === undefined) {
+    pattern = new RegExp(`(^|,)\\s*${escapeRegExp(name)}\\s*(,|$)`, 'i');
+    VARY_NAME_PATTERNS.set(name, pattern);
+  }
+  return pattern.test(vary) ? vary : `${vary}, ${name}`;
+};
+
+/**
  * Merge the swap header + every `swapUnless` name into `Vary`, seeded
  * from BOTH the accumulated ctx headers and the reply's own `vary` (the
  * reply's headers are applied AFTER ctx's at finalize, so a handler-set
@@ -196,12 +217,7 @@ function stampVary<S extends RapidContextState>(
       ...appUi?.swapUnless ?? [],
     ]
   ) {
-    if (vary === null) vary = name;
-    else if (
-      !new RegExp(`(^|,)\\s*${escapeRegExp(name)}\\s*(,|$)`, 'i').test(vary)
-    ) {
-      vary = `${vary}, ${name}`;
-    }
+    vary = mergeVary(vary, name);
   }
   ctx.setHeader('vary', vary!);
   return vary!;
@@ -237,22 +253,44 @@ function renderChecked<D>(
   try {
     out = tpl.render(data, view);
   } catch (cause) {
-    const err = cause instanceof Error ? cause : undefined;
-    throw new RapidError('RAPID_TEMPLATE_RENDER', {
-      message: `${what} threw while rendering`,
-      ...(tpl.name ? { details: { template: tpl.name } } : {}),
-      // WHY it threw would otherwise be invisible at every layer: the
-      // payload renders code/message/details/debug only, and the
-      // transport log spreads context.debug — a cause chained but not
-      // copied here reaches neither.
-      debug: {
-        cause: err?.message ?? String(cause),
-        ...(err?.stack !== undefined ? { stack: err.stack } : {}),
-      },
-      cause: err,
-    });
+    throw templateRenderError(what, cause, tpl.name);
   }
   return assertHtml(out, what);
+}
+
+/** The RAPID_TEMPLATE_RENDER build shared by every render-layer callback. */
+function templateRenderError(
+  what: string,
+  cause: unknown,
+  template?: string,
+): RapidError {
+  const err = cause instanceof Error ? cause : undefined;
+  return new RapidError('RAPID_TEMPLATE_RENDER', {
+    message: `${what} threw while rendering`,
+    ...(template ? { details: { template } } : {}),
+    // WHY it threw would otherwise be invisible at every layer: the
+    // payload renders code/message/details/debug only, and the
+    // transport log spreads context.debug — a cause chained but not
+    // copied here reaches neither.
+    debug: {
+      cause: err?.message ?? String(cause),
+      ...(err?.stack !== undefined ? { stack: err.stack } : {}),
+    },
+    cause: err,
+  });
+}
+
+/**
+ * Run a route's `title`/`meta` CALLBACK under the same diagnostics as a
+ * template render — these run in the render layer and a throw would
+ * otherwise escape as a bare 500 without the template-layer label.
+ */
+function callChecked<T>(fn: () => T, what: string): T {
+  try {
+    return fn();
+  } catch (cause) {
+    throw templateRenderError(what, cause);
+  }
 }
 
 /**
@@ -330,15 +368,21 @@ export function represent<S extends RapidContextState>(
   }
 
   const view = buildView(ctx);
+  // An identity-bearing view — a csrf token, or the app's `view`
+  // projection (which typically reads ctx.auth) — makes the rendered
+  // HTML per-user: a shared cache must never hand one user's page (and
+  // token) to another.
+  const personal = view.csrfToken !== undefined || appUi?.view !== undefined;
   let markup = renderChecked(
     template.render,
     returned.content,
     view,
     `template '${template.render.name || 'for this route'}'`,
   );
-  const title = typeof template.title === 'function'
-    ? template.title(returned.content)
-    : template.title;
+  const titleOf = template.title;
+  const title = typeof titleOf === 'function'
+    ? callChecked(() => titleOf(returned.content), 'the route title callback')
+    : titleOf;
   if (!swap) {
     // THE TWO WRAPPER TIERS (pages only — a swap is always the bare
     // fragment). Module tier: route → @Module → app default, `false`
@@ -358,9 +402,10 @@ export function represent<S extends RapidContextState>(
     }
     const core = appUi?.core;
     if (core !== undefined) {
-      const meta = typeof template.meta === 'function'
-        ? template.meta(returned.content)
-        : template.meta;
+      const metaOf = template.meta;
+      const meta = typeof metaOf === 'function'
+        ? callChecked(() => metaOf(returned.content), 'the route meta callback')
+        : metaOf;
       markup = renderChecked(
         core,
         {
@@ -386,7 +431,20 @@ export function represent<S extends RapidContextState>(
   if (!headers.has('content-type')) {
     headers.set('content-type', 'text/html; charset=UTF-8');
   }
-  headers.set('vary', vary);
+  let finalVary = vary;
+  if (personal) {
+    finalVary = mergeVary(vary, 'Cookie');
+    ctx.setHeader('vary', finalVary);
+    // `private` (not no-store): the user's own browser may cache; shared
+    // caches must not. A handler's explicit cache policy wins.
+    if (
+      !headers.has('cache-control') &&
+      ctx.responseHeaders.get('cache-control') === null
+    ) {
+      headers.set('cache-control', 'private');
+    }
+  }
+  headers.set('vary', finalVary);
   return { ...returned, content: render(markup), headers };
 }
 
@@ -394,8 +452,12 @@ export function represent<S extends RapidContextState>(
  * The HTML error representation (D9) — called from the post-onion
  * disclosure path, AFTER `app.onError` declined to override. Returns
  * `undefined` (JSON envelope as always) unless the representation
- * resolves to HTML: a swap, or a matched route / app `prefer` of
- * `'html'`. The page template resolves through the CLOSED
+ * resolves to HTML: a swap, a matched route / app `prefer` of `'html'`,
+ * or — on a TEMPLATE-LESS request with `errorTemplates` configured —
+ * an `Accept` that explicitly prefers `text/html` (the one place Accept
+ * is consulted, so a browser hitting an unknown URL gets the 404 page
+ * while API clients keep the envelope; Accept joins `Vary` when read).
+ * The page template resolves through the CLOSED
  * `errorTemplates` registry (exact status → '4xx'/'5xx' → 'default' →
  * the built-in `DefaultErrorPage`); a swap renders the bare fragment, a
  * page wraps in the CORE only (module tier skipped). The disclosure
@@ -414,14 +476,32 @@ export function representError<S extends RapidContextState>(
   const route = ctx.routeTemplate;
   const swap = isSwap(ctx, appUi);
   const prefer = route?.prefer ?? appUi.prefer ?? 'json';
+  // A TEMPLATE-LESS request (the commonest error: a browser navigating
+  // to an unknown URL) has no route `prefer` to consult — when the app
+  // configured `errorTemplates`, the client's Accept decides instead
+  // (the one place Accept is read: an explicit `text/html` earns the
+  // error page, `*/*`/JSON clients keep the envelope). Routed requests
+  // keep their declared representation.
+  const negotiated = route === undefined && appUi.errorTemplates !== undefined;
   // Same cache rule as the success path: with HTML errors in play this
   // URL's error serves TWO representations, so the stamp lands BEFORE
   // the JSON bail — errors (a heuristically-cacheable 404 included)
   // must say so in both shapes, or a shared cache would hand a stored
   // JSON 404 to a swap. The ctx header survives into the JSON envelope
-  // at finalize.
-  const vary = stampVary(ctx, appUi);
-  if (!swap && prefer !== 'html') return undefined;
+  // at finalize. When Accept was consulted it joins Vary for the same
+  // reason.
+  let vary = stampVary(ctx, appUi);
+  if (negotiated) {
+    vary = mergeVary(vary, 'Accept');
+    ctx.setHeader('vary', vary);
+  }
+  const wantsHtml = swap || prefer === 'html' ||
+    (negotiated &&
+      negotiate(
+          ctx.headers.get('accept'),
+          ['application/json', 'text/html'],
+        ) === 'text/html');
+  if (!wantsHtml) return undefined;
   // The CLOSED registry, fixed resolution: exact status → class
   // ('4xx'/'5xx') → 'default' → the built-in DefaultErrorPage — so a
   // UI-configured app never shows a browser a raw JSON envelope.
@@ -430,6 +510,12 @@ export function representError<S extends RapidContextState>(
     templates?.[status >= 500 ? '5xx' : '4xx'] ??
     templates?.default ?? DefaultErrorPage;
   const view = buildView(ctx);
+  // Same personal-view rule as the success path (see represent()).
+  const personal = view.csrfToken !== undefined || appUi.view !== undefined;
+  if (personal) {
+    vary = mergeVary(vary, 'Cookie');
+    ctx.setHeader('vary', vary);
+  }
   // The payload is the already-mode-collapsed disclosure — nothing
   // extra can leak; `status`/`mode` join it so one template can branch
   // without inferring from field absence.
@@ -455,6 +541,10 @@ export function representError<S extends RapidContextState>(
   return {
     status: status as RapidContextResponse['status'],
     content: render(markup),
-    headers: { 'content-type': 'text/html; charset=UTF-8', vary },
+    headers: {
+      'content-type': 'text/html; charset=UTF-8',
+      vary,
+      ...(personal ? { 'cache-control': 'private' } : {}),
+    },
   };
 }

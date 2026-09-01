@@ -41,12 +41,12 @@ import {
   buildExporter,
   buildState,
   currentContainer,
+  djb2,
   hasDecorations,
-  hashBytes,
+  ifNoneMatch,
   Meter,
   mountModule,
   normalizeStaticConfig,
-  serveStaticFile,
   type StaticMount,
 } from './utils/mod.ts';
 import {
@@ -124,6 +124,32 @@ let __containerProviderInstalled = false;
  * runtime-enforced way in.
  */
 const INIT_BRAND: unique symbol = Symbol('rapid.application.init');
+
+/**
+ * The closed key sets `__configureUi` validates the DATA half against —
+ * a YAML `ui:` bag reaches it uncheckable by TS, and an unknown key
+ * silently no-oping (or a code-half name booting clean then 500ing at
+ * render) breaks the "config fails as loudly as code" contract.
+ */
+const UI_DATA_KEYS = new Set([
+  'enabled',
+  'runtimePath',
+  'live',
+  'history',
+  'prefer',
+  'csrfCookie',
+  'swapHeader',
+  'swapUnless',
+  'redirectHeader',
+]);
+const UI_CODE_KEYS = new Set([
+  'core',
+  'layout',
+  'view',
+  'errorTemplate',
+  'errorTemplates',
+  'assets',
+]);
 
 /**
  * The rAPId application class. The constructor is PRIVATE — build every app
@@ -578,8 +604,24 @@ export class Application<S extends RapidContextState = RapidContextState>
    * inside the middleware via `ctx.type` (see {@link RapidMiddleware}).
    */
   public use(...middleware: RapidMiddleware[]): this {
+    this.__assertRegistrable('app.use()');
     this.__middleware.push(...middleware);
     return this;
+  }
+
+  /**
+   * Loud gate for every registration surface: the router snapshots at
+   * prepare (start() / the first fetch()), so a later registration would
+   * "succeed" yet never serve — the silent half-applied state
+   * {@link __configureUi} already forbids. One rule for all surfaces.
+   */
+  private __assertRegistrable(what: string): void {
+    if (this.__started || this.__http !== undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `${what} after start() / the first fetch() would never serve — register before the app starts`,
+      });
+    }
   }
 
   /** The app-level universal middleware, in order (read-only view). */
@@ -727,6 +769,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     command: string,
     ...chain: [...RapidSOCKETMiddleware[], RapidSOCKETHandler<S>]
   ): this {
+    this.__assertRegistrable('socket()');
     if (command.trim() === '') {
       throw new RapidError('RAPID_CONFIG', {
         message: 'socket command must be a non-empty string',
@@ -790,6 +833,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     path: string,
     ...args: unknown[]
   ): this {
+    this.__assertRegistrable('route()');
     if (typeof path !== 'string' || !path.startsWith('/')) {
       throw new RapidError('RAPID_CONFIG', {
         message: "route path must start with '/'",
@@ -943,6 +987,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     handler: RapidJobEntry<S>['handler'],
     options: { args?: Readonly<Record<string, unknown>> } = {},
   ): this {
+    this.__assertRegistrable('job()');
     if (this.__jobs.has(name)) {
       throw new RapidError('RAPID_CONFIG', {
         message: `job '${name}' is already registered`,
@@ -1160,7 +1205,8 @@ export class Application<S extends RapidContextState = RapidContextState>
    * by `initialize` (the sanctioned path) and the deprecated `app.ui()`.
    *
    * @throws {RapidError} RAPID_CONFIG on a second configuration, a call
-   *   after start, a non-template `core`/`layout`/error entry, both
+   *   after start, an unknown (or code-half) key in the data half, a
+   *   non-boolean gate, a non-template `core`/`layout`/error entry, both
    *   `errorTemplate` and `errorTemplates`, a registry key outside the
    *   closed grammar, an invalid `prefer`/`runtimePath`/header name, or
    *   a bad `assets` map.
@@ -1182,6 +1228,41 @@ export class Application<S extends RapidContextState = RapidContextState>
       throw new RapidError('RAPID_CONFIG', {
         message: 'the UI must be configured before start() / the first fetch()',
       });
+    }
+    for (const key of Object.keys(data)) {
+      if (UI_CODE_KEYS.has(key)) {
+        // Config names code, never imports it: a YAML `ui: { core: ... }`
+        // would ride into __ui as a string and 500 every render.
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            `ui: '${key}' is code (a template/function) — it cannot come from config data; pass it in Application.initialize's ui option`,
+          details: { key },
+        });
+      }
+      if (!UI_DATA_KEYS.has(key)) {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `ui: unknown option '${key}' (valid: ${
+            [...UI_DATA_KEYS].join(', ')
+          })`,
+          details: { key },
+        });
+      }
+    }
+    // The boolean gates must BE booleans — YAML's `live: "true"` would
+    // otherwise leave the feature silently off.
+    for (
+      const [name, value] of [
+        ['enabled', data.enabled],
+        ['live', data.live],
+        ['history', data.history],
+      ] as const
+    ) {
+      if (value !== undefined && typeof value !== 'boolean') {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `ui: ${name} must be a boolean`,
+          details: { key: name, value },
+        });
+      }
     }
     for (
       const [name, value] of [
@@ -1321,10 +1402,7 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __scriptRoute(path: string, source: string, etag: string): void {
     this.get(path, (ctx) => {
       const inm = ctx.headers.get('if-none-match');
-      const matches = inm !== null && (
-        inm.trim() === '*' ||
-        inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)
-      );
+      const matches = inm !== null && ifNoneMatch(inm, etag);
       const headers = { etag, 'cache-control': 'no-cache' };
       if (matches) return { status: 304, content: '', headers };
       return {
@@ -1361,7 +1439,8 @@ export class Application<S extends RapidContextState = RapidContextState>
    * file is read and hashed on first reference and cached —
    * DEVELOPMENT re-checks the mtime per call so an edited file gets a
    * fresh hash on the next render; PRODUCTION caches forever. Sync by
-   * necessity (templates render synchronously).
+   * necessity (templates render synchronously) — so the FIRST render
+   * referencing an asset pays its read+hash inline, once per path.
    */
   public assetVersion(urlPath: string): string | undefined {
     for (const mount of this.__staticMounts) {
@@ -1371,31 +1450,31 @@ export class Application<S extends RapidContextState = RapidContextState>
         !urlPath.startsWith(mount.prefix + '/')
       ) continue;
       const rel = urlPath.slice(mount.prefix.length);
-      if (rel === '' || rel.endsWith('/')) return undefined;
+      if (rel === '' || rel.endsWith('/')) continue;
       // Lexical guard only — this HASHES (never serves) and a template
       // author writes these paths, but `..` must still not escape.
       const filePath = joinPath(mount.root, rel);
       if (
         filePath !== mount.root &&
         !filePath.startsWith(mount.root + PATH_SEPARATOR)
-      ) return undefined;
+      ) continue;
       const dev = this.mode === 'DEVELOPMENT';
       const cached = this.__assetVersions.get(urlPath);
+      if (cached !== undefined && !dev) return cached.version;
       try {
-        if (cached !== undefined) {
-          if (!dev) return cached.version;
-          if (statSync(filePath).mtime?.getTime() === cached.mtimeMs) {
-            return cached.version;
-          }
+        // Stat BEFORE the read: an edit landing between the two then
+        // caches under the OLD mtime (re-hashed next call) — the reverse
+        // order would cache a stale hash under the NEW mtime, sticky
+        // until the next edit.
+        const mtimeMs = statSync(filePath).mtime?.getTime() ?? 0;
+        if (cached !== undefined && mtimeMs === cached.mtimeMs) {
+          return cached.version;
         }
-        const version = hashBytes(readFileSync(filePath));
-        this.__assetVersions.set(urlPath, {
-          version,
-          mtimeMs: statSync(filePath).mtime?.getTime() ?? 0,
-        });
+        const version = djb2(readFileSync(filePath));
+        this.__assetVersions.set(urlPath, { version, mtimeMs });
         return version;
       } catch {
-        return undefined; // unreadable / no fs → passthrough
+        continue; // unreadable here — an overlapping later mount may host it
       }
     }
     return undefined;
@@ -1540,7 +1619,17 @@ export class Application<S extends RapidContextState = RapidContextState>
       // fetch()-only deployment (Workers, tests, any embedder) the
       // bridge has no server end and can never connect. Loud, once.
       this.log.warn(
-        'app.ui({ live: true }) on the fetch()-only path: /ws never mounts here, so the live bridge cannot connect',
+        'ui.live: true on the fetch()-only path: /ws never mounts here, so the live bridge cannot connect',
+      );
+    }
+    if (this.__channels.size > 0) {
+      // Same unreachability as ui.live — declared channels have no socket
+      // to publish over here, so publish() silently no-ops. Warn, not
+      // throw: channels may be declared by shared boot code that also
+      // runs on listening replicas.
+      this.log.warn(
+        'channels declared on the fetch()-only path: /ws never mounts here, so publish() will no-op',
+        { channels: [...this.__channels.keys()] },
       );
     }
     const http = new HTTPTransport<S>(this);
@@ -1560,14 +1649,13 @@ export class Application<S extends RapidContextState = RapidContextState>
    * force-closes immediately and no exit is armed.
    */
   public async stop(): Promise<this> {
-    // The upload temp dir is created at CONSTRUCTION, not start() — an
-    // instance that never started still owns one (e.g. a validation
-    // probe in tests), so this runs even when the early-return below
-    // fires. Idempotent: a second stop() finds nothing to remove.
-    if (this.__ownedUploadPath !== undefined) {
-      await remove(this.__ownedUploadPath).catch(() => {});
-    }
     if (!this.__started) {
+      // The upload temp dir is created at CONSTRUCTION, not start() — an
+      // instance that never started still owns one (e.g. a validation
+      // probe in tests). Idempotent: a second stop() finds nothing.
+      if (this.__ownedUploadPath !== undefined) {
+        await remove(this.__ownedUploadPath).catch(() => {});
+      }
       await this.__disposeModules(); // booted via modules() + fetch(), never listened
       return this;
     }
@@ -1593,7 +1681,9 @@ export class Application<S extends RapidContextState = RapidContextState>
       // other; the first failure resurfaces after BOTH have stopped.
       const failures: unknown[] = [];
       try {
-        await jobs?.stop();
+        // Same drain window as HTTP: a job mid-run gets to finish before
+        // the module dispose below closes what it is using.
+        await jobs?.stop(drainMs);
       } catch (error) {
         failures.push(error);
       }
@@ -1601,6 +1691,13 @@ export class Application<S extends RapidContextState = RapidContextState>
         await http?.stop(drainMs);
       } catch (error) {
         failures.push(error);
+      }
+      // The owned upload dir goes only AFTER the drain — a request
+      // mid-multipart-parse is still writing temp files into it, and
+      // removing it first would 500 the very requests the drain exists
+      // to protect.
+      if (this.__ownedUploadPath !== undefined) {
+        await remove(this.__ownedUploadPath).catch(() => {});
       }
       // Modules go LAST: in-flight requests may still invoke them.
       try {
@@ -1666,15 +1763,21 @@ export class Application<S extends RapidContextState = RapidContextState>
     };
   };
 
-  /**
-   * Map a declarative exporter descriptor (file-able) to the real
-   * exporter; instances pass through (the code-composition path).
-   * OTLP is auto-wrapped in a BatchSpanProcessor — unbatched OTLP costs
-   * one HTTP round-trip per span.
-   */
-
   /** Cross-key validation — loud at boot, per the config-error rule. */
   private __validate(): void {
+    // `mode` steers error disclosure and log levels — a silently wrong
+    // value ('development' from natural YAML casing running as
+    // PRODUCTION) is a posture change with no hint why. Any casing of
+    // the two values normalizes; anything else fails the boot.
+    const mode = this._getOption('mode') as unknown;
+    const upper = typeof mode === 'string' ? mode.toUpperCase() : undefined;
+    if (upper !== 'DEVELOPMENT' && upper !== 'PRODUCTION') {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `mode must be 'DEVELOPMENT' or 'PRODUCTION'`,
+        details: { key: 'mode', value: mode },
+      });
+    }
+    if (mode !== upper) this._setOption('mode', upper);
     // Required + slogger's appName contract, surfaced as OUR error
     // (missing name from a bad Application file must fail loudly here,
     // not deep inside Slogger construction).

@@ -17,10 +17,12 @@ export {
   signValue,
   verifySignedValue,
 } from './cookies.ts';
+export { djb2 } from './hash.ts';
+export { ifNoneMatch } from './ifNoneMatch.ts';
+export { isThenable } from './isThenable.ts';
 export { negotiate } from './negotiate.ts';
 export { attachContainer, currentContainer } from './requestContainer.ts';
 export {
-  hashBytes,
   normalizeStaticConfig,
   serveStaticFile,
   type StaticMount,

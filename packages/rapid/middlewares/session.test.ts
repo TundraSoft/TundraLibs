@@ -174,4 +174,141 @@ describe('rapid session()', () => {
     );
     asserts.assertEquals((await r.json()).hits, 0);
   });
+
+  it('a transient store-read failure 500s the request but never wipes the live record', async () => {
+    const backing = memoryStore<
+      { data: Record<string, unknown>; createdAt: number }
+    >();
+    let failReads = false;
+    const flaky = {
+      // deno-lint-ignore require-await
+      get: async (key: string) => {
+        if (failReads) throw new Error('redis blip');
+        return backing.get(key);
+      },
+      set: (
+        key: string,
+        value: { data: Record<string, unknown>; createdAt: number },
+        ttl?: number,
+      ) => backing.set(key, value, ttl),
+      delete: (key: string) => backing.delete!(key),
+    };
+    const app = await Application.initialize({
+      name: 'session-flaky',
+      secret: 'a'.repeat(32),
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(session({ secure: false, store: flaky }));
+    app.post('/hit', async (ctx) => {
+      const s = (await getSession(ctx))!;
+      s.set('hits', (s.get<number>('hits') ?? 0) + 1);
+      return { content: { hits: s.get<number>('hits') } };
+    });
+    app.get('/read', async (ctx) => ({
+      content: { hits: (await getSession(ctx))!.get<number>('hits') ?? 0 },
+    }));
+
+    const sid = sidFrom(
+      await app.fetch(new Request('http://app/hit', { method: 'POST' })),
+    )!;
+    failReads = true;
+    const err = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `sid=${sid}` } }),
+    );
+    asserts.assertEquals(err.status, 500); // the blip surfaces...
+    await err.body?.cancel();
+    failReads = false;
+    // ...but the record SURVIVED — a failed load must never save over it.
+    const r = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `sid=${sid}` } }),
+    );
+    asserts.assertEquals((await r.json()).hits, 1);
+  });
+
+  it('regenerate() then destroy() in one request evicts the pre-rotation record too', async () => {
+    const app = await makeApp();
+    app.post('/rotate-and-out', async (ctx) => {
+      const s = (await getSession(ctx))!;
+      s.regenerate();
+      s.destroy();
+      return { content: { ok: true } };
+    });
+    const sid = sidFrom(
+      await app.fetch(new Request('http://app/hit', { method: 'POST' })),
+    )!;
+    const out = await app.fetch(
+      new Request('http://app/rotate-and-out', {
+        method: 'POST',
+        headers: { cookie: `sid=${sid}` },
+      }),
+    );
+    await out.body?.cancel();
+    // The pre-rotation record must be gone — not parked behind the rotation.
+    const r = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `sid=${sid}` } }),
+    );
+    asserts.assertEquals((await r.json()).hits, 0);
+  });
+
+  it('destroy() followed by a throw still logs the user out', async () => {
+    const app = await makeApp();
+    app.post('/logout-throw', async (ctx) => {
+      (await getSession(ctx))!.destroy();
+      throw new Error('audit hook failed');
+    });
+    const sid = sidFrom(
+      await app.fetch(new Request('http://app/hit', { method: 'POST' })),
+    )!;
+    const err = await app.fetch(
+      new Request('http://app/logout-throw', {
+        method: 'POST',
+        headers: { cookie: `sid=${sid}` },
+      }),
+    );
+    asserts.assertEquals(err.status, 500);
+    await err.body?.cancel();
+    const r = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `sid=${sid}` } }),
+    );
+    asserts.assertEquals((await r.json()).hits, 0); // record dropped despite the throw
+  });
+
+  it('in-place mutation without set() never persists — the load is a clone, not an alias', async () => {
+    const app = await Application.initialize({
+      name: 'session-alias',
+      secret: 'a'.repeat(32),
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    // rolling off: an untouched-but-read session writes nothing back, so
+    // an aliased store object would be the ONLY way a mutation persists.
+    app.use(session({ secure: false, rolling: false }));
+    app.post('/seed', async (ctx) => {
+      (await getSession(ctx))!.set('obj', { n: 1 });
+      return { content: { ok: true } };
+    });
+    app.post('/mutate', async (ctx) => {
+      const obj = (await getSession(ctx))!.get<{ n: number }>('obj');
+      if (obj !== undefined) obj.n = 99; // in place, no set()
+      return { content: { ok: true } };
+    });
+    app.get('/peek', async (ctx) => ({
+      content: { n: (await getSession(ctx))!.get<{ n: number }>('obj')?.n },
+    }));
+    const sid = sidFrom(
+      await app.fetch(new Request('http://app/seed', { method: 'POST' })),
+    )!;
+    const m = await app.fetch(
+      new Request('http://app/mutate', {
+        method: 'POST',
+        headers: { cookie: `sid=${sid}` },
+      }),
+    );
+    await m.body?.cancel();
+    const r = await app.fetch(
+      new Request('http://app/peek', { headers: { cookie: `sid=${sid}` } }),
+    );
+    asserts.assertEquals((await r.json()).n, 1); // the mutation stayed request-local
+  });
 });

@@ -53,10 +53,27 @@ describe('rapid.ui.formState', () => {
     });
   });
 
-  it("any other validator's throw lands under (root)", () => {
+  it('an UNRECOGNIZED throw rethrows — a validator bug is a 500, never a 200 form error', () => {
+    // The old behavior rendered `cause.message` ("Cannot read properties
+    // of undefined…") into production HTML as a user-facing form error.
+    asserts.assertThrows(
+      () =>
+        formState({
+          parse: () => {
+            throw new Error('zod says no');
+          },
+        }, { a: 'b' }),
+      Error,
+      'zod says no',
+    );
+  });
+
+  it("a validated()-wrapped foreign validator's throw still lands under (root)", () => {
     const result = formState({
       parse: () => {
-        throw new Error('zod says no');
+        throw new RapidError('RAPID_VALIDATION_FAILED', {
+          details: { message: 'zod says no' },
+        });
       },
     }, { a: 'b' }) as RapidFormResult<never>;
     asserts.assertFalse(result.ok);
@@ -94,10 +111,27 @@ describe('rapid.ui.formState', () => {
     asserts.assertEquals(ok.data, { n: 1 });
 
     const bad = await formState({
-      parse: () => Promise.reject(new Error('late no')),
+      parse: () =>
+        Promise.reject(
+          new RapidError('RAPID_VALIDATION_FAILED', {
+            details: { message: 'late no' },
+          }),
+        ),
     }, { n: 'x' });
     asserts.assertFalse(bad.ok);
     asserts.assertEquals(bad.error.fields, { '(root)': 'late no' });
     asserts.assertEquals(bad.error.values, { n: 'x' });
+
+    // An async UNRECOGNIZED throw propagates as a rejection, same policy
+    // as the sync path.
+    await asserts.assertRejects(
+      async () => {
+        await formState({
+          parse: () => Promise.reject(new Error('late bug')),
+        }, { n: 'x' });
+      },
+      Error,
+      'late bug',
+    );
   });
 });

@@ -636,6 +636,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       stack: err.stack,
     });
     const payload = err.payload(this._app.mode);
+    // The error path cleans up like __materialize does — a multipart
+    // parse may have written temp files before the finalize-time
+    // failure, and skipping the sweep here leaks them per request
+    // (cleanup drains its file list, so reaching both paths is safe).
+    if (ctx.hasPendingCleanup) ctx.detach(ctx.cleanup());
     const headers = ctx.responseHeaders;
     headers.set('content-type', 'application/json');
     headers.set(requestIdHeader, ctx.requestId);

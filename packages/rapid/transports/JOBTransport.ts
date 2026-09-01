@@ -1,4 +1,5 @@
 import { Cronus } from '@tundralibs/cronus';
+import { unrefTimer } from '@tundralibs/compat/runtime';
 import { JOBContext, type JobTick } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { compose } from '../utils/mod.ts';
@@ -28,6 +29,12 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     ctx: JOBContext<S>,
     next: () => void | Promise<void>,
   ) => void | Promise<void>;
+  /**
+   * Scheduled firings still running — what {@link stop} waits on
+   * (bounded), so the module dispose that follows a SIGTERM can't close
+   * pools a mid-run job is still using.
+   */
+  private readonly __inflight = new Set<Promise<unknown>>();
 
   public start(): Promise<void> {
     // unref: the HTTP server (or the caller) owns the process
@@ -51,7 +58,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       // Scheduled firings carry the registration-default params only
       // (no overrides — those exist solely on the trigger path).
       cronus.add(job.name, job.schedule, async (run) => {
-        await this.__run(
+        const running = this.__run(
           job,
           {
             scheduledAt: run.scheduledAt,
@@ -61,6 +68,12 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
           undefined,
           true,
         ); // hold the slot until detached work settles
+        this.__inflight.add(running);
+        try {
+          await running;
+        } finally {
+          this.__inflight.delete(running);
+        }
       });
     }
     cronus.start();
@@ -68,10 +81,26 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     return Promise.resolve();
   }
 
-  public stop(): Promise<void> {
+  /**
+   * Stop the scheduler and WAIT — bounded by `drainMs` — for firings
+   * already mid-run. `cronus.stop()` only clears timers; without the
+   * wait, `stop()`'s module dispose would rip pools out from under a
+   * running job. `drainMs: 0` skips the wait (force-stop semantics,
+   * matching the HTTP transport).
+   */
+  public async stop(drainMs = 0): Promise<void> {
     this.__cronus?.stop();
     this.__cronus = undefined;
-    return Promise.resolve();
+    if (drainMs <= 0 || this.__inflight.size === 0) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.allSettled([...this.__inflight]),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, drainMs);
+        unrefTimer(timer);
+      }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
   }
 
   /** Scheduler observability passthrough (vitals later). */

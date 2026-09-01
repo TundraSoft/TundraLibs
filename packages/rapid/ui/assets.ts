@@ -16,7 +16,7 @@
 
 import { readDir, readFile } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
-import { hashBytes } from '../utils/staticFiles.ts';
+import { djb2 } from '../utils/hash.ts';
 
 /**
  * Hash every file under `root` (recursively; symlinks are skipped, so a
@@ -52,7 +52,7 @@ export async function fingerprintAssets(
       if (entry.isDirectory) {
         await walk(entry.path, childRel);
       } else if (entry.isFile) {
-        out[`${prefix}${childRel}`] = hashBytes(await readFile(entry.path));
+        out[`${prefix}${childRel}`] = djb2(await readFile(entry.path));
       }
     }
   };

@@ -4,13 +4,15 @@
  * the client's `If-None-Match` already has that hash. HTTP GET/HEAD only,
  * `200` responses only.
  *
- * Order it OUTSIDE compression (`app.use(compress(), etag())`) so the tag
- * hashes the ORIGINAL body, not the compressed bytes.
+ * Register it AFTER `compress()` (`app.use(compress(), etag())`) — the
+ * inner post-`next()` runs first, so the tag hashes the ORIGINAL body,
+ * not the compressed bytes.
  *
  * @module
  */
 
 import type { RapidContextResponse, RapidMiddleware } from '../types/mod.ts';
+import { ifNoneMatch } from '../utils/ifNoneMatch.ts';
 import { isStreamBody } from '../utils/streams.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -31,13 +33,6 @@ const computeTag = async (bytes: Uint8Array): Promise<string> => {
   let hex = '';
   for (let i = 0; i < 10; i++) hex += digest[i]!.toString(16).padStart(2, '0');
   return `"${bytes.length.toString(16)}-${hex}"`;
-};
-
-/** Whether `If-None-Match` covers `tag` (handles `*`, lists, and W/). */
-const ifNoneMatches = (header: string, tag: string): boolean => {
-  if (header.trim() === '*') return true;
-  const bare = tag.replace(/^W\//, '');
-  return header.split(',').some((t) => t.trim().replace(/^W\//, '') === bare);
 };
 
 /**
@@ -65,7 +60,7 @@ export function etag(): RapidMiddleware {
     ctx.setHeader('etag', tag);
 
     const inm = ctx.headers.get('if-none-match');
-    if (inm !== null && ifNoneMatches(inm, tag)) {
+    if (inm !== null && ifNoneMatch(inm, tag)) {
       // 304 keeps the ETag header (already set) and drops the body.
       ctx.response = { status: 304, content: '' };
     }

@@ -64,8 +64,17 @@ describe('rapid.ui.history', () => {
     asserts.assertStringIncludes(UI_HISTORY, 'location.assign(entry.url)');
     // A push needs a restore address — an id-less region refuses it.
     asserts.assertStringIncludes(UI_HISTORY, 'region.id');
-    // The initial entry is stamped once so back-to-start restores.
+    // Only GET swaps push — restoring a POST action URL would 405.
+    asserts.assertStringIncludes(UI_HISTORY, "detail.method !== 'GET'");
+    // The initial entry is stamped once, as a PAGE entry: back-to-start
+    // is a full navigation, never the page fetched as a fragment into
+    // the region (nested UI).
     asserts.assertStringIncludes(UI_HISTORY, 'history.replaceState');
+    asserts.assertStringIncludes(UI_HISTORY, 'page: true');
+    asserts.assertStringIncludes(UI_HISTORY, 'if (entry.page) {');
+    // pushState can throw (cross-origin/invalid URL) — guarded, so a
+    // refused address can't kill back navigation.
+    asserts.assertStringIncludes(UI_HISTORY, 'pushState refused');
     // Title sync from the enriched rapid:swapped detail — pushed and
     // restored swaps only (a widget swap never retitles the tab).
     asserts.assertStringIncludes(UI_HISTORY, 'doc.title = detail.title');

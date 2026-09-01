@@ -504,23 +504,34 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
 
   /**
    * Queue a `Set-Cookie` on the outbound response (appended, so multiple
-   * cookies coexist). Frozen after {@link respond}.
+   * cookies coexist). Frozen after {@link respond}. A `signed` cookie is
+   * QUEUED and signed at finalize (HMAC is async, this method is not) —
+   * misconfiguration (no app `secret`) and an illegal name/value still
+   * fail here, at the call site.
    *
-   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond}.
+   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond},
+   *   RAPID_CONFIG for a signed cookie without an app `secret`.
    * @throws {Error} When `name` is not a legal cookie name.
    */
   public setCookie(
     name: string,
     value: string,
     options: CookieOptions = {},
-  ): void | Promise<void> {
+  ): void {
     if (options.signed === true) {
-      // Signing is async (HMAC) — await the returned promise. The secret is
-      // read up front so a missing one fails here, not inside the promise.
-      const secret = this.app.secret;
-      return signValue(value, secret).then((signed) => {
-        this.appendHeader('set-cookie', serializeCookie(name, signed, options));
-      });
+      // Queued for _applyReplyCookies, never appended from a caller-owned
+      // promise: a handler that fires-and-forgets a signed set would
+      // otherwise have the HMAC resolve AFTER a sync request froze the
+      // context — appendHeader throwing inside a dropped promise is an
+      // unhandled rejection, i.e. process death.
+      this._assertNotResponded();
+      void this.app.secret; // the getter THROWS when unconfigured
+      serializeCookie(name, value, options); // name/value legality, eagerly
+      this.__replyCookies = [
+        ...(this.__replyCookies ?? []),
+        { name, value, options },
+      ];
+      return;
     }
     this.appendHeader('set-cookie', serializeCookie(name, value, options));
   }
@@ -550,12 +561,25 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     const pending = this.__replyCookies;
     if (pending === undefined) return;
     this.__replyCookies = undefined;
-    // Plain cookies apply synchronously; only a signed one yields a promise.
+    // Plain cookies apply synchronously; only a signed one yields a
+    // promise. Signing happens INLINE here (not via setCookie, which
+    // would re-queue a signed cookie right back onto the drained list).
     let chain: Promise<void> | undefined;
     for (const c of pending) {
-      const r = this.setCookie(c.name, c.value, c.options);
-      if (r !== undefined) {
-        chain = chain === undefined ? r : chain.then(() => r);
+      const options = c.options ?? {};
+      if (options.signed === true) {
+        const sign = signValue(c.value, this.app.secret).then((signed) => {
+          this.appendHeader(
+            'set-cookie',
+            serializeCookie(c.name, signed, options),
+          );
+        });
+        chain = chain === undefined ? sign : chain.then(() => sign);
+      } else {
+        this.appendHeader(
+          'set-cookie',
+          serializeCookie(c.name, c.value, options),
+        );
       }
     }
     return chain;
@@ -696,7 +720,11 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     if (this.__payloadPromise !== undefined) {
       await this.__payloadPromise.catch(() => {});
     }
-    for (const file of this._fileUploads) {
+    // DRAINED before deleting: finalize reaches cleanup from the success
+    // AND the error path, and a double call must find nothing left to do
+    // rather than warn per already-deleted file.
+    const files = this._fileUploads.splice(0);
+    for (const file of files) {
       // One undeletable file (already gone, permissions) must not
       // strand every file after it in the list.
       try {

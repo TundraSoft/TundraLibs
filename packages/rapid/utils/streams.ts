@@ -65,14 +65,22 @@ export type SseEvent = {
   retry?: number;
 };
 
+/** EOL characters are field delimiters in SSE — never data (see below). */
+const stripEol = (value: string): string => value.replace(/[\r\n]/g, '');
+
 /** Frame one event per the SSE spec (`text/event-stream`). */
 export const frameSseEvent = (e: SseEvent): string => {
   let out = '';
-  if (e.event !== undefined) out += `event: ${e.event}\n`;
-  if (e.id !== undefined) out += `id: ${e.id}\n`;
+  // `event`/`id` are single-line by spec, and a bare CR ends a line for
+  // EventSource just like LF — left intact, a value could INJECT its own
+  // `event:`/`data:` fields into the stream. Data splits on ALL three
+  // line endings for the same reason: a lone `\r` mid-value would
+  // otherwise ride out unframed.
+  if (e.event !== undefined) out += `event: ${stripEol(e.event)}\n`;
+  if (e.id !== undefined) out += `id: ${stripEol(e.id)}\n`;
   if (e.retry !== undefined) out += `retry: ${e.retry}\n`;
   const data = typeof e.data === 'string' ? e.data : JSON.stringify(e.data);
-  for (const line of data.split('\n')) out += `data: ${line}\n`;
+  for (const line of data.split(/\r\n|\r|\n/)) out += `data: ${line}\n`;
   return out + '\n';
 };
 

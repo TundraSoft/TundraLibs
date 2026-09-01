@@ -9,8 +9,9 @@
  * The per-request view bag — frozen, read-only, built by the representer
  * so a layout can render a nav without any template touching `ctx`. By
  * default it carries NOTHING from the auth bag; identity reaches
- * templates only through the explicit `app.ui({ view })` projection,
- * whose returned fields merge over these defaults (typed via `Extra`).
+ * templates only through the explicit `ui.view` projection configured
+ * at `Application.initialize`, whose returned fields merge over these
+ * defaults (typed via `Extra`).
  *
  * @typeParam Extra - the app projection's added fields.
  */
@@ -29,9 +30,10 @@ export type RapidView<
     path: string;
     /**
      * Version a static asset URL: `'/style.css'` →
-     * `'/style.css?v=<hash>'` when the path is in `app.ui({ assets })`
-     * (see `fingerprintAssets`), the path unchanged otherwise — safe to
-     * use unconditionally.
+     * `'/style.css?v=<hash>'` when the path is in the `ui.assets`
+     * manifest (see `fingerprintAssets`) or under a fingerprint-enabled
+     * `server.static` mount (lazily content-hashed), the path unchanged
+     * otherwise — safe to use unconditionally.
      */
     asset(path: string): string;
     /** Raw query params, decoded; the LAST value wins for a repeated key. */

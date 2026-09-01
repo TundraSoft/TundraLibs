@@ -6,6 +6,14 @@
  * No store needed. HTTP-only. `SameSite=Lax` cookies remain the first line —
  * this is defense-in-depth for the gaps (top-level navigations, older UAs).
  *
+ * KNOWN LIMIT (accepted trade-off of the stateless design): the token is
+ * signed but NOT bound to a session — an attacker who can PLANT a cookie
+ * on the origin (a writable subdomain, "cookie tossing") can pair their
+ * own validly-signed token with its header echo. `SameSite` plus
+ * subdomain hygiene is the mitigation; where subdomains are untrusted,
+ * bind the identity yourself (keep a copy of the token in the session at
+ * issue time and compare in the handler).
+ *
  * @module
  */
 import { ulid } from '@tundralibs/id';

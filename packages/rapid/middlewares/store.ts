@@ -28,13 +28,25 @@ export type Store<V> = {
 /** Amortised prune: sweep expired entries every N writes. */
 const PRUNE_EVERY = 256;
 
+/** Options for {@link memoryStore}. */
+export type MemoryStoreOptions = {
+  /**
+   * Hard cap on live entries. When a NEW key would exceed it, the oldest
+   * entries are evicted first (insertion order) — a safety bound against
+   * attacker-minted keys growing the process without limit, not an LRU.
+   * Unset → unbounded (fine for server-minted keys like session ids).
+   */
+  maxEntries?: number;
+};
+
 /**
  * A synchronous, per-process {@link Store} backed by a `Map`, with TTL
  * expiry and amortised pruning of expired keys. The default for every
  * stateful middleware; swap in a shared store for multi-replica
  * deployments.
  */
-export function memoryStore<V>(): Store<V> {
+export function memoryStore<V>(options: MemoryStoreOptions = {}): Store<V> {
+  const maxEntries = options.maxEntries ?? Infinity;
   const entries = new Map<string, { value: V; expiresAt: number }>();
   let writes = 0;
 
@@ -53,6 +65,11 @@ export function memoryStore<V>(): Store<V> {
         const now = Date.now();
         for (const [k, e] of entries) {
           if (e.expiresAt <= now) entries.delete(k);
+        }
+      }
+      if (!entries.has(key)) {
+        while (entries.size >= maxEntries) {
+          entries.delete(entries.keys().next().value!);
         }
       }
       entries.set(key, {

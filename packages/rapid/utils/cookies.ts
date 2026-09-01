@@ -6,22 +6,18 @@
  */
 
 import { signHMAC, verifyHMAC } from '@tundralibs/crypt';
+import {
+  type CookieOptions as CompatCookieOptions,
+  parseCookies as parseCookieHeader,
+  serializeCookie as serializeSetCookie,
+} from '@tundralibs/compat/http';
 import { RapidError } from '../errors/mod.ts';
 
-/** Attributes for an outbound cookie (`Set-Cookie`). */
-export type CookieOptions = {
-  /** Lifetime in SECONDS (`Max-Age`). */
-  maxAge?: number;
-  /** Absolute expiry (`Expires`). */
-  expires?: Date;
-  /** @default not set (browser scopes to the request path). */
-  path?: string;
-  domain?: string;
-  /** HTTPS-only. */
-  secure?: boolean;
-  /** Not readable from `document.cookie`. */
-  httpOnly?: boolean;
-  sameSite?: 'Strict' | 'Lax' | 'None';
+/**
+ * Attributes for an outbound cookie (`Set-Cookie`) — compat's standard
+ * attributes plus rapid's `signed`.
+ */
+export type CookieOptions = CompatCookieOptions & {
   /**
    * Sign the value with the app `secret` (HMAC) so it is tamper-evident; read
    * it back with `ctx.signedCookie(name)`, which verifies and returns
@@ -58,34 +54,21 @@ export const verifySignedValue = async (
 
 /**
  * Parse a `Cookie` request header into a name → value map (values
- * percent-decoded). A malformed pair is skipped, never thrown.
+ * percent-decoded, compat's parser). NULL-PROTOTYPE, like every other
+ * request-facing parser here: `ctx.cookies['toString']` for a cookie
+ * never sent must be `undefined`, not the inherited Function.
  */
 export const parseCookies = (
   header: string | null,
-): Record<string, string> => {
-  const out: Record<string, string> = {};
-  if (header === null || header === '') return out;
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq < 0) continue;
-    const name = part.slice(0, eq).trim();
-    if (name === '') continue;
-    let value = part.slice(eq + 1).trim();
-    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-      value = value.slice(1, -1);
-    }
-    try {
-      out[name] = decodeURIComponent(value);
-    } catch {
-      out[name] = value; // keep the raw value if it isn't valid encoding
-    }
-  }
-  return out;
-};
+): Record<string, string> =>
+  Object.assign(Object.create(null), parseCookieHeader(header));
 
 /**
- * Serialize one `Set-Cookie` header value. The value is
- * percent-encoded, so it can never inject `;`/CRLF into the header.
+ * Serialize one `Set-Cookie` header value — compat's serializer (the
+ * value is percent-encoded, so it can never inject `;`/CRLF), with its
+ * `TypeError` translated to this package's error model. `signed` is a
+ * rapid-level concern the caller resolves BEFORE serializing (the value
+ * handed here is already the wire form).
  *
  * @throws {@link RapidError} RAPID_RESPONSE_INVALID when `name` contains
  *   characters illegal in a cookie name (a separator/control char) — a server
@@ -96,24 +79,12 @@ export const serializeCookie = (
   value: string,
   options: CookieOptions = {},
 ): string => {
-  if (!/^[\w!#$%&'*+.^`|~-]+$/.test(name)) {
+  try {
+    return serializeSetCookie(name, value, options);
+  } catch (cause) {
     throw new RapidError('RAPID_RESPONSE_INVALID', {
-      message: `Invalid cookie name: ${JSON.stringify(name)}`,
+      message: cause instanceof Error ? cause.message : String(cause),
+      ...(cause instanceof Error ? { cause } : {}),
     });
   }
-  let cookie = `${name}=${encodeURIComponent(value)}`;
-  if (options.maxAge !== undefined) {
-    cookie += `; Max-Age=${Math.floor(options.maxAge)}`;
-  }
-  if (options.expires !== undefined) {
-    cookie += `; Expires=${options.expires.toUTCString()}`;
-  }
-  if (options.domain !== undefined) cookie += `; Domain=${options.domain}`;
-  if (options.path !== undefined) cookie += `; Path=${options.path}`;
-  if (options.secure === true) cookie += '; Secure';
-  if (options.httpOnly === true) cookie += '; HttpOnly';
-  if (options.sameSite !== undefined) {
-    cookie += `; SameSite=${options.sameSite}`;
-  }
-  return cookie;
 };

@@ -196,8 +196,9 @@ async function collectFormData(
  * the stream more than once.
  *
  * @throws {RapidError} RAPID_PAYLOAD_TOO_LARGE (over the byte cap or a
- *   per-file limit), RAPID_VALIDATION_FAILED (malformed JSON — a client
- *   error), or RAPID_UNSUPPORTED_MEDIA (upload gauntlet).
+ *   per-file limit), RAPID_VALIDATION_FAILED (malformed JSON or form
+ *   payload — a client error), or RAPID_UNSUPPORTED_MEDIA (upload
+ *   gauntlet).
  */
 export async function parseBody(
   request: Request,
@@ -225,7 +226,19 @@ export async function parseBody(
       bytes as unknown as BodyInit,
       rawContentType ? { headers: { 'content-type': rawContentType } } : {},
     );
-    const data = await response.formData();
+    let data: FormData;
+    try {
+      data = await response.formData();
+    } catch (cause) {
+      // A malformed form body — a boundary-less multipart, truncated
+      // parts — throws a raw TypeError here (and WHEN differs per
+      // runtime): a CLIENT error (400), like the malformed-JSON path,
+      // never a fake internal 500.
+      throw new RapidError('RAPID_VALIDATION_FAILED', {
+        message: 'Request body is not a valid form payload',
+        cause: cause instanceof Error ? cause : undefined,
+      });
+    }
     try {
       return {
         value: await collectFormData(data, options.uploads, files),

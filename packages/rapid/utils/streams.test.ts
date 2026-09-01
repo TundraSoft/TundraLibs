@@ -87,6 +87,23 @@ describe('streaming response model', () => {
     );
   });
 
+  it('SSE: a bare CR cannot inject fields — data splits on \\r too; event/id strip EOL', () => {
+    // EventSource treats a lone CR as end-of-line: unframed, this value
+    // would smuggle its own `event:`/`data:` lines into the stream.
+    asserts.assertEquals(
+      frameSseEvent({ data: 'x\revent: fake\rdata: {"pwn":1}' }),
+      'data: x\ndata: event: fake\ndata: data: {"pwn":1}\n\n',
+    );
+    asserts.assertEquals(
+      frameSseEvent({ data: 'a\r\nb' }),
+      'data: a\ndata: b\n\n',
+    );
+    asserts.assertEquals(
+      frameSseEvent({ event: 'ti\nck', id: '7\r8', data: 'x' }),
+      'event: tick\nid: 78\ndata: x\n\n',
+    );
+  });
+
   it('ctx.sse streams framed events with text/event-stream over app.fetch', async () => {
     const app = await make();
     app.get('/events', (ctx) =>

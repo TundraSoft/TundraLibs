@@ -35,8 +35,8 @@ export type RapidUiConfigOptions = {
   live?: boolean;
   /**
    * Serve the OPT-IN history module at `/__rapid/history.js` —
-   * push-state navigation for swaps flagged `data-push` (or
-   * `rapid.swap(..., { push: true })`), popstate re-fetch, and
+   * push-state navigation for swaps flagged `data-push` (or via
+   * `rapid.history.push(url, target, opts?)`), popstate re-fetch, and
    * `document.title` sync from the `rapid-title` header. @default false
    */
   history?: boolean;

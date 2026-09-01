@@ -592,6 +592,18 @@ describe('rapid.ui.app', () => {
       UI_RUNTIME,
       'dest.origin === location.origin',
     );
+    // The same-origin PRIMARY-fetch guard: a request-derived data-action
+    // must not ship the csrf header off-origin nor swap a foreign body in.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'new URL(url, location.href).origin !== location.origin',
+    );
+    // Idempotent under a double load — no duplicate click/submit
+    // listeners (a second load would double every fetch and POST).
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'if (window.rapid && window.rapid.swap) return;',
+    );
     // The default csrf cookie name.
     asserts.assertStringIncludes(UI_RUNTIME, "'csrf'");
     // View Transitions progressive enhancement — with the animation

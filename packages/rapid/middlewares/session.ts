@@ -136,6 +136,7 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
     let createdAt = Date.now();
     let dirty = false;
     let destroyed = false;
+    let loaded = false; // only a COMPLETED load may reach the save phase
     let evict: string | undefined; // an old id to drop after regenerate()
 
     // LOAD — verify the signed id, fetch + validate the record, build the
@@ -146,11 +147,17 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
       if (id !== undefined) {
         const rec = await store.get(id);
         if (rec !== undefined && Date.now() - rec.createdAt < absoluteTtl) {
-          ({ data, createdAt } = rec);
+          // CLONED, never aliased: handing out the in-memory store's own
+          // object would let in-place mutations persist even when the
+          // save phase never runs — semantics a serializing (redis)
+          // store could not match.
+          data = structuredClone(rec.data);
+          createdAt = rec.createdAt;
         } else {
           id = undefined; // absent / past the absolute cap → start fresh, lazily
         }
       }
+      loaded = true;
       return {
         get id() {
           return id;
@@ -179,35 +186,64 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
     let loading: Promise<RapidSession> | undefined;
     (ctx as unknown as WithSession)[SESSION] = () => (loading ??= load());
 
-    // RUN.
-    await next();
-
-    // SAVE — only for a TOUCHED session (loading set), and only when
-    // something changed (or rolling slides the window). An un-awaited
-    // getSession() (a handler that fired and forgot) still settles here
-    // before the state is read, so a half-loaded session can't save.
-    if (loading === undefined) return; // untouched — zero store I/O
-    await loading.catch(() => {}); // a failed load: nothing to save
-    if (destroyed) {
-      if (id !== undefined) await drop(id);
-      ctx.deleteCookie(name, { path: options.path ?? '/' });
-      return;
+    // RUN — the SAVE phase runs whether or not the handler threw, so a
+    // handler that calls destroy() (logout) or set() and THEN throws
+    // still persists that intent; without it, logout-then-throw leaves
+    // the user signed in. (Structured as catch-then-rethrow, not a
+    // throwing `finally` — deno lint's no-unsafe-finally is right that
+    // a finally-throw masks control flow.)
+    let thrown = false;
+    let handlerError: unknown;
+    try {
+      await next();
+    } catch (error) {
+      thrown = true;
+      handlerError = error;
     }
-    if (dirty || (id !== undefined && rolling)) {
-      const fresh = id === undefined;
-      id ??= ulid();
-      if (evict !== undefined && evict !== id) await drop(evict);
-      await store.set(id, { data, createdAt }, idleTtl);
-      // Issue on a fresh/rotated id; re-issue to slide the rolling window.
-      if (fresh || rolling) {
-        ctx.setCookie(name, await signValue(id, ctx.app.secret), {
-          httpOnly: true,
-          secure: options.secure ?? true,
-          sameSite: options.sameSite ?? 'Lax',
-          path: options.path ?? '/',
-          maxAge: Math.floor(idleTtl / 1000),
-        });
+    {
+      try {
+        // SAVE — only for a TOUCHED session (loading set), and only when
+        // something changed (or rolling slides the window). An un-awaited
+        // getSession() (a handler that fired and forgot) still settles
+        // here before the state is read, so a half-loaded session can't
+        // save.
+        if (loading !== undefined) {
+          await loading.catch(() => {});
+          // `loaded` gates everything: a load that FAILED mid-way (a
+          // transient store read error) may have verified `id` already —
+          // saving then would overwrite the live record with an empty
+          // one and re-issue the cookie, erasing the session over a
+          // blip. A failed load saves nothing.
+          if (loaded && destroyed) {
+            // regenerate() then destroy(): the pre-rotation record must
+            // die too, or the fixation window survives the logout.
+            if (evict !== undefined) await drop(evict);
+            if (id !== undefined) await drop(id);
+            ctx.deleteCookie(name, { path: options.path ?? '/' });
+          } else if (loaded && (dirty || (id !== undefined && rolling))) {
+            const fresh = id === undefined;
+            id ??= ulid();
+            if (evict !== undefined && evict !== id) await drop(evict);
+            await store.set(id, { data, createdAt }, idleTtl);
+            // Issue on a fresh/rotated id; re-issue to slide the rolling
+            // window.
+            if (fresh || rolling) {
+              ctx.setCookie(name, await signValue(id, ctx.app.secret), {
+                httpOnly: true,
+                secure: options.secure ?? true,
+                sameSite: options.sameSite ?? 'Lax',
+                path: options.path ?? '/',
+                maxAge: Math.floor(idleTtl / 1000),
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // A store failure in SAVE surfaces as the request's error —
+        // unless the handler already threw; the original error wins.
+        if (!thrown) throw error;
       }
     }
+    if (thrown) throw handlerError;
   };
 }

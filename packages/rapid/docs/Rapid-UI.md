@@ -192,8 +192,11 @@ show a heading; either may ignore it. On swap replies it rides the
 
 ```ts ignore
 @GET('/posts/:id:', {
-  template: { render: PostPage, title: (p) => p.title },
-  meta: (p) => ({ description: p.summary, 'og:title': p.title }),
+  template: {
+    render: PostPage,
+    title: (p) => p.title,
+    meta: (p) => ({ description: p.summary, 'og:title': p.title }),
+  },
 })
 ```
 
@@ -537,7 +540,8 @@ secrets (they land in the address bar and browser history).
   the D3/D8 rules compose into it.
 - **Strict CSP (nonces)** — the projection carries per-request data, so a
   style/script nonce is just a view field:
-  `app.ui({ view: (ctx) => ({ nonce: mintNonce(ctx) }) })` and
+  `ui: { view: (ctx) => ({ nonce: mintNonce(ctx) }) }` at
+  `Application.initialize` and
   `html\`<style nonce="${view.nonce}">…\``— pair with your security
   middleware emitting the matching header. Prefer external files via`server.static` where you can.
 - **i18n** — same pattern: negotiate the locale in the projection and hand
@@ -614,7 +618,13 @@ const ErrorPage = template<Record<string, unknown>>((e, view) =>
 Every entry receives exactly the disclosure payload the JSON envelope
 would carry (PRODUCTION collapses 5xx, never `debug`) plus `requestId`,
 `status`, and `mode`, and renders only when the representation resolves
-to HTML — a swap gets the bare fragment, a page renders inside the CORE
+to HTML: a swap, a route/app `prefer: 'html'`, or — with
+`errorTemplates` configured — a TEMPLATE-LESS request whose `Accept`
+explicitly prefers `text/html`, so the commonest error of all (a browser
+navigating to an unknown URL) gets the 404 page while `*/*`/JSON clients
+keep the envelope (`Accept` joins `Vary` when consulted; this error path
+is the one place Accept is ever read). A swap gets the bare fragment, a
+page renders inside the CORE
 (the module tier is skipped: errors are not module-scoped, and a module
 layout may depend on the very data that failed) with
 `"{status} {message}"` as the core's title. Off-HTML (and on a
@@ -636,6 +646,13 @@ A template consumes **data**: a templated route whose HTML representation is
 asked of a `Uint8Array`/stream content is `RAPID_RESPONSE_INVALID`. Stream
 replies belong on non-templated routes (or `prefer: 'json'`, where the reply
 passes through untouched).
+
+A structural limit to know: rendering is **synchronous and
+whole-string** — a page is built entirely in memory before the first
+byte leaves, so HTML never streams. That is the right trade for this
+layer's scope (admin surfaces, CRUD apps, fragments measured in
+kilobytes); a page so large that time-to-first-byte depends on streaming
+its markup is past what this layer targets.
 
 ## OpenAPI
 
