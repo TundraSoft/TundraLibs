@@ -9,6 +9,8 @@
  * @module
  */
 
+import { RapidError } from '../errors/mod.ts';
+
 /**
  * A keyed value store: `get` reads (or `undefined` when absent/expired),
  * `set` writes with an optional TTL in milliseconds. Both may be
@@ -29,14 +31,24 @@ export type Store<V> = {
 const PRUNE_EVERY = 256;
 
 /** Options for {@link memoryStore}. */
-export type MemoryStoreOptions = {
+export type MemoryStoreOptions<V = unknown> = {
   /**
    * Hard cap on live entries. When a NEW key would exceed it, the oldest
-   * entries are evicted first (insertion order) — a safety bound against
-   * attacker-minted keys growing the process without limit, not an LRU.
-   * Unset → unbounded (fine for server-minted keys like session ids).
+   * EVICTABLE entries are evicted first (insertion order) — a safety
+   * bound against attacker-minted keys growing the process without
+   * limit, not an LRU. Unset → unbounded (fine for server-minted keys
+   * like session ids). Must be a positive integer when set.
    */
   maxEntries?: number;
+  /**
+   * Entries this returns `false` for are NEVER evicted for the bound —
+   * e.g. idempotency's in-flight `pending` markers, whose loss would
+   * silently break its 409/single-execution guarantee. When nothing is
+   * evictable the bound is EXCEEDED rather than corrupting live state
+   * (such entries carry their own short TTLs, so the excess is
+   * transient). @default every entry is evictable
+   */
+  evictable?: (value: V) => boolean;
 };
 
 /**
@@ -45,8 +57,19 @@ export type MemoryStoreOptions = {
  * stateful middleware; swap in a shared store for multi-replica
  * deployments.
  */
-export function memoryStore<V>(options: MemoryStoreOptions = {}): Store<V> {
+export function memoryStore<V>(options: MemoryStoreOptions<V> = {}): Store<V> {
   const maxEntries = options.maxEntries ?? Infinity;
+  if (
+    maxEntries !== Infinity &&
+    (!Number.isInteger(maxEntries) || maxEntries < 1)
+  ) {
+    // <= 0 would loop the eviction scan forever; fail the config loudly.
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'memoryStore maxEntries must be a positive integer',
+      details: { maxEntries },
+    });
+  }
+  const evictable = options.evictable;
   const entries = new Map<string, { value: V; expiresAt: number }>();
   let writes = 0;
 
@@ -69,7 +92,15 @@ export function memoryStore<V>(options: MemoryStoreOptions = {}): Store<V> {
       }
       if (!entries.has(key)) {
         while (entries.size >= maxEntries) {
-          entries.delete(entries.keys().next().value!);
+          let victim: string | undefined;
+          for (const [k, e] of entries) {
+            if (evictable === undefined || evictable(e.value)) {
+              victim = k;
+              break;
+            }
+          }
+          if (victim === undefined) break; // nothing evictable — exceed the bound
+          entries.delete(victim);
         }
       }
       entries.set(key, {

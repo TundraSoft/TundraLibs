@@ -112,6 +112,10 @@ describe('rapid.HTTPContext.serve / .html', () => {
 
     c.setCookie('token', 'xyz', { httpOnly: true, path: '/' });
     c.deleteCookie('sid', { path: '/' });
+    // Cookies queue until finalize (CALL order preserved — a delete
+    // after a signed set must win); apply as the transport does, then
+    // observe. Unsigned-only → the apply is synchronous.
+    c._applyReplyCookies();
     const setCookies = c.responseHeaders.getSetCookie();
     asserts.assertEquals(setCookies[0], 'token=xyz; Path=/; HttpOnly');
     asserts.assert(setCookies[1]!.startsWith('sid=; Max-Age=0;'));

@@ -619,11 +619,13 @@ Every entry receives exactly the disclosure payload the JSON envelope
 would carry (PRODUCTION collapses 5xx, never `debug`) plus `requestId`,
 `status`, and `mode`, and renders only when the representation resolves
 to HTML: a swap, a route/app `prefer: 'html'`, or — with
-`errorTemplates` configured — a TEMPLATE-LESS request whose `Accept`
+`errorTemplates` configured — an UNMATCHED request whose `Accept`
 explicitly prefers `text/html`, so the commonest error of all (a browser
 navigating to an unknown URL) gets the 404 page while `*/*`/JSON clients
 keep the envelope (`Accept` joins `Vary` when consulted; this error path
-is the one place Accept is ever read). A swap gets the bare fragment, a
+is the one place Accept is ever read; a MATCHED route — templated or
+not — keeps its declared representation, so a JSON API route's errors
+stay JSON whatever a browser's Accept says). A swap gets the bare fragment, a
 page renders inside the CORE
 (the module tier is skipped: errors are not module-scoped, and a module
 layout may depend on the very data that failed) with

@@ -5,7 +5,7 @@
  * request header (our client runtime) → the FRAGMENT, always; otherwise
  * the route's `prefer` → JSON unchanged (default) or the layout-wrapped
  * page. (One deliberate exception: `representError` consults `Accept`
- * for template-less requests when `errorTemplates` are configured — see
+ * for UNMATCHED requests when `errorTemplates` are configured — see
  * its doc.) Runs before every middleware's post-`next()` view, so
  * `etag`/`compress`/loggers see the final HTML, not the data object.
  *
@@ -453,10 +453,11 @@ export function represent<S extends RapidContextState>(
  * disclosure path, AFTER `app.onError` declined to override. Returns
  * `undefined` (JSON envelope as always) unless the representation
  * resolves to HTML: a swap, a matched route / app `prefer` of `'html'`,
- * or — on a TEMPLATE-LESS request with `errorTemplates` configured —
- * an `Accept` that explicitly prefers `text/html` (the one place Accept
- * is consulted, so a browser hitting an unknown URL gets the 404 page
- * while API clients keep the envelope; Accept joins `Vary` when read).
+ * or — on an UNMATCHED request with `errorTemplates` configured — an
+ * `Accept` that explicitly prefers `text/html` (the one place Accept is
+ * consulted, so a browser hitting an unknown URL gets the 404 page
+ * while API clients keep the envelope; Accept joins `Vary` when read;
+ * matched routes, templated or not, keep their declared shape).
  * The page template resolves through the CLOSED
  * `errorTemplates` registry (exact status → '4xx'/'5xx' → 'default' →
  * the built-in `DefaultErrorPage`); a swap renders the bare fragment, a
@@ -476,13 +477,14 @@ export function representError<S extends RapidContextState>(
   const route = ctx.routeTemplate;
   const swap = isSwap(ctx, appUi);
   const prefer = route?.prefer ?? appUi.prefer ?? 'json';
-  // A TEMPLATE-LESS request (the commonest error: a browser navigating
-  // to an unknown URL) has no route `prefer` to consult — when the app
+  // An UNMATCHED request (the commonest error: a browser navigating to
+  // an unknown URL) has no route `prefer` to consult — when the app
   // configured `errorTemplates`, the client's Accept decides instead
   // (the one place Accept is read: an explicit `text/html` earns the
-  // error page, `*/*`/JSON clients keep the envelope). Routed requests
-  // keep their declared representation.
-  const negotiated = route === undefined && appUi.errorTemplates !== undefined;
+  // error page, `*/*`/JSON clients keep the envelope). MATCHED routes —
+  // templated or not — keep their declared representation: a JSON API
+  // route's errors stay JSON no matter what a browser's Accept says.
+  const negotiated = !ctx.matched && appUi.errorTemplates !== undefined;
   // Same cache rule as the success path: with HTML errors in play this
   // URL's error serves TWO representations, so the stamp lands BEFORE
   // the JSON bail — errors (a heuristically-cacheable 404 included)
@@ -544,7 +546,13 @@ export function representError<S extends RapidContextState>(
     headers: {
       'content-type': 'text/html; charset=UTF-8',
       vary,
-      ...(personal ? { 'cache-control': 'private' } : {}),
+      // Same guard as the success path: `private` only when nothing
+      // stricter was already set — these reply headers overwrite ctx's
+      // at finalize, and downgrading an explicit `no-store` would let a
+      // browser disk-cache an authenticated error page.
+      ...(personal && ctx.responseHeaders.get('cache-control') === null
+        ? { 'cache-control': 'private' }
+        : {}),
     },
   };
 }

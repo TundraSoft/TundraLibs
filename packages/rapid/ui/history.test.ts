@@ -72,6 +72,13 @@ describe('rapid.ui.history', () => {
     asserts.assertStringIncludes(UI_HISTORY, 'history.replaceState');
     asserts.assertStringIncludes(UI_HISTORY, 'page: true');
     asserts.assertStringIncludes(UI_HISTORY, 'if (entry.page) {');
+    // The page entry's url is a NAVIGATION target: hash preserved, and
+    // restored via replace() (assign would push and truncate forward).
+    asserts.assertStringIncludes(
+      UI_HISTORY,
+      'location.pathname + location.search + location.hash',
+    );
+    asserts.assertStringIncludes(UI_HISTORY, 'location.replace(entry.url)');
     // pushState can throw (cross-origin/invalid URL) — guarded, so a
     // refused address can't kill back navigation.
     asserts.assertStringIncludes(UI_HISTORY, 'pushState refused');

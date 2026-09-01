@@ -17,22 +17,25 @@
  * another caller — is a different record, never a cross-route or
  * cross-user replay. `scope: false` opts into a deliberately shared key
  * space (a webhook receiver keyed by the provider's event id); a scope
- * returning `undefined` skips idempotency for that request (an anonymous
- * caller gets no replay, never someone else's).
+ * returning `undefined` or `''` skips idempotency for that request (an
+ * anonymous caller gets no replay, never someone else's).
  *
  * What a replay carries: the first attempt's `content`, `status`, and
  * the response headers its INNER chain added or changed (measured
  * against a pre-`next()` snapshot — per-request stamps like the
- * request-id echo are re-issued fresh, never resurrected). The record is
- * a structured clone taken at store AND replay time — later in-place
- * mutation of the live reply can never leak into (or out of) the store.
- * A reply `redirect` survives as its interpreted status + `location`.
- * NOT replayed: `set-cookie` (a cookie is per-request state — don't put
- * a login behind an idempotency key) and STREAMED or otherwise
- * un-cloneable bodies, which cannot be re-sent from a store — those pass
- * through un-recorded (the key is released, a retry re-executes). A
- * THROWN error is never recorded either: the key is released and the
- * retry re-executes.
+ * request-id echo are re-issued fresh, never resurrected). The record
+ * is a WIRE-FAITHFUL snapshot (data replies round-trip through JSON, so
+ * `toJSON` projections are honored; bytes are copied) taken at store
+ * time and cloned again per replay — later in-place mutation of the
+ * live reply can never leak into (or out of) the store, and a replay
+ * serializes the same bytes the first attempt sent. A reply `redirect`
+ * survives as its interpreted status + `location`. NOT replayed:
+ * `set-cookie` (a cookie is per-request state — don't put a login
+ * behind an idempotency key) and STREAMED or otherwise un-serializable
+ * bodies, which cannot be re-sent from a store — those pass through
+ * un-recorded (the key is released, a retry re-executes). A THROWN
+ * error is never recorded either: the key is released and the retry
+ * re-executes.
  *
  * @module
  */
@@ -71,8 +74,9 @@ export type IdempotencyOptions = {
    * Who a key belongs to — REQUIRED, because a key without an identity
    * replays one caller's stored response to anyone who guesses (or
    * sniffs) the header. Return a stable caller identity (auth subject,
-   * session id, API-key id); return `undefined` to skip idempotency for
-   * that request (no identity → no replay). Pass `false` — an explicit
+   * session id, API-key id); `undefined` or `''` skips idempotency for
+   * that request (no identity → no replay — a blank header value must
+   * not become a shared key space). Pass `false` — an explicit
    * opt-out, never a default — for a deliberately shared key space, e.g.
    * a webhook receiver keyed by the provider's event id.
    */
@@ -105,9 +109,12 @@ export type IdempotencyOptions = {
   /**
    * Cap on the default in-memory store's live records, oldest-first
    * evicted beyond it — the bound that keeps attacker-minted keys from
-   * growing the process for `ttlMs` (an evicted record just means that
-   * retry re-executes). Ignored when `store` is injected: bound the
-   * shared store yourself (redis maxmemory, cacher limits).
+   * growing the process for `ttlMs` (an evicted COMPLETED record just
+   * means that retry re-executes; in-flight `pending` markers are never
+   * evicted, so the 409 guarantee holds even under key pressure —
+   * exceeding the bound transiently instead). Ignored when `store` is
+   * injected: bound the shared store yourself (redis maxmemory, cacher
+   * limits).
    * @default 10_000
    */
   maxRecords?: number;
@@ -170,6 +177,24 @@ async function release(
   } catch {
     // swallowed — pendingTtlMs expires the marker regardless
   }
+}
+
+/**
+ * A WIRE-FAITHFUL copy of a reply's content for the record: strings are
+ * immutable, bytes are copied, and DATA round-trips through JSON — the
+ * same projection respond() applies — so a replay serializes the exact
+ * bytes of the first attempt. (`structuredClone` here would be a LEAK:
+ * it keeps hidden own fields while dropping the `toJSON` that hides
+ * them, so a replay could ship what the first response projected away.)
+ * Throws on unserializable content (circular, a throwing `toJSON`) —
+ * the caller treats that like a stream: un-recordable.
+ */
+function snapshotContent(
+  content: RapidContextResponse['content'],
+): RapidContextResponse['content'] {
+  if (typeof content === 'string') return content;
+  if (content instanceof Uint8Array) return content.slice();
+  return JSON.parse(JSON.stringify(content));
 }
 
 /**
@@ -243,8 +268,13 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
     }
   }
   const header = options.header ?? 'idempotency-key';
-  const store = options.store ??
-    memoryStore<IdempotencyRecord>({ maxEntries: maxRecords });
+  const store = options.store ?? memoryStore<IdempotencyRecord>({
+    maxEntries: maxRecords,
+    // A pending marker is an in-flight attempt's claim — evicting one
+    // would let a concurrent duplicate execute a second time instead of
+    // 409ing. Only completed records may make room.
+    evictable: (record) => record.state !== 'pending',
+  });
 
   const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP') return next();
@@ -257,8 +287,15 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
           `${header} must be at most ${MAX_KEY_LENGTH} characters (an opaque token, not a payload)`,
       });
     }
-    const scopeValue = scope === false ? '' : await scope(ctx);
-    if (scopeValue === undefined) return next(); // no identity → no replay
+    let scopeValue = '';
+    if (scope !== false) {
+      const identity = await scope(ctx);
+      // '' is not an identity (an empty auth header, a blank claim) — it
+      // must not fall into a shared key space; that is `scope: false`'s
+      // EXPLICIT choice alone. No identity → no replay.
+      if (identity === undefined || identity === '') return next();
+      scopeValue = identity;
+    }
     // NUL-separated: header values cannot carry \0, so a crafted key can
     // never collide across (action, scope) boundaries.
     const key = `${ctx.action}\u0000${scopeValue}\u0000${clientKey}`;
@@ -296,11 +333,12 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
     if (reply !== null) {
       let content: RapidContextResponse['content'];
       try {
-        // Cloned at store time: the live reply object stays the app's to
-        // mutate; the record is frozen at what the handler answered.
-        content = structuredClone(reply.content);
+        // Snapshotted at store time: the live reply object stays the
+        // app's to mutate; the record is frozen at the WIRE form of what
+        // the handler answered (see snapshotContent).
+        content = snapshotContent(reply.content);
       } catch {
-        await release(store, key); // un-cloneable → un-replayable, like a stream
+        await release(store, key); // un-serializable → un-replayable, like a stream
         return;
       }
       const added = headersAdded(before, ctx.responseHeaders);

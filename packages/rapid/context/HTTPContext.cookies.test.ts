@@ -105,6 +105,23 @@ describe('signed cookies + reply cookies', () => {
     asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
   });
 
+  it('a delete AFTER a signed set of the same cookie wins — Set-Cookie preserves call order', async () => {
+    const app = await make(SECRET);
+    app.get('/revoke', (ctx) => {
+      ctx.setCookie('token', 'v1', { signed: true });
+      ctx.deleteCookie('token'); // revoke — must land LAST
+      return { content: { ok: true } };
+    });
+    const res = await app.fetch(new Request('http://app/revoke'));
+    await res.body?.cancel();
+    const tokens = res.headers.getSetCookie().filter((c) =>
+      c.startsWith('token=')
+    );
+    asserts.assertEquals(tokens.length, 2);
+    // The browser keeps the LAST header for a name — it must be the delete.
+    asserts.assertStringIncludes(tokens[1]!, 'Max-Age=0');
+  });
+
   it('a signed setCookie from a SYNC handler lands on the response — queued, never a dropped promise', async () => {
     const app = await make(SECRET);
     app.get('/sync', (ctx) => {

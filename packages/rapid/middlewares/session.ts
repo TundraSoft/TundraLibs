@@ -151,8 +151,14 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
           // object would let in-place mutations persist even when the
           // save phase never runs — semantics a serializing (redis)
           // store could not match.
-          data = structuredClone(rec.data);
-          createdAt = rec.createdAt;
+          try {
+            data = structuredClone(rec.data);
+            createdAt = rec.createdAt;
+          } catch {
+            // An unclonable (corrupt / foreign-store) record must not
+            // 500 every request forever — degrade to a fresh session.
+            id = undefined;
+          }
         } else {
           id = undefined; // absent / past the absolute cap → start fresh, lazily
         }
@@ -224,7 +230,16 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
             const fresh = id === undefined;
             id ??= ulid();
             if (evict !== undefined && evict !== id) await drop(evict);
-            await store.set(id, { data, createdAt }, idleTtl);
+            // CLONED at save too: (a) the in-memory store must hold a
+            // snapshot, not an alias of the live `data` (a post-response
+            // mutation must not persist); (b) a value no store could
+            // serialize (a function) fails THIS request loudly instead
+            // of poisoning the record and wedging every later load.
+            await store.set(
+              id,
+              { data: structuredClone(data), createdAt },
+              idleTtl,
+            );
             // Issue on a fresh/rotated id; re-issue to slide the rolling
             // window.
             if (fresh || rolling) {

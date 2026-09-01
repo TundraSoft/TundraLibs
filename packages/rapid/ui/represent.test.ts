@@ -507,6 +507,61 @@ describe('rapid.ui error negotiation + personal pages (2026-09 review)', () => {
     await app.stop();
   });
 
+  it('a MATCHED template-less route keeps JSON errors — negotiation is for unmatched requests only', async () => {
+    const app = await Application.initialize({
+      name: 'err-matched-json',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { errorTemplates: { 404: NotFound, '4xx': NotFound } },
+    });
+    app.get('/api/users', () => {
+      throw new RapidError('RAPID_VALIDATION_FAILED');
+    });
+    const r = await app.fetch(
+      new Request('http://app/api/users', {
+        headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' },
+      }),
+    );
+    asserts.assertEquals(r.status, 400);
+    asserts.assertStringIncludes(
+      r.headers.get('content-type') ?? '',
+      'application/json', // the route's declared shape, whatever Accept says
+    );
+    asserts.assertEquals((await r.json()).code, 'RAPID_VALIDATION_FAILED');
+    // Accept was never consulted → it must not join Vary either.
+    asserts.assertEquals(
+      /(^|,)\s*accept\s*(,|$)/i.test(r.headers.get('vary') ?? ''),
+      false,
+    );
+    await app.stop();
+  });
+
+  it("an explicit stricter cache policy survives the personal error page — 'no-store' is never downgraded", async () => {
+    const app = await Application.initialize({
+      name: 'err-nostore',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { errorTemplates: { 404: NotFound } },
+    });
+    app.use(async (ctx, next) => {
+      if (ctx.type === 'HTTP') ctx.setHeader('cache-control', 'no-store');
+      await next();
+    });
+    const r = await app.fetch(
+      new Request('http://app/nope', {
+        headers: { accept: 'text/html', cookie: 'csrf=tok' },
+      }),
+    );
+    asserts.assertEquals(r.status, 404);
+    asserts.assertStringIncludes(
+      r.headers.get('content-type') ?? '',
+      'text/html',
+    );
+    asserts.assertEquals(r.headers.get('cache-control'), 'no-store');
+    await r.body?.cancel();
+    await app.stop();
+  });
+
   it('an identity-bearing page (csrf token in view) stamps Vary: Cookie + Cache-Control: private', async () => {
     const Page = template<Record<string, unknown>>(
       () => html`<p>hi</p>`,

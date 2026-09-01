@@ -38,7 +38,10 @@ import { scriptEtag } from './ui.ts';
 export const UI_HISTORY: string = `(() => {
   if (window.rapid && window.rapid.history) return;
   const doc = document;
-  const initial = location.pathname + location.search;
+  // The page entry's restore target — a NAVIGATION url (hash included),
+  // unlike fetch urls: losing the anchor on back-to-start would land the
+  // user at the top of the page they started on.
+  const initial = location.pathname + location.search + location.hash;
   // The interaction that WANTS a push — armed by a data-push click or
   // history.push(), consumed by the matching rapid:swapped. Last-write-
   // wins, mirroring the runtime's per-target request semantics.
@@ -129,8 +132,11 @@ export const UI_HISTORY: string = `(() => {
     if (!entry) return;
     if (entry.page) {
       // A page entry (the pre-push start) restores by NAVIGATION — its
-      // URL serves a whole page, not a region's fragment.
-      location.assign(entry.url);
+      // URL serves a whole page, not a region's fragment. replace(),
+      // not assign(): the traversal already landed on this entry, and
+      // an assign would PUSH (truncating the forward stack and minting
+      // a spurious extra entry).
+      location.replace(entry.url);
       return;
     }
     const region = doc.querySelector(entry.target);

@@ -3358,6 +3358,33 @@ describe('rapid.Application boot-loud config', () => {
     );
   });
 
+  it('job()/socket() still register after a first fetch() (read live at start); after start() they throw', async () => {
+    const app = await Application.initialize({
+      name: 'late-job',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.get('/warm', () => ({ content: { ok: true } }));
+    await (await app.fetch(new Request('http://app/warm'))).body?.cancel();
+    // Jobs are consumed live at start() — a warmup fetch must not close
+    // this surface (the router-snapshot deadline is route()/use()'s).
+    app.job('nightly', '0 6 * * *', () => ({ content: 'ran' }));
+    const out = await app.triggerJob('nightly');
+    asserts.assertEquals(out.status, 200);
+    await app.start();
+    asserts.assertThrows(
+      () => app.job('later', '0 7 * * *', () => ({ content: '' })),
+      RapidError,
+      'after start()',
+    );
+    asserts.assertThrows(
+      () => app.socket('late-cmd', () => ({ content: {} })),
+      RapidError,
+      'after start()',
+    );
+    await app.stop();
+  });
+
   it('a route registered after the first fetch() throws instead of silently never serving', async () => {
     const app = await Application.initialize({
       name: 'late-route',

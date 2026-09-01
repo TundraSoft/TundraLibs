@@ -610,16 +610,26 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
-   * Loud gate for every registration surface: the router snapshots at
-   * prepare (start() / the first fetch()), so a later registration would
-   * "succeed" yet never serve — the silent half-applied state
-   * {@link __configureUi} already forbids. One rule for all surfaces.
+   * Loud gate for every registration surface — a late registration would
+   * "succeed" yet never serve, the silent half-applied state
+   * {@link __configureUi} already forbids. Two deadlines, per surface:
+   * routes/middleware SNAPSHOT into the router at prepare (start() or
+   * the first fetch()), so `snapshotted` surfaces close then; job and
+   * socket registries are read LIVE at start() (fetch()-then-register-
+   * then-start() is legitimate and worked pre-guard), so those close
+   * only at start().
    */
-  private __assertRegistrable(what: string): void {
-    if (this.__started || this.__http !== undefined) {
+  private __assertRegistrable(what: string, snapshotted = true): void {
+    if (snapshotted && (this.__started || this.__http !== undefined)) {
       throw new RapidError('RAPID_CONFIG', {
         message:
           `${what} after start() / the first fetch() would never serve — register before the app starts`,
+      });
+    }
+    if (!snapshotted && this.__started) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `${what} after start() would never run — register before start()`,
       });
     }
   }
@@ -769,7 +779,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     command: string,
     ...chain: [...RapidSOCKETMiddleware[], RapidSOCKETHandler<S>]
   ): this {
-    this.__assertRegistrable('socket()');
+    this.__assertRegistrable('socket()', false);
     if (command.trim() === '') {
       throw new RapidError('RAPID_CONFIG', {
         message: 'socket command must be a non-empty string',
@@ -987,7 +997,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     handler: RapidJobEntry<S>['handler'],
     options: { args?: Readonly<Record<string, unknown>> } = {},
   ): this {
-    this.__assertRegistrable('job()');
+    this.__assertRegistrable('job()', false);
     if (this.__jobs.has(name)) {
       throw new RapidError('RAPID_CONFIG', {
         message: `job '${name}' is already registered`,
@@ -1679,18 +1689,21 @@ export class Application<S extends RapidContextState = RapidContextState>
       this.__started = false;
       // Isolated teardown: one transport's failure cannot orphan the
       // other; the first failure resurfaces after BOTH have stopped.
+      // The two transports drain CONCURRENTLY — they are independent
+      // (jobs' cron timers clear synchronously at the head of its stop,
+      // so no new firing starts while HTTP drains), and SEQUENTIAL
+      // drains could take 2× the window, overrunning the nuclear
+      // backstop armed at 1.1× and killing the process mid-drain. Each
+      // gets the full window; a mid-run job still finishes before the
+      // module dispose below closes what it is using.
       const failures: unknown[] = [];
-      try {
-        // Same drain window as HTTP: a job mid-run gets to finish before
-        // the module dispose below closes what it is using.
-        await jobs?.stop(drainMs);
-      } catch (error) {
-        failures.push(error);
-      }
-      try {
-        await http?.stop(drainMs);
-      } catch (error) {
-        failures.push(error);
+      for (
+        const outcome of await Promise.allSettled([
+          jobs?.stop(drainMs),
+          http?.stop(drainMs),
+        ])
+      ) {
+        if (outcome.status === 'rejected') failures.push(outcome.reason);
       }
       // The owned upload dir goes only AFTER the drain — a request
       // mid-multipart-parse is still writing temp files into it, and

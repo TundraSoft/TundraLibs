@@ -503,37 +503,33 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   }
 
   /**
-   * Queue a `Set-Cookie` on the outbound response (appended, so multiple
-   * cookies coexist). Frozen after {@link respond}. A `signed` cookie is
-   * QUEUED and signed at finalize (HMAC is async, this method is not) —
-   * misconfiguration (no app `secret`) and an illegal name/value still
-   * fail here, at the call site.
+   * Queue a `Set-Cookie` on the outbound response (appended at finalize
+   * in CALL ORDER, so multiple cookies coexist and a later set/delete of
+   * the same name wins). Frozen after {@link respond}. BOTH flavors are
+   * queued: signing is async (this method is not), and applying signed
+   * sets out-of-band would let an earlier signed set land AFTER a later
+   * delete/overwrite of the same cookie — a revoked token surviving in
+   * the browser. Failures still fail HERE, at the call site: the
+   * frozen-context guard, the secret read, and name/value legality.
    *
-   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond},
-   *   RAPID_CONFIG for a signed cookie without an app `secret`.
-   * @throws {Error} When `name` is not a legal cookie name.
+   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond} or
+   *   on an illegal cookie name, RAPID_CONFIG for a signed cookie
+   *   without an app `secret`.
    */
   public setCookie(
     name: string,
     value: string,
     options: CookieOptions = {},
   ): void {
+    this._assertNotResponded();
     if (options.signed === true) {
-      // Queued for _applyReplyCookies, never appended from a caller-owned
-      // promise: a handler that fires-and-forgets a signed set would
-      // otherwise have the HMAC resolve AFTER a sync request froze the
-      // context — appendHeader throwing inside a dropped promise is an
-      // unhandled rejection, i.e. process death.
-      this._assertNotResponded();
       void this.app.secret; // the getter THROWS when unconfigured
-      serializeCookie(name, value, options); // name/value legality, eagerly
-      this.__replyCookies = [
-        ...(this.__replyCookies ?? []),
-        { name, value, options },
-      ];
-      return;
     }
-    this.appendHeader('set-cookie', serializeCookie(name, value, options));
+    serializeCookie(name, value, options); // name/value legality, eagerly
+    this.__replyCookies = [
+      ...(this.__replyCookies ?? []),
+      { name, value, options },
+    ];
   }
 
   /**
@@ -561,28 +557,31 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     const pending = this.__replyCookies;
     if (pending === undefined) return;
     this.__replyCookies = undefined;
-    // Plain cookies apply synchronously; only a signed one yields a
-    // promise. Signing happens INLINE here (not via setCookie, which
-    // would re-queue a signed cookie right back onto the drained list).
-    let chain: Promise<void> | undefined;
-    for (const c of pending) {
-      const options = c.options ?? {};
-      if (options.signed === true) {
-        const sign = signValue(c.value, this.app.secret).then((signed) => {
-          this.appendHeader(
-            'set-cookie',
-            serializeCookie(c.name, signed, options),
-          );
-        });
-        chain = chain === undefined ? sign : chain.then(() => sign);
-      } else {
+    // STRICT call order — a later delete/overwrite of a name must append
+    // AFTER an earlier signed set of it, or revocation silently loses.
+    // Sync-through when nothing needs signing (the common case); one
+    // signed entry makes the whole apply sequential-async.
+    if (!pending.some((c) => c.options?.signed === true)) {
+      for (const c of pending) {
         this.appendHeader(
           'set-cookie',
-          serializeCookie(c.name, c.value, options),
+          serializeCookie(c.name, c.value, c.options ?? {}),
         );
       }
+      return;
     }
-    return chain;
+    return (async () => {
+      for (const c of pending) {
+        const options = c.options ?? {};
+        const value = options.signed === true
+          ? await signValue(c.value, this.app.secret)
+          : c.value;
+        this.appendHeader(
+          'set-cookie',
+          serializeCookie(c.name, value, options),
+        );
+      }
+    })();
   }
 
   /**

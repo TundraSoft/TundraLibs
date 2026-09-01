@@ -42,7 +42,7 @@ carries a regression test that fails on the pre-fix code).
   record). `__configureUi` and `normalizeStaticConfig` validate against
   closed key sets and boolean-check the gates (typos and code-half
   names now fail the boot).
-- **Fixed in code — MEDIUMs:** template-less errors negotiate `Accept`
+- **Fixed in code — MEDIUMs:** unmatched-request errors negotiate `Accept`
   when `errorTemplates` are configured (browsers get the 404 page, API
   clients keep the envelope, Accept joins Vary); identity-bearing pages
   stamp `Vary: Cookie` + `Cache-Control: private`; history stamps the
@@ -77,6 +77,50 @@ carries a regression test that fails on the pre-fix code).
 - **Documented as accepted trade-off (not code-fixed):** the csrf
   double-submit token is not session-bound — caveat + mitigation now in
   `csrf.ts`'s fileoverview (defense-in-depth behind SameSite; low).
+
+## Second pass (same day): adversarial review OF the fixes
+
+A follow-up adversarial pass over the fix commit itself (three parallel
+reviewers + a cross-cutting check, findings verified with runnable
+repros) caught **8 regressions the fixes introduced**, all corrected the
+same day in a follow-up commit, each with a failing-before regression
+test:
+
+1. **Bounded idempotency store could evict an in-flight `pending`
+   marker** — a concurrent duplicate then executed a second time instead
+   of 409ing. Fix: `memoryStore` gained an `evictable` predicate;
+   pending markers are never evicted (the bound is exceeded transiently
+   instead).
+2. **`structuredClone` at record time stripped `toJSON`** — a replay
+   could serialize fields the first response's projection deliberately
+   hid. Fix: a wire-faithful snapshot (JSON round-trip for data, copied
+   bytes, strings as-is) — replays are byte-identical to first attempts.
+3. **Session clone asymmetry could wedge a session**: an unclonable
+   value was accepted at save (aliased), then every later load 500'd on
+   `DataCloneError` with logout unreachable. Fix: clone at save (the
+   writing request fails loudly, the record is never poisoned) and
+   degrade an unclonable load to a fresh session.
+4. **`memoryStore({ maxEntries: 0 })` looped `set()` forever** — now a
+   loud RAPID_CONFIG.
+5. **An empty-string scope value fell into the shared key space** — `''`
+   now skips like `undefined`; only the explicit `scope: false` shares.
+6. **The doubled shutdown drain overran the nuclear backstop**: jobs +
+   HTTP drained sequentially (up to 2× the window) against an `exit(1)`
+   armed at 1.1× — a wedged job could get the process killed mid-drain.
+   Fix: the two transports drain concurrently.
+7. **Queued signed cookies inverted Set-Cookie order against a later
+   delete/overwrite of the same name** — a revoked token survived in the
+   browser. Fix: BOTH cookie flavors queue and apply strictly in call
+   order at finalize.
+8. **The late-registration guard over-closed `job()`/`socket()`** (their
+   registries are read live at `start()`, so fetch-then-register-then-
+   start is legitimate) and **the Accept negotiation keyed off
+   `routeTemplate` instead of `ctx.matched`** — matched template-less
+   API routes could serve HTML errors to browsers; **the error page also
+   downgraded an explicit `no-store` to `private`**, and **history's
+   back-to-start dropped the URL hash and churned the stack**. All four
+   gates/paths corrected (`ctx.matched`, per-surface deadlines,
+   cache-policy guard, hash-preserving `location.replace`).
 
 ## Findings
 

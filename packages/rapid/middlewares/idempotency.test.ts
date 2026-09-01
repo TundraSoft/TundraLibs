@@ -234,6 +234,14 @@ describe('rapid.middlewares.idempotency (identity scope)', () => {
     await (await post({ 'idempotency-key': 'anon' })).body?.cancel();
     asserts.assertEquals(handled, before + 2); // both executed
   });
+
+  it("an EMPTY scope value ('' — a blank identity header) skips too, never a shared key space", async () => {
+    const before = handled;
+    const headers = { 'idempotency-key': 'anon2', 'x-user': '' };
+    await (await post(headers)).body?.cancel();
+    await (await post(headers)).body?.cancel();
+    asserts.assertEquals(handled, before + 2); // both executed — no shared replay
+  });
 });
 
 describe('rapid.middlewares.idempotency (bounds + store hygiene)', () => {
@@ -263,6 +271,85 @@ describe('rapid.middlewares.idempotency (bounds + store hygiene)', () => {
     await r.body?.cancel();
     asserts.assertEquals(reads, 0);
     await app.stop();
+  });
+
+  it('a PENDING marker survives eviction pressure — the 409 guarantee holds under key churn', async () => {
+    let handled = 0;
+    let releaseSlow!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const app = await Application.initialize({
+      name: 'idempotency-pending',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({ scope: false, maxRecords: 2 }));
+    app.post('/slow', async () => {
+      handled++;
+      await gate;
+      return { content: { done: true } };
+    });
+    app.post('/n', () => ({ content: { ok: true } }));
+    const post = (path: string, key: string) =>
+      app.fetch(
+        new Request(`http://app${path}`, {
+          method: 'POST',
+          headers: { 'idempotency-key': key },
+        }),
+      );
+    const first = post('/slow', 'K'); // claims K (pending)
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Churn well past the bound — every COMPLETED record may evict, the
+    // in-flight pending marker must not.
+    for (const k of ['a', 'b', 'c']) await (await post('/n', k)).body?.cancel();
+    const dup = await post('/slow', 'K');
+    asserts.assertEquals(dup.status, 409); // marker survived → no double execution
+    await dup.body?.cancel();
+    releaseSlow();
+    await (await first).body?.cancel();
+    asserts.assertEquals(handled, 1);
+    await app.stop();
+  });
+
+  it('a replay serializes the SAME bytes as the first attempt — toJSON projections are honored', async () => {
+    class User {
+      id = 'u1';
+      _passwordHash = 'bcrypt$secret';
+      toJSON() {
+        return { id: this.id };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'idempotency-tojson',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({ scope: false }));
+    app.post('/u', () => ({
+      content: { user: new User() } as unknown as Record<string, unknown>,
+    }));
+    const post = () =>
+      app.fetch(
+        new Request('http://app/u', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'k' },
+        }),
+      );
+    const firstBody = await (await post()).text();
+    const replayBody = await (await post()).text();
+    asserts.assertEquals(replayBody, firstBody); // wire-identical
+    asserts.assertEquals(firstBody.includes('secret'), false);
+    asserts.assertEquals(replayBody.includes('secret'), false); // no projection bypass
+    await app.stop();
+  });
+
+  it('memoryStore rejects a non-positive maxEntries (a zero bound would loop set() forever)', () => {
+    asserts.assertThrows(
+      () => memoryStore({ maxEntries: 0 }),
+      RapidError,
+      'maxEntries must be a positive integer',
+    );
   });
 
   it('maxRecords bounds the default store — the oldest record evicts, its retry re-executes', async () => {

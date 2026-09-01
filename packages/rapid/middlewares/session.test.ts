@@ -274,6 +274,31 @@ describe('rapid session()', () => {
     asserts.assertEquals((await r.json()).hits, 0); // record dropped despite the throw
   });
 
+  it('storing an unclonable value fails THAT request loudly — the record is never poisoned', async () => {
+    const app = await makeApp();
+    app.post('/poison', async (ctx) => {
+      (await getSession(ctx))!.set('cb', () => {}); // no store can serialize this
+      return { content: { ok: true } };
+    });
+    const sid = sidFrom(
+      await app.fetch(new Request('http://app/hit', { method: 'POST' })),
+    )!;
+    const bad = await app.fetch(
+      new Request('http://app/poison', {
+        method: 'POST',
+        headers: { cookie: `sid=${sid}` },
+      }),
+    );
+    asserts.assertEquals(bad.status, 500); // the WRITING request fails...
+    await bad.body?.cancel();
+    // ...and the stored record is untouched — no permanent 500 wedge.
+    const r = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `sid=${sid}` } }),
+    );
+    asserts.assertEquals(r.status, 200);
+    asserts.assertEquals((await r.json()).hits, 1);
+  });
+
   it('in-place mutation without set() never persists — the load is a clone, not an alias', async () => {
     const app = await Application.initialize({
       name: 'session-alias',
