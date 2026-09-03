@@ -43,8 +43,9 @@ const App = Schema('App', {
 });
 
 const norm = new Norm({
+  name: 'app',
   database: { dialect: 'sqlite', path: './data' },
-  cache: { engine: 'MEMORY', name: 'app' },
+  cache: { engine: 'MEMORY' },
 });
 const db = norm.use(App);
 ```
@@ -53,9 +54,13 @@ The TTL is **windowed**: each cache hit resets the clock, so a hot query
 stays cached as long as it keeps being read. `cache: 0` (or omitting it)
 turns caching off for that entity.
 
-The `name` is the isolation boundary — two `Norm`s pointed at the same
-cache engine must use different names, or they would share (and
-cross-prune) each other's entries.
+The `Norm`'s `name` roots the cache namespace and is the isolation
+boundary: two `Norm`s pointed at the same cache engine must use different
+names, or they would share (and cross-prune) each other's entries. It
+defaults to `norm-<n>`, a per-process counter — fine for `MEMORY`, whose
+store is private to the process, but a `REDIS` / `MEMCACHED` engine
+requires an explicit `name` (the constructor throws `INVALID_CACHE_CONFIG`
+otherwise), since every process would call itself `norm-1`.
 
 ## What gets cached
 
@@ -187,17 +192,17 @@ goes through cacher's unified API and never special-cases an engine:
 ```typescript ignore
 // In-process, no dependencies (the only engine that may cache encrypted
 // entities):
-cache: { engine: 'MEMORY', name: 'app' }
+cache: { engine: 'MEMORY' }
 
 // Redis / Memcached — options are forwarded verbatim to cacher:
 cache: {
   engine: 'REDIS',
-  name: 'app',
   options: { host: '10.0.0.1', port: 6379, username: '', password: '…', db: 0 },
 }
 ```
 
-Each entity gets its own cache namespace (`name__Entity`), and every
+Each entity gets its own cache namespace (`<name>__Entity`, rooted at
+the `Norm`'s `name`), and every
 engine's namespace clear is correctly scoped — Redis deletes `name:*`,
 Memcached bumps a per-namespace version counter (never a server-wide
 `flush_all`), Memory clears its own map. So pruning one table never
@@ -227,14 +232,15 @@ Wire these on the [event bus](../README.md#events):
 
 - Both the `Norm` `cache` config **and** a per-entity `cache` TTL are
   required — either alone caches nothing.
+- A non-`MEMORY` cache engine requires an explicit `Norm` `name`, and a
+  `name` used for caching must not contain `:` (cacher's reserved
+  separator) or `__` (norm's entity separator).
 - Per-entity `cache` is a non-negative integer number of minutes, capped
   at 30 days (the cacher expiry ceiling); an invalid value throws
   `INVALID_CACHE_CONFIG` at `use()` time.
 - The cache key is derived from the compiled query, so two logically-equal
   filters written with a different key order are a benign cache miss, not a
   correctness problem.
-- `name` must not contain `:` (cacher's reserved separator) or `__`
-  (norm's entity separator).
 
 ## Related documentation
 

@@ -28,4 +28,37 @@ export class NormError<
   get code(): NormErrorCode | undefined {
     return (this.context as { code?: NormErrorCode }).code;
   }
+
+  /**
+   * The `name` of the `Norm` instance the error came from
+   * (`context.norm`) — set by the throw site, or stamped by the `NormDb`
+   * boundary the error crossed. `undefined` when no instance was in
+   * play: definition errors from `Entity()` / `Schema()`, or a
+   * hand-built runtime that gave no name.
+   */
+  get norm(): string | undefined {
+    return (this.context as { norm?: string }).norm;
+  }
+
+  /**
+   * Stamp `name` as the originating `Norm` when none is set, re-rendering
+   * the message with the `[name]` prefix. Idempotent — the first stamp
+   * wins, so an error tagged deep in the pipeline keeps that name when it
+   * crosses an outer boundary. Returns `this` so a catch can
+   * `throw err.tagNorm(name)`.
+   *
+   * @internal
+   */
+  public tagNorm(name: string): this {
+    if (this.norm !== undefined) return this;
+    (this.context as Record<string, unknown>).norm = name;
+    this.message = this._makeMessage();
+    return this;
+  }
+
+  /** `[<name>] <message>` once a `Norm` is known — the name is what
+   * tells two instances in one process apart. */
+  protected override get _messageTemplate(): string {
+    return this.norm === undefined ? '${message}' : '[${norm}] ${message}';
+  }
 }

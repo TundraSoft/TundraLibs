@@ -71,7 +71,7 @@ handle migration failures.
 | Class                   | Thrown by                                                                                                                                                                                                                                                            | Carries a code                                        |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `NormError`             | The instance/configuration surface — `new Norm({...})`, dialect resolution, `runtimeOf()`. Also the base class.                                                                                                                                                      | Yes — the four instance codes.                        |
-| `NormQueryError`        | The read/write surface, **before** any engine call: filters, projections, aggregates, upserts, scopes.                                                                                                                                                               | Yes — all nine query-surface codes.                   |
+| `NormQueryError`        | The read/write surface, **before** any engine call: filters, projections, aggregates, upserts, scopes. An unknown local column is OQL's `TypeError`, not this — see [caveats](#guarantees-and-caveats).                                                              | Yes — all nine query-surface codes.                   |
 | `NormCryptoError`       | The crypto path — a cell that would not decrypt/decode, or a request needing a `secret` that was never configured.                                                                                                                                                   | Only for `MISSING_SECRET`; read-path failures do not. |
 | `NormDefinitionError`   | `Entity()` / `Schema()` / `use()` and the compile pass. Aggregates every finding on `context.issues`.                                                                                                                                                                | Yes — the five definition codes.                      |
 | `NormMigrationError`    | The `Migrator` — drift, blocked drops, plan mismatches, lock contention, refused rewrites.                                                                                                                                                                           | Yes — the migration codes, plus `MISSING_SECRET`.     |
@@ -93,6 +93,15 @@ function describe(err: unknown): string {
   return err.code ?? 'no code on this throw site';
 }
 ```
+
+Every error that leaves a `NormDb` also says which instance raised it:
+`norm` is a getter on `NormError` (it reads `context.norm`) and the
+message is prefixed with the name — `new Norm({ name: 'billing', … })`
+raises `[billing] Column 'ssn' on entity 'Users' is not filterable …`.
+The name is `NormConfig.name` (`norm-<n>` when omitted), so two `Norm`s
+in one process are told apart without parsing anything. Definition
+errors from `Entity()` / `Schema()` are raised before any instance
+exists and carry no `norm`.
 
 There are **30** codes in the `NormErrorCode` union, grouped below by
 the surface that raises them.
@@ -140,12 +149,12 @@ They surface as a thrown `NormCryptoError` only under
 
 All four are thrown as a plain `NormError`.
 
-| Code                    | Raised when                                                                                                                                                                                                                             | What to do                                                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `INVALID_HANDLE`        | A value passed where a `NormDb` handle was expected is not one — `runtimeOf()` and the migration seam.                                                                                                                                  | Pass the value `norm.use(...)` returned, not the `Norm` instance and not a repo.                                                        |
-| `INVALID_ENGINE_CONFIG` | `new Norm({...})` got no `database` config, or a `database.dialect` NORM does not know.                                                                                                                                                 | Pass a `database` config with a supported dialect.                                                                                      |
-| `ENGINE_NOT_REGISTERED` | `database.dialect` names a known dialect whose engine module was never imported (`context.dialect` names it).                                                                                                                           | Import `@tundralibs/norm/engines/<dialect>` — or the root `@tundralibs/norm` barrel, which registers all of them — before constructing. |
-| `INVALID_CACHE_CONFIG`  | An entity declares `cache: <minutes>` and also declares `.encrypt()` columns, on a cache engine other than the in-process `MEMORY` one — an external cache must never hold decrypted plaintext at rest. Raised at `norm.use(...)` time. | Cache that entity only on the `MEMORY` cache engine, or drop `cache` from it. See [Caching](NORM-Caching.md).                           |
+| Code                    | Raised when                                                                                                                                                                                                                                                                                                                                                                                                        | What to do                                                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_HANDLE`        | A value passed where a `NormDb` handle was expected is not one — `runtimeOf()` and the migration seam.                                                                                                                                                                                                                                                                                                             | Pass the value `norm.use(...)` returned, not the `Norm` instance and not a repo.                                                                              |
+| `INVALID_ENGINE_CONFIG` | `new Norm({...})` got no `database` config, or a `database.dialect` NORM does not know.                                                                                                                                                                                                                                                                                                                            | Pass a `database` config with a supported dialect.                                                                                                            |
+| `ENGINE_NOT_REGISTERED` | `database.dialect` names a known dialect whose engine module was never imported (`context.dialect` names it).                                                                                                                                                                                                                                                                                                      | Import `@tundralibs/norm/engines/<dialect>` — or the root `@tundralibs/norm` barrel, which registers all of them — before constructing.                       |
+| `INVALID_CACHE_CONFIG`  | `new Norm({ cache })` names a non-`MEMORY` cache engine without an explicit `name` (the auto-generated one would collide across processes); or, at `norm.use(...)` time, an entity's `cache` TTL is not a whole number of minutes within 30 days, or an entity declares `cache: <minutes>` and also `.encrypt()` columns on a non-`MEMORY` engine — an external cache must never hold decrypted plaintext at rest. | Set `name` on the `Norm`; fix the TTL; cache encrypted entities only on the `MEMORY` cache engine, or drop `cache` from them. See [Caching](NORM-Caching.md). |
 
 `ENGINE_NOT_REGISTERED` is the one you meet most often on `sqlite` — the
 root barrel deliberately does not register it eagerly (a native binding
@@ -329,6 +338,17 @@ both a `NormCryptoError` (query surface) and a `NormMigrationError`
 (rebuild path), and `LOCK_TIMEOUT` appears on both
 `NormAdvisoryLockError` and `NormMigrationError`. Match on the class as
 well as the code when the reaction differs.
+
+**An unknown column is a `TypeError`, not a `NormQueryError`.** NORM
+validates what it owns — relation aliases (`@Alias.@col`), projection
+targets, hashed / encrypted / `unfilterable()` columns, aggregates,
+scopes — and hands the assembled query to `@tundralibs/oql`, whose
+asserts reject a filter, `orderBy`, or `conflictKeys` entry that names a
+local column the entity does not have. That rejection still happens
+before any SQL is sent, but it surfaces as OQL's plain `TypeError`
+(`Invalid SELECT query: 'where' is invalid - … ColumnIdentifier "@nope"
+is not in the provided column list`) — no `code`, no `norm` stamp. Treat
+it like `UNKNOWN_ENTITY`: a programming error, not user input.
 
 ## Related documentation
 

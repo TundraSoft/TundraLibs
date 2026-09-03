@@ -163,7 +163,7 @@ try {
   Cacher.addEngine('FAILING', FailingCacher as any);
 } catch { /* already registered in this process */ }
 
-// A fresh connection name per test keeps the process-global MEMORY cacher
+// A fresh Norm name per test keeps the process-global MEMORY cacher
 // namespaces isolated (Cacher instances live in a singleton registry).
 let connSeq = 0;
 const nextConn = () => `normcachetest${++connSeq}`;
@@ -173,13 +173,13 @@ type Events = Array<{ event: keyof NormEvents; args: unknown[] }>;
 function setup<R extends Record<string, AnyDefinition>>(
   schema: R,
   cache: NormCacheConfig | undefined,
-  opts: { secret?: string } = {},
+  opts: { secret?: string; name?: string } = {},
 ) {
   const exec = new MockExec();
   const events: Events = [];
   const runtime = compileRuntime(
     use(Schema('S', schema as Record<string, AnyDefinition>)),
-    { secret: opts.secret },
+    { name: opts.name ?? nextConn(), secret: opts.secret },
     exec,
     (event, ...args) => events.push({ event, args }),
     undefined,
@@ -231,7 +231,6 @@ describe('norm read cache', () => {
     it('serves a second identical read from cache and emits cacheHit', async () => {
       const { db, exec, events } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const users = db.repo('Users');
       exec.selectRows = [{ id: 1, name: 'a' }];
@@ -259,7 +258,6 @@ describe('norm read cache', () => {
       }, { pk: ['id'], cache: 5 });
       const { db, exec } = setup({ Events }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const at = new Date('2020-05-05T05:05:05.000Z');
       exec.selectRows = [{ id: 1, at, big: 123456789012345678n }];
@@ -285,7 +283,6 @@ describe('norm read cache', () => {
     it('does nothing for an entity that did not opt in (cache: 0)', async () => {
       const { db, exec } = setup({ Users: NoCacheUsers }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       await db.repo('Users').find();
@@ -296,7 +293,6 @@ describe('norm read cache', () => {
     it('caches distinct filters separately', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const users = db.repo('Users');
       exec.selectRows = [{ id: 1, name: 'a' }];
@@ -315,7 +311,6 @@ describe('norm read cache', () => {
       }, { pk: ['id'], cache: 5 });
       const { db, exec, events } = setup({ Sales }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ country: 'BR', total: 10 }];
       await db.repo('Sales').find(undefined, {
@@ -339,7 +334,6 @@ describe('norm read cache', () => {
     it('bypasses the read and does not populate', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const users = db.repo('Users');
       exec.selectRows = [{ id: 1, name: 'a' }];
@@ -359,7 +353,6 @@ describe('norm read cache', () => {
       it(`${w} prunes the entity's cache`, async () => {
         const { db, exec } = setup({ Users }, {
           engine: 'MEMORY',
-          name: nextConn(),
         });
         const users = db.repo('Users');
         exec.selectRows = [{ id: 1, name: 'a' }];
@@ -399,7 +392,6 @@ describe('norm read cache', () => {
     it('does not cache a joined (projected relation) read and warns', async () => {
       const { db, exec, events } = setup({ Items, Owners }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const items = db.repo('Items');
       exec.selectRows = [];
@@ -415,7 +407,6 @@ describe('norm read cache', () => {
     it('bypasses the cache inside a transaction (read + write)', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       // Prime the cache outside the transaction.
@@ -437,7 +428,6 @@ describe('norm read cache', () => {
     it('prunes on commit, not before', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       await db.repo('Users').find(); // populate
@@ -452,7 +442,6 @@ describe('norm read cache', () => {
     it('does NOT prune on rollback', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       await db.repo('Users').find(); // populate
@@ -472,7 +461,6 @@ describe('norm read cache', () => {
     it('caches count and invalidates it on write', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const users = db.repo('Users');
       exec.countValue = 7;
@@ -489,7 +477,6 @@ describe('norm read cache', () => {
     it('caches getByPK (rides find)', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       const users = db.repo('Users');
       exec.selectRows = [{ id: 1, name: 'a' }];
@@ -533,7 +520,6 @@ describe('norm read cache', () => {
     it('prunes a VIEW and a QUERY when their source table is written', async () => {
       const { db, exec } = setup({ Owners, VOwners, QOwners }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       await db.repo('VOwners').find();
@@ -555,7 +541,6 @@ describe('norm read cache', () => {
     it('repo.clearCache() drops one entity (and its dependents)', async () => {
       const { db, exec } = setup({ Users }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       await db.repo('Users').find();
@@ -572,7 +557,6 @@ describe('norm read cache', () => {
       }, { pk: ['id'], cache: 5 });
       const { db, exec } = setup({ Users, Other }, {
         engine: 'MEMORY',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       await db.repo('Users').find();
@@ -589,10 +573,8 @@ describe('norm read cache', () => {
 
   describe('multi-connection isolation', () => {
     it('two Norms sharing MEMORY do not cross-populate or cross-prune', async () => {
-      const cfgA: NormCacheConfig = { engine: 'MEMORY', name: nextConn() };
-      const cfgB: NormCacheConfig = { engine: 'MEMORY', name: nextConn() };
-      const a = setup({ Users }, cfgA);
-      const b = setup({ Users }, cfgB);
+      const a = setup({ Users }, { engine: 'MEMORY' });
+      const b = setup({ Users }, { engine: 'MEMORY' });
       a.exec.selectRows = [{ id: 1, name: 'a' }];
       b.exec.selectRows = [{ id: 9, name: 'b' }];
 
@@ -622,7 +604,7 @@ describe('norm read cache', () => {
     const build = (cache: NormCacheConfig) =>
       compileRuntime(
         use(Schema('S', { Secretive })),
-        { secret: 'test-secret' },
+        { name: nextConn(), secret: 'test-secret' },
         new MockExec(),
         () => {},
         undefined,
@@ -631,7 +613,7 @@ describe('norm read cache', () => {
 
     it('rejects encrypted + cache on a non-MEMORY engine', () => {
       const err = asserts.assertThrows(
-        () => build({ engine: 'REDIS', name: nextConn() }),
+        () => build({ engine: 'REDIS' }),
         NormError,
       );
       asserts.assertEquals(
@@ -641,7 +623,7 @@ describe('norm read cache', () => {
     });
 
     it('allows encrypted + cache on MEMORY', () => {
-      build({ engine: 'MEMORY', name: nextConn() }); // must not throw
+      build({ engine: 'MEMORY' }); // must not throw
     });
   });
 
@@ -649,7 +631,6 @@ describe('norm read cache', () => {
     it('serves from the database and warns when the backend fails', async () => {
       const { db, exec, events } = setup({ Users }, {
         engine: 'FAILING',
-        name: nextConn(),
       });
       exec.selectRows = [{ id: 1, name: 'a' }];
       const r1 = await db.repo('Users').find(); // get fails → miss → DB
@@ -667,19 +648,19 @@ describe('norm read cache', () => {
   });
 
   describe('config validation', () => {
-    it('rejects a missing name', () => {
+    it('rejects a Norm without a name', () => {
       asserts.assertThrows(
-        () => setup({ Users }, { engine: 'MEMORY', name: '' }),
+        () => setup({ Users }, { engine: 'MEMORY' }, { name: '' }),
         NormError,
       );
     });
-    it('rejects a name containing the reserved separators', () => {
+    it('rejects a Norm name containing the reserved separators', () => {
       asserts.assertThrows(
-        () => setup({ Users }, { engine: 'MEMORY', name: 'a__b' }),
+        () => setup({ Users }, { engine: 'MEMORY' }, { name: 'a__b' }),
         NormError,
       );
       asserts.assertThrows(
-        () => setup({ Users }, { engine: 'MEMORY', name: 'a:b' }),
+        () => setup({ Users }, { engine: 'MEMORY' }, { name: 'a:b' }),
         NormError,
       );
     });
@@ -689,7 +670,7 @@ describe('norm read cache', () => {
         cache: 1.5,
       });
       asserts.assertThrows(
-        () => setup({ Bad }, { engine: 'MEMORY', name: nextConn() }),
+        () => setup({ Bad }, { engine: 'MEMORY' }),
         NormError,
       );
       const TooLong = Entity('toolong', { id: Column.integer() }, {
@@ -697,7 +678,7 @@ describe('norm read cache', () => {
         cache: 60 * 24 * 31, // > 30 days
       });
       asserts.assertThrows(
-        () => setup({ TooLong }, { engine: 'MEMORY', name: nextConn() }),
+        () => setup({ TooLong }, { engine: 'MEMORY' }),
         NormError,
       );
     });

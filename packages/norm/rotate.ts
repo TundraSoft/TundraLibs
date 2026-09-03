@@ -196,7 +196,7 @@ export async function rotateKey(
       throw new NormError(
         `rotateKey(): entity '${key}' has encrypted columns but no ` +
           `primary key — rows cannot be addressed for rewrite.`,
-        { subject: key },
+        { norm: runtime.name, subject: key },
       );
     }
 
@@ -256,6 +256,7 @@ export async function rotateKey(
             } catch (cause) {
               throw new NormCryptoError(
                 {
+                  norm: runtime.name,
                   entity: key,
                   column: col,
                   pk: pkOf(row, pkCols),

@@ -27,12 +27,16 @@ deno add @tundralibs/norm       # or: bunx / npx jsr add @tundralibs/norm
 
 `Norm` needs an engine — let it build one from a `database` config,
 the way every example in this guide does — and, if you use encrypted
-columns, a `secret`.
+columns, a `secret`. Give it a `name` when an app runs more than one
+`Norm`: it prefixes every error the instance raises (`[shortly] …`),
+names the driver connection, and namespaces the
+[read cache](NORM-Caching.md) (defaults to `norm-<n>`).
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
 
 const norm = new Norm({
+  name: 'shortly',
   database: {
     dialect: 'postgres',
     host: 'localhost',

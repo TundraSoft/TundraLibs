@@ -466,8 +466,9 @@ each hit resets the clock.
 
 ```typescript ignore
 const norm = new Norm({
+  name: 'app', // namespaces the cache (required on REDIS / MEMCACHED)
   database: { dialect: 'sqlite', path: ':memory:' },
-  cache: { engine: 'MEMORY', name: 'app' }, // or REDIS/MEMCACHED + options
+  cache: { engine: 'MEMORY' }, // or REDIS/MEMCACHED + options
 });
 
 // Per-entity opt-in (minutes; 0/omitted = off):
@@ -482,7 +483,7 @@ await db.clearCache(); // drop every entity's cache
 ```
 
 - **Per-table invalidation.** Each entity gets its own cache namespace
-  (`name__Entity`), so a write to `TableA` prunes only `TableA` — and two
+  (`<name>__Entity`), so a write to `TableA` prunes only `TableA` — and two
   `Norm`s sharing one cache engine stay isolated as long as their `name`s
   differ. Inside a transaction, reads bypass the cache and the prune is
   deferred to **commit** (a rollback prunes nothing).

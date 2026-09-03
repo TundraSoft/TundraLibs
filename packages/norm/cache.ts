@@ -5,11 +5,12 @@
  * unless constructed with a {@link NormCacheConfig}, and even then only
  * entities that declare a per-entity `cache` TTL (minutes) participate.
  *
- * The model is one `@tundralibs/cacher` instance PER `(connection,
- * entity)` — namespace `${connName}__${entityKey}` — because cacher can
- * only clear a WHOLE namespace, never a key prefix. That single fact
- * buys both requirements at once: a write to `TableA` prunes exactly
- * `conn__TableA` (per-table invalidation), and two `Norm`s pointed at
+ * The model is one `@tundralibs/cacher` instance PER `(Norm, entity)`
+ * — namespace `${normName}__${entityKey}`, where `normName` is the
+ * `name` the `Norm` was constructed with — because cacher can only
+ * clear a WHOLE namespace, never a key prefix. That single fact buys
+ * both requirements at once: a write to `TableA` prunes exactly
+ * `app__TableA` (per-table invalidation), and two `Norm`s pointed at
  * one cache engine never collide as long as their `name`s differ
  * (multi-connection isolation).
  *
@@ -36,9 +37,9 @@ import { digest } from '@tundralibs/crypt/digest';
 import type { AnyDefinition, EmittedForeignKey } from './definition/mod.ts';
 import { NormError } from './errors/mod.ts';
 
-/** Namespace separator between the connection name and the entity key.
+/** Namespace separator between the Norm's name and the entity key.
  * Distinct from cacher's reserved `:` (which separates namespace from
- * key), so `conn__TableA` and `conn__TableB` are never colon-prefixes
+ * key), so `app__TableA` and `app__TableB` are never colon-prefixes
  * of one another and `clear()` can't cross namespaces. */
 const NS_SEP = '__';
 
@@ -50,8 +51,9 @@ const MAX_TTL_SECONDS = 2592000;
 
 /**
  * Enable read caching on a `Norm`. Passed as `cache` to the
- * constructor; individual entities opt in with their own `cache`
- * (minutes) TTL.
+ * constructor; the `Norm`'s `name` roots the namespace (explicit on an
+ * external engine — see `NormConfig.name`). Individual entities opt in
+ * with their own `cache` (minutes) TTL.
  */
 export type NormCacheConfig = {
   /**
@@ -62,14 +64,6 @@ export type NormCacheConfig = {
    * `compileRuntime`): an external store would hold their plaintext.
    */
   readonly engine?: string;
-  /**
-   * Connection namespace — the isolation boundary. REQUIRED: two
-   * `Norm`s sharing one cache engine must use different names or they
-   * would share (and cross-prune) each other's entries. Must not
-   * contain `':'` (cacher reserves it) or `'__'` (norm's entity
-   * separator).
-   */
-  readonly name: string;
   /** Options forwarded verbatim to `Cacher.create` for every per-entity
    * instance (e.g. a Redis host/port/password). */
   readonly options?: CacherOptions & Record<string, unknown>;
@@ -190,34 +184,42 @@ function stringifyQuery(q: unknown): string {
 export class QueryCache {
   /** Uppercased engine name (`'MEMORY'`, `'REDIS'`, …). */
   public readonly engineName: string;
-  private readonly __conn: string;
+  private readonly __name: string;
   private readonly __options: CacherOptions & Record<string, unknown>;
   private readonly __plan: CachePlan;
   private readonly __warn: (entity: string, message: string) => void;
 
+  /**
+   * @param name - The owning `Norm`'s `name`: the namespace root and the
+   *   isolation boundary between Norms sharing a cache engine.
+   * @throws {NormError} `INVALID_CACHE_CONFIG` when `name` is missing or
+   *   contains a reserved separator.
+   */
   public constructor(
+    name: string | undefined,
     cfg: NormCacheConfig,
     plan: CachePlan,
     warn?: (entity: string, message: string) => void,
   ) {
-    const name = (cfg.name ?? '').trim();
-    if (name.length === 0) {
+    const trimmed = (name ?? '').trim();
+    if (trimmed.length === 0) {
       throw new NormError(
-        `new Norm({ cache }): 'name' is required — it is the isolation ` +
-          `boundary between Norms sharing a cache engine.`,
+        `new Norm({ cache }): a 'name' on the Norm is required — it is the ` +
+          `cache namespace and the isolation boundary between Norms ` +
+          `sharing a cache engine.`,
         { code: 'INVALID_CACHE_CONFIG' },
       );
     }
-    if (name.includes(':') || name.includes(NS_SEP)) {
+    if (trimmed.includes(':') || trimmed.includes(NS_SEP)) {
       throw new NormError(
         `new Norm({ cache }): 'name' must not contain ':' (cacher reserves ` +
           `it) or '${NS_SEP}' (norm's entity separator); got ${
-            JSON.stringify(name)
+            JSON.stringify(trimmed)
           }.`,
         { code: 'INVALID_CACHE_CONFIG' },
       );
     }
-    this.__conn = name;
+    this.__name = trimmed;
     this.engineName = (cfg.engine ?? 'MEMORY').trim().toUpperCase();
     this.__options = { ...(cfg.options ?? {}) };
     this.__plan = plan;
@@ -233,7 +235,7 @@ export class QueryCache {
   private __engineFor(entityKey: string): AbstractEngine {
     return Cacher.create(
       this.engineName,
-      `${this.__conn}${NS_SEP}${entityKey}`,
+      `${this.__name}${NS_SEP}${entityKey}`,
       this.__options,
     );
   }
