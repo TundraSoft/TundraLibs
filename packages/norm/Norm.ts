@@ -119,6 +119,18 @@ export type DatabaseConfig =
 
 /** Constructor options. Norm builds its engine from a `database` config. */
 export type NormConfig = {
+  /**
+   * Instance name (default: `norm-<n>`, a per-process counter). Names
+   * the driver engine Norm constructs, prefixes every error this
+   * instance raises (`[name] …`, also `error.norm`), and roots the read
+   * cache's namespace — so two `Norm`s sharing one cache engine must use
+   * different names or they would share (and cross-prune) each other's
+   * entries. REQUIRED with a non-`MEMORY` cache engine: the auto-
+   * generated name restarts in every process, so two apps sharing one
+   * Redis / Memcached would otherwise collide. Must not contain `':'`
+   * or `'__'` when caching.
+   */
+  name?: string;
   /** The dialect config Norm constructs its engine (one pool) from. */
   database?: DatabaseConfig;
   /** Encryption secret for `.encrypt()` columns (e.g. from an env var). */
@@ -147,11 +159,12 @@ export type NormConfig = {
   /**
    * Enable the read-query cache ({@link NormCacheConfig}). OFF by
    * default; even when set, only entities that declare a per-entity
-   * `cache` TTL (minutes) are cached. Held privately (it owns cache
-   * connections, like the engine), kept OUT of the options bag.
+   * `cache` TTL (minutes) are cached. Namespaced by {@link
+   * NormConfig.name}. Held privately (it owns cache connections, like
+   * the engine), kept OUT of the options bag.
    *
    * ```ts ignore
-   * new Norm({ database, cache: { engine: 'MEMORY', name: 'app' } });
+   * new Norm({ database, name: 'app', cache: { engine: 'MEMORY' } });
    * ```
    */
   cache?: NormCacheConfig;
@@ -180,12 +193,15 @@ type NormEventHandlers = {
  * ```
  */
 export class Norm extends Options<NormConfig, NormEvents> {
+  /** Instance name — see {@link NormConfig.name}. */
+  public readonly name: string;
   private readonly __executor: Executor;
   /** See {@link NormConfig.witness}; threaded into every runtime. */
   private readonly __witness?: Witness;
   /** See {@link NormConfig.cache}; threaded into every runtime's cache. */
   private readonly __cacheCfg?: NormCacheConfig;
   private readonly __compileCfg: {
+    name: string | undefined;
     secret: string | undefined;
     algorithm: EncryptAlgorithm | undefined;
     crypto: CryptoOverrides | undefined;
@@ -197,8 +213,8 @@ export class Norm extends Options<NormConfig, NormEvents> {
    * connection is opened until {@link Norm.connect}.
    *
    * @param cfg - A `database` dialect config to build the engine from,
-   *   the encryption `secret` and optional `algorithm` / `crypto`
-   *   overrides, plus inline `_on<event>` handlers. The secret, database
+   *   an optional instance `name`, the encryption `secret` and optional
+   *   `algorithm` / `crypto` overrides, plus inline `_on<event>` handlers. The secret, database
    *   config, and crypto callbacks are not stored in the options bag.
    */
   public constructor(cfg: NormConfig & NormEventHandlers) {
@@ -215,12 +231,16 @@ export class Norm extends Options<NormConfig, NormEvents> {
       ...storable
     } = cfg;
     this._setOptions(storable as EventOptionKeys<NormConfig, NormEvents>);
-    const resolved = resolveEngine(cfg);
+    const explicitName = cfg.name?.trim();
+    this.name = explicitName || `norm-${++normEngineCounter}`;
+    assertCacheNamed(cfg.cache, explicitName, this.name);
+    const resolved = resolveEngine(cfg, this.name);
     this.__witness = cfg.witness;
     this.__cacheCfg = cfg.cache;
     this.__executor = resolved.executor;
     this.__forwardEngineEvents(resolved.engine);
     this.__compileCfg = {
+      name: this.name,
       secret: cfg.secret,
       algorithm: cfg.algorithm,
       crypto: cfg.crypto,
@@ -292,14 +312,19 @@ export class Norm extends Options<NormConfig, NormEvents> {
       string,
       AnyDefinition
     >;
-    const runtime = compileRuntime(
-      registry,
-      this.__compileCfg,
-      this.__executor,
-      (event, ...args) => void this._emit(event, ...args),
-      this.__witness,
-      this.__cacheCfg,
-    );
+    let runtime: Runtime;
+    try {
+      runtime = compileRuntime(
+        registry,
+        this.__compileCfg,
+        this.__executor,
+        (event, ...args) => void this._emit(event, ...args),
+        this.__witness,
+        this.__cacheCfg,
+      );
+    } catch (e) {
+      throw tagged(e, this.name);
+    }
     // NOT intersected with Record<string, AnyDefinition> — that would
     // collapse `keyof R` to string and repo() would accept any typo.
     return new NormDb<ComposedSchema<S>>(runtime, this.__executor);
@@ -420,10 +445,15 @@ export class NormDb<R, Scope extends string = never> {
   public scope<const S extends ScopeInput>(
     scope: S,
   ): NormDb<R, Scope | (ScopeKeysOf<S> & string)> {
-    const next = mergeScope(
-      this.__scope,
-      normalizeScope(scope as Record<string, unknown>, 'db.scope()'),
-    );
+    let next: ReturnType<typeof mergeScope>;
+    try {
+      next = mergeScope(
+        this.__scope,
+        normalizeScope(scope as Record<string, unknown>, 'db.scope()'),
+      );
+    } catch (e) {
+      throw tagged(e, this.__runtime.name);
+    }
     const db = new NormDb<R, Scope | (ScopeKeysOf<S> & string)>(
       this.__runtime,
       this.__rawExecutor(),
@@ -470,6 +500,7 @@ export class NormDb<R, Scope extends string = never> {
       throw new NormQueryError(`Unknown entity '${key}'`, {
         entity: key,
         code: 'UNKNOWN_ENTITY',
+        norm: this.__runtime.name,
       });
     }
     let accessor: unknown;
@@ -504,12 +535,13 @@ export class NormDb<R, Scope extends string = never> {
         );
         break;
     }
-    // Observability boundary: with a witness configured, the accessor's
-    // operation methods are wrapped ONCE here (and cached wrapped), so every
-    // call site gets witnessed without Repo/ReadRepo/QueryAccessor knowing.
-    const witness = this.__runtime.witness;
-    if (witness !== undefined) {
-      accessor = witnessAccessor(accessor as object, key, witness);
+    // Instrumentation boundary: the accessor's operation methods are
+    // wrapped ONCE here (and cached wrapped) — witnessed when a witness is
+    // configured, and every norm error they reject with is stamped with
+    // this instance's name — without Repo/ReadRepo/QueryAccessor knowing.
+    const { witness, name } = this.__runtime;
+    if (witness !== undefined || name !== undefined) {
+      accessor = instrumentAccessor(accessor as object, key, witness, name);
     }
     this.__repoCache.set(key, accessor);
     return accessor as RepoFor<R, K, Scope>;
@@ -527,7 +559,7 @@ export class NormDb<R, Scope extends string = never> {
     opts: { entity?: keyof R & string } = {},
   ): Promise<NormResult<Res[]>> {
     const id = ulid();
-    const res = await this.__executor.execute<Res>(q);
+    const res = await this.__tagged(this.__executor.execute<Res>(q));
     // Optional ENTITY BINDING: hand-built IR stays raw by default,
     // but naming the entity the rows came from lets them ride the
     // read pipeline's decrypt + decode + afterRead column transforms.
@@ -540,7 +572,11 @@ export class NormDb<R, Scope extends string = never> {
         throw new NormQueryError(
           `query(): unknown entity '${opts.entity}' — bind to a ` +
             `registered entity key.`,
-          { entity: opts.entity, code: 'UNKNOWN_ENTITY' },
+          {
+            entity: opts.entity,
+            code: 'UNKNOWN_ENTITY',
+            norm: this.__runtime.name,
+          },
         );
       }
       // No secret ⇒ nothing to decrypt; leave ciphertext raw.
@@ -556,7 +592,7 @@ export class NormDb<R, Scope extends string = never> {
             // Shared decrypt-cell kernel — honors the instance's
             // onDecryptFailure policy (throw, or null + decryptError
             // event) instead of the old bare `catch {}` swallow.
-            row[col] = await decryptCell(
+            row[col] = await this.__tagged(decryptCell(
               this.__runtime,
               compiled.key,
               secret,
@@ -564,7 +600,7 @@ export class NormDb<R, Scope extends string = never> {
               logical,
               col,
               undefined,
-            );
+            ));
           }
         }
         for (const [col, fn] of compiled.afterRead) {
@@ -631,7 +667,8 @@ export class NormDb<R, Scope extends string = never> {
         'scope applied.',
     );
     const witness = this.__runtime.witness;
-    const run = () => this.__executor.raw<Res>(sql, params, this.__txId);
+    const run = () =>
+      this.__tagged(this.__executor.raw<Res>(sql, params, this.__txId));
     const res = witness === undefined ? await run() : await witness(
       { name: 'norm.raw', attributes: { 'norm.operation': 'RAW' } },
       run,
@@ -675,7 +712,10 @@ export class NormDb<R, Scope extends string = never> {
     options?: EngineTransactionOptions,
   ): Promise<T> {
     if (!this.__executor.capabilities.transactions) {
-      throw new NormUnsupportedError({ feature: 'transactions' });
+      throw new NormUnsupportedError({
+        feature: 'transactions',
+        norm: this.__runtime.name,
+      });
     }
     // Nested → SAVEPOINT on the active engine transaction. The driver
     // owns create / rollback-to / release (and scopes its
@@ -747,7 +787,7 @@ export class NormDb<R, Scope extends string = never> {
       if (fnThrew && txId !== undefined) {
         this.__runtime.emit('transactionRollback', txId);
       }
-      throw err;
+      throw tagged(err, this.__runtime.name);
     }
   }
 
@@ -796,9 +836,20 @@ export class NormDb<R, Scope extends string = never> {
         reason: 'missing-secret',
         operation: op,
         code: 'MISSING_SECRET',
+        norm: this.__runtime.name,
       });
     }
     return secret;
+  }
+
+  /** Reject with any norm error stamped with this instance's name — the
+   * boundary tag for executor / decrypt failures surfacing through
+   * `query()` and `raw()`. */
+  private __tagged<T>(p: Promise<T>): Promise<T> {
+    const name = this.__runtime.name;
+    return name === undefined ? p : p.catch((e) => {
+      throw tagged(e, name);
+    });
   }
 
   // ─── Read-cache control (no-ops when no `cache` was configured) ────
@@ -827,7 +878,8 @@ export class NormDb<R, Scope extends string = never> {
   }
 }
 
-/** Instance-name counter for engines Norm constructs itself.
+/** Fallback instance-name counter for engines Norm constructs when no
+ * `name` is configured.
  *
  * @internal
  */
@@ -870,7 +922,7 @@ function wrap(engine: AnySQLEngine | MongoEngine): ResolvedEngine {
  *   but its `@tundralibs/norm/engines/<dialect>` module has not been
  *   imported.
  */
-function resolveEngine(cfg: NormConfig): ResolvedEngine {
+function resolveEngine(cfg: NormConfig, name: string): ResolvedEngine {
   if (cfg.database === undefined) {
     throw new NormError(
       `new Norm({...}): a 'database' config is required.`,
@@ -879,7 +931,6 @@ function resolveEngine(cfg: NormConfig): ResolvedEngine {
       },
     );
   }
-  const name = `norm-${++normEngineCounter}`;
   const { dialect, ...rest } = cfg.database;
   // Registry lookup, not a `switch` over imported engine classes — see
   // `engines/registry.ts` for why the classes cannot live in this file.
@@ -887,8 +938,41 @@ function resolveEngine(cfg: NormConfig): ResolvedEngine {
   return wrap(factory(name, rest as Record<string, unknown>));
 }
 
+/**
+ * An external cache engine needs an EXPLICIT `name`: the auto-generated
+ * `norm-<n>` restarts in every process, so two apps sharing one Redis /
+ * Memcached would land in the same namespace and serve (and prune) each
+ * other's rows. The in-process `MEMORY` engine has no such neighbour.
+ *
+ * @throws {NormError} `INVALID_CACHE_CONFIG`
+ */
+function assertCacheNamed(
+  cache: NormCacheConfig | undefined,
+  explicit: string | undefined,
+  name: string,
+): void {
+  if (cache === undefined || explicit) return;
+  const engine = (cache.engine ?? 'MEMORY').trim().toUpperCase();
+  if (engine === 'MEMORY') return;
+  throw new NormError(
+    `new Norm({ cache }): an explicit 'name' is required with the ` +
+      `'${engine}' cache engine — the auto-generated '${name}' restarts ` +
+      `in every process, so two apps sharing that store would share ` +
+      `(and cross-prune) each other's entries.`,
+    { code: 'INVALID_CACHE_CONFIG', norm: name },
+  );
+}
+
+/** Stamp this instance's name onto a norm error crossing a `NormDb`
+ * boundary; other errors, already-named ones, and nameless runtimes pass
+ * through. Returns `e` so a catch can `throw tagged(e, name)`. */
+function tagged(e: unknown, name: string | undefined): unknown {
+  if (name !== undefined && e instanceof NormError) e.tagNorm(name);
+  return e;
+}
+
 // ---------------------------------------------------------------------
-// Witness wiring (see NormConfig.witness / Witness in compile.ts)
+// Accessor instrumentation (witness + error tagging)
 // ---------------------------------------------------------------------
 
 /**
@@ -911,13 +995,15 @@ const WITNESSED_OPS = new Set([
 ]);
 
 /**
- * Wrap an accessor so its operation methods run through `witness`.
+ * Wrap an accessor so its operation methods run through `witness` and
+ * reject with norm errors stamped with the instance `name`.
  *
  * A Proxy at the accessor boundary instead of edits inside nine method
  * bodies: one implementation point covers Repo, ReadRepo and
  * QueryAccessor alike, and internal calls (an operation invoking a
  * sibling on `this`) run against the RAW target — so an operation is
- * witnessed exactly once, at the boundary the application called.
+ * witnessed (and tagged) exactly once, at the boundary the application
+ * called.
  *
  * `Reflect.get(target, prop, target)` and `apply(target, …)` keep
  * `this` bound to the raw accessor, so field access inside methods is
@@ -926,13 +1012,15 @@ const WITNESSED_OPS = new Set([
  *
  * @param accessor - The raw Repo / ReadRepo / QueryAccessor.
  * @param entity - Registry key, used in the span-style name.
- * @param witness - See {@link Witness}.
+ * @param witness - See {@link Witness}; `undefined` = not witnessed.
+ * @param name - The instance name to stamp; `undefined` = not tagged.
  * @returns The proxied accessor, cached by `repo()` in place of the raw one.
  */
-function witnessAccessor<T extends object>(
+function instrumentAccessor<T extends object>(
   accessor: T,
   entity: string,
-  witness: Witness,
+  witness: Witness | undefined,
+  name: string | undefined,
 ): T {
   const wrapped = new Map<PropertyKey, unknown>();
   return new Proxy(accessor, {
@@ -944,18 +1032,21 @@ function witnessAccessor<T extends object>(
       let fn = wrapped.get(prop);
       if (fn === undefined) {
         const op = String(prop);
-        fn = (...args: unknown[]) =>
-          witness(
-            {
-              name: `norm.${entity}.${op}`,
-              attributes: { 'norm.entity': entity, 'norm.operation': op },
-            },
-            () =>
-              (value as (...a: unknown[]) => Promise<unknown>).apply(
-                target,
-                args,
-              ),
-          );
+        const info = {
+          name: `norm.${entity}.${op}`,
+          attributes: { 'norm.entity': entity, 'norm.operation': op },
+        };
+        fn = (...args: unknown[]) => {
+          const run = () =>
+            (value as (...a: unknown[]) => Promise<unknown>).apply(
+              target,
+              args,
+            );
+          const p = witness === undefined ? run() : witness(info, run);
+          return name === undefined ? p : p.catch((e) => {
+            throw tagged(e, name);
+          });
+        };
         wrapped.set(prop, fn);
       }
       return fn;

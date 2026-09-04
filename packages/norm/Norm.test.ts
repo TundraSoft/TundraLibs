@@ -26,6 +26,8 @@ import {
   type ExecutorQuery,
   Norm,
   NormDb,
+  NormError,
+  NormQueryError,
   NormUnsupportedError,
   Schema,
   type Session,
@@ -169,6 +171,70 @@ describe('norm.Norm (config + lifecycle + tx edges)', () => {
     const db = norm.use(Schema('S', { Users }));
     asserts.assertEquals(Object.keys(db.entities), ['Users']);
     await norm.disconnect();
+  });
+
+  it('name: names the instance, stamps its errors, defaults to norm-<n>', async () => {
+    const named = new Norm({
+      name: 'billing',
+      database: { dialect: 'sqlite', path: dir },
+    });
+    asserts.assertEquals(named.name, 'billing');
+    const db = named.use(Schema('S', { Users }));
+    // Synchronous boundary: the repo lookup itself.
+    const sync = asserts.assertThrows(
+      () => db.repo('Nope' as never),
+      NormQueryError,
+    );
+    asserts.assertEquals(sync.norm, 'billing');
+    asserts.assertStringIncludes(
+      sync.message,
+      "[billing] Unknown entity 'Nope'",
+    );
+    // Asynchronous boundary: an operation rejecting deep in the pipeline.
+    const op = await asserts.assertRejects(
+      () =>
+        db.repo('Users').find(
+          undefined,
+          { project: { '@nope': true } } as never,
+        ),
+      NormQueryError,
+    );
+    asserts.assertEquals(op.code, 'INVALID_PROJECTION');
+    asserts.assertEquals(op.norm, 'billing');
+    asserts.assertStringIncludes(op.message, '[billing] ');
+    asserts.assertMatch(
+      new Norm({ database: { dialect: 'sqlite', path: dir } }).name,
+      /^norm-\d+$/,
+    );
+  });
+
+  it('cache: an external engine requires an explicit name; use() stamps cache errors', () => {
+    const anon = asserts.assertThrows(
+      () =>
+        new Norm({
+          database: { dialect: 'sqlite', path: dir },
+          cache: { engine: 'REDIS' },
+        }),
+      NormError,
+    );
+    asserts.assertEquals(anon.code, 'INVALID_CACHE_CONFIG');
+    asserts.assertStringIncludes(anon.message, "explicit 'name'");
+    // In-process MEMORY is private to the process — the auto name is fine.
+    new Norm({
+      database: { dialect: 'sqlite', path: dir },
+      cache: { engine: 'MEMORY' },
+    });
+    const bad = asserts.assertThrows(
+      () =>
+        new Norm({
+          name: 'a:b',
+          database: { dialect: 'sqlite', path: dir },
+          cache: { engine: 'MEMORY' },
+        }).use(Schema('S', { Users })),
+      NormError,
+    );
+    asserts.assertEquals(bad.code, 'INVALID_CACHE_CONFIG');
+    asserts.assertEquals(bad.norm, 'a:b');
   });
 
   it('forwards the engine connect + query events onto the Norm bus (metadata only)', async () => {

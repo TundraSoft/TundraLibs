@@ -14,6 +14,8 @@ import type { NormErrorCode } from './NormErrorCodes.ts';
 
 /** Metadata carried by {@link NormMigrationError}. */
 export type MigrationErrorMeta = {
+  /** `name` of the `Norm` the migrator runs against (`error.norm`). */
+  norm?: string;
   /** Migrations directory the operation ran against. */
   dir?: string;
   /** Migration version involved, when applicable. */

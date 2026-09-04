@@ -1,10 +1,10 @@
 # Security
 
 At-rest column encryption, digest siblings, one-way digest columns,
-virtual masks, hidden columns, and the crypto override seam — NORM's
-flagship security surface. One `secret` on the `Norm` instance drives
-every encrypted column on every registered entity; the TypeScript
-types never change.
+virtual masks, hidden columns, and the crypto override seam: norm's
+security surface. One `secret` on the `Norm` instance drives every
+encrypted column on every registered entity, and the TypeScript types
+never change.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
@@ -33,36 +33,37 @@ types never change.
 
 ## Overview
 
-NORM turns column-level cryptography into a declaration. Five builder
+norm turns column-level cryptography into a declaration. Five builder
 markers, all read from one schema:
 
-| Marker                 | What it does                                             | Reversible            | Filterable                                         |
-| ---------------------- | -------------------------------------------------------- | --------------------- | -------------------------------------------------- |
-| `.encrypt()`           | Ciphertext at rest, plaintext in TS                      | Yes (with the secret) | No (see `.hash()`)                                 |
-| `.encrypt().hash()`    | Encrypt **and** synthesize a `<col>_hash` digest sibling | Yes                   | Yes — equality only                                |
-| `Column.hash(algo)`    | One-way digest column (store only the digest)            | **No**                | Yes — equality only, except `'PBKDF2'` (see below) |
-| `Column.mask(src, fn)` | Virtual, computed-on-read presentation column            | n/a                   | No — never stored                                  |
-| `.hidden()`            | Excluded from default reads, opt-in projectable          | n/a                   | Yes (unless also `.unfilterable()`)                |
+| Marker                 | What it does                                             | Reversible            | Filterable                                        |
+| ---------------------- | -------------------------------------------------------- | --------------------- | ------------------------------------------------- |
+| `.encrypt()`           | Ciphertext at rest, plaintext in TS                      | Yes (with the secret) | No (see `.hash()`)                                |
+| `.encrypt().hash()`    | Encrypt **and** synthesize a `<col>_hash` digest sibling | Yes                   | Yes, equality only                                |
+| `Column.hash(algo)`    | One-way digest column (store only the digest)            | **No**                | Yes, equality only, except `'PBKDF2'` (see below) |
+| `Column.mask(src, fn)` | Virtual, computed-on-read presentation column            | n/a                   | No; never stored                                  |
+| `.hidden()`            | Excluded from default reads, opt-in projectable          | n/a                   | Yes (unless also `.unfilterable()`)               |
 
 `Column.password(algo)` is the same digest-column builder as
-`Column.hash(algo)`, named for credentials — see
+`Column.hash(algo)`, named for credentials; see
 [Password columns](#password-columns--columnpassword).
 
-Encryption is **per cell**: every encrypted value carries its own
-random IV (and, for cells written by older versions, a per-message
-salt), so two equal plaintexts never produce equal ciphertext. That is
-the security property — and the reason equality filters, uniqueness,
-joins, and upsert keys need a deterministic _digest_ rather than the
-ciphertext itself.
+Encryption is per cell: every encrypted value carries its own random IV
+(and, for cells written by older versions, a per-message salt), so two
+equal plaintexts never produce equal ciphertext. That is the security
+property, and the reason equality filters, uniqueness, joins, and
+upsert keys need a deterministic digest rather than the ciphertext
+itself.
 
-The whole surface is correct-by-construction. `.hash()` exists only
-after `.encrypt()`, validators (`pattern` / `lov` / `min` / `max` /
-`minLength` / `maxLength`) must chain _before_ `.encrypt()` because
-they constrain the plaintext, and `Column.hash(algo)` exposes no
-`.encrypt()`. Invalid combinations simply do not type-check.
+The whole surface is correct by construction. `.hash()` exists only
+after `.encrypt()`; validators (`pattern`, `lov`, `min`, `max`,
+`minLength`, `maxLength`) must chain before `.encrypt()` because they
+constrain the plaintext; and `Column.hash(algo)` exposes no
+`.encrypt()`. Invalid combinations do not type-check.
 
-This page expands the **At-rest encryption** summary in the
-[NORM README](../README.md#at-rest-encryption).
+This page expands the
+[At-rest encryption](../README.md#at-rest-encryption) summary in the
+README.
 
 ## Configuration
 
@@ -81,24 +82,24 @@ const norm = new Norm({
 const db = norm.use(/* ...schemas */);
 ```
 
-| Option             | Type                  | Default                              | Notes                                                                                                                         |
-| ------------------ | --------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `secret`           | `string`              | —                                    | Symmetric key material. Keep it out of source; load from an env var or secret store.                                          |
-| `algorithm`        | `EncryptAlgorithm`    | `'AES-256-GCM'`                      | Bound per instance, applied to every encrypted column.                                                                        |
-| `crypto`           | `CryptoOverrides`     | AES + SHA (from `@tundralibs/crypt`) | Swap the encrypt / decrypt / hash callbacks — see [Crypto overrides](#crypto-overrides).                                      |
-| `onDecryptFailure` | `'null'` \| `'throw'` | `'null'`                             | What a read does when a cell won't decrypt — see [Read-path decrypt failures](#read-path-decrypt-failures--ondecryptfailure). |
+| Option             | Type                  | Default                              | Notes                                                                                                                           |
+| ------------------ | --------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `secret`           | `string`              | —                                    | Symmetric key material. Keep it out of source; load from an env var or secret store.                                            |
+| `algorithm`        | `EncryptAlgorithm`    | `'AES-256-GCM'`                      | Bound per instance, applied to every encrypted column.                                                                          |
+| `crypto`           | `CryptoOverrides`     | AES + SHA (from `@tundralibs/crypt`) | Swap the encrypt / decrypt / hash callbacks; see [Crypto overrides](#crypto-overrides).                                         |
+| `onDecryptFailure` | `'null'` \| `'throw'` | `'null'`                             | What a read does when a cell will not decrypt; see [Read-path decrypt failures](#read-path-decrypt-failures--ondecryptfailure). |
 
 `EncryptAlgorithm` is any AES key length crossed with a mode:
-`AES-{128,192,256}-{GCM,CBC,CTR}`. GCM is authenticated natively;
-CBC/CTR are wrapped in encrypt-then-MAC by the default helper.
+`AES-{128,192,256}-{GCM,CBC,CTR}`. GCM is authenticated natively; CBC
+and CTR are wrapped in encrypt-then-MAC by the default helper.
 
-**Digest algorithms are not instance config.** Encrypt-siblings are
-pinned to SHA-256 (`SIBLING_HASH_ALGORITHM`) so the physical
-`VARCHAR(64)` never moves, and one-way digest columns carry their
-algorithm in the _definition_ (`Column.hash('SHA-512')`).
+Digest algorithms are not instance config. Encrypt-siblings are pinned
+to SHA-256 (`SIBLING_HASH_ALGORITHM`) so the physical `VARCHAR(64)`
+never moves, and one-way digest columns carry their algorithm in the
+definition (`Column.hash('SHA-512')`).
 
-**No secret, but a column asks to be encrypted?** `norm.use(...)`
-throws a `NormDefinitionError` at composition time — the misconfig
+No secret, but a column asks to be encrypted? `norm.use(...)` throws a
+`NormDefinitionError` at composition time, so the misconfiguration
 never reaches a query.
 
 The instance also exposes crypto helpers for the raw escape hatches:
@@ -115,9 +116,9 @@ matches sibling digests; pass an algorithm to match a
 
 ## Column encryption — `.encrypt()`
 
-`.encrypt()` works on **every** value kind — string, number, bigint,
-date, boolean, JSON. The logical TypeScript type is unchanged; only
-the physical storage becomes ciphertext (migrated to `TEXT`).
+`.encrypt()` works on every value kind: string, number, bigint, date,
+boolean, JSON. The logical TypeScript type is unchanged; only the
+physical storage becomes ciphertext, migrated to `TEXT`.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -140,11 +141,11 @@ prof.data?.birthday instanceof Date; // true — decrypted and decoded on read
 
 ### The plaintext codec
 
-Encryption operates on strings, but the column keeps its declared
-type. Before encrypting (and digesting), NORM canonicalizes the
-validated value to a deterministic string; on read it decodes back.
-The canonical forms are timezone-stable and re-digestable — the same
-value always yields the same digest.
+Encryption operates on strings, but the column keeps its declared type.
+Before encrypting (and digesting), norm canonicalizes the validated
+value to a deterministic string; on read it decodes back. The canonical
+forms are timezone-stable and re-digestable, so the same value always
+yields the same digest.
 
 | Logical type                                        | Canonical string                     | Decoded back to |
 | --------------------------------------------------- | ------------------------------------ | --------------- |
@@ -157,45 +158,45 @@ value always yields the same digest.
 
 JSON is key-sorted so digests of semantically equal objects agree
 regardless of insertion order. Decoding is defensive: a corrupted or
-pre-codec cell falls back to the raw string on every branch — one bad
+pre-codec cell falls back to the raw string on every branch, so one bad
 value neither aborts the whole read nor silently flips into a
 legal-looking value.
 
-`Column.blob()` **cannot** be encrypted — the codec is text-canonical.
-Encode binary to a text form and encrypt that if you need it.
+`Column.blob()` cannot be encrypted, because the codec is
+text-canonical. Encode binary to a text form and encrypt that if you
+need it.
 
 ### Per-cell cost
 
 For GCM algorithms (the default), the encryption key is derived from
-your secret with **PBKDF2-SHA-256 (210,000 iterations)** **once per
-process**, then reused for every cell — each encrypt/decrypt is a
-plain AES-GCM operation (microseconds), so bulk writes and reads are
-no longer dominated by key derivation. The derivation salt is computed
-from the secret itself (domain-separated SHA-256), which costs nothing
-against brute force here — one secret serves every cell, so an
-attacker guessing passphrases pays the full 210,000 iterations per
-candidate either way — and lets every process re-derive the identical
-key with nothing extra stored.
+your secret with PBKDF2-SHA-256 (210,000 iterations) once per process,
+then reused for every cell. Each encrypt or decrypt is then a plain
+AES-GCM operation measured in microseconds, so bulk writes and reads
+are no longer dominated by key derivation. The derivation salt is
+computed from the secret itself (domain-separated SHA-256). That costs
+nothing against brute force here, since one secret serves every cell
+and an attacker guessing passphrases pays the full 210,000 iterations
+per candidate either way, and it lets every process re-derive the
+identical key with nothing extra stored.
 
 Two older cell generations remain readable and are told apart by
-envelope shape: cells written before this fast path carry a
-per-message salt and pay the **~22 ms** PBKDF2 on _every_ read of that
-cell, and CBC/CTR configurations still derive per cell (their
-encrypt-then-MAC is keyed off the string secret). Running
+envelope shape. Cells written before this fast path carry a
+per-message salt and pay the ~22 ms PBKDF2 on every read of that cell,
+and CBC/CTR configurations still derive per cell, because their
+encrypt-then-MAC is keyed off the string secret. Running
 [`rotateKey()`](#key-rotation--rotatekey) re-encrypts old cells, which
 also upgrades them to the fast envelope.
 
 If you need different key handling entirely, the
-[crypto override seam](#crypto-overrides) still lets you supply your
-own KDF or delegate to a KMS.
+[crypto override seam](#crypto-overrides) lets you supply your own KDF
+or delegate to a KMS.
 
 ## Digest siblings — `.encrypt().hash()`
 
-Chaining `.hash()` after `.encrypt()` synthesizes a **`<col>_hash`**
-digest sibling — a deterministic SHA-256 `VARCHAR(64)` column that
-NORM maintains on every write. It exists so plaintext equality
-operations work against a column whose ciphertext is unusable for
-comparison.
+Chaining `.hash()` after `.encrypt()` synthesizes a `<col>_hash` digest
+sibling, a deterministic SHA-256 `VARCHAR(64)` column that norm
+maintains on every write. It exists so plaintext equality operations
+work against a column whose ciphertext is unusable for comparison.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -214,11 +215,11 @@ const Users = Entity('users', {
 
 ### Why ciphertext can't be filtered
 
-An encrypted column with **no** `.hash()` (like `apiKey` above) is
-readable but not filterable. Random-IV ciphertext never equals itself,
-so `where email = <ciphertext>` can never match, uniqueness can't be
-enforced, and you can't group, order, or join on it. Try to filter one
-and NORM throws with a pointed hint:
+An encrypted column with no `.hash()` (like `apiKey` above) is readable
+but not filterable. Random-IV ciphertext never equals itself, so
+`where email = <ciphertext>` can never match, uniqueness cannot be
+enforced, and you cannot group, order, or join on it. Filtering one
+throws with a pointed hint:
 
 ```
 Column 'apiKey' on entity 'Users' is not filterable
@@ -227,10 +228,10 @@ Column 'apiKey' on entity 'Users' is not filterable
 
 ### Filtering, uniqueness, and upsert keys
 
-With `.hash()` declared, all of these work transparently — you always
-speak plaintext, and NORM rewrites to the digest sibling under the
-hood. Equality-class operators only (`$eq`, `$ne`, `$in`, `$nin`,
-`$null`); ordering by a digest is meaningless and stays rejected.
+With `.hash()` declared, all of these work transparently: you always
+speak plaintext, and norm rewrites to the digest sibling.
+Equality-class operators only (`$eq`, `$ne`, `$in`, `$nin`, `$null`);
+ordering by a digest is meaningless and stays rejected.
 
 ```typescript ignore
 // Equality — rewritten to email_hash = sha256('ada@shortly.dev').
@@ -253,9 +254,9 @@ await db.repo('Users').update({ loginCount: 1 }, {
 await db.repo('Users').insert({ email: 'ADA@SHORTLY.DEV' /* ... */ }); // rejects
 ```
 
-Because the digest is deterministic, an encrypted-and-hashed column can
-be an **upsert conflict key** (via the sibling) even though the
-ciphertext can't:
+Because the digest is deterministic, an encrypted and hashed column can
+be an upsert conflict key through the sibling even though the
+ciphertext cannot:
 
 ```typescript ignore
 // Encrypted `email` cannot be a conflict key directly — ciphertext is
@@ -282,11 +283,11 @@ regardless of the instance's encrypt algorithm.
 
 ## One-way digest columns — `Column.hash()`
 
-For values that must be _comparable_ but never _readable_ — passwords,
-PINs, recovery codes — use a standalone digest column. Callers write
-and filter by plaintext; NORM digests on the way in and the column
-stores only the hex digest. There is nothing to decrypt, so `.encrypt()`
-on a digest column is a hard error.
+For values that must be comparable but never readable (passwords, PINs,
+recovery codes), use a standalone digest column. Callers write and
+filter by plaintext; norm digests on the way in and the column stores
+only the hex digest. There is nothing to decrypt, so `.encrypt()` on a
+digest column is a hard error.
 
 ```typescript ignore
 const Users = Entity('users', {
@@ -295,12 +296,11 @@ const Users = Entity('users', {
 });
 ```
 
-The algorithm — `'SHA-256'` (default), `'SHA-384'`, or `'SHA-512'` —
+The algorithm (`'SHA-256'` by default, `'SHA-384'`, or `'SHA-512'`)
 determines the physical `VARCHAR` length: 64, 96, or 128 hex
-characters respectively. A fourth algorithm, `'PBKDF2'`, is also
-accepted here (`Column.hash('PBKDF2')`) but behaves differently enough
-that it gets its own section next — it is salted and **not**
-filterable.
+characters. A fourth algorithm, `'PBKDF2'`, is also accepted here
+(`Column.hash('PBKDF2')`) but behaves differently enough to get its own
+section next: it is salted and not filterable.
 
 ```typescript ignore
 const row = (await db.repo('Users').insert({ pin: '4471' /* ... */ })).data[0]!;
@@ -311,25 +311,26 @@ const byPin = await db.repo('Users').findOne({ '@pin': '4471' });
 ```
 
 Note the difference from an encrypt-sibling: `.encrypt().hash()`
-rewrites the filter _key_ to `@email_hash`; a `Column.hash(algo)`
-digest rewrites only the _value_ and keeps the `@pin` key, because the
+rewrites the filter key to `@email_hash`, while a `Column.hash(algo)`
+digest rewrites only the value and keeps the `@pin` key, because the
 column itself already stores the digest. Both are transparent to the
-caller. Validators (`pattern` / `minLength` / `maxLength`) on a digest
-column constrain the plaintext — your password policy — not the digest.
+caller. Validators (`pattern`, `minLength`, `maxLength`) on a digest
+column constrain the plaintext, your password policy, not the digest.
 
 ## Password columns — `Column.password()`
 
 `Column.password(algorithm?)` builds the same digest column as
-`Column.hash(algorithm?)` — same builder, same physical shape — under a
-name that reads better on a credential. It takes two kinds of algorithm:
+`Column.hash(algorithm?)`, same builder and same physical shape, under
+a name that reads better on a credential. It takes two kinds of
+algorithm:
 
-- `'SHA-256'` (default) / `'SHA-384'` / `'SHA-512'` — a **deterministic**
-  digest, identical in every respect to `Column.hash(algo)`: write and
-  filter by plaintext, brute-forceable if the table leaks. Use this only
-  when you genuinely need to look a row up by the credential.
-- `'PBKDF2'` — a **salted** hash, the correct choice for real login
+- `'SHA-256'` (default), `'SHA-384'`, or `'SHA-512'`: a deterministic
+  digest, identical in every respect to `Column.hash(algo)`. Write and
+  filter by plaintext; brute-forceable if the table leaks. Use it only
+  when you need to look a row up by the credential.
+- `'PBKDF2'`: a salted hash, the correct choice for real login
   passwords. Every hash is unique even for the same plaintext, so the
-  column is **not filterable** — `Column.hash('PBKDF2')` carries the same
+  column is not filterable. `Column.hash('PBKDF2')` carries the same
   restriction, since it is the identical call. Read the row and verify
   the candidate instead:
 
@@ -351,17 +352,17 @@ const ok = await pbkdf2Verify('hunter2boat', row.password); // boolean
 ```
 
 `pbkdf2Verify` is re-exported from `@tundralibs/norm` (and
-`@tundralibs/norm/core`) for exactly this check. The KDF itself — hash
-family, iteration count — is overridable per instance via
-`crypto.pbkdf2Hash` on `new Norm({...})`, independent from the `hash`
-override: bare SHA digests (`Column.hash()`/`.password()` without
+`@tundralibs/norm/core`) for exactly this check. The KDF itself (hash
+family, iteration count) is overridable per instance via
+`crypto.pbkdf2Hash` on `new Norm({...})`, independent of the `hash`
+override: bare SHA digests (`Column.hash()` and `.password()` without
 `'PBKDF2'`, and encrypt-sibling digests) still route through `hash`.
 
 ## Virtual masks — `Column.mask()`
 
-A mask is a **presentation** column: computed client-side from a
-sibling `source` column _after_ decryption, never stored, never sent
-to SQL, and excluded from inserts, updates, filters, and ordering.
+A mask is a presentation column: computed client-side from a sibling
+`source` column after decryption, never stored, never sent to SQL, and
+excluded from inserts, updates, filters, and ordering.
 
 ```typescript ignore
 const Users = Entity('users', {
@@ -372,7 +373,7 @@ const Users = Entity('users', {
 ```
 
 `apiKeyHint` is its own first-class key. The raw `apiKey` and the
-masked `apiKeyHint` are **independently projectable** — a default read
+masked `apiKeyHint` are independently projectable, and a default read
 carries both:
 
 ```typescript ignore
@@ -382,29 +383,30 @@ row.apiKey; // 'ak-ada-0001' (decrypted)
 row.apiKeyHint; // '…0001'
 ```
 
-Details that matter:
+The rules:
 
-- The mask fn receives the **decoded stored value** — a real `Date`
-  for an encrypted timestamp source, a `number` for a numeric one.
-  Type the fn's parameter to the source's logical type
+- The mask fn receives the decoded stored value: a real `Date` for an
+  encrypted timestamp source, a `number` for a numeric one. Type the
+  fn's parameter to the source's logical type
   (`Column.mask<Date>('birthday', (d) => d.getFullYear().toString())`).
 - Several masks may share one source, with any custom names.
 - Whether the raw source projects by default stays the source's own
-  `.hidden()` decision — a hidden source is still fetched (and
+  `.hidden()` decision. A hidden source is still fetched (and
   decrypted) to compute the mask, then stripped from the result.
-- On a `decrypt: false` read, masks over an **encrypted** source are
-  skipped — the fn must never see ciphertext.
-- Only `hidden()` / `comment()` / `nullable()` chain on a mask.
-  Declare `.nullable()` when the source is nullable (a null source
-  yields a null mask).
-- Masks are **not** computed by the `db.query()` escape hatch (its
-  sources may be absent) — they are a typed-read feature.
+- On a `decrypt: false` read, masks over an encrypted source are
+  skipped; the fn must never see ciphertext.
+- Only `hidden()`, `comment()`, and `nullable()` chain on a mask.
+  Declare `.nullable()` when the source is nullable, since a null
+  source yields a null mask.
+- Masks are not computed by the `db.query()` escape hatch, whose
+  sources may be absent. They are a typed-read feature.
 
 ## Hidden columns — `.hidden()`
 
 `.hidden()` excludes a column from default read shapes (and from
-RETURNING), while keeping it writable and explicitly projectable. It is
-the natural home for a stored credential you verify but never surface.
+`RETURNING`) while keeping it writable and explicitly projectable. It
+is the natural home for a stored credential you verify but never
+surface.
 
 ```typescript ignore
 const Users = Entity('users', {
@@ -413,7 +415,7 @@ const Users = Entity('users', {
 });
 ```
 
-The password-verification pattern — the hash never leaves the database
+The password-verification pattern: the hash never leaves the database
 on a default read, but you can opt into it for the one query that
 checks a login:
 
@@ -430,16 +432,16 @@ const withHash = await db.repo('Users').findOne(
 const ok = await verifyPassword(candidate, withHash.data!.passwordHash);
 ```
 
-`.hidden()` composes with `.unfilterable()` (reject it in WHERE /
-ORDER BY) and survives every generic-changing modifier in a chain
-(`nullable`, `default`, `encrypt`, `hash`) — the type-level brand and
+`.hidden()` composes with `.unfilterable()` (reject it in `WHERE` and
+`ORDER BY`) and survives every generic-changing modifier in a chain
+(`nullable`, `default`, `encrypt`, `hash`), so the type-level brand and
 the runtime strip never diverge.
 
 ## Crypto overrides
 
 `CryptoOverrides` on `new Norm({ crypto })` swaps the default crypto
-callbacks. Any callback you omit falls back to the built-in
-AES/SHA implementation from `@tundralibs/crypt`.
+callbacks. Any callback you omit falls back to the built-in AES/SHA
+implementation from `@tundralibs/crypt`.
 
 ```typescript
 import type { EncryptAlgorithm, HashAlgorithm } from '@tundralibs/norm';
@@ -464,10 +466,10 @@ type CryptoOverrides = {
 };
 ```
 
-**`encrypt` and `decrypt` must be overridden as a pair.** If encrypted
+`encrypt` and `decrypt` must be overridden as a pair. If encrypted
 columns exist and you override one but not the other, `norm.use(...)`
-rejects it — rows would be written in one format and read back in
-another.
+rejects it, because rows would be written in one format and read back
+in another.
 
 ```typescript
 import '@tundralibs/norm/engines/sqlite';
@@ -489,12 +491,11 @@ const norm = new Norm({
 });
 ```
 
-The `hash` callback may be overridden **alone** — it takes no secret in
-its default form, which is the seam for **hardening low-entropy
-digests**. A one-way `Column.hash()` over a small value space (a
-4-digit PIN, a short code) is trivially rainbow-tabled as a bare
-SHA-256; swapping `hash` for a keyed HMAC binds every digest to your
-secret:
+The `hash` callback may be overridden alone. It takes no secret in its
+default form, which is the seam for hardening low-entropy digests: a
+one-way `Column.hash()` over a small value space (a 4-digit PIN, a
+short code) is trivially rainbow-tabled as a bare SHA-256, and swapping
+`hash` for a keyed HMAC binds every digest to your secret:
 
 ```typescript
 import '@tundralibs/norm/engines/sqlite';
@@ -517,32 +518,32 @@ const norm = new Norm({
 ```
 
 Because sibling digests and `db.hash()` both route through
-`crypto.hash`, one override hardens encrypt-siblings _and_
-`Column.hash()` columns consistently — and, crucially, plaintext-filter
-rewrites use the same callback, so lookups still match.
+`crypto.hash`, one override hardens encrypt-siblings and
+`Column.hash()` columns consistently, and plaintext-filter rewrites use
+the same callback, so lookups still match.
 
 ## Migrations and crypto
 
-The Migrator derives crypto changes from your definitions. The
-encrypt/hash/digest markers are **crypto facts**; when one flips, no
-in-place `ALTER` can express the change, so the Migrator performs a
-**table rebuild** (rename aside → recreate → copy → verify → drop) and
-runs the copy step per row in JS:
+The Migrator derives crypto changes from your definitions. The encrypt,
+hash, and digest markers are crypto facts; when one flips, no in-place
+`ALTER` can express the change, so the Migrator performs a table
+rebuild (rename aside, recreate, copy, verify, drop) and runs the copy
+step per row in JS:
 
-- **Turning `.encrypt()` on** encrypts every existing row's plaintext.
-- **Turning `.encrypt()` off** decrypts it back to plaintext.
-- **Adding `.hash()`** backfills the `<col>_hash` sibling from the
-  decrypted values.
+- Turning `.encrypt()` on encrypts every existing row's plaintext.
+- Turning `.encrypt()` off decrypts it back to plaintext.
+- Adding `.hash()` backfills the `<col>_hash` sibling from the decrypted
+  values.
 
 The reviewable `.sql` artifact makes the rebuild explicit (`-- (copy
 step runs per-row in the migrator: decrypt/re-encrypt/…)`), and
-`apply()` refuses to run a plan whose hash doesn't match the reviewed
+`apply()` refuses to run a plan whose hash does not match the reviewed
 artifact.
 
-**Digest algorithm changes are one-way and rejected.** Changing a
-`Column.hash('SHA-256')` to `'SHA-384'` cannot be migrated — the
-digests are one-way and the plaintext is gone, so there is nothing to
-re-digest from:
+Digest algorithm changes are one-way and rejected. Changing a
+`Column.hash('SHA-256')` to `'SHA-384'` cannot be migrated: the digests
+are one-way and the plaintext is gone, so there is nothing to re-digest
+from:
 
 ```
 Column 'Users.pin': digest algorithm changes cannot be migrated —
@@ -550,20 +551,20 @@ Column 'Users.pin': digest algorithm changes cannot be migrated —
   backfill from source data instead.
 ```
 
-See **[Migrations](NORM-Migrations.md)** for the rebuild engine, stored
+See [Migrations](NORM-Migrations.md) for the rebuild engine, stored
 plans, and the advisory lock.
 
 ## Read-path decrypt failures — `onDecryptFailure`
 
 A stored ciphertext can fail to become plaintext on read: it was
 corrupted, tampered with (GCM/MAC authentication fails), or written
-under a **different key** than the instance now holds. `onDecryptFailure`
+under a different key than the instance now holds. `onDecryptFailure`
 decides what a read does with that one cell:
 
 | Policy               | Behaviour                                                                                                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `'null'` _(default)_ | The cell reads as `null`; the row's other columns are untouched, the rest of the page still flows, and a metadata-only `decryptError` event fires. One bad cell never fails the whole query. |
-| `'throw'`            | The read raises a typed `NormCryptoError` naming the entity, column, and pk. Use it when a failure must be loud — an operational alarm rather than a silent gap.                             |
+| `'throw'`            | The read raises a typed `NormCryptoError` naming the entity, column, and pk. Use it when a failure must be loud: an operational alarm rather than a silent gap.                              |
 
 ```typescript
 import '@tundralibs/norm/engines/sqlite';
@@ -585,10 +586,10 @@ norm.on('decryptError', (entity, column, pk, reason) => {
 });
 ```
 
-`reason` is `'decrypt'` (ciphertext failed its auth tag / wrong key) or
-`'decode'` (decrypted, but the canonical plaintext was malformed). The
-event **never** carries the ciphertext or the failed value — only
-identifiers. Under `'throw'`, the same context rides on
+`reason` is `'decrypt'` (the ciphertext failed its auth tag, or the key
+is wrong) or `'decode'` (decrypted, but the canonical plaintext was
+malformed). The event never carries the ciphertext or the failed value,
+only identifiers. Under `'throw'`, the same context rides on
 `NormCryptoError.context`:
 
 ```typescript ignore
@@ -604,19 +605,19 @@ try {
 }
 ```
 
-The `'null'` default is deliberate: after a [key rotation](#key-rotation--rotatekey)
-that hasn't finished, or a partially-restored backup, a single
-unreadable cell degrades gracefully instead of taking down every list
-view that touches the table.
+The `'null'` default is deliberate: after a
+[key rotation](#key-rotation--rotatekey) that has not finished, or a
+partially restored backup, a single unreadable cell degrades gracefully
+instead of taking down every list view that touches the table.
 
 ## Key rotation — `rotateKey()`
 
-Rotating the encryption secret — re-encrypting every stored cell from an
-old key to a new one — is an **admin activity**, not a migration: no
-snapshot, no plan file, no DDL. `rotateKey()` walks each encrypted table
-in primary-key order, decrypts each cell with `oldKey`, and re-encrypts
-it with `newKey`, streaming in chunks so a multi-million-row table never
-lands in memory at once.
+Rotating the encryption secret, re-encrypting every stored cell from an
+old key to a new one, is an admin activity rather than a migration: no
+snapshot, no plan file, no DDL. `rotateKey()` walks each encrypted
+table in primary-key order, decrypts each cell with `oldKey`, and
+re-encrypts it with `newKey`, streaming in chunks so a
+multi-million-row table never lands in memory at once.
 
 ```typescript ignore
 import { rotateKey } from '@tundralibs/norm';
@@ -637,12 +638,12 @@ console.log(
 
 **Resumable and idempotent.** Every ciphertext is stamped with a short
 fingerprint of the key that produced it (`k1.<fp>.<body>`). Rotation
-reads that fingerprint to classify each cell — already under `newKey`
-(skip), under `oldKey` or legacy/un-stamped (rotate), or under some
-**third** key (leave, count under `unknownCells`). So a crashed run
-resumes safely: re-running skips whatever already moved, and a mistyped
-`oldKey` surfaces as "0 rotated, everything unknown" — never as silent
-corruption.
+reads that fingerprint to classify each cell: already under `newKey`
+(skip), under `oldKey` or legacy and un-stamped (rotate), or under some
+third key (leave, and count under `unknownCells`). A crashed run
+therefore resumes safely: re-running skips whatever already moved, and
+a mistyped `oldKey` surfaces as "0 rotated, everything unknown" rather
+than silent corruption.
 
 ```typescript ignore
 // Preview the job first — classifies + counts, writes nothing:
@@ -651,73 +652,75 @@ console.log(`${preview.rotatedCells} cells would rotate`);
 ```
 
 **Searchable hashes survive rotation.** `.encrypt().hash()` sibling
-digests are derived from **plaintext**, not ciphertext, so rotation
-never touches them — hashed-equality filters keep working across a
-rotation with no reindex.
+digests are derived from plaintext, not ciphertext, so rotation never
+touches them; hashed-equality filters keep working across a rotation
+with no reindex.
 
 Rotation reports a tally per entity (`rows`, `rotatedRows`,
 `rotatedCells`, `skippedCells`, `unknownCells`) plus grand totals. It
-throws a `NormCryptoError` (naming entity / column / pk) if a cell won't
-decrypt with `oldKey`, and having written nothing for that row.
+throws a `NormCryptoError` naming the entity, column, and pk if a cell
+will not decrypt with `oldKey`, having written nothing for that row.
 
-**Sizing the window.** Rotation is crypto-bound: each cell pays a
-decrypt _and_ a re-encrypt, ≈ **44 ms/cell** with the default PBKDF2
-helper ([Per-cell cost](#per-cell-cost)) — order **~20 cells/sec/core**,
-so a million encrypted cells is hours, not minutes. The classification
-that makes it resumable is nanoseconds and the paging/UPDATE round-trips
-are dwarfed by the KDF, so cell-count × 44 ms is a good estimate;
-`rotate.bench.ts` benchmarks the per-cell cost. A cheaper KDF via the
-[crypto override seam](#crypto-overrides) is the lever if that window is
-too long.
+**Sizing the window.** What a cell costs depends on the envelope it
+carries ([Per-cell cost](#per-cell-cost)). A cell already on the
+per-process key rotates in microseconds: both the decrypt and the
+re-encrypt are plain AES-GCM operations. A cell written before that
+fast path, or under a CBC/CTR algorithm, pays one PBKDF2 derivation
+(~22 ms) to decrypt, so a table of such cells rotates at roughly 45
+cells per second per core, and a million of them takes hours. The
+paging and per-row UPDATE round-trips are small next to that
+derivation. If the window is too long, a cheaper KDF via the
+[crypto override seam](#crypto-overrides) is the lever.
 
 > **v1 is downtime-first.** Rotation rewrites rows without holding a
-> global lock or a transaction spanning the whole table; run it while the
-> app is not writing encrypted columns. An online rotation (a runtime
-> keyring that reads both keys during the sweep) is a future addition —
-> the stamped-key-id envelope is the groundwork for it.
+> global lock or a transaction spanning the whole table; run it while
+> the app is not writing encrypted columns. An online rotation (a
+> runtime keyring that reads both keys during the sweep) is a future
+> addition, and the stamped key-id envelope is the groundwork for it.
 
 ## Limitations
 
-Be precise about what NORM does **not** do yet:
+What norm does not do yet:
 
 - **Key rotation is downtime-first.** `rotateKey()` re-encrypts every
-  stored cell old→new key, resumably and idempotently (see
-  [Key rotation](#key-rotation--rotatekey)), but v1 expects a downtime
-  window — there is no runtime keyring that reads both keys online during
-  the sweep yet.
+  stored cell from the old key to the new, resumably and idempotently
+  (see [Key rotation](#key-rotation--rotatekey)), but v1 expects a
+  downtime window. There is no runtime keyring that reads both keys
+  online during the sweep yet.
 - **Foreign-key columns must stay plaintext.** A join compares the
   actual column values across tables in its `ON` clause, and a digest
-  sibling doesn't help there — random-IV ciphertext never matches. Keep
-  FK columns unencrypted. A **scope** column is the exception: a scope
-  is an equality _filter_ (not a join), so an `.encrypt().hash()` scope
-  column rewrites to digest equality on its `<col>_hash` sibling and
-  works — a plain `.encrypt()` scope column (no hash) is still rejected.
-  See [Scoping](NORM-Scoping.md#rules-and-limits).
+  sibling does not help there, since random-IV ciphertext never
+  matches. Keep FK columns unencrypted. A scope column is the
+  exception: a scope is an equality filter, not a join, so an
+  `.encrypt().hash()` scope column rewrites to digest equality on its
+  `<col>_hash` sibling and works. A plain `.encrypt()` scope column (no
+  hash) is still rejected. See
+  [Scoping](NORM-Scoping.md#rules-and-limits).
 - **Encrypted columns are not orderable or aggregatable.** IV-random
   ciphertext never groups; aggregating an encrypted column is rejected
   up front.
-- **`BLOB` cannot be encrypted** — the codec is text-canonical.
+- **`BLOB` cannot be encrypted.** The codec is text-canonical.
 - **Escape hatches bypass decryption.** `db.raw()` returns rows exactly
   as the driver does (ciphertext, no afterRead) and emits a `warning`
   event; `db.query()` stays raw unless you bind it to an entity with
-  `{ entity: 'Users' }`, which rides the decrypt pipeline (but not
-  mask compute or hashed-filter rewrites).
+  `{ entity: 'Users' }`, which rides the decrypt pipeline but not mask
+  compute or hashed-filter rewrites.
 - **Events never carry plaintext.** The metadata-only event surface
-  (`call` / `warning` / transaction events) emits entity keys,
-  operations, timings, and ids — never row data, plaintext, or secrets.
+  (`call`, `warning`, transaction events) emits entity keys,
+  operations, timings, and ids, never row data, plaintext, or secrets.
 
 ## Related Documentation
 
-- [Schema definition](NORM-Schema.md) — the full `Column.*` builder
+- [Schema definition](NORM-Schema.md): the full `Column.*` builder
   reference, entities, relations, hooks, and validators.
-- [Querying](NORM-Querying.md) — filters, projections, and how hashed
+- [Querying](NORM-Querying.md): filters, projections, and how hashed
   columns fit the filter language.
-- [Migrations](NORM-Migrations.md) — the rebuild engine, crypto flips,
+- [Migrations](NORM-Migrations.md): the rebuild engine, crypto flips,
   and stored plans.
-- [Scoping](NORM-Scoping.md) — tenant scoping and how scope columns
+- [Scoping](NORM-Scoping.md): tenant scoping and how scope columns
   interact with encryption (plain `.encrypt()` rejected;
   `.encrypt().hash()` matched via the digest sibling).
-- [Audit](NORM-Audit.md#cross-engine-notes) — how an `audit` replica
+- [Audit](NORM-Audit.md#cross-engine-notes): how an `audit` replica
   carries an `.encrypt()` column's ciphertext over unchanged (copied,
   never decrypted or re-encrypted).
 
