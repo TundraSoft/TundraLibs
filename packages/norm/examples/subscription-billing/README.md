@@ -14,19 +14,19 @@ node --import tsx packages/norm/examples/subscription-billing/main.ts
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schema.ts` | `Customers` (`.encrypt().hash()`, `.mask()`, a tenant-scoping column), `Subscriptions` (`temporal`), `Invoices` (`audit`, v1 + v2), a VIEW, and a QUERY on top of it        |
 | `seed.ts`   | two tenant organizations and their customers, fixed UUIDs so `main.ts` doesn't have to thread insert results everywhere                                                     |
-| `main.ts`   | nine numbered scenarios, run top to bottom — Migrator create, CRUD, `@AsOf`, the audit trail, the VIEW/QUERY, `db.scope()`, two `transaction()` calls, and Migrator v1 → v2 |
+| `main.ts`   | nine numbered scenarios, run top to bottom: Migrator create, CRUD, `@AsOf`, the audit trail, the VIEW/QUERY, `db.scope()`, two `transaction()` calls, and Migrator v1 → v2 |
 
-Norm constructs and owns the SQLite engine itself from the `database`
-config — `import '@tundralibs/norm/engines/sqlite'` registers the
+norm constructs and owns the SQLite engine itself from the `database`
+config. `import '@tundralibs/norm/engines/sqlite'` registers the
 dialect (the one engine held out of the root barrel; see the README's
 "Choosing an entry point"), and no `@tundralibs/drivers` import is
 needed. The one extra install is `@tundralibs/compat`, for a
 cross-runtime temp directory the Migrator writes its snapshot files
-into — the database itself is `:memory:`, so that's the only disk
-write the example makes, and it's removed when the run finishes.
+into. The database itself is `:memory:`, so that is the only disk
+write the example makes, and it is removed when the run finishes.
 
-Expected shape of the output (ids and counts of ordered items vary run to
-run; ordering doesn't):
+Expected shape of the output (ids and counts of ordered items vary run
+to run; ordering does not):
 
 ```text
 ▶ 1. Migrator v1: schema created
@@ -57,13 +57,13 @@ run; ordering doesn't):
 { "snapshot": { "version": 2, "written": true }, "applied": [2], "preExistingInvoiceCurrency": null, "newInvoiceCurrency": "USD", ... }
 ```
 
-## What to steal for your own project
+## What to take for your own project
 
 | Feature demonstrated                                       | Read next                                                       |
 | ---------------------------------------------------------- | --------------------------------------------------------------- |
-| `Subscriptions` — `temporal`, `@AsOf`                      | [../../docs/NORM-Temporal.md](../../docs/NORM-Temporal.md)      |
-| `Invoices` — `audit`, the generated replica                | [../../docs/NORM-Audit.md](../../docs/NORM-Audit.md)            |
-| `Migrator` — `snapshot()`/`plan()`/`apply()`               | [../../docs/NORM-Migrations.md](../../docs/NORM-Migrations.md)  |
-| `db.scope()` — multi-tenant `OrganizationId`               | [../../docs/NORM-Scoping.md](../../docs/NORM-Scoping.md)        |
+| `Subscriptions`: `temporal`, `@AsOf`                       | [../../docs/NORM-Temporal.md](../../docs/NORM-Temporal.md)      |
+| `Invoices`: `audit`, the generated replica                 | [../../docs/NORM-Audit.md](../../docs/NORM-Audit.md)            |
+| `Migrator`: `snapshot()`/`plan()`/`apply()`                | [../../docs/NORM-Migrations.md](../../docs/NORM-Migrations.md)  |
+| `db.scope()`: multi-tenant `OrganizationId`                | [../../docs/NORM-Scoping.md](../../docs/NORM-Scoping.md)        |
 | `.encrypt().hash()`, `.mask()`, columns/entities generally | [../../docs/NORM-Schema.md](../../docs/NORM-Schema.md)          |
 | `db.transaction()`                                         | [../../README.md](../../README.md#transactions--escape-hatches) |
