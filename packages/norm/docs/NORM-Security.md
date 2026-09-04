@@ -660,15 +660,16 @@ Rotation reports a tally per entity (`rows`, `rotatedRows`,
 throws a `NormCryptoError` (naming entity / column / pk) if a cell won't
 decrypt with `oldKey`, and having written nothing for that row.
 
-**Sizing the window.** Rotation is crypto-bound: each cell pays a
-decrypt _and_ a re-encrypt, ≈ **44 ms/cell** with the default PBKDF2
-helper ([Per-cell cost](#per-cell-cost)) — order **~20 cells/sec/core**,
-so a million encrypted cells is hours, not minutes. The classification
-that makes it resumable is nanoseconds and the paging/UPDATE round-trips
-are dwarfed by the KDF, so cell-count × 44 ms is a good estimate;
-`rotate.bench.ts` benchmarks the per-cell cost. A cheaper KDF via the
-[crypto override seam](#crypto-overrides) is the lever if that window is
-too long.
+**Sizing the window.** What a cell costs depends on the envelope it
+carries ([Per-cell cost](#per-cell-cost)). A cell already on the
+per-process key rotates in microseconds: both the decrypt and the
+re-encrypt are plain AES-GCM operations. A cell written before that
+fast path, or under a CBC/CTR algorithm, pays one PBKDF2 derivation
+(~22 ms) to decrypt, so a table of such cells rotates at roughly 45
+cells per second per core, and a million of them takes hours. The
+paging and per-row UPDATE round-trips are small next to that derivation.
+If the window is too long, a cheaper KDF via the
+[crypto override seam](#crypto-overrides) is the lever.
 
 > **v1 is downtime-first.** Rotation rewrites rows without holding a
 > global lock or a transaction spanning the whole table; run it while the

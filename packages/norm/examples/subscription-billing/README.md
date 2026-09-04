@@ -67,15 +67,3 @@ run; ordering doesn't):
 | `db.scope()` — multi-tenant `OrganizationId`               | [../../docs/NORM-Scoping.md](../../docs/NORM-Scoping.md)        |
 | `.encrypt().hash()`, `.mask()`, columns/entities generally | [../../docs/NORM-Schema.md](../../docs/NORM-Schema.md)          |
 | `db.transaction()`                                         | [../../README.md](../../README.md#transactions--escape-hatches) |
-
-## A doc/code gap this example ran into
-
-`docs/NORM-Temporal.md` documents `repo.update(...)` on a temporal table
-as routing to `insert()` ("same thing — a new version"). The actual code
-(`Repo.ts`) throws `NormUnsupportedError` from `update()` on a temporal
-table unconditionally — `insert()` is the only write verb. `main.ts`
-scenario 3 uses `insert()` for the upgrade, per the real behavior; see
-its comment for the specific line. `tests/temporal-live.test.ts` already
-asserts the throw, so this is the code's settled behavior, not a bug —
-the prose in NORM-Temporal.md's "Writing: insert = supersede" section is
-what's stale.
