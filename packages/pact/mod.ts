@@ -1,10 +1,6 @@
 export { Pact } from './Pact.ts';
 export { deserializeGrants, serializeGrants } from './grants.ts';
-export {
-  PactError,
-  type PactErrorCode,
-  PactErrorCodes,
-} from './errors/mod.ts';
+export { PactError, type PactErrorCode, PactErrorCodes } from './errors/mod.ts';
 export type {
   ModulePermissions,
   PactCacheConfig,

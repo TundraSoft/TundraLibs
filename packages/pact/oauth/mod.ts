@@ -5,9 +5,6 @@
  *
  * @module
  */
-export {
-  type OAuthCallbackParams,
-  OAuthClient,
-} from './OAuthClient.ts';
+export { type OAuthCallbackParams, OAuthClient } from './OAuthClient.ts';
 export { IdTokenVerifier } from './IdTokenVerifier.ts';
 export { type ProviderPreset, PROVIDERS } from './providers.ts';

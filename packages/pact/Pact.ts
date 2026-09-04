@@ -13,15 +13,13 @@ import type {
   PactEvents,
   PactHooks,
   PactLoginResult,
+  PactOAuthProfile,
+  PactOAuthRedirect,
   PactOptions,
   PactPrincipal,
   PactStoredSession,
   PactStoredUser,
   PermissionBits,
-} from './types/mod.ts';
-import type {
-  PactOAuthProfile,
-  PactOAuthRedirect,
 } from './types/mod.ts';
 import { PactError } from './errors/mod.ts';
 import { deserializeGrants, serializeGrants } from './grants.ts';
@@ -528,7 +526,11 @@ export class Pact<B extends PermissionBits, M extends string>
     const ttl = this._getOption('reset')?.ttl ?? 15;
     const expiresAt = new Date(Date.now() + ttl * 60_000);
     const token = this.generatePasswordResetToken();
-    await saveResetToken({ id: await sha256(token), userId: user.id, expiresAt });
+    await saveResetToken({
+      id: await sha256(token),
+      userId: user.id,
+      expiresAt,
+    });
     return { token, expiresAt };
   }
 
@@ -847,7 +849,9 @@ export class Pact<B extends PermissionBits, M extends string>
         hook: 'saveSession (or a session cache TTL > 0)',
       });
     }
-    const seconds = Math.ceil((session.expiresAt.getTime() - Date.now()) / 1000);
+    const seconds = Math.ceil(
+      (session.expiresAt.getTime() - Date.now()) / 1000,
+    );
     await engine.set(session.id, encodeForCache(session), { expiry: seconds });
   }
 

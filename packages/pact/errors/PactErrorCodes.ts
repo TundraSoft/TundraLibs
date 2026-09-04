@@ -35,7 +35,8 @@ export const PactErrorCodes = {
    * Two permissions share the same bit, making them indistinguishable.
    * Variables: existing (first permission), permission (second), bit
    */
-  DUPLICATE_BIT: "Permissions '${existing}' and '${permission}' share bit ${bit}",
+  DUPLICATE_BIT:
+    "Permissions '${existing}' and '${permission}' share bit ${bit}",
 
   /**
    * A referenced permission is not in the bits catalog.
@@ -140,8 +141,7 @@ export const PactErrorCodes = {
    * under either policy.
    * Variables: provider, reason
    */
-  OAUTH_IDTOKEN_INVALID:
-    "OAuth id_token rejected for '${provider}': ${reason}",
+  OAUTH_IDTOKEN_INVALID: "OAuth id_token rejected for '${provider}': ${reason}",
 
   /**
    * The provider's key set could not be obtained and the instance's
