@@ -1,10 +1,10 @@
 # NORM — How-To Guide
 
-A hands-on walkthrough that builds a small multi-tenant application —
-**"Shortly"**, a link shortener with users, profiles, links, and
-visit analytics — using every major feature of NORM. Each snippet is
-drawn from the package's own live test suite, so it runs on
-PostgreSQL, MariaDB, SQLite, and MongoDB unchanged.
+A hands-on walkthrough that builds a small multi-tenant application,
+**"Shortly"**, a link shortener with users, profiles, links, and visit
+analytics, using every major feature of norm. Each snippet is drawn
+from the package's own live test suite, so it runs unchanged on
+PostgreSQL, MariaDB, SQLite, and MongoDB.
 
 ## Table of Contents
 
@@ -25,12 +25,12 @@ PostgreSQL, MariaDB, SQLite, and MongoDB unchanged.
 deno add @tundralibs/norm       # or: bunx / npx jsr add @tundralibs/norm
 ```
 
-`Norm` needs an engine — let it build one from a `database` config,
-the way every example in this guide does — and, if you use encrypted
-columns, a `secret`. Give it a `name` when an app runs more than one
-`Norm`: it prefixes every error the instance raises (`[shortly] …`),
-names the driver connection, and namespaces the
-[read cache](NORM-Caching.md) (defaults to `norm-<n>`).
+`Norm` builds its engine from a `database` config, the way every
+example in this guide does. Add a `secret` if you use encrypted
+columns. Give it a `name` when an app runs more than one `Norm`: the
+name prefixes every error the instance raises (`[shortly] …`), names
+the driver connection, and namespaces the
+[read cache](NORM-Caching.md). It defaults to `norm-<n>`.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
@@ -49,21 +49,21 @@ const norm = new Norm({
 });
 ```
 
-`dialect` is one of `postgres`, `maria`, `sqlite`, `mongo` (self-hosted)
-or `neon`, `turso`, `d1` (fetch-only, for edge/serverless runtimes). This
-guide imports the root `@tundralibs/norm` barrel throughout, which
-registers six of the seven — every dialect except `sqlite`, which needs
-its own explicit `@tundralibs/norm/engines/sqlite` import. See
-**[Browser / Worker compatibility](../README.md#browser--worker-compatibility)**
-for which of those six actually run on an edge runtime; either way,
-prefer `@tundralibs/norm/core` plus the single engine module you need
-there instead of the root barrel — see
-**[Choosing an entry point](../README.md#choosing-an-entry-point)**.
+`dialect` is one of `postgres`, `maria`, `sqlite`, or `mongo` for a
+self-hosted database, or `neon`, `turso`, or `d1` for the fetch-only
+engines that run on edge and serverless runtimes. This guide imports
+the root `@tundralibs/norm` barrel throughout, which registers every
+dialect except `sqlite`; that one needs its own
+`@tundralibs/norm/engines/sqlite` import. See
+[Browser / Worker compatibility](../README.md#browser--worker-compatibility)
+for which dialects run on an edge runtime, and prefer
+`@tundralibs/norm/core` plus the single engine module you need there;
+see [Choosing an entry point](../README.md#choosing-an-entry-point).
 
 ## 2. Model the schema
 
-Keep one entity per file and one folder per schema — the folder is the
-schema boundary. Columns are built with the chainable `Column` API;
+Keep one entity per file and one folder per schema; the folder is the
+schema boundary. Columns are built with the chainable `Column` API, and
 invalid combinations do not type-check.
 
 `models/identity/users.ts`:
@@ -93,9 +93,9 @@ export const Users = Entity('users', {
 });
 ```
 
-`models/identity/profiles.ts` — a 1:1 extension, linked by a foreign
-key. The `model` is the target's **registry key** ('Users'), not a
-table name:
+`models/identity/profiles.ts` is a 1:1 extension, linked by a foreign
+key. The `model` is the target's registry key (`'Users'`), not a table
+name:
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -118,18 +118,18 @@ export const Profiles = Entity('profiles', {
 });
 ```
 
-Both `Users` and `Profiles` above are plain tables. The third `Entity()`
-options argument also takes `temporal` (keep every version of a row,
-insert-only) and `audit` (a generated read-only history replica beside
-a normally-mutable table) — mutually exclusive with each other — plus a
-`cache: <minutes>` TTL for join-free reads. See
+`Users` and `Profiles` are plain tables. The options argument of
+`Entity()` also takes `temporal` (keep every version of a row; the
+table becomes insert-only), `audit` (a generated read-only history
+replica beside a normally mutable table), and a `cache: <minutes>` TTL
+for join-free reads. `temporal` and `audit` are mutually exclusive. See
 [Temporal](NORM-Temporal.md), [Audit](NORM-Audit.md), and
 [Caching](NORM-Caching.md).
 
 Group entities into a schema and compose the schemas into a typed
 database handle. `use()` resolves foreign keys across schema
-boundaries, so `Links.ownerId → Users` works even though they live in
-different schemas.
+boundaries, so `Links.ownerId → Users` works even though the two live
+in different schemas.
 
 ```typescript ignore
 import { Schema } from '@tundralibs/norm';
@@ -145,9 +145,9 @@ const db = norm.use(Identity, Shortener);
 
 ## 3. Let the Migrator own the schema
 
-Never hand-write DDL. Snapshot the composed registry and apply it — the
-Migrator creates the tables, indexes, digest siblings, and foreign
-keys, and records what it did.
+Do not hand-write DDL. Snapshot the composed registry and apply it. The
+Migrator creates the tables, indexes, digest siblings, and foreign keys,
+and records what it did.
 
 ```typescript ignore
 import { Migrator } from '@tundralibs/norm/migrations';
@@ -159,18 +159,19 @@ await mig.plan(); // inspect the DDL before you run it
 await mig.apply(); // execute + record in _norm_migrations
 ```
 
-Day 2, you change a model. `snapshot()` writes `0002.json`; `plan()`
-shows the diff; `apply()` runs it. A rename is a one-line hint
-(`.renamedFrom('oldName')` on the column) so data survives; a forgotten
-rename shows up as a **blocked drop** and `apply()` refuses rather than
-silently losing a column. See [Migrations](NORM-Migrations.md) for
-rebuilds, stored plans, and the advisory lock.
+On day two you change a model: `snapshot()` writes `0002.json`,
+`plan()` shows the diff, and `apply()` runs it. A rename is a one-line
+hint, `.renamedFrom('oldName')` on the column, so the data survives. A
+forgotten rename shows up as a blocked drop, and `apply()` refuses
+rather than silently losing the column. See
+[Migrations](NORM-Migrations.md) for rebuilds, stored plans, and the
+advisory lock.
 
 ## 4. Insert and read
 
 Every operation returns a `NormResult` envelope. Reads carry `data`;
 counts carry only `count`. The `id` is a ULID that also appears on the
-`call` event, so you can correlate a slow query in your logs.
+`call` event, so a slow query in your logs can be matched to its call.
 
 ```typescript ignore
 const created = await db.repo('Users').insert({
@@ -198,16 +199,15 @@ const admins = await db.repo('Users').find({ '@role': 'admin' }, {
 });
 ```
 
-Validation runs before any SQL — an out-of-range `role` or a too-short
-`displayName` is a `NormValidationError`, not a database error. See
-[Querying](NORM-Querying.md) for the full filter and projection
+Validation runs before any SQL. An out-of-range `role` or a too-short
+`displayName` is a `NormValidationError` rather than a database error.
+See [Querying](NORM-Querying.md) for the full filter and projection
 reference.
 
 ## 5. Encryption in practice
 
-`email` is encrypted, so it is ciphertext in the database — but you
-never think about that. You filter by the plaintext and NORM rewrites
-the comparison to the SHA-256 digest sibling:
+`email` is ciphertext in the database. You filter by the plaintext and
+norm rewrites the comparison to the SHA-256 digest sibling:
 
 ```typescript ignore
 // Transparent: this becomes  WHERE email_hash = sha256('ada@shortly.dev')
@@ -221,8 +221,8 @@ await db.repo('Users').insert({
 }); // rejected — collides with Ada on email_hash
 ```
 
-`password` is a one-way digest column — you write and filter by the
-plaintext, but only the digest is ever stored:
+`password` is a one-way digest column. You write and filter by the
+plaintext; only the digest is stored:
 
 ```typescript ignore
 await db.repo('Users').findOne({ '@password': 'hunter2boat' }); // matches Ada
@@ -230,22 +230,23 @@ await db.repo('Users').findOne({ '@password': 'hunter2boat' }); // matches Ada
 ```
 
 Encrypted non-string columns keep their type. `Profiles.birthday` is a
-`Date` in TypeScript and TEXT ciphertext at rest — you read a `Date`
-back. See [Security](NORM-Security.md) for the codec, masks, digest
-columns, and the crypto override hooks.
+`Date` in TypeScript and ciphertext `TEXT` at rest, and you read a
+`Date` back. See [Security](NORM-Security.md) for the codec, masks,
+digest columns, and the crypto override hooks.
 
 ## 6. Relations
 
-Because `Profiles.User` declared `reverseProject: true`, a default read
-of a user eagerly includes its profile:
+`Profiles.User` declared `reverseProject: true`, so a default read of a
+user includes its profile:
 
 ```typescript ignore
 const u = await db.repo('Users').getByPK({ id: adaId });
 u.data?.Profile; // { userId, bio, birthday } | null
 ```
 
-Project relations explicitly to shape the result — depth-1, no
-fan-out. Reverse to-many relations come back as arrays:
+Project relations explicitly to shape the result. Projections are
+depth-1 and never fan out; reverse to-many relations come back as
+arrays:
 
 ```typescript ignore
 const org = await db.repo('Organisations').find(undefined, {
@@ -272,7 +273,7 @@ const posts = await db.repo('Posts').find(undefined, {
 
 ## 7. Reports and aggregates
 
-Grouped aggregates live on the typed `find()` surface — the projected
+Grouped aggregates live on the typed `find()` surface. The projected
 columns become the `GROUP BY`:
 
 ```typescript ignore
@@ -293,24 +294,23 @@ const summary = await db.repo('Visits').find(undefined, {
 });
 ```
 
-A grouped read pages like any other: with no `limit` it stops at the
-entity's `defaultPageSize` (10), so a report over more groups than that
-is **truncated** — and a truncated report looks complete. Pass
-`limit: 0` for every group or an explicit `limit` to page it. Norm emits
-a `grouped-page-cap` warning event when a grouped read fills the default
-page, so the truncation is at least never silent. See
+A grouped read pages like any other read. With no `limit` it stops at
+the entity's `defaultPageSize` of 10, so a report with more groups than
+that is truncated, and a truncated report looks complete. Pass
+`limit: 0` for every group, or an explicit `limit` to page it. When a
+grouped read fills the default page, norm emits a `grouped-page-cap`
+warning event. See
 [Grouped reports are paged like any other read](./NORM-Querying.md#grouped-reports-are-paged-like-any-other-read).
 
-For anything the typed surface can't express, drop to the IR escape
-hatch (`db.query(ir, { entity })`, which still decrypts) or raw SQL
-(`db.raw(sql, params)`, which does not).
+For anything the typed surface cannot express, drop to the IR escape
+hatch, `db.query(ir, { entity })`, which still decrypts, or to raw SQL,
+`db.raw(sql, params)`, which does not.
 
 ## 8. Multi-tenant scoping
 
 `db.scope({...})` returns a handle whose every read and write carries
-an always-on equality filter. In a request handler you scope once to
-the current tenant and every subsequent call is confined to it — you
-can't forget the tenant filter:
+an always-on equality filter. Scope once per request to the current
+tenant and every later call is confined to it:
 
 ```typescript ignore
 function handler(req) {
@@ -323,22 +323,21 @@ function handler(req) {
 }
 ```
 
-Scoping applies to writes too: `insert` auto-fills the scope column
-(the typed handle even makes it optional), and `update` refuses a
-payload that would move a row into another tenant. `upsert` enforces
-the scope the same way — it auto-fills the scope column (optional on the
-typed handle) and refuses, on every dialect, to adopt or overwrite a row
-belonging to another tenant; declare a `unique` over
-(scope column, conflict key) and the scope is folded into the
-`ON CONFLICT` target as well. `truncate` is the exception: it takes no `WHERE`, so on a
-scoped handle it **refuses** rather than wipe every tenant — use
+Scoping applies to writes too. `insert` fills the scope column (the
+typed handle makes it optional), `update` refuses a payload that would
+move a row into another tenant, and `upsert` refuses on every dialect to
+adopt or overwrite another tenant's row. Declare a `unique` over the
+scope column and the conflict key and the scope is folded into the
+`ON CONFLICT` target as well. `truncate` takes no `WHERE`, so on a
+scoped handle it refuses rather than wipe every tenant; use
 `delete({})` to clear only the current scope. A scope column an entity
-doesn't have is gracefully skipped. See [Scoping](NORM-Scoping.md).
+does not have is skipped for that entity. See
+[Scoping](NORM-Scoping.md).
 
 ## 9. Transactions
 
 `db.transaction(fn)` commits when `fn` resolves and rolls back if it
-throws. The `tx` handle shares everything (including an active scope):
+throws. The `tx` handle shares everything, including an active scope:
 
 ```typescript ignore
 await db.transaction(async (tx) => {
@@ -348,9 +347,9 @@ await db.transaction(async (tx) => {
 });
 ```
 
-**Writing across relations.** NORM has no fluent nested-write syntax
-(`{ posts: { create: … } }`) by design — it hides ordering and a
-transaction, and drags in ambiguous `disconnect`/`set` semantics. The
+**Writing across relations.** norm has no nested-write syntax such as
+`{ posts: { create: … } }`. That shape hides ordering and a transaction
+and brings ambiguous `disconnect` and `set` semantics with it. The
 sanctioned pattern is an explicit transaction, which reads clearly and
 composes with everything else:
 
@@ -365,10 +364,10 @@ await db.transaction(async (tx) => {
 ```
 
 **Nesting.** Calling `transaction()` inside an open transaction opens a
-`SAVEPOINT` on the same engine transaction rather than throwing: on
-resolve its writes fold into the outer transaction; on throw only the
-inner block is rolled back and the error is rethrown, so you can
-`try/catch` it and continue the outer transaction.
+`SAVEPOINT` on the same engine transaction. On resolve its writes fold
+into the outer transaction; on throw only the inner block is rolled
+back and the error is rethrown, so you can `try/catch` it and continue
+the outer transaction.
 
 ```typescript ignore
 await db.transaction(async (tx) => {
@@ -381,18 +380,18 @@ await db.transaction(async (tx) => {
 });
 ```
 
-This holds for **both** JS-level failures (validation errors, thrown
-errors) **and** SQL-level failures (e.g. a constraint violation): the
-engine scopes its auto-rollback-on-failure to the innermost savepoint,
-so a failed statement undoes only the nested block — not the whole
-transaction — and the outer transaction stays usable.
+This holds for JavaScript-level failures such as validation errors and
+for SQL-level failures such as a constraint violation. The engine scopes
+its rollback-on-failure to the innermost savepoint, so a failed
+statement undoes only the nested block and the outer transaction stays
+usable.
 
-MongoDB has no transaction support and rejects `transaction()` with
-`NormUnsupportedError`.
+MongoDB and the fetch-only dialects have no transaction support and
+reject `transaction()` with `NormUnsupportedError`.
 
 ## 10. Testing your app
 
-Test against a real SQLite database — it's fast enough to be the
+Test against a real SQLite database. It is fast enough to be the
 default, and the Migrator applies your actual definitions, so you test
 the real schema:
 
@@ -411,9 +410,9 @@ await new Migrator(db, { dir: tempDir }).apply();
 ```
 
 To unit-test code above the database with no engine at all, implement
-the `Executor` seam (`execute` / `ddl` / `transaction` / capabilities) as
-a mock and pass it to `compileRuntime` — the package's own `runtime.test`
-does exactly this.
+the `Executor` seam (`execute`, `ddl`, `transaction`, and
+`capabilities`) as a mock and pass it to `compileRuntime`. The
+package's own `runtime.test` does exactly this.
 
 ---
 
