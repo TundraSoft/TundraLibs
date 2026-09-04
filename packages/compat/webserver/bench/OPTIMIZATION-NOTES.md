@@ -19,7 +19,7 @@ parameter every `handler(request, info)` receives, and (b) via the
 `onResponse`/`onError` EventEmitter hooks — `Compat-WebServer.md`'s
 "Events" section documents exactly this pattern:
 
-```typescript
+```typescript ignore
 server.on('onResponse', (name, req, info, res) => {
   console.log(`[${info.requestId}] ${req.method} ${req.url} → ${res.status}`);
 });
