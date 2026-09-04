@@ -602,6 +602,15 @@ indexes directly. ² MongoDB transactions require a replica set and are
 not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
 ⁴ MongoDB has no SQL surface; use `db.query()` with OQL IR.
 
+`neon` (PostgreSQL over HTTP), `turso` and `d1` (SQLite over HTTP) speak
+their base dialect's SQL and inherit its column above, minus what a
+one-shot fetch cannot do — `executor.capabilities` reports both gaps: no
+transactions (`db.transaction()` throws `NormUnsupportedError`; temporal
+and audit writes are best-effort) and no advisory lock, so the Migrator
+applies unlocked and without transactional DDL. See
+[Browser / Worker compatibility](#browser--worker-compatibility) for
+where each dialect actually runs.
+
 ## Guides
 
 - **[How-To Guide](docs/NORM-Guide.md)** — build a real app end to end.

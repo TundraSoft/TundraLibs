@@ -1,26 +1,28 @@
 # NORM Roadmap
 
 > **Status:** A proven, opinionated, security-first polyglot ORM — one
-> typed surface over SQLite, PostgreSQL, MariaDB, and MongoDB, live-proven
-> across three runtimes, published on JSR. The moat (in-core searchable
-> at-rest encryption, write-path validation, hash-verified migrations,
-> write-enforcing tenant scope, no codegen) is demonstrated, not asserted.
-> The remaining gaps are almost entirely **productization** — the cheaper
-> class of gap to close — not capability.
+> typed surface over seven dialects (PostgreSQL, MariaDB, SQLite, and
+> MongoDB self-hosted; Neon, Turso, and D1 over HTTP for edge runtimes),
+> live-proven across three runtimes, published on JSR. The moat (in-core
+> searchable at-rest encryption, write-path validation, hash-verified
+> migrations, write-enforcing tenant scope, no codegen) is demonstrated,
+> not asserted. The remaining gaps are almost entirely **productization**
+> — the cheaper class of gap to close — not capability.
 >
-> **Last updated:** 2026-08-23
+> **Last updated:** 2026-09-04
 
 ## Current state
 
-| Layer               | Status   | Notes                                                                                                                                                                                       |
-| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Typed model surface | Complete | Schema, querying, aggregates, scoping, transactions (with savepoints)                                                                                                                       |
-| Four-engine support | Complete | SQLite / PG / Maria / Mongo — one migration + encryption story, live-proven                                                                                                                 |
-| At-rest encryption  | Complete | `.encrypt().hash().mask()`; key rotation via `rotateKey()` (key-id envelope)                                                                                                                |
-| Migrations          | Complete | Stored reviewed plans + hash-verified apply + advisory lock                                                                                                                                 |
-| Observability       | Complete | `witness` hook bridges the metadata-only event bus to `@tundralibs/tracer`                                                                                                                  |
-| Read caching        | Complete | Opt-in per-entity TTL over `@tundralibs/cacher`; per-table namespaced pruning; view/query dep-invalidation; MEMORY/REDIS/MEMCACHED; degrades on backend failure. Joins deferred (see below) |
-| Escape hatch        | Partial  | `db.raw<R>()` typed passthrough (crypto-blind by design); `query(IR)`                                                                                                                       |
+| Layer               | Status   | Notes                                                                                                                                                                                                |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typed model surface | Complete | Schema, querying, aggregates, scoping, transactions (with savepoints)                                                                                                                                |
+| Engine support      | Complete | Seven dialects: PostgreSQL / MariaDB / SQLite / MongoDB self-hosted and live-proven; Neon / Turso / D1 fetch-only for edge runtimes (no pooling, no transactions). One migration + encryption story  |
+| At-rest encryption  | Complete | `.encrypt().hash().mask()`; key rotation via `rotateKey()` (key-id envelope); since 1.5.0 the GCM path derives one AES key per secret per process instead of PBKDF2 per cell                         |
+| Temporal & audit    | Complete | Shipped in 1.4.0: insert-only versioned tables and generated read-only audit replicas over one supersede primitive; best-effort on Mongo and the fetch-only dialects. Design in `DESIGN-Temporal.md` |
+| Migrations          | Complete | Stored reviewed plans + hash-verified apply + advisory lock                                                                                                                                          |
+| Observability       | Complete | `witness` hook bridges the metadata-only event bus to `@tundralibs/tracer`                                                                                                                           |
+| Read caching        | Complete | Opt-in per-entity TTL over `@tundralibs/cacher`; per-table namespaced pruning; view/query dep-invalidation; MEMORY/REDIS/MEMCACHED; degrades on backend failure. Joins deferred (see below)          |
+| Escape hatch        | Partial  | `db.raw<R>()` typed passthrough (crypto-blind by design); `query(IR)`                                                                                                                                |
 
 ## Planned / deferred
 
@@ -44,31 +46,19 @@ before adopting is tooling, not new query power.
 - **Thin column-type palette** — no PG enum/array/tsvector/geometry, no
   `customType`, no `CHECK`, no partial/expression indexes.
 - **After-write hooks / global subscribers** — no hook that sees the
-  persisted result, no cross-entity subscribers. (The temporal write path
-  below would land this seam.)
-- **Temporal & audit tables** — _BOTH BUILT + live-tested on all 4 engines
-  (uncommitted)._ Two effective-dating features sharing one supersede
-  primitive (`EffectiveFrom`/`EffectiveTo`, far-future sentinel
-  making one-current a cross-dialect `UNIQUE` constraint), **no actor**.
-  _Temporal_: the main table itself is versioned (declared temporal key ≠
-  pk; `insert` supersedes — the ONLY write verb; `update`/`upsert`/
-  `truncate`/`delete` all disabled). _Audit_: the main table stays
-  completely normal (unchanged write semantics) and norm mirrors every
-  insert/update/upsert/delete/truncate into a generated, FK-less,
-  read-only replica (main columns + time columns + a new surrogate pk;
-  the main pk becomes the version key). Reads are plain column filters
-  (`EffectiveTo = sentinel` for current, or the virtual `@AsOf` filter —
-  no injected predicate). Best-effort/non-atomic on Mongo + edge
-  (documented). Design in [`DESIGN-Temporal.md`](DESIGN-Temporal.md),
-  user guides in [`docs/NORM-Temporal.md`](docs/NORM-Temporal.md) and
-  [`docs/NORM-Audit.md`](docs/NORM-Audit.md).
+  persisted result, no cross-entity subscribers. (The audit mirror is an
+  internal after-write step, not a user-facing hook — the seam is still
+  unexposed.)
+- **Temporal / audit actor column** — neither feature records _who_ wrote
+  a version; shipped without an actor by design of the first cut.
 - **Cached joined reads** — the read cache covers single-table reads
   (single-table aggregates included); joined / relational reads are never
   cached (a joined entry depends on more than one table, breaking
   per-table pruning) — the sanctioned pattern is a cacheable `VIEW`.
   Caching ad-hoc runtime joins precisely would need per-key dependency
   tracking cacher doesn't expose today.
-- **Engine breadth** — no MSSQL/Oracle/Spanner (NORM uniquely adds Mongo).
+- **Engine breadth** — no MSSQL/Oracle/Spanner (NORM uniquely adds Mongo;
+  the fetch-only edge dialects arrived for free through `drivers`).
 - **Polymorphic associations / STI / embeddables.**
 
 ### Ergonomics
@@ -84,11 +74,13 @@ before adopting is tooling, not new query power.
 
 ### Performance
 
-- **PBKDF2-per-cell cliff** — 210k iterations, per-cell salt, no key cache
-  (~22 ms/cell). Needs an envelope-encryption / key-caching redesign. The
-  single largest production cost.
-- **Benchmarks** — partially delivered (`rotate.bench.ts` confirmed the
-  KDF cliff and ~1% envelope overhead). Still want the row-with-N-columns
+- **PBKDF2 residue** — the 1.5.0 per-process key applies to AES-GCM
+  cells written since; legacy per-message-salt envelopes (until
+  `rotateKey()` rewrites them) and the CBC/CTR modes still derive a key
+  per cell at 210k iterations.
+- **Benchmarks** — partially delivered (`rotate.bench.ts` measured the
+  pre-1.5.0 per-cell KDF cliff and ~1% envelope overhead; it predates the
+  per-process key and needs re-baselining). Still want the row-with-N-columns
   and page-of-M-rows aggregate shapes over a mock executor (isolating
   NORM's own overhead from DB latency), a hashed-filter-rewrite bench, and
   `Norm.compare.bench.ts` (NORM vs raw `db.raw` — "what the ORM costs me").
@@ -97,14 +89,15 @@ before adopting is tooling, not new query power.
 ### Tooling / maintainability
 
 - **Studio / GUI data browser.**
-- **`Repo.ts` maintainability debt** — a ~2,500-line single class with
-  scattered dialect-string knowledge and many `as` casts.
+- **`Repo.ts` maintainability debt** — a ~4,000-line file (three accessor
+  classes) with scattered dialect-string knowledge and ~165 `as` casts.
 
 ## Moat — do not regress
 
 Searchable in-core at-rest encryption (`.encrypt().hash()` transparent
 filter rewrite, plus `.mask()`); ONE typed surface across
-SQLite/PG/Maria/**Mongo**; apply-time hash-verified migration plans with
+SQLite/PG/Maria/**Mongo** and the fetch-only edge dialects; apply-time
+hash-verified migration plans with
 locks and crypto rebuild; write-path Guardian validation; no
 codegen/decorators/engine-binary; write-enforcing `db.scope`; a mock
 executor seam alongside one engine-parametrized live suite; a

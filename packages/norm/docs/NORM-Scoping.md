@@ -117,7 +117,7 @@ covers (`42P10` / _"does not match any PRIMARY KEY or UNIQUE
 constraint"_), so NORM cannot simply append the scope column to it;
 and MariaDB's `ON DUPLICATE KEY UPDATE` ignores the target entirely,
 matching on **any** unique key. So the guarantee is enforced one level
-up, identically on all four dialects:
+up, identically on every dialect:
 
 - **Pre-flight scope probe (always, every dialect).** Before the
   statement runs, `upsert` asks the database whether any row this write
@@ -173,7 +173,7 @@ conflict key is globally unique and the engine matches on it alone,
 **adopt** it into the active scope (the auto-filled scope value is set
 onto the matched row). This is a residual race, not a routine outcome —
 it needs a concurrent cross-scope writer on the same key in that narrow
-window — but it is real on all four dialects, including document stores,
+window — but it is real on every dialect, including document stores,
 which match on the conflict key alone. The per-scope `unique` above
 closes both limits: it folds the scope into the conflict target, so the
 isolation becomes a schema invariant no concurrent writer can race, and
