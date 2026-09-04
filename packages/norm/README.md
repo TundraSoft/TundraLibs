@@ -582,28 +582,30 @@ hooks, and per-cell crypto on encrypted columns).
 
 ## Supported databases
 
-| Feature                       | PostgreSQL | MariaDB/MySQL | SQLite | MongoDB |
-| ----------------------------- | ---------- | ------------- | ------ | ------- |
-| CRUD, filters, projections    | ✅         | ✅            | ✅     | ✅      |
-| Relations (join / `$lookup`)  | ✅         | ✅            | ✅     | ✅      |
-| At-rest encryption + digests  | ✅         | ✅            | ✅     | ✅      |
-| Aggregates (GROUP BY)         | ✅         | ✅            | ✅     | ✅      |
-| Migrations                    | ✅         | ✅            | ✅     | ⚠️¹     |
-| Transactions                  | ✅         | ✅            | ✅     | ❌²     |
-| `$exists` to-many filter lift | ✅         | ✅            | ✅     | ❌³     |
-| Raw SQL (`db.raw`)            | ✅         | ✅            | ✅     | ❌⁴     |
+| Feature                       | PostgreSQL | Neon | MariaDB/MySQL | SQLite | Turso | D1  | MongoDB |
+| ----------------------------- | ---------- | ---- | ------------- | ------ | ----- | --- | ------- |
+| CRUD, filters, projections    | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
+| Relations (join / `$lookup`)  | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
+| At-rest encryption + digests  | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
+| Aggregates (GROUP BY)         | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
+| Migrations                    | ✅         | ⚠️⁵  | ✅            | ✅     | ⚠️⁵   | ⚠️⁵ | ⚠️¹     |
+| Transactions                  | ✅         | ❌⁶  | ✅            | ✅     | ❌⁶   | ❌⁶ | ❌²     |
+| `$exists` to-many filter lift | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ❌³     |
+| Raw SQL (`db.raw`)            | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ❌⁴     |
 
 ¹ MongoDB is schemaless, so the Migrator does not own its schema; create
 indexes directly. ² MongoDB transactions require a replica set and are
 not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
-⁴ MongoDB has no SQL surface; use `db.query()` with OQL IR.
+⁴ MongoDB has no SQL surface; use `db.query()` with OQL IR. ⁵ Neon,
+Turso, and D1 migrate without the advisory lock and without transactional
+DDL, so a version that fails halfway resumes from its checkpoint, as on
+MariaDB. ⁶ A fetch dialect sends one request per statement, so
+`db.transaction()` throws `NormUnsupportedError` and temporal and audit
+writes are best-effort.
 
-`neon` (PostgreSQL over HTTP), `turso`, and `d1` (SQLite over HTTP) speak
-their base dialect's SQL and inherit its column above, except for what a
-one-shot fetch cannot do. `executor.capabilities` reports both gaps: no
-transactions, so `db.transaction()` throws `NormUnsupportedError` and
-temporal and audit writes are best-effort, and no advisory lock, so the
-Migrator applies unlocked and without transactional DDL. See
+Neon speaks PostgreSQL's SQL and Turso and D1 speak SQLite's, each
+through its base dialect's translator, and `executor.capabilities`
+reports the two gaps above. See
 [Browser / Worker compatibility](#browser--worker-compatibility) for
 where each dialect runs.
 
