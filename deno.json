@@ -116,6 +116,7 @@
       "**/tsconfig.json",
       "**/*.test.ts",
       "**/*.bench.ts",
+      "**/bench/**",
       "**/fixtures/**",
       "**/tests/**",
       "**/test-fixtures/**",
