@@ -121,8 +121,10 @@ const main = () => {
           return match;
         }
         const [file, anchor] = target.split('#', 2);
-        if (!file.endsWith('.md')) return match;
-        const resolved = path.normalize(path.join(dir, file));
+        const resolved = path.normalize(path.join(dir, file)).replace(
+          /\/$/,
+          '',
+        );
         const suffix = anchor ? `#${anchor}` : '';
 
         const wiki = wikiNameOf(resolved);
@@ -132,13 +134,18 @@ const main = () => {
         if (wiki) return `](${wiki.replace(/\.md$/, '')}${suffix})`;
 
         // Exists in the repo but is not a wiki page — deep-link to GitHub.
+        // A file (source, a non-synced markdown page) goes to `blob`; a
+        // directory (an example project) goes to `tree`. Left relative, a
+        // link like `](core.ts)` would resolve against the flat wiki and 404.
         try {
-          if (Deno.statSync(resolved).isFile) {
+          const stat = Deno.statSync(resolved);
+          if (stat.isFile || stat.isDirectory) {
             if (repo) {
-              return `](https://github.com/${repo}/blob/${ref}/${resolved}${suffix})`;
+              const kind = stat.isFile ? 'blob' : 'tree';
+              return `](https://github.com/${repo}/${kind}/${ref}/${resolved}${suffix})`;
             }
             warnings.push(
-              `${src}: link to non-wiki file '${target}' left as-is (no --repo)`,
+              `${src}: link to non-wiki path '${target}' left as-is (no --repo)`,
             );
             return match;
           }
