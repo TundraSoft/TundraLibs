@@ -28,10 +28,8 @@
   "main": "mod.ts",
   "exports": {
     ".": "./mod.ts",
-    "./authz": "./authz/mod.ts",
-    "./oauth": "./oauth/mod.ts",
-    "./types": "./types/mod.ts",
-    "./errors": "./errors/mod.ts"
+    "./errors": "./errors/mod.ts",
+    "./types": "./types/mod.ts"
   },
   "engines": {
     "node": ">=22"
@@ -40,6 +38,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@tundralibs/cacher": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",
     "@tundralibs/id": "workspace:*",

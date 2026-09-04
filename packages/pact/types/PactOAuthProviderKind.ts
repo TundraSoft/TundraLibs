@@ -1,14 +1,6 @@
 /**
- * @fileoverview Built-in OAuth provider identifiers for `@tundralibs/pact`.
- * @module
+ * Built-in OAuth provider presets. `OIDC` is the generic
+ * discovery-driven preset covering any spec-compliant issuer
+ * (Auth0, Cognito, Entra, Keycloak, …); more named presets are additive.
  */
-
-/** Built-in provider presets (endpoints + scopes + profile normalizer). */
-export type PactOAuthProviderKind =
-  | 'GOOGLE'
-  | 'GITHUB'
-  | 'MICROSOFT'
-  | 'DISCORD'
-  | 'FACEBOOK'
-  | 'APPLE'
-  | 'OIDC';
+export type PactOAuthProviderKind = 'GITHUB' | 'GOOGLE' | 'OIDC';

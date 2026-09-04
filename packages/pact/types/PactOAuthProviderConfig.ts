@@ -1,55 +1,40 @@
-/**
- * @fileoverview OAuth provider-instance configuration for
- * `@tundralibs/pact`. Federated identity flows through the
- * `getUser({by:'OAUTH'})` and `createUser` hooks, so the link-vs-create
- * policy lives in app code — there is no `map` callback.
- *
- * @module
- */
-
-import type { PactClaimSpec } from './PactClaimSpec.ts';
 import type { PactOAuthProviderKind } from './PactOAuthProviderKind.ts';
 
-/** Configuration for one OAuth provider instance (`oauth` option entry). */
+/**
+ * One configured OAuth provider instance. The `oauth` option is a record
+ * of instance name → config; the name IS the login-method name, and
+ * multiple instances of one kind may coexist.
+ */
 export type PactOAuthProviderConfig = {
-  /** Which preset drives endpoints + profile normalization. */
-  provider: PactOAuthProviderKind;
+  kind: PactOAuthProviderKind;
   clientId: string;
-  /**
-   * Client secret — omit for public PKCE-only clients. Apple's "secret" is
-   * a short-lived ES256 JWT the consumer mints out-of-band.
-   */
+  /** Absent = public client; the exchange then relies on PKCE alone. */
   clientSecret?: string;
-  /** Redirect URI registered with the provider. */
+  /** Must EXACTLY match the URI registered with the provider. */
   redirectUri: string;
-  /** Override the preset's default scopes. */
-  scopes?: string[];
-  /** `OIDC` preset only: the issuer URL for discovery. */
-  issuer?: string;
-  /** `MICROSOFT` preset only: tenant id. Defaults to `common`. */
-  tenant?: string;
-  /** Extra authorization-URL query params (merged over the preset's). */
-  authParams?: Record<string, string>;
+  /** Overrides the preset's default scopes. */
+  scopes?: readonly string[];
   /**
-   * Declared scope-dependent claims (output name → {@link PactClaimSpec}).
-   * Drives both ends: merged into the OIDC `claims` request parameter on
-   * OIDC-speaking presets, and extracted + sanitized from the raw payload
-   * into `profile.claims` on callback. Fail-soft — missing/uncastable
-   * claims are absent. The right `scopes` still gate what providers
-   * actually return.
+   * `OIDC` kind only: the https issuer used for endpoint discovery and
+   * as the id_token trust anchor.
    */
-  claims?: Record<string, PactClaimSpec>;
+  issuer?: string;
   /**
-   * How strictly to treat an unobtainable JWKS when verifying the
-   * `id_token`. A bad signature or claim is rejected under either setting.
-   *
+   * id_token availability policy: `'PREFERRED'` degrades to
+   * claim-validated decoding when the provider's key set is unreachable;
+   * `'REQUIRED'` fails the login instead. Signature and claim failures
+   * are fatal under both.
    * @default 'PREFERRED'
    */
-  idTokenVerification?: 'PREFERRED' | 'REQUIRED';
+  idToken?: 'PREFERRED' | 'REQUIRED';
   /**
-   * How long a fetched JWKS stays cached, in milliseconds.
-   *
-   * @default 3600000
+   * Create the user on first login via the `createUser` hook. Without it
+   * an unlinked identity throws `OAUTH_UNLINKED`.
    */
-  jwksCacheTtl?: number;
+  autoProvision?: boolean;
+  /**
+   * Extra authorization-URL params. Cannot override the generated
+   * `state`/PKCE/`nonce`/`redirect_uri`.
+   */
+  authParams?: Record<string, string>;
 };

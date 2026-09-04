@@ -5,10 +5,8 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
-    "./authz": "./authz/mod.ts",
-    "./oauth": "./oauth/mod.ts",
-    "./types": "./types/mod.ts",
-    "./errors": "./errors/mod.ts"
+    "./errors": "./errors/mod.ts",
+    "./types": "./types/mod.ts"
   },
   "imports": {}
 }
