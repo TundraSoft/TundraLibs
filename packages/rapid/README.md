@@ -436,8 +436,10 @@ routes. Error pages resolve through the `ui.errorTemplates` registry
 to swaps — and `ui.history: true` the history module: opt-in push-state
 per interaction (`data-push` / `rapid.history.push()`), no DOM cache
 (back re-fetches), `document.title` synced from `rapid-title`.
-`ui.enabled: false` turns a replica API-only from YAML. `htmlDocument()`, `withQuery()`, `ctx.isSwap`, typed view
-projections, and `testing`'s `view()` / `swap: true` round out the layer. See
+`ui.enabled: false` turns a replica API-only from YAML. `htmlDocument()`, `withQuery()`, `when()` / `each()`
+(value-truthiness branches and lists with an empty state — `0 && …` would
+render the `0`), `ctx.isSwap`, typed view projections, and `testing`'s
+`view()` / `swap: true` round out the layer. See
 [docs/Rapid-UI.md](docs/Rapid-UI.md) for the full contract and
 [`examples/dashboard/main.ts`](examples/dashboard/main.ts) for a runnable page.
 

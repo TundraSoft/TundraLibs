@@ -37,7 +37,8 @@ export const UserList = template<Users>((data) =>
 
 - `` html`…` `` escapes **every** interpolated value (`& < > " '`); nested
   `Html` composes without double-escaping; arrays join with `''`; `null` /
-  `undefined` / `false` render as `''` (so `cond && html\`…\`` works).
+  `undefined` / `false` render as `''` (so `cond && html\`…\``works for a
+  BOOLEAN`cond`).`0`and`''`render as text — branch on a value with`when()`(below), never`value && …`.
 - `raw(string)` is the ONLY unescaped path — one greppable audit point. The
   framework never calls it internally.
 - Templates are pure and synchronous — async work belongs in the handler.
@@ -54,6 +55,39 @@ export const UserList = template<Users>((data) =>
   elements (`<script>`/`<style>` — never interpolate into them). `raw()`
   is the single opt-out for TRUSTED markup; these context rules are the
   other half of the audit.
+
+## Keeping large pages readable
+
+Templates are TypeScript values, so control flow is expression-form (like
+JSX) — a big page written as one template turns into nested ternaries.
+Four habits keep it flat:
+
+- **Compute above the markup.** Branches and derived lists are plain
+  variables; the `html` block interpolates names, not logic.
+- **Split into components.** A page is a tree of small `template()`s
+  (the shipped examples run 5–8 per page); shared ones in `views/`, a
+  module's beside it as `<Module>.views.ts` (see Recipes).
+- **`when` / `each`** for the two shapes `&&`/`.map` handle worst — a
+  value-truthiness branch (`0`/`''` would leak as text) and a list with an
+  empty state:
+
+  ```ts ignore
+  const Cart = template<{ items: Item[]; credit: number }>((d) =>
+    html`<ul>${
+      each(d.items, (i) =>
+        html`<li>${i.name}</li>`, () =>
+        html`<li class="muted">Your cart is empty</li>`)
+    }</ul>
+    ${when(d.credit, (c) => html`<p>Credit: ${c}</p>`)}`
+  );
+  ```
+
+  Both take callbacks, so only the taken branch is evaluated and `when`
+  hands over the narrowed value.
+- **Editor support.** Extensions that highlight lit-style `` html`…` ``
+  templates (VS Code's lit-plugin family) give HTML colouring, tag
+  matching, and auto-indent inside the tag. Truly static chrome can also
+  live in a real `.html` file — see the designer-handoff recipe.
 
 ## Wiring routes
 

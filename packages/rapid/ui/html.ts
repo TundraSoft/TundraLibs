@@ -65,7 +65,9 @@ const escapeHtml = (value: string): string =>
  * One interpolated value → its markup string: `Html` passes through
  * un-re-escaped; arrays resolve element-wise and join with `''`;
  * `null` / `undefined` / `false` render as `''` (so `cond && html\`…\``
- * works); everything else goes through `String()` then escaping.
+ * works for BOOLEAN conditions); everything else — `0` and `''`
+ * included — goes through `String()` then escaping, which is why a
+ * value-truthiness branch belongs in `when()`, not `&&`.
  */
 const resolve = (value: unknown): string => {
   if (value === null || value === undefined || value === false) return '';

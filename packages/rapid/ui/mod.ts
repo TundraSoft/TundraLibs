@@ -10,6 +10,7 @@
 
 export { fingerprintAssets } from './assets.ts';
 export { DefaultErrorPage } from './errorPage.ts';
+export { each, when } from './flow.ts';
 export { formState } from './formState.ts';
 export { Html, html, htmlDocument, raw, render, template } from './html.ts';
 export { UI_HISTORY, UI_HISTORY_ETAG } from './history.ts';
