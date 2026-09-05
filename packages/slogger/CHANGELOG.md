@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.2.2...slogger-v1.2.3) (2026-09-05)
+
+
+### Documentation
+
+* **slogger:** tell the reader to install utils for SyslogFacilities ([#629](https://github.com/TundraSoft/TundraLibs/issues/629)) ([354d304](https://github.com/TundraSoft/TundraLibs/commit/354d304f68e0b78a54fb77266900c491e3a09b3d))
+
 ## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.2.1...slogger-v1.2.2) (2026-08-25)
 
 
