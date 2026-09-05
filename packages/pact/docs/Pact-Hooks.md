@@ -1,165 +1,120 @@
-# Hooks — the storage seam
+# Hooks
 
-pact owns no storage. Users, sessions, api keys, and tokens live in YOUR
-database under YOUR schema; pact reaches them through `hooks` — a flat
-object of **optional, promise-returning functions**. No adapter interface,
-no base class to extend, no generated tables: each hook is one obvious
-read or write, and you implement only the ones the features you enable
-need.
+The storage seam: flat, optional, Promise-friendly functions that connect
+pact to your database. pact calls them, optionally caches what they return
+(see [Caching](Pact-Caching.md)), and never owns a schema. Ready-made
+tables for every hook are in [Storage](Pact-Storage.md).
 
-All crypto happens inside pact (via `@tundralibs/crypt`) **before** a hook
-runs — hooks only ever see opaque hash strings, never a password, token,
-or api-key secret.
+![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
+![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 
-One thing is deliberately **not** hook data: the JWT/HMAC signing `secret`
-(and any RS/ES private key) is engine configuration, held out of the option
-store — never put it in a table your hooks read. A store compromise must not
-also leak the key that mints tokens. See
-[Secrets & algorithms](Pact-Authentication.md).
+## Table of Contents
 
-## The one lookup: `getUser(query)`
+- [Which features need which hooks](#which-features-need-which-hooks)
+- [Stored shapes](#stored-shapes)
+- [The hooks](#the-hooks)
+- [How secrets are stored](#how-secrets-are-stored)
+- [Contract rules](#contract-rules)
 
-One hook serves every user lookup, discriminated by `by`:
+## Which features need which hooks
 
-| Query                                | Used by                                 | Must the result carry `secret`? |
-| ------------------------------------ | --------------------------------------- | ------------------------------- |
-| `{ by: 'IDENTIFIER', identifier }`   | `login('password')`, the `BASIC` scheme | yes (pbkdf2 hash)               |
-| `{ by: 'ID', id }`                   | token/session → principal resolution    | no                              |
-| `{ by: 'OAUTH', provider, subject }` | federated login mapping                 | no                              |
+Every hook is optional. A feature whose hooks are missing throws
+`MISSING_HOOK` the first time it is used, so misconfiguration is loud and
+immediate.
 
-```typescript
-import { Pact } from '@tundralibs/pact';
-import type { PactStoredUser } from '@tundralibs/pact/types';
-
-declare const db: {
-  byEmail(email: string): Promise<PactStoredUser | null>;
-  byId(id: string): Promise<PactStoredUser | null>;
-  byOAuth(provider: string, subject: string): Promise<PactStoredUser | null>;
-};
-
-const pact = Pact.create({
-  bits: { READ: 1n },
-  hooks: {
-    getUser: (q) =>
-      q.by === 'ID'
-        ? db.byId(q.id)
-        : q.by === 'IDENTIFIER'
-        ? db.byEmail(q.identifier)
-        : db.byOAuth(q.provider, q.subject),
-  },
-});
-```
+| Feature                                    | Hooks required                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `hasPermission` / `assert` / `principalOf` | `getPrincipal`, or `getUser`, or `getApiKey`                                                |
+| `register`                                 | `getUser` + `createUser`                                                                    |
+| `login` / `verifyCredentials`              | `getUser`, plus a session store (below)                                                     |
+| Session store                              | `saveSession` + `getSession` + `deleteSession` — or a `session` cache TTL (cache-only mode) |
+| `authenticate` `BEARER`                    | the session store + `getUser`/`getPrincipal`                                                |
+| `authenticate` `BASIC`                     | `getUser`                                                                                   |
+| `authenticate` `APIKEY` / `HMAC`           | `getApiKey`                                                                                 |
+| `issueApiKey` / `revokeApiKey`             | `saveApiKey` / `revokeApiKey`                                                               |
+| `logoutAll`                                | `deleteSessions`                                                                            |
+| `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                 |
+| `verifyMFA`                                | `getUser`                                                                                   |
+| OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on)                                       |
 
 ## Stored shapes
 
-The contracts are plain objects — how you persist them is your business:
+All shapes are exported from `@tundralibs/pact/types`.
 
-- **`PactStoredUser`** — `{ id, secret?, otpSecret?, grants?, status?,
-  metadata? }`. `grants` are the user's **effective** per-module masks as
-  decimal strings — compose group/role membership yourself (the
-  [`./authz` algebra](Pact-Authorization.md) makes it a one-liner) and
-  return the flat result. `status` defaults to `'ACTIVE'`; `'LOCKED'` /
-  `'DISABLED'` users cannot log in, authenticate, or pass `can`. `secret`
-  (pbkdf2 hash) and `otpSecret` (TOTP seed) are credential material — the seed
-  is a bearer secret, so encrypt it at rest and leave it OUT of the
-  `{ by: 'ID' }` result used to build a principal (that path needs only
-  `id`/`grants`/`status`/`metadata`).
-- **`PactStoredSession`** — opaque session AND refresh-family record:
-  `{ id, userId, expiresAt, generation?, rotatedAt?, revokedAt? }`.
-- **`PactStoredApiKey`** — `{ id, userId, secretHash?, secret?, grants?,
-  revokedAt? }`. Presented (`APIKEY`) keys store only `secretHash`;
-  `HMAC` signing keys must store the retrievable `secret` (encrypt at
-  rest via crypt when warranted).
-- **`PactStoredToken`** — simple static token, keyed by its sha-256:
-  `{ hash, userId, grants?, expiresAt?, revokedAt? }`. The token itself
-  is never stored.
+| Type                   | Purpose                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `PactStoredUser`       | `id`, `status`, `passwordHash?`, `mfaSecret?`, `grants`, `metadata?`                  |
+| `PactStoredApiKey`     | `id`, `userId?`, `status`, `secret` (raw at this boundary), `grants`, `metadata?`     |
+| `PactStoredSession`    | `id` (token sha-256), `userId`, `expiresAt`, `generation?`, `rotatedAt?`, `metadata?` |
+| `PactStoredResetToken` | `id` (token sha-256), `userId`, `expiresAt`                                           |
+| `PactUserQuery`        | `{by:'ID'}` \| `{by:'IDENTIFIER'}` \| `{by:'OAUTH', provider, subject}`               |
+| `PactCreateUserInput`  | What `createUser` receives, including the OAuth link on JIT provisioning              |
+| `PactPrincipal`        | What `getPrincipal` returns: `kind`, `id`, per-module bigint `grants`                 |
 
-`grants` on an api key or token **override** (replace, not intersect) the
-user's grants — a scoped key checks against its own mask, not the owner's full
-set. Two consequences: never let untrusted input flow into an issued key's
-`grants` (it is stored verbatim and becomes that key's authority), and a scoped
-key's grants **outlive a later downgrade** of the user — only a non-`ACTIVE`
-status or revoking the key removes them, so revoke over-privileged keys when a
-user's role changes.
+`grants` on stored records is the serialized form — a JSON object of module
+name to decimal bit-string, produced by `serializeGrants` and parsed by
+`deserializeGrants`. Deserialization drops `__proto__`/`constructor`/
+`prototype` keys and caps masks at 100 digits.
 
-## Hook reference
+## The hooks
 
-| Hook                 | Signature (all may be sync or async)     | Enables                                 |
-| -------------------- | ---------------------------------------- | --------------------------------------- |
-| `getUser`            | `(query) => PactStoredUser \| null`      | nearly everything — see the table below |
-| `createUser`         | `(draft) => PactStoredUser`              | `register()`, OAuth first-login         |
-| `updateUser`         | `(id, patch) => void`                    | `setPassword()`, `enrollOtp()`          |
-| `saveSession`        | `(session) => void`                      | `'OPAQUE'` sessions, refresh rotation   |
-| `getSession`         | `(id) => PactStoredSession \| null`      | 〃                                      |
-| `deleteSession`      | `(id) => void`                           | 〃 + `logout()`                         |
-| `deleteUserSessions` | `(userId) => void`                       | `logoutAll()`                           |
-| `getApiKey`          | `(keyId) => PactStoredApiKey \| null`    | `APIKEY` + `HMAC` schemes               |
-| `saveApiKey`         | `(record) => void`                       | `issueApiKey()`                         |
-| `revokeApiKey`       | `(keyId) => void`                        | optional revocation sugar               |
-| `getToken`           | `(tokenHash) => PactStoredToken \| null` | `TOKEN` scheme                          |
-| `saveToken`          | `(record) => void`                       | `issueToken()`                          |
-| `isRevoked`          | `(claims) => boolean`                    | extra verify-time JWT veto (denylists)  |
+The authoritative contracts live in the `PactHooks` JSDoc; the load-bearing
+points:
 
-### The `isRevoked` seam
+- **`getPrincipal(id)`** returns a fully composed principal: effective
+  per-module masks with groups/roles already folded in. Return `null` for
+  an unknown actor or one that must not authorize. When both `getPrincipal`
+  and `getUser` exist, `getPrincipal` wins for id-based resolution.
+- **`getUser(query)`** serves three discriminated lookups: by id, by login
+  identifier, and by OAuth link (`provider` + `subject`). Return `null` for
+  no match; never throw for absence.
+- **`createUser(input)`** persists and returns the stored record. On OAuth
+  JIT provisioning `input.oauth` carries the link (`provider`, `subject`,
+  normalized `profile`) — store it so the `by: 'OAUTH'` query finds the user
+  next login.
+- **`getApiKey(keyId)`** returns the record with `secret` decrypted — see
+  [How secrets are stored](#how-secrets-are-stored).
+- **`saveSession(session)`** should be an insert (or a
+  conditional/keyed write), not a blind upsert of arbitrary ids: session ids
+  are pact-minted, and a blind upsert lets a deleted session be resurrected
+  by a late write racing a logout.
+- **`consumeResetToken(id)`** returns and deletes in one motion, which is
+  what makes reset tokens single-use even under concurrent attempts.
 
-`isRevoked(claims)` is the one way to add revocation to an _otherwise
-stateless_ JWT: `verify()` calls it on every access token and treats `true` as
-revoked. The ideal is a fast denylist keyed on the token's `jti`/`sid` (or the
-user id) — a set in Redis, a cached bloom filter. Two constraints: it runs on
-**every** verification, so it must be O(1)/cached rather than a table scan; and
-with [`session.embedGrants`](Pact-Sessions.md) it is the **only** mid-token
-veto you have, since the principal is otherwise rebuilt from the token with no
-store read.
+Actor ids share one namespace across kinds: a user id and an API-key id
+must never collide (pact's generated `pact_ak_...` key ids make this true
+by construction; prefix your own ids if you mint them yourself).
 
-## The requiredness table
+## How secrets are stored
 
-Enabling a capability gates its hooks — the constructor throws
-`MISSING_HOOK` on a gap, at startup rather than mid-request:
+Each credential kind has one correct storage treatment, and pact's boundary
+shapes assume it:
 
-| You enable…                             | Required hooks                                 |
-| --------------------------------------- | ---------------------------------------------- |
-| authorization only                      | none                                           |
-| `password` / the `BASIC` scheme         | `getUser`                                      |
-| `oauth`                                 | `getUser` + `createUser`                       |
-| `apiKeys` (`APIKEY`/`HMAC` schemes)     | `getApiKey` + `getUser`                        |
-| `tokens` (`TOKEN` scheme)               | `getToken` + `getUser`                         |
-| `session.strategy: 'OPAQUE'` or refresh | `saveSession` + `getSession` + `deleteSession` |
+| Value                   | Treatment                                        | Why                                                              |
+| ----------------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| Password                | pbkdf2 hash (pact hashes it for you)             | Verification only ever compares hashes                           |
+| API-key secret          | Encrypt at rest, app-side                        | APIKEY comparison and HMAC recomputation both need the raw bytes |
+| TOTP seed (`mfaSecret`) | Encrypt at rest, app-side                        | TOTP computation needs the raw seed                              |
+| Session / reset tokens  | Nothing — the stored `id` is the token's sha-256 | The raw token is shown once and never stored                     |
 
-Methods with a single obvious hook (`register` → `createUser`,
-`setPassword`/`enrollOtp` → `updateUser`, `logoutAll` →
-`deleteUserSessions`, `issueApiKey` → `saveApiKey`, `issueToken` →
-`saveToken`) check at call time instead.
+Hooks return raw secrets: decrypt inside `getApiKey`/`getUser`, encrypt
+inside `saveApiKey`/your enrollment write. pact never sees or owns your
+encryption keys. The AWS SigV4 model is the precedent for retrievable API
+secrets: one secret serves both presented-secret and signature schemes.
 
-## OAuth first login: the policy is yours
+## Contract rules
 
-On a federated login pact looks up `getUser({ by: 'OAUTH', … })`; when
-that returns `null` it calls `createUser` with the **verified** profile in
-`draft.oauth`. Whether that creates a fresh account or links to an
-existing one (e.g. by verified email) is app policy — deliberately: silent
-auto-linking on an unverified email is a classic account-takeover vector,
-so pact never bakes that decision in.
+1. Return `null` for absence; throw only for real faults (a down database).
+   A thrown hook error surfaces to the caller unchanged — it is never
+   swallowed into a false "denied".
+2. Hooks may be sync or async; pact awaits everything.
+3. Statuses are yours. pact only asks "is this status in `activeStatuses`";
+   `PENDING`, `LOCKED`, `TRIAL` and friends are app vocabulary.
+4. After changing an actor's grants or status in storage, call
+   `invalidatePrincipal(id)` — with caching on, pact cannot see your
+   writes. See [Caching](Pact-Caching.md).
 
-```typescript
-import type { PactNewUser, PactStoredUser } from '@tundralibs/pact/types';
+---
 
-declare const db: {
-  byVerifiedEmail(email: string): Promise<PactStoredUser | null>;
-  link(userId: string, provider: string, subject: string): Promise<void>;
-  insert(draft: PactNewUser): Promise<PactStoredUser>;
-};
-
-// a createUser hook that links by VERIFIED provider email, else creates
-export const createUser = async (
-  draft: PactNewUser,
-): Promise<PactStoredUser> => {
-  const oauth = draft.oauth;
-  if (oauth !== undefined && oauth.profile.emailVerified === true) {
-    const existing = await db.byVerifiedEmail(oauth.profile.email ?? '');
-    if (existing !== null) {
-      await db.link(existing.id, oauth.provider, oauth.subject);
-      return existing;
-    }
-  }
-  return await db.insert(draft);
-};
-```
+[← Back to Pact](../README.md)

@@ -5,10 +5,13 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
-    "./authz": "./authz/mod.ts",
-    "./oauth": "./oauth/mod.ts",
-    "./types": "./types/mod.ts",
-    "./errors": "./errors/mod.ts"
+    "./errors": "./errors/mod.ts",
+    "./middleware": "./middleware/mod.ts",
+    "./middleware/express": "./middleware/express.ts",
+    "./middleware/fastify": "./middleware/fastify.ts",
+    "./middleware/hono": "./middleware/hono.ts",
+    "./middleware/oak": "./middleware/oak.ts",
+    "./types": "./types/mod.ts"
   },
   "imports": {}
 }

@@ -1,67 +1,66 @@
+/**
+ * @fileoverview Tests for the serialized-grants codec.
+ * @module
+ */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { combineGrants, deserializeGrants, serializeGrants } from './grants.ts';
-import { PactDefinitionError } from './errors/mod.ts';
+import { deserializeGrants, serializeGrants } from './grants.ts';
+import { PactError } from './errors/mod.ts';
 
-describe('pact.grants', () => {
-  it('combineGrants ORs masks and skips undefined sets', () => {
-    const combined = combineGrants(
-      { Post: 1n },
-      undefined,
-      { Post: 2n, Billing: 4n },
+describe('grants codec', () => {
+  it('should round-trip per-module masks through the storage form', () => {
+    const grants = deserializeGrants(
+      serializeGrants({ Post: 5n, Billing: 0n }),
     );
-    asserts.assertEquals(combined.Post, 3n);
-    asserts.assertEquals(combined.Billing, 4n);
-    asserts.assertEquals(combineGrants(), {});
+    asserts.assertStrictEquals(grants.Post, 5n);
+    asserts.assertStrictEquals(grants.Billing, 0n);
   });
 
-  it('serialize → deserialize round-trips masks as decimal strings', () => {
-    const grants = { Post: 6n, Huge: 1n << 80n };
-    const wire = serializeGrants(grants);
-    asserts.assertEquals(wire.Post, '6');
-    asserts.assertEquals(deserializeGrants(wire), grants);
-  });
-
-  it('deserialize accepts numbers and BigInts, rejects malformed values', () => {
-    asserts.assertEquals(deserializeGrants({ A: 5, B: 7n }).A, 5n);
-    for (const bad of ['', ' 5', '0x1F', '1.5', '-3', 'abc']) {
-      const err = asserts.assertThrows(
-        () => deserializeGrants({ M: bad }),
-        PactDefinitionError,
-      );
-      asserts.assertEquals(
-        (err as PactDefinitionError).code,
-        'INVALID_GRANTS',
-      );
-    }
+  it('should reject a negative or non-bigint mask on serialize', () => {
     asserts.assertThrows(
-      () => deserializeGrants({ M: -1 }),
-      PactDefinitionError,
+      () => serializeGrants({ Post: -1n }),
+      PactError,
+      'non-negative',
+    );
+    asserts.assertThrows(
+      // deno-lint-ignore no-explicit-any
+      () => serializeGrants({ Post: 5 as any }),
+      PactError,
     );
   });
 
-  it("a '__proto__' module round-trips as an own property [F2]", () => {
-    const wire = serializeGrants({ ['__proto__']: 3n });
-    asserts.assertEquals(wire['__proto__'], '3');
-    const back = deserializeGrants(wire);
-    asserts.assertEquals(back['__proto__'], 3n);
-    const combined = combineGrants(back, { ['__proto__']: 4n });
-    asserts.assertEquals(combined['__proto__'], 7n);
+  it('should drop prototype-chain keys from poisoned stored records', () => {
+    const hostile = deserializeGrants(
+      '{"__proto__":"1","constructor":"2","prototype":"3","Post":"2"}',
+    );
+    asserts.assertStrictEquals(hostile.Post, 2n);
+    asserts.assertEquals(Object.keys(hostile), ['Post']);
   });
 
-  it('deserializeGrants rejects a negative BigInt mask → INVALID_GRANTS', () => {
-    const err = asserts.assertThrows(
-      () => deserializeGrants({ Post: -3n }),
-      PactDefinitionError,
-    );
-    asserts.assertEquals((err as { code?: string }).code, 'INVALID_GRANTS');
+  it('should throw INVALID_GRANTS for malformed input', () => {
+    for (
+      const bad of [
+        'not json',
+        '[1]',
+        'null',
+        '{"Post": 2}', // number, not a decimal string
+        '{"Post": "-2"}', // negative
+        `{"Post": "${'9'.repeat(101)}"}`, // over the 100-digit parse cap
+      ]
+    ) {
+      const error = asserts.assertThrows(
+        () => deserializeGrants(bad),
+        PactError,
+      );
+      asserts.assertStrictEquals(error.code, 'INVALID_GRANTS');
+    }
   });
 
-  it('deserializeGrants rejects a number mask above 2^53 (no silent truncation)', () => {
-    const err = asserts.assertThrows(
-      () => deserializeGrants({ Post: 9007199254740993 }),
-      PactDefinitionError,
+  it('should accept a mask at the 100-digit cap', () => {
+    const big = '9'.repeat(100);
+    asserts.assertStrictEquals(
+      deserializeGrants(`{"Post":"${big}"}`).Post,
+      BigInt(big),
     );
-    asserts.assertEquals((err as { code?: string }).code, 'INVALID_GRANTS');
   });
 });

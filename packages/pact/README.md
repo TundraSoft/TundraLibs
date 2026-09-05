@@ -3,15 +3,16 @@
 **Permissions, Authentication, Control & Tokens** — a transport-agnostic
 **authentication and authorization toolkit** for Deno, Bun, Node, Cloudflare
 Workers, and the browser. It covers **RBAC** authorization over unbounded
-**BigInt bitmask** permissions; five credential schemes — password (Basic,
-PBKDF2), **JWT** Bearer sessions, opaque tokens, API keys, and **HMAC** request
-signatures; **JWT** and opaque **sessions** with **refresh-token rotation** and
-reuse detection; **TOTP** as a second factor (**MFA / 2FA**); and an in-house
-**OAuth 2.0 / OpenID Connect** client with **PKCE**, `state`, and JWKS
-`id_token` verification. Identity, credentials, and sessions live behind a flat
-set of **optional storage hooks** — plain functions, no adapter, no base class,
-no schema ownership — a lighter, bring-your-own-storage alternative to Passport,
-Lucia, or better-auth. All cryptography is delegated to
+**BigInt bitmask** permissions; four credential schemes — password (**Basic**,
+PBKDF2), **Bearer** sessions, **API keys**, and **HMAC** request signatures;
+**JWT** and opaque **sessions** with **refresh-token rotation** and reuse
+detection; **TOTP** as a second factor (**MFA / 2FA**); an **OAuth 2.0 /
+OpenID Connect** client with **PKCE**, `state`, and JWKS `id_token`
+verification; and drop-in **middleware** for express, fastify, oak, and hono.
+Identity, credentials, and sessions live behind a flat set of **optional
+storage hooks** — plain functions, no adapter, no base class, no schema
+ownership — a lighter, bring-your-own-storage alternative to Passport, Lucia,
+or better-auth. All cryptography is delegated to
 [`@tundralibs/crypt`](../crypt/README.md); OAuth HTTP runs on
 [`@tundralibs/restler`](../restler/README.md).
 
@@ -26,28 +27,30 @@ Lucia, or better-auth. All cryptography is delegated to
 ## The three boundaries
 
 - **Transport belongs to your framework.** pact never parses headers or
-  cookies, performs redirects, or owns routes. The framework extracts
-  values (splits `Authorization`, decodes Basic, holds OAuth `state`) and
-  passes them in; pact checks and validates.
-- **Storage belongs to your app.** Users, sessions, api keys live in YOUR
-  database under YOUR schema. pact reaches them through
-  [flat optional hooks](docs/Pact-Hooks.md) — implement only what the
-  features you enable need (an authorization-only pact needs zero hooks;
-  password + stateless JWT needs one).
-- **Crypto belongs to crypt.** Password hashing (salted PBKDF2), JWTs,
-  HMAC, TOTP, sha-256 — pact orchestrates, crypt computes. Your hooks
-  only ever see opaque hash strings.
+  cookies, performs redirects, or owns routes. The framework extracts values
+  and passes them in; pact checks and validates. The shipped
+  [middleware adapters](middleware/Pact-Middleware.md) do the extraction for
+  the common frameworks.
+- **Storage belongs to your app.** Users, sessions, and API keys live in your
+  database under your schema. pact reaches them through
+  [flat optional hooks](docs/Pact-Hooks.md) — implement only what the features
+  you enable need. A [suggested table structure](docs/Pact-Storage.md) covers
+  every capability if you'd rather not design the schema yourself.
+- **Crypto belongs to crypt.** Password hashing (salted PBKDF2), JWTs, HMAC,
+  TOTP, sha-256 — pact orchestrates, crypt computes.
 
 ## Documentation
 
-| Topic                                         | Description                                                            |
-| --------------------------------------------- | ---------------------------------------------------------------------- |
-| [Hooks](docs/Pact-Hooks.md)                   | The storage seam — stored shapes, every hook, the requiredness table   |
-| [Authentication](docs/Pact-Authentication.md) | `authenticate` schemes, `login` methods, registration, TOTP            |
-| [Sessions](docs/Pact-Sessions.md)             | JWT vs opaque, refresh-token rotation, reuse detection, logout         |
-| [Authorization](docs/Pact-Authorization.md)   | Bitmask permissions — `can`/`assert`, mask math, the `./authz` subpath |
-| [OAuth](docs/Pact-OAuth.md)                   | Provider presets, PKCE/state/nonce, declared claims, id_token policy   |
-| [Errors & Events](docs/Pact-Errors.md)        | Error classes, stable codes, and the event map                         |
+| Topic                                       | Description                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| [Hooks](docs/Pact-Hooks.md)                 | The storage seam — stored shapes, every hook, what each feature needs      |
+| [Storage](docs/Pact-Storage.md)             | A suggested table structure covering every pact capability                 |
+| [Sessions](docs/Pact-Sessions.md)           | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode          |
+| [OAuth](docs/Pact-OAuth.md)                 | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy      |
+| [Caching](docs/Pact-Caching.md)             | Opt-in caches, the instance name, TTLs, invalidation                       |
+| [Security](docs/Pact-Security.md)           | The error contract, enumeration resistance, bound principals, threat notes |
+| [Middleware](middleware/Pact-Middleware.md) | express / fastify / oak / hono adapters and the neutral core               |
+| [Roadmap](docs/Pact-Roadmap.md)             | Known limitations and planned work                                         |
 
 ## Installation
 
@@ -80,198 +83,170 @@ declare const db: {
   users: {
     byEmail(email: string): Promise<PactStoredUser | null>;
     byId(id: string): Promise<PactStoredUser | null>;
-    byOAuth(provider: string, subject: string): Promise<PactStoredUser | null>;
     insert(draft: unknown): Promise<PactStoredUser>;
   };
   sessions: {
-    upsert(s: PactStoredSession): Promise<void>;
+    insert(s: PactStoredSession): Promise<void>;
     get(id: string): Promise<PactStoredSession | null>;
     del(id: string): Promise<void>;
   };
 };
 
 const pact = Pact.create({
-  // authorization: module × action over BigInt masks
+  // Authorization: atomic permission bits and per-module ceilings.
+  // Modules are derived from the modulePermissions keys.
   bits: { READ: 1n, EDIT: 2n, DELETE: 4n, PUBLISH: 8n },
-  modules: { Post: ['READ', 'EDIT', 'DELETE', 'PUBLISH'], Billing: ['READ'] },
-  // tokens: configured once, delegated to @tundralibs/crypt
-  secret: 'a-256-bit-shared-secret-for-hs256!', // load from your env store
-  issuer: 'api.example.com',
-  // login methods (each optional; enabling one gates its hooks)
-  password: true,
-  // sessions: short access token + rotating refresh family
-  session: { ttl: 900, refresh: {} },
-  // the storage seam: flat, optional, promise-returning functions
+  modulePermissions: {
+    Post: ['READ', 'EDIT', 'DELETE', 'PUBLISH'],
+    Billing: ['READ'],
+  },
+  // The storage seam: flat, optional, promise-friendly functions.
   hooks: {
     getUser: (q) =>
       q.by === 'ID'
         ? db.users.byId(q.id)
         : q.by === 'IDENTIFIER'
         ? db.users.byEmail(q.identifier)
-        : db.users.byOAuth(q.provider, q.subject),
+        : Promise.resolve(null),
     createUser: (draft) => db.users.insert(draft),
-    saveSession: (s) => db.sessions.upsert(s),
+    saveSession: (s) => db.sessions.insert(s),
     getSession: (id) => db.sessions.get(id),
     deleteSession: (id) => db.sessions.del(id),
   },
 });
 
-// ── register → login → verify → authorize ───────────────────────────
-await pact.register({ identifier: 'a@x.io', password: 'hunter2!hunter2!' });
-const login = await pact.login('password', {
+// ── register → login → authenticate → authorize ─────────────────────
+await pact.register({
   identifier: 'a@x.io',
   password: 'hunter2!hunter2!',
-}); // { principal, token, refreshToken, expiresAt } | null
+  grants: { Post: 1n | 2n }, // READ | EDIT
+});
+const login = await pact.login({
+  identifier: 'a@x.io',
+  password: 'hunter2!hunter2!',
+}); // throws typed errors on failure — never returns null
 
-const principal = await pact.verify(login!.token); // Principal | null
-pact.can(principal, 'Post', 'EDIT'); // boolean
-pact.assert(principal, 'Post', 'DELETE'); // throws PactDeniedError
+const ctx = await pact.authenticate({
+  scheme: 'BEARER',
+  token: login.session.token,
+});
+// The bound principal checks against already-resolved grants: no
+// store round-trip per check.
+await ctx.principal.assert('Post', 'EDIT');
+const canPublish = await ctx.principal.hasPermission('Post', 'PUBLISH');
 
-// rotate the session without re-authenticating
-const next = await pact.refresh(login!.refreshToken!);
-await pact.logout(next!.token);
+// Or by id, from anywhere:
+await pact.hasPermission('user-42', 'Billing', 'READ'); // boolean
+await pact.logout(login.session.token);
+console.log(canPublish);
 ```
 
-> The inline `secret` is for readability only. In production it must be an
-> `HS256`-grade key (≥ 32 bytes), loaded from an env var or secret manager,
-> never committed, and never stored where your hooks can read it — see
-> [Secrets & algorithms](docs/Pact-Authentication.md). Keep the access `ttl`
-> short (it is the revocation backstop for stateless JWT) and tune the refresh
-> family `ttl` (the theft window) — see [Sessions](docs/Pact-Sessions.md).
+Failure semantics are part of the contract: authentication failures throw
+typed `PactError`s with stable codes (map `PACT_AUTH_FAILURE_CODES` to 401),
+authorization answers are booleans, and `assert` throws `PERMISSION_DENIED`.
+See [Security](docs/Pact-Security.md).
 
-## The two middlewares
+## Middleware
 
-pact slots into any `(ctx, next)` framework as two seams — extraction is
-the framework's job, checking is pact's:
+The `./middleware` subpaths ship the transport half for the common
+frameworks: an authentication handler that extracts the credential, calls
+`authenticate`, and attaches the context, plus a per-route permission guard.
 
 ```typescript
-import { Pact, PactDeniedError } from '@tundralibs/pact';
+import { Pact } from '@tundralibs/pact';
+import { oakAuth, oakGuard } from '@tundralibs/pact/middleware/oak';
 
-declare const pact: Pact;
-type Ctx = {
-  req: { headers: Headers };
-  principal?: unknown;
-  status?: number;
-};
-type Next = () => Promise<void>;
-
-// middleware 1 — authenticate: extracted credential → principal
-export const authenticate = async (ctx: Ctx, next: Next): Promise<void> => {
-  const header = ctx.req.headers.get('authorization') ?? '';
-  const space = header.indexOf(' ');
-  const [scheme, value] = space === -1
-    ? [header, '']
-    : [header.slice(0, space), header.slice(space + 1)];
-  ctx.principal = scheme === 'Bearer' && value !== ''
-    ? await pact.authenticate({ scheme: 'BEARER', token: value })
-    : null;
-  await next();
+declare const pact: Pact<{ READ: 1n }, 'Projects'>;
+declare const router: {
+  get: (path: string, ...handlers: unknown[]) => void;
 };
 
-// middleware 2 — authorize: principal → allow / deny
-export const canEditPost = async (ctx: Ctx, next: Next): Promise<void> => {
-  try {
-    pact.assert(
-      (ctx.principal ?? null) as Parameters<typeof pact.assert>[0],
-      'Post',
-      'EDIT',
-    );
-  } catch (error) {
-    if (error instanceof PactDeniedError) {
-      ctx.status = 403;
-      return;
-    }
-    throw error;
-  }
-  await next();
-};
+router.get('/projects', oakAuth(pact), oakGuard('Projects', 'READ'), () => {
+  // ctx.state.pact.principal is the authenticated, bound principal
+});
 ```
+
+`expressAuth`/`expressGuard`, `fastifyAuth`/`fastifyGuard`, and
+`honoAuth`/`honoGuard` follow the same shape, and the neutral core makes an
+adapter for any other stack a few lines. See
+[Middleware](middleware/Pact-Middleware.md).
 
 ## Highlights
 
-- **Five credential schemes** through one `authenticate()` —
-  `BASIC` (identifier+password), `BEARER` (pact-issued session token),
-  `TOKEN` (simple static token, stored by hash), `APIKEY` (key id +
-  presented secret), `HMAC` (request signature; the secret never travels).
-  See [Authentication](docs/Pact-Authentication.md).
-- **Two session strategies, one surface** — stateless `JWT` (fast, revoke at
-  expiry) or store-backed `OPAQUE` (instantly revocable); `JWT` + `refresh` is
-  the balanced middle. Pick by your revocation needs.
-  See [Sessions](docs/Pact-Sessions.md).
-- **Refresh-token rotation with reuse detection** — every refresh bumps a
-  family generation; replaying a stale token revokes the whole family and
-  fires the `refreshReuse` event. A `grace` window absorbs legitimate
-  concurrent refreshes; a long family `ttl` (default 30 days) is the window a
-  stolen-but-unused token stays live, so tune it. See
+- **Four credential schemes** through one `authenticate()` — `BASIC`
+  (identifier + password), `BEARER` (session token, opaque or JWT), `APIKEY`
+  (key id + presented secret), `HMAC` (request signature; the secret never
+  travels). Junk input collapses to a 401, never a crash.
+- **Bound principals** — `authenticate` and `principalOf(id)` return a
+  principal whose `hasPermission`/`assert` evaluate in memory, re-resolving
+  only when stale or after a revocation call. Hand-built objects have no
+  working methods, and the capability does not survive serialization. See
+  [Security](docs/Pact-Security.md).
+- **A login seam you can compose** — `verifyCredentials` proves identity
+  (and reports MFA enrollment), `createSession` mints by id; `login` is the
+  two glued together. MFA-gated logins, magic links, and impersonation are
+  app flows, not framework features.
+- **Two session strategies, one surface** — store-backed `OPAQUE` (instantly
+  revocable) or `JWT` with a rotating refresh family: every refresh bumps a
+  generation, a `grace` window absorbs concurrent refreshes, and replaying a
+  stale token revokes the whole family and fires `refreshReused`. See
   [Sessions](docs/Pact-Sessions.md).
-- **Bitmask authorization** — `module × action` over unbounded BigInt
-  masks, module-catalog validation that turns typos into thrown config
-  errors, and a dependency-free `./authz` subpath that runs in the
-  browser. See [Authorization](docs/Pact-Authorization.md).
+- **Bitmask authorization** — module × permission over unbounded BigInt
+  masks. Definition typos throw at construction; per-request junk fails
+  closed. Grants serialize through a prototype-pollution-safe codec.
 - **OAuth as helpers, not a framework** — `oauthRedirect()` (URL, state,
-  PKCE verifier, nonce) and callback verification feeding the standard
-  login pipeline. Six presets + generic `OIDC` discovery; declared claims are
-  requested AND extracted (sanitized, fail-soft). Inbound `id_token`s are
-  JWKS-verified with the algorithm pinned to the key.
-  See [OAuth](docs/Pact-OAuth.md).
-- **TOTP as plain secondary verification** — `enrollOtp()` (seed +
-  otpauth URL) and `verifyOtp()`; the app decides when to demand the
-  second step. No login state machine.
-- **Content signing** — `sign()` / `verifySignature()` for signed
-  responses, webhook payloads, and signed URLs, keyed by an
-  HKDF-derived, JWT-domain-separated secret (or your own explicit key).
-  See [Authentication](docs/Pact-Authentication.md).
-- **Events everywhere** — `register`, `login`/`loginFailed`,
-  `verifyFailed`, `denied`, `refreshReuse`, `logout`,
-  `idTokenUnverified`, via `_on<Event>` options or `.on()`. Listener
-  faults are isolated by the hardened `Events` base — an audit hook can
-  never alter an outcome. See [Errors & Events](docs/Pact-Errors.md).
+  PKCE verifier, nonce) and `oauthLogin()` feeding the standard session
+  pipeline. Seven presets plus generic OIDC discovery; inbound `id_token`s
+  are JWKS-verified with the algorithm pinned to the key. See
+  [OAuth](docs/Pact-OAuth.md).
+- **Opt-in caching with a named namespace** — no config means every check
+  hits your hooks; per-type TTLs opt in, and the instance `name` keys the
+  cache namespace so two apps on one Redis can never read each other's
+  grants. See [Caching](docs/Pact-Caching.md).
+- **TOTP as plain secondary verification** — `generateMFASecret()` /
+  `generateMFAAuthURL()` for enrollment, `verifyMFA()` to check; the app
+  decides when to demand the second step.
+- **Content signing** — `sign()` / `verifySignature()` for webhook payloads
+  and signed URLs, keyed by an HKDF-derived, JWT-domain-separated secret or
+  your own explicit key.
+- **Events everywhere** — `login`, `loginFailed`, `logout`,
+  `authenticateFailed`, `refreshReused`, `idTokenUnverified` via `.on()` or
+  `_on<event>` options. Listener faults never alter an outcome.
 
 ## Sub-paths
 
-| Import                    | Contents                                                   |
-| ------------------------- | ---------------------------------------------------------- |
-| `@tundralibs/pact`        | `Pact`, `Permissions`, grants codec, errors, all types     |
-| `@tundralibs/pact/authz`  | Dependency-free authorization core (browser-safe)          |
-| `@tundralibs/pact/oauth`  | `OAuthClient`, `IdTokenVerifier`, `PROVIDERS` (standalone) |
-| `@tundralibs/pact/types`  | The type surface                                           |
-| `@tundralibs/pact/errors` | Error classes + codes                                      |
+| Import                                | Contents                                                 |
+| ------------------------------------- | -------------------------------------------------------- |
+| `@tundralibs/pact`                    | `Pact`, the grants codec, errors, all types              |
+| `@tundralibs/pact/middleware`         | The neutral core + every framework adapter               |
+| `@tundralibs/pact/middleware/express` | express adapter only (same for `fastify`, `oak`, `hono`) |
+| `@tundralibs/pact/types`              | The type surface                                         |
+| `@tundralibs/pact/errors`             | `PactError`, codes, `PACT_AUTH_FAILURE_CODES`            |
 
 ## Examples
 
-The repo's `packages/pact/examples/` directory has nine runnable, self-contained
-mini-apps (in-memory hooks, verified on Deno/Bun/Node) — each a folder with a
-`main.ts` and its own README:
+Two runnable mini-apps live in `packages/pact/examples/`, each with its own
+README and per-runtime run commands:
 
-- **password-jwt** — the core register → login → verify → authorize → refresh →
-  logout flow
-- **opaque-sessions** — store-backed `OPAQUE` sessions with instant revocation
-- **api-keys** — issue keys, the `APIKEY` scheme, scoped grants, revocation
-- **hmac-signing** — inbound `HMAC` request signatures + outbound
-  `sign()`/`verifySignature()`
-- **simple-tokens** — opaque static bearer tokens (`TOKEN`): issue, expiry,
-  revoke
-- **rbac-authz** — the dependency-free `./authz` bitmask kernel
-- **totp-mfa** — password login + TOTP as a second factor
-- **custom-strategy** — the `strategies` escape hatch (a mock magic link)
-- **oauth-login** — the OAuth redirect (PKCE/state/nonce) + first-login linking
-  policy
+- **orbit** — a project-management API on oak exercising the whole surface:
+  register/activate, login/logout/refresh (JWT strategy), password reset,
+  API keys, HMAC, MFA, per-route authorization, and the audit-trail events.
+- **oauth-signin** — "Sign in with Google/GitHub" end to end: redirect with
+  PKCE and state, callback exchange, JIT provisioning, and the shipped oak
+  middleware. Bring your own provider credentials via env variables.
 
-```bash
-deno run packages/pact/examples/password-jwt/main.ts
-```
-
-## What pact deliberately does NOT do
+## What pact deliberately does not do
 
 Header/cookie parsing, redirects, routes, CSRF, and every other transport
-concern (the framework's); user/session **storage** (yours, via hooks —
-no schema, no adapters, no migrations); account management flows (email
-verification, password-reset delivery); per-instance / attribute
-authorization ("edit **this** post" is app logic); group/role membership
-resolution (compose effective grants in your `getUser` — the mask algebra
-in `./authz` makes it a one-liner).
+concern (the framework's — though the [middleware](middleware/Pact-Middleware.md)
+covers the common cases); user/session storage (yours, via hooks — no schema,
+no adapters, no migrations); account-management flows (email verification,
+password-reset delivery); per-instance authorization ("edit this post" is app
+logic); group/role membership resolution (compose effective grants in your
+`getUser`).
 
-See [ROADMAP.md](./ROADMAP.md) for known limitations and planned work.
+See the [Roadmap](docs/Pact-Roadmap.md) for known limitations and planned
+work.
 
 ## License
 

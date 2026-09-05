@@ -1,41 +1,74 @@
 /**
- * @fileoverview Base error class + typed metadata for `@tundralibs/pact`.
- *
- * Extends {@link BaseError} from `@tundralibs/utils` so every pact error
- * shares the project-wide contract (typed `context`, `${var}` substitution,
- * cause chains, JSON serialization). Concrete errors (one per file) set a
- * stable {@link PactErrorCode} on `context.code`; callers branch on
- * `instanceof` and/or {@link PactError.code}.
+ * @fileoverview {@link PactError} — the package base error, tagged with a
+ * code from {@link PactErrorCodes} so callers can branch without parsing
+ * messages.
  *
  * @module
  */
 
-import { BaseError } from '@tundralibs/utils';
-import type { PactErrorCode } from './PactErrorCodes.ts';
+import { BaseError, type BaseErrorJson } from '@tundralibs/utils';
+import { type PactErrorCode, PactErrorCodes } from './PactErrorCodes.ts';
 
 /**
- * Metadata carried on a {@link PactError}'s `context` — a stable `code`
- * plus whatever the throw site attaches (`module`, `permission`, …).
+ * Render bigints (and bigints nested in plain objects/arrays) to strings
+ * so the JSON form of an error context is always serializable. Non-plain
+ * objects (Dates, class instances) pass through untouched.
+ * @internal
  */
-export type PactErrorMeta = {
-  /** Stable error code — see {@link PactErrorCode}. */
-  code: PactErrorCode;
-} & Record<string, unknown>;
+const debigint = (value: unknown): unknown => {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map(debigint);
+  if (
+    value !== null && typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = debigint(v);
+    return out;
+  }
+  return value;
+};
 
 /**
- * Base error for the pact package. Concrete pact errors extend this class.
+ * Base error for `@tundralibs/pact`. The code's message template is
+ * rendered against `context` (BaseError's `${var}` substitution), so
+ * callers branch on {@link PactError.code} or `instanceof` rather than
+ * message text.
  *
- * @typeParam M - shape of the error `context`.
+ * @typeParam M - Shape of the context record.
  */
 export class PactError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends BaseError<M> {
+  /** Branch on this rather than the message text. */
+  public readonly code: PactErrorCode;
+
   /**
-   * Stable, machine-readable {@link PactErrorCode} when the throw site set
-   * one on `context.code` — branch on this instead of parsing the message.
-   * `undefined` when the site left it unset.
+   * Builds an error from a code, resolving its message template against
+   * `context`.
+   *
+   * @param code - Key into {@link PactErrorCodes}.
+   * @param context - Template variables, attached as `error.context`.
+   * @param cause - Underlying error to chain.
    */
-  get code(): PactErrorCode | undefined {
-    return (this.context as { code?: PactErrorCode }).code;
+  constructor(code: PactErrorCode, context: M = {} as M, cause?: Error) {
+    super(PactErrorCodes[code], context, cause);
+    this.code = code;
+  }
+
+  /**
+   * BaseError emits `context` as-is, and pact contexts carry bigint
+   * permission bits that would make `JSON.stringify` throw. Stringify
+   * bigints in the JSON form only — `error.context` keeps the raw
+   * values — and expose `code` alongside the standard fields. Patching
+   * `BigInt.prototype.toJSON` instead is an app-level decision a library
+   * must not make (global side effect on import).
+   */
+  public override toJSON<T extends BaseErrorJson = BaseErrorJson>(): T {
+    return {
+      ...super.toJSON<T>(),
+      code: this.code,
+      context: debigint(this.context) as Record<string, unknown>,
+    } as T;
   }
 }

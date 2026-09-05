@@ -1,16 +1,14 @@
 /**
- * @fileoverview OAuth token-set type for `@tundralibs/pact`.
- * @module
+ * Tokens returned by the provider's code exchange. Pact neither stores
+ * nor refreshes these — they ride the login result once for the
+ * application to use or discard.
  */
-
-/** Tokens returned by the code exchange. */
 export type PactOAuthTokens = {
-  accessToken: string;
-  refreshToken?: string;
-  /** OIDC identity token (JWT) when the provider issues one. */
-  idToken?: string;
-  /** Seconds until `accessToken` expires, when reported. */
-  expiresIn?: number;
-  /** Raw token-endpoint response for anything not normalized. */
-  raw: Record<string, unknown>;
+  readonly accessToken: string;
+  readonly refreshToken?: string;
+  readonly idToken?: string;
+  /** Seconds until the access token expires, when the provider says. */
+  readonly expiresIn?: number;
+  /** The verbatim token-endpoint response body. */
+  readonly raw: Record<string, unknown>;
 };

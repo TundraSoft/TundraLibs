@@ -1,27 +1,19 @@
 /**
- * @fileoverview Stored API-key contract for `@tundralibs/pact` — what the
- * `getApiKey` hook returns. One record shape serves both presentation
- * styles: `APIKEY` (secret presented, only its hash stored) and `HMAC`
- * (secret never presented — the stored secret verifies signatures).
- *
- * @module
+ * The stored API-key record. `secret` is RAW at the hook boundary: the
+ * application ENCRYPTS it at rest (never hashes — the same secret must
+ * serve both presentation and HMAC proof-of-possession) and decrypts
+ * inside its hooks.
  */
-
-/** API-key record (`APIKEY` and `HMAC` schemes). */
 export type PactStoredApiKey = {
-  /** Public key id (`<prefix>_ak_…`). */
-  id: string;
-  userId: string;
-  /** sha-256 of the shown-once secret — `APIKEY` scheme. */
-  secretHash?: string;
-  /**
-   * The signing secret — `HMAC` scheme only, which must hold the real
-   * secret to verify signatures. Store encrypted at rest (crypt
-   * `encryptAES`) when the backing store warrants it; omit entirely for
-   * presented-secret keys.
-   */
-  secret?: string;
-  /** Optional scoped grants — override the user's when present. */
-  grants?: Record<string, string>;
-  revokedAt?: number;
+  /** The key id — the actor id of an APIKEY principal. */
+  readonly id: string;
+  /** Owning user, when the key belongs to one. */
+  readonly userId?: string;
+  /** App-defined lifecycle status, gated like user status. */
+  readonly status: string;
+  /** Raw secret at this boundary; encrypt at rest, app-side. */
+  readonly secret: string;
+  /** Serialized per-module grants (see `serializeGrants`). */
+  readonly grants: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
 };

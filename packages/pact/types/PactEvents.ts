@@ -1,43 +1,39 @@
-/**
- * @fileoverview Event map for `@tundralibs/pact` — the audit seam.
- * Consumers subscribe via `_on<Event>` constructor options or `.on()`;
- * the hardened `Events` base isolates listener faults (a throwing or
- * rejecting listener can never alter an operation's outcome).
- *
- * @module
- */
-
 import type { PactPrincipal } from './PactPrincipal.ts';
 
-/** Events emitted by the `Pact` engine. */
-export type PactEvents = {
-  /** An account was provisioned via `register()`. */
-  register: (principal: PactPrincipal) => void;
-  /** A `login()` succeeded (after any session mint). */
-  login: (method: string, principal: PactPrincipal, isNew: boolean) => void;
-  /** A `login()` failed — bad credentials (no `error`) or operational. */
-  loginFailed: (method: string, error?: Error) => void;
+/**
+ * The observability seam. Every emission is fire-and-forget with
+ * listener errors isolated by the Events base, so a throwing listener
+ * can never break an auth flow. Register via `pact.on(...)` or the
+ * `_on<name>` keys of the create options.
+ */
+export type PactEvents<M extends string = string> = {
   /**
-   * A token failed verification — bad signature/claims, wrong token
-   * type, revoked, or a dead session. `verify` then resolves `null`;
-   * this event carries the typed error for audit.
+   * Successful interactive login; `method` is `'PASSWORD'` or the OAuth
+   * instance name.
    */
-  verifyFailed: (error: Error, token: string) => void;
-  /** An `assert()` was denied (fires just before the throw). */
-  denied: (
-    principal: PactPrincipal | null,
-    module: string,
-    permission: string | bigint,
-  ) => void;
-  /** A stale refresh generation was replayed — family revoked. ALERT. */
-  refreshReuse: (userId: string, familyId: string) => void;
-  /** A session/family was ended via `logout()`/`logoutAll()`. */
-  logout: (userId: string, familyId?: string) => void;
+  login: (principal: PactPrincipal<M>, method: string) => void;
   /**
-   * An `id_token` was accepted WITHOUT a signature check because the
-   * provider's JWKS could not be obtained and the instance runs the
-   * default `'PREFERRED'` policy. Claims were still validated. This is
-   * the security-relevant downgrade — alert on it.
+   * Failed interactive login. `identifier` is what the caller presented
+   * (`'<provider>:<subject>'` for OAuth); `code` is the thrown
+   * PactError code.
+   */
+  loginFailed: (identifier: string, code: string) => void;
+  /** A session ended via logout; the id is the token's sha-256. */
+  logout: (sessionId: string) => void;
+  /**
+   * `authenticate` rejected a per-request credential with one of the
+   * PACT_AUTH_FAILURE_CODES.
+   */
+  authenticateFailed: (scheme: string, code: string) => void;
+  /**
+   * An id_token's signature verification degraded to decode-only under
+   * the `'PREFERRED'` policy — claims were still validated.
    */
   idTokenUnverified: (provider: string, reason: string) => void;
+  /**
+   * A refresh token from an older generation was presented outside the
+   * grace window — the session family was revoked. Treat as a possible
+   * token theft signal.
+   */
+  refreshReused: (sessionId: string, userId: string) => void;
 };

@@ -1,53 +1,37 @@
-/**
- * @fileoverview `@tundralibs/pact` — transport-agnostic authentication &
- * authorization toolkit: BigInt-bitmask authorization, hook-backed
- * identity/sessions (flat optional callbacks — the app owns storage),
- * five credential schemes, refresh-token rotation, TOTP, and an OAuth2/
- * OIDC client. Sub-paths: `./authz` (dependency-free authorization core),
- * `./oauth` (standalone client), `./types`, `./errors`.
- *
- * @module
- */
-
 export { Pact } from './Pact.ts';
-export { Permissions } from './Permissions.ts';
-export { combineGrants, deserializeGrants, serializeGrants } from './grants.ts';
+export { deserializeGrants, serializeGrants } from './grants.ts';
 export {
-  PactDefinitionError,
-  PactDeniedError,
+  PACT_AUTH_FAILURE_CODES,
   PactError,
   type PactErrorCode,
   PactErrorCodes,
-  type PactErrorMeta,
-  PactOAuthError,
-  PactTokenError,
 } from './errors/mod.ts';
 export type {
-  PactAuthorizationUrlOptions,
-  PactClaimSpec,
-  PactClaimValue,
+  ModulePermissions,
+  PactAuthContext,
+  PactBoundPrincipal,
+  PactCacheConfig,
+  PactCacheType,
+  PactCreateUserInput,
   PactCredential,
   PactEvents,
-  PactGrants,
   PactHooks,
   PactLoginResult,
-  PactModulePermissions,
-  PactNewUser,
   PactOAuthCallbackParams,
   PactOAuthProfile,
+  PactOAuthProfileNormalizer,
   PactOAuthProviderConfig,
   PactOAuthProviderKind,
+  PactOAuthProviderPreset,
+  PactOAuthRedirect,
   PactOAuthTokens,
   PactOptions,
-  PactPermissionBits,
-  PactPermissionRef,
   PactPrincipal,
-  PactSessionConfig,
   PactStoredApiKey,
+  PactStoredResetToken,
   PactStoredSession,
-  PactStoredToken,
   PactStoredUser,
-  PactStrategy,
-  PactStrategyResult,
   PactUserQuery,
+  PactVerifiedCredentials,
+  PermissionBits,
 } from './types/mod.ts';

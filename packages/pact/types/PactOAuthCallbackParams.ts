@@ -1,29 +1,15 @@
 /**
- * @fileoverview OAuth callback parameters for `@tundralibs/pact` — the
- * credentials for `login('<oauth instance>', …)` and
- * `OAuthClient.callback`. The framework extracts `code`/`state` from the
- * provider redirect; the app supplies the `expected*` values it held since
- * `oauthRedirect()`.
- *
- * @module
+ * Callback inputs for the OAuth client — the provider's callback params
+ * plus what the consumer stowed at redirect time. The engine assembles
+ * this from `oauthLogin`'s arguments.
  */
-
-/** Parameters completing an OAuth authorization-code flow. */
 export type PactOAuthCallbackParams = {
-  /** The authorization code from the provider redirect. */
   code: string;
-  /** The PKCE verifier returned by `oauthRedirect()`. */
-  verifier: string;
-  /** The `state` the provider sent back. */
   state?: string;
-  /**
-   * The `state` returned by `oauthRedirect()`. Once supplied, a missing
-   * or mismatched callback `state` is rejected — fail-closed CSRF guard.
-   */
+  /** Fail-closed once supplied: a missing callback `state` rejects. */
   expectedState?: string;
-  /**
-   * The `nonce` returned by `oauthRedirect()`. Once supplied, the
-   * `id_token`'s `nonce` claim must match — fail-closed replay guard.
-   */
+  /** PKCE verifier from the redirect step. */
+  verifier: string;
+  /** Fail-closed once supplied, mirroring `expectedState`. */
   expectedNonce?: string;
 };

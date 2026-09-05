@@ -1,1408 +1,1044 @@
+/**
+ * @fileoverview Tests for the Pact engine: definition validation, id-based
+ * authorization, opt-in caching, register/API-key sugar, login/sessions,
+ * the credential seam, the four authenticate schemes, JWT refresh
+ * rotation, events, MFA, and content signing.
+ * @module
+ */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { hash } from '@tundralibs/crypt';
+import { Cacher } from '@tundralibs/cacher';
+import { pbkdf2Hash, sha256 } from '@tundralibs/crypt/digest';
 import { generateTOTP } from '@tundralibs/crypt/OTP';
 import { signHMAC } from '@tundralibs/crypt/sign';
-import { Pact } from './Pact.ts';
-import {
-  PactDefinitionError,
-  PactDeniedError,
-  PactTokenError,
-} from './errors/mod.ts';
+import { Pact } from './mod.ts';
+import { PactError } from './errors/mod.ts';
+import { deserializeGrants, serializeGrants } from './grants.ts';
 import type {
-  PactHooks,
+  PactPrincipal,
   PactStoredApiKey,
+  PactStoredResetToken,
   PactStoredSession,
-  PactStoredToken,
   PactStoredUser,
 } from './types/mod.ts';
 
-const BITS = { READ: 1n, EDIT: 2n, DELETE: 4n } as const;
-// ≥ 64 UTF-8 bytes so it satisfies every HS* minimum (RFC 7518 §3.2).
-const SECRET =
-  'test-secret-at-least-512-bits-long-for-the-pact-jwt-test-suite-okay';
+const HASH = await pbkdf2Hash('secret123');
 
-/** In-memory hook store — the app-side seam, five Maps and no magic. */
-function makeStore() {
-  const users = new Map<string, PactStoredUser>();
-  const sessions = new Map<string, PactStoredSession>();
-  const apiKeys = new Map<string, PactStoredApiKey>();
-  const tokens = new Map<string, PactStoredToken>();
-  const hooks: PactHooks = {
-    getUser: (q) => {
-      if (q.by === 'ID') return users.get(q.id) ?? null;
-      if (q.by === 'IDENTIFIER') {
-        return [...users.values()].find((u) =>
-          u.metadata?.email === q.identifier
-        ) ?? null;
-      }
-      return [...users.values()].find((u) =>
-        u.metadata?.oauth === `${q.provider}:${q.subject}`
-      ) ?? null;
-    },
-    createUser: (draft) => {
-      const id = `u${users.size + 1}`;
-      const user: PactStoredUser = {
-        id,
-        secret: draft.secret,
-        grants: draft.grants,
-        status: 'ACTIVE',
-        metadata: {
-          email: draft.identifier,
-          ...(draft.oauth !== undefined
-            ? { oauth: `${draft.oauth.provider}:${draft.oauth.subject}` }
-            : {}),
-          ...draft.metadata,
-        },
-      };
-      users.set(id, user);
-      return user;
-    },
-    updateUser: (id, patch) => {
-      const user = users.get(id);
-      if (user !== undefined) users.set(id, { ...user, ...patch });
-    },
-    saveSession: (s) => {
-      sessions.set(s.id, s);
-    },
-    getSession: (id) => sessions.get(id) ?? null,
-    deleteSession: (id) => {
-      sessions.delete(id);
-    },
-    deleteUserSessions: (userId) => {
-      for (const [id, s] of sessions) {
-        if (s.userId === userId) sessions.delete(id);
-      }
-    },
-    getApiKey: (id) => apiKeys.get(id) ?? null,
-    saveApiKey: (r) => {
-      apiKeys.set(r.id, r);
-    },
-    getToken: (h) => tokens.get(h) ?? null,
-    saveToken: (r) => {
-      tokens.set(r.hash, r);
-    },
-  };
-  return { users, sessions, apiKeys, tokens, hooks };
+const BASE = {
+  bits: { READ: 1n, EDIT: 2n, DELETE: 4n },
+  modulePermissions: {
+    Post: ['READ', 'EDIT', 'DELETE'],
+    Billing: ['READ'],
+  },
+} as const;
+
+async function expectCode(
+  p: Promise<unknown>,
+  code: string,
+): Promise<PactError> {
+  const error = await asserts.assertRejects(() => p, PactError);
+  asserts.assertStrictEquals(error.code, code);
+  return error;
 }
 
-describe('pact.Pact construction', () => {
-  it('throws MISSING_OPTION when bits are omitted', () => {
-    // deno-lint-ignore no-explicit-any
-    const err = asserts.assertThrows(() => Pact.create({} as any));
-    asserts.assertEquals((err as { code?: string }).code, 'MISSING_OPTION');
-  });
+function expectThrowCode(fn: () => unknown, code: string): PactError {
+  const error = asserts.assertThrows(fn, PactError);
+  asserts.assertStrictEquals(error.code, code);
+  return error;
+}
 
-  it('gates capability hooks: password without getUser → MISSING_HOOK', () => {
-    const err = asserts.assertThrows(() =>
-      Pact.create({ bits: BITS, secret: SECRET, password: true })
+/** An in-memory user/session/key/reset store wired into pact hooks. */
+function makeStore() {
+  const byId = new Map<string, PactStoredUser>();
+  const byIdentifier = new Map<string, string>();
+  const sessions = new Map<string, PactStoredSession>();
+  const keys = new Map<string, PactStoredApiKey>();
+  const resets = new Map<string, PactStoredResetToken>();
+  const store = {
+    byId,
+    byIdentifier,
+    sessions,
+    keys,
+    resets,
+    lastSetPassword: undefined as { userId: string; hash: string } | undefined,
+    seed(id: string, identifier: string, extra: Partial<PactStoredUser> = {}) {
+      byId.set(id, {
+        id,
+        status: 'ACTIVE',
+        passwordHash: HASH,
+        grants: serializeGrants({ Post: 1n }),
+        ...extra,
+      });
+      byIdentifier.set(identifier, id);
+    },
+    hooks: {
+      getUser: (q: { by: string; id?: string; identifier?: string }) => {
+        if (q.by === 'ID') return byId.get(q.id!) ?? null;
+        if (q.by === 'IDENTIFIER') {
+          const id = byIdentifier.get(q.identifier!);
+          return id === undefined ? null : byId.get(id) ?? null;
+        }
+        return null;
+      },
+      saveSession: (s: PactStoredSession) => {
+        sessions.set(s.id, s);
+      },
+      getSession: (id: string) => sessions.get(id) ?? null,
+      deleteSession: (id: string) => {
+        sessions.delete(id);
+      },
+      deleteSessions: (userId: string) => {
+        for (const [k, s] of sessions) {
+          if (s.userId === userId) sessions.delete(k);
+        }
+      },
+      saveApiKey: (k: PactStoredApiKey) => {
+        keys.set(k.id, k);
+      },
+      getApiKey: (id: string) => keys.get(id) ?? null,
+      revokeApiKey: (id: string) => {
+        keys.delete(id);
+      },
+      setPassword: (userId: string, hash: string) => {
+        store.lastSetPassword = { userId, hash };
+        const user = byId.get(userId)!;
+        byId.set(userId, { ...user, passwordHash: hash });
+      },
+      saveResetToken: (r: PactStoredResetToken) => {
+        resets.set(r.id, r);
+      },
+      consumeResetToken: (id: string) => {
+        const r = resets.get(id) ?? null;
+        resets.delete(id);
+        return r;
+      },
+    },
+  };
+  return store;
+}
+
+// =============================================================================
+// Definition
+// =============================================================================
+
+describe('Pact definition', () => {
+  it('should reject empty or junk activeStatuses', () => {
+    expectThrowCode(
+      () => Pact.create({ ...BASE, activeStatuses: [] }),
+      'INVALID_STATUSES',
     );
-    asserts.assertEquals((err as { code?: string }).code, 'MISSING_HOOK');
+    expectThrowCode(
+      () => Pact.create({ ...BASE, activeStatuses: [' '] }),
+      'INVALID_STATUSES',
+    );
   });
 
-  it('gates session hooks: OPAQUE / refresh without the trio → MISSING_HOOK', () => {
-    for (
-      const session of [
-        { strategy: 'OPAQUE' as const },
-        { refresh: {} },
-      ]
-    ) {
-      const err = asserts.assertThrows(() =>
-        Pact.create({ bits: BITS, session })
+  it('should reject malformed instance names', () => {
+    for (const bad of ['', ' padded', 'a:b', 'a__b']) {
+      expectThrowCode(
+        () => Pact.create({ ...BASE, name: bad }),
+        'INVALID_OPTION',
       );
-      asserts.assertEquals((err as { code?: string }).code, 'MISSING_HOOK');
     }
   });
 
-  it('JWT sessions with a minting method require secret → MISSING_OPTION', () => {
-    const { hooks } = makeStore();
-    const err = asserts.assertThrows(() =>
-      Pact.create({ bits: BITS, password: true, hooks })
-    );
-    asserts.assertEquals((err as { code?: string }).code, 'MISSING_OPTION');
+  it('should auto-name unnamed instances uniquely', () => {
+    const a = Pact.create({ ...BASE });
+    const b = Pact.create({ ...BASE });
+    asserts.assertMatch(a.name, /^pact-\d+$/);
+    asserts.assertNotStrictEquals(a.name, b.name);
   });
 
-  it('validates secret shape/length against the algorithm', () => {
-    const short = asserts.assertThrows(() =>
-      Pact.create({ bits: BITS, secret: 'too-short' })
+  it('should require an explicit name to cache on a shared engine', () => {
+    const error = expectThrowCode(
+      () =>
+        Pact.create({
+          ...BASE,
+          options: { cache: { engine: 'REDIS', ttl: { principal: 5 } } },
+        }),
+      'INVALID_OPTION',
     );
-    asserts.assertEquals((short as { code?: string }).code, 'INVALID_OPTION');
-    const pair = asserts.assertThrows(() =>
-      Pact.create({
-        bits: BITS,
-        secret: { privateKey: 'a', publicKey: 'b' },
-      })
-    );
-    asserts.assertEquals((pair as { code?: string }).code, 'INVALID_OPTION');
+    asserts.assertStringIncludes(error.message, 'name');
+    // MEMORY stays name-optional: per-process, collisions impossible.
+    Pact.create({ ...BASE, options: { cache: { ttl: { principal: 5 } } } });
   });
 
-  it('authorization-only construction needs zero hooks', () => {
-    const pact = Pact.create({
-      bits: BITS,
-      modules: { Post: ['READ', 'EDIT'] },
+  it('should surface a bad cache engine as CACHE_INIT_FAILED', () => {
+    expectThrowCode(
+      () =>
+        Pact.create({
+          ...BASE,
+          name: 'pact-test-bad-engine',
+          options: { cache: { engine: 'NOPE', ttl: { principal: 1 } } },
+        }),
+      'CACHE_INIT_FAILED',
+    );
+  });
+
+  it('should construct the subclass when a subclass calls create()', async () => {
+    class SubPact extends Pact<{ READ: 1n }, 'Post'> {}
+    const sub = SubPact.create({
+      bits: { READ: 1n },
+      modulePermissions: { Post: ['READ'] },
+      hooks: { getPrincipal: () => null },
     });
     asserts.assert(
-      pact.can(
-        { id: 'x', grants: { Post: 1n }, status: 'ACTIVE', metadata: {} },
-        'Post',
-        'READ',
-      ),
+      sub instanceof SubPact,
+      'create() must construct the subclass',
     );
+    asserts.assertFalse(await sub.hasPermission('ghost', 'Post', 'READ'));
   });
 });
 
-describe('pact.Pact register + password login + JWT sessions', () => {
-  const setup = () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      modules: { Post: ['READ', 'EDIT', 'DELETE'] },
-      secret: SECRET,
-      password: true,
-      hooks: store.hooks,
-    });
-    return { store, pact };
+// =============================================================================
+// Authorization
+// =============================================================================
+
+describe('Pact authorization', () => {
+  const PRINCIPALS: Record<string, PactPrincipal<'Post' | 'Billing'>> = {
+    u1: { kind: 'USER', id: 'u1', grants: { Post: 3n } },
+    ak_1: { kind: 'APIKEY', id: 'ak_1', userId: 'u1', grants: { Billing: 1n } },
+    neg: { kind: 'USER', id: 'neg', grants: { Post: -1n } },
+    // deno-lint-ignore no-explicit-any
+    junk: { kind: 'USER', id: 'junk', grants: { Post: 5 as any } },
   };
-
-  it('register hashes the password (never stored plaintext) and emits', async () => {
-    const { store, pact } = setup();
-    const registered: string[] = [];
-    pact.on('register', (p) => {
-      registered.push(p.id);
-    });
-    const principal = await pact.register({
-      identifier: 'a@x.io',
-      password: 'correct horse battery staple',
-      grants: { Post: '3' },
-    });
-    asserts.assertEquals(registered, [principal.id]);
-    const stored = store.users.get(principal.id)!;
-    asserts.assertNotEquals(stored.secret, 'correct horse battery staple');
-    asserts.assert(stored.secret!.startsWith('pbkdf2-'));
-    asserts.assertEquals(principal.grants.Post, 3n);
+  const pact = Pact.create({
+    ...BASE,
+    hooks: { getPrincipal: (id) => PRINCIPALS[id] ?? null },
   });
 
-  it('login → JWT → verify round-trips the principal', async () => {
-    const { pact } = setup();
-    await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-      grants: { Post: '3' },
-    });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assert(result !== null);
-    asserts.assert(result.token.split('.').length === 3); // compact JWT
-    asserts.assertEquals(result.refreshToken, undefined);
-    const principal = await pact.verify(result.token);
-    asserts.assert(principal !== null);
-    asserts.assertEquals(principal.grants.Post, 3n);
-  });
-
-  it('bad password / unknown user / non-ACTIVE → null + loginFailed(no error)', async () => {
-    const { store, pact } = setup();
-    const failures: Array<Error | undefined> = [];
-    pact.on('loginFailed', (_m, error) => {
-      failures.push(error);
-    });
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assertEquals(
-      await pact.login('password', { identifier: 'a@x.io', password: 'nope' }),
-      null,
+  it('should evaluate grants by id and fail closed on the unknown', async () => {
+    asserts.assert(await pact.hasPermission('u1', 'Post', 'READ'));
+    asserts.assertFalse(await pact.hasPermission('u1', 'Post', 'DELETE'));
+    asserts.assertFalse(
+      await pact.hasPermission('u1', 'Billing', 'READ'),
+      'module absent from grants',
     );
-    asserts.assertEquals(
-      await pact.login('password', { identifier: 'ghost', password: 'x' }),
-      null,
+    asserts.assertFalse(await pact.hasPermission('ghost', 'Post', 'READ'));
+  });
+
+  it('should throw PERMISSION_DENIED from assert with actor context', async () => {
+    await pact.assert('ak_1', 'Billing', 'READ');
+    const denied = await expectCode(
+      pact.assert('ak_1', 'Post', 'READ'),
+      'PERMISSION_DENIED',
     );
-    store.users.set(p.id, { ...store.users.get(p.id)!, status: 'LOCKED' });
-    asserts.assertEquals(
-      await pact.login('password', {
-        identifier: 'a@x.io',
-        password: 'pw-123456789',
-      }),
-      null,
+    asserts.assertStringIncludes(denied.message, "APIKEY 'ak_1'");
+    const ghost = await expectCode(
+      pact.assert('ghost', 'Post', 'READ'),
+      'PERMISSION_DENIED',
     );
-    asserts.assertEquals(failures, [undefined, undefined, undefined]);
+    asserts.assertStringIncludes(ghost.message, "PRINCIPAL 'ghost'");
   });
 
-  it('unknown login method throws UNKNOWN_STRATEGY', async () => {
-    const { pact } = setup();
-    const err = await asserts.assertRejects(() => pact.login('ldap', {}));
-    asserts.assertEquals((err as { code?: string }).code, 'UNKNOWN_STRATEGY');
-  });
-
-  it('custom identifierField renames the credential key', async () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: { identifierField: 'email' },
-      hooks: store.hooks,
-    });
-    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
-    const result = await pact.login('password', {
-      email: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assert(result !== null);
-  });
-
-  it('embedGrants: verify rebuilds the principal with zero store lookups', async () => {
-    const store = makeStore();
-    let idLookups = 0;
-    const hooks: PactHooks = {
-      ...store.hooks,
-      getUser: (q) => {
-        if (q.by === 'ID') idLookups++;
-        return store.hooks.getUser!(q);
-      },
-    };
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      session: { embedGrants: true },
-      hooks,
-    });
-    await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-      grants: { Post: '7' },
-    });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const principal = await pact.verify(result!.token);
-    asserts.assertEquals(principal!.grants.Post, 7n);
-    asserts.assertEquals(idLookups, 0);
-  });
-
-  it('without embedGrants verify resolves fresh — a LOCKED user dies immediately', async () => {
-    const { store, pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    store.users.set(p.id, { ...store.users.get(p.id)!, status: 'LOCKED' });
-    asserts.assertEquals(await pact.verify(result!.token), null);
-  });
-
-  it('a tampered token verifies to null and emits verifyFailed', async () => {
-    const { pact } = setup();
-    const failures: Error[] = [];
-    pact.on('verifyFailed', (error) => {
-      failures.push(error);
-    });
-    asserts.assertEquals(await pact.verify('not.a.jwt'), null);
-    asserts.assertEquals(failures.length, 1);
-  });
-
-  it('isRevoked vetoes a signature-valid token (TOKEN_REVOKED)', async () => {
-    const store = makeStore();
-    const blocked = new Set<string>();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks: { ...store.hooks, isRevoked: (c) => blocked.has(String(c.sub)) },
-    });
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assert(await pact.verify(result!.token) !== null);
-    blocked.add(p.id);
-    const failures: Error[] = [];
-    pact.on('verifyFailed', (error) => {
-      failures.push(error);
-    });
-    asserts.assertEquals(await pact.verify(result!.token), null);
-    asserts.assertEquals(
-      (failures[0] as PactTokenError).code,
-      'TOKEN_REVOKED',
+  it('should keep definition misuse loud, never a boolean', async () => {
+    await expectCode(
+      pact.hasPermission('u1', 'Billing', 'EDIT'),
+      'PERMISSION_NOT_IN_MODULE',
     );
+    await expectCode(
+      pact.hasPermission('u1', 'constructor' as never, 'READ'),
+      'UNKNOWN_MODULE',
+    );
+    await expectCode(
+      pact.hasPermission('u1', 'Post', 'toString' as never),
+      'UNKNOWN_PERMISSION',
+    );
+  });
+
+  it('should clamp hostile grants to no access', async () => {
+    asserts.assertFalse(
+      await pact.hasPermission('neg', 'Post', 'READ'),
+      '-1n mask must never grant',
+    );
+    asserts.assertFalse(
+      await pact.hasPermission('junk', 'Post', 'READ'),
+      'non-bigint mask must never grant',
+    );
+  });
+
+  it('should fail closed on padded or empty principal ids', async () => {
+    asserts.assertFalse(await pact.hasPermission(' u1', 'Post', 'READ'));
+    asserts.assertFalse(await pact.hasPermission('', 'Post', 'READ'));
+  });
+
+  it('should throw MISSING_HOOK when no resolution hook exists', async () => {
+    const bare = Pact.create({ ...BASE });
+    await expectCode(bare.hasPermission('u1', 'Post', 'READ'), 'MISSING_HOOK');
   });
 });
 
-describe('pact.Pact OPAQUE sessions', () => {
-  const setup = () => {
-    const store = makeStore();
+// =============================================================================
+// Caching
+// =============================================================================
+
+describe('Pact caching', () => {
+  function counting(options?: Parameters<typeof Pact.create>[0]['options']) {
+    let fetches = 0;
     const pact = Pact.create({
-      bits: BITS,
-      password: true,
-      session: { strategy: 'OPAQUE', ttl: 60 },
-      hooks: store.hooks,
-    });
-    return { store, pact };
-  };
-
-  it('login mints an opaque id; verify resolves; logout kills it', async () => {
-    const { pact } = setup();
-    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assert(result !== null);
-    asserts.assertFalse(result.token.includes('.')); // opaque, not a JWT
-    asserts.assert(await pact.verify(result.token) !== null);
-    await pact.logout(result.token);
-    asserts.assertEquals(await pact.verify(result.token), null);
-  });
-
-  it('an expired session verifies to null', async () => {
-    const { store, pact } = setup();
-    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    // Opaque sessions are stored under sha-256(token), not the raw token.
-    const key = await hash(result!.token);
-    const session = store.sessions.get(key)!;
-    store.sessions.set(key, { ...session, expiresAt: Date.now() - 1 });
-    asserts.assertEquals(await pact.verify(result!.token), null);
-  });
-
-  it('logoutAll ends every session for the user', async () => {
-    const { pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const creds = { identifier: 'a@x.io', password: 'pw-123456789' };
-    const a = await pact.login('password', creds);
-    const b = await pact.login('password', creds);
-    await pact.logoutAll(p.id);
-    asserts.assertEquals(await pact.verify(a!.token), null);
-    asserts.assertEquals(await pact.verify(b!.token), null);
-  });
-});
-
-describe('pact.Pact refresh rotation', () => {
-  const setup = (grace = 5) => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      session: { ttl: 60, refresh: { ttl: 3_600, grace } },
-      hooks: store.hooks,
-    });
-    return { store, pact };
-  };
-  const login = async (pact: Pact<typeof BITS>) => {
-    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
-    return (await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    }))!;
-  };
-
-  it('login issues an access+refresh pair; refresh rotates both', async () => {
-    const { pact } = setup();
-    const first = await login(pact);
-    asserts.assert(first.refreshToken !== undefined);
-    asserts.assert(await pact.verify(first.token) !== null);
-    const second = await pact.refresh(first.refreshToken!);
-    asserts.assert(second !== null);
-    asserts.assert(second.refreshToken !== first.refreshToken);
-    asserts.assert(await pact.verify(second.token) !== null);
-    // the rotated refresh token works again
-    asserts.assert(await pact.refresh(second.refreshToken!) !== null);
-  });
-
-  it('a refresh token never passes verify (TOKEN_TYPE_MISMATCH)', async () => {
-    const { pact } = setup();
-    const result = await login(pact);
-    const failures: Error[] = [];
-    pact.on('verifyFailed', (error) => {
-      failures.push(error);
-    });
-    asserts.assertEquals(await pact.verify(result.refreshToken!), null);
-    asserts.assertEquals(
-      (failures[0] as PactTokenError).code,
-      'TOKEN_TYPE_MISMATCH',
-    );
-  });
-
-  it('within grace, a concurrent refresh of the previous generation succeeds', async () => {
-    const { pact } = setup(5);
-    const first = await login(pact);
-    await pact.refresh(first.refreshToken!);
-    // Replaying the JUST-rotated generation inside the grace window is the
-    // legitimate concurrent-refresh race — allowed, no family kill.
-    const raced = await pact.refresh(first.refreshToken!);
-    asserts.assert(raced !== null);
-  });
-
-  it('with grace 0, replaying an old refresh token kills the family', async () => {
-    const { pact } = setup(0);
-    const first = await login(pact);
-    const reuse: Array<[string, string]> = [];
-    pact.on('refreshReuse', (userId, familyId) => {
-      reuse.push([userId, familyId]);
-    });
-    const second = await pact.refresh(first.refreshToken!);
-    asserts.assert(second !== null);
-    // Replay of the old generation → family revoked, event fired.
-    asserts.assertEquals(await pact.refresh(first.refreshToken!), null);
-    asserts.assertEquals(reuse.length, 1);
-    // The whole family is dead — even the newest token fails now.
-    asserts.assertEquals(await pact.refresh(second.refreshToken!), null);
-  });
-
-  it('logout via the access token kills the family', async () => {
-    const { pact } = setup();
-    const first = await login(pact);
-    await pact.logout(first.token);
-    asserts.assertEquals(await pact.refresh(first.refreshToken!), null);
-  });
-
-  it('refresh returns null when the user vanished between rotations', async () => {
-    const { store, pact } = setup();
-    const first = await login(pact);
-    store.users.clear(); // user deleted; the family is still live
-    asserts.assertEquals(await pact.refresh(first.refreshToken!), null);
-  });
-
-  it('a malformed / non-refresh token yields null (TOKEN_TYPE_MISMATCH)', async () => {
-    const { pact } = setup();
-    const first = await login(pact);
-    const failures: Error[] = [];
-    pact.on('verifyFailed', (e) => {
-      failures.push(e);
-    });
-    // the ACCESS token is not a refresh token
-    asserts.assertEquals(await pact.refresh(first.token), null);
-    // garbage isn't a JWT at all
-    asserts.assertEquals(await pact.refresh('not.a.jwt'), null);
-    asserts.assert(failures.length >= 1);
-  });
-});
-
-describe('pact.Pact logout edge cases', () => {
-  it('stateless JWT logout is a no-op (nothing to revoke)', async () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks: store.hooks, // JWT, no refresh → stateless
-    });
-    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
-    const r = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    await pact.logout(r!.token); // resolves, throws nothing
-    // the access token still verifies — stateless logout can't revoke it
-    asserts.assert(await pact.verify(r!.token) !== null);
-  });
-
-  it('OPAQUE logout of an unknown token is a silent no-op', async () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      password: true,
-      session: { strategy: 'OPAQUE' },
-      hooks: store.hooks,
-    });
-    await pact.logout('never-issued'); // no throw, no event
-  });
-
-  it('refresh() throws when refresh rotation is not configured', async () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks: store.hooks,
-    });
-    const err = await asserts.assertRejects(
-      () => pact.refresh('x'),
-      PactDefinitionError,
-    );
-    asserts.assertEquals((err as PactDefinitionError).code, 'MISSING_OPTION');
-  });
-});
-
-describe('pact.Pact authenticate schemes', () => {
-  const setup = () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      apiKeys: { prefix: 'acme' },
-      tokens: true,
-      hooks: store.hooks,
-    });
-    return { store, pact };
-  };
-
-  it('BASIC verifies identifier+password per request', async () => {
-    const { pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const ok = await pact.authenticate({
-      scheme: 'BASIC',
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assertEquals(ok?.id, p.id);
-    asserts.assertEquals(
-      await pact.authenticate({
-        scheme: 'BASIC',
-        identifier: 'a@x.io',
-        password: 'wrong',
-      }),
-      null,
-    );
-  });
-
-  it('BEARER delegates to verify()', async () => {
-    const { pact } = setup();
-    await pact.register({ identifier: 'a@x.io', password: 'pw-123456789' });
-    const result = await pact.login('password', {
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const principal = await pact.authenticate({
-      scheme: 'BEARER',
-      token: result!.token,
-    });
-    asserts.assert(principal !== null);
-  });
-
-  it('TOKEN: issueToken → authenticate; grants override; revocation', async () => {
-    const { store, pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-      grants: { Post: '7' },
-    });
-    const { token } = await pact.issueToken(p.id, {
-      grants: { Post: 1n },
-      expiresAt: Date.now() + 60_000,
-    });
-    asserts.assert(token.startsWith('pact_tk_'));
-    const principal = await pact.authenticate({ scheme: 'TOKEN', token });
-    asserts.assertEquals(principal?.grants.Post, 1n); // scoped, not the user's 7n
-    asserts.assertEquals(
-      await pact.authenticate({ scheme: 'TOKEN', token: 'pact_tk_bogus' }),
-      null,
-    );
-    for (const record of store.tokens.values()) {
-      store.tokens.set(record.hash, { ...record, revokedAt: Date.now() });
-    }
-    asserts.assertEquals(
-      await pact.authenticate({ scheme: 'TOKEN', token }),
-      null,
-    );
-  });
-
-  it('APIKEY: issueApiKey → authenticate with keyId+secret', async () => {
-    const { pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    const { id, secret } = await pact.issueApiKey(p.id);
-    asserts.assert(id.startsWith('acme_ak_'));
-    asserts.assert(secret.startsWith('acme_sk_'));
-    const principal = await pact.authenticate({
-      scheme: 'APIKEY',
-      keyId: id,
-      secret,
-    });
-    asserts.assertEquals(principal?.id, p.id);
-    asserts.assertEquals(
-      await pact.authenticate({ scheme: 'APIKEY', keyId: id, secret: 'no' }),
-      null,
-    );
-  });
-
-  it('APIKEY with a hash-only-missing record, and HMAC with no stored secret, reject', async () => {
-    const { store, pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    // A signing-style key (only `secret`, no `secretHash`) can't be presented
-    // as an APIKEY.
-    store.apiKeys.set('k_ak_1', {
-      id: 'k_ak_1',
-      userId: p.id,
-      secret: 'signing-only',
-    });
-    asserts.assertEquals(
-      await pact.authenticate({
-        scheme: 'APIKEY',
-        keyId: 'k_ak_1',
-        secret: 'signing-only',
-      }),
-      null,
-    );
-    // A presented-style key (only `secretHash`) can't verify HMAC signatures.
-    store.apiKeys.set('k_ak_2', {
-      id: 'k_ak_2',
-      userId: p.id,
-      secretHash: await (async () => 'deadbeef')(),
-    });
-    asserts.assertEquals(
-      await pact.authenticate({
-        scheme: 'HMAC',
-        keyId: 'k_ak_2',
-        signature: await signHMAC('x', 'whatever'),
-        payload: 'x',
-      }),
-      null,
-    );
-    // unknown key id → null (both schemes)
-    asserts.assertEquals(
-      await pact.authenticate({
-        scheme: 'APIKEY',
-        keyId: 'ghost',
-        secret: 's',
-      }),
-      null,
-    );
-  });
-
-  it('HMAC verifies a signature against the stored signing secret', async () => {
-    const { store, pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    store.apiKeys.set('sign_ak_1', {
-      id: 'sign_ak_1',
-      userId: p.id,
-      secret: 'the-signing-secret',
-    });
-    const payload = 'POST /orders {"total":42}';
-    const signature = await signHMAC(payload, 'the-signing-secret');
-    const principal = await pact.authenticate({
-      scheme: 'HMAC',
-      keyId: 'sign_ak_1',
-      signature,
-      payload,
-    });
-    asserts.assertEquals(principal?.id, p.id);
-    asserts.assertEquals(
-      await pact.authenticate({
-        scheme: 'HMAC',
-        keyId: 'sign_ak_1',
-        signature,
-        payload: 'POST /orders {"total":9000}', // tampered
-      }),
-      null,
-    );
-  });
-
-  it("signAs signs with the key's stored secret — matches signHMAC directly", async () => {
-    const { store, pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    store.apiKeys.set('sign_ak_2', {
-      id: 'sign_ak_2',
-      userId: p.id,
-      secret: 'the-signing-secret',
-    });
-    const content = 'the response body';
-    const signature = await pact.signAs('sign_ak_2', content);
-    asserts.assertEquals(
-      signature,
-      await signHMAC(content, 'the-signing-secret'),
-    );
-  });
-
-  it('signAs resolves null for unknown, revoked, or presented-secret-only keys', async () => {
-    const { store, pact } = setup();
-    const p = await pact.register({
-      identifier: 'a@x.io',
-      password: 'pw-123456789',
-    });
-    asserts.assertEquals(await pact.signAs('ghost', 'x'), null);
-
-    store.apiKeys.set('revoked_ak', {
-      id: 'revoked_ak',
-      userId: p.id,
-      secret: 's',
-      revokedAt: Date.now(),
-    });
-    asserts.assertEquals(await pact.signAs('revoked_ak', 'x'), null);
-
-    store.apiKeys.set('presented_ak', {
-      id: 'presented_ak',
-      userId: p.id,
-      secretHash: 'deadbeef',
-    });
-    asserts.assertEquals(await pact.signAs('presented_ak', 'x'), null);
-  });
-
-  it('signAs requires the getApiKey hook (MISSING_HOOK at call time without it)', async () => {
-    const pact = Pact.create({ bits: BITS });
-    const err = await asserts.assertRejects(
-      () => pact.signAs('any', 'x'),
-      PactDefinitionError,
-    );
-    asserts.assertEquals((err as PactDefinitionError).code, 'MISSING_HOOK');
-  });
-});
-
-describe('pact.Pact OAuth login', () => {
-  const setup = () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      oauth: {
-        google: {
-          provider: 'GOOGLE',
-          clientId: 'cid',
-          clientSecret: 'cs',
-          redirectUri: 'https://app.example.com/cb',
+      ...BASE,
+      hooks: {
+        getPrincipal: (id) => {
+          fetches++;
+          return { kind: 'USER', id, grants: { Post: 1n } };
         },
       },
-      hooks: store.hooks,
+      ...(options === undefined ? {} : { options }),
     });
-    // Inject a stub fetch into the internal OAuth client's `_fetch` seam so
-    // the login pipeline runs end-to-end without touching the network.
-    const stub = ((input: unknown) => {
-      const url = String(input);
-      const body = url.includes('/token')
-        ? { access_token: 'at' }
-        : { sub: 'g-1', email: 'a@x.io' };
-      return Promise.resolve(
-        new Response(JSON.stringify(body), {
-          headers: { 'content-type': 'application/json' },
-        }),
-      );
-    }) as unknown as typeof fetch;
-    (pact as unknown as {
-      __oauth: Map<string, { _fetch: typeof fetch }>;
-    }).__oauth.get('google')!._fetch = stub;
-    return { store, pact };
-  };
+    return { pact, fetches: () => fetches };
+  }
 
-  it('first login provisions via createUser (isNew); repeat login finds the user', async () => {
-    const { pact } = setup();
-    const first = await pact.login('google', { code: 'c', verifier: 'v' });
-    asserts.assert(first !== null);
-    asserts.assertEquals(first.isNew, true); // provisioned
-    asserts.assertEquals(first.profile?.id, 'g-1'); // fresh profile rides along
-    asserts.assertEquals(first.profile?.email, 'a@x.io');
-    asserts.assert(await pact.verify(first.token) !== null);
-
-    const second = await pact.login('google', { code: 'c2', verifier: 'v2' });
-    asserts.assert(second !== null);
-    asserts.assertEquals(second.isNew, false); // existing account found
-    asserts.assertEquals(second.principal.id, first.principal.id);
+  it('should hit the hook every time when caching is not configured', async () => {
+    const { pact, fetches } = counting();
+    await pact.hasPermission('a', 'Post', 'READ');
+    await pact.hasPermission('a', 'Post', 'READ');
+    asserts.assertStrictEquals(fetches(), 2);
+    await pact.invalidatePrincipal('a'); // safe no-op
+    await pact.hasPermission('a', 'Post', 'READ');
+    asserts.assertStrictEquals(fetches(), 3);
   });
 
-  it('oauthRedirect returns url/state/verifier/nonce; unknown provider throws', async () => {
-    const { pact } = setup();
-    const { url, state, verifier, nonce } = await pact.oauthRedirect('google');
-    asserts.assertEquals(new URL(url).origin, 'https://accounts.google.com');
-    asserts.assert(state.length > 0 && verifier.length > 0 && nonce.length > 0);
-    const err = asserts.assertThrows(() => {
-      pact.oauthRedirect('ghost');
-    });
-    asserts.assertEquals((err as { code?: string }).code, 'UNKNOWN_STRATEGY');
+  it('should cache under a configured TTL and evict on invalidate', async () => {
+    const { pact, fetches } = counting({ cache: { ttl: { principal: 1 } } });
+    await pact.hasPermission('b', 'Post', 'READ');
+    await pact.hasPermission('b', 'Post', 'EDIT');
+    asserts.assertStrictEquals(fetches(), 1);
+    await pact.invalidatePrincipal('b');
+    await pact.hasPermission('b', 'Post', 'READ');
+    asserts.assertStrictEquals(fetches(), 2);
+  });
+
+  it('should treat ttl 0 as the explicit opt-out', async () => {
+    const { pact, fetches } = counting({ cache: { ttl: { principal: 0 } } });
+    await pact.hasPermission('c', 'Post', 'READ');
+    await pact.hasPermission('c', 'Post', 'READ');
+    asserts.assertStrictEquals(fetches(), 2);
+  });
+
+  it('should namespace per-type caches by instance name and round-trip values', async () => {
+    class TestPact extends Pact<typeof BASE.bits, 'Post' | 'Billing'> {
+      constructor() {
+        super(
+          BASE.bits,
+          BASE.modulePermissions,
+          ['ACTIVE'],
+          {},
+          { cache: { ttl: { principal: 5 } } },
+          'pact-test',
+        );
+      }
+      put(key: string, value: unknown): Promise<void> {
+        return this._cacheSet('principal', key, value);
+      }
+      take<T>(key: string): Promise<T | undefined> {
+        return this._cacheGet<T>('principal', key);
+      }
+      putSession(key: string, value: unknown): Promise<void> {
+        return this._cacheSet('session', key, value);
+      }
+      takeSession<T>(key: string): Promise<T | undefined> {
+        return this._cacheGet<T>('session', key);
+      }
+    }
+    const p = new TestPact();
+    asserts.assert(Cacher.hasInstance('pact-test__principal'));
+    asserts.assertFalse(
+      Cacher.hasInstance('pact-test__session'),
+      'a type without a TTL gets no cache instance',
+    );
+    const seen = new Date('2026-01-01T00:00:00Z');
+    await p.put('u1', { id: 'u1', grants: 6n, seen });
+    const got = await p.take<{ grants: bigint; seen: Date }>('u1');
+    asserts.assertStrictEquals(got?.grants, 6n);
+    asserts.assert(got?.seen instanceof Date);
+    await p.clearCache();
+    asserts.assertStrictEquals(await p.take('u1'), undefined);
+    // A type without a TTL never caches.
+    await p.putSession('s1', { x: 1 });
+    asserts.assertStrictEquals(await p.takeSession('s1'), undefined);
   });
 });
 
-describe('pact.Pact otp + strategies + authZ', () => {
-  it('enrollOtp stores a seed; verifyOtp accepts a live TOTP code', async () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      issuer: 'test.pact',
-      hooks: store.hooks,
-    });
-    const user: PactStoredUser = { id: 'u1', metadata: { email: 'a@x.io' } };
-    store.users.set('u1', user);
-    const { secret, url } = await pact.enrollOtp('u1', {
-      accountName: 'a@x.io',
-    });
-    asserts.assert(url.startsWith('otpauth://totp/'));
-    asserts.assert(url.includes('test.pact'));
-    asserts.assertEquals(store.users.get('u1')!.otpSecret, secret);
-    const code = await generateTOTP(secret);
-    asserts.assert(await pact.verifyOtp('u1', code));
-    asserts.assertFalse(await pact.verifyOtp('u1', '000000'));
-    asserts.assertFalse(await pact.verifyOtp('ghost', code));
-  });
+// =============================================================================
+// Register and API keys
+// =============================================================================
 
-  it('custom strategies mint sessions through the same pipeline', async () => {
-    const store = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      strategies: {
-        ldap: (creds) =>
-          (creds as { user?: string }).user === 'ok'
-            ? {
-              ok: true,
-              user: { id: 'ldap-1', grants: { Post: '3' } },
-              isNew: true,
-            }
-            : { ok: false },
+describe('Pact register and API keys', () => {
+  const store = makeStore();
+  const pact = Pact.create({
+    ...BASE,
+    activeStatuses: ['ACTIVE', 'TRIAL'],
+    hooks: {
+      ...store.hooks,
+      createUser: (input) => {
+        const user: PactStoredUser = {
+          id: `fu${store.byId.size + 1}`,
+          status: input.status,
+          passwordHash: input.passwordHash,
+          grants: input.grants,
+          metadata: input.metadata,
+        };
+        store.byId.set(user.id, user);
+        store.byIdentifier.set(input.identifier, user.id);
+        return user;
       },
-      hooks: store.hooks,
-    });
-    const result = await pact.login('ldap', { user: 'ok' });
-    asserts.assert(result !== null);
-    asserts.assertEquals(result.isNew, true);
-    asserts.assertEquals(result.principal.grants.Post, 3n);
-    asserts.assertEquals(await pact.login('ldap', { user: 'no' }), null);
+    },
   });
 
-  it('can/assert gate on status and emit denied before throwing', () => {
-    const pact = Pact.create({
-      bits: BITS,
-      modules: { Post: ['READ', 'EDIT', 'DELETE'] },
-    });
-    const denied: string[] = [];
-    pact.on('denied', (_p, module, permission) => {
-      denied.push(`${module}:${String(permission)}`);
-    });
-    const active = {
-      id: 'u1',
+  it('should hash the password, default the status, and reject duplicates', async () => {
+    const user = await pact.register({
+      identifier: 'ada@example.dev',
+      password: 'correct horse',
       grants: { Post: 3n },
-      status: 'ACTIVE' as const,
-      metadata: {},
-    };
-    asserts.assert(pact.can(active, 'Post', 'READ'));
-    asserts.assertFalse(pact.can(null, 'Post', 'READ'));
-    asserts.assertFalse(
-      pact.can({ ...active, status: 'LOCKED' }, 'Post', 'READ'),
+    });
+    asserts.assert(user.passwordHash?.startsWith('pbkdf2-'));
+    asserts.assertStrictEquals(user.status, 'ACTIVE');
+    await expectCode(
+      pact.register({ identifier: 'ada@example.dev', password: 'x' }),
+      'USER_EXISTS',
     );
-    pact.assert(active, 'Post', 'EDIT');
-    asserts.assertThrows(
-      () => pact.assert(active, 'Post', 'DELETE'),
-      PactDeniedError,
-    );
-    asserts.assertEquals(denied, ['Post:DELETE']);
   });
 
-  it('call-time hook gating throws MISSING_HOOK', async () => {
-    const pact = Pact.create({ bits: BITS });
-    const err = await asserts.assertRejects(
-      () => pact.register({ identifier: 'x' }),
-      PactDefinitionError,
+  it('should authorize any active status and fail closed on others', async () => {
+    const trial = await pact.register({
+      identifier: 'trial@example.dev',
+      password: 'x',
+      grants: { Post: 1n },
+      status: 'TRIAL',
+    });
+    asserts.assert(await pact.hasPermission(trial.id, 'Post', 'READ'));
+    const pending = await pact.register({
+      identifier: 'pending@example.dev',
+      password: 'x',
+      grants: { Post: 1n },
+      status: 'PENDING',
+    });
+    asserts.assertFalse(await pact.hasPermission(pending.id, 'Post', 'READ'));
+  });
+
+  it('should issue prefixed key pairs with serialized grants and revoke via hook', async () => {
+    const pair = await pact.issueApiKey({
+      userId: 'fu1',
+      grants: { Post: 1n },
+    });
+    const saved = store.keys.get(pair.key);
+    asserts.assertExists(saved);
+    asserts.assertStrictEquals(saved.secret, pair.secret);
+    asserts.assert(pair.key.startsWith('pact_ak_'));
+    asserts.assert(pair.secret.startsWith('pact_as_'));
+    asserts.assertStrictEquals(deserializeGrants(saved.grants).Post, 1n);
+    await pact.revokeApiKey(pair.key);
+    asserts.assertFalse(store.keys.has(pair.key));
+  });
+
+  it('should suspend keys whose owner can no longer authorize', async () => {
+    store.seed('own-ok', 'own-ok@example.dev');
+    store.seed('own-bad', 'own-bad@example.dev', { status: 'LOCKED' });
+    const set = (id: string, userId?: string) =>
+      store.keys.set(id, {
+        id,
+        userId,
+        status: 'ACTIVE',
+        secret: `s-${id}`,
+        grants: serializeGrants({ Post: 1n }),
+      });
+    set('k-ok', 'own-ok');
+    set('k-bad', 'own-bad');
+    set('k-ghost', 'gone');
+    set('k-free');
+    const ok = await pact.authenticate({
+      scheme: 'APIKEY',
+      keyId: 'k-ok',
+      secret: 's-k-ok',
+    });
+    asserts.assertStrictEquals(ok.principal.id, 'k-ok');
+    const notActive = await expectCode(
+      pact.authenticate({
+        scheme: 'APIKEY',
+        keyId: 'k-bad',
+        secret: 's-k-bad',
+      }),
+      'NOT_ACTIVE',
     );
-    asserts.assertEquals(
-      (err as PactDefinitionError).code,
+    asserts.assertStringIncludes(notActive.message, "'LOCKED'");
+    await expectCode(
+      pact.authenticate({
+        scheme: 'APIKEY',
+        keyId: 'k-ghost',
+        secret: 's-k-ghost',
+      }),
+      'INVALID_CREDENTIALS',
+    );
+    const free = await pact.authenticate({
+      scheme: 'APIKEY',
+      keyId: 'k-free',
+      secret: 's-k-free',
+    });
+    asserts.assertStrictEquals(free.via, 'APIKEY');
+    // Id-based authz honors the same owner gate.
+    asserts.assertFalse(await pact.hasPermission('k-bad', 'Post', 'READ'));
+    asserts.assert(await pact.hasPermission('k-ok', 'Post', 'READ'));
+  });
+
+  it('should skip the owner gate when no user hooks can verify it', async () => {
+    const keyOnly = Pact.create({
+      ...BASE,
+      hooks: { getApiKey: (id) => store.keys.get(id) ?? null },
+    });
+    const ctx = await keyOnly.authenticate({
+      scheme: 'APIKEY',
+      keyId: 'k-bad',
+      secret: 's-k-bad',
+    });
+    asserts.assertStrictEquals(ctx.via, 'APIKEY');
+  });
+});
+
+// =============================================================================
+// Login, sessions, reset
+// =============================================================================
+
+describe('Pact login and sessions', () => {
+  const store = makeStore();
+  store.seed('lu1', 'ada@example.dev');
+  store.seed('lu2', 'pending@example.dev', { status: 'PENDING' });
+  const pact = Pact.create({ ...BASE, hooks: store.hooks });
+
+  it('should mint an opaque session stored by sha-256 and delete on logout', async () => {
+    const result = await pact.login({
+      identifier: 'ada@example.dev',
+      password: 'secret123',
+    });
+    asserts.assert(result.session.token.startsWith('pact_st_'));
+    asserts.assertStrictEquals(result.principal.id, 'lu1');
+    asserts.assert(result.session.expiresAt.getTime() > Date.now());
+    const id = await sha256(result.session.token);
+    asserts.assertStrictEquals(store.sessions.get(id)?.userId, 'lu1');
+    await pact.logout(result.session.token);
+    asserts.assertFalse(store.sessions.has(id));
+  });
+
+  it('should collapse failures and order NOT_ACTIVE after verification', async () => {
+    await expectCode(
+      pact.login({ identifier: 'ada@example.dev', password: 'wrong' }),
+      'INVALID_CREDENTIALS',
+    );
+    await expectCode(
+      pact.login({ identifier: 'ghost@example.dev', password: 'secret123' }),
+      'INVALID_CREDENTIALS',
+    );
+    // Wrong password on an inactive account must not reveal the status.
+    await expectCode(
+      pact.login({ identifier: 'pending@example.dev', password: 'wrong' }),
+      'INVALID_CREDENTIALS',
+    );
+    const notActive = await expectCode(
+      pact.login({ identifier: 'pending@example.dev', password: 'secret123' }),
+      'NOT_ACTIVE',
+    );
+    asserts.assertStringIncludes(notActive.message, "'PENDING'");
+  });
+
+  it('should run the password reset end to end, single-use and windowed', async () => {
+    asserts.assertStrictEquals(
+      await pact.requestPasswordReset('ghost@example.dev'),
+      null,
+    );
+    const reset = await pact.requestPasswordReset('ada@example.dev');
+    asserts.assertExists(reset);
+    asserts.assert(reset.token.startsWith('pact_pr_'));
+    asserts.assert(await pact.resetPassword(reset.token, 'newpass456'));
+    asserts.assert(store.lastSetPassword?.hash.startsWith('pbkdf2-'));
+    asserts.assertFalse(
+      await pact.resetPassword(reset.token, 'again'),
+      'token must be single-use',
+    );
+    await pact.login({ identifier: 'ada@example.dev', password: 'newpass456' });
+    const expired = await pact.requestPasswordReset('ada@example.dev');
+    const rec = store.resets.get(await sha256(expired!.token))!;
+    store.resets.set(rec.id, {
+      ...rec,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    asserts.assertFalse(await pact.resetPassword(expired!.token, 'x'));
+  });
+
+  it('should use the session cache as the store in cache-only mode', async () => {
+    const cacheOnly = Pact.create({
+      ...BASE,
+      name: 'login-cache-only',
+      hooks: { getUser: store.hooks.getUser },
+      options: { cache: { ttl: { session: 5 } } },
+    });
+    const result = await cacheOnly.login({
+      identifier: 'ada@example.dev',
+      password: 'newpass456',
+    });
+    const id = await sha256(result.session.token);
+    const engine = Cacher.getInstance('login-cache-only__session');
+    asserts.assert(await engine?.has(id));
+    await cacheOnly.logout(result.session.token);
+    asserts.assertFalse(await engine?.has(id));
+  });
+
+  it('should throw MISSING_HOOK when no session store exists at all', async () => {
+    const storeless = Pact.create({
+      ...BASE,
+      hooks: { getUser: store.hooks.getUser },
+    });
+    await expectCode(
+      storeless.login({
+        identifier: 'ada@example.dev',
+        password: 'newpass456',
+      }),
       'MISSING_HOOK',
     );
   });
 });
 
-describe('pact.Pact content signing', () => {
-  const pact = Pact.create({ bits: BITS, secret: SECRET });
+// =============================================================================
+// The credential seam (verifyCredentials / createSession)
+// =============================================================================
 
-  it('sign → verifySignature round-trips (string and bytes)', async () => {
-    const sig = await pact.sign('the response body');
-    asserts.assert(await pact.verifySignature('the response body', sig));
-    asserts.assertFalse(await pact.verifySignature('tampered', sig));
-    asserts.assertFalse(
-      await pact.verifySignature('the response body', 'nope'),
+describe('Pact credential seam', () => {
+  const store = makeStore();
+  store.seed('ada', 'ada@example.dev');
+  store.seed('mia', 'mia@example.dev', { mfaSecret: 'JBSWY3DPEHPK3PXPJBSW' });
+  store.seed('sam', 'sam@example.dev', { status: 'LOCKED' });
+  store.keys.set('k1', {
+    id: 'k1',
+    status: 'ACTIVE',
+    secret: 's1',
+    grants: serializeGrants({ Post: 1n }),
+  });
+  const events: { event: string; detail: unknown[] }[] = [];
+  const pact = Pact.create({
+    ...BASE,
+    name: 'seam-check',
+    hooks: { getUser: store.hooks.getUser, getApiKey: store.hooks.getApiKey },
+    options: { cache: { ttl: { session: 5 } } },
+  });
+  pact.on('login', (principal, method) => {
+    events.push({ event: 'login', detail: [principal.id, method] });
+  });
+  pact.on('loginFailed', (identifier, code) => {
+    events.push({ event: 'loginFailed', detail: [identifier, code] });
+  });
+
+  it('should prove identity without minting and flag MFA enrollment', async () => {
+    const plain = await pact.verifyCredentials('ada@example.dev', 'secret123');
+    asserts.assertFalse(plain.mfaRequired);
+    asserts.assertStrictEquals(
+      typeof plain.principal.hasPermission,
+      'function',
     );
-
-    const bytes = new TextEncoder().encode('binary payload');
-    const bsig = await pact.sign(bytes);
-    asserts.assert(await pact.verifySignature(bytes, bsig));
+    asserts.assert(await plain.principal.hasPermission('Post', 'READ'));
+    const mfa = await pact.verifyCredentials('mia@example.dev', 'secret123');
+    asserts.assert(mfa.mfaRequired);
   });
 
-  it('derives a domain-separated key — NOT the raw JWT secret', async () => {
-    // The default (derived) signature must differ from one made with the
-    // raw secret as an explicit key: content signed via pact can never be
-    // a valid HS* JWT signature under the same secret.
-    const derived = await pact.sign('x');
-    const rawKeyed = await pact.sign('x', SECRET);
-    asserts.assertNotEquals(derived, rawKeyed);
-  });
-
-  it('honours an explicit key on both sides', async () => {
-    const sig = await pact.sign('payload', 'my-own-key');
-    asserts.assert(await pact.verifySignature('payload', sig, 'my-own-key'));
-    // wrong key fails; the derived key also does not match an explicit one
-    asserts.assertFalse(
-      await pact.verifySignature('payload', sig, 'other-key'),
+  it('should keep login failure semantics and emit the audit events', async () => {
+    events.length = 0;
+    await expectCode(
+      pact.verifyCredentials('ada@example.dev', 'wrong'),
+      'INVALID_CREDENTIALS',
     );
-    asserts.assertFalse(await pact.verifySignature('payload', sig));
+    await expectCode(
+      pact.verifyCredentials('sam@example.dev', 'secret123'),
+      'NOT_ACTIVE',
+    );
+    const failed = events.filter((e) => e.event === 'loginFailed');
+    asserts.assertStrictEquals(failed.length, 2);
+    asserts.assertStrictEquals(failed[0]!.detail[1], 'INVALID_CREDENTIALS');
+    asserts.assertStrictEquals(failed[1]!.detail[1], 'NOT_ACTIVE');
   });
 
-  it('derived signing requires a shared secret (RSA/none → MISSING_OPTION)', async () => {
-    const rsa = Pact.create({
-      bits: BITS,
-      algorithm: 'RS256',
-      secret: { privateKey: 'x', publicKey: 'y' },
+  it('should mint a working session by id with metadata and event label', async () => {
+    events.length = 0;
+    const result = await pact.createSession('ada', {
+      method: 'MAGIC_LINK',
+      metadata: { device: 'probe' },
     });
-    const err = await asserts.assertRejects(
-      () => rsa.sign('x'),
-      PactDefinitionError,
+    const ctx = await pact.authenticate({
+      scheme: 'BEARER',
+      token: result.session.token,
+    });
+    asserts.assertStrictEquals(ctx.principal.id, 'ada');
+    const engine = Cacher.getInstance('seam-check__session');
+    const raw = JSON.stringify(
+      await engine?.get(await sha256(result.session.token)),
     );
-    asserts.assertEquals((err as PactDefinitionError).code, 'MISSING_OPTION');
-    // but an explicit key works even with an RSA pair
-    asserts.assert(
-      await rsa.verifySignature('x', await rsa.sign('x', 'k'), 'k'),
-    );
+    asserts.assertStringIncludes(raw, '"device"');
+    asserts.assertStringIncludes(raw, '"probe"');
+    const login = events.find((e) => e.event === 'login');
+    asserts.assertEquals(login?.detail, ['ada', 'MAGIC_LINK']);
+  });
 
-    const authzOnly = Pact.create({ bits: BITS });
-    await asserts.assertRejects(() => authzOnly.sign('x'), PactDefinitionError);
+  it('should refuse unknown ids, API keys, and inactive users', async () => {
+    await expectCode(pact.createSession('nobody'), 'INVALID_CREDENTIALS');
+    await expectCode(pact.createSession('k1'), 'INVALID_CREDENTIALS');
+    await expectCode(pact.createSession('sam'), 'INVALID_CREDENTIALS');
+  });
+
+  it('should compose the MFA-gated flow end to end', async () => {
+    const { principal, mfaRequired } = await pact.verifyCredentials(
+      'mia@example.dev',
+      'secret123',
+    );
+    asserts.assert(mfaRequired);
+    const result = await pact.createSession(principal.id, { method: 'MFA' });
+    const ctx = await pact.authenticate({
+      scheme: 'BEARER',
+      token: result.session.token,
+    });
+    asserts.assertStrictEquals(ctx.principal.id, 'mia');
   });
 });
 
-describe('pact.Pact — security-path coverage', () => {
-  it('rejects an RS* algorithm handed a string secret → INVALID_OPTION', () => {
-    const err = asserts.assertThrows(() =>
-      Pact.create({ bits: BITS, algorithm: 'RS256', secret: SECRET })
+// =============================================================================
+// Authenticate schemes
+// =============================================================================
+
+describe('Pact authenticate', () => {
+  const store = makeStore();
+  store.seed('va1', 'val@example.dev');
+  store.seed('va2', 'valpending@example.dev', { status: 'PENDING' });
+  const pact = Pact.create({ ...BASE, hooks: store.hooks });
+
+  it('should validate a bearer session into the envelope', async () => {
+    const { session } = await pact.login({
+      identifier: 'val@example.dev',
+      password: 'secret123',
+    });
+    const ctx = await pact.authenticate({
+      scheme: 'BEARER',
+      token: session.token,
+    });
+    asserts.assertStrictEquals(ctx.via, 'SESSION');
+    asserts.assertStrictEquals(ctx.principal.id, 'va1');
+    asserts.assertStrictEquals(ctx.sessionId, await sha256(session.token));
+    await expectCode(
+      pact.authenticate({ scheme: 'BEARER', token: 'pact_st_garbage' }),
+      'INVALID_CREDENTIALS',
     );
-    asserts.assertEquals((err as { code?: string }).code, 'INVALID_OPTION');
   });
 
-  it('gates oauth hooks: missing getUser or createUser → MISSING_HOOK', () => {
-    const { hooks } = makeStore();
-    const oauth = {
-      google: {
-        provider: 'GOOGLE' as const,
-        clientId: 'c',
-        clientSecret: 's',
-        redirectUri: 'https://app.example/cb',
-      },
-    };
-    const err1 = asserts.assertThrows(() =>
-      Pact.create({
-        bits: BITS,
-        secret: SECRET,
-        oauth,
-        hooks: { getUser: hooks.getUser },
-      })
+  it('should expire a stale session with best-effort cleanup', async () => {
+    const { session } = await pact.login({
+      identifier: 'val@example.dev',
+      password: 'secret123',
+    });
+    const id = await sha256(session.token);
+    store.sessions.set(id, {
+      ...store.sessions.get(id)!,
+      expiresAt: new Date(Date.now() - 1),
+    });
+    await expectCode(
+      pact.authenticate({ scheme: 'BEARER', token: session.token }),
+      'SESSION_EXPIRED',
     );
-    asserts.assertEquals((err1 as { code?: string }).code, 'MISSING_HOOK');
-    const err2 = asserts.assertThrows(() =>
-      Pact.create({ bits: BITS, secret: SECRET, oauth, hooks: {} })
-    );
-    asserts.assertEquals((err2 as { code?: string }).code, 'MISSING_HOOK');
+    asserts.assertFalse(store.sessions.has(id));
   });
 
-  it('gates apiKeys hooks: missing getApiKey or getUser → MISSING_HOOK', () => {
-    const { hooks } = makeStore();
-    const err1 = asserts.assertThrows(() =>
-      Pact.create({
-        bits: BITS,
-        apiKeys: true,
-        hooks: { getUser: hooks.getUser },
-      })
-    );
-    asserts.assertEquals((err1 as { code?: string }).code, 'MISSING_HOOK');
-    const err2 = asserts.assertThrows(() =>
-      Pact.create({
-        bits: BITS,
-        apiKeys: true,
-        hooks: { getApiKey: hooks.getApiKey },
-      })
-    );
-    asserts.assertEquals((err2 as { code?: string }).code, 'MISSING_HOOK');
-  });
-
-  it('gates tokens hooks: missing getToken or getUser → MISSING_HOOK', () => {
-    const { hooks } = makeStore();
-    const err1 = asserts.assertThrows(() =>
-      Pact.create({
-        bits: BITS,
-        tokens: true,
-        hooks: { getUser: hooks.getUser },
-      })
-    );
-    asserts.assertEquals((err1 as { code?: string }).code, 'MISSING_HOOK');
-    const err2 = asserts.assertThrows(() =>
-      Pact.create({
-        bits: BITS,
-        tokens: true,
-        hooks: { getToken: hooks.getToken },
-      })
-    );
-    asserts.assertEquals((err2 as { code?: string }).code, 'MISSING_HOOK');
-  });
-
-  it('verify rejects a token whose issuer does not match config', async () => {
-    const store = makeStore();
-    const mint = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      issuer: 'iss-a',
-      audience: 'aud-a',
-      password: true,
-      hooks: store.hooks,
+  it('should verify BASIC per request without minting', async () => {
+    const before = store.sessions.size;
+    const ctx = await pact.authenticate({
+      scheme: 'BASIC',
+      identifier: 'val@example.dev',
+      password: 'secret123',
     });
-    await mint.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
-    const login = await mint.login('password', {
-      identifier: 'a@x',
-      password: 'pw-pw-pw-pw',
-    });
-    asserts.assertExists(login);
-    // the minting pact (matching iss/aud) accepts its own token…
-    asserts.assertExists(await mint.verify(login.token));
-    // …a checker expecting a DIFFERENT issuer rejects it → null
-    const checker = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      issuer: 'iss-b',
-      audience: 'aud-a',
-      password: true,
-      hooks: store.hooks,
-    });
-    asserts.assertEquals(await checker.verify(login.token), null);
-  });
-
-  it('login rethrows an operational error and emits loginFailed with it', async () => {
-    const { hooks } = makeStore();
-    const boom = new Error('ldap down');
-    let captured: Error | undefined;
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      strategies: {
-        flaky: () => {
-          throw boom;
-        },
-      },
-      hooks,
-    });
-    pact.on('loginFailed', (_method, err) => {
-      captured = err;
-    });
-    await asserts.assertRejects(
-      () => pact.login('flaky', {}),
-      Error,
-      'ldap down',
-    );
-    asserts.assertStrictEquals(captured, boom);
-  });
-
-  it('BASIC authenticate → null for an unknown or passwordless user', async () => {
-    const { hooks, users } = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks,
-    });
-    asserts.assertEquals(
-      await pact.authenticate({
+    asserts.assertStrictEquals(ctx.via, 'BASIC');
+    asserts.assertStrictEquals(ctx.sessionId, undefined);
+    asserts.assertStrictEquals(store.sessions.size, before);
+    await expectCode(
+      pact.authenticate({
         scheme: 'BASIC',
-        identifier: 'ghost@x',
-        password: 'p',
+        identifier: 'val@example.dev',
+        password: 'nope',
       }),
-      null,
+      'INVALID_CREDENTIALS',
     );
-    users.set('u9', {
-      id: 'u9',
-      status: 'ACTIVE',
-      metadata: { email: 'oauth@x' },
-    });
-    asserts.assertEquals(
-      await pact.authenticate({
+    await expectCode(
+      pact.authenticate({
         scheme: 'BASIC',
-        identifier: 'oauth@x',
-        password: 'p',
+        identifier: 'valpending@example.dev',
+        password: 'secret123',
       }),
-      null,
+      'NOT_ACTIVE',
     );
   });
 
-  it('TOKEN authenticate → null for an expired record', async () => {
-    const { hooks, users } = makeStore();
-    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: '1' } });
-    const pact = Pact.create({ bits: BITS, tokens: true, hooks });
-    const { token } = await pact.issueToken('u1', {
-      expiresAt: Date.now() - 1000,
+  it('should verify APIKEY and HMAC against the stored raw secret', async () => {
+    const pair = await pact.issueApiKey({
+      userId: 'va1',
+      grants: { Post: 1n },
     });
-    asserts.assertEquals(
-      await pact.authenticate({ scheme: 'TOKEN', token }),
-      null,
-    );
-  });
-
-  it('APIKEY and HMAC authenticate → null for a revoked key', async () => {
-    const { hooks, users, apiKeys } = makeStore();
-    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: '1' } });
-    const pact = Pact.create({ bits: BITS, apiKeys: true, hooks });
-    const key = await pact.issueApiKey('u1');
-    apiKeys.set(key.id, { ...apiKeys.get(key.id)!, revokedAt: Date.now() });
-    asserts.assertEquals(
-      await pact.authenticate({
-        scheme: 'APIKEY',
-        keyId: key.id,
-        secret: key.secret,
-      }),
-      null,
-    );
-    apiKeys.set('h1', {
-      id: 'h1',
-      userId: 'u1',
-      secret: 'shared-hmac-secret',
-      revokedAt: Date.now(),
+    const ctx = await pact.authenticate({
+      scheme: 'APIKEY',
+      keyId: pair.key,
+      secret: pair.secret,
     });
-    const sig = await signHMAC('payload', 'shared-hmac-secret');
-    asserts.assertEquals(
-      await pact.authenticate({
+    asserts.assertStrictEquals(ctx.principal.kind, 'APIKEY');
+    asserts.assertStrictEquals(
+      ctx.principal.kind === 'APIKEY' ? ctx.principal.userId : undefined,
+      'va1',
+    );
+    await expectCode(
+      pact.authenticate({ scheme: 'APIKEY', keyId: pair.key, secret: 'wrong' }),
+      'INVALID_CREDENTIALS',
+    );
+    const payload = 'POST /billing 1725450000 {"amount":1}';
+    const signature = await signHMAC(payload, pair.secret);
+    const hctx = await pact.authenticate({
+      scheme: 'HMAC',
+      keyId: pair.key,
+      signature,
+      payload,
+    });
+    asserts.assertStrictEquals(hctx.via, 'HMAC');
+    await expectCode(
+      pact.authenticate({
         scheme: 'HMAC',
-        keyId: 'h1',
-        signature: sig,
-        payload: 'payload',
+        keyId: pair.key,
+        signature,
+        payload: payload + 'tampered',
       }),
-      null,
+      'INVALID_CREDENTIALS',
+    );
+    await expectCode(
+      pact.authenticate({
+        scheme: 'HMAC',
+        keyId: pair.key,
+        signature: 'zz-not-hex',
+        payload,
+      }),
+      'INVALID_CREDENTIALS',
+    );
+    // A status flip surfaces post-verification.
+    store.keys.set(pair.key, {
+      ...store.keys.get(pair.key)!,
+      status: 'REVOKED',
+    });
+    await expectCode(
+      pact.authenticate({
+        scheme: 'APIKEY',
+        keyId: pair.key,
+        secret: pair.secret,
+      }),
+      'NOT_ACTIVE',
     );
   });
 
-  it('authenticate → null when the resolved user is non-ACTIVE', async () => {
-    const { hooks, users } = makeStore();
-    users.set('u1', { id: 'u1', status: 'LOCKED', grants: { Post: '1' } });
-    const pact = Pact.create({ bits: BITS, tokens: true, hooks });
-    const { token } = await pact.issueToken('u1');
-    asserts.assertEquals(
-      await pact.authenticate({ scheme: 'TOKEN', token }),
+  it('should collapse junk credentials to 401s, never TypeErrors', async () => {
+    const cases = [
       null,
-    );
-  });
-
-  it('refresh applies the default grace window (previous gen re-issued)', async () => {
-    const { hooks } = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      session: { refresh: {} },
-      hooks,
-    });
-    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
-    const login = await pact.login('password', {
-      identifier: 'a@x',
-      password: 'pw-pw-pw-pw',
-    });
-    asserts.assertExists(login);
-    const r1 = await pact.refresh(login.refreshToken!);
-    asserts.assertExists(r1);
-    // replaying the ORIGINAL (previous-gen) token within the default 5 s grace
-    // is a concurrent refresh, not reuse → re-issued, family NOT revoked
-    const r2 = await pact.refresh(login.refreshToken!);
-    asserts.assertExists(r2);
-  });
-
-  it('refresh → null when the family record has expired', async () => {
-    const { hooks, sessions } = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      session: { refresh: {} },
-      hooks,
-    });
-    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
-    const login = await pact.login('password', {
-      identifier: 'a@x',
-      password: 'pw-pw-pw-pw',
-    });
-    asserts.assertExists(login);
-    for (const [id, s] of sessions) {
-      sessions.set(id, { ...s, expiresAt: Date.now() - 1000 });
+      { scheme: 'MAGIC' },
+      { scheme: 'BEARER', token: 123 },
+      { scheme: 'APIKEY', keyId: 'k' },
+      { scheme: 'APIKEY', keyId: 'k', secret: '' },
+      { scheme: 'HMAC', keyId: 'k', signature: 'ab', payload: '' },
+    ];
+    for (const credential of cases) {
+      await expectCode(
+        // deno-lint-ignore no-explicit-any
+        pact.authenticate(credential as any),
+        'INVALID_CREDENTIALS',
+      );
     }
-    asserts.assertEquals(await pact.refresh(login.refreshToken!), null);
-  });
-
-  it('setPassword hashes via updateUser; without it → MISSING_HOOK', async () => {
-    const { hooks, users } = makeStore();
-    users.set('u1', { id: 'u1', status: 'ACTIVE' });
-    const pact = Pact.create({ bits: BITS, secret: SECRET, hooks });
-    await pact.setPassword('u1', 'a-brand-new-password');
-    const stored = users.get('u1');
-    asserts.assertExists(stored?.secret);
-    asserts.assert(stored!.secret !== 'a-brand-new-password'); // hashed
-    const bare = Pact.create({ bits: BITS, secret: SECRET, hooks: {} });
-    await asserts.assertRejects(
-      () => bare.setPassword('u1', 'x'),
-      PactDefinitionError,
-    );
-  });
-
-  it('verifyOtp → false for a not-enrolled or non-ACTIVE user', async () => {
-    const { hooks, users } = makeStore();
-    users.set('u1', { id: 'u1', status: 'ACTIVE' }); // no otpSecret
-    users.set('u2', {
-      id: 'u2',
-      status: 'LOCKED',
-      otpSecret: 'JBSWY3DPEHPK3PXP',
-    });
-    const pact = Pact.create({ bits: BITS, secret: SECRET, hooks });
-    asserts.assertEquals(await pact.verifyOtp('u1', '000000'), false);
-    const code = await generateTOTP('JBSWY3DPEHPK3PXP');
-    asserts.assertEquals(await pact.verifyOtp('u2', code), false);
   });
 });
 
-describe('pact.Pact — security-review fixes', () => {
-  it('authenticate HMAC returns null (never throws) on a malformed signature', async () => {
-    const { hooks, users, apiKeys } = makeStore();
-    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: '1' } });
-    apiKeys.set('h1', { id: 'h1', userId: 'u1', secret: 'shared-hmac-secret' });
-    const pact = Pact.create({ bits: BITS, apiKeys: true, hooks });
-    for (const signature of ['', 'nothex', 'zz', '123']) {
-      asserts.assertEquals(
-        await pact.authenticate({
-          scheme: 'HMAC',
-          keyId: 'h1',
-          signature,
-          payload: 'x',
+// =============================================================================
+// JWT strategy and refresh rotation
+// =============================================================================
+
+describe('Pact JWT and refresh', () => {
+  const store = makeStore();
+  store.seed('rf1', 'rf@example.dev');
+  const pact = Pact.create({
+    ...BASE,
+    hooks: store.hooks,
+    options: {
+      session: {
+        ttl: 60,
+        strategy: 'JWT',
+        secret: 'unit-test-signing-secret-32-chars-ok',
+        refresh: { ttl: 60, grace: 30 },
+      },
+    },
+  });
+
+  it('should mint a JWT pair and pin tokens to their use claim', async () => {
+    const result = await pact.login({
+      identifier: 'rf@example.dev',
+      password: 'secret123',
+    });
+    asserts.assertExists(result.session.refreshToken);
+    const ctx = await pact.authenticate({
+      scheme: 'BEARER',
+      token: result.session.token,
+    });
+    asserts.assertStrictEquals(ctx.principal.id, 'rf1');
+    await expectCode(
+      pact.authenticate({
+        scheme: 'BEARER',
+        token: result.session.refreshToken,
+      }),
+      'INVALID_CREDENTIALS',
+    );
+    await expectCode(pact.refresh(result.session.token), 'INVALID_CREDENTIALS');
+  });
+
+  it('should rotate on refresh, absorb races in grace, kill the family on reuse', async () => {
+    const login = await pact.login({
+      identifier: 'rf@example.dev',
+      password: 'secret123',
+    });
+    const r0 = login.session.refreshToken!;
+    const rot1 = await pact.refresh(r0);
+    const grace = await pact.refresh(r0); // previous generation, in grace
+    asserts.assertExists(grace.session.refreshToken);
+    await pact.refresh(rot1.session.refreshToken!);
+    let reused = false;
+    pact.on('refreshReused', () => {
+      reused = true;
+    });
+    await expectCode(pact.refresh(r0), 'REFRESH_REUSED');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    asserts.assert(reused, 'refreshReused event must fire');
+    await expectCode(
+      pact.refresh(grace.session.refreshToken),
+      'INVALID_CREDENTIALS',
+    );
+    await expectCode(
+      pact.authenticate({ scheme: 'BEARER', token: login.session.token }),
+      'INVALID_CREDENTIALS',
+    );
+  });
+
+  it('should reject refresh outside the JWT strategy', async () => {
+    const opaque = Pact.create({ ...BASE, hooks: { getUser: () => null } });
+    await expectCode(opaque.refresh('anything'), 'INVALID_OPTION');
+  });
+
+  it('should require a secret for the JWT strategy at construction', () => {
+    expectThrowCode(
+      () =>
+        Pact.create({
+          ...BASE,
+          options: { session: { strategy: 'JWT' } },
         }),
-        null,
-      );
-    }
-  });
-
-  it('holds secret-bearing fields off enumeration surfaces', () => {
-    const { hooks } = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks,
-    });
-    for (const hidden of ['__secretMaterial', '__hooks', '__oauth']) {
-      asserts.assertFalse(
-        Object.getOwnPropertyDescriptor(pact, hidden)?.enumerable ?? false,
-        `${hidden} must not be enumerable`,
-      );
-      asserts.assertFalse(Object.keys(pact).includes(hidden));
-    }
-    // a naive spread of the instance must not carry the raw signing secret
-    const spread = JSON.stringify(Object.values({ ...pact }).map(String));
-    asserts.assertFalse(spread.includes(SECRET));
-  });
-
-  it('authenticate returns null (not undefined) for an unrecognized scheme', async () => {
-    const { hooks } = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks,
-    });
-    asserts.assertEquals(
-      // deno-lint-ignore no-explicit-any
-      await pact.authenticate({ scheme: 'Bearer' } as any),
-      null,
+      'INVALID_OPTION',
     );
   });
+});
 
-  it('OPAQUE sessions are stored under a hash, never the raw token', async () => {
-    const { hooks, sessions } = makeStore();
-    const pact = Pact.create({
-      bits: BITS,
-      password: true,
-      session: { strategy: 'OPAQUE' },
-      hooks,
-    });
-    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
-    const login = await pact.login('password', {
-      identifier: 'a@x',
-      password: 'pw-pw-pw-pw',
-    });
-    asserts.assertExists(login);
-    asserts.assertFalse(sessions.has(login.token)); // not the raw token…
-    asserts.assert(sessions.has(await hash(login.token))); // …its sha-256
-    asserts.assertExists(await pact.verify(login.token)); // still verifies
+// =============================================================================
+// Events and MFA
+// =============================================================================
+
+describe('Pact events and MFA', () => {
+  const store = makeStore();
+  const events: unknown[][] = [];
+  const record = (name: string) => (...args: unknown[]) => {
+    events.push([name, ...args]);
+  };
+  const pact = Pact.create({
+    ...BASE,
+    hooks: { getUser: store.hooks.getUser },
+    options: {
+      // Listener registration via the option-key form.
+      _onloginFailed: record('loginFailed'),
+      cache: { ttl: { session: 5 } },
+    },
   });
+  pact.on('login', record('login'));
+  pact.on('logout', record('logout'));
+  pact.on('authenticateFailed', record('authenticateFailed'));
 
-  it('verify rejects an OPAQUE session with a non-numeric expiresAt', async () => {
-    const { hooks, sessions, users } = makeStore();
-    users.set('u1', { id: 'u1', status: 'ACTIVE' });
-    const pact = Pact.create({
-      bits: BITS,
-      password: true,
-      session: { strategy: 'OPAQUE' },
-      hooks,
+  it('should fire events across the auth lifecycle', async () => {
+    store.seed('ev1', 'eve@example.dev');
+    const { principal, session } = await pact.login({
+      identifier: 'eve@example.dev',
+      password: 'secret123',
     });
-    const token = 'opaque-token-xyz';
-    const key = await hash(token);
-    sessions.set(key, {
-      id: key,
-      userId: 'u1',
-      expiresAt: undefined as unknown as number, // corrupt row
-    });
-    asserts.assertEquals(await pact.verify(token), null);
-  });
-
-  it('refresh honors the isRevoked denylist', async () => {
-    const { hooks } = makeStore();
-    let revoked = false;
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      session: { refresh: {} },
-      hooks: { ...hooks, isRevoked: () => revoked },
-    });
-    await pact.register({ identifier: 'a@x', password: 'pw-pw-pw-pw' });
-    const login = await pact.login('password', {
-      identifier: 'a@x',
-      password: 'pw-pw-pw-pw',
-    });
-    asserts.assertExists(login);
-    revoked = true;
-    asserts.assertEquals(await pact.refresh(login.refreshToken!), null);
-  });
-
-  it('authenticate resolves null (not throws) when stored grants are corrupt', async () => {
-    const { hooks, users } = makeStore();
-    // 'FF' is hex — not a valid decimal-string wire mask
-    users.set('u1', { id: 'u1', status: 'ACTIVE', grants: { Post: 'FF' } });
-    const pact = Pact.create({ bits: BITS, tokens: true, hooks });
-    const { token } = await pact.issueToken('u1');
-    asserts.assertEquals(
-      await pact.authenticate({ scheme: 'TOKEN', token }),
-      null,
+    await pact.logout(session.token);
+    await expectCode(
+      pact.login({ identifier: 'eve@example.dev', password: 'nope' }),
+      'INVALID_CREDENTIALS',
     );
+    await expectCode(
+      pact.authenticate({ scheme: 'BEARER', token: 'pact_st_junk' }),
+      'INVALID_CREDENTIALS',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const login = events.find((e) => e[0] === 'login');
+    asserts.assertStrictEquals((login?.[1] as { id: string }).id, principal.id);
+    asserts.assertStrictEquals(login?.[2], 'PASSWORD');
+    asserts.assertExists(events.find((e) => e[0] === 'logout'));
+    const failed = events.find((e) => e[0] === 'loginFailed');
+    asserts.assertEquals(failed?.slice(1), [
+      'eve@example.dev',
+      'INVALID_CREDENTIALS',
+    ]);
+    const authFailed = events.find((e) => e[0] === 'authenticateFailed');
+    asserts.assertEquals(authFailed?.slice(1), [
+      'BEARER',
+      'INVALID_CREDENTIALS',
+    ]);
   });
 
-  it('verifyFailed emits a redacted token (JWT signature stripped)', async () => {
-    const { hooks } = makeStore();
-    let emitted: string | undefined;
-    const pact = Pact.create({
-      bits: BITS,
-      secret: SECRET,
-      password: true,
-      hooks,
+  it('should verify TOTP against the enrolled seed only', async () => {
+    const seed = pact.generateMFASecret();
+    store.seed('ev2', 'mfa@example.dev', { mfaSecret: seed });
+    store.seed('ev3', 'nomfa@example.dev');
+    const code = await generateTOTP(seed);
+    asserts.assert(await pact.verifyMFA('ev2', code));
+    const wrong = code === '123456' ? '654321' : '123456';
+    asserts.assertFalse(await pact.verifyMFA('ev2', wrong));
+    asserts.assertFalse(await pact.verifyMFA('ev3', code), 'unenrolled');
+    asserts.assertFalse(await pact.verifyMFA('ghost', code), 'unknown user');
+  });
+
+  it('should honor the boolean contract for a corrupt MFA seed', async () => {
+    store.seed('ev4', 'badseed@example.dev', { mfaSecret: 'short' });
+    asserts.assertFalse(await pact.verifyMFA('ev4', '123456'));
+  });
+
+  it('should build an otpauth enrollment URL', () => {
+    const seed = pact.generateMFASecret();
+    const url = pact.generateMFAAuthURL(seed, 'mfa@example.dev', 'PactApp');
+    asserts.assert(url.startsWith('otpauth://totp/'));
+    asserts.assertStringIncludes(url, seed);
+  });
+});
+
+// =============================================================================
+// Content signing
+// =============================================================================
+
+describe('Pact content signing', () => {
+  it('should round-trip with a key derived from the session secret', async () => {
+    const SECRET = 'content-signing-secret-32-chars-min!!';
+    const signer = Pact.create({
+      ...BASE,
+      options: { session: { strategy: 'JWT', secret: SECRET } },
     });
-    pact.on('verifyFailed', (_e, token) => {
-      emitted = token;
-    });
-    await pact.verify('aaa.bbb.the-secret-signature');
-    asserts.assertExists(emitted);
-    asserts.assert(emitted.endsWith('.<redacted>'));
-    asserts.assertFalse(emitted.includes('the-secret-signature'));
+    const sig = await signer.sign('payload-1');
+    asserts.assert(await signer.verifySignature('payload-1', sig));
+    asserts.assertFalse(await signer.verifySignature('payload-2', sig));
+    asserts.assertFalse(
+      await signer.verifySignature('payload-1', 'zz-not-hex'),
+      'garbage signatures are false, not thrown',
+    );
+    // Domain separation from the raw session secret.
+    asserts.assertNotStrictEquals(await signHMAC('payload-1', SECRET), sig);
+  });
+
+  it('should sign with an explicit key and demand one otherwise', async () => {
+    const bare = Pact.create({ ...BASE });
+    const sig = await bare.sign('x', 'explicit-key');
+    asserts.assert(await bare.verifySignature('x', sig, 'explicit-key'));
+    await expectCode(bare.sign('x'), 'INVALID_OPTION');
   });
 });
