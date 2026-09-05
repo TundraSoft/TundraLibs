@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.6.2...tracer-v0.6.3) (2026-09-05)
+
+
+### Documentation
+
+* **tracer:** track norm's NormConfig — the engine key became database ([#630](https://github.com/TundraSoft/TundraLibs/issues/630)) ([05f8890](https://github.com/TundraSoft/TundraLibs/commit/05f88906ddecd5b805dae5e7ef5c027213852216))
+
 ## [0.6.2](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.6.1...tracer-v0.6.2) (2026-08-25)
 
 
