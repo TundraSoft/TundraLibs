@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.5.0...norm-v1.6.0) (2026-09-05)
+
+
+### Features
+
+* **norm:** name the instance for cache namespacing and error tracing ([#633](https://github.com/TundraSoft/TundraLibs/issues/633)) ([4c3d341](https://github.com/TundraSoft/TundraLibs/commit/4c3d341c7642a8c32d9aba871cb992c29349479c))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.4.0...norm-v1.5.0) (2026-08-28)
 
 
