@@ -118,7 +118,12 @@ const renderReleasePleaseConfig = (pkgs: Pkg[]): string =>
   JSON.stringify(
     {
       '$schema': 'https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json',
-      'separate-pull-requests': true,
+      // false (the release-please default): one aggregated release PR.
+      // Separate per-package PRs each bump adjacent lines in the shared
+      // manifest, so merging one conflicts every other open release PR.
+      // Per-package version independence is unaffected — this only changes
+      // PR count, not version computation.
+      'separate-pull-requests': false,
       'include-component-in-tag': true,
       'changelog-sections': [
         { type: 'feat', section: 'Features' },
