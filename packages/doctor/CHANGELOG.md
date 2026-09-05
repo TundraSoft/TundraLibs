@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.5.1...doctor-v1.5.2) (2026-09-05)
+
+
+### Documentation
+
+* **doctor:** tell the reader to install ambient for the provider recipe ([#628](https://github.com/TundraSoft/TundraLibs/issues/628)) ([5674971](https://github.com/TundraSoft/TundraLibs/commit/5674971d2912421d954e3a42b858ce8c13bd204c))
+
 ## [1.5.1](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.5.0...doctor-v1.5.1) (2026-08-25)
 
 
