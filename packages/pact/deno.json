@@ -6,6 +6,11 @@
   "exports": {
     ".": "./mod.ts",
     "./errors": "./errors/mod.ts",
+    "./middleware": "./middleware/mod.ts",
+    "./middleware/express": "./middleware/express.ts",
+    "./middleware/fastify": "./middleware/fastify.ts",
+    "./middleware/hono": "./middleware/hono.ts",
+    "./middleware/oak": "./middleware/oak.ts",
     "./types": "./types/mod.ts"
   },
   "imports": {}

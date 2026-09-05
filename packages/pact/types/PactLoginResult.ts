@@ -10,5 +10,7 @@ export type PactLoginResult<M extends string = string> = {
   readonly session: {
     readonly token: string;
     readonly expiresAt: Date;
+    /** JWT strategy only: rotate via `refresh()` before `expiresAt`. */
+    readonly refreshToken?: string;
   };
 };

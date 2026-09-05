@@ -2,13 +2,11 @@ import type { CacherOptions } from '@tundralibs/cacher';
 import type { PactCacheType } from './PactCacheType.ts';
 
 /**
- * Hook-result caching. Always initialized: with no config pact defaults
- * to the in-process MEMORY engine with
- * `ttl: { principal: 15, apiKey: 5, session: 5 }` (minutes). A supplied
- * `ttl` record replaces that default wholesale — zeroing a type is the
- * explicit opt-out — and a type participates only when its TTL is a
- * positive integer. Mirrors norm's cache config, minus the instance
- * name, which pact owns (see `Pact._cacheName`).
+ * Hook-result caching — OPT-IN. With no config nothing is cached and
+ * every resolution hits the hooks; a type participates only when given
+ * a positive TTL here (`engine` defaults to the in-process MEMORY).
+ * Mirrors norm's cache config, minus the instance name, which pact owns
+ * (see `Pact._cacheName`).
  */
 export type PactCacheConfig = {
   /**

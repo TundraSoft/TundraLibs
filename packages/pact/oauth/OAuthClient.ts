@@ -19,14 +19,17 @@
  * @module
  */
 
+import { Guardian } from '@tundralibs/guardian';
 import { nanoID } from '@tundralibs/id';
 import { RESTler } from '@tundralibs/restler';
 import { PactError } from '../errors/mod.ts';
 import { IdTokenVerifier } from './IdTokenVerifier.ts';
-import { type ProviderPreset, PROVIDERS } from './providers.ts';
+import { PROVIDERS } from './providers.ts';
 import type {
+  PactOAuthCallbackParams,
   PactOAuthProfile,
   PactOAuthProviderConfig,
+  PactOAuthProviderPreset,
   PactOAuthTokens,
 } from '../types/mod.ts';
 
@@ -41,15 +44,38 @@ type Endpoints = {
   jwks?: string;
 };
 
-/** Callback inputs — assembled by the engine from the provider's
- * callback params plus what the consumer stowed at redirect time. */
-export type OAuthCallbackParams = {
-  code: string;
-  state?: string;
-  expectedState?: string;
-  verifier: string;
-  expectedNonce?: string;
-};
+// ── boundary schemas — guardian at every external-JSON boundary ─────
+
+/** The shape a consumer hands `options.oauth[<name>]`. */
+const PROVIDER_CONFIG_SCHEMA = Guardian.object({
+  kind: Guardian.string().notEmpty(),
+  clientId: Guardian.string().notEmpty(),
+  clientSecret: Guardian.string().notEmpty().optional(),
+  redirectUri: Guardian.string().url(),
+  scopes: Guardian.array(Guardian.string()).optional(),
+  issuer: Guardian.string().url().optional(),
+  tenant: Guardian.string().notEmpty().optional(),
+  idToken: Guardian.string().optional(),
+  autoProvision: Guardian.boolean().optional(),
+  authParams: Guardian.object().optional(),
+});
+
+/** Token-endpoint response — extra provider fields pass through via
+ * `raw`; only the fields pact consumes are validated. */
+const TOKEN_RESPONSE_SCHEMA = Guardian.object({
+  access_token: Guardian.string().notEmpty(),
+  refresh_token: Guardian.string().optional(),
+  id_token: Guardian.string().optional(),
+  expires_in: Guardian.number().optional(),
+});
+
+/** OIDC discovery document — only the fields pact consumes. */
+const DISCOVERY_SCHEMA = Guardian.object({
+  authorization_endpoint: Guardian.string().url(),
+  token_endpoint: Guardian.string().url(),
+  userinfo_endpoint: Guardian.string().url().optional(),
+  jwks_uri: Guardian.string().url().optional(),
+});
 
 /** RFC 4648 §5 base64url (unpadded) of raw bytes. */
 function base64url(bytes: Uint8Array): string {
@@ -96,11 +122,30 @@ function splitUrl(
  *   missing `OIDC` issuer, or a non-https issuer.
  */
 function resolveAnchor(name: string, config: PactOAuthProviderConfig): string {
+  try {
+    PROVIDER_CONFIG_SCHEMA.parse(config);
+  } catch (cause) {
+    throw new PactError('INVALID_OPTION', {
+      option: `oauth.${name}`,
+      reason: 'provider config failed schema validation',
+    }, cause as Error);
+  }
   const preset = PROVIDERS[config.kind];
   if (preset === undefined) {
     throw new PactError('INVALID_OPTION', {
       option: `oauth.${name}.kind`,
       reason: `unknown provider kind '${String(config.kind)}'`,
+    });
+  }
+  // `{tenant}` is path-positioned so a hostile value cannot break the
+  // host, but `?`/`#` would still mutate path/query of every endpoint —
+  // pin the charset as defense-in-depth.
+  if (
+    config.tenant !== undefined && !/^[A-Za-z0-9._-]+$/.test(config.tenant)
+  ) {
+    throw new PactError('INVALID_OPTION', {
+      option: `oauth.${name}.tenant`,
+      reason: 'must contain only A-Z, a-z, 0-9, dot, underscore, or hyphen',
     });
   }
   if (config.kind === 'OIDC') {
@@ -116,7 +161,8 @@ function resolveAnchor(name: string, config: PactOAuthProviderConfig): string {
     }
     return new URL(config.issuer).origin;
   }
-  return new URL(preset.token).origin;
+  return new URL(preset.token.replace('{tenant}', config.tenant ?? 'common'))
+    .origin;
 }
 
 /**
@@ -129,7 +175,7 @@ export class OAuthClient extends RESTler {
 
   private readonly __name: string;
   private readonly __config: PactOAuthProviderConfig;
-  private readonly __preset: ProviderPreset;
+  private readonly __preset: PactOAuthProviderPreset;
   /** JWKS-backed id_token verifier (owns its own key cache). */
   private readonly __idTokens: IdTokenVerifier;
   /** Discovered oidc endpoints (fetched once, then cached). */
@@ -223,7 +269,7 @@ export class OAuthClient extends RESTler {
    *   rejected id_token; `OAUTH_JWKS_UNAVAILABLE` under the
    *   `'REQUIRED'` policy when the key set is unobtainable.
    */
-  async callback(params: OAuthCallbackParams): Promise<PactOAuthProfile> {
+  async callback(params: PactOAuthCallbackParams): Promise<PactOAuthProfile> {
     // Fail closed: once the caller opts into CSRF protection by
     // supplying `expectedState`, a missing or mismatched callback
     // `state` is rejected — dropping the param cannot bypass the check.
@@ -234,6 +280,17 @@ export class OAuthClient extends RESTler {
       throw new PactError('OAUTH_STATE_MISMATCH', { provider: this.__name });
     }
     const tokens = await this.__exchange(params.code, params.verifier);
+    // The nonce guarantee must hold on the USERINFO identity path too:
+    // when the caller supplied an expectedNonce and the exchange
+    // returned an id_token, verify it even though identity comes from
+    // userinfo — otherwise the replay guard is silently a no-op for
+    // exactly the providers most apps use.
+    if (
+      this.__preset.identity !== 'id_token' &&
+      params.expectedNonce !== undefined && tokens.idToken !== undefined
+    ) {
+      await this.__idTokenIdentity(tokens, params);
+    }
     const raw = this.__preset.identity === 'id_token'
       ? await this.__idTokenIdentity(tokens, params)
       : await this.__userinfo(tokens, params);
@@ -259,7 +316,7 @@ export class OAuthClient extends RESTler {
    */
   private async __idTokenIdentity(
     tokens: PactOAuthTokens,
-    params: OAuthCallbackParams,
+    params: PactOAuthCallbackParams,
   ): Promise<Record<string, unknown>> {
     const endpoints = await this.__endpoints();
     return await this.__idTokens.verify(tokens.idToken, {
@@ -299,28 +356,45 @@ export class OAuthClient extends RESTler {
           if (this.__discovered !== undefined) return this.__discovered;
           throw err;
         }
+        let discovered: {
+          authorization_endpoint: string;
+          token_endpoint: string;
+          userinfo_endpoint?: string;
+          jwks_uri?: string;
+        };
+        try {
+          discovered = DISCOVERY_SCHEMA.parse(doc) as typeof discovered;
+        } catch (cause) {
+          throw new PactError('OAUTH_EXCHANGE_FAILED', {
+            provider: this.__name,
+            reason: 'discovery document failed schema validation',
+          }, cause as Error);
+        }
         this.__discoveredAt = Date.now();
         this.__discovered = {
           authorization: this.__requireHttps(
-            String(doc.authorization_endpoint),
+            discovered.authorization_endpoint,
             'authorization',
           ),
-          token: this.__requireHttps(String(doc.token_endpoint), 'token'),
-          userinfo: typeof doc.userinfo_endpoint === 'string'
-            ? this.__requireHttps(doc.userinfo_endpoint, 'userinfo')
-            : undefined,
-          // `jwks_uri` is https-validated again downstream by the
-          // verifier.
-          jwks: typeof doc.jwks_uri === 'string' ? doc.jwks_uri : undefined,
+          token: this.__requireHttps(discovered.token_endpoint, 'token'),
+          userinfo: discovered.userinfo_endpoint === undefined
+            ? undefined
+            : this.__requireHttps(discovered.userinfo_endpoint, 'userinfo'),
+          // https-enforced here too (symmetric with the other three) —
+          // the verifier's own check only DEGRADES under 'PREFERRED'.
+          jwks: discovered.jwks_uri === undefined
+            ? undefined
+            : this.__requireHttps(discovered.jwks_uri, 'jwks'),
         };
       }
       return this.__discovered;
     }
+    const tenant = this.__config.tenant ?? 'common';
     return {
-      authorization: this.__preset.authorization,
-      token: this.__preset.token,
+      authorization: this.__preset.authorization.replace('{tenant}', tenant),
+      token: this.__preset.token.replace('{tenant}', tenant),
       userinfo: this.__preset.userinfo,
-      jwks: this.__preset.jwks,
+      jwks: this.__preset.jwks?.replace('{tenant}', tenant),
     };
   }
 
@@ -382,25 +456,32 @@ export class OAuthClient extends RESTler {
         reason: 'transport failure',
       }, cause as Error);
     }
-    if (
-      status === null || status < 200 || status >= 300 ||
-      typeof raw.access_token !== 'string'
-    ) {
+    if (status === null || status < 200 || status >= 300) {
       throw new PactError('OAUTH_EXCHANGE_FAILED', {
         provider: this.__name,
         reason: `token endpoint returned ${status}`,
         error: raw.error,
       });
     }
+    let tokens: {
+      access_token: string;
+      refresh_token?: string;
+      id_token?: string;
+      expires_in?: number;
+    };
+    try {
+      tokens = TOKEN_RESPONSE_SCHEMA.parse(raw) as typeof tokens;
+    } catch (cause) {
+      throw new PactError('OAUTH_EXCHANGE_FAILED', {
+        provider: this.__name,
+        reason: 'token response failed schema validation',
+      }, cause as Error);
+    }
     return {
-      accessToken: raw.access_token,
-      refreshToken: typeof raw.refresh_token === 'string'
-        ? raw.refresh_token
-        : undefined,
-      idToken: typeof raw.id_token === 'string' ? raw.id_token : undefined,
-      expiresIn: typeof raw.expires_in === 'number'
-        ? raw.expires_in
-        : undefined,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      idToken: tokens.id_token,
+      expiresIn: tokens.expires_in,
       raw,
     };
   }
@@ -408,7 +489,7 @@ export class OAuthClient extends RESTler {
   /** GET the userinfo endpoint with the bearer token. */
   private async __userinfo(
     tokens: PactOAuthTokens,
-    params: OAuthCallbackParams,
+    params: PactOAuthCallbackParams,
   ): Promise<Record<string, unknown>> {
     const endpoints = await this.__endpoints();
     if (endpoints.userinfo === undefined) {

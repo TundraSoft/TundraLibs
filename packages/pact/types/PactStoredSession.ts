@@ -10,8 +10,16 @@ export type PactStoredSession = {
   readonly id: string;
   /** The user this session belongs to. */
   readonly userId: string;
-  /** Absolute expiry; sessions never slide. */
+  /** Absolute expiry; sessions never slide. Under the JWT strategy
+   * this is the FAMILY expiry (refresh window). */
   readonly expiresAt: Date;
+  /** JWT strategy only: the refresh-token generation this family is at.
+   * Presenting an older generation outside the grace window revokes
+   * the whole family (reuse detection). */
+  readonly generation?: number;
+  /** JWT strategy only: when the last rotation happened — anchors the
+   * concurrent-refresh grace window. */
+  readonly rotatedAt?: Date;
   /** App-owned bag (device info, ip, …). */
   readonly metadata?: Readonly<Record<string, unknown>>;
 };

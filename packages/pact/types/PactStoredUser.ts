@@ -14,6 +14,11 @@ export type PactStoredUser = {
   /** pbkdf2 password hash; absent for password-less (e.g. OAuth-only)
    * users. */
   readonly passwordHash?: string;
+  /**
+   * TOTP seed (canonical base32), RAW at the hook boundary — encrypt at
+   * rest, app-side, like the API-key secret. Absent = not enrolled.
+   */
+  readonly mfaSecret?: string;
   /** Serialized per-module grants (see `serializeGrants`). */
   readonly grants: string;
   /** App-owned bag, copied verbatim onto the resolved principal. */

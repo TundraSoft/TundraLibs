@@ -29,6 +29,11 @@
   "exports": {
     ".": "./mod.ts",
     "./errors": "./errors/mod.ts",
+    "./middleware": "./middleware/mod.ts",
+    "./middleware/express": "./middleware/express.ts",
+    "./middleware/fastify": "./middleware/fastify.ts",
+    "./middleware/hono": "./middleware/hono.ts",
+    "./middleware/oak": "./middleware/oak.ts",
     "./types": "./types/mod.ts"
   },
   "engines": {
@@ -37,10 +42,14 @@
   "scripts": {
     "test": "bun test"
   },
+  "devDependencies": {
+    "@oak/oak": "npm:@jsr/oak__oak@^17.0.0"
+  },
   "dependencies": {
     "@tundralibs/cacher": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",
+    "@tundralibs/guardian": "workspace:*",
     "@tundralibs/id": "workspace:*",
     "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*"

@@ -61,10 +61,15 @@ export function encodeForCache(value: unknown): unknown {
   return value;
 }
 
-/** Field-wise encode of a plain object. */
+/** Field-wise encode of a plain object. `__proto__` keys are skipped:
+ * `out[k] = v` would hit the prototype SETTER, not create an own key —
+ * a silent local prototype swap instead of data. */
 function encodeFields(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) out[k] = encodeForCache(v);
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === '__proto__') continue;
+    out[k] = encodeForCache(v);
+  }
   return out;
 }
 
@@ -84,9 +89,14 @@ export function decodeFromCache(value: unknown): unknown {
   return decodeFields(obj);
 }
 
-/** Field-wise decode of a plain object (mirror of {@link encodeFields}). */
+/** Field-wise decode of a plain object (mirror of {@link encodeFields},
+ * including the `__proto__` skip — a cache-tamperer must not smuggle
+ * values in via the prototype chain). */
 function decodeFields(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) out[k] = decodeFromCache(v);
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === '__proto__') continue;
+    out[k] = decodeFromCache(v);
+  }
   return out;
 }

@@ -53,6 +53,22 @@ export type PactHooks<M extends string = string> = {
    * single-process, lost on restart.
    */
   saveSession?: (session: PactStoredSession) => void | Promise<void>;
+  /**
+   * Fetch a stored session by id (the token's sha-256). Return `null`
+   * for no match. Without this hook, bearer validation reads the
+   * session cache as the store (cache-only mode).
+   */
+  getSession?: (
+    sessionId: string,
+  ) => PactStoredSession | null | Promise<PactStoredSession | null>;
+  /**
+   * Fetch a stored API key by id with `secret` DECRYPTED (see
+   * `PactStoredApiKey`). Return `null` for no match — never throw for
+   * absence.
+   */
+  getApiKey?: (
+    keyId: string,
+  ) => PactStoredApiKey | null | Promise<PactStoredApiKey | null>;
   /** Delete one session by id (logout). Absence is not an error. */
   deleteSession?: (sessionId: string) => void | Promise<void>;
   /** Delete every session of a user (logout-all, password change). */

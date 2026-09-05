@@ -109,6 +109,22 @@ export const PactErrorCodes = {
     "${kind} '${principal}' does not hold '${permission}' in module '${module}'",
 
   /**
+   * A bearer session exists but its window has closed. Distinct from
+   * INVALID_CREDENTIALS because it carries distinct UX value (prompt a
+   * re-login) and is post-lookup — no enumeration risk.
+   * Variables: none
+   */
+  SESSION_EXPIRED: 'Session has expired',
+
+  /**
+   * A refresh token from an older generation was presented outside the
+   * grace window; the whole session family has been revoked. A possible
+   * token-theft signal — also emitted as the `refreshReused` event.
+   * Variables: none (context carries sessionId and userId)
+   */
+  REFRESH_REUSED: 'Refresh token reuse detected — session family revoked',
+
+  /**
    * The named OAuth instance is not configured.
    * Variables: provider (instance name)
    */
@@ -170,3 +186,17 @@ export const PactErrorCodes = {
 
 /** Union of all keys from {@link PactErrorCodes}. */
 export type PactErrorCode = keyof typeof PactErrorCodes;
+
+/**
+ * The authentication-failure subset of {@link PactErrorCodes}: a
+ * framework adapter maps these to 401 and RETHROWS everything else —
+ * config/storage errors are 500s and `PERMISSION_DENIED` is authz
+ * (403). Kept mechanical so a boundary cannot mask a config error as
+ * an auth failure.
+ */
+export const PACT_AUTH_FAILURE_CODES: ReadonlySet<PactErrorCode> = new Set([
+  'INVALID_CREDENTIALS',
+  'NOT_ACTIVE',
+  'REFRESH_REUSED',
+  'SESSION_EXPIRED',
+]);

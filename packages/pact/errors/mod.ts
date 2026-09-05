@@ -5,4 +5,8 @@
  * @module
  */
 export { PactError } from './Base.ts';
-export { type PactErrorCode, PactErrorCodes } from './PactErrorCodes.ts';
+export {
+  PACT_AUTH_FAILURE_CODES,
+  type PactErrorCode,
+  PactErrorCodes,
+} from './PactErrorCodes.ts';

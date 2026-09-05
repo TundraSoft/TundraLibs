@@ -58,9 +58,13 @@ export function deserializeGrants(
   const grants: Partial<Record<string, bigint>> = {};
   for (const [module, value] of Object.entries(parsed)) {
     if (FORBIDDEN_KEYS.has(module)) continue;
-    if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+    // The digit cap bounds BigInt() parse cost (quadratic in length) —
+    // a hostile multi-MB digit string must not burn CPU inside the
+    // silent fail-closed read path.
+    if (typeof value !== 'string' || !/^\d{1,100}$/.test(value)) {
       throw new PactError('INVALID_GRANTS', {
-        reason: `mask for module '${module}' must be a decimal string`,
+        reason: `mask for module '${module}' must be a decimal string ` +
+          'of at most 100 digits',
       });
     }
     grants[module] = BigInt(value);

@@ -1,17 +1,28 @@
 export { Pact } from './Pact.ts';
 export { deserializeGrants, serializeGrants } from './grants.ts';
-export { PactError, type PactErrorCode, PactErrorCodes } from './errors/mod.ts';
+export {
+  PACT_AUTH_FAILURE_CODES,
+  PactError,
+  type PactErrorCode,
+  PactErrorCodes,
+} from './errors/mod.ts';
 export type {
   ModulePermissions,
+  PactAuthContext,
+  PactBoundPrincipal,
   PactCacheConfig,
   PactCacheType,
   PactCreateUserInput,
+  PactCredential,
   PactEvents,
   PactHooks,
   PactLoginResult,
+  PactOAuthCallbackParams,
   PactOAuthProfile,
+  PactOAuthProfileNormalizer,
   PactOAuthProviderConfig,
   PactOAuthProviderKind,
+  PactOAuthProviderPreset,
   PactOAuthRedirect,
   PactOAuthTokens,
   PactOptions,
@@ -21,5 +32,6 @@ export type {
   PactStoredSession,
   PactStoredUser,
   PactUserQuery,
+  PactVerifiedCredentials,
   PermissionBits,
 } from './types/mod.ts';

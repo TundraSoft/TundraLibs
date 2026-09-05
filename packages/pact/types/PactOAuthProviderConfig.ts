@@ -20,6 +20,11 @@ export type PactOAuthProviderConfig = {
    */
   issuer?: string;
   /**
+   * Tenant for tenant-scoped presets (`MICROSOFT`).
+   * @default 'common'
+   */
+  tenant?: string;
+  /**
    * id_token availability policy: `'PREFERRED'` degrades to
    * claim-validated decoding when the provider's key set is unreachable;
    * `'REQUIRED'` fails the login instead. Signature and claim failures

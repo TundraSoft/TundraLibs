@@ -14,10 +14,9 @@ export type PactOptions = {
    */
   secretPrefix?: string;
   /**
-   * Hook-result caching — see {@link PactCacheConfig}. Defaults to the
-   * MEMORY engine with `ttl: { principal: 15, apiKey: 5, session: 5 }`
-   * (minutes). The cacher instance NAME is deliberately not an option —
-   * see `Pact._cacheName`.
+   * Hook-result caching — see {@link PactCacheConfig}. OPT-IN: leave
+   * unset and every resolution hits the hooks. The cacher instance NAME
+   * is deliberately not an option — see `Pact._cacheName`.
    */
   cache?: PactCacheConfig;
   /**
@@ -27,11 +26,20 @@ export type PactOptions = {
    */
   oauth?: Record<string, PactOAuthProviderConfig>;
   /**
-   * Opaque-session behavior; `ttl` is the session LIFETIME in minutes
-   * (absolute, never sliding).
-   * @default { ttl: 480 }
+   * Session behavior. `ttl` (minutes, absolute, never sliding) is the
+   * session lifetime — under `strategy: 'JWT'` it becomes the
+   * ACCESS-token lifetime while `refresh.ttl` bounds the family. The
+   * JWT strategy requires an HS256 `secret` of at least 32 characters
+   * and enables `refresh()` rotation with reuse detection
+   * (`refresh.grace` seconds absorb concurrent-refresh races).
+   * @default { ttl: 480, strategy: 'OPAQUE', refresh: { ttl: 10080, grace: 30 } }
    */
-  session?: { ttl?: number };
+  session?: {
+    ttl?: number;
+    strategy?: 'OPAQUE' | 'JWT';
+    secret?: string;
+    refresh?: { ttl?: number; grace?: number };
+  };
   /**
    * Password-reset behavior; `ttl` is the reset-token validity window
    * in minutes.

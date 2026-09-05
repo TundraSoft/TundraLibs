@@ -328,11 +328,36 @@ export class IdTokenVerifier {
       if (!res.ok) {
         throw new Error(`JWKS endpoint returned ${res.status}`);
       }
+      // Fast-fail on a declared size, then enforce the cap on the
+      // ACTUAL stream — a chunked response with no content-length must
+      // not buffer unbounded.
       const declared = Number(res.headers.get('content-length') ?? '0');
       if (declared > MAX_JWKS_BYTES) {
         throw new Error(`JWKS response too large (${declared} bytes)`);
       }
-      const doc = await res.json() as { keys?: unknown };
+      const reader = res.body?.getReader();
+      let text = '';
+      if (reader === undefined) {
+        text = await res.text();
+        if (text.length > MAX_JWKS_BYTES) {
+          throw new Error(`JWKS response too large (> ${MAX_JWKS_BYTES})`);
+        }
+      } else {
+        const decoder = new TextDecoder();
+        let received = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += value.byteLength;
+          if (received > MAX_JWKS_BYTES) {
+            await reader.cancel();
+            throw new Error(`JWKS response too large (> ${MAX_JWKS_BYTES})`);
+          }
+          text += decoder.decode(value, { stream: true });
+        }
+        text += decoder.decode();
+      }
+      const doc = JSON.parse(text) as { keys?: unknown };
       if (!Array.isArray(doc.keys)) {
         throw new Error('JWKS document has no `keys` array');
       }
