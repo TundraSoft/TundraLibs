@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.2](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.1...compat-v2.7.2) (2026-09-05)
+
+
+### Documentation
+
+* **compat:** tag the bench notes' snippet as non-compiling ([#631](https://github.com/TundraSoft/TundraLibs/issues/631)) ([dc958d6](https://github.com/TundraSoft/TundraLibs/commit/dc958d6ee4acc3905bc9f79b053c390a0a6cf2ab))
+
 ## [2.7.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.0...compat-v2.7.1) (2026-08-25)
 
 
