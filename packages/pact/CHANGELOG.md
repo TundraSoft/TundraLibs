@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.6.0...pact-v0.7.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pact:** rebuild core as hook-driven authz and auth kernel ([#643](https://github.com/TundraSoft/TundraLibs/issues/643))
+
+### Features
+
+* **crypt:** reorganize KDF exports, add Ed25519, key-based AES, otpauth parser ([#621](https://github.com/TundraSoft/TundraLibs/issues/621)) ([a5ea357](https://github.com/TundraSoft/TundraLibs/commit/a5ea357579abbb4fe48bc268738a7360dab64bd8))
+* **pact:** passkeys — WebAuthn registration and login ([#644](https://github.com/TundraSoft/TundraLibs/issues/644)) ([ba49561](https://github.com/TundraSoft/TundraLibs/commit/ba4956106678dcede34886ff76cd460ad53520e0))
+* **pact:** rebuild core as hook-driven authz and auth kernel ([#643](https://github.com/TundraSoft/TundraLibs/issues/643)) ([325f39c](https://github.com/TundraSoft/TundraLibs/commit/325f39c61c4e13c9ef0e444301251d1410dd7aba))
+
 ## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.5.0...pact-v0.6.0) (2026-08-26)
 
 
