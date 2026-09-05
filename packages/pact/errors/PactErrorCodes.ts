@@ -176,6 +176,14 @@ export const PactErrorCodes = {
     "No user is linked to OAuth identity '${provider}:${subject}'",
 
   /**
+   * A passkey registration ceremony failed verification. Diagnostic by
+   * design — registration is an authenticated flow, so the reason helps
+   * the developer without enabling enumeration.
+   * Variables: reason
+   */
+  PASSKEY_REGISTRATION_FAILED: 'Passkey registration failed: ${reason}',
+
+  /**
    * Cacher rejected the cache configuration (unknown engine, bad engine
    * options, engine-type conflict on the shared instance name).
    * Variables: engine

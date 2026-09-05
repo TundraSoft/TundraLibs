@@ -8,8 +8,9 @@ import type { PactPrincipal } from './PactPrincipal.ts';
  */
 export type PactEvents<M extends string = string> = {
   /**
-   * Successful interactive login; `method` is `'PASSWORD'` or the OAuth
-   * instance name.
+   * Successful interactive login; `method` is `'PASSWORD'`,
+   * `'PASSKEY'`, an OAuth instance name, or the label `createSession`
+   * was given (default `'DIRECT'`).
    */
   login: (principal: PactPrincipal<M>, method: string) => void;
   /**
@@ -36,4 +37,11 @@ export type PactEvents<M extends string = string> = {
    * token theft signal.
    */
   refreshReused: (sessionId: string, userId: string) => void;
+  /**
+   * A passkey assertion presented a signature counter at or below the
+   * stored one (both non-zero) — the classic cloned-authenticator
+   * signal. The login was rejected as `INVALID_CREDENTIALS`; this event
+   * is where the distinction surfaces, server-side only.
+   */
+  passkeyCloneSuspected: (credentialId: string, userId: string) => void;
 };

@@ -1,5 +1,6 @@
 import type { PactCacheConfig } from './PactCacheConfig.ts';
 import type { PactOAuthProviderConfig } from './PactOAuthProviderConfig.ts';
+import type { PactPasskeyConfig } from './PactPasskeyConfig.ts';
 
 /**
  * Tunable behavior only — the structural definition (bits,
@@ -40,6 +41,13 @@ export type PactOptions = {
     secret?: string;
     refresh?: { ttl?: number; grace?: number };
   };
+  /**
+   * Passkey (WebAuthn) relying-party configuration — see
+   * {@link PactPasskeyConfig}. Configuring it enables the four ceremony
+   * methods and makes the passkey hooks required at construction, so
+   * misconfiguration fails at boot rather than mid-request.
+   */
+  passkeys?: PactPasskeyConfig;
   /**
    * Password-reset behavior; `ttl` is the reset-token validity window
    * in minutes.

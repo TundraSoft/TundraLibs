@@ -23,34 +23,36 @@ Every hook is optional. A feature whose hooks are missing throws
 `MISSING_HOOK` the first time it is used, so misconfiguration is loud and
 immediate.
 
-| Feature                                    | Hooks required                                                                              |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `hasPermission` / `assert` / `principalOf` | `getPrincipal`, or `getUser`, or `getApiKey`                                                |
-| `register`                                 | `getUser` + `createUser`                                                                    |
-| `login` / `verifyCredentials`              | `getUser`, plus a session store (below)                                                     |
-| Session store                              | `saveSession` + `getSession` + `deleteSession` — or a `session` cache TTL (cache-only mode) |
-| `authenticate` `BEARER`                    | the session store + `getUser`/`getPrincipal`                                                |
-| `authenticate` `BASIC`                     | `getUser`                                                                                   |
-| `authenticate` `APIKEY` / `HMAC`           | `getApiKey`                                                                                 |
-| `issueApiKey` / `revokeApiKey`             | `saveApiKey` / `revokeApiKey`                                                               |
-| `logoutAll`                                | `deleteSessions`                                                                            |
-| `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                 |
-| `verifyMFA`                                | `getUser`                                                                                   |
-| OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on)                                       |
+| Feature                                    | Hooks required                                                                                                                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hasPermission` / `assert` / `principalOf` | `getPrincipal`, or `getUser`, or `getApiKey`                                                                                                                           |
+| `register`                                 | `getUser` + `createUser`                                                                                                                                               |
+| `login` / `verifyCredentials`              | `getUser`, plus a session store (below)                                                                                                                                |
+| Session store                              | `saveSession` + `getSession` + `deleteSession` — or a `session` cache TTL (cache-only mode)                                                                            |
+| `authenticate` `BEARER`                    | the session store + `getUser`/`getPrincipal`                                                                                                                           |
+| `authenticate` `BASIC`                     | `getUser`                                                                                                                                                              |
+| `authenticate` `APIKEY` / `HMAC`           | `getApiKey`                                                                                                                                                            |
+| `issueApiKey` / `revokeApiKey`             | `saveApiKey` / `revokeApiKey`                                                                                                                                          |
+| `logoutAll`                                | `deleteSessions`                                                                                                                                                       |
+| `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
+| `verifyMFA`                                | `getUser`                                                                                                                                                              |
+| OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on)                                                                                                                  |
+| Passkeys (all four ceremonies)             | `getPasskey` + `getPasskeys` + `savePasskey` + `updatePasskeyCounter` + `getUser` — checked at construction; `finishPasskeyLogin` additionally needs the session store |
 
 ## Stored shapes
 
 All shapes are exported from `@tundralibs/pact/types`.
 
-| Type                   | Purpose                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `PactStoredUser`       | `id`, `status`, `passwordHash?`, `mfaSecret?`, `grants`, `metadata?`                  |
-| `PactStoredApiKey`     | `id`, `userId?`, `status`, `secret` (raw at this boundary), `grants`, `metadata?`     |
-| `PactStoredSession`    | `id` (token sha-256), `userId`, `expiresAt`, `generation?`, `rotatedAt?`, `metadata?` |
-| `PactStoredResetToken` | `id` (token sha-256), `userId`, `expiresAt`                                           |
-| `PactUserQuery`        | `{by:'ID'}` \| `{by:'IDENTIFIER'}` \| `{by:'OAUTH', provider, subject}`               |
-| `PactCreateUserInput`  | What `createUser` receives, including the OAuth link on JIT provisioning              |
-| `PactPrincipal`        | What `getPrincipal` returns: `kind`, `id`, per-module bigint `grants`                 |
+| Type                   | Purpose                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `PactStoredUser`       | `id`, `status`, `passwordHash?`, `mfaSecret?`, `grants`, `metadata?`                                           |
+| `PactStoredApiKey`     | `id`, `userId?`, `status`, `secret` (raw at this boundary), `grants`, `metadata?`                              |
+| `PactStoredSession`    | `id` (token sha-256), `userId`, `expiresAt`, `generation?`, `rotatedAt?`, `metadata?`                          |
+| `PactStoredResetToken` | `id` (token sha-256), `userId`, `expiresAt`                                                                    |
+| `PactStoredPasskey`    | `id` (credential id), `userId`, `publicKey` (JWK string), `algorithm`, `signCount`, `transports?`, `metadata?` |
+| `PactUserQuery`        | `{by:'ID'}` \| `{by:'IDENTIFIER'}` \| `{by:'OAUTH', provider, subject}`                                        |
+| `PactCreateUserInput`  | What `createUser` receives, including the OAuth link on JIT provisioning                                       |
+| `PactPrincipal`        | What `getPrincipal` returns: `kind`, `id`, per-module bigint `grants`                                          |
 
 `grants` on stored records is the serialized form — a JSON object of module
 name to decimal bit-string, produced by `serializeGrants` and parsed by

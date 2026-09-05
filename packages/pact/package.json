@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/pact",
   "version": "0.6.0",
-  "description": "Permissions, Authentication, Control & Tokens — a transport-agnostic authentication & authorization toolkit: RBAC BigInt-bitmask permissions, JWT & opaque sessions with refresh-token rotation, five credential schemes (password, JWT, API keys, HMAC, tokens), TOTP MFA, and an OAuth2/OIDC client over flat bring-your-own-storage hooks",
+  "description": "Permissions, Authentication, Control & Tokens — a transport-agnostic authentication & authorization toolkit: RBAC BigInt-bitmask permissions, JWT & opaque sessions with refresh-token rotation, passkeys (WebAuthn/FIDO2), four credential schemes (password, bearer, API keys, HMAC), TOTP MFA, an OAuth2/OIDC client, and drop-in middleware for express/fastify/oak/hono — all over flat bring-your-own-storage hooks",
   "keywords": [
     "typescript",
     "deno",
@@ -21,7 +21,11 @@
     "totp",
     "mfa",
     "hmac",
-    "access-control"
+    "access-control",
+    "passkeys",
+    "webauthn",
+    "passwordless",
+    "fido2"
   ],
   "license": "MIT",
   "type": "module",
@@ -46,6 +50,7 @@
     "@oak/oak": "npm:@jsr/oak__oak@^17.0.0"
   },
   "dependencies": {
+    "@std/encoding": "npm:@jsr/std__encoding@1.0.11",
     "@tundralibs/cacher": "workspace:*",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/crypt": "workspace:*",

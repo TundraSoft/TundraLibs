@@ -61,6 +61,18 @@ CREATE TABLE sessions (
 );
 CREATE INDEX sessions_user_id ON sessions (user_id);  -- deleteSessions(userId)
 
+CREATE TABLE passkeys (
+  id             TEXT PRIMARY KEY,          -- WebAuthn credential id, base64url
+  user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  public_key     TEXT NOT NULL,             -- JWK JSON from registration; not secret
+  algorithm      TEXT NOT NULL,             -- 'ES256' | 'RS256'
+  sign_count     INTEGER NOT NULL,
+  transports     JSON,                      -- ['internal', 'hybrid', ...]
+  metadata       JSON,                      -- device label etc.
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX passkeys_user_id ON passkeys (user_id);  -- getPasskeys(userId)
+
 CREATE TABLE reset_tokens (
   id             TEXT PRIMARY KEY,          -- sha-256 of the reset token
   user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -82,6 +94,9 @@ CREATE TABLE reset_tokens (
 | `api_keys.secret`     | `PactStoredApiKey.secret`      | Decrypt in `getApiKey`, encrypt in `saveApiKey`                                |
 | `sessions.id`         | `PactStoredSession.id`         | Already hashed by pact; store verbatim                                         |
 | `sessions.generation` | `PactStoredSession.generation` | Only the JWT strategy writes it                                                |
+| `passkeys.id`         | `PactStoredPasskey.id`         | The APIKEY-style lookup key for assertions                                     |
+| `passkeys.public_key` | `PactStoredPasskey.publicKey`  | Verification key only — nothing here is secret                                 |
+| `passkeys.sign_count` | `PactStoredPasskey.signCount`  | Written via `updatePasskeyCounter`, keyed update                               |
 | `reset_tokens.id`     | `PactStoredResetToken.id`      | Already hashed by pact; store verbatim                                         |
 
 ## Hook implementation sketch
@@ -164,6 +179,12 @@ const hooks: PactHooks<'Post' | 'Billing'> = {
   resurrecting deleted sessions with blind writes. An `expires_at` sweep
   (cron `DELETE WHERE expires_at < now()`) keeps the table bounded; expiry
   is enforced by pact regardless.
+- **passkeys** — one row per registered authenticator; a user may hold
+  several. `public_key` is a verification key, so this table needs no
+  encryption. Deleting a row revokes the passkey (app management UI).
+  Write `updatePasskeyCounter` as a guarded update —
+  `UPDATE passkeys SET sign_count = ? WHERE id = ? AND sign_count < ?` —
+  so concurrent assertions cannot race the clone check backwards.
 - **reset_tokens** — rows are short-lived (default 15-minute window) and
   deleted on consumption; the same expiry sweep applies.
 
