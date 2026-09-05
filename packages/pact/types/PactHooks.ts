@@ -1,6 +1,7 @@
 import type { PactCreateUserInput } from './PactCreateUserInput.ts';
 import type { PactPrincipal } from './PactPrincipal.ts';
 import type { PactStoredApiKey } from './PactStoredApiKey.ts';
+import type { PactStoredPasskey } from './PactStoredPasskey.ts';
 import type { PactStoredResetToken } from './PactStoredResetToken.ts';
 import type { PactStoredSession } from './PactStoredSession.ts';
 import type { PactStoredUser } from './PactStoredUser.ts';
@@ -87,4 +88,29 @@ export type PactHooks<M extends string = string> = {
   consumeResetToken?: (
     id: string,
   ) => PactStoredResetToken | null | Promise<PactStoredResetToken | null>;
+  /**
+   * Fetch one passkey by credential id (base64url). Return `null` for
+   * no match — never throw for absence. Required, with the other three
+   * passkey hooks, when `options.passkeys` is configured.
+   */
+  getPasskey?: (
+    id: string,
+  ) => PactStoredPasskey | null | Promise<PactStoredPasskey | null>;
+  /** Every passkey of one user — feeds excludeCredentials on
+   * registration and allowCredentials on identifier-first login. */
+  getPasskeys?: (
+    userId: string,
+  ) => readonly PactStoredPasskey[] | Promise<readonly PactStoredPasskey[]>;
+  /** Persist a newly registered passkey. */
+  savePasskey?: (record: PactStoredPasskey) => void | Promise<void>;
+  /**
+   * Store an advanced signature counter after a verified assertion — a
+   * keyed update on purpose, never a blind upsert of the whole record.
+   * Guard it against going backwards (`... WHERE sign_count < ?`) so
+   * concurrent assertions cannot race the clone check.
+   */
+  updatePasskeyCounter?: (
+    id: string,
+    signCount: number,
+  ) => void | Promise<void>;
 };

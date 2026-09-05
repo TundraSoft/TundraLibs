@@ -10,7 +10,7 @@ contract.
 ## Table of Contents
 
 - [Schema](#schema)
-- [Column-to-shape mapping](#column-to-shape-mapping)
+- [Exact requirements](#exact-requirements)
 - [Hook implementation sketch](#hook-implementation-sketch)
 - [Notes per table](#notes-per-table)
 
@@ -61,6 +61,18 @@ CREATE TABLE sessions (
 );
 CREATE INDEX sessions_user_id ON sessions (user_id);  -- deleteSessions(userId)
 
+CREATE TABLE passkeys (
+  id             TEXT PRIMARY KEY,          -- WebAuthn credential id, base64url
+  user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  public_key     TEXT NOT NULL,             -- JWK JSON from registration; not secret
+  algorithm      TEXT NOT NULL,             -- 'ES256' | 'RS256'
+  sign_count     INTEGER NOT NULL,
+  transports     JSON,                      -- ['internal', 'hybrid', ...]
+  metadata       JSON,                      -- device label etc.
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX passkeys_user_id ON passkeys (user_id);  -- getPasskeys(userId)
+
 CREATE TABLE reset_tokens (
   id             TEXT PRIMARY KEY,          -- sha-256 of the reset token
   user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -68,21 +80,75 @@ CREATE TABLE reset_tokens (
 );
 ```
 
-## Column-to-shape mapping
+## Exact requirements
 
-| Table.column          | Hook shape field               | Notes                                                                          |
-| --------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
-| `users.id`            | `PactStoredUser.id`            | Becomes the USER principal id                                                  |
-| `users.identifier`    | — (lookup only)                | Serves `getUser({by:'IDENTIFIER'})`; unique index is the register race-settler |
-| `users.status`        | `PactStoredUser.status`        | Compared against `activeStatuses`                                              |
-| `users.password_hash` | `PactStoredUser.passwordHash`  | Written by pact via `createUser`/`setPassword`                                 |
-| `users.mfa_secret`    | `PactStoredUser.mfaSecret`     | Decrypt in `getUser`, store encrypted                                          |
-| `users.grants`        | `PactStoredUser.grants`        | The `serializeGrants` string, verbatim                                         |
-| `user_oauth_links.*`  | `PactCreateUserInput.oauth`    | Written on JIT provisioning; serves `{by:'OAUTH'}`                             |
-| `api_keys.secret`     | `PactStoredApiKey.secret`      | Decrypt in `getApiKey`, encrypt in `saveApiKey`                                |
-| `sessions.id`         | `PactStoredSession.id`         | Already hashed by pact; store verbatim                                         |
-| `sessions.generation` | `PactStoredSession.generation` | Only the JWT strategy writes it                                                |
-| `reset_tokens.id`     | `PactStoredResetToken.id`      | Already hashed by pact; store verbatim                                         |
+One matrix per table: the exact hook-shape field and TypeScript type each
+column serves, whether pact requires it, and the constraint that makes the
+hook correct. `NULL` columns map to `undefined` on the hook boundary in
+both directions. `created_at` columns are app-only; pact never reads them.
+
+### users
+
+| Column          | Type | Null     | Hook field · TS type                     | Requirement                                                                     |
+| --------------- | ---- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `id`            | TEXT | NOT NULL | `PactStoredUser.id` · `string`           | Primary key; becomes the USER principal id; one id namespace with API keys      |
+| `identifier`    | TEXT | NOT NULL | — (lookup only)                          | UNIQUE — serves `getUser({by:'IDENTIFIER'})` and settles register races         |
+| `status`        | TEXT | NOT NULL | `.status` · `string`                     | Must hold a value comparable against `activeStatuses`                           |
+| `password_hash` | TEXT | NULL     | `.passwordHash?` · `string`              | pact-written pbkdf2 string via `createUser`/`setPassword`; NULL = password-less |
+| `mfa_secret`    | TEXT | NULL     | `.mfaSecret?` · `string`                 | Store encrypted; `getUser` returns it decrypted (raw base32 seed)               |
+| `grants`        | TEXT | NOT NULL | `.grants` · `string`                     | Verbatim `serializeGrants` JSON; never edited in SQL                            |
+| `metadata`      | JSON | NULL     | `.metadata?` · `Record<string, unknown>` | Copied verbatim onto the resolved principal                                     |
+
+### user_oauth_links
+
+| Column     | Type | Null     | Hook field · TS type                | Requirement                                                          |
+| ---------- | ---- | -------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `provider` | TEXT | NOT NULL | `PactUserQuery.provider` · `string` | The oauth instance name; composite PK `(provider, subject)`          |
+| `subject`  | TEXT | NOT NULL | `PactUserQuery.subject` · `string`  | Provider's stable user id; the PK bars one identity → two users      |
+| `user_id`  | TEXT | NOT NULL | — (join to `users`)                 | FK; row written from `PactCreateUserInput.oauth` on JIT provisioning |
+| `profile`  | JSON | NULL     | `PactCreateUserInput.oauth.profile` | Optional convenience copy; pact never reads it back                  |
+
+### api_keys
+
+| Column     | Type | Null     | Hook field · TS type                     | Requirement                                                                                |
+| ---------- | ---- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `id`       | TEXT | NOT NULL | `PactStoredApiKey.id` · `string`         | Primary key; `<prefix>_ak_` + 32 hex chars as pact generates it                            |
+| `user_id`  | TEXT | NULL     | `.userId?` · `string`                    | FK; NULL = service key (no owner gate); non-NULL keys inherit the owner's status           |
+| `status`   | TEXT | NOT NULL | `.status` · `string`                     | Gated against `activeStatuses` like a user status                                          |
+| `secret`   | TEXT | NOT NULL | `.secret` · `string`                     | Encrypt at rest; `getApiKey` MUST return it decrypted (raw, `<prefix>_as_` + 64 hex chars) |
+| `grants`   | TEXT | NOT NULL | `.grants` · `string`                     | Verbatim `serializeGrants` JSON                                                            |
+| `metadata` | JSON | NULL     | `.metadata?` · `Record<string, unknown>` | Copied onto the APIKEY principal                                                           |
+
+### sessions
+
+| Column       | Type      | Null     | Hook field · TS type                     | Requirement                                                                                            |
+| ------------ | --------- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `id`         | TEXT      | NOT NULL | `PactStoredSession.id` · `string`        | Primary key, pact-minted: 64 hex chars (opaque, sha-256 of the token) or 32 hex chars (JWT family sid) |
+| `user_id`    | TEXT      | NOT NULL | `.userId` · `string`                     | FK; index required — `deleteSessions(userId)` deletes by it                                            |
+| `expires_at` | TIMESTAMP | NOT NULL | `.expiresAt` · `Date`                    | Absolute expiry; must round-trip as a `Date`                                                           |
+| `generation` | INTEGER   | NULL     | `.generation?` · `number`                | JWT strategy only; monotonically overwritten on refresh                                                |
+| `rotated_at` | TIMESTAMP | NULL     | `.rotatedAt?` · `Date`                   | JWT strategy only; timestamps the last rotation for the grace window                                   |
+| `metadata`   | JSON      | NULL     | `.metadata?` · `Record<string, unknown>` | From `createSession(..., { metadata })`                                                                |
+
+### passkeys
+
+| Column       | Type    | Null     | Hook field · TS type                     | Requirement                                                                    |
+| ------------ | ------- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `id`         | TEXT    | NOT NULL | `PactStoredPasskey.id` · `string`        | Primary key; base64url WebAuthn credential id, at most 1364 chars (1023 bytes) |
+| `user_id`    | TEXT    | NOT NULL | `.userId` · `string`                     | FK; index required — `getPasskeys(userId)` selects by it                       |
+| `public_key` | TEXT    | NOT NULL | `.publicKey` · `string`                  | JSON-serialized JWK, stored verbatim; verification key, not a secret           |
+| `algorithm`  | TEXT    | NOT NULL | `.algorithm` · `'ES256' \| 'RS256'`      | Exactly one of the two values                                                  |
+| `sign_count` | INTEGER | NOT NULL | `.signCount` · `number`                  | 0 to 2^32-1; write via `updatePasskeyCounter` guarded `WHERE sign_count < ?`   |
+| `transports` | JSON    | NULL     | `.transports?` · `readonly string[]`     | Echoed into `allowCredentials`; store what registration reported               |
+| `metadata`   | JSON    | NULL     | `.metadata?` · `Record<string, unknown>` | App-owned (device label etc.)                                                  |
+
+### reset_tokens
+
+| Column       | Type      | Null     | Hook field · TS type                 | Requirement                                                    |
+| ------------ | --------- | -------- | ------------------------------------ | -------------------------------------------------------------- |
+| `id`         | TEXT      | NOT NULL | `PactStoredResetToken.id` · `string` | Primary key; 64 hex chars (sha-256 of the token, pact-minted)  |
+| `user_id`    | TEXT      | NOT NULL | `.userId` · `string`                 | FK to the user being reset                                     |
+| `expires_at` | TIMESTAMP | NOT NULL | `.expiresAt` · `Date`                | Absolute window end; `consumeResetToken` deletes on first read |
 
 ## Hook implementation sketch
 
@@ -164,6 +230,12 @@ const hooks: PactHooks<'Post' | 'Billing'> = {
   resurrecting deleted sessions with blind writes. An `expires_at` sweep
   (cron `DELETE WHERE expires_at < now()`) keeps the table bounded; expiry
   is enforced by pact regardless.
+- **passkeys** — one row per registered authenticator; a user may hold
+  several. `public_key` is a verification key, so this table needs no
+  encryption. Deleting a row revokes the passkey (app management UI).
+  Write `updatePasskeyCounter` as a guarded update —
+  `UPDATE passkeys SET sign_count = ? WHERE id = ? AND sign_count < ?` —
+  so concurrent assertions cannot race the clone check backwards.
 - **reset_tokens** — rows are short-lived (default 15-minute window) and
   deleted on consumption; the same expiry sweep applies.
 

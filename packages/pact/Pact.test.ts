@@ -17,10 +17,12 @@ import { deserializeGrants, serializeGrants } from './grants.ts';
 import type {
   PactPrincipal,
   PactStoredApiKey,
+  PactStoredPasskey,
   PactStoredResetToken,
   PactStoredSession,
   PactStoredUser,
 } from './types/mod.ts';
+import { createAuthenticator } from './passkeys/fixtures/authenticator.ts';
 
 const HASH = await pbkdf2Hash('secret123');
 
@@ -1040,5 +1042,520 @@ describe('Pact content signing', () => {
     const sig = await bare.sign('x', 'explicit-key');
     asserts.assert(await bare.verifySignature('x', sig, 'explicit-key'));
     await expectCode(bare.sign('x'), 'INVALID_OPTION');
+  });
+});
+
+// =============================================================================
+// Passkeys
+// =============================================================================
+
+describe('Pact passkeys', () => {
+  const RP_ID = 'example.dev';
+  const ORIGIN = 'https://app.example.dev';
+  const store = makeStore();
+  store.seed('ada', 'ada@example.dev');
+  store.seed('sam', 'sam@example.dev', { status: 'LOCKED' });
+  const passkeys = new Map<string, PactStoredPasskey>();
+  const counters: [string, number][] = [];
+  const events: { event: string; detail: unknown[] }[] = [];
+  const pact = Pact.create({
+    ...BASE,
+    hooks: {
+      getUser: store.hooks.getUser,
+      getPasskey: (id) => passkeys.get(id) ?? null,
+      getPasskeys: (userId) =>
+        [...passkeys.values()].filter((p) => p.userId === userId),
+      savePasskey: (record) => {
+        passkeys.set(record.id, record);
+      },
+      updatePasskeyCounter: (id, signCount) => {
+        counters.push([id, signCount]);
+        const existing = passkeys.get(id)!;
+        passkeys.set(id, { ...existing, signCount });
+      },
+    },
+    options: {
+      cache: { ttl: { session: 5 } }, // cache-only session store
+      passkeys: { rpId: RP_ID, rpName: 'Example', origins: [ORIGIN] },
+    },
+  });
+  pact.on('login', (principal, method) => {
+    events.push({ event: 'login', detail: [principal.id, method] });
+  });
+  pact.on('loginFailed', (identifier, code) => {
+    events.push({ event: 'loginFailed', detail: [identifier, code] });
+  });
+  pact.on('passkeyCloneSuspected', (credentialId, userId) => {
+    events.push({
+      event: 'passkeyCloneSuspected',
+      detail: [credentialId, userId],
+    });
+  });
+
+  it('should gate the feature at construction, loudly', async () => {
+    // Config without hooks: MISSING_HOOK at boot, not mid-request.
+    const boot = asserts.assertThrows(
+      () =>
+        Pact.create({
+          ...BASE,
+          hooks: { getUser: store.hooks.getUser },
+          options: {
+            passkeys: { rpId: RP_ID, rpName: 'Example', origins: [ORIGIN] },
+          },
+        }),
+      PactError,
+    );
+    asserts.assertStrictEquals(boot.code, 'MISSING_HOOK');
+    // Ceremonies without config: INVALID_OPTION.
+    const off = Pact.create({
+      ...BASE,
+      hooks: { getUser: store.hooks.getUser },
+    });
+    await asserts.assertRejects(
+      () => off.beginPasskeyLogin(),
+      PactError,
+      'passkeys option block',
+    );
+  });
+
+  it('should run registration end to end and refuse duplicates', async () => {
+    const begin = await pact.beginPasskeyRegistration('ada', 'Ada L.');
+    asserts.assertStrictEquals(begin.options.rp.id, RP_ID);
+    asserts.assertStrictEquals(begin.options.user.displayName, 'Ada L.');
+    asserts.assertStrictEquals(begin.options.attestation, 'none');
+    asserts.assertEquals(
+      begin.options.pubKeyCredParams.map((p) => p.alg).sort((a, b) => a - b),
+      [-257, -7],
+    );
+    asserts.assertStrictEquals(begin.options.challenge, begin.challenge);
+    const authenticator = await createAuthenticator(RP_ID);
+    const record = await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    asserts.assertStrictEquals(record.userId, 'ada');
+    asserts.assert(passkeys.has(record.id), 'savePasskey must persist');
+    // The same credential cannot register twice.
+    const again = await pact.beginPasskeyRegistration('ada');
+    asserts.assertStrictEquals(again.options.excludeCredentials.length, 1);
+    const dup = await asserts.assertRejects(
+      async () =>
+        await pact.finishPasskeyRegistration(
+          'ada',
+          await authenticator.registrationResponse({
+            challenge: again.challenge,
+            origin: ORIGIN,
+          }),
+          { challenge: again.challenge },
+        ),
+      PactError,
+    );
+    asserts.assertStrictEquals(dup.code, 'PASSKEY_REGISTRATION_FAILED');
+  });
+
+  it('should refuse registration for unknown or inactive users', async () => {
+    for (const userId of ['ghost', 'sam']) {
+      const error = await asserts.assertRejects(
+        () => pact.beginPasskeyRegistration(userId),
+        PactError,
+      );
+      asserts.assertStrictEquals(error.code, 'PASSKEY_REGISTRATION_FAILED');
+    }
+  });
+
+  it('should log in with a passkey and mint a working session', async () => {
+    events.length = 0;
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    const login = await pact.beginPasskeyLogin('ada@example.dev');
+    asserts.assert(
+      login.options.allowCredentials.some(
+        (c) => c.id === authenticator.credentialId,
+      ),
+      'identifier-first login lists the user credentials',
+    );
+    const result = await pact.finishPasskeyLogin(
+      await authenticator.assertionResponse({
+        challenge: login.challenge,
+        origin: ORIGIN,
+        signCount: 1,
+      }),
+      { challenge: login.challenge },
+    );
+    asserts.assertStrictEquals(result.principal.id, 'ada');
+    const ctx = await pact.authenticate({
+      scheme: 'BEARER',
+      token: result.session.token,
+    });
+    asserts.assertStrictEquals(ctx.principal.id, 'ada');
+    const loginEvent = events.find((e) => e.event === 'login');
+    asserts.assertEquals(loginEvent?.detail, ['ada', 'PASSKEY']);
+    asserts.assert(
+      counters.some(([id, n]) => id === authenticator.credentialId && n === 1),
+      'updatePasskeyCounter must record the advance',
+    );
+  });
+
+  it('should support usernameless login via the discoverable path', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    const login = await pact.beginPasskeyLogin();
+    asserts.assertStrictEquals(login.options.allowCredentials.length, 0);
+    const result = await pact.finishPasskeyLogin(
+      await authenticator.assertionResponse({
+        challenge: login.challenge,
+        origin: ORIGIN,
+        signCount: 1,
+        userHandle: 'ada',
+      }),
+      { challenge: login.challenge },
+    );
+    asserts.assertStrictEquals(result.principal.id, 'ada');
+    // A mismatched user handle fails closed.
+    const again = await pact.beginPasskeyLogin();
+    const mismatch = await asserts.assertRejects(
+      async () =>
+        await pact.finishPasskeyLogin(
+          await authenticator.assertionResponse({
+            challenge: again.challenge,
+            origin: ORIGIN,
+            signCount: 5,
+            userHandle: 'someone-else',
+          }),
+          { challenge: again.challenge },
+        ),
+      PactError,
+    );
+    asserts.assertStrictEquals(mismatch.code, 'INVALID_CREDENTIALS');
+  });
+
+  it('should hide unknown identifiers behind the usernameless shape', async () => {
+    const known = await pact.beginPasskeyLogin('ghost@example.dev');
+    asserts.assertStrictEquals(known.options.allowCredentials.length, 0);
+  });
+
+  it('should collapse failures to 401 and surface clones server-side', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+        signCount: 7,
+      }),
+      { challenge: begin.challenge },
+    );
+    events.length = 0;
+    // Unknown credential id.
+    const login1 = await pact.beginPasskeyLogin();
+    const bogus = await authenticator.assertionResponse({
+      challenge: login1.challenge,
+      origin: ORIGIN,
+      signCount: 8,
+    });
+    const unknown = await asserts.assertRejects(
+      () =>
+        pact.finishPasskeyLogin(
+          { ...bogus, id: 'bm90LXJlZ2lzdGVyZWQ' },
+          { challenge: login1.challenge },
+        ),
+      PactError,
+    );
+    asserts.assertStrictEquals(unknown.code, 'INVALID_CREDENTIALS');
+    // Counter regression: rejected AND flagged.
+    const login2 = await pact.beginPasskeyLogin();
+    const clone = await asserts.assertRejects(
+      async () =>
+        await pact.finishPasskeyLogin(
+          await authenticator.assertionResponse({
+            challenge: login2.challenge,
+            origin: ORIGIN,
+            signCount: 7, // not above the registered 7
+          }),
+          { challenge: login2.challenge },
+        ),
+      PactError,
+    );
+    asserts.assertStrictEquals(clone.code, 'INVALID_CREDENTIALS');
+    const suspected = events.find((e) => e.event === 'passkeyCloneSuspected');
+    asserts.assertEquals(suspected?.detail, [
+      authenticator.credentialId,
+      'ada',
+    ]);
+    const failed = events.filter((e) => e.event === 'loginFailed');
+    asserts.assert(
+      failed.every((e) => e.detail[1] === 'INVALID_CREDENTIALS'),
+      'all passkey login failures collapse outward',
+    );
+  });
+});
+
+describe('Pact passkeys hardening', () => {
+  const RP_ID = 'example.dev';
+  const ORIGIN = 'https://app.example.dev';
+  const store = makeStore();
+  store.seed('ada', 'ada@example.dev');
+  store.seed('x'.repeat(65), 'long@example.dev'); // over the user-handle cap
+  const passkeys = new Map<string, PactStoredPasskey>();
+  const counters: [string, number][] = [];
+  const events: { event: string; detail: unknown[] }[] = [];
+  const pact = Pact.create({
+    ...BASE,
+    hooks: {
+      getUser: store.hooks.getUser,
+      getPasskey: (id) => passkeys.get(id) ?? null,
+      getPasskeys: (userId) =>
+        [...passkeys.values()].filter((p) => p.userId === userId),
+      savePasskey: (record) => {
+        passkeys.set(record.id, record);
+      },
+      updatePasskeyCounter: (id, signCount) => {
+        counters.push([id, signCount]);
+      },
+    },
+    options: {
+      cache: { ttl: { session: 5 } },
+      passkeys: { rpId: RP_ID, rpName: 'Example', origins: [ORIGIN] },
+    },
+  });
+  pact.on('loginFailed', (identifier, code) => {
+    events.push({ event: 'loginFailed', detail: [identifier, code] });
+  });
+
+  it('should reject a challenge mismatch through both finish paths', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    const wrongChallenge = await pact.beginPasskeyRegistration('ada');
+    // Registration: response signed over one challenge, expected = another.
+    const registration = await asserts.assertRejects(
+      async () =>
+        await pact.finishPasskeyRegistration(
+          'ada',
+          await authenticator.registrationResponse({
+            challenge: begin.challenge,
+            origin: ORIGIN,
+          }),
+          { challenge: wrongChallenge.challenge },
+        ),
+      PactError,
+    );
+    asserts.assertStrictEquals(
+      registration.code,
+      'PASSKEY_REGISTRATION_FAILED',
+    );
+    // Register properly, then a login with a mismatched challenge.
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    events.length = 0;
+    counters.length = 0;
+    const login = await pact.beginPasskeyLogin();
+    const other = await pact.beginPasskeyLogin();
+    const denied = await asserts.assertRejects(
+      async () =>
+        await pact.finishPasskeyLogin(
+          await authenticator.assertionResponse({
+            challenge: login.challenge,
+            origin: ORIGIN,
+            signCount: 1,
+          }),
+          { challenge: other.challenge },
+        ),
+      PactError,
+    );
+    asserts.assertStrictEquals(denied.code, 'INVALID_CREDENTIALS');
+    asserts.assertStrictEquals(
+      counters.length,
+      0,
+      'no counter write on failure',
+    );
+    const failed = events.find((e) => e.event === 'loginFailed');
+    asserts.assertEquals(failed?.detail, [
+      `passkey:${authenticator.credentialId}`,
+      'INVALID_CREDENTIALS',
+    ]);
+  });
+
+  it('should refuse finish for unknown or inactive users', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    const response = await authenticator.registrationResponse({
+      challenge: begin.challenge,
+      origin: ORIGIN,
+    });
+    const ghost = await asserts.assertRejects(
+      () =>
+        pact.finishPasskeyRegistration('ghost', response, {
+          challenge: begin.challenge,
+        }),
+      PactError,
+    );
+    asserts.assertStrictEquals(ghost.code, 'PASSKEY_REGISTRATION_FAILED');
+    asserts.assertFalse(
+      passkeys.has(authenticator.credentialId),
+      'nothing persisted for an unknown user',
+    );
+  });
+
+  it('should reject a userId over the 64-byte user-handle cap', async () => {
+    const error = await asserts.assertRejects(
+      () => pact.beginPasskeyRegistration('x'.repeat(65)),
+      PactError,
+      'user-handle',
+    );
+    asserts.assertStrictEquals(error.code, 'PASSKEY_REGISTRATION_FAILED');
+  });
+
+  it('should skip the counter write for synced passkeys at zero', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+        signCount: 0,
+      }),
+      { challenge: begin.challenge },
+    );
+    counters.length = 0;
+    const login = await pact.beginPasskeyLogin();
+    await pact.finishPasskeyLogin(
+      await authenticator.assertionResponse({
+        challenge: login.challenge,
+        origin: ORIGIN,
+        signCount: 0,
+      }),
+      { challenge: login.challenge },
+    );
+    asserts.assertStrictEquals(
+      counters.length,
+      0,
+      'zero-counter assertions must not write',
+    );
+  });
+});
+
+describe('Pact passkeys multi-device', () => {
+  const RP_ID = 'example.dev';
+  const ORIGIN = 'https://app.example.dev';
+  const store = makeStore();
+  store.seed('ada', 'ada@example.dev');
+  store.seed('bare', 'bare@example.dev'); // active user, no passkeys
+  const passkeys = new Map<string, PactStoredPasskey>();
+  const pact = Pact.create({
+    ...BASE,
+    hooks: {
+      getUser: store.hooks.getUser,
+      getPasskey: (id) => passkeys.get(id) ?? null,
+      getPasskeys: (userId) =>
+        [...passkeys.values()].filter((p) => p.userId === userId),
+      savePasskey: (record) => {
+        passkeys.set(record.id, record);
+      },
+      updatePasskeyCounter: (id, signCount) => {
+        const existing = passkeys.get(id)!;
+        passkeys.set(id, { ...existing, signCount });
+      },
+    },
+    options: {
+      cache: { ttl: { session: 5 } },
+      passkeys: { rpId: RP_ID, rpName: 'Example', origins: [ORIGIN] },
+    },
+  });
+
+  async function register(): Promise<
+    Awaited<ReturnType<typeof createAuthenticator>>
+  > {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    return authenticator;
+  }
+
+  it('should support several passkeys per user, each able to sign in', async () => {
+    const first = await register();
+    const second = await register();
+    const begin = await pact.beginPasskeyLogin('ada@example.dev');
+    const ids = begin.options.allowCredentials.map((c) => c.id);
+    asserts.assertArrayIncludes(ids, [
+      first.credentialId,
+      second.credentialId,
+    ]);
+    // Transports reported at registration are echoed for browser UX.
+    asserts.assert(
+      begin.options.allowCredentials.every(
+        (c) => c.transports?.includes('internal'),
+      ),
+    );
+    for (const authenticator of [first, second]) {
+      const login = await pact.beginPasskeyLogin();
+      const result = await pact.finishPasskeyLogin(
+        await authenticator.assertionResponse({
+          challenge: login.challenge,
+          origin: ORIGIN,
+          signCount: 1,
+        }),
+        { challenge: login.challenge },
+      );
+      asserts.assertStrictEquals(result.principal.id, 'ada');
+    }
+  });
+
+  it('should show a passkey-less known user as the empty usernameless shape', async () => {
+    const begin = await pact.beginPasskeyLogin('bare@example.dev');
+    asserts.assertStrictEquals(begin.options.allowCredentials.length, 0);
+  });
+
+  it('should fail closed on a userHandle that is not valid base64url', async () => {
+    const authenticator = await register();
+    const login = await pact.beginPasskeyLogin();
+    const response = await authenticator.assertionResponse({
+      challenge: login.challenge,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+    const mangled = {
+      ...response,
+      response: { ...response.response, userHandle: '%%%not-base64%%%' },
+    };
+    const error = await asserts.assertRejects(
+      () => pact.finishPasskeyLogin(mangled, { challenge: login.challenge }),
+      PactError,
+    );
+    asserts.assertStrictEquals(error.code, 'INVALID_CREDENTIALS');
   });
 });

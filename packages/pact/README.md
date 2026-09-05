@@ -6,7 +6,8 @@ Workers, and the browser. It covers **RBAC** authorization over unbounded
 **BigInt bitmask** permissions; four credential schemes — password (**Basic**,
 PBKDF2), **Bearer** sessions, **API keys**, and **HMAC** request signatures;
 **JWT** and opaque **sessions** with **refresh-token rotation** and reuse
-detection; **TOTP** as a second factor (**MFA / 2FA**); an **OAuth 2.0 /
+detection; **passkeys** (**WebAuthn / FIDO2**) for passwordless sign-in;
+**TOTP** as a second factor (**MFA / 2FA**); an **OAuth 2.0 /
 OpenID Connect** client with **PKCE**, `state`, and JWKS `id_token`
 verification; and drop-in **middleware** for express, fastify, oak, and hono.
 Identity, credentials, and sessions live behind a flat set of **optional
@@ -50,6 +51,7 @@ or better-auth. All cryptography is delegated to
 | [Caching](docs/Pact-Caching.md)             | Opt-in caches, the instance name, TTLs, invalidation                       |
 | [Security](docs/Pact-Security.md)           | The error contract, enumeration resistance, bound principals, threat notes |
 | [Middleware](middleware/Pact-Middleware.md) | express / fastify / oak / hono adapters and the neutral core               |
+| [Passkeys](docs/Pact-Passkeys.md)           | WebAuthn registration and login, usernameless sign-in, clone detection     |
 | [Roadmap](docs/Pact-Roadmap.md)             | Known limitations and planned work                                         |
 
 ## Installation
@@ -203,6 +205,10 @@ adapter for any other stack a few lines. See
   hits your hooks; per-type TTLs opt in, and the instance `name` keys the
   cache namespace so two apps on one Redis can never read each other's
   grants. See [Caching](docs/Pact-Caching.md).
+- **Passkeys** — WebAuthn registration and login (identifier-first or
+  usernameless), verified server-side with attestation policy 'none' and
+  counter-based clone detection; the minted session is an ordinary
+  bearer. See [Passkeys](docs/Pact-Passkeys.md).
 - **TOTP as plain secondary verification** — `generateMFASecret()` /
   `generateMFAAuthURL()` for enrollment, `verifyMFA()` to check; the app
   decides when to demand the second step.
@@ -210,7 +216,8 @@ adapter for any other stack a few lines. See
   and signed URLs, keyed by an HKDF-derived, JWT-domain-separated secret or
   your own explicit key.
 - **Events everywhere** — `login`, `loginFailed`, `logout`,
-  `authenticateFailed`, `refreshReused`, `idTokenUnverified` via `.on()` or
+  `authenticateFailed`, `refreshReused`, `passkeyCloneSuspected`,
+  `idTokenUnverified` via `.on()` or
   `_on<event>` options. Listener faults never alter an outcome.
 
 ## Sub-paths
@@ -225,12 +232,14 @@ adapter for any other stack a few lines. See
 
 ## Examples
 
-Two runnable mini-apps live in `packages/pact/examples/`, each with its own
+Three runnable mini-apps live in `packages/pact/examples/`, each with its own
 README and per-runtime run commands:
 
 - **orbit** — a project-management API on oak exercising the whole surface:
   register/activate, login/logout/refresh (JWT strategy), password reset,
   API keys, HMAC, MFA, per-route authorization, and the audit-trail events.
+- **passkey-signin** — passwordless sign-up and sign-in with passkeys in a
+  real browser, including usernameless login and the oak middleware.
 - **oauth-signin** — "Sign in with Google/GitHub" end to end: redirect with
   PKCE and state, callback exchange, JIT provisioning, and the shipped oak
   middleware. Bring your own provider credentials via env variables.

@@ -13,6 +13,7 @@ import { issueJWT, JWTError, verifyJWT } from '@tundralibs/crypt/JWT';
 import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import { AbstractEngine, Cacher } from '@tundralibs/cacher';
+import { decodeBase64Url, encodeBase64Url } from '@std/encoding';
 import type {
   ModulePermissions,
   PactAuthContext,
@@ -26,8 +27,13 @@ import type {
   PactOAuthProfile,
   PactOAuthRedirect,
   PactOptions,
+  PactPasskeyAssertionResponse,
+  PactPasskeyCreationOptions,
+  PactPasskeyRegistrationResponse,
+  PactPasskeyRequestOptions,
   PactPrincipal,
   PactStoredApiKey,
+  PactStoredPasskey,
   PactStoredSession,
   PactStoredUser,
   PactVerifiedCredentials,
@@ -37,6 +43,13 @@ import { PACT_AUTH_FAILURE_CODES, PactError } from './errors/mod.ts';
 import { BoundPrincipal } from './BoundPrincipal.ts';
 import { deserializeGrants, serializeGrants } from './grants.ts';
 import { OAuthClient } from './oauth/mod.ts';
+import {
+  COSE_BY_ALGORITHM,
+  type NormalizedPasskeyConfig,
+  normalizePasskeyConfig,
+  verifyAssertionCeremony,
+  verifyRegistrationCeremony,
+} from './passkeys/mod.ts';
 import {
   decodeFromCache,
   encodeForCache,
@@ -119,6 +132,9 @@ export class Pact<B extends PermissionBits, M extends string>
   /** Bumped by the revocation APIs; every outstanding bound principal
    * born under an older epoch re-resolves at its next check. */
   private __revocationEpoch = 0;
+
+  /** Validated passkey configuration; undefined = feature off. */
+  private readonly __passkeys?: NormalizedPasskeyConfig;
   // Per-type TTLs in SECONDS (validated minutes × 60).
   private readonly __cacheTtl: ReadonlyMap<PactCacheType, number>;
 
@@ -275,6 +291,27 @@ export class Pact<B extends PermissionBits, M extends string>
       );
     }
     this.__oauth = oauth;
+    // Passkeys: validate config AND hook presence at construction, so
+    // a misconfigured deployment fails at boot instead of surfacing
+    // MISSING_HOOK mid-request.
+    const passkeys = this._getOption('passkeys');
+    if (passkeys !== undefined) {
+      this.__passkeys = normalizePasskeyConfig(passkeys);
+      const required = [
+        'getPasskey',
+        'getPasskeys',
+        'savePasskey',
+        'updatePasskeyCounter',
+        'getUser',
+      ] as const;
+      for (const hook of required) {
+        if (this._hooks[hook] === undefined) {
+          throw new PactError('MISSING_HOOK', {
+            hook: `${hook} (required when passkeys are configured)`,
+          });
+        }
+      }
+    }
   }
 
   /**
@@ -992,6 +1029,262 @@ export class Pact<B extends PermissionBits, M extends string>
     issuer: string,
   ): string {
     return generateOTPAuthURL({ type: 'totp', secret, accountName, issuer });
+  }
+
+  /**
+   * Start a passkey registration ceremony for an existing active user —
+   * an authenticated flow (adding a passkey to an account, or right
+   * after signup); the caller vouches for `userId`. Returns the
+   * creation options for `navigator.credentials.create` plus the
+   * challenge the app must stash and hand back to
+   * {@link finishPasskeyRegistration} — pact holds no state between the
+   * two calls.
+   *
+   * @throws {PactError} `INVALID_OPTION` when passkeys are not
+   *   configured; `PASSKEY_REGISTRATION_FAILED` for an unknown or
+   *   inactive user.
+   */
+  public async beginPasskeyRegistration(
+    userId: string,
+    displayName?: string,
+  ): Promise<{ options: PactPasskeyCreationOptions; challenge: string }> {
+    const cfg = this.__requirePasskeys();
+    await this.__requireActivePasskeyUser(userId);
+    const handle = new TextEncoder().encode(userId);
+    // WebAuthn caps user handles at 64 bytes; over it the browser fails
+    // credentials.create with an undiagnosable TypeError — reject here.
+    if (handle.length > 64) {
+      throw new PactError('PASSKEY_REGISTRATION_FAILED', {
+        reason: 'userId exceeds the 64-byte WebAuthn user-handle limit',
+      });
+    }
+    const existing = await this._hooks.getPasskeys!(userId);
+    const challenge = this.__passkeyChallenge();
+    const name = displayName ?? userId;
+    return {
+      options: {
+        rp: { id: cfg.rpId, name: cfg.rpName },
+        user: {
+          id: encodeBase64Url(handle),
+          name,
+          displayName: name,
+        },
+        challenge,
+        pubKeyCredParams: [...cfg.algorithms].map((algorithm) => ({
+          type: 'public-key',
+          alg: COSE_BY_ALGORITHM[algorithm],
+        })),
+        timeout: cfg.timeout,
+        excludeCredentials: existing.map((passkey) => ({
+          type: 'public-key',
+          id: passkey.id,
+          ...(passkey.transports === undefined
+            ? {}
+            : { transports: passkey.transports }),
+        })),
+        authenticatorSelection: {
+          residentKey: 'preferred',
+          userVerification: cfg.userVerification.toLowerCase() as
+            | 'required'
+            | 'preferred'
+            | 'discouraged',
+        },
+        attestation: 'none',
+      },
+      challenge,
+    };
+  }
+
+  /**
+   * Verify the browser's registration result and persist the passkey
+   * via `savePasskey`. Returns the stored record (nothing in it is
+   * secret).
+   *
+   * The challenge is the ONLY link between begin and finish, and pact
+   * does not bind it to a user — the app must: either authenticate this
+   * call as the same `userId` the ceremony was begun for, or key its
+   * challenge stash by user and ceremony kind. Under attestation policy
+   * 'none' a registration response is constructible without an
+   * authenticator, so an unbound finish endpoint would let anyone
+   * attach their passkey to any account.
+   *
+   * @throws {PactError} `PASSKEY_REGISTRATION_FAILED` with a diagnostic
+   *   reason on any ceremony failure (challenge/origin/rpId mismatch,
+   *   malformed attestation, disabled algorithm, duplicate credential,
+   *   unknown or inactive user); `INVALID_OPTION` when passkeys are not
+   *   configured.
+   */
+  public async finishPasskeyRegistration(
+    userId: string,
+    response: PactPasskeyRegistrationResponse,
+    expected: { challenge: string },
+  ): Promise<PactStoredPasskey> {
+    const cfg = this.__requirePasskeys();
+    // Re-checked here, not only at begin: the user may have been
+    // deactivated between the two calls, and a finish for a nonexistent
+    // id must not persist a credential.
+    await this.__requireActivePasskeyUser(userId);
+    const verified = await verifyRegistrationCeremony(
+      response,
+      expected?.challenge ?? '',
+      cfg,
+    );
+    if (await this._hooks.getPasskey!(verified.id) !== null) {
+      throw new PactError('PASSKEY_REGISTRATION_FAILED', {
+        reason: 'credential is already registered',
+      });
+    }
+    const record: PactStoredPasskey = { ...verified, userId };
+    await this._hooks.savePasskey!(record);
+    return record;
+  }
+
+  /**
+   * Start a passkey login ceremony. With an `identifier`, the returned
+   * options carry the user's registered credentials in
+   * `allowCredentials`; without one, the list is empty and the browser
+   * offers its discoverable credentials (usernameless sign-in). An
+   * unknown identifier is indistinguishable from a user with no
+   * passkeys; a user WITH passkeys necessarily reveals their credential
+   * ids — the inherent identifier-first tradeoff. Offer the
+   * usernameless form to avoid it. Stash the challenge and hand it to
+   * {@link finishPasskeyLogin}.
+   *
+   * @throws {PactError} `INVALID_OPTION` when passkeys are not
+   *   configured.
+   */
+  public async beginPasskeyLogin(
+    identifier?: string,
+  ): Promise<{ options: PactPasskeyRequestOptions; challenge: string }> {
+    const cfg = this.__requirePasskeys();
+    let allowCredentials: PactPasskeyRequestOptions['allowCredentials'] = [];
+    if (identifier !== undefined) {
+      const user = await this._hooks.getUser!({ by: 'IDENTIFIER', identifier });
+      if (user !== null && this.__activeStatusSet.has(user.status)) {
+        allowCredentials = (await this._hooks.getPasskeys!(user.id)).map(
+          (passkey) => ({
+            type: 'public-key',
+            id: passkey.id,
+            ...(passkey.transports === undefined
+              ? {}
+              : { transports: passkey.transports }),
+          }),
+        );
+      }
+    }
+    const challenge = this.__passkeyChallenge();
+    return {
+      options: {
+        challenge,
+        rpId: cfg.rpId,
+        timeout: cfg.timeout,
+        userVerification: cfg.userVerification.toLowerCase() as
+          | 'required'
+          | 'preferred'
+          | 'discouraged',
+        allowCredentials,
+      },
+      challenge,
+    };
+  }
+
+  /**
+   * Verify a passkey assertion and mint a session for the credential's
+   * owner (through {@link createSession}; the `login` event fires with
+   * method `'PASSKEY'`). Every verification failure — unknown
+   * credential, challenge/origin mismatch, bad signature, suspected
+   * clone — collapses into the same `INVALID_CREDENTIALS`; a counter
+   * regression additionally emits `passkeyCloneSuspected` server-side.
+   *
+   * @throws {PactError} `INVALID_CREDENTIALS` as above (a 401);
+   *   `INVALID_OPTION` when passkeys are not configured;
+   *   `MISSING_HOOK` when no session store exists.
+   */
+  public async finishPasskeyLogin(
+    response: PactPasskeyAssertionResponse,
+    expected: { challenge: string },
+  ): Promise<PactLoginResult<M>> {
+    const cfg = this.__requirePasskeys();
+    // Credential ids are at most 1023 bytes (1364 base64url chars) —
+    // anything longer is junk and must not reach store hooks or event
+    // listeners as an unbounded attacker-controlled string.
+    const credentialId =
+      typeof response?.id === 'string' && response.id.length <= 1364
+        ? response.id
+        : '';
+    try {
+      const passkey = credentialId === ''
+        ? null
+        : await this._hooks.getPasskey!(credentialId);
+      if (passkey === null) throw new PactError('INVALID_CREDENTIALS');
+      if (!this.__userHandleMatches(response, passkey.userId)) {
+        throw new PactError('INVALID_CREDENTIALS');
+      }
+      const verdict = await verifyAssertionCeremony(
+        response,
+        expected?.challenge ?? '',
+        cfg,
+        passkey,
+      );
+      if (!verdict.valid) {
+        if (verdict.cloneSuspected) {
+          this._emit('passkeyCloneSuspected', passkey.id, passkey.userId);
+        }
+        throw new PactError('INVALID_CREDENTIALS');
+      }
+      if (verdict.signCount > passkey.signCount) {
+        await this._hooks.updatePasskeyCounter!(passkey.id, verdict.signCount);
+      }
+      return await this.createSession(passkey.userId, { method: 'PASSKEY' });
+    } catch (error) {
+      if (
+        error instanceof PactError && PACT_AUTH_FAILURE_CODES.has(error.code)
+      ) {
+        this._emit('loginFailed', `passkey:${credentialId}`, error.code);
+      }
+      throw error;
+    }
+  }
+
+  /** Both registration ceremonies require an existing, active user. */
+  private async __requireActivePasskeyUser(userId: string): Promise<void> {
+    const user = await this._hooks.getUser!({ by: 'ID', id: userId });
+    if (user === null || !this.__activeStatusSet.has(user.status)) {
+      throw new PactError('PASSKEY_REGISTRATION_FAILED', {
+        reason: 'unknown or inactive user',
+      });
+    }
+  }
+
+  /** The passkey feature gate: configured settings or a loud refusal. */
+  private __requirePasskeys(): NormalizedPasskeyConfig {
+    if (this.__passkeys === undefined) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'passkeys',
+        reason: 'passkey ceremonies require the passkeys option block',
+      });
+    }
+    return this.__passkeys;
+  }
+
+  /** 32 random bytes as an unpadded base64url challenge. */
+  private __passkeyChallenge(): string {
+    return encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  }
+
+  /** A discoverable-credential userHandle, when present, must decode to
+   * the stored owner id. */
+  private __userHandleMatches(
+    response: PactPasskeyAssertionResponse,
+    userId: string,
+  ): boolean {
+    const handle = response?.response?.userHandle;
+    if (handle === undefined || handle === null || handle === '') return true;
+    try {
+      return new TextDecoder().decode(decodeBase64Url(handle)) === userId;
+    } catch {
+      return false;
+    }
   }
 
   /**
