@@ -3,7 +3,7 @@
 Forward-looking build plan. Completed work is summarized under **Shipped**;
 everything below it is the **Backlog** — one pool, no 1.0-vs-later gate, all in
 scope and up for scheduling. Full build-history detail lives in git and the
-project memory. Last updated **2026-08-22**.
+project memory. Last updated **2026-09-05**.
 
 ## Shipped
 
@@ -21,11 +21,14 @@ Core and the current capability set are built and green on Deno / Bun / Node
   default }`; `@GET`/`@Module` `{ version }` override).
 - **Middleware** — universal `use()`, scope helpers (`onlyHTTP`/`guardHTTP`/…),
   and the catalog: cors, secureHeaders, compress, etag, rateLimit (store-
-  injection), requestId, requestLogger, responseTimer, serveStatic,
-  healthCheck, timeout, auth (`authenticate`/`authorize`/`permission`/`jwt`),
+  injection), requestId, requestLogger, responseTimer, healthCheck,
+  timeout, **idempotency** (identity-scoped replays, bounded default
+  store), auth (`authenticate`/`authorize`/`permission`/`jwt`),
   **session** (store-injection, signed id, rolling + absolute TTL, regenerate /
-  destroy, read via `getSession`), and **csrf** (stateless signed
-  double-submit). `Store` gained an optional `delete`.
+  destroy, loaded LAZILY on the first `await getSession(ctx)`), and **csrf**
+  (signed double-submit, session-bound). `Store` gained an optional
+  `delete`; `memoryStore` a `maxEntries` bound with an `evictable` guard.
+  Static serving is no longer a middleware — see `server.static` below.
 - **Decorators + modules** — `@GET/@POST/@PUT/@PATCH/@DELETE/@SOCKET/@JOB`,
   binders (`param`/`payload`/`query`/`paging`/`header`/`cookie`/`auth`/
   `session`/`connection`), `@Module`, `@On`/`@Use`, `RapidModule` +
@@ -125,16 +128,58 @@ Core and the current capability set are built and green on Deno / Bun / Node
   → JSON (default) or layout-wrapped page; `Accept` never consulted;
   `Vary: rapid-swap` stamped. Auto-escaping `html`/`raw`/`render`/
   `template` primitives (symbol-branded `Html`); layouts resolve route →
-  `@Module` → `app.ui()`; the frozen `view` bag exposes NOTHING from
+  `@Module` → app-level `ui` config; the frozen `view` bag exposes NOTHING from
   `ctx.auth` without the opt-in projection. The ~80-line `data-*` runtime
   is served from a string at `/__rapid/ui.js` (content-keyed ETag,
   always-revalidate no-cache, Workers-safe), echoes the `csrf` cookie, follows
   `rapid-redirect` same-origin only, emits `rapid:swapped`/`rapid:error`.
   Swap-side redirects become `200` + `rapid-redirect`; HTML error pages via
-  `app.ui({ errorTemplate })` under the same disclosure rules; templated
+  `ui.errorTemplates` under the same disclosure rules; templated
   routes advertise both media types in OpenAPI. Docs: docs/Rapid-UI.md +
-  README "UI"; runnable `examples/dashboard/main.ts`. Polling/history/transitions
-  stay deferred.
+  README "UI"; runnable `examples/dashboard/main.ts`. History shipped in the
+  tiers round (below); polling/transitions stay deferred.
+- **UI tiers round (2026-08-31; DESIGN-ui D10–D15)** — three fixed layout
+  tiers (core document > module/route layout > fragment; `layout: false`
+  opts out); UI config split BY NATURE — the serializable half under YAML
+  `ui:` (`enabled`, `runtimePath`, `live`, `history`, `prefer`, contract
+  headers), the code half (`core`/`layout`/`view`/`errorTemplates`/`assets`)
+  on `Application.initialize({ ui })` — "config names code, never imports
+  it"; `app.ui()` deprecated sugar. A CLOSED error registry (exact status /
+  `4xx`/`5xx` / `default` → `DefaultErrorPage`). Static serving became
+  CONFIG: `server.static` (prefix → dir, served on route miss, routes win;
+  `serveStatic` removed) with LAZY per-path fingerprinting (`view.asset()`,
+  immutable `?v=` URLs, no boot walk). Route `title`/`meta` flow to the
+  tiers. The opt-in **history module** (`ui.history`, `data-push`,
+  popstate re-fetch, no DOM cache). Sessions load lazily (`getSession` →
+  promise). `rapid init --ui` scaffolds the three-tier starter, `--with
+  bootstrap|pico` self-hosts a CSS framework. Examples restructured into a
+  showcase (blog: permission-driven nav via the `view` projection; kanban:
+  history + `formState`; dashboard).
+- **Adversarial review + hardening (2026-09-01 → 04;
+  `reviews/rapid-review-2026-09-01.md`)** — 23 findings dispositioned, then
+  a same-day pass over the fixes caught and corrected 8 regressions. The
+  keepers: `idempotency()` REQUIRES an identity `scope` (`false` = explicit
+  shared space), caps keys, skips unmatched requests, snapshots records
+  wire-faithfully (JSON round-trip — `toJSON` honoured on replay) and
+  never evicts an in-flight `pending` marker; `session()` saves only after
+  a COMPLETED load, clones at load AND save, runs its save phase on the
+  throw path; config fails LOUDLY (closed key sets for `ui:`/`server.static`,
+  boolean gates, `mode` normalised, late `route()`/`use()` after the router
+  snapshot throws); cookies queue and apply in CALL ORDER (signed ones
+  included — a later delete wins); `compress` skips 206; malformed multipart
+  → 400; SSE strips bare CRs; graceful stop drains jobs AND HTTP
+  concurrently within one window, removes the uploads dir only after;
+  unmatched-request errors negotiate `Accept` when `errorTemplates` exist;
+  identity-bearing pages stamp `Vary: Cookie` + `Cache-Control: private`;
+  `formState` rethrows unrecognised throws; the runtime origin-gates its
+  fetch and survives a double load; compat twins (`negotiate`/`parseRange`/
+  `parseCookies`) deduplicated; the false docs corrected.
+- **Beta feedback round (2026-09-04/05)** — `when()` / `each()` template
+  helpers (value-truthiness branches — `0 && …` rendered "0" — and lists
+  with an empty state) + a "keeping large pages readable" guide;
+  `data-load` lazy regions (skeleton first — the answer to "partial
+  prerendering"; D10 amended); csrf tokens session-bound (cookie tossing
+  closed). JSX authoring parked (below).
 - **OpenAPI from the decorators (2026-08-23)** — routes take `summary` /
   `description` / `tags` / `operationId` / `security`; `@Module` takes
   `description` / `tags` / `security` as the defaults its routes inherit. A
@@ -248,11 +293,15 @@ sequencing fact, not a deferral.
   client: `EventSource`, same `rapid:push`/`rapid:live` events) so live
   updates work on Cloudflare Workers, where the rpc WebSocket cannot
   listen. Documented as a known limit in docs/Rapid-UI.md until then.
-- **`rapid init --ui`** — scaffold the three-tier starter (core +
-  module layout + a page module + view components, `server.static`
-  wired) per DESIGN-ui D10/A3's conventions; `--with <css framework>`
-  emits an SRI-pinned link in the core (the sanctioned home for
-  bootstrap-style asks — never a framework API).
+- **JSX authoring runtime — PARKED (beta feedback 2026-09-04, user
+  call).** The only "SFC-like" option consistent with "the type checker
+  is the template compiler": a `ui/jsx-runtime` producing the same
+  `Html` (escape-by-default, `raw` the one opt-out), typed props for
+  free, no tooling of ours (every runtime compiles JSX). A few hundred
+  lines + intrinsic-element types + a second authoring syntax to
+  document. Mustache/SFC compilers rejected (a language + a Workers
+  file-loading story, and the typed handler↔view contract is lost).
+  Decide on its own merits, not as a reaction to one report.
 - **`cores` registry** (YAML `ui.core: <name>` selecting the document
   per replica) — DEFERRED from the tiers round: chrome moved to the
   module tier, thinning the per-replica case; purely additive when a

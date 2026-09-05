@@ -307,12 +307,13 @@ stylesheet caches forever.
 One delegated `click` + one `submit` listener over `data-action` elements —
 no inline handlers anywhere, so `script-src 'self'` suffices.
 
-| attribute     | meaning                                                 |
-| ------------- | ------------------------------------------------------- |
-| `data-action` | URL to fetch                                            |
-| `data-method` | default `get`; forms default `post`                     |
-| `data-target` | selector to swap into (default: the element itself)     |
-| `data-swap`   | `replace` (default) \| `outer` \| `append` \| `prepend` |
+| attribute     | meaning                                                                             |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `data-action` | URL to fetch                                                                        |
+| `data-method` | default `get`; forms default `post`                                                 |
+| `data-target` | selector to swap into (default: the element itself)                                 |
+| `data-swap`   | `replace` (default) \| `outer` \| `append` \| `prepend`                             |
+| `data-load`   | present → fetch the action on DOM ready / when swapped in (a lazy region; GET only) |
 
 Requests carry `rapid-swap: 1` (the only header the representer reads) plus
 `Accept: text/html` as a courtesy. Forms post
@@ -371,6 +372,29 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   **dynamic-update patterns** below. Everything further (polling,
   history) stays app JS over the runtime's events — the attribute
   surface is deliberately frozen.
+
+### Lazy regions — skeleton first
+
+The answer to slow data (what Next calls partial prerendering): render
+the page immediately with a skeleton element that carries the region's
+URL and `data-load`; the runtime fetches it once the DOM is ready (or
+right after the swap that inserted it) and swaps the result in:
+
+```ts ignore
+html`<section id="stats" data-action="/dashboard/stats" data-load>
+  <p class="skeleton">Loading…</p>
+  <noscript><a href="/dashboard/stats">Open stats</a></noscript>
+</section>`;
+```
+
+That is one extra request, by design: the region is its own route
+(it also serves JSON), caches on its own (`ETag`/`Vary` per region),
+fails on its own (`rapid:error` — the page stands), and `rapid:swapped`
+fires so history and multi-region chains apply. Each element loads
+ONCE; a response that itself carries `data-load` chains (poll-by-
+chain — deliberate). GET only. Without JavaScript the skeleton stays,
+so a `<noscript>` link is the honest fallback — the same route serves
+the full page. Pages never stream (see Bytes and streams).
 
 ## Dynamic updates — one action, many regions
 
@@ -687,8 +711,10 @@ A structural limit to know: rendering is **synchronous and
 whole-string** — a page is built entirely in memory before the first
 byte leaves, so HTML never streams. That is the right trade for this
 layer's scope (admin surfaces, CRUD apps, fragments measured in
-kilobytes); a page so large that time-to-first-byte depends on streaming
-its markup is past what this layer targets.
+kilobytes): once half a `200` page is on the wire an error can no
+longer become a proper error page, and `etag`/`compress` must see the
+final HTML. Slow DATA is a different problem, answered by lazy regions
+(`data-load`, above) rather than streaming.
 
 ## OpenAPI
 

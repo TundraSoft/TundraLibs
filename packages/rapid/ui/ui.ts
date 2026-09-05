@@ -11,8 +11,10 @@
  * target, opts?)` and `window.rapid.refresh(target)` — the sanctioned
  * way for app code to trigger (and repeat) swaps, e.g. multi-region
  * updates from a `rapid:swapped` listener, without synthesizing clicks.
- * Everything else (polling, history, transitions) stays
- * app-JS-over-events by design — the attribute surface is frozen.
+ * Everything else (polling, transitions) stays app-JS-over-events by
+ * design — the attribute surface is frozen; `data-load` (2026-09, the
+ * declarative lazy region) is its one recorded addition, see
+ * DESIGN-ui D10.
  *
  * Invariants pinned by `ui.test.ts` over this source string: the exact
  * header names, the same-origin `rapid-redirect` guard, the csrf echo,
@@ -27,7 +29,9 @@ import { djb2 } from '../utils/hash.ts';
  * The swap runtime. Attributes: `data-action` (URL), `data-method`
  * (default `get`; forms default `post`), `data-target` (selector;
  * default: the element itself), `data-swap` = `replace` (default) |
- * `outer` | `append` | `prepend`. The `csrf` cookie is echoed as
+ * `outer` | `append` | `prepend`, `data-load` (present → the element
+ * fetches its own action on DOM ready, or right after the swap that
+ * inserted it — a lazy region; GET only). The `csrf` cookie is echoed as
  * `x-csrf-token` (names overridable via `data-csrf-cookie` /
  * `data-csrf-header` on `<body>`; a renamed `ui.swapHeader` /
  * `ui.redirectHeader` is followed via `data-swap-header` /
@@ -235,6 +239,7 @@ export const UI_RUNTIME: string = `(() => {
         catch { detail.title = title; }
       }
       emit(swapped, 'rapid:swapped', detail);
+      loadLazy(swapped); // lazy regions the fragment brought with it
       return true;
     } finally {
       // Cleared only NOW: an entry deleted at the headers phase would
@@ -260,6 +265,31 @@ export const UI_RUNTIME: string = `(() => {
       swap: el.dataset.swap,
       body,
     });
+  };
+
+  // Lazy regions — the skeleton-first pattern: a [data-action][data-load]
+  // element fetches its own action once the DOM is ready, and any such
+  // element a swap INSERTS loads right after that swap. Each element
+  // loads ONCE; a response that itself carries data-load chains (that
+  // is how a poll-by-chain works — deliberate, not guarded). GET only,
+  // like history pushes: a load that POSTs is a footgun, so it warns.
+  const loaded = new WeakSet();
+  const loadLazy = (root) => {
+    const scope = root instanceof Element ? root : doc;
+    const found = [];
+    if (scope !== doc && scope.matches('[data-action][data-load]')) {
+      found.push(scope);
+    }
+    found.push(...scope.querySelectorAll('[data-action][data-load]'));
+    for (const el of found) {
+      if (loaded.has(el)) continue;
+      loaded.add(el);
+      if ((el.dataset.method || 'get').toLowerCase() !== 'get') {
+        console.warn('[rapid] data-load is GET-only', el);
+        continue;
+      }
+      perform(el, null);
+    }
   };
 
   // The public API — swap + refresh: app code triggers swaps
@@ -306,6 +336,11 @@ export const UI_RUNTIME: string = `(() => {
     e.preventDefault();
     perform(form, form, e.submitter);
   });
+  if (doc.readyState === 'loading') {
+    doc.addEventListener('DOMContentLoaded', () => loadLazy(doc));
+  } else {
+    loadLazy(doc);
+  }
 })();
 `;
 

@@ -325,6 +325,19 @@ Behaviour (the demo's `swap.js`, hardened — about 80 lines, no dependencies):
   wiring, transitions, `data-confirm`. Each is a later, opt-in attribute if
   demand appears; none is needed to make the mechanism whole.
 
+**Amended 2026-09-05 — `data-load` added (beta feedback).** The one
+addition to the frozen attribute surface: a `[data-action][data-load]`
+element fetches its own action once on DOM ready and right after the
+swap that inserted it — the declarative LAZY REGION, this layer's answer
+to "partial prerendering" (skeleton first, slow data swapped in). It
+earned the slot because the app-JS form was a one-liner every app would
+copy verbatim, and the pattern is the official reply to the streaming
+question (pages never stream — status-code correctness and
+`etag`/`compress` seeing final HTML — so slow data must be a region).
+Rules: once per element (a `WeakSet`), GET only (warn + skip
+otherwise), a response carrying `data-load` chains deliberately. History
+(`data-push`, D15) and this are the only two attributes added since v1.
+
 ### D11 — Package surface
 
 New subpath **`@tundralibs/rapid/ui`** (added to `deno.json` exports):

@@ -58,6 +58,71 @@ describe('rapid csrf()', () => {
     asserts.assertEquals((await r.json()).ok, true);
   });
 
+  it('a token minted anonymously is rejected once a session cookie exists — a planted token never rides a victim session', async () => {
+    const app = await makeApp();
+    const planted = tokenFrom(await app.fetch(new Request('http://app/form')))!;
+    const r = await app.fetch(
+      new Request('http://app/submit', {
+        method: 'POST',
+        headers: {
+          cookie: `csrf=${planted}; sid=victim-session`,
+          'x-csrf-token': planted,
+        },
+      }),
+    );
+    asserts.assertEquals(r.status, 403);
+    asserts.assertEquals((await r.json()).code, 'RAPID_CSRF_INVALID');
+  });
+
+  it('a token is bound to the session it was issued under — verifies there, nowhere else', async () => {
+    const app = await makeApp();
+    const bound = tokenFrom(
+      await app.fetch(
+        new Request('http://app/form', { headers: { cookie: 'sid=abc' } }),
+      ),
+    )!;
+    const own = await app.fetch(
+      new Request('http://app/submit', {
+        method: 'POST',
+        headers: { cookie: `csrf=${bound}; sid=abc`, 'x-csrf-token': bound },
+      }),
+    );
+    asserts.assertEquals(own.status, 200);
+    await own.body?.cancel();
+    const other = await app.fetch(
+      new Request('http://app/submit', {
+        method: 'POST',
+        headers: { cookie: `csrf=${bound}; sid=xyz`, 'x-csrf-token': bound },
+      }),
+    );
+    asserts.assertEquals(other.status, 403); // tossed onto another session
+  });
+
+  it('a session change re-issues the token on the next response; an unchanged one is kept', async () => {
+    const app = await makeApp();
+    const bound = tokenFrom(
+      await app.fetch(
+        new Request('http://app/form', { headers: { cookie: 'sid=abc' } }),
+      ),
+    )!;
+    const same = await app.fetch(
+      new Request('http://app/form', {
+        headers: { cookie: `csrf=${bound}; sid=abc` },
+      }),
+    );
+    asserts.assertEquals(tokenFrom(same), undefined); // still bound → no re-issue
+    const rotated = await app.fetch(
+      new Request('http://app/form', {
+        headers: { cookie: `csrf=${bound}; sid=after-login` },
+      }),
+    );
+    const fresh = tokenFrom(rotated);
+    asserts.assert(
+      fresh !== undefined && fresh !== bound,
+      'a new token follows the session',
+    );
+  });
+
   it('rejects a forged/unsigned token (403)', async () => {
     const app = await makeApp();
     const r = await app.fetch(

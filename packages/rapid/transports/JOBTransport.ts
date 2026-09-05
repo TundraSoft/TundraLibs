@@ -30,9 +30,9 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     next: () => void | Promise<void>,
   ) => void | Promise<void>;
   /**
-   * Scheduled firings still running — what {@link stop} waits on
-   * (bounded), so the module dispose that follows a SIGTERM can't close
-   * pools a mid-run job is still using.
+   * Firings still running — scheduled AND triggered — what {@link stop}
+   * waits on (bounded), so the module dispose that follows a SIGTERM
+   * can't close pools a mid-run job is still using.
    */
   private readonly __inflight = new Set<Promise<unknown>>();
 
@@ -58,7 +58,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       // Scheduled firings carry the registration-default params only
       // (no overrides — those exist solely on the trigger path).
       cronus.add(job.name, job.schedule, async (run) => {
-        const running = this.__run(
+        await this.__run(
           job,
           {
             scheduledAt: run.scheduledAt,
@@ -68,12 +68,6 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
           undefined,
           true,
         ); // hold the slot until detached work settles
-        this.__inflight.add(running);
-        try {
-          await running;
-        } finally {
-          this.__inflight.delete(running);
-        }
       });
     }
     cronus.start();
@@ -150,6 +144,18 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     }, args);
   }
 
+  /** Every firing, scheduled or triggered, tracked for {@link stop}'s drain. */
+  private __run(
+    job: RapidJobEntry<S>,
+    tick: JobTick,
+    overrides?: Readonly<Record<string, unknown>>,
+    holdDetached = false,
+  ): Promise<{ status: number; content: unknown; handlerRan: boolean }> {
+    const running = this.__execute(job, tick, overrides, holdDetached);
+    this.__inflight.add(running);
+    return running.finally(() => this.__inflight.delete(running));
+  }
+
   /**
    * @param holdDetached - SCHEDULED firings pass `true`: this method's
    *   promise IS what cronus's overlap guard keys off, so it must not
@@ -159,7 +165,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
    *   `false`: no scheduler slot is at stake and the caller is waiting
    *   for the outcome.
    */
-  private async __run(
+  private async __execute(
     job: RapidJobEntry<S>,
     tick: JobTick,
     overrides?: Readonly<Record<string, unknown>>,

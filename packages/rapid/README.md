@@ -420,7 +420,8 @@ per-page slots), the swappable module/route `layout` nesting inside it
 (route → `@Module` → app default; `false` opts out), and the content
 fragment built from plain view components. The small (~200-line) runtime
 (`GET /__rapid/ui.js`, ETag-revalidated) swaps fragments via `data-action` /
-`data-target` / `data-swap` attributes — no inline handlers
+`data-target` / `data-swap` attributes (`data-load` for lazy regions —
+skeleton first, the slow-data answer) — no inline handlers
 (`script-src 'self'` suffices) — echoes the `csrf` cookie as `x-csrf-token`,
 follows the `rapid-redirect` header same-origin only, emits
 `rapid:swapped` / `rapid:error` DOM events, and exposes a two-function

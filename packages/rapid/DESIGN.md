@@ -504,23 +504,28 @@ pointed:
 
 ## Open questions
 
-1. **Middleware × non-HTTP triggers** — per-trigger onions (ws yes,
-   cron mostly no), the scheduled-invocation principal (`@Access` on
-   cron runs), and the in-box middleware set. Core shape is decided —
-   see [Middleware](#middleware).
-2. **Synchronous inter-module dependency** — the declared class-token
-   mechanism (or a decision that v1 ships without one).
-3. **WebSockets trigger** — scoped after the HTTP shape settles; composes
-   rpc; expected to be "another trigger + its transport context."
+1. ~~**Middleware × non-HTTP triggers**~~ — **DONE.** One universal onion
+   (`app.use`) runs on every transport's invocation cycle — HTTP, socket
+   frames, and job firings alike — with `onlyHTTP`/`guardHTTP`/… scope
+   helpers; a job skipped by middleware is a distinct logged outcome. The
+   in-box set is the middleware catalog (ROADMAP → Shipped).
+2. ~~**Synchronous inter-module dependency**~~ — **DONE** via doctor:
+   modules are doctor-constructed, each app owns a child container
+   (`app.container`), and `inject()` resolves against it even after an
+   `await` (see DESIGN-modules.md).
+3. ~~**WebSockets trigger**~~ — **DONE.** `@SOCKET` commands +
+   `SOCKETContext` on the shared `/ws` listener, composed on
+   `@tundralibs/rpc`, through the same invocation cycle as HTTP and jobs.
 4. ~~Prototype cross-check~~ — **DONE 2026-08-10**; see
    [Prototype cross-check](#prototype-cross-check-2026-08-10). Its
    outputs: the adopt-list below, stronger evidence on questions 2
    (command bus) and the scheduled principal, and one new small
    question (decorated-class inheritance).
-5. **Decorated-class inheritance** — the scratch's WeakMap metadata was
-   keyed on the exact constructor, so subclassing a decorated module
-   silently lost the parent's routes. Decide: support it, or boot-error
-   on it. Leaning: boot error until a real use case appears.
+5. ~~**Decorated-class inheritance**~~ — **DONE.** Decorations live in a
+   name-keyed `Symbol.metadata` registry that follows the prototype chain,
+   so a subclass keeps the parent's routes; an override of a decorated
+   method must be re-decorated or mounting fails loudly (both cases
+   tested — see DESIGN-modules.md, the subclass-override policy).
 
 ## Prototype cross-check (2026-08-10)
 

@@ -604,6 +604,13 @@ describe('rapid.ui.app', () => {
       UI_RUNTIME,
       'if (window.rapid && window.rapid.swap) return;',
     );
+    // Lazy regions: [data-action][data-load] loads ONCE — on DOM ready
+    // and after the swap that inserted it — and only via GET.
+    asserts.assertStringIncludes(UI_RUNTIME, "'[data-action][data-load]'");
+    asserts.assertStringIncludes(UI_RUNTIME, 'const loaded = new WeakSet()');
+    asserts.assertStringIncludes(UI_RUNTIME, 'loadLazy(swapped)');
+    asserts.assertStringIncludes(UI_RUNTIME, "doc.readyState === 'loading'");
+    asserts.assertStringIncludes(UI_RUNTIME, 'data-load is GET-only');
     // The default csrf cookie name.
     asserts.assertStringIncludes(UI_RUNTIME, "'csrf'");
     // View Transitions progressive enhancement — with the animation

@@ -3407,3 +3407,68 @@ describe('rapid.Application boot-loud config', () => {
     await app.stop();
   });
 });
+
+// ==========================================================================
+// Graceful stop — drain ordering (2026-09 review follow-up)
+// ==========================================================================
+
+describe('rapid.Application graceful stop', () => {
+  it('the owned uploads dir outlives the drain — a multipart parse mid-drain still succeeds', async () => {
+    const app = await Application.initialize({
+      name: 'stop-uploads',
+      server: { port: 0, hostname: '127.0.0.1' },
+      uploads: { allowedExtensions: ['.txt'], maxSize: 1024 },
+      logger: { handlers: [] },
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    app.post('/up', async (ctx) => {
+      await gate; // the parse (and its temp-file write) happens DURING the drain
+      const body = (await ctx.payload) as Record<string, unknown>;
+      return { content: { got: Object.keys(body) } };
+    });
+    await app.start();
+    const form = new FormData();
+    form.append('doc', new File(['hello'], 'note.txt', { type: 'text/plain' }));
+    const inflight = fetch(`http://127.0.0.1:${app.port}/up`, {
+      method: 'POST',
+      body: form,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50)); // reach the handler
+    const stopping = app.stop();
+    setTimeout(release, 50);
+    const res = await inflight;
+    asserts.assertEquals(res.status, 200); // removed-dir-first would ENOENT → 500
+    asserts.assertEquals((await res.json()).got, ['doc']);
+    await stopping;
+  });
+
+  it('stop() waits, within the drain window, for an in-flight job firing', async () => {
+    const app = await Application.initialize({
+      name: 'stop-jobs',
+      server: { port: 0, hostname: '127.0.0.1' },
+      shutdownTimeout: 2000,
+      logger: { handlers: [] },
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let finished = false;
+    app.job('slow', '0 6 * * *', async () => {
+      await gate;
+      finished = true;
+      return { content: 'done' };
+    });
+    await app.start();
+    const firing = app.triggerJob('slow');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const stopping = app.stop();
+    setTimeout(release, 50);
+    await stopping;
+    asserts.assertEquals(finished, true); // resolved only after the job finished
+    await firing;
+  });
+});
