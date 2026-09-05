@@ -518,3 +518,37 @@ describe('hostile registration payloads', () => {
     asserts.assert(Date.now() - started < 5_000, 'must fail fast');
   });
 });
+
+describe('registration response integrity', () => {
+  it('should reject a response id that differs from the attested credential', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const response = await authenticator.registrationResponse({
+      challenge: CHALLENGE,
+      origin: ORIGIN,
+    });
+    const swapped = { ...response, id: 'c29tZW9uZS1lbHNl' };
+    await asserts.assertRejects(
+      () => verifyRegistrationCeremony(swapped, CHALLENGE, CONFIG),
+      PactError,
+      'does not match the attested credential',
+    );
+  });
+
+  it('should sanitize junk transports instead of storing them', async () => {
+    const authenticator = await createAuthenticator(RP_ID);
+    const response = await authenticator.registrationResponse({
+      challenge: CHALLENGE,
+      origin: ORIGIN,
+    });
+    const junk = {
+      ...response,
+      response: {
+        ...response.response,
+        // deno-lint-ignore no-explicit-any
+        transports: [7, null, 'x'.repeat(64)] as any,
+      },
+    };
+    const verified = await verifyRegistrationCeremony(junk, CHALLENGE, CONFIG);
+    asserts.assertStrictEquals(verified.transports, undefined);
+  });
+});

@@ -1461,3 +1461,101 @@ describe('Pact passkeys hardening', () => {
     );
   });
 });
+
+describe('Pact passkeys multi-device', () => {
+  const RP_ID = 'example.dev';
+  const ORIGIN = 'https://app.example.dev';
+  const store = makeStore();
+  store.seed('ada', 'ada@example.dev');
+  store.seed('bare', 'bare@example.dev'); // active user, no passkeys
+  const passkeys = new Map<string, PactStoredPasskey>();
+  const pact = Pact.create({
+    ...BASE,
+    hooks: {
+      getUser: store.hooks.getUser,
+      getPasskey: (id) => passkeys.get(id) ?? null,
+      getPasskeys: (userId) =>
+        [...passkeys.values()].filter((p) => p.userId === userId),
+      savePasskey: (record) => {
+        passkeys.set(record.id, record);
+      },
+      updatePasskeyCounter: (id, signCount) => {
+        const existing = passkeys.get(id)!;
+        passkeys.set(id, { ...existing, signCount });
+      },
+    },
+    options: {
+      cache: { ttl: { session: 5 } },
+      passkeys: { rpId: RP_ID, rpName: 'Example', origins: [ORIGIN] },
+    },
+  });
+
+  async function register(): Promise<
+    Awaited<ReturnType<typeof createAuthenticator>>
+  > {
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    return authenticator;
+  }
+
+  it('should support several passkeys per user, each able to sign in', async () => {
+    const first = await register();
+    const second = await register();
+    const begin = await pact.beginPasskeyLogin('ada@example.dev');
+    const ids = begin.options.allowCredentials.map((c) => c.id);
+    asserts.assertArrayIncludes(ids, [
+      first.credentialId,
+      second.credentialId,
+    ]);
+    // Transports reported at registration are echoed for browser UX.
+    asserts.assert(
+      begin.options.allowCredentials.every(
+        (c) => c.transports?.includes('internal'),
+      ),
+    );
+    for (const authenticator of [first, second]) {
+      const login = await pact.beginPasskeyLogin();
+      const result = await pact.finishPasskeyLogin(
+        await authenticator.assertionResponse({
+          challenge: login.challenge,
+          origin: ORIGIN,
+          signCount: 1,
+        }),
+        { challenge: login.challenge },
+      );
+      asserts.assertStrictEquals(result.principal.id, 'ada');
+    }
+  });
+
+  it('should show a passkey-less known user as the empty usernameless shape', async () => {
+    const begin = await pact.beginPasskeyLogin('bare@example.dev');
+    asserts.assertStrictEquals(begin.options.allowCredentials.length, 0);
+  });
+
+  it('should fail closed on a userHandle that is not valid base64url', async () => {
+    const authenticator = await register();
+    const login = await pact.beginPasskeyLogin();
+    const response = await authenticator.assertionResponse({
+      challenge: login.challenge,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+    const mangled = {
+      ...response,
+      response: { ...response.response, userHandle: '%%%not-base64%%%' },
+    };
+    const error = await asserts.assertRejects(
+      () => pact.finishPasskeyLogin(mangled, { challenge: login.challenge }),
+      PactError,
+    );
+    asserts.assertStrictEquals(error.code, 'INVALID_CREDENTIALS');
+  });
+});
