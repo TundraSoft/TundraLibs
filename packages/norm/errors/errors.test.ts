@@ -92,4 +92,27 @@ describe('norm.errors (taxonomy)', () => {
     asserts.assertEquals((h.cause as Error).message, 'boom');
     asserts.assertEquals(h instanceof NormError, true);
   });
+
+  it('norm: context.norm prefixes the message; tagNorm stamps once', () => {
+    const named = new NormQueryError('bad filter', {
+      entity: 'Users',
+      norm: 'billing',
+    });
+    asserts.assertEquals(named.norm, 'billing');
+    asserts.assertEquals(named.message, '[billing] bad filter');
+
+    const bare = new NormQueryError('bad filter', { entity: 'Users' });
+    asserts.assertEquals(bare.norm, undefined);
+    asserts.assertEquals(bare.message, 'bad filter');
+    asserts.assertStrictEquals(bare.tagNorm('billing'), bare);
+    asserts.assertEquals(bare.norm, 'billing');
+    asserts.assertEquals(bare.message, '[billing] bad filter');
+    asserts.assertEquals(
+      bare.toJSON().formattedMessage,
+      '[billing] bad filter',
+    );
+    bare.tagNorm('other'); // first stamp wins
+    asserts.assertEquals(bare.norm, 'billing');
+    asserts.assertEquals(bare.message, '[billing] bad filter');
+  });
 });

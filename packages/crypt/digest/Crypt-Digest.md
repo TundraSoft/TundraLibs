@@ -1,6 +1,6 @@
 # Crypt-Digest
 
-Cryptographic hashing functions using the Web Crypto API.
+Cryptographic hashing and salted PBKDF2 password hashing using the Web Crypto API.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
@@ -18,12 +18,15 @@ Cryptographic hashing functions using the Web Crypto API.
   - [sha512()](#sha512)
   - [sha384()](#sha384)
   - [sha1()](#sha1)
+  - [pbkdf2Hash()](#pbkdf2hash)
+  - [pbkdf2Verify()](#pbkdf2verify)
+  - [pbkdf2()](#pbkdf2)
 - [Examples](#examples)
 - [Security Notes](#security-notes)
 
 ## Overview
 
-The Digest module provides cryptographic hash functions for creating fixed-size digests from arbitrary data. All functions use the native Web Crypto API for secure, standards-compliant hashing.
+The Digest module provides cryptographic hash functions for creating fixed-size digests from arbitrary data, plus **salted PBKDF2 password hashing** (`pbkdf2Hash` / `pbkdf2Verify`) for at-rest password storage. All functions use the native Web Crypto API for secure, standards-compliant hashing.
 
 ### Features
 
@@ -36,6 +39,7 @@ The Digest module provides cryptographic hash functions for creating fixed-size 
 | Hex encoding    | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Base64 encoding | ✅  | ✅   | ✅      | ✅      | ✅      |
 | Binary input    | ✅  | ✅   | ✅      | ✅      | ✅      |
+| PBKDF2 (salted) | ✅  | ✅   | ✅      | ✅      | ✅      |
 
 ## Installation
 
@@ -227,6 +231,63 @@ const hash = await sha1('my data');
 // Returns 40 hex characters (160 bits)
 ```
 
+### `pbkdf2Hash()`
+
+Hash a password with **salted** PBKDF2 for at-rest storage. Returns a
+self-describing `pbkdf2-<hash>$<iterations>$<salt-hex>$<hash-hex>` string that
+carries everything `pbkdf2Verify` needs. Iterations default to the
+digest-aware `PBKDF2_PASSWORD_ITERATIONS` (600,000 for the default SHA-256,
+210,000 for SHA-384/512, per current OWASP guidance); the stored string
+records its count, so raising a default never breaks old hashes.
+
+Unlike a bare `digest()`, the random salt makes every hash of the same
+password unique, so the output **cannot be matched by equality** — you verify
+a candidate, you do not look a user up by their password hash.
+
+```typescript ignore
+pbkdf2Hash(
+  password: string,
+  opts?: { iterations?: number; hash?: 'SHA-256' | 'SHA-384' | 'SHA-512' },
+): Promise<string>
+```
+
+**Example:**
+
+```typescript
+import { pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/digest';
+
+const stored = await pbkdf2Hash('correct horse battery staple');
+const ok = await pbkdf2Verify('correct horse battery staple', stored); // true
+```
+
+### `pbkdf2Verify()`
+
+Verify a password against a `pbkdf2Hash` output. Constant-time on the digest
+comparison; returns `false` on any malformed or unrecognised input rather
+than throwing.
+
+```typescript ignore
+pbkdf2Verify(password: string, stored: string): Promise<boolean>
+```
+
+### `pbkdf2()`
+
+Low-level PBKDF2 derivation to raw bytes — the primitive `pbkdf2Hash` builds
+on. The salt (see `SALT_BYTES`, 16) must be stored to re-derive.
+
+```typescript ignore
+pbkdf2(
+  password: string,
+  salt: Uint8Array,
+  iterations: number,
+  bits?: number, // default 256
+  hash?: 'SHA-256' | 'SHA-384' | 'SHA-512', // default 'SHA-256'
+): Promise<Uint8Array>
+```
+
+For deriving a ready-to-use AES `CryptoKey` or fast HKDF sub-keys, see
+[Generators](../generators/Crypt-Generators.md) (`derivePBKDF2Key`, `hkdf`).
+
 ## Examples
 
 ### File Integrity Check
@@ -248,16 +309,15 @@ const isValid = await verifyFileIntegrity(
 );
 ```
 
-### Password Hashing (Not Recommended)
+### Password Hashing
 
 ```typescript
-import { sha256 } from '@tundralibs/crypt/digest';
+import { pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/digest';
 
-// ⚠️ For demonstration only - use dedicated password hashing
-// algorithms like Argon2, bcrypt, or scrypt in production
-async function hashPassword(password: string, salt: string): Promise<string> {
-  return await sha256(password + salt);
-}
+// ⚠️ Never store a bare SHA digest of a password — use the salted,
+// deliberately slow PBKDF2 pair instead.
+const stored = await pbkdf2Hash('hunter2'); // pbkdf2-sha256$600000$…
+const ok = await pbkdf2Verify('hunter2', stored); // true
 ```
 
 ### Generating Checksums
@@ -315,9 +375,12 @@ const content = storage.retrieve(id);
 | SHA-384   | 96 chars   | ~64 chars     | 384  |
 | SHA-512   | 128 chars  | ~88 chars     | 512  |
 
+The per-algorithm byte lengths are exported as `DIGEST_OUTPUT_BYTES`
+(e.g. `DIGEST_OUTPUT_BYTES['SHA-256']` → `32`).
+
 ### Best Practices
 
-1. **Don't use for passwords** - Use dedicated password hashing (Argon2, bcrypt, scrypt)
+1. **Don't store bare digests of passwords** - Use the salted `pbkdf2Hash` / `pbkdf2Verify` pair
 2. **Use SHA-256 minimum** - Avoid SHA-1 for new applications
 3. **Add salt when needed** - For password hashing or unique identifiers
 4. **Consider HMAC** - For message authentication (see [Crypt-Sign](../sign/Crypt-Sign.md))

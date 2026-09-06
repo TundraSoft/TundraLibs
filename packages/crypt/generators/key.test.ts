@@ -4,6 +4,7 @@ import {
   generateECDHKeys,
   generateECDSAKeys,
   generateECKeyPair,
+  generateEd25519Keys,
   generateKeyPair,
   generateRSAEncryptionKeys,
   generateRSAKeyPair,
@@ -659,5 +660,52 @@ describe('crypt.generators.key', () => {
     const algorithm = keyPair.publicKey.algorithm as RsaHashedKeyAlgorithm;
     assertEquals(algorithm.modulusLength, 3072);
     assertEquals(algorithm.hash.name, 'SHA-512');
+  });
+});
+
+describe('crypt.generators.key.ed25519', () => {
+  it('generates a usable Ed25519 signing pair', async () => {
+    const { publicKey, privateKey } = await generateEd25519Keys();
+    assertEquals(privateKey.algorithm.name, 'Ed25519');
+    assertEquals(publicKey.algorithm.name, 'Ed25519');
+    const data = new TextEncoder().encode('probe');
+    const sig = await crypto.subtle.sign('Ed25519', privateKey, data);
+    assert(
+      await crypto.subtle.verify('Ed25519', publicKey, sig, data),
+    );
+  });
+
+  it('exports PEM, DER, JWK, and RAW (public only)', async () => {
+    const pem = await generateEd25519Keys('PEM');
+    assert(
+      (pem.publicKeyExported as string).startsWith(
+        '-----BEGIN PUBLIC KEY-----',
+      ),
+    );
+    assert(
+      (pem.privateKeyExported as string).startsWith(
+        '-----BEGIN PRIVATE KEY-----',
+      ),
+    );
+
+    const der = await generateEd25519Keys('DER');
+    assert(der.publicKeyExported instanceof ArrayBuffer);
+
+    const jwk = await generateEd25519Keys('JWK');
+    assertEquals((jwk.publicKeyExported as JsonWebKey).kty, 'OKP');
+    assertEquals((jwk.publicKeyExported as JsonWebKey).crv, 'Ed25519');
+    assertEquals((jwk.privateKeyExported as JsonWebKey).d !== undefined, true);
+
+    const raw = await generateEd25519Keys('RAW');
+    assertEquals(
+      new Uint8Array(raw.publicKeyExported as ArrayBuffer).length,
+      32,
+    );
+    assertEquals(raw.privateKeyExported, undefined);
+  });
+
+  it('generateKeyPair routes the Ed25519 algorithm', async () => {
+    const { publicKey } = await generateKeyPair('Ed25519', 'PEM');
+    assertEquals(publicKey.algorithm.name, 'Ed25519');
   });
 });

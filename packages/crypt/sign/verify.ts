@@ -33,8 +33,10 @@ import type {
   SigningKey,
 } from './types/mod.ts';
 import {
+  describeKey,
   EC_CURVE_HASH,
   EC_SIGNATURE_BYTES,
+  ED25519_SIGNATURE_BYTES,
   importSigningKey,
   resolveECCurve,
 } from './keys.ts';
@@ -346,6 +348,86 @@ export const verifyEC = async (
 
   return crypto.subtle.verify(
     { name: 'ECDSA', hash: hashAlgorithm },
+    cryptoKey,
+    signatureBytes as BufferSource,
+    dataToVerify as BufferSource,
+  );
+};
+
+/**
+ * Verifies an Ed25519 signature produced by {@link signEd25519} (EdDSA,
+ * RFC 8032).
+ *
+ * A key of the wrong family is **refused** (thrown) rather than reported as
+ * an invalid signature — handing an RSA or EC key to an Ed25519 verify is a
+ * caller bug, and hiding it behind `false` would make it indistinguishable
+ * from a forgery. A malformed or wrong-width signature returns `false`.
+ *
+ * @param {string | Uint8Array} data - The data the signature covers
+ * @param {string} signature - The base64-encoded 64-byte signature
+ * @param {SigningKey} publicKey - The Ed25519 public key: a PEM string
+ *   (SPKI `PUBLIC KEY`), an `Ed25519` `CryptoKey`, or a public `OKP` JWK
+ * @returns {Promise<boolean>} Whether the signature is valid
+ *
+ * @throws {Error} When the signature is not a non-empty string
+ * @throws {Error} When the signature is not valid base64
+ * @throws {Error} When the supplied key is not an Ed25519 key, is in invalid
+ *   PEM format, or does not permit verification
+ *
+ * @see {@link signEd25519} for signing
+ * @see {@link SigningKey} for the accepted key forms
+ */
+export const verifyEd25519 = async (
+  data: string | Uint8Array,
+  signature: string,
+  publicKey: SigningKey,
+): Promise<boolean> => {
+  if (!signature || typeof signature !== 'string') {
+    throw new Error('Signature must be a non-empty string');
+  }
+
+  const shape = describeKey(publicKey);
+  if (shape.family !== 'Ed25519') {
+    throw new Error(
+      'Ed25519 verification needs an Ed25519 key, but the supplied key is ' +
+        (shape.family === 'HMAC'
+          ? 'a raw secret or HMAC key'
+          : shape.family === 'EC'
+          ? `an EC key on ${shape.curve}`
+          : 'an RSA key'),
+    );
+  }
+
+  const cryptoKey = await importSigningKey(publicKey, {
+    family: 'Ed25519',
+    purpose: 'verify',
+  });
+
+  const dataToVerify = typeof data === 'string'
+    ? new TextEncoder().encode(data)
+    : data;
+
+  let signatureBytes: Uint8Array;
+  try {
+    signatureBytes = Uint8Array.from(
+      atob(signature),
+      (c) => c.codePointAt(0) ?? 0,
+    );
+  } catch (error) {
+    throw new Error(
+      `Invalid signature format. Must be a base64 string: ${error}`,
+    );
+  }
+
+  // RFC 8032 fixes the width at 64 bytes, so anything else is not an Ed25519
+  // signature. Checked here rather than left to the runtime so every target
+  // agrees on the answer instead of some throwing and some returning false.
+  if (signatureBytes.length !== ED25519_SIGNATURE_BYTES) {
+    return false;
+  }
+
+  return crypto.subtle.verify(
+    'Ed25519',
     cryptoKey,
     signatureBytes as BufferSource,
     dataToVerify as BufferSource,

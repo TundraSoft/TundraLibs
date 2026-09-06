@@ -321,7 +321,7 @@ export abstract class ConnectionEngine<
    */
   protected _requireOptions(keys: readonly string[]): void {
     for (const key of keys) {
-      if (this.hasOption(key as keyof O) === false) {
+      if (this._hasOption(key as keyof O) === false) {
         throw new EngineError('MISSING_CONFIG_VALUE', {
           instanceId: this.instanceId,
           option: key,

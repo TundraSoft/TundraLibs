@@ -684,13 +684,14 @@ describe('crypt.JWT.issue', () => {
   });
 
   it('issueJWT - Unsupported algorithm throws UNSUPPORTED_ALGORITHM', async () => {
-    // `EdDSA` (RFC 8037) is a real JOSE algorithm this package does not
-    // implement — it stands in for "an algorithm we have never heard of".
-    // (This slot used to hold `ES256`, which is now supported.)
+    // `ES256K` (secp256k1, RFC 8812) is a real JOSE algorithm this package
+    // does not implement — it stands in for "an algorithm we have never
+    // heard of". (This slot used to hold `ES256`, then `EdDSA` — both now
+    // supported.)
     await asserts.assertRejects(
       async () => {
         // @ts-expect-error Testing unsupported algo
-        await issueJWT('EdDSA', { sub: 'test' }, TEST_SECRET);
+        await issueJWT('ES256K', { sub: 'test' }, TEST_SECRET);
       },
       JWTError,
       'Unsupported algorithm',

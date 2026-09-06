@@ -135,6 +135,7 @@ e.g. [`@tundralibs/ambient`](https://jsr.io/@tundralibs/ambient)'s
 the right container across `await`s too:
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/ambient
 import { createContext } from '@tundralibs/ambient';
 import { Doctor, inject, setContainerProvider, Vial } from '@tundralibs/doctor';
 import type { DoctorContainer } from '@tundralibs/doctor';

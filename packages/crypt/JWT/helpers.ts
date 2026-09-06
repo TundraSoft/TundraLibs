@@ -37,7 +37,7 @@ import {
  * @see {@link https://tools.ietf.org/html/rfc7518#section-3} RFC 7518 - JWT Algorithms
  */
 export const JWT_ALGORITHM_MAP: Record<
-  JWTAlgorithm,
+  Exclude<JWTAlgorithm, 'EdDSA'>,
   'SHA-256' | 'SHA-384' | 'SHA-512'
 > = {
   'HS256': 'SHA-256',
@@ -77,10 +77,11 @@ export const JWT_EC_CURVES: Record<string, ECCurve> = {
  * - `'RSA'` — asymmetric algorithms (RS/PS256/384/512) keyed with an RSA key.
  * - `'EC'` — asymmetric algorithms (ES256/384/512) keyed with an EC key on the
  *   one curve the algorithm binds.
+ * - `'Ed25519'` — `EdDSA` (RFC 8037), keyed with an Ed25519 key.
  *
  * @internal
  */
-export type JWTAlgorithmFamily = 'HMAC' | 'RSA' | 'EC';
+export type JWTAlgorithmFamily = 'HMAC' | 'RSA' | 'EC' | 'Ed25519';
 
 /**
  * Returns the {@link JWTAlgorithmFamily} an algorithm belongs to.
@@ -90,6 +91,9 @@ export type JWTAlgorithmFamily = 'HMAC' | 'RSA' | 'EC';
  * @internal
  */
 export const algorithmFamily = (alg: JWTAlgorithm): JWTAlgorithmFamily => {
+  if (alg === 'EdDSA') {
+    return 'Ed25519';
+  }
   if (alg.startsWith('ES')) {
     return 'EC';
   }

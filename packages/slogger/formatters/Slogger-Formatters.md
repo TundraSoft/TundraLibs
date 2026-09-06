@@ -353,6 +353,7 @@ import {
   Slogger,
   SyslogSeverities,
 } from '@tundralibs/slogger';
+// Needs a separate install: deno add @tundralibs/utils
 import { SyslogFacilities } from '@tundralibs/utils';
 
 const logger = new Slogger({

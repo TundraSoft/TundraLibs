@@ -21,6 +21,11 @@
  * - `ES384`: ECDSA on **P-384** using SHA-384
  * - `ES512`: ECDSA on **P-521** using SHA-512
  *
+ * EdDSA (asymmetric — RFC 8037):
+ * - `EdDSA`: Ed25519 signatures. No hash or curve to choose — both are fixed
+ *   by the algorithm — and signing is deterministic. Needs an Ed25519 key
+ *   (PKCS#8/SPKI PEM, `Ed25519` `CryptoKey`, or `OKP` JWK).
+ *
  * Both RSA families are RFC 7518-compliant and interoperate with standard JWT
  * implementations. `RS*` and `PS*` accept the same RSA key material; pick the
  * scheme the verifying party expects (`RS256` is the common default).
@@ -63,4 +68,5 @@ export type JWTAlgorithm =
   | 'PS512'
   | 'ES256'
   | 'ES384'
-  | 'ES512';
+  | 'ES512'
+  | 'EdDSA';

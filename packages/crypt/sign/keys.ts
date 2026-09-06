@@ -51,13 +51,21 @@ export const EC_SIGNATURE_BYTES: Record<ECCurve, number> = {
 };
 
 /**
+ * Width, in bytes, of an Ed25519 signature (RFC 8032 §5.1.6 — always 64).
+ *
+ * @internal
+ */
+export const ED25519_SIGNATURE_BYTES = 64;
+
+/**
  * The kind of cryptographic key an algorithm needs.
  *
  * - `'HMAC'` — symmetric; a raw secret, an `oct` JWK, or an HMAC `CryptoKey`.
  * - `'RSA'` — asymmetric RSA, for both `RS*` (PKCS#1 v1.5) and `PS*` (PSS).
  * - `'EC'` — asymmetric elliptic curve, for `ES*`.
+ * - `'Ed25519'` — asymmetric Edwards-curve (RFC 8410), for `EdDSA`.
  */
-export type KeyFamily = 'HMAC' | 'RSA' | 'EC';
+export type KeyFamily = 'HMAC' | 'RSA' | 'EC' | 'Ed25519';
 
 /** The operation a key is being requested for. */
 export type KeyPurpose = 'sign' | 'verify';
@@ -76,8 +84,9 @@ export type KeyRequirement = {
   family: KeyFamily;
   /** Whether the key will sign or verify. */
   purpose: KeyPurpose;
-  /** Hash the operation runs with. */
-  hash: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+  /** Hash the operation runs with. Required for every family except
+   * `'Ed25519'`, whose digest (SHA-512) is fixed by the algorithm itself. */
+  hash?: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
   /** Required curve — mandatory when `family` is `'EC'`. */
   curve?: ECCurve;
   /** RSA signature scheme — mandatory when `family` is `'RSA'`. */
@@ -118,6 +127,7 @@ const JOSE_NAMES: Record<string, string> = {
   'EC:P-256': 'ES256',
   'EC:P-384': 'ES384',
   'EC:P-521': 'ES512',
+  'Ed25519': 'EdDSA',
 };
 
 /**
@@ -235,6 +245,9 @@ export const describeKey = (key: SigningKey): KeyShape => {
     if (info?.family === 'EC') {
       return { family: 'EC', curve: info.curve };
     }
+    if (info?.family === 'Ed25519') {
+      return { family: 'Ed25519' };
+    }
     return { family: 'RSA' };
   }
 
@@ -252,6 +265,9 @@ export const describeKey = (key: SigningKey): KeyShape => {
     if (name === 'RSASSA-PKCS1-v1_5' || name === 'RSA-PSS') {
       return { family: 'RSA' };
     }
+    if (name === 'Ed25519') {
+      return { family: 'Ed25519' };
+    }
     if (name === 'ECDSA') {
       const curve = cryptoKeyCurve(key);
       if (curve !== 'P-256' && curve !== 'P-384' && curve !== 'P-521') {
@@ -264,7 +280,7 @@ export const describeKey = (key: SigningKey): KeyShape => {
     }
     throw new Error(
       `CryptoKey algorithm '${name}' cannot sign or verify. Supported: ` +
-        'HMAC, RSASSA-PKCS1-v1_5, RSA-PSS, ECDSA',
+        'HMAC, RSASSA-PKCS1-v1_5, RSA-PSS, ECDSA, Ed25519',
     );
   }
 
@@ -284,9 +300,18 @@ export const describeKey = (key: SigningKey): KeyShape => {
       }
       return { family: 'EC', curve };
     }
+    case 'OKP': {
+      if (jwk.crv !== 'Ed25519') {
+        throw new Error(
+          `Unsupported OKP JWK curve '${jwk.crv}': only Ed25519 is supported`,
+        );
+      }
+      return { family: 'Ed25519' };
+    }
     default:
       throw new Error(
-        `Unsupported JWK key type '${jwk.kty}': expected 'oct', 'RSA' or 'EC'`,
+        `Unsupported JWK key type '${jwk.kty}': expected 'oct', 'RSA', 'EC' ` +
+          "or 'OKP'",
       );
   }
 };
@@ -316,7 +341,11 @@ export const resolveECCurve = (
   if (shape.family !== 'EC' || shape.curve === undefined) {
     throw new Error(
       'ECDSA needs an EC key, but the supplied key is ' +
-        (shape.family === 'HMAC' ? 'a raw secret or HMAC key' : 'an RSA key'),
+        (shape.family === 'HMAC'
+          ? 'a raw secret or HMAC key'
+          : shape.family === 'Ed25519'
+          ? 'an Ed25519 key'
+          : 'an RSA key'),
     );
   }
   if (pinned !== undefined && shape.curve !== pinned) {
@@ -338,6 +367,7 @@ export const resolveECCurve = (
 const algorithmName = (need: KeyRequirement): string => {
   if (need.family === 'HMAC') return 'HMAC';
   if (need.family === 'EC') return 'ECDSA';
+  if (need.family === 'Ed25519') return 'Ed25519';
   return need.scheme === 'PKCS1' ? 'RSASSA-PKCS1-v1_5' : 'RSA-PSS';
 };
 
@@ -354,6 +384,7 @@ const algorithmName = (need: KeyRequirement): string => {
  */
 const joseName = (need: KeyRequirement): string | undefined => {
   if (need.family === 'EC') return JOSE_NAMES[`EC:${need.curve}`];
+  if (need.family === 'Ed25519') return JOSE_NAMES['Ed25519'];
   if (need.family === 'RSA') {
     return JOSE_NAMES[`RSA:${need.scheme ?? 'PSS'}:${need.hash}`];
   }
@@ -370,6 +401,8 @@ const joseName = (need: KeyRequirement): string | undefined => {
 const describeRequirement = (need: KeyRequirement): string =>
   need.family === 'EC'
     ? `${algorithmName(need)} on ${need.curve}`
+    : need.family === 'Ed25519'
+    ? 'Ed25519'
     : `${algorithmName(need)} with ${need.hash}`;
 
 /**
@@ -405,9 +438,10 @@ const validateCryptoKey = (key: CryptoKey, need: KeyRequirement): CryptoKey => {
           `'${need.curve}'`,
       );
     }
-  } else {
+  } else if (need.family !== 'Ed25519') {
     // RSA and HMAC keys bind their hash at import time; ECDSA takes it per
-    // operation, which is why the curve is checked instead above.
+    // operation (the curve is checked instead above), and Ed25519 binds
+    // neither hash nor curve — the algorithm name already said it all.
     const hash = cryptoKeyHash(key);
     if (hash !== undefined && hash !== need.hash) {
       throw new Error(
@@ -459,6 +493,8 @@ const validateJwk = (jwk: JsonWebKey, need: KeyRequirement): void => {
     ? 'oct'
     : need.family === 'EC'
     ? 'EC'
+    : need.family === 'Ed25519'
+    ? 'OKP'
     : 'RSA';
   if (jwk.kty !== expectedKty) {
     throw new Error(
@@ -469,6 +505,12 @@ const validateJwk = (jwk: JsonWebKey, need: KeyRequirement): void => {
   if (need.family === 'EC' && jwk.crv !== need.curve) {
     throw new Error(
       `JWK 'crv' is '${jwk.crv}' but this operation needs '${need.curve}'`,
+    );
+  }
+
+  if (need.family === 'Ed25519' && jwk.crv !== 'Ed25519') {
+    throw new Error(
+      `JWK 'crv' is '${jwk.crv}' but this operation needs 'Ed25519'`,
     );
   }
 
@@ -508,9 +550,15 @@ const validateJwk = (jwk: JsonWebKey, need: KeyRequirement): void => {
     );
   }
 
-  // RFC 7517 §4.4 — a JWK that names its algorithm names exactly one.
+  // RFC 7517 §4.4 — a JWK that names its algorithm names exactly one. For
+  // Ed25519 two registered spellings name the same operation: RFC 8037's
+  // polymorphic 'EdDSA' and the fully-specified 'Ed25519' (which is what
+  // Bun's own `exportKey('jwk')` emits) — accept either.
   const jose = joseName(need);
-  if (jwk.alg !== undefined && jose !== undefined && jwk.alg !== jose) {
+  if (
+    jwk.alg !== undefined && jose !== undefined && jwk.alg !== jose &&
+    !(need.family === 'Ed25519' && jwk.alg === 'Ed25519')
+  ) {
     throw new Error(
       `JWK 'alg' is '${jwk.alg}' but this operation is '${jose}'`,
     );
@@ -545,6 +593,15 @@ const sanitiseJwk = (jwk: JsonWebKey, need: KeyRequirement): JsonWebKey => {
     };
     return jwk.d === undefined ? base : { ...base, d: jwk.d };
   }
+  if (need.family === 'Ed25519') {
+    const base: JsonWebKey = {
+      kty: 'OKP',
+      crv: 'Ed25519',
+      x: jwk.x,
+      ext: true,
+    };
+    return jwk.d === undefined ? base : { ...base, d: jwk.d };
+  }
   const base: JsonWebKey = { kty: 'RSA', n: jwk.n, e: jwk.e, ext: true };
   if (jwk.d === undefined) {
     return base;
@@ -569,10 +626,12 @@ const sanitiseJwk = (jwk: JsonWebKey, need: KeyRequirement): JsonWebKey => {
  */
 const importParams = (
   need: KeyRequirement,
-): EcKeyImportParams | HmacImportParams | RsaHashedImportParams =>
+): Algorithm | EcKeyImportParams | HmacImportParams | RsaHashedImportParams =>
   need.family === 'EC'
     ? { name: 'ECDSA', namedCurve: need.curve as string }
-    : { name: algorithmName(need), hash: need.hash };
+    : need.family === 'Ed25519'
+    ? { name: 'Ed25519' }
+    : { name: algorithmName(need), hash: need.hash as string };
 
 /**
  * Imports PEM or raw-secret key material.

@@ -25,6 +25,13 @@
  *
  * So a crashed run resumes safely: re-running skips what already moved.
  *
+ * ## Rotation also upgrades the envelope
+ * Cells written before the derived-cell-key fast path carry a
+ * per-message salt and pay a full PBKDF2 on every read. Rotation
+ * re-encrypts through the current default cipher, so rotated cells come
+ * out in the fast `data:iv` envelope — after a rotation, every cell
+ * reads at plain AES-GCM cost.
+ *
  * ## Searchable hashes are rotation-invariant
  * `.hash()` sibling digests are derived from PLAINTEXT, not ciphertext —
  * rotation never touches them, and hashed-equality filters keep working
@@ -189,7 +196,7 @@ export async function rotateKey(
       throw new NormError(
         `rotateKey(): entity '${key}' has encrypted columns but no ` +
           `primary key — rows cannot be addressed for rewrite.`,
-        { subject: key },
+        { norm: runtime.name, subject: key },
       );
     }
 
@@ -249,6 +256,7 @@ export async function rotateKey(
             } catch (cause) {
               throw new NormCryptoError(
                 {
+                  norm: runtime.name,
                   entity: key,
                   column: col,
                   pk: pkOf(row, pkCols),

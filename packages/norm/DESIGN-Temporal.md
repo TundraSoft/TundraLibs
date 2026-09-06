@@ -1,13 +1,14 @@
 # Temporal & audit tables — design
 
-> **Status:** BOTH features BUILT (uncommitted) + live-tested on all 4
-> engines (Postgres/MariaDB/SQLite/MongoDB) + an adversarial review
-> pass (temporal's write-verb guards hardened: `update`/`upsert`/
-> `truncate` all disabled, not just `delete`).
+> **Status:** SHIPPED in norm 1.4.0 (PR #556, 2026-08-25). Both features
+> live-tested on the four self-hosted engines (Postgres/MariaDB/SQLite/
+> MongoDB) + an adversarial review pass (temporal's write-verb guards
+> hardened: `update`/`upsert`/`truncate` all disabled, not just
+> `delete`). Best-effort on Mongo and the fetch-only edge dialects.
 >
 > **Created:** 2026-08-23 · **Revised:** 2026-08-24 (audit built; two
 > features split; reads are plain column filters; Mongo/edge
-> best-effort)
+> best-effort) · 2026-09-04 (status: shipped)
 
 ## Build status (2026-08-24)
 
@@ -21,7 +22,8 @@ sentinel overflowed MariaDB's `TIMESTAMP` (2038 cap) — fixed by injecting
 **`DATETIME`** (→ `DATETIME(6)` on Maria, `TIMESTAMP` on PG, `TEXT` on
 SQLite). On Mongo the supersede is best-effort (no transactions, no unique).
 
-**Temporal — built and green** (mock + live 4-engine, Deno/Bun/Node):
+**Temporal — built and green** (mock + live on the four self-hosted
+engines, Deno/Bun/Node):
 config + `EffectiveFrom`/`EffectiveTo` injection + `UNIQUE(key…,
 EffectiveTo)` + `insert`=supersede (close-current + insert-new, in a
 transaction; best-effort on no-tx engines) + `update`→insert + `delete`
@@ -52,7 +54,8 @@ truncate would have erased the whole history) — both now disabled too.
 A temporal table is insert-only: `insert()` is the only write verb, and
 it already supersedes.
 
-**Audit — built and live-tested on all 4 engines** (`audit.test.ts` +
+**Audit — built and live-tested on the four self-hosted engines**
+(`audit.test.ts` +
 `tests/audit-live.test.ts`): the source table's write verbs are
 UNCHANGED; norm mirrors every insert/update/upsert/delete/truncate into
 the generated replica via the same supersede primitive (delete/truncate

@@ -89,10 +89,15 @@ describe('crypt.sign.keys', () => {
   });
 
   it('describeKey - rejects key material it cannot use', async () => {
+    // OKP/Ed25519 is a supported shape now; other OKP curves are not.
+    asserts.assertEquals(
+      describeKey({ kty: 'OKP', crv: 'Ed25519', x: 'AAAA' }),
+      { family: 'Ed25519' },
+    );
     asserts.assertThrows(
-      () => describeKey({ kty: 'OKP', crv: 'Ed25519', x: 'AAAA' }),
+      () => describeKey({ kty: 'OKP', crv: 'X25519', x: 'AAAA' }),
       Error,
-      "Unsupported JWK key type 'OKP'",
+      "Unsupported OKP JWK curve 'X25519'",
     );
     asserts.assertThrows(
       () => describeKey({ kty: 'EC', crv: 'secp256k1', x: 'A', y: 'B' }),

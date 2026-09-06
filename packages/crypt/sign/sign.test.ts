@@ -121,7 +121,7 @@ describe('crypt.sign', () => {
         await signHMAC(data, secret, { hashAlgorithm: 'INVALID' });
       },
       Error,
-      'Invalid HMAC hash',
+      'Invalid hash algorithm',
     );
   });
 

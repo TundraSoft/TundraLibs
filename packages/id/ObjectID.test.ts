@@ -1,6 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { ObjectID } from './mod.ts';
+import { ALPHA_NUMERIC, ObjectID } from './mod.ts';
 import { getProcessId } from '@tundralibs/compat/runtime';
 
 // Component lengths (default machineIdLength = 3)
@@ -169,12 +169,22 @@ describe('id.objectId', () => {
     }
   });
 
-  it('multi-instance differing workerIds', () => {
-    const g1 = ObjectID();
-    const g2 = ObjectID();
-    const w1 = g1().substring(18, 20);
-    const w2 = g2().substring(18, 20);
-    // worker ids likely differ (collision extremely unlikely)
-    asserts.assertNotEquals(w1, w2);
+  it('draws a fresh 2-char worker id per generator, stable across its calls', () => {
+    // There is no worker-id parameter, so the per-generator draw can only be
+    // observed. Two draws colliding is a 1-in-3,844 coin flip (it happened in
+    // CI); 64 draws all landing on one value is (1/3,844)^63 — a bug, not luck.
+    const workerOf = (gen: () => string) => gen().substring(18, 20);
+    const segment = new RegExp(`^[${ALPHA_NUMERIC}]{2}$`);
+    const drawn = Array.from({ length: 64 }, () => {
+      const gen = ObjectID(0, 'mch');
+      const worker = workerOf(gen);
+      asserts.assertMatch(worker, segment);
+      asserts.assertEquals(workerOf(gen), worker);
+      return worker;
+    });
+    asserts.assert(
+      new Set(drawn).size > 1,
+      'worker id must be drawn per generator, not shared process-wide',
+    );
   });
 });

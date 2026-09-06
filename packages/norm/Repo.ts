@@ -452,8 +452,12 @@ export class ReadRepo<
   ): Promise<NormResult<DefaultRowOf<R, Self>[]>>;
   /**
    * @throws {@link NormQueryError} When the filter, ordering, or projection
-   *   references an unknown column or misuses a hashed/encrypted one, or a
-   *   scoped handle's guard is violated (`SCOPE_VIOLATION`).
+   *   misuses a hashed/encrypted column, names an unknown relation alias
+   *   (`@Alias.@col`) or projection target, or a scoped handle's guard is
+   *   violated (`SCOPE_VIOLATION`).
+   * @throws {TypeError} From `@tundralibs/oql`'s query asserts when the
+   *   filter or ordering names a local column the entity does not have —
+   *   rejected before any SQL is sent, but not as a norm error.
    */
   public async find(
     filter?: FilterOf<R, Self>,
@@ -763,9 +767,10 @@ export class ReadRepo<
   /**
    * The envelope's `count` carries the answer; there is no `data`.
    *
-   * @throws {@link NormQueryError} When `filter` references an unknown column
-   *   or misuses a hashed/encrypted one, or a scoped handle's guard is
-   *   violated.
+   * @throws {@link NormQueryError} When `filter` misuses a hashed/encrypted
+   *   column, or a scoped handle's guard is violated.
+   * @throws {TypeError} From `@tundralibs/oql`'s query asserts when `filter`
+   *   names a local column the entity does not have.
    */
   public async count(
     filter?: FilterOf<R, Self>,
@@ -2675,6 +2680,8 @@ export class Repo<
    *   payload value contradicts the active `db.scope(...)`, or the
    *   write would collide with a row outside that scope.
    * @throws {@link NormValidationError} If a value fails its column rules.
+   * @throws {TypeError} From `@tundralibs/oql`'s query asserts when a
+   *   `conflictKeys` entry names a column the entity does not have.
    */
   public async upsert(
     // Scoped-relaxed like insert(): on a `db.scope(...)` handle the
@@ -2914,10 +2921,12 @@ export class Repo<
    * Update matching rows; OMITTING the filter updates ALL rows
    * (warned). Hashed columns filter by plaintext equality.
    *
-   * @throws {@link NormQueryError} When `filter` references an unknown or
-   *   hashed/encrypted column illegally, or a scoped update would move a row
-   *   to a different scope (`SCOPE_VIOLATION`).
+   * @throws {@link NormQueryError} When `filter` misuses a hashed/encrypted
+   *   column, or a scoped update would move a row to a different scope
+   *   (`SCOPE_VIOLATION`).
    * @throws {@link NormValidationError} If a value fails its column rules.
+   * @throws {TypeError} From `@tundralibs/oql`'s query asserts when `filter`
+   *   names a local column the entity does not have.
    */
   public async update(
     data: UpdateOf<D>,
@@ -3061,8 +3070,10 @@ export class Repo<
    * Delete matching rows; OMITTING the filter deletes ALL rows
    * (warned).
    *
-   * @throws {@link NormQueryError} When `filter` references an unknown or
-   *   hashed/encrypted column illegally.
+   * @throws {@link NormQueryError} When `filter` misuses a hashed/encrypted
+   *   column.
+   * @throws {TypeError} From `@tundralibs/oql`'s query asserts when `filter`
+   *   names a local column the entity does not have.
    */
   public async delete(filter?: FilterOf<R, Self>): Promise<NormResult> {
     // Temporal entity: history is never removed — delete is disabled.

@@ -2,7 +2,8 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { encodeHex } from '@std/encoding';
 import { decryptAES, decryptRSA, encryptAES, encryptRSA } from './mod.ts';
-import { derivePBKDF2Key, SALT_BYTES } from './kdf.ts';
+import { SALT_BYTES } from '../digest/mod.ts';
+import { derivePBKDF2Key } from '../generators/mod.ts';
 
 describe('crypt.decrypt', () => {
   it('decryptAES - Basic Decryption', async () => {
@@ -929,5 +930,118 @@ describe('crypt.decrypt', () => {
 
     // Verify the encrypted value is valid base64 with expected characters
     asserts.assertEquals(/^[A-Za-z0-9+/]+=*$/.test(encryptedValue), true);
+  });
+});
+
+describe('crypt.AES with a pre-derived CryptoKey', () => {
+  const keyFor = async (bits: 128 | 192 | 256 = 256): Promise<CryptoKey> => {
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+    return await derivePBKDF2Key('shared-secret', salt, 'AES-GCM', bits);
+  };
+
+  it('round-trips with a derivePBKDF2Key key and a 2-part envelope', async () => {
+    const key = await keyFor();
+    const envelope = await encryptAES('key-based message', key);
+    asserts.assertEquals(envelope.split(':').length, 2); // data:iv — no salt
+    asserts.assertEquals(await decryptAES(envelope, key), 'key-based message');
+  });
+
+  it('round-trips binary data with an imported raw key', async () => {
+    const raw = crypto.getRandomValues(new Uint8Array(32));
+    const key = await crypto.subtle.importKey(
+      'raw',
+      raw as BufferSource,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+    const payload = new Uint8Array([0, 1, 2, 253, 254, 255]);
+    const envelope = await encryptAES(payload, key);
+    const out = await decryptAES(envelope, key, { returnBinary: true });
+    asserts.assertEquals([...out], [...payload]);
+  });
+
+  it('skipping PBKDF2 means the same key decrypts many envelopes', async () => {
+    const key = await keyFor(128);
+    const a = await encryptAES('one', key, { keyLength: 128 });
+    const b = await encryptAES('two', key);
+    asserts.assertEquals(await decryptAES(a, key), 'one');
+    asserts.assertEquals(await decryptAES(b, key), 'two');
+    asserts.assertEquals(a === b, false); // fresh IV per message
+  });
+
+  it('rejects CBC/CTR with a CryptoKey secret (no MAC secret to derive)', async () => {
+    const key = await keyFor();
+    await asserts.assertRejects(
+      () => encryptAES('x', key, { mode: 'CBC' }),
+      Error,
+      'CryptoKey secret supports GCM only',
+    );
+    await asserts.assertRejects(
+      () => decryptAES('aa:bb', key, { mode: 'CTR' }),
+      Error,
+      'CryptoKey secret supports GCM only',
+    );
+  });
+
+  it('rejects a non-GCM key and a contradicting keyLength option', async () => {
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+    const cbcKey = await derivePBKDF2Key('s', salt, 'AES-CBC', 256);
+    await asserts.assertRejects(
+      () => encryptAES('x', cbcKey),
+      Error,
+      "CryptoKey is for 'AES-CBC'",
+    );
+    const key = await keyFor(256);
+    await asserts.assertRejects(
+      () => encryptAES('x', key, { keyLength: 128 }),
+      Error,
+      'options.keyLength says 128',
+    );
+  });
+
+  it('rejects a key that does not permit the operation', async () => {
+    const raw = crypto.getRandomValues(new Uint8Array(32));
+    const encryptOnly = await crypto.subtle.importKey(
+      'raw',
+      raw as BufferSource,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt'],
+    );
+    const envelope = await encryptAES('x', encryptOnly);
+    await asserts.assertRejects(
+      () => decryptAES(envelope, encryptOnly),
+      Error,
+      "does not permit 'decrypt'",
+    );
+  });
+
+  it('string and key envelopes are not interchangeable', async () => {
+    const key = await keyFor();
+    const stringEnvelope = await encryptAES('x', 'shared-secret'); // 3-part
+    await asserts.assertRejects(
+      () => decryptAES(stringEnvelope, key),
+      Error,
+      'Expected "data:iv" for a CryptoKey secret',
+    );
+    const keyEnvelope = await encryptAES('x', key); // 2-part
+    await asserts.assertRejects(
+      () => decryptAES(keyEnvelope, 'shared-secret'),
+      Error,
+      'Expected "data:iv:salt"',
+    );
+  });
+
+  it('a tampered key-based envelope is rejected (GCM auth)', async () => {
+    const key = await keyFor();
+    const envelope = await encryptAES('authentic', key);
+    const [dataHex, ivHex] = envelope.split(':') as [string, string];
+    const flipped = (parseInt(dataHex.slice(0, 2), 16) ^ 0x01)
+      .toString(16)
+      .padStart(2, '0');
+    await asserts.assertRejects(() =>
+      decryptAES(`${flipped}${dataHex.slice(2)}:${ivHex}`, key)
+    );
   });
 });

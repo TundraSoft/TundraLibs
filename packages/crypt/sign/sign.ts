@@ -31,8 +31,10 @@ import type {
   SigningKey,
 } from './types/mod.ts';
 import {
+  describeKey,
   EC_CURVE_HASH,
   EC_SIGNATURE_BYTES,
+  ED25519_SIGNATURE_BYTES,
   importSigningKey,
   resolveECCurve,
 } from './keys.ts';
@@ -298,6 +300,82 @@ export const signEC = async (
     throw new Error(
       `ECDSA produced a ${bytes.length}-byte signature but ${curve} requires ` +
         `${expected} bytes of raw R‖S`,
+    );
+  }
+
+  return encodeBase64(bytes);
+};
+
+/**
+ * Signs data using Ed25519 (EdDSA, RFC 8032).
+ *
+ * Unlike ECDSA there is nothing to configure: the curve, the digest (SHA-512,
+ * internal to the algorithm), and the 64-byte signature width are all fixed by
+ * Ed25519 itself — which also makes signatures deterministic: the same key and
+ * data always produce the same signature, with no per-signature nonce to
+ * mismanage.
+ *
+ * @param {string | Uint8Array} data - The data to sign, either as a string or binary data
+ * @param {SigningKey} privateKey - The Ed25519 private key: a PEM string
+ *   (PKCS#8 `PRIVATE KEY`), an `Ed25519` `CryptoKey`, or a private `OKP` JWK
+ * @returns {Promise<string>} A promise that resolves to the base64
+ *   representation of the 64-byte signature
+ *
+ * @throws {Error} When the supplied key is not an Ed25519 key
+ * @throws {Error} When the private key is in invalid or encrypted PEM format
+ * @throws {Error} When a supplied `CryptoKey` or JWK is not an Ed25519 private
+ *   key, or does not permit signing
+ *
+ * @example
+ * ```typescript
+ * import { generateEd25519Keys } from '@tundralibs/crypt/generators';
+ *
+ * const { privateKey } = await generateEd25519Keys();
+ * const signature = await signEd25519('important document', privateKey);
+ * ```
+ *
+ * @see {@link verifyEd25519} for signature verification
+ * @see {@link SigningKey} for the accepted key forms
+ * @see {@link https://www.rfc-editor.org/rfc/rfc8032} RFC 8032 — EdDSA
+ */
+export const signEd25519 = async (
+  data: string | Uint8Array,
+  privateKey: SigningKey,
+): Promise<string> => {
+  const shape = describeKey(privateKey);
+  if (shape.family !== 'Ed25519') {
+    throw new Error(
+      'Ed25519 signing needs an Ed25519 key, but the supplied key is ' +
+        (shape.family === 'HMAC'
+          ? 'a raw secret or HMAC key'
+          : shape.family === 'EC'
+          ? `an EC key on ${shape.curve}`
+          : 'an RSA key'),
+    );
+  }
+
+  const cryptoKey = await importSigningKey(privateKey, {
+    family: 'Ed25519',
+    purpose: 'sign',
+  });
+
+  const dataToSign = typeof data === 'string'
+    ? new TextEncoder().encode(data)
+    : data;
+
+  const signature = await crypto.subtle.sign(
+    'Ed25519',
+    cryptoKey,
+    dataToSign as BufferSource,
+  );
+
+  const bytes = new Uint8Array(signature);
+  if (bytes.length !== ED25519_SIGNATURE_BYTES) {
+    // Unreachable on a conforming runtime; asserted because a runtime that
+    // handed back anything else would silently mint unverifiable signatures.
+    throw new Error(
+      `Ed25519 produced a ${bytes.length}-byte signature but RFC 8032 ` +
+        `requires ${ED25519_SIGNATURE_BYTES} bytes`,
     );
   }
 
