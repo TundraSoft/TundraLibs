@@ -1,120 +1,121 @@
-# Sessions — JWT, opaque, and refresh rotation
+# Sessions
 
-`login()` mints a session; `verify()` resolves it back to a principal;
-`refresh()`/`logout()` manage its lifetime. Two strategies share one
-surface:
+Login mints a session under one of two strategies; `authenticate` with the
+`BEARER` scheme validates it. Both strategies share one result shape
+(`PactLoginResult`) and one storage seam.
 
-| `session.strategy`  | Token                        | State              | Revocation                                   |
-| ------------------- | ---------------------------- | ------------------ | -------------------------------------------- |
-| `'JWT'` (default)   | signed JWT (crypt)           | none (stateless)…  | at expiry — keep `ttl` short, or add refresh |
-| `'JWT'` + `refresh` | short JWT + rotating refresh | one family record  | instant via the family                       |
-| `'OPAQUE'`          | random id, store-backed      | one session record | instant (`logout` deletes the record)        |
+## Table of Contents
 
-**Choosing a strategy.** Reach for stateless `'JWT'` only when scale or
-statelessness outweighs revocation — a leaked or over-privileged token stays
-valid until it expires, so pair it with a **short `ttl`** (and the `isRevoked`
-denylist seam below) as the backstop. Choose `'OPAQUE'`, or `'JWT'` + `refresh`,
-whenever you need **instant** revocation — logout-everywhere, lock-on-abuse,
-high-value sessions — since both kill a session the moment its record is
-deleted. When in doubt, `'JWT'` + `refresh` is the balanced default: stateless
-access checks with a revocable family behind them.
+- [Choosing a strategy](#choosing-a-strategy)
+- [Opaque sessions](#opaque-sessions)
+- [JWT sessions and refresh families](#jwt-sessions-and-refresh-families)
+- [Cache-only mode](#cache-only-mode)
+- [The login seam](#the-login-seam)
+- [Logout and revocation](#logout-and-revocation)
+- [Options and defaults](#options-and-defaults)
 
-## JWT claims layout
+## Choosing a strategy
 
-Access token: `{ sub, use: 'ACCESS', iat, exp, iss?, aud?, sid?, grants? }`.
-Refresh token: `{ sub, use: 'REFRESH', sid, gen, iat, exp, iss?, aud? }`.
+| Property               | `OPAQUE` (default)            | `JWT`                                    |
+| ---------------------- | ----------------------------- | ---------------------------------------- |
+| Bearer validation      | Store lookup by token sha-256 | Signature check + family lookup          |
+| Revocation             | Immediate (delete the row)    | Family kill; access tokens die at `ttl`  |
+| Refresh                | —                             | Rotating refresh family, reuse detection |
+| Needs a signing secret | No                            | Yes (`session.secret`, 32+ chars)        |
 
-The `use` claim is **pinned**: `verify()` refuses anything but `'ACCESS'`
-and `refresh()` anything but `'REFRESH'` (`TOKEN_TYPE_MISMATCH`) — a
-long-lived refresh token can never be replayed as an access token.
+## Opaque sessions
 
-### `embedGrants`
+`login` returns a `pact_st_...` token shown once; the store only ever holds
+its sha-256 as the session id. Validation is one lookup; logout is one
+delete. There is no refresh — re-login when it expires.
 
-With `session: { embedGrants: true }` the principal's serialized masks
-ride the access token and `verify()` rebuilds the principal with **zero
-store lookups** — the right default for edge/high-throughput checks. The
-cost is staleness: grant AND status changes are invisible until the
-(short) token expiry. Without it, `verify()` resolves the user fresh via
-`getUser({ by: 'ID' })`, so a `LOCKED` user dies immediately.
+## JWT sessions and refresh families
 
-**Pitfall — stale authorization.** Because the token is self-contained, a
-grant downgrade or a `LOCKED`/`DISABLED` status flip is _invisible until
-expiry_: the token keeps its old authority for its whole lifetime. So do
-**not** embed when grants or status change often, and when you do embed, bound
-the access `ttl` to the staleness you can tolerate (≤ 5 minutes is typical).
-The [`isRevoked`](Pact-Hooks.md) hook is the _only_ mid-token veto an
-embedded-grant token has — revoking a role or emptying a group updates future
-`getUser` results but does **not** retroactively invalidate tokens already
-minted.
+With `session: { strategy: 'JWT', secret, ttl, refresh }` a login returns a
+short-lived access token and a refresh token, both HS256 JWTs pinned to
+their purpose by a `use` claim (an access token can never refresh; a
+refresh token can never authenticate). The stored record is the refresh
+family — one row per login, keyed by the `sid` claim, carrying the current
+`generation`.
 
-## Refresh rotation
+`refresh(refreshToken)` rotates: the presented generation must match the
+family's current one, and a new access + refresh pair is issued at the next
+generation.
 
-Enable with `session: { refresh: {} }` (defaults: family `ttl` 30 days,
-access `ttl` 900 s, `grace` 5 s). Every login creates a **family**
-(`PactStoredSession` with `generation: 0`); every `refresh()`:
+- A token one generation behind, presented within `refresh.grace` seconds
+  of the last rotation, re-issues at the current generation instead — this
+  absorbs the legitimate race of two tabs refreshing at once.
+- Anything older is treated as replay of a stolen token: the family is
+  deleted (every access and refresh token in it dies), `refresh` throws
+  `REFRESH_REUSED`, and the `refreshReused` event fires with the session
+  and user ids.
 
-1. verifies the refresh JWT (`use: 'REFRESH'`, signature, `iss`/`aud`);
-2. loads the family — missing/revoked/expired resolves `null`;
-3. compares the token's `gen` to the family's:
-   - **match** → rotate: `generation + 1` saved, fresh access+refresh
-     pair returned;
-   - **previous generation, within `grace` of the last rotation** → a
-     legitimate concurrent refresh (two tabs, a flaky retry): re-issued
-     at the current generation, no penalty;
-   - **anything else** → replay of a stolen token: the family is
-     tombstoned (`revokedAt`), the **`refreshReuse` event fires** —
-     alert on it — and both the thief's and the victim's tokens are dead.
+The reuse verdict is always taken against an authoritative store read,
+never a cached copy, so a stale cache cannot make an honest refresh look
+like theft. The family `ttl` bounds how long a stolen-but-unused refresh
+token stays live; the access `ttl` bounds how long a revoked family's last
+access token keeps working.
 
-**Tune the windows.** The family `ttl` (default 30 days) is the outer bound on
-how long a stolen-but-unused refresh token stays usable — shorten it for
-sensitive apps. Keep `grace` to a few seconds: it exists only to absorb
-legitimate concurrent refreshes (two tabs, a flaky retry), and an oversized
-window is exactly the gap a thief races inside to look legitimate, blunting
-reuse detection. `grace: 0` disables it entirely (strict single-use), at the
-cost of failing genuine concurrent refreshes.
+## Cache-only mode
 
-```typescript
-import { Pact } from '@tundralibs/pact';
+With no session hooks and a `session` cache TTL configured
+(`cache: { ttl: { session: n } }`), the session cache is the store.
+This is real, working session storage with two documented limits: it is
+per-process on the MEMORY engine (a restart logs everyone out, and
+multi-instance deployments need an external engine plus an instance
+[name](Pact-Caching.md)), and `logoutAll`/`setPassword` cannot enumerate a
+user's sessions from a cache — `logoutAll` still requires the
+`deleteSessions` hook.
 
-declare const pact: Pact;
-declare const oldRefreshToken: string;
+## The login seam
 
-const rotated = await pact.refresh(oldRefreshToken);
-if (rotated !== null) {
-  // hand rotated.token + rotated.refreshToken back to the client
+`login` is two public halves glued together, so app-owned flows can insert
+steps between them:
+
+```ts ignore
+const { principal, mfaRequired } = await pact.verifyCredentials(email, pw);
+if (mfaRequired && !await pact.verifyMFA(principal.id, code)) {
+  throw new Error('bad TOTP');
 }
+const result = await pact.createSession(principal.id, { method: 'MFA' });
 ```
 
-## The `verify` contract
+`verifyCredentials` proves identity with login's exact failure semantics
+and reports whether the user carries an MFA secret. `createSession` mints
+for an active user id with no credential proof — the caller vouches, which
+is precisely what magic links and impersonation need; gate it accordingly.
+It also accepts session `metadata` (stored on the record) and a `method`
+label for the `login` event.
 
-`verify(token)` resolves **`null` for every bad-token outcome** — bad
-signature/claims, wrong `use`, revoked, dead session, unknown or
-non-`ACTIVE` user — emitting `verifyFailed` with the typed error for
-audit. It throws only for configuration mistakes (`MISSING_OPTION` /
-`MISSING_HOOK`). That uniform null contract is what lets
-`authenticate()` treat every scheme identically.
+## Logout and revocation
 
-To add revocation to an otherwise-stateless JWT, wire the
-[`isRevoked`](Pact-Hooks.md) hook — a fast denylist check (by `jti`/`sid`/user)
-that `verify()` consults on every call. Keep it O(1)/cached: it runs on every
-request, and with `embedGrants` it is the only revocation seam you have.
+- `logout(token)` deletes the session (JWT: the family — expired access
+  tokens still identify their family, so logout works after expiry).
+- `logoutAll(userId)` calls `deleteSessions` and then clears the whole
+  session cache. On a shared cache engine the clear spans that namespace;
+  the instance [name](Pact-Caching.md) keeps it scoped to this app.
+- `setPassword` ends the user's sessions via `deleteSessions` when the
+  hook exists.
 
-## Logout semantics
+A `saveSession` implemented as a blind upsert can resurrect a session that
+a concurrent logout just deleted; prefer an insert plus a keyed update of
+rotation fields — see [Storage](Pact-Storage.md).
 
-| Setup             | `logout(token)` does…                                                                                                        |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `'OPAQUE'`        | deletes the session — immediate                                                                                              |
-| `'JWT'` + refresh | deletes the family (access OR refresh token accepted — both carry `sid`); refresh dies instantly, access at its short expiry |
-| `'JWT'` stateless | no-op — nothing to kill; use a short `ttl`                                                                                   |
+## Options and defaults
 
-`logout` is idempotent: invalid tokens are ignored. `logoutAll(userId)`
-ends every session/family via the `deleteUserSessions` hook. Both emit
-`logout`.
+| Option                  | Default  | Meaning                                           |
+| ----------------------- | -------- | ------------------------------------------------- |
+| `session.strategy`      | `OPAQUE` | Session strategy                                  |
+| `session.ttl`           | `480`    | Minutes: opaque session / JWT access lifetime     |
+| `session.secret`        | —        | JWT signing secret; required for `JWT`, 32+ chars |
+| `session.refresh.ttl`   | `10080`  | Minutes the refresh family lives (7 days)         |
+| `session.refresh.grace` | `30`     | Seconds a previous-generation refresh re-issues   |
+| `reset.ttl`             | `15`     | Minutes a password-reset token stays valid        |
 
-`'OPAQUE'` sessions have a **fixed lifetime** (`ttl` from mint); sliding
-renewal is on the [roadmap](../ROADMAP.md) as an opt-in.
+The `session` and `reset` option groups replace wholesale: passing
+`session: { strategy: 'JWT', secret }` resets the other session fields to
+their defaults rather than merging with an earlier value.
 
-An `'OPAQUE'` token is a bearer secret, so pact stores it hashed: `saveSession`,
-`getSession`, and `deleteSession` see the **sha-256 of the token**, never the
-raw id, and the raw token lives only in the client's hands. A read-only leak of
-the sessions table therefore yields no usable session ids.
+---
+
+[← Back to Pact](../README.md)

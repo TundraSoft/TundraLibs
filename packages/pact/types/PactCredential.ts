@@ -1,45 +1,30 @@
 /**
- * @fileoverview Extracted-credential union for `@tundralibs/pact` — what
- * `Pact.authenticate` checks. pact never parses headers or cookies: the
- * framework extracts the values (splits `Authorization`, decodes Basic
- * base64, picks the cookie, canonicalizes the HMAC payload) and passes
- * them along; pact only handles the checks and validation.
- *
- * @module
+ * One per-request credential, EXTRACTED by the framework adapter — pact
+ * never touches headers, cookies, or transport. `scheme` routes
+ * validation inside `authenticate`.
  */
-
-/** One extracted credential, discriminated by scheme. */
 export type PactCredential =
+  | { readonly scheme: 'BEARER'; readonly token: string }
   | {
-    /** Basic auth — identifier + password, pbkdf2-verified via `getUser`. */
-    scheme: 'BASIC';
-    identifier: string;
-    password: string;
+    readonly scheme: 'BASIC';
+    readonly identifier: string;
+    readonly password: string;
   }
   | {
-    /** A pact-issued session token (JWT or opaque, per `session` config). */
-    scheme: 'BEARER';
-    token: string;
+    readonly scheme: 'APIKEY';
+    readonly keyId: string;
+    readonly secret: string;
   }
   | {
-    /** Simple static token — sha-256 hashed, looked up via `getToken`. */
-    scheme: 'TOKEN';
-    token: string;
-  }
-  | {
-    /** API key pair — `secret` sha-256-compared against the stored hash. */
-    scheme: 'APIKEY';
-    keyId: string;
-    secret: string;
-  }
-  | {
+    readonly scheme: 'HMAC';
+    readonly keyId: string;
+    /** Hex signature over `payload`, as produced by crypt's signHMAC. */
+    readonly signature: string;
     /**
-     * Request signature — verified against the key's stored `secret` via
-     * crypt HMAC. The framework decides WHAT was signed (raw body, a
-     * canonical string) and passes it as `payload`.
+     * The canonicalized content the signature covers. Canonicalization
+     * (which bytes of the request are signed, replay windows) is the
+     * framework/application contract — pact never guesses transport
+     * bytes.
      */
-    scheme: 'HMAC';
-    keyId: string;
-    signature: string;
-    payload: string | Uint8Array;
+    readonly payload: string;
   };

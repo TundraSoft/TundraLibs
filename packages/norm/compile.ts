@@ -356,6 +356,11 @@ export type Runtime = {
    * (`@`-less FK aliases with `project: true` + hasOne reverse names
    * with `reverseProject: true`). Empty map entries are omitted. */
   readonly eager: ReadonlyMap<string, ReadonlyArray<string>>;
+  /** The owning `Norm`'s `name` (`CompileConfig.name`) — stamped onto
+   * every norm error that crosses a `NormDb` boundary, and the root of
+   * the read cache's namespace. Undefined for a hand-built runtime that
+   * gave none. */
+  readonly name?: string;
   /** Observability wrapper from `NormConfig.witness`; see {@link Witness}. */
   readonly witness?: Witness;
   /** The read-query cache, present only when the `Norm` was constructed
@@ -446,8 +451,12 @@ function decryptCellFailure(
   return null;
 }
 
-/** Crypto/behavior knobs `compileRuntime` consumes. */
+/** Instance knobs `compileRuntime` consumes. */
 export type CompileConfig = {
+  /** The owning `Norm`'s `name`: stamped onto errors that cross a
+   * `NormDb` boundary, and the read cache's namespace root (required
+   * when a cache config is given). */
+  readonly name?: string | undefined;
   readonly secret?: string | undefined;
   readonly algorithm?: EncryptAlgorithm | undefined;
   readonly crypto?: CryptoOverrides | undefined;
@@ -554,6 +563,7 @@ export function compileRuntime(
       }
     }
     cache = new QueryCache(
+      cfg.name,
       cacheCfg,
       plan,
       (entity, message) =>
@@ -585,6 +595,7 @@ export function compileRuntime(
   return {
     registry,
     reverseMap,
+    name: cfg.name,
     witness,
     encryptedFqn,
     nonFilterableFqn,

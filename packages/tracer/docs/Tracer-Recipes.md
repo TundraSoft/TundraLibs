@@ -735,9 +735,9 @@ import { Tracer } from '@tundralibs/tracer';
 import { Norm, type NormConfig } from '@tundralibs/norm';
 
 const tracer = new Tracer({ serviceName: 'orders' });
-declare const engine: NonNullable<NormConfig['engine']>;
+declare const database: NonNullable<NormConfig['database']>;
 
-const norm = new Norm({ engine, witness: tracer.wrap });
+const norm = new Norm({ database, witness: tracer.wrap });
 // tracer.wrap is the bound Witness adapter — equivalent to wiring
 // startActiveSpan(info.name, { attributes: info.attributes }, fn) by hand,
 // with non-OTLP-representable attribute values dropped for you.

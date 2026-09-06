@@ -45,10 +45,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * or transform values before they're stored.
  *
  * Options live in a {@link PrivateObject}: the store is readable only
- * by the subclass (`_getOption`/`_getOptions`) and writable only via
- * the protected `_setOption*` methods — option bags routinely carry
- * credentials, so nothing is exposed on the public surface beyond
- * {@link Options.hasOption}.
+ * by the subclass (`_hasOption`/`_getOption`/`_getOptions`) and
+ * writable only via the protected `_setOption*` methods — option bags
+ * routinely carry credentials, so nothing about the store is exposed on
+ * the public surface.
  *
  * @typeParam O - Option keys and their value types.
  * @typeParam E - Event names and their callback signatures.
@@ -77,8 +77,10 @@ export abstract class Options<
 > extends Events<E> {
   private readonly __options: PrivateObject<O> = privateObject<O>();
 
-  /** Whether `key` is present in the option store. */
-  public hasOption<K extends keyof O>(key: K): boolean {
+  /** Whether `key` is present in the option store. Protected like the
+   * rest of the store: even key existence can leak configuration (say,
+   * whether credentials were supplied). */
+  protected _hasOption<K extends keyof O>(key: K): boolean {
     return this.__options.has(key);
   }
 

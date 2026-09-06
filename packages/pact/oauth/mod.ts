@@ -1,28 +1,10 @@
 /**
- * @fileoverview `@tundralibs/pact/oauth` — the OAuth2/OIDC client layer:
- * the restler-based authorization-code + PKCE client, the JWKS-backed
- * id_token verifier, and the provider presets. Composed by the `Pact`
- * engine (one client per `oauth` option entry) but usable standalone.
+ * Internal OAuth engine for pact — the per-instance client, its id_token
+ * verifier, and the built-in provider presets. Not a public subpath
+ * (yet): the engine surface is `Pact.oauthRedirect` / `Pact.oauthLogin`.
  *
  * @module
  */
-
 export { OAuthClient } from './OAuthClient.ts';
-export {
-  type IdTokenContext,
-  type IdTokenVerificationPolicy,
-  IdTokenVerifier,
-  type IdTokenVerifierOptions,
-} from './IdTokenVerifier.ts';
-export {
-  type ProfileNormalizer,
-  type ProviderPreset,
-  PROVIDERS,
-} from './providers.ts';
-export type {
-  PactAuthorizationUrlOptions,
-  PactOAuthCallbackParams,
-  PactOAuthProfile,
-  PactOAuthProviderKind,
-  PactOAuthTokens,
-} from '../types/mod.ts';
+export { IdTokenVerifier } from './IdTokenVerifier.ts';
+export { PROVIDERS } from './providers.ts';

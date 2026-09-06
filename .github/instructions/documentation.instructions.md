@@ -10,7 +10,8 @@ Guidelines for creating and maintaining documentation in TundraLibs.
 The repo-wide coding conventions this builds on — public-specifier doc
 examples, `{@link}`/`@throws` JSDoc rules, imports through folder barrels — are
 the single source in [CONVENTIONS.md](../../CONVENTIONS.md). This file adds the
-documentation-specific detail (file naming, structure, length budget); where
+documentation-specific detail (file naming, structure, prose voice, length
+budget); where
 they touch the same rule, CONVENTIONS.md wins.
 
 ## File Naming Convention
@@ -270,6 +271,73 @@ Content...
 
 [← Back to {Module}](../Package-Module.md)
 ````
+
+## Prose voice
+
+The sections above govern the shape of a document. This one governs the
+sentences, and it applies to README prose, `docs/*.md`, and JSDoc
+paragraphs alike. Generated-sounding prose has a recognisable fingerprint:
+not dryness, but the same few devices used at the same density in every
+paragraph. Readers deciding whether to trust a package notice it. Write
+reference prose, not a pitch and not a design review.
+
+1. **State the behavior first, in a sentence that ends.** Add the reason
+   in a second sentence only when it changes what the reader does.
+   Rationale welded onto every behavior ("..., because ..., so ...") turns
+   a reference into an essay the reader has to wade through.
+2. **One em-dash per paragraph at most.** A sentence that needs two is two
+   sentences. Prefer the full stop, then the comma, then the colon.
+3. **No capitals for emphasis.** Not "the SAME id", "EVERY read", "ONLY".
+   Bold marks a defined term on first use or a warning the reader must not
+   miss, and nothing else. Italics are not an emphasis channel.
+4. **Contrast only when the contrast is the point.** "X, not Y" once per
+   page is a good sentence; once per paragraph is a tic. The same goes for
+   "the whole point", "for free", "never silent", "footgun", "buys nothing".
+5. **Say each rule once, in its home document, and link from everywhere
+   else.** A paragraph that appears in the README, the guide, and two
+   references is three stale copies waiting to happen.
+6. **Keep paragraphs short.** Past about six rendered lines, look for the
+   list, the table, or the second heading hiding inside.
+7. **Name the package one way.** In prose the package is `norm`, `compat`,
+   `guardian`; the class is `Norm`. The shouted form is a logo, not a word.
+8. **No throat-clearing about the document itself.** "Two things worth
+   knowing", "read this before you...", "be precise about what it does not
+   do": delete the sentence and keep the content.
+9. **Numbers go in tables or code, not adjectives.** A per-cell figure and
+   the arithmetic beat "hours, not minutes".
+
+Two real before/after pairs from this repo:
+
+> **Before.** Set it to `0` only once you've deliberately decided every
+> limit-less read of this entity should return every row — that still
+> emits an `unbounded-read` `warning` event on every such read, because a
+> forgotten `limit` on a large table is a production incident, not a style
+> nit.
+>
+> **After.** `0` removes the cap: every limit-less read returns every row
+> and emits an `unbounded-read` warning, since a missing `limit` on a large
+> table is a common cause of outages.
+
+> **Before.** **Never cached:** reads that **join** another table (a
+> `cache-skip` `warning` fires so it's diagnosable) — a joined entry would
+> depend on more than one table, breaking per-table pruning; model those
+> as a **VIEW** instead.
+>
+> **After.** Reads that join another table are never cached, because a
+> joined entry depends on more than one table and per-table pruning could
+> not invalidate it. Such reads emit a `cache-skip` warning. Model them as
+> a VIEW to cache them.
+
+### Retrofitting an existing document
+
+Rewrite one file at a time, run `deno check --doc-only` on it, and keep
+every fact and every code block. These three greps find most of the tics:
+
+```bash
+grep -c '—' packages/{package}/README.md              # em-dashes: expect far fewer than paragraphs
+grep -nE '\b(NOT|ONLY|EVERY|SAME|THIS|ANY|NEVER)\b' packages/{package}/docs/*.md   # shouted emphasis
+grep -n ', not ' packages/{package}/docs/*.md          # the contrast tic
+```
 
 ## Badges
 

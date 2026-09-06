@@ -136,8 +136,8 @@ describe('norm.scoped-upsert (live sqlite)', () => {
     // MariaDB's ON DUPLICATE KEY UPDATE matches on ANY unique key, not
     // the conflict target — so a payload PK belonging to another tenant
     // silently rewrites that tenant's row there. The probe covers every
-    // DECLARED key the payload supplies, so the write is refused on all
-    // four dialects, before any SQL runs.
+    // DECLARED key the payload supplies, so the write is refused on every
+    // dialect, before any SQL runs.
     const org42 = db.scope({ '@orgId': 42 });
     await asserts.assertRejects(
       () =>

@@ -1,11 +1,11 @@
 # Schema definition
 
-Everything NORM needs to know about your data lives in one place: the
+Everything norm needs to know about your data lives in one place: the
 `Column.*` builders, the `Entity()` constructor, and the `Schema()` /
-`use()` composition functions. From that single declaration NORM
-derives your types, validation, migrations, and at-rest encryption —
-no codegen, no decorators, no import cycles. This guide is the full
-builder reference: every column factory and modifier, every entity
+`use()` composition functions. From that single declaration norm
+derives your types, validation, migrations, and at-rest encryption,
+with no codegen, no decorators, and no import cycles. This guide is the
+full builder reference: every column factory and modifier, every entity
 kind and option, foreign keys and derived relations, and how schemas
 compose.
 
@@ -64,18 +64,18 @@ const Identity = Schema('Identity', { Users });
 const registry = use(Identity);
 ```
 
-Builders are **immutable**: every chained call returns a _new_ builder,
-and the chain's result is carried on `.spec` as plain, serializable
-data (this is what snapshots and migrations diff). The TypeScript value
-type rides along as a phantom generic, so `RowOf`, `InsertOf`, and
-`UpdateOf` are read straight off the builder type — no `as const`
-discipline, no literal-widening pitfalls.
+Builders are immutable: every chained call returns a new builder, and
+the chain's result is carried on `.spec` as plain, serializable data,
+which is what snapshots and migrations diff. The TypeScript value type
+rides along as a phantom generic, so `RowOf`, `InsertOf`, and
+`UpdateOf` are read straight off the builder type with no `as const`
+discipline and no literal-widening pitfalls.
 
-Invalid combinations don't type-check. `hash()` exists only after
-`encrypt()`; the string validators disappear once you encrypt; a
-digest column has no `encrypt()`. The classic "runtime throws because
-you called two incompatible options" is mostly a compile error here
-instead — see [Correct by construction](#correct-by-construction).
+Invalid combinations do not type-check. `hash()` exists only after
+`encrypt()`, the string validators disappear once you encrypt, and a
+digest column has no `encrypt()`. Most of what a literal API would
+reject at runtime is a compile error here; see
+[Correct by construction](#correct-by-construction).
 
 ## Column builders
 
@@ -88,53 +88,53 @@ import { Column } from '@tundralibs/norm';
 
 ### Factories
 
-| Factory                            | SQL type       | TS value     | Notes                                                                                                                            |
-| ---------------------------------- | -------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Column.varchar(length)`           | `VARCHAR(n)`   | `string`     | String validators apply.                                                                                                         |
-| `Column.char(length)`              | `CHAR(n)`      | `string`     | Fixed-width string.                                                                                                              |
-| `Column.text()`                    | `TEXT`         | `string`     | Unbounded string.                                                                                                                |
-| `Column.clob()`                    | `CLOB`         | `string`     | Character large object (`TEXT`/`LONGTEXT`/`TEXT`). String validators apply.                                                      |
-| `Column.xml()`                     | `XML`          | `string`     | Native `XML` on Postgres, `TEXT` elsewhere.                                                                                      |
-| `Column.uuid()`                    | `UUID`         | `string`     | Pair with `.default({ $$_expression: 'UUID' })`.                                                                                 |
-| `Column.integer()`                 | `INTEGER`      | `number`     | Numeric validators apply.                                                                                                        |
-| `Column.int()`                     | `INT`          | `number`     | Dialect synonym of `integer`.                                                                                                    |
-| `Column.tinyint()`                 | `TINYINT`      | `number`     | 1-byte int (→ `SMALLINT`/`INTEGER` where absent).                                                                                |
-| `Column.smallint()`                | `SMALLINT`     | `number`     | 2-byte int.                                                                                                                      |
-| `Column.bigint()`                  | `BIGINT`       | `bigint`     | Values ride as `bigint` (`0n`).                                                                                                  |
-| `Column.decimal(precision, scale)` | `DECIMAL(p,s)` | `number`     | Fixed-point.                                                                                                                     |
-| `Column.numeric(precision, scale)` | `NUMERIC(p,s)` | `number`     | Exact fixed-point; synonym of `decimal`.                                                                                         |
-| `Column.float()`                   | `FLOAT`        | `number`     |                                                                                                                                  |
-| `Column.double()`                  | `DOUBLE`       | `number`     |                                                                                                                                  |
-| `Column.real()`                    | `REAL`         | `number`     |                                                                                                                                  |
-| `Column.bit()`                     | `BIT`          | `number`     | Bit value (`BIT`/`BIT`/`INTEGER`).                                                                                               |
-| `Column.boolean()`                 | `BOOLEAN`      | `boolean`    | No numeric/string validators.                                                                                                    |
-| `Column.date()`                    | `DATE`         | `Date`       | Date validators apply.                                                                                                           |
-| `Column.time()`                    | `TIME`         | `Date`       | Only the clock part is significant.                                                                                              |
-| `Column.datetime()`                | `DATETIME`     | `Date`       | For engines that distinguish it from `TIMESTAMP` (MariaDB).                                                                      |
-| `Column.timestamp()`               | `TIMESTAMP`    | `Date`       | Wall-clock, no zone.                                                                                                             |
-| `Column.timestamptz()`             | `TIMESTAMPTZ`  | `Date`       | Timestamp WITH time zone — `TIMESTAMPTZ` on Postgres, tz-aware `TIMESTAMP` on MariaDB, ISO-with-offset `TEXT` on SQLite.         |
-| `Column.json<Shape>()`             | `JSONB`        | `Shape`      | Typed object. Renders as **`JSONB`** on Postgres (never bare `JSON`), native `JSON` on MariaDB, `TEXT` on SQLite.                |
-| `Column.blob()`                    | `BLOB`         | `Uint8Array` | Raw bytes. The crypto codec is text-canonical, so binary can't be meaningfully encrypted — encrypt an encoded text form instead. |
-| `Column.binary(length)`            | `BINARY(n)`    | `Uint8Array` | Fixed-length raw bytes (`BYTEA`/`BINARY`/`BLOB`). Like `blob`, not encryptable.                                                  |
-| `Column.varbinary(length)`         | `VARBINARY(n)` | `Uint8Array` | Variable-length raw bytes. Like `blob`, not encryptable.                                                                         |
-| `Column.hash(algorithm?)`          | `VARCHAR`      | `string`     | One-way [digest column](#digest-columns). Default `'SHA-256'`.                                                                   |
-| `Column.password(algorithm?)`      | `VARCHAR`      | `string`     | Auth digest: `SHA-*` (deterministic, filterable) or `'PBKDF2'` (salted, verify-based). See [Digest columns](#digest-columns).    |
-| `Column.mask(source, fn)`          | _(virtual)_    | `string`     | Computed-on-read [mask](#masked-columns); never stored.                                                                          |
+| Factory                            | SQL type       | TS value     | Notes                                                                                                                         |
+| ---------------------------------- | -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Column.varchar(length)`           | `VARCHAR(n)`   | `string`     | String validators apply.                                                                                                      |
+| `Column.char(length)`              | `CHAR(n)`      | `string`     | Fixed-width string.                                                                                                           |
+| `Column.text()`                    | `TEXT`         | `string`     | Unbounded string.                                                                                                             |
+| `Column.clob()`                    | `CLOB`         | `string`     | Character large object (`TEXT`/`LONGTEXT`/`TEXT`). String validators apply.                                                   |
+| `Column.xml()`                     | `XML`          | `string`     | Native `XML` on Postgres, `TEXT` elsewhere.                                                                                   |
+| `Column.uuid()`                    | `UUID`         | `string`     | Pair with `.default({ $$_expression: 'UUID' })`.                                                                              |
+| `Column.integer()`                 | `INTEGER`      | `number`     | Numeric validators apply.                                                                                                     |
+| `Column.int()`                     | `INT`          | `number`     | Dialect synonym of `integer`.                                                                                                 |
+| `Column.tinyint()`                 | `TINYINT`      | `number`     | 1-byte int (`SMALLINT`/`INTEGER` where absent).                                                                               |
+| `Column.smallint()`                | `SMALLINT`     | `number`     | 2-byte int.                                                                                                                   |
+| `Column.bigint()`                  | `BIGINT`       | `bigint`     | Values ride as `bigint` (`0n`).                                                                                               |
+| `Column.decimal(precision, scale)` | `DECIMAL(p,s)` | `number`     | Fixed-point.                                                                                                                  |
+| `Column.numeric(precision, scale)` | `NUMERIC(p,s)` | `number`     | Exact fixed-point; synonym of `decimal`.                                                                                      |
+| `Column.float()`                   | `FLOAT`        | `number`     |                                                                                                                               |
+| `Column.double()`                  | `DOUBLE`       | `number`     |                                                                                                                               |
+| `Column.real()`                    | `REAL`         | `number`     |                                                                                                                               |
+| `Column.bit()`                     | `BIT`          | `number`     | Bit value (`BIT`/`BIT`/`INTEGER`).                                                                                            |
+| `Column.boolean()`                 | `BOOLEAN`      | `boolean`    | No numeric/string validators.                                                                                                 |
+| `Column.date()`                    | `DATE`         | `Date`       | Date validators apply.                                                                                                        |
+| `Column.time()`                    | `TIME`         | `Date`       | Only the clock part is significant.                                                                                           |
+| `Column.datetime()`                | `DATETIME`     | `Date`       | For engines that distinguish it from `TIMESTAMP` (MariaDB).                                                                   |
+| `Column.timestamp()`               | `TIMESTAMP`    | `Date`       | Wall-clock, no zone.                                                                                                          |
+| `Column.timestamptz()`             | `TIMESTAMPTZ`  | `Date`       | Timestamp with time zone: `TIMESTAMPTZ` on Postgres, tz-aware `TIMESTAMP` on MariaDB, ISO-with-offset `TEXT` on SQLite.       |
+| `Column.json<Shape>()`             | `JSONB`        | `Shape`      | Typed object. Renders as `JSONB` on Postgres (never bare `JSON`), native `JSON` on MariaDB, `TEXT` on SQLite.                 |
+| `Column.blob()`                    | `BLOB`         | `Uint8Array` | Raw bytes. The crypto codec is text-canonical, so binary cannot be encrypted; encrypt an encoded text form instead.           |
+| `Column.binary(length)`            | `BINARY(n)`    | `Uint8Array` | Fixed-length raw bytes (`BYTEA`/`BINARY`/`BLOB`). Like `blob`, not encryptable.                                               |
+| `Column.varbinary(length)`         | `VARBINARY(n)` | `Uint8Array` | Variable-length raw bytes. Like `blob`, not encryptable.                                                                      |
+| `Column.hash(algorithm?)`          | `VARCHAR`      | `string`     | One-way [digest column](#digest-columns). Default `'SHA-256'`.                                                                |
+| `Column.password(algorithm?)`      | `VARCHAR`      | `string`     | Auth digest: `SHA-*` (deterministic, filterable) or `'PBKDF2'` (salted, verify-based). See [Digest columns](#digest-columns). |
+| `Column.mask(source, fn)`          | _(virtual)_    | `string`     | Computed-on-read [mask](#masked-columns); never stored.                                                                       |
 
-`json` / `boolean` / `blob` / `binary` / `varbinary` / `bit` are the
-_base_ builder — they carry
-the [common modifiers](#common-modifiers) and `encrypt()`, but none of
-the value validators (there is nothing to range-check on a boolean).
+`json`, `boolean`, `blob`, `binary`, `varbinary`, and `bit` are the
+base builder: they carry the [common modifiers](#common-modifiers) and
+`encrypt()`, but none of the value validators, since there is nothing
+to range-check on a boolean.
 
 ### Common modifiers
 
-These chain on every builder kind (a few are overridden on
-[masks](#masked-columns)):
+These chain on every builder kind; a few are overridden on
+[masks](#masked-columns):
 
 | Modifier                | Effect                                                                                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `.nullable()`           | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                          |
-| `.default(v)`           | Insert default — see [Defaults](#defaults).                                                                                       |
+| `.default(v)`           | Insert default; see [Defaults](#defaults).                                                                                        |
 | `.defaultOnUpdate(v)`   | Auto-touch on every update (e.g. `updatedAt`).                                                                                    |
 | `.comment(text)`        | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                              |
 | `.hidden()`             | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                   |
@@ -165,7 +165,7 @@ Which validators exist depends on the builder kind:
 | Date         | `date` `time` `datetime` `timestamp` `timestamptz`                                              | `.min(date)` `.max(date)`                                    |
 
 `.lov([...])` does double duty: it constrains the value to the given
-literals **and narrows the TS type to their union** — no `as const`
+literals and narrows the TS type to their union, with no `as const`
 needed.
 
 ```typescript
@@ -182,16 +182,16 @@ const slug = Column.varchar(32)
 const clicks = Column.bigint().min(0n).default(0n);
 ```
 
-`.pattern()` accepts a `RegExp` or a string; it is stored serializably
-as `{ source, flags }`. `.min()` / `.max()` on bigint and date columns
-canonicalize the bound to a string in the spec (the runtime rehydrates
-per column type).
+`.pattern()` accepts a `RegExp` or a string and is stored serializably
+as `{ source, flags }`. `.min()` and `.max()` on bigint and date
+columns canonicalize the bound to a string in the spec, and the runtime
+rehydrates it per column type.
 
 ### Defaults
 
-`.default(v)` fires when the insert payload **omits** the column (or
-passes explicit `undefined`); an explicit `null` is validated as a
-value, not replaced. It also makes the column omittable in `InsertOf`.
+`.default(v)` fires when the insert payload omits the column or passes
+explicit `undefined`; an explicit `null` is validated as a value, not
+replaced. It also makes the column omittable in `InsertOf`.
 `.defaultOnUpdate(v)` does the same on every update. Both accept three
 forms:
 
@@ -214,16 +214,16 @@ const updatedAt = Column.timestamp()
   .defaultOnUpdate(() => new Date());
 ```
 
-An `ExpressionDefault` is `{ $$_expression: string, args?: unknown }`;
-it is passed through to the query untouched and never validated as a JS
-value.
+An `ExpressionDefault` is `{ $$_expression: string, args?: unknown }`.
+It is passed through to the query untouched and never validated as a
+JS value.
 
 ### Transforms
 
 `.beforeWrite(fn)` normalizes a value before it is validated,
 encrypted, and written; `.afterRead(fn)` transforms it as it comes back
-from a read. Both are runtime-only callbacks — they are stripped from
-the JSON/snapshot export.
+from a read. Both are runtime-only callbacks and are stripped from the
+JSON and snapshot export.
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -242,9 +242,9 @@ const status = Column.varchar(12).afterRead((v) => v.replace(/_/g, ' '));
 ### Encryption and hashing
 
 `.encrypt()` encrypts the column at rest (AES via the Norm secret) and
-is available on **every** value kind — string, number, bigint, date,
-boolean, json. The logical TS type is unchanged (an encrypted
-`timestamp()` still reads and writes `Date`); the runtime canonicalizes
+is available on every value kind: string, number, bigint, date,
+boolean, json. The logical TS type is unchanged, so an encrypted
+`timestamp()` still reads and writes `Date`. The runtime canonicalizes
 the plaintext to a string before encrypting and decodes it back on
 read, and the physical column becomes `TEXT`.
 
@@ -255,14 +255,14 @@ import { Column } from '@tundralibs/norm';
 const birthday = Column.timestamp().encrypt().nullable();
 ```
 
-Two consequences follow from encryption:
+Two consequences follow:
 
-1. **Validators must chain before `encrypt()`** — they constrain the
-   _plaintext_, so `encrypt()` narrows the builder to a surface where
+1. Validators must chain before `encrypt()`. They constrain the
+   plaintext, so `encrypt()` narrows the builder to a surface where
    they no longer exist.
-2. **Encrypted columns are not filterable** — random-IV ciphertext
-   never matches an equality predicate. To filter or enforce
-   uniqueness by plaintext, add `.hash()`:
+2. Encrypted columns are not filterable, because random-IV ciphertext
+   never matches an equality predicate. To filter or enforce uniqueness
+   by plaintext, add `.hash()`:
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -271,16 +271,15 @@ import { Column } from '@tundralibs/norm';
 const email = Column.varchar(255).encrypt().hash();
 ```
 
-`.hash()` exists _only_ on an encrypted builder and synthesizes a
-deterministic `<col>_hash` sibling column — see
-[Hash siblings](#hash-siblings). Full details on the crypto pipeline,
-digests, and override hooks live in
-[Security](NORM-Security.md).
+`.hash()` exists only on an encrypted builder and synthesizes a
+deterministic `<col>_hash` sibling column; see
+[Hash siblings](#hash-siblings). The crypto pipeline, digests, and
+override hooks are in [Security](NORM-Security.md).
 
 ### Digest columns
 
-`Column.hash(algorithm)` is a **standalone one-way digest** column —
-for values like passwords that must be comparable but never readable.
+`Column.hash(algorithm)` is a standalone one-way digest column, for
+values like passwords that must be comparable but never readable.
 Callers write and filter by plaintext; the runtime digests on the way
 in and stores only the hex digest, whose `VARCHAR` length derives from
 the algorithm.
@@ -294,22 +293,21 @@ const pin = Column.hash('SHA-256').nullable();
 
 `algorithm` is one of `'SHA-256'` (default, `VARCHAR(64)`), `'SHA-384'`
 (`VARCHAR(96)`), or `'SHA-512'` (`VARCHAR(128)`). String validators
-(`pattern` / `minLength` / `maxLength`) chain here and constrain the
-_plaintext_ (password policy). `encrypt()` is a hard error — a digest
-is already one-way.
+(`pattern`, `minLength`, `maxLength`) chain here and constrain the
+plaintext, which is where a password policy goes. `encrypt()` is a
+hard error, since a digest is already one-way.
 
 > A digest column is the inverse of `.encrypt().hash()`: a digest is
-> write-and-forget (you can never read the value back), whereas an
-> encrypted+hashed column is fully readable with an _additional_
-> lookup digest on the side.
+> write-and-forget, whereas an encrypted and hashed column is fully
+> readable with an additional lookup digest on the side.
 
 `Column.password(algorithm?)` is the auth-facing digest column. It has
-two modes — **you decide**:
+two modes:
 
-| Mode                                                             | Behaviour                                                                                                                                                                        |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Column.password('SHA-256' \| 'SHA-384' \| 'SHA-512')` (default) | **Deterministic** digest, identical to `hash()` — write and **filter by plaintext**, store the digest. Fast & searchable, but a leaked table is brute-forceable.                 |
-| `Column.password('PBKDF2')`                                      | **Salted** PBKDF2 hash — the correct choice for real passwords. Each hash is unique, so the column is **not filterable**: read the row and `pbkdf2Verify(candidate, row.field)`. |
+| Mode                                                             | Behaviour                                                                                                                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Column.password('SHA-256' \| 'SHA-384' \| 'SHA-512')` (default) | Deterministic digest, identical to `hash()`: write and filter by plaintext, store the digest. Fast and searchable, but a leaked table is brute-forceable.               |
+| `Column.password('PBKDF2')`                                      | Salted PBKDF2 hash, the correct choice for real passwords. Each hash is unique, so the column is not filterable: read the row and `pbkdf2Verify(candidate, row.field)`. |
 
 ```typescript
 import { Column, Entity, Norm, pbkdf2Verify, Schema } from '@tundralibs/norm';
@@ -329,19 +327,19 @@ const row = (await db.repo('Users').find({ '@id': userId })).data[0];
 const ok = row && await pbkdf2Verify(candidatePassword, row.secret);
 ```
 
-`pbkdf2Verify` is re-exported from `@tundralibs/norm`; the PBKDF2 KDF
+`pbkdf2Verify` is re-exported from `@tundralibs/norm`. The PBKDF2 KDF
 (salt, OWASP-guided iterations) comes from `@tundralibs/crypt` and is
 overridable via the instance's `crypto.pbkdf2Hash`.
 
 > **Why not a plain digest for passwords?** A fast SHA-2 digest is cheap
-> to brute-force if the table leaks. `'PBKDF2'` salts + stretches the
-> input so each hash is unique and slow to attack — at the cost of
-> plaintext filtering (verify instead of look up).
+> to brute-force if the table leaks. `'PBKDF2'` salts and stretches the
+> input so each hash is unique and slow to attack, at the cost of
+> plaintext filtering: verify instead of look up.
 
 ### Masked columns
 
-`Column.mask(source, fn)` is a **virtual** column computed client-side
-from a sibling `source` column after decrypt/`afterRead`. It is never
+`Column.mask(source, fn)` is a virtual column computed client-side from
+a sibling `source` column after decrypt and `afterRead`. It is never
 stored, never in DDL or snapshots, and excluded from writes, filters,
 and ordering.
 
@@ -354,31 +352,31 @@ const Users = {
 };
 ```
 
-The mask has its own first-class key (the property name), several masks
-may share one source, and the source's own `.hidden()` decision is
-independent of the mask. Type the `fn` parameter to the source's
-_logical_ type when it isn't a string — e.g.
+The mask has its own first-class key (the property name), several
+masks may share one source, and the source's own `.hidden()` decision
+is independent of the mask. Type the `fn` parameter to the source's
+logical type when it is not a string, for example
 `Column.mask<Date>('birthday', (v) => v.getFullYear().toString())`.
 
 Only `.nullable()`, `.hidden()`, and `.comment()` chain on a mask.
 `.default()`, `.defaultOnUpdate()`, `.beforeWrite()`, `.afterRead()`,
-and `.encrypt()` all throw — a mask is presentation, computed from its
+and `.encrypt()` all throw: a mask is presentation computed from its
 source, with nothing to write or encrypt. Declare `.nullable()` when
-the _source_ is nullable (a null source yields a null mask).
+the source is nullable, since a null source yields a null mask.
 
 ### Correct by construction
 
-The illegal combinations of a literal API are simply not reachable
-here — most are compile errors, a few are guarded runtime throws:
+The illegal combinations of a literal API are not reachable here. Most
+are compile errors and a few are guarded runtime throws:
 
-| Attempt                                                     | Result                                                         |
-| ----------------------------------------------------------- | -------------------------------------------------------------- |
-| `.hash()` before `.encrypt()`                               | Compile error — `hash()` exists only on the encrypted builder. |
-| A validator after `.encrypt()`                              | Compile error — validators live on the plaintext builders.     |
-| `.encrypt().encrypt()`                                      | Runtime throw — already encrypted.                             |
-| `Column.hash(algo).encrypt()`                               | Runtime throw — digests are one-way.                           |
-| `.default()` / `.beforeWrite()` / `.encrypt()` on a `mask`  | Runtime throw — masks are computed presentation.               |
-| A `_hash`-named column colliding with a synthesized sibling | Runtime throw at `Entity()` — norm owns `<column>_hash` names. |
+| Attempt                                                     | Result                                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------------- |
+| `.hash()` before `.encrypt()`                               | Compile error: `hash()` exists only on the encrypted builder. |
+| A validator after `.encrypt()`                              | Compile error: validators live on the plaintext builders.     |
+| `.encrypt().encrypt()`                                      | Runtime throw: already encrypted.                             |
+| `Column.hash(algo).encrypt()`                               | Runtime throw: digests are one-way.                           |
+| `.default()` / `.beforeWrite()` / `.encrypt()` on a `mask`  | Runtime throw: masks are computed presentation.               |
+| A `_hash`-named column colliding with a synthesized sibling | Runtime throw at `Entity()`: norm owns `<column>_hash` names. |
 
 ## Defining entities
 
@@ -391,9 +389,9 @@ Omit it for the default, `TABLE`.
 
 ### TABLE
 
-Physical, writable, DDL-emitting. `pk` is **required** (composite keys
-just list several columns). `fk` aliases drive joins and reverse
-relations; `index` and `unique` emit DDL indexes.
+Physical, writable, DDL-emitting. `pk` is required; a composite key
+lists several columns. `fk` aliases drive joins and reverse relations;
+`index` and `unique` emit DDL indexes.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -425,7 +423,7 @@ export const Users = Entity('users', {
 });
 ```
 
-A composite primary key is just a longer tuple:
+A composite primary key is a longer tuple:
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -444,11 +442,11 @@ export const PostTags = Entity('post_tags', {
 
 ### VIEW
 
-Read-only and DB-side (`CREATE VIEW … AS query`). A view **can** be
-joined against and **can** be the base of further stored queries. Pass
-a `query` (an OQL `SELECT`), optionally `materialized: true`, and
-optionally a _logical_ `fk` (join linkage only — never DDL, never
-snapshotted; see [Many-to-many through a view](#many-to-many-through-a-view)).
+Read-only and DB-side (`CREATE VIEW … AS query`). A view can be joined
+against and can be the base of further stored queries. Pass a `query`
+(an OQL `SELECT`), optionally `materialized: true`, and optionally a
+logical `fk` for join linkage only, never DDL and never snapshotted;
+see [Many-to-many through a view](#many-to-many-through-a-view).
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -475,17 +473,17 @@ export const ActiveLinks = Entity('active_links', {
 });
 ```
 
-Views have no primary key, so a derived reverse relation is **always**
+Views have no primary key, so a derived reverse relation is always
 `hasMany`; declare `reverseCardinality: 'hasOne'` explicitly when the
-view is one-row-per-target. `materialized: true` emits
+view is one row per target. `materialized: true` emits
 `CREATE MATERIALIZED VIEW` on Postgres and degrades to a plain view on
 other dialects.
 
 ### QUERY
 
-A read-only, client-side stored `SELECT` (no DDL). It is **terminal**:
-it cannot be joined and cannot be built upon by other views or queries,
-and it cannot declare foreign keys.
+A read-only, client-side stored `SELECT` with no DDL. It is terminal:
+it cannot be joined, cannot be built upon by other views or queries,
+and cannot declare foreign keys.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -507,30 +505,29 @@ export const TopLinks = Entity('top_links', {
 
 ### Options reference
 
-| Option            | Kind        | Description                                                                                                                                                                                  |
-| ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`            | all         | `'TABLE'` (default), `'VIEW'`, or `'QUERY'`.                                                                                                                                                 |
-| `pk`              | TABLE       | **Required.** Primary-key column tuple; composite keys list several.                                                                                                                         |
-| `fk`              | TABLE, VIEW | Named FK aliases → target + column mapping. See [Foreign keys](#foreign-keys-and-relations).                                                                                                 |
-| `index`           | TABLE       | Named indexes: name → column tuple. Synthesized `<col>_hash` siblings are indexable.                                                                                                         |
-| `unique`          | TABLE       | Named `UNIQUE` constraints, emitted as unique indexes (diffable on every dialect).                                                                                                           |
-| `insert`          | TABLE       | Insert [pick-list](#write-scoping-insert--update-pick-lists).                                                                                                                                |
-| `update`          | TABLE       | Update [pick-list](#write-scoping-insert--update-pick-lists).                                                                                                                                |
-| `hooks`           | all         | Whole-row [hooks](#hooks). TABLEs get the write + delete hooks; read-only kinds get `afterRead` only.                                                                                        |
-| `dbSchema`        | TABLE, VIEW | Database namespace (e.g. Postgres `public`). Named `dbSchema` because "schema" already means a named entity collection in norm.                                                              |
-| `comment`         | all         | Documentation + DDL comment (`COMMENT ON TABLE …`).                                                                                                                                          |
-| `defaultPageSize` | all         | Rows a limit-less `find()` fetches (default `10`). `0` = UNBOUNDED, and every such read emits a `warning` event.                                                                             |
-| `cache`           | all         | Read-cache TTL in minutes (`0`/omitted = off; needs a `cache` config on `Norm`). See [Read caching](NORM-Caching.md).                                                                        |
-| `temporal`        | TABLE       | Make it an effective-dated **[temporal table](NORM-Temporal.md)** — norm keeps every version; `insert` supersedes, and `update`/`upsert`/`truncate`/`delete` are all disabled (insert-only). |
-| `audit`           | TABLE       | Generate a versioned **[audit replica](NORM-Audit.md)** — the table itself is unchanged; norm mirrors every write into it.                                                                   |
-| `query`           | VIEW, QUERY | **Required** on read-only kinds. The stored OQL `SELECT`.                                                                                                                                    |
-| `materialized`    | VIEW        | `CREATE MATERIALIZED VIEW` (Postgres; degrades elsewhere).                                                                                                                                   |
-| `renamedFrom`     | TABLE       | Migration hint: this table's previous physical name (optionally `'dbSchema.name'`-qualified). Consumed only by the migration diff.                                                           |
+| Option            | Kind        | Description                                                                                                                                                           |
+| ----------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`            | all         | `'TABLE'` (default), `'VIEW'`, or `'QUERY'`.                                                                                                                          |
+| `pk`              | TABLE       | Required. Primary-key column tuple; composite keys list several.                                                                                                      |
+| `fk`              | TABLE, VIEW | Named FK aliases → target + column mapping. See [Foreign keys](#foreign-keys-and-relations).                                                                          |
+| `index`           | TABLE       | Named indexes: name → column tuple. Synthesized `<col>_hash` siblings are indexable.                                                                                  |
+| `unique`          | TABLE       | Named `UNIQUE` constraints, emitted as unique indexes (diffable on every dialect).                                                                                    |
+| `insert`          | TABLE       | Insert [pick-list](#write-scoping-insert--update-pick-lists).                                                                                                         |
+| `update`          | TABLE       | Update [pick-list](#write-scoping-insert--update-pick-lists).                                                                                                         |
+| `hooks`           | all         | Whole-row [hooks](#hooks). TABLEs get the write + delete hooks; read-only kinds get `afterRead` only.                                                                 |
+| `dbSchema`        | TABLE, VIEW | Database namespace (e.g. Postgres `public`). Named `dbSchema` because "schema" already means a named entity collection in norm.                                       |
+| `comment`         | all         | Documentation + DDL comment (`COMMENT ON TABLE …`).                                                                                                                   |
+| `defaultPageSize` | all         | Rows a limit-less `find()` fetches (default `10`). `0` means unbounded, and every such read emits a `warning` event.                                                  |
+| `cache`           | all         | Read-cache TTL in minutes (`0`/omitted = off; needs a `cache` config on `Norm`). See [Read caching](NORM-Caching.md).                                                 |
+| `temporal`        | TABLE       | Make it an effective-dated [temporal table](NORM-Temporal.md): norm keeps every version; `insert` supersedes, and `update`/`upsert`/`truncate`/`delete` are disabled. |
+| `audit`           | TABLE       | Generate a versioned [audit replica](NORM-Audit.md): the table itself is unchanged; norm mirrors every write into it.                                                 |
+| `query`           | VIEW, QUERY | Required on read-only kinds. The stored OQL `SELECT`.                                                                                                                 |
+| `materialized`    | VIEW        | `CREATE MATERIALIZED VIEW` (Postgres; degrades elsewhere).                                                                                                            |
+| `renamedFrom`     | TABLE       | Migration hint: this table's previous physical name (optionally `'dbSchema.name'`-qualified). Consumed only by the migration diff.                                    |
 
 ### dbSchema, defaultPageSize, and table renames
 
-Three options from the table above are easy to skim past — a minimal
-example for each.
+Three options from the table above deserve a minimal example each.
 
 **`dbSchema`** places a TABLE or VIEW in a database namespace instead of
 the dialect's default one (Postgres `public`, or the equivalent):
@@ -544,14 +541,13 @@ export const Invoices = Entity('invoices', {
 }, { pk: ['id'], dbSchema: 'billing' });
 ```
 
-Reach for it when one database hosts several logical groupings you want
-DDL to land in separately (per-tenant schemas, `billing` vs `public`).
-Leave it unset for the common single-schema case — it isn't free
-complexity-wise: every reader of the entity now has to know which
-schema it actually lives in.
+Reach for it when one database hosts several logical groupings you
+want DDL to land in separately, such as per-tenant schemas or `billing`
+beside `public`. Leave it unset for the single-schema case: every
+reader of the entity then has to know which schema it lives in.
 
 **`defaultPageSize`** overrides how many rows a limit-less `find()`
-fetches for this entity (the global default is 10 — see
+fetches for this entity (the global default is 10; see
 [Pagination and totals](NORM-Querying.md#pagination-and-totals)):
 
 ```typescript
@@ -563,22 +559,22 @@ export const AuditLog = Entity('audit_log', {
 }, { pk: ['id'], defaultPageSize: 50 });
 ```
 
-Raise it for entities callers typically page through in bigger chunks.
-Set it to `0` only once you've deliberately decided every limit-less
-read of this entity should return every row — that still emits an
-`unbounded-read` `warning` event on every such read, because a forgotten
-`limit` on a large table is a production incident, not a style nit.
+Raise it for entities callers page through in bigger chunks. `0`
+removes the cap: every limit-less read then returns every row and emits
+an `unbounded-read` warning event, since a missing `limit` on a large
+table is a common cause of outages.
 
-**`renamedFrom`** (entity-level) is consumed only by the migration diff —
-it has no effect on reads, writes, or validation, and doesn't change what
-callers see. See [Table renames](NORM-Migrations.md#table-renames) for
-the full mechanics and worked example, including when a stable registry
-key already makes it unnecessary.
+**`renamedFrom`** (entity-level) is consumed only by the migration
+diff. It has no effect on reads, writes, or validation and does not
+change what callers see. See
+[Table renames](NORM-Migrations.md#table-renames) for the mechanics and
+a worked example, including when a stable registry key already makes
+it unnecessary.
 
 ### Hooks
 
-Row-level hooks complement the per-column transforms — they see the
-whole row (or, for deletes, the filter). Returning a row replaces the
+Row-level hooks complement the per-column transforms: they see the
+whole row, or the filter for deletes. Returning a row replaces the
 payload; returning nothing means the hook mutated in place. Like column
 transforms, hooks are runtime-only and drop out of the JSON export.
 
@@ -607,15 +603,15 @@ export const Tickets = Entity('tickets', {
 });
 ```
 
-Read-only kinds (VIEW, QUERY) take `afterRead` only — write-side hooks
-(`beforeInsert` / `beforeUpdate`) are rejected at construction.
+Read-only kinds (VIEW, QUERY) take `afterRead` only; the write-side
+hooks are rejected at construction.
 
 ### Write scoping (insert / update pick-lists)
 
-`insert` and `update` restrict which columns a **caller** may pass per
-operation (the "request schema" pattern). Columns outside a declared
-scope become norm-owned for that operation, and `InsertOf` / `UpdateOf`
-plus the generated Guardians are limited to the scope. Omit a list and
+`insert` and `update` restrict which columns a caller may pass per
+operation, the "request schema" pattern. Columns outside a declared
+list become norm-owned for that operation, and `InsertOf`, `UpdateOf`,
+and the generated Guardians are limited to the list. Omit a list and
 every column is passable.
 
 ```typescript
@@ -635,15 +631,15 @@ export const Accounts = Entity('accounts', {
 });
 ```
 
-Scoping governs the payload surface, not norm itself: norm-maintained
-behavior — hash siblings, `defaultOnUpdate` auto-touch — always runs
-regardless of the pick-lists.
+The lists govern the payload surface, not norm itself: norm-maintained
+behavior such as hash siblings and the `defaultOnUpdate` auto-touch
+always runs regardless.
 
 ## Foreign keys and relations
 
 A foreign key is a named alias mapping local columns to a target's
-columns. Declared on `fk`, each one drives joins **and** a derived
-reverse relation on the target.
+columns. Declared on `fk`, each one drives joins and a derived reverse
+relation on the target.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -668,21 +664,21 @@ export const Profiles = Entity('profiles', {
 
 ### `model` is a registry key
 
-`model` is the target's **entity key** — the stable name it is exposed
-under in the schema registry (`Schema('Identity', { Users })` →
-`'Users'`) — **not** its database table name. Renaming the physical
-table, or moving it to another `dbSchema`, is an `ALTER`; no FK
-declaration anywhere changes. There are no model imports and no import
-cycles, and definitions serialize cleanly. Keys resolve — with named
-errors — when schemas compose in [`use()`](#schemas-and-composition),
-so a cross-schema FK (`Posts → 'Users'`) is written exactly like an
+`model` is the target's entity key, the stable name it is exposed under
+in the schema registry (`Schema('Identity', { Users })` gives
+`'Users'`), not its database table name. Renaming the physical table,
+or moving it to another `dbSchema`, is an `ALTER`; no FK declaration
+changes. There are no model imports and no import cycles, and
+definitions serialize cleanly. Keys resolve, with named errors, when
+schemas compose in [`use()`](#schemas-and-composition), so a
+cross-schema FK (`Posts → 'Users'`) is written exactly like an
 in-schema one.
 
 ### Reverse relations
 
-Every FK from `A → B` automatically gives `B` a reverse relation.
+Every FK from `A → B` gives `B` a reverse relation.
 
-- **`reverseAs`** names it. It defaults to `A`'s registry key, and
+- **`reverseAs`** names it. It defaults to `A`'s registry key and
   auto-qualifies as `<Key>_via_<alias>` when two FKs share the same
   source and target. When two FKs point at the same target, name both
   reverses explicitly:
@@ -709,51 +705,51 @@ Every FK from `A → B` automatically gives `B` a reverse relation.
 
 - **`reverseCardinality`** (`'hasOne'` | `'hasMany'`) sets whether the
   target sees one row or many. It defaults by derivation: `hasOne` when
-  the FK's local columns equal _this_ entity's primary key, else
+  the FK's local columns equal this entity's primary key, else
   `hasMany`. In `Profiles` above the FK column (`userId`) is the whole
   pk, so `Users` sees `@Profile` as an object-or-null with no explicit
-  cardinality needed. (Views have no pk, so their reverses are always
-  `hasMany` unless you declare otherwise.)
+  cardinality needed. Views have no pk, so their reverses are always
+  `hasMany` unless you declare otherwise.
 
-A reverse name must be free on the target: it cannot collide with one of
-the target's columns, with a foreign-key alias (those resolve first, so
-the reverse would be unreachable), or with another reverse. Composing
-with [`use()`](#schemas-and-composition) checks this once the full graph
-is known and throws a `REVERSE_COLLISION` error naming the clash — set an
-explicit `reverseAs` to resolve it.
+A reverse name must be free on the target: it cannot collide with one
+of the target's columns, with a foreign-key alias (those resolve first,
+so the reverse would be unreachable), or with another reverse.
+Composing with [`use()`](#schemas-and-composition) checks this once the
+full graph is known and throws a `REVERSE_COLLISION` error naming the
+clash; set an explicit `reverseAs` to resolve it.
 
 ### Eager projection
 
 By default, relations are fetched only when you project them. Two flags
-make a relation load eagerly on _default_ (projection-less) reads:
+make a relation load eagerly on default (projection-less) reads:
 
-- **`project: true`** eager-fetches this relation on **this** entity's
-  default reads — rows gain the alias as `object | null` (the target's
-  local default row, depth-1, no transitive eager).
+- **`project: true`** eager-fetches this relation on this entity's
+  default reads. Rows gain the alias as `object | null`, the target's
+  local default row, depth-1 with no transitive eager.
 - **`reverseProject: true`** eager-fetches the derived reverse on the
-  **target's** default reads. Only `hasOne` reverses qualify (explicit
-  `reverseCardinality: 'hasOne'` or FK-columns-equal-pk); eager to-many
-  lists on every innocent read would be a footgun, so `hasMany` is
+  target's default reads. Only `hasOne` reverses qualify (an explicit
+  `reverseCardinality: 'hasOne'`, or FK columns equal to the pk). An
+  eager to-many list on every read would be a trap, so `hasMany` is
   rejected at construction.
 
 Explicit projections replace the eager default entirely, and write
-`RETURNING` stays flat (it cannot join).
+`RETURNING` stays flat, since it cannot join.
 
 ### Referential actions
 
 `onDelete` and `onUpdate` take the cross-dialect-safe subset
 `CASCADE | RESTRICT | NO_ACTION | SET_NULL`, applied to the physical FK
 constraint. Omitting them uses the database default (`RESTRICT`). They
-are **TABLE-only** — a VIEW's `fk` is a logical join with no physical
+are TABLE-only: a VIEW's `fk` is a logical join with no physical
 constraint to act on, so an action there is rejected at construction.
 
 ### Many-to-many through a view
 
-The logical `fk` on a VIEW is what makes a view _projectable from its
-target_ — the M2M pattern. A junction⋈far VIEW flattens the join once,
-DB-side, and its logical FK derives the reverse relation on the target,
-so "posts with their tags" is one call and one `SELECT` with no
-junction pivoting:
+The logical `fk` on a VIEW is what makes a view projectable from its
+target, which is the many-to-many pattern. A junction⋈far VIEW flattens
+the join once, DB-side, and its logical FK derives the reverse relation
+on the target, so "posts with their tags" is one call and one `SELECT`
+with no junction pivoting:
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -796,11 +792,10 @@ Chaining `.encrypt().hash()` tells `Entity()` to synthesize a
 `<col>_hash` sibling column alongside the encrypted one. The sibling is
 a deterministic SHA-256 digest (`VARCHAR(64)`), maintained by norm on
 every write, so plaintext equality filters, `$in`, uniqueness, and
-upsert conflict keys all rewrite transparently to an indexed digest
-lookup.
+upsert conflict keys all rewrite to an indexed digest lookup.
 
-You never declare the sibling — you _reference_ it by name in `index`
-and `unique`:
+You never declare the sibling; you reference it by name in `index` and
+`unique`:
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
@@ -816,7 +811,7 @@ export const Users = Entity('users', {
 
 The sibling is norm-owned (`disableInsert` / `disableUpdate`), its
 nullability follows the source column, and it follows the source
-through `renamedFrom` so a rename doesn't drop every stored digest.
+through `renamedFrom` so a rename does not drop every stored digest.
 Declaring your own column named `<col>_hash` that collides with a
 synthesized sibling is an error at `Entity()`. For the crypto pipeline,
 digest algorithms, masks, and override hooks, see
@@ -824,8 +819,8 @@ digest algorithms, masks, and override hooks, see
 
 ## Schemas and composition
 
-A **schema** is a named collection of entities — the database namespace
-is the separate `dbSchema` option on `Entity()`. Group entities with
+A schema is a named collection of entities; the database namespace is
+the separate `dbSchema` option on `Entity()`. Group entities with
 `Schema(name, entities)`, then compose any number of schemas into one
 typed registry with `use(...schemas)`.
 
@@ -842,46 +837,43 @@ const Blog = Schema('Blog', { Posts }); // Posts' fk targets 'Users' cross-schem
 const registry = use(Identity, Blog);
 ```
 
-`Schema()` accepts a plain object **or** a namespace/barrel import —
+`Schema()` accepts a plain object or a namespace/barrel import;
 non-entity exports (helpers, constants) are filtered out, so
 `Schema('Blog', BlogModule)` works directly. It validates everything it
-can see and _defers_ unknown FK targets, because a target may live in
+can see and defers unknown FK targets, because a target may live in
 another schema.
 
 `use()` merges the schemas into the flat registry a Norm instance is
 constructed over, and this is where deferred names resolve. Composition
-fails loudly with named errors when:
+fails with named errors when:
 
 - Registry keys collide across composed schemas (keys must be unique).
-- A deferred FK target doesn't resolve (e.g. composing `Blog` without
-  `Identity`, so `'Users'` is missing).
-- An FK target resolves to a `QUERY` — FK targets must be a `TABLE` or
+- A deferred FK target does not resolve (composing `Blog` without
+  `Identity`, say, so `'Users'` is missing).
+- An FK target resolves to a `QUERY`. FK targets must be a `TABLE` or
   `VIEW`.
 - A stored `SELECT` (of a VIEW or QUERY) reads from or joins a
-  registered `QUERY`'s database name — queries are terminal.
-- A [reverse-relation name](#reverse-relations) — derived or explicit
-  `reverseAs` — collides with a column, a foreign-key alias, or another
+  registered `QUERY`'s database name. Queries are terminal.
+- A [reverse-relation name](#reverse-relations), derived or explicit
+  `reverseAs`, collides with a column, a foreign-key alias, or another
   reverse on the target. Resolving reverses needs the full graph, so
-  `use()` is the first place this is caught (it otherwise surfaces only
-  when a Norm instance is constructed); `Schema()`, which may still be
-  missing cross-schema targets, skips it.
+  `use()` is the first place this is caught; `Schema()`, which may
+  still be missing cross-schema targets, skips it.
 
 Once composed, the registry is what you hand to the Norm handle to open
-repos over your entities (see the [Norm README](../README.md) quick
-start and [Querying](NORM-Querying.md)).
+repos over your entities; see the [Norm README](../README.md) quick
+start and [Querying](NORM-Querying.md).
 
 ## Related documentation
 
-- [Querying](NORM-Querying.md) — filters, typed projections, relations,
+- [Querying](NORM-Querying.md): filters, typed projections, relations,
   aggregates, and pagination.
-- [Security](NORM-Security.md) — encryption, digest siblings, masks,
-  and crypto override hooks.
-- [Migrations](NORM-Migrations.md) — snapshots, plans, the rebuild
+- [Security](NORM-Security.md): encryption, digest siblings, masks, and
+  crypto override hooks.
+- [Migrations](NORM-Migrations.md): snapshots, plans, the rebuild
   engine, and `renamedFrom` hints.
-- [Scoping](NORM-Scoping.md) — tenant scoping and default filters.
+- [Scoping](NORM-Scoping.md): tenant scoping and default filters.
 
 ---
 
 [← Back to NORM](../README.md)
-</content>
-</invoke>

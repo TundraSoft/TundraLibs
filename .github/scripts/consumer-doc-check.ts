@@ -68,8 +68,11 @@ const DOC_PEERS: Record<string, string[]> = {
   norm: ['drivers'],
   // Observability recipes: ambient/slogger/tracer document each other's wiring.
   ambient: ['slogger', 'tracer'],
-  slogger: ['ambient', 'tracer'],
+  // slogger's RFC 5424 formatter takes `SyslogFacilities` from utils.
+  slogger: ['ambient', 'tracer', 'utils'],
   tracer: ['norm', 'slogger', 'drivers', 'restler', 'radrouter'],
+  // doctor's async container-provider recipe wires ambient's createContext.
+  doctor: ['ambient'],
   // Servers/routers demonstrate the compat webserver they run on.
   rpc: ['compat', 'guardian'],
   radrouter: ['compat', 'guardian'],

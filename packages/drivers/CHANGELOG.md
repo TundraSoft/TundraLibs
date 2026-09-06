@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.4...drivers-v1.2.0) (2026-09-06)
+
+
+### Features
+
+* **utils:** protect the option-existence check as _hasOption ([#645](https://github.com/TundraSoft/TundraLibs/issues/645)) ([eb2800b](https://github.com/TundraSoft/TundraLibs/commit/eb2800bf54cb586d16f1042760e49d3ad5becc64))
+
 ## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.3...drivers-v1.1.4) (2026-08-25)
 
 

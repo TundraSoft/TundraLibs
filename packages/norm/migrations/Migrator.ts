@@ -334,7 +334,12 @@ export class Migrator {
         `Applied snapshot ${dbVersion} is missing from ${this.__dir} — ` +
           `pending diffs would baseline against the wrong version. ` +
           `Restore the file.`,
-        { dir: this.__dir, version: dbVersion, code: 'MISSING_SNAPSHOT' },
+        {
+          norm: this.__runtime.name,
+          dir: this.__dir,
+          version: dbVersion,
+          code: 'MISSING_SNAPSHOT',
+        },
       );
     }
     const pending = versions.filter((v) => v > dbVersion);
@@ -425,7 +430,11 @@ export class Migrator {
             `apply refused: drops are blocked (allowDrop: false) — ` +
               `${blocked.join('; ')}. Pass allowDrop: true, or add ` +
               `renamedFrom hints if these are renames.`,
-            { dir: this.__dir, code: 'BLOCKED_DROPS' },
+            {
+              norm: this.__runtime.name,
+              dir: this.__dir,
+              code: 'BLOCKED_DROPS',
+            },
           );
         }
         // steps.length === 0 → the loop is a no-op and `applied` stays
@@ -536,7 +545,12 @@ export class Migrator {
       throw new NormMigrationError(
         `rollback target ${target} is not below the applied head ` +
           `${dbVersion}.`,
-        { dir: this.__dir, version: target, code: 'INVALID_ROLLBACK' },
+        {
+          norm: this.__runtime.name,
+          dir: this.__dir,
+          version: target,
+          code: 'INVALID_ROLLBACK',
+        },
       );
     }
     const versions = await this.__fsVersions();
@@ -552,7 +566,12 @@ export class Migrator {
           if (!versions.includes(v)) {
             throw new NormMigrationError(
               `Cannot roll back version ${v}: its snapshot file is missing.`,
-              { dir: this.__dir, version: v, code: 'MISSING_SNAPSHOT' },
+              {
+                norm: this.__runtime.name,
+                dir: this.__dir,
+                version: v,
+                code: 'MISSING_SNAPSHOT',
+              },
             );
           }
           const from = await this.__readSnapshot(v);
@@ -669,7 +688,11 @@ export class Migrator {
           throw new NormMigrationError(
             `Another process holds the migration advisory lock ` +
               `('${ADVISORY_LOCK_KEY}') — is a deploy running elsewhere?`,
-            { dir: this.__dir, code: 'LOCK_TIMEOUT' },
+            {
+              norm: this.__runtime.name,
+              dir: this.__dir,
+              code: 'LOCK_TIMEOUT',
+            },
             cause,
           );
         }
@@ -736,7 +759,11 @@ export class Migrator {
       throw new NormMigrationError(
         `Rebuild of '${r.entityKey}': copied ${copied} of ${original} ` +
           `rows — the original is preserved as '${aside}'.`,
-        { subject: r.entityKey, code: 'REBUILD_COUNT_MISMATCH' },
+        {
+          norm: this.__runtime.name,
+          subject: r.entityKey,
+          code: 'REBUILD_COUNT_MISMATCH',
+        },
       );
     }
     for (const q of plan.postCopy) await ex.ddl(q, txId);
@@ -759,7 +786,11 @@ export class Migrator {
       throw new NormMigrationError(
         `Rebuild of '${r.entityKey}' rewrites encrypted data — a ` +
           `'secret' must be configured on the Norm instance.`,
-        { subject: r.entityKey, code: 'MISSING_SECRET' },
+        {
+          norm: this.__runtime.name,
+          subject: r.entityKey,
+          code: 'MISSING_SECRET',
+        },
       );
     }
     const schema = r.from.dbSchema !== undefined
@@ -923,7 +954,12 @@ export class Migrator {
           `computed ${rendered.hash}) — the snapshot or artifact changed ` +
           `after review. Re-run renderPlans(), get the diff re-reviewed, ` +
           `then apply.`,
-        { dir: this.__dir, version, code: 'PLAN_HASH_MISMATCH' },
+        {
+          norm: this.__runtime.name,
+          dir: this.__dir,
+          version,
+          code: 'PLAN_HASH_MISMATCH',
+        },
       );
     }
   }
@@ -932,7 +968,7 @@ export class Migrator {
     throw new NormMigrationError(
       `Applied snapshot ${version} no longer matches its recorded ` +
         `hash — was the file edited (or deleted) after application?`,
-      { dir: this.__dir, version, code: 'DRIFT' },
+      { norm: this.__runtime.name, dir: this.__dir, version, code: 'DRIFT' },
     );
   }
 
@@ -961,7 +997,12 @@ export class Migrator {
     } catch (cause) {
       throw new NormMigrationError(
         `Cannot read snapshot ${path}.`,
-        { dir: this.__dir, version, code: 'MISSING_SNAPSHOT' },
+        {
+          norm: this.__runtime.name,
+          dir: this.__dir,
+          version,
+          code: 'MISSING_SNAPSHOT',
+        },
         cause instanceof Error ? cause : new Error(String(cause)),
       );
     }
@@ -1080,7 +1121,12 @@ export class Migrator {
           `DIFFERENT plan (recorded ${stored}, computed ${planHash}) — ` +
           `the snapshots changed since it failed. Reconcile the schema ` +
           `by hand, then delete the row from ${PROGRESS_TABLE_NAME}.`,
-        { dir: this.__dir, version, code: 'PLAN_CHANGED' },
+        {
+          norm: this.__runtime.name,
+          dir: this.__dir,
+          version,
+          code: 'PLAN_CHANGED',
+        },
       );
     }
     return coerceCount(row.completed);
