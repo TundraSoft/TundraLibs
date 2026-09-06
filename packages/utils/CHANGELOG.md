@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.2.1...utils-v1.3.0) (2026-09-06)
+
+
+### Features
+
+* **utils:** protect the option-existence check as _hasOption ([#645](https://github.com/TundraSoft/TundraLibs/issues/645)) ([eb2800b](https://github.com/TundraSoft/TundraLibs/commit/eb2800bf54cb586d16f1042760e49d3ad5becc64))
+
 ## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.2.0...utils-v1.2.1) (2026-08-25)
 
 
