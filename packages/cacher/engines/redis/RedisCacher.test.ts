@@ -567,7 +567,7 @@ describe('cacher.engines.redis', () => {
     );
 
     it('should throw CONFIG_MISSING in constructor when no host is provided', () => {
-      // Constructing with no host key triggers hasOption('host') === false check
+      // Constructing with no host key triggers _hasOption('host') === false check
       asserts.assertThrows(
         () =>
           new RedisCacher(

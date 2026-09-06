@@ -141,7 +141,7 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
       maxBufferSize: 10,
     });
     // Ensure mandatory items present
-    if (this.hasOption('host') === false) {
+    if (this._hasOption('host') === false) {
       throw new CacherEngineError('CONFIG_MISSING', {
         name: this.name,
         engine: this.Engine,

@@ -82,7 +82,7 @@ class Client extends Options<MyOptions> {
 - `_getOption<K>(key)`: Read one option (protected — option bags
   routinely carry credentials; expose values through purpose-built
   public getters)
-- `hasOption(key)`: Check if option exists
+- `_hasOption(key)` (protected): Check if option exists
 - `_getOptions()`: Read a defensive copy of the whole bag (nested
   plain-object groups are copied too — mutating the result never
   writes into the store)

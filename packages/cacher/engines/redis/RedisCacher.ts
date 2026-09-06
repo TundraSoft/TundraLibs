@@ -50,7 +50,7 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     super(name, options, {
       port: 6379,
     });
-    if (this.hasOption('host') === false) {
+    if (this._hasOption('host') === false) {
       throw new CacherEngineError('CONFIG_MISSING', {
         name: this.name,
         engine: this.Engine,
@@ -58,8 +58,8 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
       });
     }
     // Username + password must come together (either both or neither).
-    const hasUser = this.hasOption('username');
-    const hasPass = this.hasOption('password');
+    const hasUser = this._hasOption('username');
+    const hasPass = this._hasOption('password');
     if (hasUser !== hasPass) {
       throw new CacherEngineError('CONFIG_MISSING', {
         name: this.name,
