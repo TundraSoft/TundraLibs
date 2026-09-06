@@ -11,6 +11,10 @@ describe('utils.Options', () => {
       // deno-lint-ignore no-explicit-any
       return this._getOption(key as any);
     }
+    public hasOption<K extends string>(key: K) {
+      // deno-lint-ignore no-explicit-any
+      return this._hasOption(key as any);
+    }
     public getOptions() {
       return this._getOptions();
     }
@@ -56,6 +60,10 @@ describe('utils.Options', () => {
     public getOption<K extends string>(key: K) {
       // deno-lint-ignore no-explicit-any
       return this._getOption(key as any);
+    }
+    public hasOption<K extends string>(key: K) {
+      // deno-lint-ignore no-explicit-any
+      return this._hasOption(key as any);
     }
     public getOptions() {
       return this._getOptions();

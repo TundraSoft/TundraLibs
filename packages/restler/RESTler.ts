@@ -180,7 +180,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     // through construction and surface as a raw `TypeError` at the first
     // request. Enforce it here so the documented "validated in the
     // constructor, throws RESTlerConfigError" contract holds.
-    if (!this.hasOption('baseURL')) {
+    if (!this._hasOption('baseURL')) {
       throw new RESTlerConfigError(
         `Base URL must be a valid URL.`,
         // `vendor` is an abstract field whose subclass initializer has not yet

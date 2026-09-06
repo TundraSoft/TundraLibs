@@ -148,8 +148,8 @@ export class MongoEngine
     this.__slowThresholdMs = (this._getOption('slowQueryThreshold') ?? 0.5) *
       1000;
     if (
-      this.hasOption('uri') === false &&
-      this.hasOption('host') === false
+      this._hasOption('uri') === false &&
+      this._hasOption('host') === false
     ) {
       throw new EngineError('MISSING_CONFIG_VALUE', {
         instanceId: this.instanceId,
