@@ -30,4 +30,13 @@ export type PactMiddlewareOptions = {
   readonly hmac?: {
     readonly canonical: (req: PactMiddlewareRequest) => string;
   };
+  /**
+   * Send a `WWW-Authenticate` header (one challenge per accepted scheme)
+   * with every 401 the two handlers raise.
+   *
+   * @default true
+   */
+  readonly challenge?: boolean;
+  /** The `realm` parameter of those challenges. Omitted when unset. */
+  readonly realm?: string;
 };

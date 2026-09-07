@@ -1,19 +1,16 @@
 /**
- * @fileoverview Fastify hook adapters for pact. Written against
- * structural types — the package does not depend on fastify. Register
- * globally with `app.addHook('preHandler', fastifyAuth(pact))` or
- * per-route via the route's `preHandler` array.
+ * @fileoverview Fastify hooks for pact (`preHandler`-shaped). Written
+ * against structural types — the package does not depend on fastify.
  *
  * @module
  */
 import type { Pact } from '../Pact.ts';
 import type { PactAuthContext, PermissionBits } from '../types/mod.ts';
-import type { PactMiddlewareOptions } from './types/mod.ts';
-import {
-  extractCredential,
-  failureResponse,
-  NO_CREDENTIALS,
-} from './shared.ts';
+import type {
+  PactMiddlewareDenial,
+  PactMiddlewareOptions,
+} from './types/mod.ts';
+import { createPactMiddleware } from './core.ts';
 
 /** The slice of a fastify request the hook reads and writes. */
 export type PactFastifyRequest<
@@ -24,93 +21,80 @@ export type PactFastifyRequest<
   /** Fastify's `url` includes the query string. */
   url: string;
   headers: Record<string, string | string[] | undefined>;
-  /** Attached by {@link fastifyAuth} on successful authentication. */
+  /** Attached by `authenticate` on successful authentication. */
   pact?: PactAuthContext<M, B>;
 };
 
 /** The slice of a fastify reply the hook writes. */
 export type PactFastifyReply = {
   code: (status: number) => { send: (body: unknown) => unknown };
+  /** Fastify's `reply.header`; the challenge lands here when present. */
+  header?: (name: string, value: string) => unknown;
 };
 
-function requestView(req: PactFastifyRequest): {
-  method: string;
-  path: string;
-  header: (name: string) => string | null;
-} {
-  return {
-    method: req.method,
-    path: req.url.split('?', 2)[0] ?? req.url,
-    header: (name) => {
-      const value = req.headers[name.toLowerCase()];
-      if (value === undefined) return null;
-      return Array.isArray(value) ? value[0] ?? null : value;
-    },
-  };
+/** A fastify `preHandler` hook (async form — resolve to continue). */
+export type PactFastifyHook<
+  M extends string = string,
+  B extends PermissionBits = PermissionBits,
+> = (
+  request: PactFastifyRequest<M, B>,
+  reply: PactFastifyReply,
+) => Promise<void>;
+
+function send(reply: PactFastifyReply, denial: PactMiddlewareDenial): void {
+  for (const [name, value] of Object.entries(denial.headers)) {
+    reply.header?.(name, value);
+  }
+  reply.code(denial.status).send(denial.body);
 }
 
 /**
- * Authentication preHandler hook: extracts the credential, calls
- * `pact.authenticate`, and attaches the auth context as `request.pact`.
- * Sends 401 itself on a missing or invalid credential (unless
- * `options.optional`); non-pact errors are rethrown to fastify.
+ * Build the two fastify hooks over one pact instance: `authenticate`
+ * extracts the credential, calls `pact.authenticate`, and attaches the
+ * auth context as `request.pact` (401 on a missing credential unless
+ * `optional`, 401 on an invalid one always, non-pact errors rethrown to
+ * fastify); `authorize(module, permission)` — typed by the instance —
+ * asserts on the attached bound principal (401 unauthenticated, 403
+ * denied). Both are async `preHandler` hooks: a sent reply ends the
+ * request, a resolved hook continues it.
  *
  * @example
  * ```ts ignore
- * app.addHook('preHandler', fastifyAuth(pact));
+ * const { authenticate, authorize } = fastifyPact(pact);
+ * app.addHook('preHandler', authenticate); // global
  * app.get('/projects', {
- *   preHandler: fastifyGuard('Projects', 'READ'),
- * }, (request) => ({ user: request.pact.principal.id }));
+ *   preHandler: authorize('Projects', 'READ'), // per-route
+ * }, async (request) => ({ user: request.pact.principal.id }));
  * ```
  */
-export function fastifyAuth<B extends PermissionBits, M extends string>(
+export function fastifyPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
   options?: PactMiddlewareOptions,
-): (
-  request: PactFastifyRequest<M, B>,
-  reply: PactFastifyReply,
-) => Promise<void> {
-  return async (request, reply) => {
-    const credential = extractCredential(requestView(request), options);
-    if (credential === null) {
-      if (options?.optional === true) return;
-      reply.code(NO_CREDENTIALS.status).send(NO_CREDENTIALS.body);
-      return;
-    }
-    try {
-      request.pact = await pact.authenticate(credential);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) throw error;
-      reply.code(failure.status).send(failure.body);
-    }
-  };
-}
-
-/**
- * Permission guard hook: requires a request authenticated by
- * {@link fastifyAuth} whose principal holds `permission` in `module`.
- * Sends 401 when unauthenticated and 403 when denied.
- */
-export function fastifyGuard(
-  module: string,
-  permission: string,
-): (
-  request: PactFastifyRequest,
-  reply: PactFastifyReply,
-) => Promise<void> {
-  return async (request, reply) => {
-    const ctx = request.pact;
-    if (ctx === undefined) {
-      reply.code(NO_CREDENTIALS.status).send(NO_CREDENTIALS.body);
-      return;
-    }
-    try {
-      await ctx.principal.assert(module, permission);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) throw error;
-      reply.code(failure.status).send(failure.body);
-    }
+): {
+  authenticate: PactFastifyHook<M, B>;
+  authorize: (module: M, permission: keyof B & string) => PactFastifyHook<M, B>;
+} {
+  const core = createPactMiddleware(pact, options);
+  return {
+    authenticate: async (request, reply) => {
+      const verdict = await core.authenticate({
+        method: request.method,
+        path: request.url.split('?', 2)[0] ?? request.url,
+        header: (name) => {
+          const value = request.headers[name.toLowerCase()];
+          if (value === undefined) return null;
+          return Array.isArray(value) ? value[0] ?? null : value;
+        },
+      });
+      if (!verdict.ok) return send(reply, verdict.denial);
+      if (verdict.auth !== undefined) request.pact = verdict.auth;
+    },
+    authorize: (module, permission) => {
+      const guard = core.authorize(module, permission);
+      return async (request, reply) => {
+        const denial = await guard(request.pact);
+        if (denial !== undefined) send(reply, denial);
+      };
+    },
   };
 }

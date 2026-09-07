@@ -156,20 +156,23 @@ frameworks: an authentication handler that extracts the credential, calls
 
 ```typescript
 import { Pact } from '@tundralibs/pact';
-import { oakAuth, oakGuard } from '@tundralibs/pact/middleware/oak';
+import { oakPact } from '@tundralibs/pact/middleware/oak';
 
 declare const pact: Pact<{ READ: 1n }, 'Projects'>;
 declare const router: {
   get: (path: string, ...handlers: unknown[]) => void;
 };
 
-router.get('/projects', oakAuth(pact), oakGuard('Projects', 'READ'), () => {
+const { authenticate, authorize } = oakPact(pact);
+router.get('/projects', authenticate, authorize('Projects', 'READ'), () => {
   // ctx.state.pact.principal is the authenticated, bound principal
 });
 ```
 
-`expressAuth`/`expressGuard`, `fastifyAuth`/`fastifyGuard`, and
-`honoAuth`/`honoGuard` follow the same shape, and the neutral core makes an
+One factory per framework — `expressPact`, `fastifyPact`, `oakPact`,
+`honoPact` — each returning `{ authenticate, authorize }` over one instance
+and one options bag; `authorize` is typed by the instance's catalog and
+checked at the call site. The neutral core (`createPactMiddleware`) makes an
 adapter for any other stack a few lines. See
 [Middleware](middleware/Pact-Middleware.md).
 

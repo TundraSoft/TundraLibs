@@ -12,7 +12,7 @@ import process from 'node:process';
 import { Application, Router } from '@oak/oak';
 import { Pact, PactError } from '@tundralibs/pact';
 import { failureResponse } from '@tundralibs/pact/middleware';
-import { oakAuth } from '@tundralibs/pact/middleware/oak';
+import { oakPact } from '@tundralibs/pact/middleware/oak';
 import { createUser, hooks, passkeyCount } from './store.ts';
 
 const PORT = Number(process.env.PORT ?? 8736);
@@ -120,7 +120,7 @@ router.post('/login/finish', async (ctx) => {
 
 // A protected API route through the shipped middleware — the passkey
 // session is an ordinary bearer token from here on.
-router.get('/me', oakAuth(pact), (ctx) => {
+router.get('/me', oakPact(pact).authenticate, (ctx) => {
   const auth = ctx.state.pact!;
   ctx.response.body = { id: auth.principal.id, via: auth.via };
 });

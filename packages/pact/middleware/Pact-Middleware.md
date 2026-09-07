@@ -1,11 +1,12 @@
 # Middleware
 
-Drop-in transport adapters: an authentication handler that extracts the
-credential, calls `authenticate`, and attaches the auth context, plus a
-per-route permission guard. Four frameworks ship ready-made — express,
-fastify, oak, hono — and the neutral core makes any other stack a few
-lines of glue. The adapters are structural: pact depends on none of the
-frameworks.
+Drop-in transport adapters: one factory per framework — express, fastify,
+oak, hono — returning `{ authenticate, authorize }` over one pact instance
+and one options bag. `authenticate` extracts the credential, calls
+`pact.authenticate`, and attaches the auth context; `authorize(module,
+permission)` is the per-route guard, typed by the instance. The neutral
+core (`createPactMiddleware`) makes any other stack a few lines of glue.
+The adapters are structural: pact depends on none of the frameworks.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
@@ -25,14 +26,17 @@ frameworks.
 
 ## What every adapter does
 
-| Step          | Behavior                                                                                                                                      |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extract       | `Authorization: Bearer` / `Basic` / `ApiKey key:secret`, plus `x-key-id` + `x-signature` when HMAC is configured                              |
-| No credential | 401 `{ "error": "NO_CREDENTIALS" }` — or pass through when `optional`                                                                         |
-| Authenticate  | `pact.authenticate(credential)`; the context attaches to the request (`req.pact`, `request.pact`, `ctx.state.pact`, `c.get('pact')`)          |
-| Auth failure  | 401 with the stable code (`INVALID_CREDENTIALS`, `SESSION_EXPIRED`, ...)                                                                      |
-| Guard         | `<framework>Guard(module, permission)` asserts on the attached bound principal — 403 `PERMISSION_DENIED` on refusal, 401 when unauthenticated |
-| Other errors  | Handed to the framework (express `next(error)`; the rest rethrow)                                                                             |
+| Step          | Behavior                                                                                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build         | `const { authenticate, authorize } = <framework>Pact(pact, options)` — once, at module load                                                                       |
+| Extract       | `Authorization: Bearer` / `Basic` / `ApiKey key:secret`, plus `x-key-id` + `x-signature` when HMAC is configured                                                  |
+| No credential | 401 `{ "error": "NO_CREDENTIALS" }` — or pass through unauthenticated when `optional`                                                                             |
+| Authenticate  | `pact.authenticate(credential)`; the context attaches to the request (`req.pact`, `request.pact`, `ctx.state.pact`, `c.get('pact')`)                              |
+| Auth failure  | 401 with the stable code (`INVALID_CREDENTIALS`, `SESSION_EXPIRED`, ...) — a presented credential that fails is NEVER downgraded to anonymous, even if `optional` |
+| Challenge     | Every 401 carries `WWW-Authenticate` — one challenge per accepted scheme, `realm` when set (`challenge: false` to suppress)                                       |
+| Guard         | `authorize(module, permission)` asserts on the attached bound principal — 403 `PERMISSION_DENIED` on refusal, 401 when unauthenticated                            |
+| Typing        | `authorize` takes the instance's own module names and permission keys; the catalog is checked when the guard is built, so a typo fails at boot                    |
+| Other errors  | Handed to the framework (express `next(error)`; the rest rethrow)                                                                                                 |
 
 The attached principal is a bound principal: route handlers can call
 `principal.hasPermission(...)`/`assert(...)` directly for checks beyond
@@ -40,29 +44,33 @@ the guard, at no store round-trip.
 
 ## Options
 
-Both handlers accept the same `PactMiddlewareOptions`:
+The factory's `PactMiddlewareOptions` — one bag both halves share:
 
-| Option     | Default                                                      | Meaning                                                                      |
-| ---------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `schemes`  | `['BEARER', 'BASIC', 'APIKEY']` (+ `'HMAC'` when `hmac` set) | Accepted schemes; others read as absent                                      |
-| `optional` | `false`                                                      | Missing credential continues unauthenticated (invalid ones still 401)        |
-| `hmac`     | —                                                            | `{ canonical }` enables the HMAC scheme — see [below](#hmac-signed-requests) |
+| Option      | Default                                                      | Meaning                                                                      |
+| ----------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `schemes`   | `['BEARER', 'BASIC', 'APIKEY']` (+ `'HMAC'` when `hmac` set) | Accepted schemes; others read as absent                                      |
+| `optional`  | `false`                                                      | Missing credential continues unauthenticated (invalid ones still 401)        |
+| `hmac`      | —                                                            | `{ canonical }` enables the HMAC scheme — see [below](#hmac-signed-requests) |
+| `challenge` | `true`                                                       | Send `WWW-Authenticate` on every 401                                         |
+| `realm`     | —                                                            | The `realm` parameter of those challenges                                    |
 
 ## express
 
 ```ts ignore
 import express from 'express';
-import { expressAuth, expressGuard } from '@tundralibs/pact/middleware/express';
+import { expressPact } from '@tundralibs/pact/middleware/express';
 
+const { authenticate, authorize } = expressPact(pact);
 const app = express();
-app.use(expressAuth(pact));
+app.use(authenticate);
 
-app.get('/projects', expressGuard('Projects', 'READ'), (req, res) => {
+app.get('/projects', authorize('Projects', 'READ'), (req, res) => {
   res.json({ user: req.pact.principal.id });
 });
 
 // Sessions-only route group, anonymous browsing allowed:
-app.use('/shop', expressAuth(pact, { schemes: ['BEARER'], optional: true }));
+const shop = expressPact(pact, { schemes: ['BEARER'], optional: true });
+app.use('/shop', shop.authenticate);
 ```
 
 The context attaches as `req.pact`. Non-pact errors go to `next(error)`
@@ -72,31 +80,32 @@ and your express error handler.
 
 ```ts ignore
 import Fastify from 'fastify';
-import { fastifyAuth, fastifyGuard } from '@tundralibs/pact/middleware/fastify';
+import { fastifyPact } from '@tundralibs/pact/middleware/fastify';
 
+const { authenticate, authorize } = fastifyPact(pact);
 const app = Fastify();
-app.addHook('preHandler', fastifyAuth(pact)); // global
+app.addHook('preHandler', authenticate); // global
 
 app.get('/projects', {
-  preHandler: fastifyGuard('Projects', 'READ'), // per-route
+  preHandler: authorize('Projects', 'READ'), // per-route
 }, async (request) => ({ user: request.pact.principal.id }));
 ```
 
 The context attaches as `request.pact`. Register per-route instead of
-globally by putting `fastifyAuth(pact)` in that route's `preHandler`
-array.
+globally by putting `authenticate` in that route's `preHandler` array.
 
 ## oak
 
 ```ts ignore
 import { Application, Router } from '@oak/oak';
-import { oakAuth, oakGuard } from '@tundralibs/pact/middleware/oak';
+import { oakPact } from '@tundralibs/pact/middleware/oak';
 
+const { authenticate, authorize } = oakPact(pact);
 const router = new Router();
 router.get(
   '/projects',
-  oakAuth(pact),
-  oakGuard('Projects', 'READ'),
+  authenticate,
+  authorize('Projects', 'READ'),
   (ctx) => {
     ctx.response.body = { user: ctx.state.pact.principal.id };
   },
@@ -111,13 +120,14 @@ adapter over live HTTP.
 
 ```ts ignore
 import { Hono } from 'hono';
-import { honoAuth, honoGuard } from '@tundralibs/pact/middleware/hono';
+import { honoPact } from '@tundralibs/pact/middleware/hono';
 import type { PactAuthContext } from '@tundralibs/pact';
 
+const { authenticate, authorize } = honoPact(pact);
 const app = new Hono();
-app.use(honoAuth(pact));
+app.use(authenticate);
 
-app.get('/projects', honoGuard('Projects', 'READ'), (c) => {
+app.get('/projects', authorize('Projects', 'READ'), (c) => {
   const auth = c.get('pact') as PactAuthContext;
   return c.json({ user: auth.principal.id });
 });
@@ -134,11 +144,12 @@ contract — the exact string clients sign. There is no default because the
 contract must match your clients byte for byte:
 
 ```ts ignore
-app.use(expressAuth(pact, {
+const { authenticate } = expressPact(pact, {
   hmac: {
     canonical: (req) => `${req.method} ${req.path}`,
   },
-}));
+});
+app.use(authenticate);
 ```
 
 Clients send `x-key-id` and `x-signature` (hex, as produced by crypt's
@@ -148,36 +159,45 @@ real deployments, and reject stale timestamps at the app layer — see
 
 ## Writing your own adapter
 
-The core is two functions from `@tundralibs/pact/middleware`:
+The core is one factory from `@tundralibs/pact/middleware`: it returns the
+two halves as pure functions over a `{ method, path, header }` request view
+and an auth context, plus the shared challenge. An adapter maps a verdict or
+a denial to its framework's response:
 
 ```ts ignore
-import {
-  extractCredential,
-  failureResponse,
-} from '@tundralibs/pact/middleware';
+import { createPactMiddleware } from '@tundralibs/pact/middleware';
 
-async function myAdapter(req: MyRequest, res: MyResponse, pass: () => void) {
-  const credential = extractCredential({
+const core = createPactMiddleware(pact, { optional: true });
+
+async function myAuth(req: MyRequest, res: MyResponse, pass: () => void) {
+  const verdict = await core.authenticate({
     method: req.method,
     path: req.pathname,
     header: (name) => req.headers.get(name),
-  });
-  if (credential === null) return res.send(401, { error: 'NO_CREDENTIALS' });
-  try {
-    req.auth = await pact.authenticate(credential);
-  } catch (error) {
-    const failure = failureResponse(error); // null → not pact's error
-    if (failure === null) throw error;
-    return res.send(failure.status, failure.body);
+  }); // throws only for non-pact errors — let the framework handle those
+  if (!verdict.ok) {
+    const { status, body, headers } = verdict.denial; // headers: www-authenticate on 401
+    return res.send(status, body, headers);
+  }
+  req.auth = verdict.auth; // undefined when absent and optional
+  pass();
+}
+
+const guard = core.authorize('Projects', 'READ'); // typed; catalog-checked here
+async function myGuard(req: MyRequest, res: MyResponse, pass: () => void) {
+  const denial = await guard(req.auth);
+  if (denial !== undefined) {
+    return res.send(denial.status, denial.body, denial.headers);
   }
   pass();
 }
 ```
 
-`extractCredential` needs only `{ method, path, header }`;
-`failureResponse` is the complete PactError → status mapping (401 for the
-auth-failure codes, 403 `PERMISSION_DENIED`, 409 `USER_EXISTS`, 500
-otherwise) and doubles as an app-level error boundary.
+The lower-level pieces remain exported: `extractCredential` needs only
+`{ method, path, header }`; `failureResponse` is the complete PactError →
+status mapping (401 for the auth-failure codes, 403 `PERMISSION_DENIED`,
+409 `USER_EXISTS`, 500 otherwise) and doubles as an app-level error
+boundary.
 
 ---
 

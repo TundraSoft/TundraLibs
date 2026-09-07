@@ -4,7 +4,7 @@
  */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { honoAuth, honoGuard } from './hono.ts';
+import { honoPact } from './hono.ts';
 import type { PactHonoContext } from './hono.ts';
 import { Pact } from '../mod.ts';
 import { serializeGrants } from '../grants.ts';
@@ -66,10 +66,10 @@ function run(headers: Record<string, string> = {}): {
   };
 }
 
-describe('honoAuth', () => {
+describe('honoPact().authenticate', () => {
   it("should set c.get('pact') and call next on success", async () => {
     const m = run({ authorization: 'ApiKey k1:s1' });
-    await honoAuth(pact)(m.c, m.next);
+    await honoPact(pact).authenticate(m.c, m.next);
     asserts.assertStrictEquals(m.nextCalls(), 1);
     const auth = m.vars.get('pact') as { principal: { id: string } };
     asserts.assertStrictEquals(auth.principal.id, 'k1');
@@ -77,20 +77,23 @@ describe('honoAuth', () => {
 
   it('should return 401 without a credential, unless optional', async () => {
     const denied = run();
-    await honoAuth(pact)(denied.c, denied.next);
+    await honoPact(pact).authenticate(denied.c, denied.next);
     asserts.assertStrictEquals(denied.nextCalls(), 0);
     asserts.assertEquals(denied.sent, {
       status: 401,
       body: { error: 'NO_CREDENTIALS' },
     });
     const optional = run();
-    await honoAuth(pact, { optional: true })(optional.c, optional.next);
+    await honoPact(pact, { optional: true }).authenticate(
+      optional.c,
+      optional.next,
+    );
     asserts.assertStrictEquals(optional.nextCalls(), 1);
   });
 
   it('should return 401 for an invalid credential', async () => {
     const m = run({ authorization: 'ApiKey k1:wrong' });
-    await honoAuth(pact)(m.c, m.next);
+    await honoPact(pact).authenticate(m.c, m.next);
     asserts.assertEquals(m.sent, {
       status: 401,
       body: { error: 'INVALID_CREDENTIALS' },
@@ -99,21 +102,24 @@ describe('honoAuth', () => {
 
   it('should rethrow non-pact errors to hono', async () => {
     const m = run({ authorization: 'ApiKey boom:s' });
-    await asserts.assertRejects(() => honoAuth(pact)(m.c, m.next), TypeError);
+    await asserts.assertRejects(
+      () => honoPact(pact).authenticate(m.c, m.next),
+      TypeError,
+    );
   });
 });
 
-describe('honoGuard', () => {
+describe('honoPact().authorize', () => {
   it('should pass a held permission and 403 a missing one', async () => {
     const auth = run({ authorization: 'ApiKey k1:s1' });
-    await honoAuth(pact)(auth.c, auth.next);
+    await honoPact(pact).authenticate(auth.c, auth.next);
     const ok = run();
     ok.vars.set('pact', auth.vars.get('pact'));
-    await honoGuard('Post', 'READ')(ok.c, ok.next);
+    await honoPact(pact).authorize('Post', 'READ')(ok.c, ok.next);
     asserts.assertStrictEquals(ok.nextCalls(), 1);
     const denied = run();
     denied.vars.set('pact', auth.vars.get('pact'));
-    await honoGuard('Post', 'EDIT')(denied.c, denied.next);
+    await honoPact(pact).authorize('Post', 'EDIT')(denied.c, denied.next);
     asserts.assertEquals(denied.sent, {
       status: 403,
       body: { error: 'PERMISSION_DENIED' },
@@ -122,7 +128,7 @@ describe('honoGuard', () => {
 
   it('should return 401 when no auth context is attached', async () => {
     const m = run();
-    await honoGuard('Post', 'READ')(m.c, m.next);
+    await honoPact(pact).authorize('Post', 'READ')(m.c, m.next);
     asserts.assertStrictEquals(m.sent.status, 401);
   });
 });

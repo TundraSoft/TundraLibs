@@ -7,12 +7,11 @@
  */
 import type { Pact } from '../Pact.ts';
 import type { PactAuthContext, PermissionBits } from '../types/mod.ts';
-import type { PactMiddlewareOptions } from './types/mod.ts';
-import {
-  extractCredential,
-  failureResponse,
-  NO_CREDENTIALS,
-} from './shared.ts';
+import type {
+  PactMiddlewareDenial,
+  PactMiddlewareOptions,
+} from './types/mod.ts';
+import { createPactMiddleware } from './core.ts';
 
 /** The slice of an oak context the middleware reads and writes. */
 export type PactOakContext<
@@ -24,99 +23,78 @@ export type PactOakContext<
     url: { pathname: string };
     headers: { get: (name: string) => string | null };
   };
-  response: { status: number; body: unknown };
+  response: {
+    status: number;
+    body: unknown;
+    /** oak's `Headers`; the challenge lands here when present. */
+    headers?: { set: (name: string, value: string) => unknown };
+  };
   state: {
-    /** Attached by {@link oakAuth} on successful authentication. */
+    /** Attached by `authenticate` on successful authentication. */
     pact?: PactAuthContext<M, B>;
   };
 };
 
-function requestView(ctx: PactOakContext): {
-  method: string;
-  path: string;
-  header: (name: string) => string | null;
-} {
-  return {
-    method: ctx.request.method,
-    path: ctx.request.url.pathname,
-    header: (name) => ctx.request.headers.get(name),
-  };
+/** An oak middleware. */
+export type PactOakMiddleware<
+  M extends string = string,
+  B extends PermissionBits = PermissionBits,
+> = (ctx: PactOakContext<M, B>, next: () => Promise<unknown>) => Promise<void>;
+
+function send(ctx: PactOakContext, denial: PactMiddlewareDenial): void {
+  ctx.response.status = denial.status;
+  ctx.response.body = denial.body;
+  for (const [name, value] of Object.entries(denial.headers)) {
+    ctx.response.headers?.set(name, value);
+  }
 }
 
 /**
- * Authentication middleware: extracts the credential, calls
- * `pact.authenticate`, and attaches the auth context as
- * `ctx.state.pact`. Responds 401 itself on a missing or invalid
- * credential (unless `options.optional`); non-pact errors are rethrown
- * to oak.
+ * Build the two oak middlewares over one pact instance: `authenticate`
+ * extracts the credential, calls `pact.authenticate`, and attaches the
+ * auth context as `ctx.state.pact` (401 on a missing credential unless
+ * `optional`, 401 on an invalid one always, non-pact errors rethrown to
+ * oak); `authorize(module, permission)` — typed by the instance — asserts
+ * on the attached bound principal (401 unauthenticated, 403 denied).
  *
  * @example
  * ```ts ignore
- * app.use(oakAuth(pact));
- * router.get('/projects', oakGuard('Projects', 'READ'), (ctx) => {
+ * const { authenticate, authorize } = oakPact(pact);
+ * app.use(authenticate);
+ * router.get('/projects', authorize('Projects', 'READ'), (ctx) => {
  *   ctx.response.body = { user: ctx.state.pact.principal.id };
  * });
  * ```
  */
-export function oakAuth<B extends PermissionBits, M extends string>(
+export function oakPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
   options?: PactMiddlewareOptions,
-): (
-  ctx: PactOakContext<M, B>,
-  next: () => Promise<unknown>,
-) => Promise<void> {
-  return async (ctx, next) => {
-    const credential = extractCredential(requestView(ctx), options);
-    if (credential === null) {
-      if (options?.optional === true) {
+): {
+  authenticate: PactOakMiddleware<M, B>;
+  authorize: (
+    module: M,
+    permission: keyof B & string,
+  ) => PactOakMiddleware<M, B>;
+} {
+  const core = createPactMiddleware(pact, options);
+  return {
+    authenticate: async (ctx, next) => {
+      const verdict = await core.authenticate({
+        method: ctx.request.method,
+        path: ctx.request.url.pathname,
+        header: (name) => ctx.request.headers.get(name),
+      });
+      if (!verdict.ok) return send(ctx, verdict.denial);
+      if (verdict.auth !== undefined) ctx.state.pact = verdict.auth;
+      await next();
+    },
+    authorize: (module, permission) => {
+      const guard = core.authorize(module, permission);
+      return async (ctx, next) => {
+        const denial = await guard(ctx.state.pact);
+        if (denial !== undefined) return send(ctx, denial);
         await next();
-        return;
-      }
-      ctx.response.status = NO_CREDENTIALS.status;
-      ctx.response.body = NO_CREDENTIALS.body;
-      return;
-    }
-    try {
-      ctx.state.pact = await pact.authenticate(credential);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) throw error;
-      ctx.response.status = failure.status;
-      ctx.response.body = failure.body;
-      return;
-    }
-    await next();
-  };
-}
-
-/**
- * Permission guard: requires a request authenticated by {@link oakAuth}
- * whose principal holds `permission` in `module`. Responds 401 when
- * unauthenticated and 403 when denied.
- */
-export function oakGuard(
-  module: string,
-  permission: string,
-): (
-  ctx: PactOakContext,
-  next: () => Promise<unknown>,
-) => Promise<void> {
-  return async (ctx, next) => {
-    const auth = ctx.state.pact;
-    if (auth === undefined) {
-      ctx.response.status = NO_CREDENTIALS.status;
-      ctx.response.body = NO_CREDENTIALS.body;
-      return;
-    }
-    try {
-      await auth.principal.assert(module, permission);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) throw error;
-      ctx.response.status = failure.status;
-      ctx.response.body = failure.body;
-      return;
-    }
-    await next();
+      };
+    },
   };
 }

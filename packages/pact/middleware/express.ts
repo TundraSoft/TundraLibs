@@ -7,12 +7,11 @@
  */
 import type { Pact } from '../Pact.ts';
 import type { PactAuthContext, PermissionBits } from '../types/mod.ts';
-import type { PactMiddlewareOptions } from './types/mod.ts';
-import {
-  extractCredential,
-  failureResponse,
-  NO_CREDENTIALS,
-} from './shared.ts';
+import type {
+  PactMiddlewareDenial,
+  PactMiddlewareOptions,
+} from './types/mod.ts';
+import { createPactMiddleware } from './core.ts';
 
 /** The slice of an express request the middleware reads and writes. */
 export type PactExpressRequest<
@@ -24,14 +23,26 @@ export type PactExpressRequest<
   /** Express provides `path` (no query string); plain Connect may not. */
   path?: string;
   headers: Record<string, string | string[] | undefined>;
-  /** Attached by {@link expressAuth} on successful authentication. */
+  /** Attached by `authenticate` on successful authentication. */
   pact?: PactAuthContext<M, B>;
 };
 
 /** The slice of an express response the middleware writes. */
 export type PactExpressResponse = {
   status: (code: number) => { json: (body: unknown) => unknown };
+  /** Express's `res.setHeader`; the challenge lands here when present. */
+  setHeader?: (name: string, value: string) => unknown;
 };
+
+/** An express middleware. */
+export type PactExpressMiddleware<
+  M extends string = string,
+  B extends PermissionBits = PermissionBits,
+> = (
+  req: PactExpressRequest<M, B>,
+  res: PactExpressResponse,
+  next: (error?: unknown) => void,
+) => Promise<void>;
 
 function headerOf(req: PactExpressRequest, name: string): string | null {
   const value = req.headers[name.toLowerCase()];
@@ -39,86 +50,70 @@ function headerOf(req: PactExpressRequest, name: string): string | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-function requestView(req: PactExpressRequest): {
-  method: string;
-  path: string;
-  header: (name: string) => string | null;
-} {
-  return {
-    method: req.method,
-    path: req.path ?? req.url.split('?', 2)[0] ?? req.url,
-    header: (name) => headerOf(req, name),
-  };
+function send(res: PactExpressResponse, denial: PactMiddlewareDenial): void {
+  for (const [name, value] of Object.entries(denial.headers)) {
+    res.setHeader?.(name, value);
+  }
+  res.status(denial.status).json(denial.body);
 }
 
 /**
- * Authentication middleware: extracts the credential, calls
- * `pact.authenticate`, and attaches the auth context as `req.pact`.
- * Responds 401 itself on a missing or invalid credential (unless
- * `options.optional`); non-pact errors go to `next(error)`.
+ * Build the two express middlewares over one pact instance:
+ * `authenticate` extracts the credential, calls `pact.authenticate`, and
+ * attaches the auth context as `req.pact` (401 on a missing credential
+ * unless `optional`, 401 on an invalid one always, non-pact errors go to
+ * `next(error)`); `authorize(module, permission)` — typed by the
+ * instance — asserts on the attached bound principal (401
+ * unauthenticated, 403 denied).
  *
  * @example
  * ```ts ignore
- * app.use(expressAuth(pact));
- * app.get('/projects', expressGuard('Projects', 'READ'), (req, res) => {
+ * const { authenticate, authorize } = expressPact(pact);
+ * app.use(authenticate);
+ * app.get('/projects', authorize('Projects', 'READ'), (req, res) => {
  *   res.json({ user: req.pact.principal.id });
  * });
  * ```
  */
-export function expressAuth<B extends PermissionBits, M extends string>(
+export function expressPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
   options?: PactMiddlewareOptions,
-): (
-  req: PactExpressRequest<M, B>,
-  res: PactExpressResponse,
-  next: (error?: unknown) => void,
-) => Promise<void> {
-  return async (req, res, next) => {
-    const credential = extractCredential(requestView(req), options);
-    if (credential === null) {
-      if (options?.optional === true) return next();
-      res.status(NO_CREDENTIALS.status).json(NO_CREDENTIALS.body);
-      return;
-    }
-    try {
-      req.pact = await pact.authenticate(credential);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) return next(error);
-      res.status(failure.status).json(failure.body);
-      return;
-    }
-    next();
-  };
-}
-
-/**
- * Permission guard: requires a request authenticated by
- * {@link expressAuth} whose principal holds `permission` in `module`.
- * Responds 401 when unauthenticated and 403 when denied.
- */
-export function expressGuard(
-  module: string,
-  permission: string,
-): (
-  req: PactExpressRequest,
-  res: PactExpressResponse,
-  next: (error?: unknown) => void,
-) => Promise<void> {
-  return async (req, res, next) => {
-    const ctx = req.pact;
-    if (ctx === undefined) {
-      res.status(NO_CREDENTIALS.status).json(NO_CREDENTIALS.body);
-      return;
-    }
-    try {
-      await ctx.principal.assert(module, permission);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) return next(error);
-      res.status(failure.status).json(failure.body);
-      return;
-    }
-    next();
+): {
+  authenticate: PactExpressMiddleware<M, B>;
+  authorize: (
+    module: M,
+    permission: keyof B & string,
+  ) => PactExpressMiddleware<M, B>;
+} {
+  const core = createPactMiddleware(pact, options);
+  return {
+    authenticate: async (req, res, next) => {
+      let verdict: Awaited<ReturnType<typeof core.authenticate>>;
+      try {
+        verdict = await core.authenticate({
+          method: req.method,
+          path: req.path ?? req.url.split('?', 2)[0] ?? req.url,
+          header: (name) => headerOf(req, name),
+        });
+      } catch (error) {
+        return next(error);
+      }
+      if (!verdict.ok) return send(res, verdict.denial);
+      if (verdict.auth !== undefined) req.pact = verdict.auth;
+      next();
+    },
+    authorize: (module, permission) => {
+      const guard = core.authorize(module, permission);
+      return async (req, res, next) => {
+        let denial: PactMiddlewareDenial | undefined;
+        try {
+          denial = await guard(req.pact);
+        } catch (error) {
+          return next(error);
+        }
+        if (denial !== undefined) return send(res, denial);
+        next();
+      };
+    },
   };
 }

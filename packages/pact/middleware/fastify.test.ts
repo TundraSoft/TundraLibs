@@ -4,7 +4,7 @@
  */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { fastifyAuth, fastifyGuard } from './fastify.ts';
+import { fastifyPact } from './fastify.ts';
 import type { PactFastifyReply, PactFastifyRequest } from './fastify.ts';
 import { Pact } from '../mod.ts';
 import { serializeGrants } from '../grants.ts';
@@ -49,23 +49,23 @@ function run(headers: Record<string, string | string[]> = {}): {
   };
 }
 
-describe('fastifyAuth', () => {
+describe('fastifyPact().authenticate', () => {
   it('should attach request.pact and send nothing on success', async () => {
     const m = run({ authorization: 'ApiKey k1:s1' });
-    await fastifyAuth(pact)(m.request, m.reply);
+    await fastifyPact(pact).authenticate(m.request, m.reply);
     asserts.assertStrictEquals(m.request.pact?.principal.id, 'k1');
     asserts.assertStrictEquals(m.sent.status, undefined);
   });
 
   it('should send 401 without a credential, unless optional', async () => {
     const denied = run();
-    await fastifyAuth(pact)(denied.request, denied.reply);
+    await fastifyPact(pact).authenticate(denied.request, denied.reply);
     asserts.assertEquals(denied.sent, {
       status: 401,
       body: { error: 'NO_CREDENTIALS' },
     });
     const optional = run();
-    await fastifyAuth(pact, { optional: true })(
+    await fastifyPact(pact, { optional: true }).authenticate(
       optional.request,
       optional.reply,
     );
@@ -75,7 +75,7 @@ describe('fastifyAuth', () => {
 
   it('should send 401 for an invalid credential', async () => {
     const m = run({ authorization: 'ApiKey k1:wrong' });
-    await fastifyAuth(pact)(m.request, m.reply);
+    await fastifyPact(pact).authenticate(m.request, m.reply);
     asserts.assertEquals(m.sent, {
       status: 401,
       body: { error: 'INVALID_CREDENTIALS' },
@@ -85,24 +85,27 @@ describe('fastifyAuth', () => {
   it('should rethrow non-pact errors to fastify', async () => {
     const m = run({ authorization: 'ApiKey boom:s' });
     await asserts.assertRejects(
-      () => fastifyAuth(pact)(m.request, m.reply),
+      () => fastifyPact(pact).authenticate(m.request, m.reply),
       TypeError,
     );
     asserts.assertStrictEquals(m.sent.status, undefined);
   });
 });
 
-describe('fastifyGuard', () => {
+describe('fastifyPact().authorize', () => {
   it('should pass a held permission and 403 a missing one', async () => {
     const auth = run({ authorization: 'ApiKey k1:s1' });
-    await fastifyAuth(pact)(auth.request, auth.reply);
+    await fastifyPact(pact).authenticate(auth.request, auth.reply);
     const ok = run();
     ok.request.pact = auth.request.pact;
-    await fastifyGuard('Post', 'READ')(ok.request, ok.reply);
+    await fastifyPact(pact).authorize('Post', 'READ')(ok.request, ok.reply);
     asserts.assertStrictEquals(ok.sent.status, undefined);
     const denied = run();
     denied.request.pact = auth.request.pact;
-    await fastifyGuard('Post', 'EDIT')(denied.request, denied.reply);
+    await fastifyPact(pact).authorize('Post', 'EDIT')(
+      denied.request,
+      denied.reply,
+    );
     asserts.assertEquals(denied.sent, {
       status: 403,
       body: { error: 'PERMISSION_DENIED' },
@@ -111,7 +114,7 @@ describe('fastifyGuard', () => {
 
   it('should send 401 when no auth context is attached', async () => {
     const m = run();
-    await fastifyGuard('Post', 'READ')(m.request, m.reply);
+    await fastifyPact(pact).authorize('Post', 'READ')(m.request, m.reply);
     asserts.assertStrictEquals(m.sent.status, 401);
   });
 });

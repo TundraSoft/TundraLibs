@@ -4,7 +4,7 @@
  */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { oakAuth, oakGuard } from './oak.ts';
+import { oakPact } from './oak.ts';
 import type { PactOakContext } from './oak.ts';
 import { Pact } from '../mod.ts';
 import { serializeGrants } from '../grants.ts';
@@ -53,28 +53,31 @@ function run(headers: Record<string, string> = {}): {
   };
 }
 
-describe('oakAuth', () => {
+describe('oakPact().authenticate', () => {
   it('should attach ctx.state.pact and call next on success', async () => {
     const m = run({ authorization: 'ApiKey k1:s1' });
-    await oakAuth(pact)(m.ctx, m.next);
+    await oakPact(pact).authenticate(m.ctx, m.next);
     asserts.assertStrictEquals(m.nextCalls(), 1);
     asserts.assertStrictEquals(m.ctx.state.pact?.principal.id, 'k1');
   });
 
   it('should respond 401 without a credential, unless optional', async () => {
     const denied = run();
-    await oakAuth(pact)(denied.ctx, denied.next);
+    await oakPact(pact).authenticate(denied.ctx, denied.next);
     asserts.assertStrictEquals(denied.nextCalls(), 0);
     asserts.assertStrictEquals(denied.ctx.response.status, 401);
     asserts.assertEquals(denied.ctx.response.body, { error: 'NO_CREDENTIALS' });
     const optional = run();
-    await oakAuth(pact, { optional: true })(optional.ctx, optional.next);
+    await oakPact(pact, { optional: true }).authenticate(
+      optional.ctx,
+      optional.next,
+    );
     asserts.assertStrictEquals(optional.nextCalls(), 1);
   });
 
   it('should respond 401 for an invalid credential', async () => {
     const m = run({ authorization: 'ApiKey k1:wrong' });
-    await oakAuth(pact)(m.ctx, m.next);
+    await oakPact(pact).authenticate(m.ctx, m.next);
     asserts.assertStrictEquals(m.ctx.response.status, 401);
     asserts.assertEquals(m.ctx.response.body, { error: 'INVALID_CREDENTIALS' });
   });
@@ -83,37 +86,40 @@ describe('oakAuth', () => {
     // Wrong signature still proves the extraction path end to end: the
     // request reaches authenticate and fails there, not at extraction.
     const m = run({ 'x-key-id': 'k1', 'x-signature': 'ab12' });
-    await oakAuth(pact, {
+    await oakPact(pact, {
       hmac: { canonical: (req) => `${req.method} ${req.path}` },
-    })(m.ctx, m.next);
+    }).authenticate(m.ctx, m.next);
     asserts.assertStrictEquals(m.ctx.response.status, 401);
     asserts.assertEquals(m.ctx.response.body, { error: 'INVALID_CREDENTIALS' });
   });
 
   it('should rethrow non-pact errors to oak', async () => {
     const m = run({ authorization: 'ApiKey boom:s' });
-    await asserts.assertRejects(() => oakAuth(pact)(m.ctx, m.next), TypeError);
+    await asserts.assertRejects(
+      () => oakPact(pact).authenticate(m.ctx, m.next),
+      TypeError,
+    );
   });
 });
 
-describe('oakGuard', () => {
+describe('oakPact().authorize', () => {
   it('should pass a held permission and 403 a missing one', async () => {
     const auth = run({ authorization: 'ApiKey k1:s1' });
-    await oakAuth(pact)(auth.ctx, auth.next);
+    await oakPact(pact).authenticate(auth.ctx, auth.next);
     const ok = run();
     ok.ctx.state.pact = auth.ctx.state.pact;
-    await oakGuard('Post', 'READ')(ok.ctx, ok.next);
+    await oakPact(pact).authorize('Post', 'READ')(ok.ctx, ok.next);
     asserts.assertStrictEquals(ok.nextCalls(), 1);
     const denied = run();
     denied.ctx.state.pact = auth.ctx.state.pact;
-    await oakGuard('Post', 'EDIT')(denied.ctx, denied.next);
+    await oakPact(pact).authorize('Post', 'EDIT')(denied.ctx, denied.next);
     asserts.assertStrictEquals(denied.nextCalls(), 0);
     asserts.assertStrictEquals(denied.ctx.response.status, 403);
   });
 
   it('should respond 401 when no auth context is attached', async () => {
     const m = run();
-    await oakGuard('Post', 'READ')(m.ctx, m.next);
+    await oakPact(pact).authorize('Post', 'READ')(m.ctx, m.next);
     asserts.assertStrictEquals(m.ctx.response.status, 401);
   });
 });
