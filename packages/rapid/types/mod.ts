@@ -37,6 +37,7 @@ export type { RapidContextQueryFilter } from './context/QueryFilter.ts';
 export type { RapidContextQuerySort } from './context/QuerySort.ts';
 export type { RapidContextResponse } from './context/Response.ts';
 export type { RapidContextState } from './context/State.ts';
+export type { RapidContextSurface } from './context/Surface.ts';
 export type { RapidContextType } from './context/Type.ts';
 export type { RapidContext } from './Context.ts';
 export type { RapidCoreData } from './CoreData.ts';

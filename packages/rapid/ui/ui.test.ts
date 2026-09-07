@@ -660,3 +660,13 @@ describe('rapid.ui.app', () => {
     );
   });
 });
+
+describe('rapid.ui.runtime — outer swaps with several roots', () => {
+  it('collects every new root of an outer fragment so later roots get their lazy regions loaded', () => {
+    asserts.assertStringIncludes(UI_RUNTIME, 'extraRoots.push(n)');
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'for (const root of extraRoots) loadLazy(root);',
+    );
+  });
+});

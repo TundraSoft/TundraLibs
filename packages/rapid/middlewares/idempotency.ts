@@ -219,7 +219,12 @@ function headersAdded(
  * must NOT re-run on a replay — a replayed request answers from the
  * store without reaching inner middleware or the handler. Note the
  * `scope` callback IS reached on a replay (it builds the key), so keep
- * it cheap and side-effect free.
+ * it cheap and side-effect free. With `timeout()` in the chain (either
+ * order) a deadline that fires leaves the handler running detached
+ * while the request already failed with a 504 — the key then stays
+ * PENDING (a retry is a 409, never a second execution) until
+ * `pendingTtlMs` expires it; size `pendingTtlMs` above the handler's
+ * worst case.
  *
  * @throws {RapidError} RAPID_CONFIG when `scope` is missing, or when
  *   `ttlMs`/`pendingTtlMs`/`maxRecords` are not positive integers
@@ -297,8 +302,11 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
       scopeValue = identity;
     }
     // NUL-separated: header values cannot carry \0, so a crafted key can
-    // never collide across (action, scope) boundaries.
-    const key = `${ctx.action}\u0000${scopeValue}\u0000${clientKey}`;
+    // never collide across (surface, action, scope) boundaries. The
+    // surface is part of the identity: one route replays a JSON reply on
+    // the api surface and a fragment on the ui surface.
+    const key =
+      `${ctx.surface}\u0000${ctx.action}\u0000${scopeValue}\u0000${clientKey}`;
 
     const prior = await claim(store, key, pendingTtlMs);
     if (prior !== undefined) {
@@ -320,10 +328,26 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
       await next();
     } catch (error) {
       // Never record a throw — a retry re-executes. Awaited so an
-      // immediate retry can't still find the pending marker.
-      await release(store, key);
+      // immediate retry can't still find the pending marker. EXCEPT when
+      // the work may still be running: an INNER `timeout()` rejects
+      // RAPID_TIMEOUT while the handler continues detached, and an OUTER
+      // one has already sent the 504 (`ctx.responded`) by the time the
+      // detached chain rejects back here. Releasing in either case would
+      // let the retry run the charge a second time — the pending marker
+      // stands (a retry gets an honest 409) until `pendingTtlMs`.
+      if (
+        !ctx.responded && RapidError.from(error).code !== 'RAPID_TIMEOUT'
+      ) {
+        await release(store, key);
+      }
       throw error;
     }
+    // Answered by an OUTER middleware (`timeout()`'s 504) while the work was
+    // still running: the late reply must not be recorded — the context's
+    // status is already the 504, so the record would replay a poisoned
+    // reply — and the marker must not be released either (the work ran;
+    // a retry would run it twice). It stays pending until `pendingTtlMs`.
+    if (ctx.responded) return;
     const reply = ctx.response;
     if (reply !== null && isStreamBody(reply.content)) {
       await release(store, key); // a stream cannot replay — don't pretend it can

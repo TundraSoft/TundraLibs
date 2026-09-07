@@ -62,7 +62,8 @@ export type RapidApplicationServerOptions = {
    * default) ignores proxy headers entirely, so a client cannot spoof
    * its address. `true`/`1` trusts one proxy and uses the address that
    * proxy observed (the rightmost XFF entry, not the forgeable
-   * leftmost); `N` trusts N proxies.
+   * leftmost); `N` trusts N proxies. Governs `x-forwarded-for` only;
+   * `x-forwarded-host` additionally needs `api.trustForwardedHost`.
    * @default false
    */
   trustProxy?: boolean | number;
@@ -111,6 +112,42 @@ export type RapidApplicationServerOptions = {
    * @default true
    */
   ignoreTrailingSlash?: boolean;
+  /**
+   * The API SURFACE — which requests this app answers as an API only.
+   * A request whose hostname is in `hosts`, or whose path lies under
+   * `prefix`, resolves to the `'api'` surface: the representer is off
+   * (templated routes serve JSON, errors are the JSON envelope, the
+   * swap header is ignored), and the api route table is SMALLER — page
+   * routes (`prefer: 'html'`), `server.static` files and the UI runtime
+   * routes respond 404 there. `prefix` is stripped BEFORE routing (and
+   * before `versioning` path mode), so `hostname.com/api/v1/users` and
+   * `api.hostname.com/v1/users` both route to `/users`; `ctx.basePath`
+   * carries the stripped prefix and `ctx.href()` re-applies it. Every
+   * other request is the `'ui'` surface — today's full behaviour.
+   * Absent: every request is `'ui'` (unless `ui.enabled: false`, which
+   * makes every request `'api'`). Hostnames are compared case-
+   * insensitively (punycode-normalised, a trailing dot ignored, the
+   * port ignored) against the URL's own host; `x-forwarded-host` is read
+   * only with {@link trustForwardedHost} AND {@link trustProxy}. The
+   * prefix match is exact-segment and case-sensitive (`/api` matches
+   * `/api` and `/api/…`, not `/apix`).
+   */
+  api?: {
+    /** Hostnames that are the API surface, e.g. `['api.example.com']`. */
+    hosts?: readonly string[];
+    /** A leading path that is the API surface, e.g. `'/api'` (no trailing slash). */
+    prefix?: string;
+    /**
+     * Resolve the hostname from `x-forwarded-host` (under the
+     * {@link trustProxy} hop count) instead of the URL. Explicit because
+     * the common proxies set `x-forwarded-for` but NOT `x-forwarded-host`
+     * by default — with only `trustProxy` on, a client could then send
+     * the header itself and pick its surface. Enable it only when your
+     * proxy sets (and overwrites) the header.
+     * @default false
+     */
+    trustForwardedHost?: boolean;
+  };
   /**
    * Path that accepts websocket upgrades for `app.socket()` commands
    * (the socket shares the HTTP listener). Upgrades on other paths are

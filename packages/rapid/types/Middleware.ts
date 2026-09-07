@@ -16,9 +16,12 @@ import type { RapidContextState } from './context/State.ts';
  * shared (`ctx.action`, `ctx.args`, `ctx.payload`, `ctx.response`,
  * `ctx.state`) needs no narrowing at all.
  *
- * Call `next()` exactly once to continue the chain; skipping it
- * short-circuits the invocation (on jobs this is surfaced as a
- * distinct skipped-by-middleware outcome, never a silent "finished").
+ * Call `next()` exactly once to continue the chain, and RETURN or AWAIT
+ * it — a fire-and-forget `void next()` lets the invocation finalize
+ * before the handler settles (its later throw is logged, not disclosed).
+ * Skipping `next()` short-circuits the invocation (on jobs this is
+ * surfaced as a distinct skipped-by-middleware outcome, never a silent
+ * "finished").
  *
  * NEVER call `ctx.respond()` — finalization is transport-owned; set
  * `ctx.response` (or, in handlers, return the payload) instead. An

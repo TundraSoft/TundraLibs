@@ -100,11 +100,13 @@ export function normalizeStaticConfig(
     }
     if (
       entry.maxAge !== undefined &&
-      (typeof entry.maxAge !== 'number' || Number.isNaN(entry.maxAge) ||
-        entry.maxAge < 0)
+      (!Number.isInteger(entry.maxAge) || entry.maxAge < 0 ||
+        entry.maxAge > 31_536_000)
     ) {
+      // delta-seconds; a year is the ceiling caches honour (RFC 9111).
       throw new RapidError('RAPID_CONFIG', {
-        message: `server.static['${prefix}']: maxAge must be a number >= 0`,
+        message:
+          `server.static['${prefix}']: maxAge must be an integer number of seconds from 0 to 31536000 (one year)`,
       });
     }
     if (
@@ -133,6 +135,66 @@ export function normalizeStaticConfig(
 }
 
 /**
+ * Resolve `rel` under the mount to a real, contained FILE: the lexical
+ * `..` guard, the symlink guard against the RESOLVED root, and — when the
+ * path names a directory and the mount has an `index` — one retry with
+ * `rel/index` (the transport strips the trailing slash, so a directory
+ * request never arrives slash-terminated). `undefined` = not ours.
+ */
+async function resolveFile(
+  mount: StaticMount,
+  rel: string,
+): Promise<{ real: string; info: FileInfo } | undefined> {
+  const candidates = [rel];
+  if (mount.index !== false && !rel.endsWith(`/${mount.index}`)) {
+    candidates.push(`${rel}/${mount.index}`);
+  }
+  for (const candidate of candidates) {
+    // Lexical guard: `join` collapses `..`; the result must be inside
+    // `root` (or be `root` itself).
+    const filePath = path.join(mount.root, candidate);
+    if (
+      filePath !== mount.root &&
+      !filePath.startsWith(mount.root + path.SEPARATOR)
+    ) {
+      return undefined;
+    }
+    // Symlink guard: resolve the real path and require it inside the
+    // RESOLVED root, so a symlink under `root` pointing elsewhere can't
+    // leak an out-of-tree file (a consistently symlinked tree still works).
+    let real: string;
+    try {
+      real = await realPath(filePath);
+    } catch {
+      return undefined; // missing / unreadable
+    }
+    const inside = (root: string) =>
+      real === root || real.startsWith(root + path.SEPARATOR);
+    if (mount.realRoot === undefined || !inside(mount.realRoot)) {
+      // Resolved lazily — and RE-resolved on a miss: a deploy that
+      // re-points a symlinked root (`current → release-N`) must not
+      // 404 every file until restart.
+      try {
+        mount.realRoot = await realPath(mount.root);
+      } catch {
+        mount.realRoot = mount.root;
+      }
+      if (!inside(mount.realRoot)) return undefined; // escapes — deny without leaking
+    }
+    let info: FileInfo;
+    try {
+      info = await stat(real);
+    } catch {
+      return undefined;
+    }
+    if (info.isFile) return { real, info };
+    if (!info.isDirectory) return undefined; // special → not ours
+    // a directory: try its index next (or give up)
+  }
+  return undefined;
+}
+
+/**
  * Try to serve `ctx`'s request from `mount`. Returns `true` when it
  * answered (200/206/304/416 — `ctx.response` set), `false` when the
  * request is not this mount's to serve (wrong prefix, missing file,
@@ -146,12 +208,13 @@ export async function serveStaticFile<S extends RapidContextState>(
   let pathname: string;
   let fingerprinted = false;
   try {
-    // `new URL().pathname` normalizes literal dot-segments; decoding
+    // `ctx.path` is the ROUTED pathname (dot-segments normalized by
+    // `new URL()`, api prefix / path-mode version stripped); decoding
     // can REINTRODUCE `..` (from `%2e%2e`), which the guard below
     // re-checks after joining.
-    const url = new URL(ctx.url);
-    pathname = decodeURIComponent(url.pathname);
-    fingerprinted = mount.fingerprint && url.searchParams.has('v');
+    pathname = decodeURIComponent(ctx.path);
+    fingerprinted = mount.fingerprint &&
+      new URL(ctx.url).searchParams.has('v');
   } catch {
     return false; // malformed percent-encoding
   }
@@ -168,45 +231,9 @@ export async function serveStaticFile<S extends RapidContextState>(
     rel += mount.index;
   }
 
-  // Lexical guard: `join` collapses `..`; the result must be inside
-  // `root` (or be `root` itself).
-  const filePath = path.join(mount.root, rel);
-  if (
-    filePath !== mount.root && !filePath.startsWith(mount.root + path.SEPARATOR)
-  ) {
-    return false;
-  }
-
-  // Symlink guard: resolve the real path and require it inside the
-  // RESOLVED root, so a symlink under `root` pointing elsewhere can't
-  // leak an out-of-tree file (a consistently symlinked tree still works).
-  let real: string;
-  try {
-    real = await realPath(filePath);
-  } catch {
-    return false; // missing / unreadable
-  }
-  if (mount.realRoot === undefined) {
-    try {
-      mount.realRoot = await realPath(mount.root);
-    } catch {
-      mount.realRoot = mount.root;
-    }
-  }
-  if (
-    real !== mount.realRoot &&
-    !real.startsWith(mount.realRoot + path.SEPARATOR)
-  ) {
-    return false; // escapes the resolved root — deny without leaking
-  }
-
-  let info: FileInfo;
-  try {
-    info = await stat(real);
-  } catch {
-    return false;
-  }
-  if (!info.isFile) return false; // directory / special → not ours
+  const resolved = await resolveFile(mount, rel);
+  if (resolved === undefined) return false;
+  const { real, info } = resolved;
 
   // A WEAK ETag from size + mtime — an unchanged file answers 304
   // without ever reading the bytes.
@@ -228,9 +255,16 @@ export async function serveStaticFile<S extends RapidContextState>(
     return true;
   }
 
-  // Range requests (RFC 7233, single byte range only).
+  // Range requests (RFC 7233, single byte range only). `If-Range` that no
+  // longer matches the entity means the client's earlier bytes are from
+  // another version — serve the whole file (200), or it stitches garbage.
   headers['accept-ranges'] = 'bytes';
-  const range = parseRange(ctx.headers.get('range'), info.size);
+  const ifRange = ctx.headers.get('if-range');
+  const rangeHeader = ifRange === null || ifRange === etag ||
+      ifRange === headers['last-modified']
+    ? ctx.headers.get('range')
+    : null;
+  const range = parseRange(rangeHeader, info.size);
   if (range === 'unsatisfiable') {
     headers['content-range'] = `bytes */${info.size}`;
     ctx.response = { status: 416, content: '', headers };

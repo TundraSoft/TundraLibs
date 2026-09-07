@@ -96,6 +96,44 @@ const NO_CONTENT: Reply<null> = Object.freeze(new Reply(204, null));
 const currentOf = (): Ctx | undefined =>
   (ambient.get() as Bag | undefined)?.[CURRENT];
 
+/**
+ * Make a transport-invoked module method the PARENT of the invocations it
+ * makes: an `InvokeContext` for the request's own call of the method is
+ * placed in the ambient {@link CURRENT} slot, so `this.invoke()` inside
+ * it inherits the request's `requestId`, `auth` and `state` exactly as a
+ * nested invoke inherits its caller's. Without this the request path
+ * seeded nothing and an auth-aware `@Use` guard saw `auth: undefined`.
+ * A no-op outside an ambient scope.
+ *
+ * @internal Called by mountModule's invoker for `RapidModule` instances.
+ */
+export function _seedRequestFrame(seed: {
+  requestId: string;
+  action: string;
+  target: string;
+  method: string;
+  args: readonly unknown[];
+  state: Record<string, unknown>;
+  auth: Record<string, unknown> | undefined;
+}): void {
+  const bag = ambient.get() as Bag | undefined;
+  if (bag === undefined) return;
+  Object.defineProperty(bag, CURRENT, {
+    value: new InvokeContext({
+      requestId: seed.requestId,
+      action: seed.action,
+      state: seed.state,
+      target: seed.target,
+      method: seed.method,
+      args: seed.args,
+      ...(seed.auth !== undefined ? { auth: seed.auth } : {}),
+    }),
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+}
+
 /** An explicit `reply()` passes through; `undefined` is 204; anything else is 200 content. */
 const toReply = (value: unknown): Reply =>
   value instanceof Reply
@@ -139,6 +177,8 @@ export class ModuleRuntime {
   private readonly __pending = new Set<Promise<unknown>>();
   private __finalized = false;
   private __disposed = false;
+  /** dispose() entered: no new mounts, but in-flight work may still emit/invoke. */
+  private __disposing = false;
 
   /**
    * @param context - The host context.
@@ -197,7 +237,9 @@ export class ModuleRuntime {
    *   disposed.
    */
   public mount(instance: AnyModule): void {
-    if (this.__disposed) throw this.__disposedError('mount');
+    if (this.__disposed || this.__disposing) {
+      throw this.__disposedError('mount');
+    }
     if (this.__finalized) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -391,7 +433,9 @@ export class ModuleRuntime {
    *   failing `init()` after rollback.
    */
   public async finalize(): Promise<void> {
-    if (this.__disposed) throw this.__disposedError('finalize');
+    if (this.__disposed || this.__disposing) {
+      throw this.__disposedError('finalize');
+    }
     if (this.__finalized) return;
     for (const mounted of this.__order) {
       for (const subscription of mounted.subscriptions) {
@@ -575,9 +619,13 @@ export class ModuleRuntime {
    * Afterwards `mount`/`invoke`/`emit` fail with RAPID_CONFIG.
    */
   public async dispose(): Promise<void> {
-    if (this.__disposed) return;
-    this.__disposed = true;
+    if (this.__disposed || this.__disposing) return;
+    // Two phases: DRAINING (what in-flight deliveries trigger — a cascaded
+    // emit/invoke — must still run, or drain()'s "including ones they
+    // trigger" is a lie), then DISPOSED.
+    this.__disposing = true;
     await this.drain();
+    this.__disposed = true;
     for (const mounted of this.__order) {
       for (const subscription of mounted.subscriptions) {
         for (const [event, wrapper] of subscription.wired) {

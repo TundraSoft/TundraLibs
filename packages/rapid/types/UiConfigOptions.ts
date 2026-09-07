@@ -11,14 +11,13 @@
 /** The serializable UI options — `ui:` in Application options / YAML. */
 export type RapidUiConfigOptions = {
   /**
-   * The replica-level UI gate. `false` turns this replica API-only:
-   * templated routes serve JSON unconditionally (`prefer` and the swap
-   * header are ignored), the client runtime / live bridge / history
-   * module routes are not registered, and errors fall back to the
-   * JSON envelope. NOTE: with the UI on, a `prefer: 'html'` route's
-   * template acts as a de-facto field filter — flipping `enabled` off
-   * ships the handler's FULL content as JSON, so handlers must only
-   * ever return what may serialize (the representer never filters).
+   * The app-level UI gate. `false` means this app never emits HTML —
+   * every request is the `'api'` surface: page routes (`prefer:
+   * 'html'`) respond 404, API-first templated routes serve JSON
+   * (`prefer` and the swap header are ignored), errors are the JSON
+   * envelope, static files and the client runtime / live bridge /
+   * history module routes are not served. To serve BOTH faces from one
+   * app and pick per request by host or path, use `server.api` instead.
    * @default true
    */
   enabled?: boolean;

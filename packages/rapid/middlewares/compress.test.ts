@@ -9,6 +9,7 @@ import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { compress } from './compress.ts';
 import { cors } from './cors.ts';
+import { etag } from './etag.ts';
 import { middlewareScope } from './scope.ts';
 
 describe('rapid.middlewares.compress', () => {
@@ -215,5 +216,31 @@ describe('rapid.middlewares.compress', () => {
 
   it('is HTTP-scoped', () => {
     asserts.assertEquals(middlewareScope(compress()), ['HTTP']);
+  });
+});
+
+describe('rapid.middlewares.compress — validators', () => {
+  it('weakens a STRONG ETag once the body is encoded (RFC 9110 §8.8.3)', async () => {
+    const app = await Application.initialize({
+      name: 'compress-etag',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(compress(), etag()); // the documented order: etag hashes identity bytes
+    app.get('/big', () => ({ content: { data: 'x'.repeat(5000) } }));
+    const plain = await app.fetch(new Request('http://app/big'));
+    const strong = plain.headers.get('etag')!;
+    asserts.assert(
+      strong.startsWith('"'),
+      'identity response carries a strong tag',
+    );
+    await plain.body?.cancel();
+    const gz = await app.fetch(
+      new Request('http://app/big', { headers: { 'accept-encoding': 'gzip' } }),
+    );
+    asserts.assertEquals(gz.headers.get('content-encoding'), 'gzip');
+    asserts.assertEquals(gz.headers.get('etag'), `W/${strong}`);
+    await gz.body?.cancel();
+    await app.stop();
   });
 });

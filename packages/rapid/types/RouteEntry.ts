@@ -31,4 +31,10 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
   openapi?: RapidRouteOpenApi;
   /** Normalized template config; presence makes the route representable. */
   template?: RapidRouteTemplate;
+  /**
+   * A UI-infrastructure route (the client runtime / live / history
+   * scripts): absent from the `'api'` surface's route table. Framework-
+   * stamped only.
+   */
+  uiOnly?: boolean;
 };

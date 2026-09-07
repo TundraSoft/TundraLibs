@@ -15,10 +15,19 @@ export type RapidApplicationUploadOptions = {
    */
   path?: string;
   /**
-   * Per-file size cap in bytes.
+   * Per-file size cap in bytes. A multipart REQUEST is read up to
+   * `max(server.maxBodySize, maxSize)` in total when uploads are accepted
+   * (`allowedExtensions` non-empty), else only `server.maxBodySize`.
    * @default 10485760 (10 MB)
    */
   maxSize?: number;
+  /**
+   * Maximum file parts one multipart request may carry — each accepted
+   * part is written to disk before the handler runs, so this bounds the
+   * per-request write work an unauthenticated client can cause.
+   * @default 20
+   */
+  maxFiles?: number;
   /**
    * Allowed file extensions (lowercase, dot-prefixed). FAIL-SAFE
    * default: `[]` — every upload is rejected until the app declares

@@ -71,7 +71,27 @@ export const compose = <
       if (!fn) return i < middleware.length ? dispatch(i + 1) : undefined;
       try {
         return fn(ctx, function next() {
-          return dispatch(i + 1);
+          const downstream = dispatch(i + 1);
+          // A middleware that abandons next() (`void next()`, no return)
+          // leaves this promise unowned: a handler throw that lands after
+          // the middleware returned would then be a process-fatal
+          // unhandled rejection instead of a disclosed response. The side
+          // handler OWNS it (logged, never re-thrown — the response is
+          // already finalized by then); a middleware that awaits still
+          // receives the rejection through the returned promise.
+          downstream.catch((error: unknown) => {
+            // Structurally guarded: unit tests drive compose with bare
+            // context doubles that carry no app.
+            (ctx as Partial<Context<S, unknown>>).app?.log.error(
+              'a handler rejected after a middleware abandoned next() — return or await next()',
+              {
+                requestId: ctx.requestId,
+                action: ctx.action,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            );
+          });
+          return downstream;
         });
       } catch (err) {
         return Promise.reject(err);

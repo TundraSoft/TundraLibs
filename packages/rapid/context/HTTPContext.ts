@@ -19,9 +19,9 @@ import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import { contentTypeFor } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
-import { isSwap } from '../ui/represent.ts';
 import {
   type CookieOptions,
+  isSwap,
   negotiate,
   pagingFromHeaders,
   pagingFromQuery,
@@ -45,6 +45,7 @@ import type {
   RapidContextQuery,
   RapidContextResponse,
   RapidContextState,
+  RapidContextSurface,
   RapidHTTPRequestBody,
   RapidRouteTemplate,
 } from '../types/mod.ts';
@@ -56,6 +57,12 @@ export type HTTPContextInit = {
   request: Request;
   /** Transport-reported peer address ('' when unavailable/unix). */
   remoteAddress: string;
+  /** The surface the transport resolved (see {@link HTTPContext.surface}). */
+  surface?: RapidContextSurface;
+  /** The stripped api prefix, `''` when none (see {@link HTTPContext.basePath}). */
+  basePath?: string;
+  /** The routed pathname (see {@link HTTPContext.path}). */
+  path?: string;
   /** Route params from the matched pattern; empty until matched. */
   params?: Readonly<Record<string, string>>;
   /**
@@ -73,6 +80,37 @@ export type HTTPContextInit = {
   /** The matched route's template config (see {@link HTTPContext.routeTemplate}). */
   template?: RapidRouteTemplate;
 };
+
+/** A target with an explicit scheme — the author's deliberate, untouched choice. */
+const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * Refuse a redirect target a browser would resolve to ANOTHER origin
+ * although it was written as a path. Decided the way the browser decides —
+ * resolve against a sentinel origin and see whether the host survived —
+ * not with a leading-character regex: the WHATWG parser strips ASCII
+ * tab/newline and leading controls BEFORE parsing, so `/\t/evil.example`
+ * and `' //evil.example'` are `//evil.example` to the browser.
+ *
+ * @throws {RapidError} RAPID_RESPONSE_INVALID when the target leaves the
+ *   sentinel origin (`//host`, `/\host`, `/\t/host`, …).
+ */
+function assertRedirectTarget(url: string): void {
+  if (ABSOLUTE_URL.test(url)) return;
+  let host = '';
+  try {
+    host = new URL(url, 'http://rapid.invalid').host;
+  } catch {
+    // unparsable: falls through to the throw below
+  }
+  if (host !== 'rapid.invalid') {
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message:
+        'redirect target resolves to another origin although it is not a full URL (a scheme-relative //host form) — write the full https://… URL to redirect cross-origin on purpose',
+      details: { url },
+    });
+  }
+}
 
 /**
  * The HTTP `args` view. `params` is known immediately from the route match;
@@ -182,6 +220,29 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    */
   public readonly matched: boolean;
   /**
+   * Which face of the app this request addresses — resolved by the
+   * transport before routing from `server.api` (`hosts` / `prefix`) and
+   * `ui.enabled`. On `'api'` the representer is off and pages, static
+   * files and the UI runtime routes do not exist; on `'ui'` everything
+   * behaves as documented for the UI layer. Branch on it for dual
+   * routes (`ctx.surface === 'api' ? { status: 201, content } :
+   * { redirect: '/done' }`).
+   */
+  public readonly surface: RapidContextSurface;
+  /**
+   * The api prefix this request arrived under and had stripped before
+   * routing (`'/api'`), or `''`. Prepend it (via {@link href}) to a
+   * path-absolute URL you generate that should stay on this surface.
+   */
+  public readonly basePath: string;
+  /**
+   * The pathname the ROUTER saw: trailing slash normalised, the api
+   * prefix and a path-mode version segment stripped. Middleware
+   * comparing paths must read this, not `new URL(ctx.url).pathname`,
+   * or the two views of one request disagree.
+   */
+  public readonly path: string;
+  /**
    * The parse, cached AS A PROMISE on first {@link payload} access — so
    * concurrent first readers share ONE stream read (the body stream is
    * single-shot), and a parse FAILURE replays to every awaiter instead
@@ -212,9 +273,24 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * header names. Meaningful on any route; `false` for plain requests.
    */
   public get isSwap(): boolean {
-    // A ui.enabled:false replica never swaps — handlers branching side
-    // effects on the representation must see the representer's truth.
-    return this.app.uiEnabled && isSwap(this);
+    // The api surface never swaps — handlers branching side effects on
+    // the representation must see the representer's truth.
+    return this.surface === 'ui' && isSwap(this);
+  }
+
+  /**
+   * `path` made surface-relative: a path-absolute target (`/users/1`)
+   * gets {@link basePath} prepended so it stays on the api prefix this
+   * request came in on; anything else (`https://…`, `//…`, relative)
+   * is returned unchanged. Rapid never applies this for you — a
+   * redirect or link crosses to the other surface unless you say
+   * otherwise (see the "Surfaces" section of the UI guide).
+   */
+  public href(path: string): string {
+    return this.basePath !== '' && path.startsWith('/') &&
+        !path.startsWith('//')
+      ? this.basePath + path
+      : path;
   }
 
   /**
@@ -263,6 +339,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     this.params = init.params ?? {};
     this.routeTemplate = init.template;
     this.matched = init.matched ?? false;
+    this.surface = init.surface ?? 'ui';
+    this.basePath = init.basePath ?? '';
+    this.path = init.path ?? new URL(request.url).pathname;
     this.__rawRemoteAddress = remoteAddress;
   }
 
@@ -480,7 +559,13 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * Permanently` when `permanent` is true. Return it from a handler
    * (`return ctx.redirect('/login')`). Equivalent to returning
    * `{ content: '', redirect: { url, permanent } }` — the reply key is the
-   * transport-blind form a module method can use without `ctx`.
+   * transport-blind form a module method can use without `ctx`. The
+   * target is NOT made surface-relative — wrap it in {@link href} to
+   * keep an api-prefix request on its prefix.
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID (at assignment) for a
+   *   scheme-relative target (`//host`, `/\host`) — see the response
+   *   setter.
    */
   public redirect(url: string, permanent = false): RapidContextResponse {
     // Fully formed (status + location inline) so the object is correct when
@@ -536,12 +621,14 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * Read a cookie set with `{ signed: true }`: verifies the HMAC against the
    * app `secret` and returns the bare value, or `undefined` when the cookie
    * is missing, unsigned, or forged. Tamper-evident by construction — a
-   * client cannot alter the value without invalidating it.
+   * client cannot alter the value without invalidating it, and the
+   * signature is bound to the cookie NAME, so a value signed under
+   * `pref` never verifies as `uid`.
    *
    * @throws {RapidError} RAPID_CONFIG when no app `secret` is configured.
    */
   public signedCookie(name: string): Promise<string | undefined> {
-    return verifySignedValue(this.cookies[name], this.app.secret);
+    return verifySignedValue(this.cookies[name], this.app.secret, name);
   }
 
   /**
@@ -574,7 +661,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       for (const c of pending) {
         const options = c.options ?? {};
         const value = options.signed === true
-          ? await signValue(c.value, this.app.secret)
+          ? await signValue(c.value, this.app.secret, c.name)
           : c.value;
         this.appendHeader(
           'set-cookie',
@@ -608,8 +695,19 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * re-setting `content` without a status does NOT reset a 404/500 to
    * 200), `headers` merged per-key so an override never wipes middleware
    * contributions. `set-cookie` is appended (never collapsed).
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID when `redirect` is written
+   *   as a path but a browser would resolve it to ANOTHER origin
+   *   (`//evil.example`, `/\evil.example`, `/\t/evil.example`), so a
+   *   target built from request input (`'/' + userPath`) cannot become an
+   *   open redirect. Cross-origin on purpose → write the full `https://…`
+   *   URL.
    */
   public override set response(response: RapidContextResponse | null) {
+    if (response?.redirect !== undefined) {
+      const r = response.redirect;
+      assertRedirectTarget(typeof r === 'string' ? r : r.url);
+    }
     super.response = response;
     if (response === null) {
       this._status = 200; // cleared → back to the default

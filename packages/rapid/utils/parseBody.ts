@@ -23,9 +23,10 @@ import type {
 /** Config the parser needs, sourced from the app's server/upload options. */
 export type ParseBodyOptions = {
   /**
-   * Byte ceiling for non-multipart bodies (`0` disables). Multipart is
-   * capped separately at `max(maxBodySize, uploads.maxSize)`, since its
-   * files have their own per-file limit.
+   * Byte ceiling for non-multipart bodies (`0` disables). Multipart that
+   * can carry files (`uploads.allowedExtensions` non-empty) is capped at
+   * `max(maxBodySize, uploads.maxSize)` instead, since its files have
+   * their own per-file limit.
    */
   maxBodySize: number;
   /** Upload handling — `path` is required (always set at runtime). */
@@ -113,6 +114,7 @@ async function collectFormData(
   const maxFileSize = uploads.maxSize;
   const allowedExtensions = uploads.allowedExtensions;
   const uploadPath = uploads.path;
+  const maxFiles = uploads.maxFiles ?? 20;
   // NULL-PROTOTYPE accumulator — a field literally named `__proto__`
   // would otherwise hit Object.prototype's setter: the `existing` read
   // below returns the inherited prototype (not `undefined`), so the
@@ -148,6 +150,14 @@ async function collectFormData(
     if (uploadPath === undefined) {
       throw new RapidError('RAPID_UPLOADS_UNAVAILABLE', {
         details: { file: value.name },
+      });
+    }
+    // Counted BEFORE the bytes are touched: a body of thousands of tiny
+    // valid files is a write-amplification attack the byte cap cannot see.
+    if (files.length >= maxFiles) {
+      throw new RapidError('RAPID_PAYLOAD_TOO_LARGE', {
+        message: `more than ${maxFiles} files in one request`,
+        details: { maxFiles },
       });
     }
     const extension = path.extname(value.name).toLowerCase();
@@ -215,8 +225,11 @@ export async function parseBody(
 
   // Multipart carries file uploads gated by their OWN per-file cap —
   // subjecting it to the small JSON body cap would make uploads larger
-  // than `maxBodySize` unreachable (the 1 MB vs 10 MB contradiction).
-  const cap = isMultipart
+  // than `maxBodySize` unreachable (the 1 MB vs 10 MB contradiction). An
+  // app that accepts NO files (the fail-safe default) has nothing to
+  // write, so its multipart forms get the ordinary body cap.
+  const acceptsFiles = (options.uploads.allowedExtensions?.length ?? 0) > 0;
+  const cap = isMultipart && acceptsFiles
     ? Math.max(options.maxBodySize, options.uploads.maxSize ?? 0)
     : options.maxBodySize;
   const bytes = await readCapped(request.body, cap);

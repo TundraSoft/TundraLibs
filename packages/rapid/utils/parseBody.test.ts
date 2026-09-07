@@ -335,3 +335,63 @@ describe('rapid.parseBody', () => {
     asserts.assert(files[0]!.endsWith('.png'));
   });
 });
+
+describe('rapid.utils.parseBody — multipart bounds (2026-09 review)', () => {
+  const PNG = new Uint8Array([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    1,
+    2,
+    3,
+    4,
+  ]);
+  const form = (files: number, extra?: string) => {
+    const fd = new FormData();
+    for (let i = 0; i < files; i++) {
+      fd.append(`f${i}`, new File([PNG], `p${i}.png`, { type: 'image/png' }));
+    }
+    if (extra !== undefined) fd.append('note', extra);
+    return new Request('http://x/', { method: 'POST', body: fd });
+  };
+
+  it('more file parts than uploads.maxFiles → RAPID_PAYLOAD_TOO_LARGE before any extra write', async () => {
+    const o = opts();
+    o.uploads = {
+      ...o.uploads,
+      allowedExtensions: ['.png'],
+      maxFiles: 2,
+    } as never;
+    const ok = await parseBody(form(2), o);
+    asserts.assertEquals(ok.files.length, 2);
+    await asserts.assertRejects(
+      () => parseBody(form(3), o),
+      RapidError,
+      'more than 2 files',
+    );
+  });
+
+  it('an app that accepts NO files keeps the ordinary body cap for multipart too', async () => {
+    const o = opts(1024); // maxBodySize 1 KB, uploads.maxSize 10 MB, allowedExtensions []
+    await asserts.assertRejects(
+      () => parseBody(form(0, 'x'.repeat(2048)), o),
+      RapidError,
+      'Payload too large',
+    );
+    const accepts = opts(1024);
+    accepts.uploads = {
+      ...accepts.uploads,
+      allowedExtensions: ['.png'],
+    } as never;
+    const parsed = await parseBody(form(0, 'x'.repeat(2048)), accepts);
+    asserts.assertEquals(
+      (parsed.value as Record<string, unknown>).note,
+      'x'.repeat(2048),
+    );
+  });
+});

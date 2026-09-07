@@ -6,6 +6,7 @@
  */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { isDeno } from '@tundralibs/compat/runtime';
 import {
   makeDir,
   makeTempDir,
@@ -570,5 +571,155 @@ describe('rapid.cli health', () => {
       await healthCommand('http://127.0.0.1:1', { path: '/health' }),
       1,
     );
+  });
+});
+
+describe('rapid.cli init scaffold — installable and type-correct', () => {
+  const base = (over: Partial<Parameters<typeof scaffold>[0]>) =>
+    scaffold(
+      {
+        name: 'demo',
+        module: true,
+        norm: true,
+        runtime: 'deno',
+        docker: false,
+        github: false,
+        ai: false,
+        ...over,
+      },
+      '1.2.3',
+    );
+
+  it('npm-shaped runtimes get an .npmrc pointing @jsr at npm.jsr.io; deno does not', () => {
+    for (const runtime of ['bun', 'node', 'workers'] as const) {
+      const f = base({ runtime });
+      asserts.assertEquals(f['.npmrc'], '@jsr:registry=https://npm.jsr.io\n');
+    }
+    asserts.assert(!('.npmrc' in base({ runtime: 'deno' })));
+  });
+
+  it('--norm declares @tundralibs/norm in the chosen manifest, beside rapid', () => {
+    asserts.assertStringIncludes(
+      base({ runtime: 'deno' })['deno.json']!,
+      '"@tundralibs/norm": "jsr:@tundralibs/norm@^1"',
+    );
+    asserts.assertStringIncludes(
+      base({ runtime: 'node' })['package.json']!,
+      '"@tundralibs/norm": "npm:@jsr/tundralibs__norm@^1"',
+    );
+    asserts.assert(!base({ norm: false })['deno.json']!.includes('norm'));
+  });
+
+  it('an unknown rapid version pins nothing (= latest) instead of a made-up floor', () => {
+    const f = scaffold(
+      {
+        name: 'demo',
+        module: false,
+        norm: false,
+        runtime: 'deno',
+        docker: false,
+        github: false,
+        ai: false,
+      },
+      null,
+    );
+    asserts.assertStringIncludes(
+      f['deno.json']!,
+      '"@tundralibs/rapid": "jsr:@tundralibs/rapid"',
+    );
+    asserts.assertStringIncludes(
+      base({})['deno.json']!,
+      '"@tundralibs/rapid": "jsr:@tundralibs/rapid@^1.2.3"',
+    );
+  });
+
+  it({
+    name:
+      'a generated --module --norm project passes `deno check` and `deno lint` against the workspace',
+    bun: false,
+    node: false,
+    fn: async () => {
+      const dir = await makeTempDir({ prefix: 'rapid-scaffold-check-' });
+      try {
+        const files = base({ runtime: 'deno' });
+        for (const [path, body] of Object.entries(files)) {
+          const slash = path.lastIndexOf('/');
+          if (slash > 0) {
+            await makeDir(`${dir}/${path.slice(0, slash)}`, {
+              recursive: true,
+            });
+          }
+          await writeTextFile(`${dir}/${path}`, body);
+        }
+        // The scaffold's deno.json pins a registry version; the workspace
+        // root config resolves the SAME specifiers to the local packages.
+        const root = new URL('../../../', import.meta.url).pathname;
+        const run = async (...args: string[]) => {
+          const out = await new Deno.Command(Deno.execPath(), {
+            args: [...args, '--config', `${root}deno.json`],
+            cwd: dir,
+            stdout: 'piped',
+            stderr: 'piped',
+          }).output();
+          return {
+            code: out.code,
+            text: new TextDecoder().decode(out.stderr) +
+              new TextDecoder().decode(out.stdout),
+          };
+        };
+        const check = await run('check', 'main.ts', 'db.ts');
+        asserts.assertEquals(check.code, 0, check.text);
+        const lint = await run('lint', 'main.ts', 'db.ts', 'modules', 'models');
+        asserts.assertEquals(lint.code, 0, lint.text);
+      } finally {
+        await removeDir(dir, { recursive: true });
+      }
+    },
+  });
+
+  it('initCommand rejects a name that would corrupt the generated YAML/JSON/TS', async () => {
+    const tmp = await makeTempDir({ prefix: 'rapid-init-name-' });
+    try {
+      for (const name of ["it's", 'a"b', 'x: y', '-lead', 'sp ace']) {
+        const code = await initCommand(
+          { _: [name], module: false, norm: false, runtime: 'deno', yes: true },
+          tmp,
+        );
+        asserts.assertEquals(code, 1, name);
+        asserts.assertEquals(await pathExists(`${tmp}/${name}`), false, name);
+      }
+      const ok = await initCommand(
+        {
+          _: ['my-app.v2'],
+          module: false,
+          norm: false,
+          runtime: 'deno',
+          yes: true,
+        },
+        tmp,
+      );
+      asserts.assertEquals(ok, 0);
+    } finally {
+      await removeDir(tmp, { recursive: true });
+    }
+  });
+});
+
+describe('rapid.cli modules generator — duplicate class names', () => {
+  it('two files exporting one class name fail loudly, naming both, instead of emitting a barrel that cannot compile', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-barrel-dup-' });
+    try {
+      await writeTextFile(`${dir}/A.ts`, 'export class Users {}\n');
+      await writeTextFile(`${dir}/B.ts`, 'export class Users {}\n');
+      await asserts.assertRejects(
+        () => generateBarrel(dir),
+        Error,
+        "'Users' is exported by both A.ts and B.ts",
+      );
+      asserts.assertEquals(await modulesCommand(dir), 1);
+      asserts.assertEquals(await pathExists(`${dir}/mod.ts`), false);
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
   });
 });

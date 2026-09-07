@@ -92,3 +92,13 @@ describe('rapid.ui.history', () => {
     );
   });
 });
+
+describe('rapid.ui.history — restore selector', () => {
+  it('escapes the region id (a legal HTML id like 2024-q3 is not a legal bare selector) and guards the restore lookup', () => {
+    asserts.assertStringIncludes(UI_HISTORY, "'#' + CSS.escape(region.id)");
+    asserts.assertStringIncludes(
+      UI_HISTORY,
+      'try { region = doc.querySelector(entry.target); }',
+    );
+  });
+});

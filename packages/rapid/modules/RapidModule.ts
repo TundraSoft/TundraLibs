@@ -59,6 +59,11 @@ export function _detach(instance: object): void {
   ATTACHED.delete(instance);
 }
 
+/** Whether a runtime hosts this instance (`log`/`emit`/`invoke` work). @internal */
+export function _isAttached(instance: object): boolean {
+  return ATTACHED.has(instance);
+}
+
 /** The attachment, or a loud RAPID_CONFIG for a never-initialized module. */
 const attachmentOf = (instance: object, member: string): ModuleAttachment => {
   const attachment = ATTACHED.get(instance);

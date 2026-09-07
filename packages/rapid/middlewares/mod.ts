@@ -35,9 +35,11 @@ export {
   guardSOCKET,
   MIDDLEWARE_SCOPE,
   middlewareScope,
+  onlyApi,
   onlyHTTP,
   onlyJOB,
   onlySOCKET,
+  onlyUi,
 } from './scope.ts';
 export { secureHeaders, type SecureHeadersOptions } from './secureHeaders.ts';
 export {

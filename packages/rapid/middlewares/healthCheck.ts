@@ -43,7 +43,7 @@ export function healthCheck(options: HealthCheckOptions = {}): RapidMiddleware {
     ) {
       return next();
     }
-    if (new URL(ctx.url).pathname !== path) return next();
+    if (ctx.path !== path) return next();
 
     if (check === undefined) {
       ctx.response = { content: { status: 'ok' } };

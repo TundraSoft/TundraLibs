@@ -5,7 +5,7 @@ the handler keeps returning JSON-shaped data, and the same route serves both
 representations. Not a React/Vite-class framework — a deliberately minimal
 mechanism for server-rendered pages with fragment swaps.
 
-## The decision table — deterministic, `Accept` is never consulted
+## The decision table — deterministic; `Accept` never picks a route's representation
 
 | Request                                        | Representation                     |
 | ---------------------------------------------- | ---------------------------------- |
@@ -16,8 +16,9 @@ mechanism for server-rendered pages with fragment swaps.
 `prefer` resolves route → `ui.prefer` → `'json'`. A fragment and a
 page are both `text/html`, so `Accept` could never tell them apart; ignoring
 it entirely makes the outcome readable off the route's declaration and needs
-no `Vary: Accept`. Every templated response instead carries
-`Vary: rapid-swap`. What is given up: a form POST with JavaScript disabled is
+no `Vary: Accept` on any route (the one place `Accept` is read is the error
+page for an UNMATCHED URL — see [Errors](#errors)). Every templated response
+instead carries `Vary: rapid-swap`. What is given up: a form POST with JavaScript disabled is
 a plain navigation and would get JSON — set `prefer: 'html'` on that route
 and the no-JS path returns the page.
 
@@ -144,7 +145,7 @@ UI configuration is split by NATURE, typed disjoint, at
 ```yaml
 # configs/Application.yaml — the replica-level surface
 ui:
-  enabled: true # false = API replica: JSON everywhere, no runtime routes
+  enabled: true # false = never emit HTML (every request is the api surface)
   prefer: html
   live: true
   history: true
@@ -164,12 +165,11 @@ const app = await Application.initialize({
 });
 ```
 
-`ui.enabled: false` turns a replica API-only — templated routes serve
-JSON unconditionally, the runtime/live/history routes are not
-registered. One caution rides that switch: with the UI on, a
-`prefer: 'html'` route's template acts as a de-facto field filter —
-disabled, the handler's FULL content ships as JSON. Handlers must only
-ever return what may serialize; the representer never filters.
+`ui.enabled: false` means the app never emits HTML: every request is the
+`api` surface (see [Surfaces](#surfaces--api-and-ui-in-one-app)) — page
+routes are 404, API-first templated routes serve JSON, the
+runtime/live/history routes are not registered. To serve both faces from
+one app and decide per request, configure `server.api` instead.
 
 Configuring the UI registers the client runtime at `runtimePath`
 (default `/__rapid/ui.js`) — served from a string constant (no file
@@ -177,6 +177,68 @@ read: works on Workers and with `app.fetch()`), strong content-keyed
 `ETag`, `cache-control: no-cache` (a 304 when unchanged — never a stale
 runtime after an upgrade). Configure at most once; a second
 configuration (the deprecated `app.ui()` included) is `RAPID_CONFIG`.
+
+## Surfaces — API and UI in one app
+
+One instance serves both faces; the **request** decides which it sees.
+`server.api` names the API surface by host, by path prefix, or both:
+
+```yaml
+server:
+  api:
+    hosts: [api.example.com] # api.example.com/users
+    prefix: /api # example.com/api/users — stripped before routing
+```
+
+A request to an api host, or under the prefix, is the `api` surface;
+everything else is `ui`. Routing is identical on both — `/api/v1/users`
+and `api.example.com/v1/users` both reach the route registered as
+`/users` (the prefix comes off first, then a path-mode version). What
+differs:
+
+| On the `api` surface                                        | On the `ui` surface |
+| ----------------------------------------------------------- | ------------------- |
+| templated `prefer: 'json'` route → JSON, swap ignored       | as documented above |
+| page route (`prefer: 'html'`) → **404**, as if unregistered | page / fragment     |
+| errors → the JSON envelope; no `Vary: rapid-swap`           | error pages         |
+| `server.static`, `/__rapid/*` → 404                         | served              |
+| non-templated routes                                        | identical           |
+
+A page 404 is a true no-match: its route middleware never runs and, with
+`server.methodNotAllowed`, it is absent from `Allow` — so an API client
+(or a spoofed `Host`) learns nothing about pages. Hostnames compare
+case-insensitively (punycode, trailing dot and port ignored) against the
+URL's host; behind a proxy that rewrites it, set
+`server.api.trustForwardedHost: true` (with `server.trustProxy`) to read
+`x-forwarded-host` — explicit, because most proxies set `x-forwarded-for`
+but not `x-forwarded-host`, and a header the proxy doesn't overwrite is
+one the client can send.
+
+On the context: `ctx.surface` (`'ui' | 'api'`), `ctx.basePath` (`'/api'`
+when the prefix was stripped, else `''`), `ctx.path` (the routed path —
+compare against this, never `new URL(ctx.url).pathname`), and
+`ctx.href(path)`. Rapid never rewrites redirects or links: a handler's
+`redirect: '/posts'` reaches the `/posts` page from either surface.
+Keep an API client on its prefix explicitly — `ctx.redirect(ctx.href('/posts'))`
+— or branch: a dual POST is
+`ctx.surface === 'api' ? { status: 201, content } : { redirect: '/posts' }`.
+Scheme-relative targets (`//host`, `/\host`) are refused at assignment
+(open redirect); cross-origin on purpose is a full URL.
+
+Middleware scopes per side with `onlyApi()` / `onlyUi()` — `app.use(onlyApi(cors({ origin: [uiOrigin] })), onlyApi(rateLimit()))`.
+Both RUN on sockets and jobs (no surface — fail-closed, unlike
+`onlyHTTP`). Do **not** scope `csrf()` or `session()` to `ui` on a
+shared host (`prefix` mode) unless nothing on the api surface
+authenticates from a cookie: the cookie jar is one, and an unchecked
+cookie-authenticated POST at `/api/…` is a cross-site hole. A pure
+token API (`Authorization` only) may scope them; a browser SPA that logs
+in through `/api` keeps `csrf()` unscoped and echoes the token.
+
+`ui.enabled: false` is the blunt form: every request is `api`. Sockets
+and jobs have no surface; `/ws` upgrades under the prefix too. OpenAPI
+omits pages when an api surface exists (they are not reachable there).
+In tests, `client(app).get('/users', { host: 'api.rapid.test' })`
+addresses a host.
 
 ## The three tiers
 
@@ -261,8 +323,8 @@ const Nav = template<unknown, AppView>((_data, view) =>
 
 Handlers that vary SIDE EFFECTS by representation read `ctx.isSwap` — the
 representer's own decision (config-aware: a renamed `swapHeader`/
-`swapUnless` keeps it correct; always `false` on a `ui.enabled: false`
-replica) instead of re-deriving header checks.
+`swapUnless` keeps it correct; always `false` on the `api` surface)
+instead of re-deriving header checks.
 
 One divergence to know: the representer runs on the RETURN-VALUE channel
 only. A handler (or middleware) assigning `ctx.response` directly on a
@@ -368,7 +430,8 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   fragment swapped into `target` (POST sources are never replayed, and
   `append`/`prepend` swaps never register — a "refresh" would re-append;
   refresh on a target with no recorded source resolves `false`). These
-  two functions are the runtime's whole public API — they exist for the
+  two functions are the base runtime's whole public API (`live.js` adds
+  `rapid.live.*`, `history.js` `rapid.history.push`) — they exist for the
   **dynamic-update patterns** below. Everything further (polling,
   history) stays app JS over the runtime's events — the attribute
   surface is deliberately frozen.
@@ -597,7 +660,10 @@ secrets (they land in the address bar and browser history).
   on failure, values re-filled from the returned data. No framework knob —
   the D3/D8 rules compose into it.
 - **Strict CSP (nonces)** — the projection carries per-request data, so a
-  style/script nonce is just a view field:
+  style/script nonce is just a view field (note the built-in
+  `DefaultErrorPage` styles itself with inline `style=` attributes, which a
+  nonce cannot cover — under a strict `style-src` supply your own
+  `errorTemplates.default`):
   `ui: { view: (ctx) => ({ nonce: mintNonce(ctx) }) }` at
   `Application.initialize` and
   `html\`<style nonce="${view.nonce}">…\``— pair with your security
@@ -687,12 +753,11 @@ stay JSON whatever a browser's Accept says). A swap gets the bare fragment, a
 page renders inside the CORE
 (the module tier is skipped: errors are not module-scoped, and a module
 layout may depend on the very data that failed) with
-`"{status} {message}"` as the core's title. Off-HTML (and on a
-`ui.enabled: false` replica), the JSON envelope is sent unchanged.
-One asymmetry to know in a `prefer: 'html'` app: a NON-templated JSON
-route's successes stay JSON, but its errors resolve to HTML pages like
-everything else — `prefer` lives on templates, so there is no bare-route
-opt-out; keep `prefer: 'html'` scoped to page routes when that matters.
+`"{status} {message}"` as the core's title. Off-HTML (and on the `api`
+surface), the JSON envelope is sent unchanged. A matched route WITHOUT
+a template is never a page, so its errors stay JSON even in a
+`prefer: 'html'` app — only the unmatched-URL 404 consults the app-level
+`prefer` (and `Accept`, as above).
 
 For failed SECTIONS there is deliberately no error template: recoverable
 input problems are the form union's own 200-state (`formState`), and a

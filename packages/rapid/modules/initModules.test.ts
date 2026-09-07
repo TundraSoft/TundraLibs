@@ -577,3 +577,63 @@ describe('rapid.modules', () => {
     );
   });
 });
+
+describe('rapid.modules — dispose phases + constructor arity (2026-09 review)', () => {
+  it("a cascaded emit fired by an in-flight delivery still runs during dispose()'s drain", async () => {
+    const A_EVENTS = { Fired: event<{ n: number }>() };
+    const B_EVENTS = { Relayed: event<{ n: number }>() };
+    const got: number[] = [];
+    class Pa extends RapidModule<typeof A_EVENTS> {
+      readonly name = 'Pa';
+      readonly namespace = 'cascade';
+      protected readonly events = A_EVENTS;
+      fire() {
+        void this.emit('Fired', { n: 1 }); // fire-and-forget
+      }
+    }
+    class Pb extends RapidModule<typeof B_EVENTS> {
+      readonly name = 'Pb';
+      readonly namespace = 'cascade';
+      protected readonly events = B_EVENTS;
+      @On('cascade:Pa:Fired')
+      async onFired(p: { n: number }) {
+        await sleep(10);
+        await this.emit('Relayed', { n: p.n + 1 });
+      }
+    }
+    class Pc extends RapidModule<typeof A_EVENTS> {
+      readonly name = 'Pc';
+      readonly namespace = 'cascade';
+      protected readonly events = A_EVENTS;
+      @On('cascade:Pb:Relayed')
+      onRelayed(p: { n: number }) {
+        got.push(p.n);
+      }
+    }
+    const { modules, runtime } = await initModules(QUIET, {
+      modules: [{ Pa, Pb, Pc }],
+    });
+    modules.Pa.fire();
+    await runtime.dispose();
+    asserts.assertEquals(got, [2]);
+  });
+
+  it('a module whose constructor REQUIRES arguments fails the boot instead of mounting half-built', async () => {
+    class Needy extends RapidModule<Record<never, never>> {
+      readonly name = 'Needy';
+      readonly namespace = 'arity';
+      protected readonly events = {};
+      constructor(private readonly db: { query(s: string): unknown }) {
+        super();
+      }
+      list() {
+        return this.db.query('x');
+      }
+    }
+    await asserts.assertRejects(
+      () => initModules(QUIET, { modules: [{ Needy }] }),
+      RapidError,
+      'declares 1 constructor parameter',
+    );
+  });
+});

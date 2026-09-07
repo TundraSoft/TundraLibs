@@ -17,6 +17,7 @@ import { ulid } from '@tundralibs/id';
 import type { Context } from '../context/mod.ts';
 import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
 import { signValue, verifySignedValue } from '../utils/cookies.ts';
+import { mark, SESSION_ISSUED } from '../utils/requestMarks.ts';
 import { memoryStore, type Store } from './store.ts';
 
 /** Arbitrary per-client data held in a session. */
@@ -143,7 +144,7 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
     // wrapper. Memoized: every getSession() call shares one promise.
     const load = async (): Promise<RapidSession> => {
       const secret = ctx.app.secret;
-      id = await verifySignedValue(ctx.cookies[name], secret);
+      id = await verifySignedValue(ctx.cookies[name], secret, name);
       if (id !== undefined) {
         const rec = await store.get(id);
         if (rec !== undefined && Date.now() - rec.createdAt < absoluteTtl) {
@@ -220,13 +221,27 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
           // saving then would overwrite the live record with an empty
           // one and re-issue the cookie, erasing the session over a
           // blip. A failed load saves nothing.
+          const issue = async (sid: string): Promise<void> => {
+            const signed = await signValue(sid, ctx.app.secret, name);
+            ctx.setCookie(name, signed, {
+              httpOnly: true,
+              secure: options.secure ?? true,
+              sameSite: options.sameSite ?? 'Lax',
+              path: options.path ?? '/',
+              maxAge: Math.floor(idleTtl / 1000),
+            });
+            // For an OUTER csrf(): the binding this response's cookie
+            // carries, so it can re-bind its token on the same response.
+            mark(ctx, SESSION_ISSUED, signed);
+          };
           if (loaded && destroyed) {
             // regenerate() then destroy(): the pre-rotation record must
             // die too, or the fixation window survives the logout.
             if (evict !== undefined) await drop(evict);
             if (id !== undefined) await drop(id);
             ctx.deleteCookie(name, { path: options.path ?? '/' });
-          } else if (loaded && (dirty || (id !== undefined && rolling))) {
+            mark(ctx, SESSION_ISSUED, '');
+          } else if (loaded && dirty) {
             const fresh = id === undefined;
             id ??= ulid();
             if (evict !== undefined && evict !== id) await drop(evict);
@@ -242,15 +257,20 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
             );
             // Issue on a fresh/rotated id; re-issue to slide the rolling
             // window.
-            if (fresh || rolling) {
-              ctx.setCookie(name, await signValue(id, ctx.app.secret), {
-                httpOnly: true,
-                secure: options.secure ?? true,
-                sameSite: options.sameSite ?? 'Lax',
-                path: options.path ?? '/',
-                maxAge: Math.floor(idleTtl / 1000),
-              });
+            if (fresh || rolling) await issue(id);
+          } else if (loaded && id !== undefined && rolling) {
+            // A READ-ONLY request slides the window WITHOUT rewriting the
+            // record: its snapshot may be older than a write that landed
+            // in parallel (a page render overlapping a POST), and saving
+            // it back would erase that write. `touch` when the store has
+            // it; else re-set whatever the store holds NOW.
+            if (store.touch !== undefined) {
+              await store.touch(id, idleTtl);
+            } else {
+              const current = await store.get(id);
+              if (current !== undefined) await store.set(id, current, idleTtl);
             }
+            await issue(id);
           }
         }
       } catch (error) {

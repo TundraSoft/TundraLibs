@@ -337,3 +337,70 @@ describe('rapid session()', () => {
     asserts.assertEquals((await r.json()).n, 1); // the mutation stayed request-local
   });
 });
+
+describe('rapid session() rolling save', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  /** App whose read route holds its stale snapshot across a concurrent write. */
+  const raceApp = async (store?: ReturnType<typeof memoryStore<never>>) => {
+    const app = await Application.initialize({
+      name: 'sess-race',
+      secret: 'test-secret-0123456789-abcdefghijklmnop',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(session({ secure: false, ...(store ? { store } : {}) }));
+    app.post('/hit', async (ctx) => {
+      const s = (await getSession(ctx))!;
+      s.set('hits', (s.get<number>('hits') ?? 0) + 1);
+      return { content: { hits: s.get<number>('hits') } };
+    });
+    app.get('/slow', async (ctx) => {
+      const before = (await getSession(ctx))!.get<number>('hits');
+      await sleep(60); // a page render overlapping a POST
+      return { content: { before } };
+    });
+    app.get('/read', async (ctx) => ({
+      content: { hits: (await getSession(ctx))!.get<number>('hits') },
+    }));
+    return app;
+  };
+
+  const race = async (app: Application) => {
+    const first = await app.fetch(
+      new Request('http://app/hit', { method: 'POST' }),
+    );
+    const sid = sidFrom(first)!;
+    await first.body?.cancel();
+    const cookie = { cookie: `sid=${sid}` };
+    const slow = app.fetch(new Request('http://app/slow', { headers: cookie }));
+    await sleep(10);
+    await (await app.fetch(
+      new Request('http://app/hit', { method: 'POST', headers: cookie }),
+    )).text();
+    await (await slow).text();
+    const read = await app.fetch(
+      new Request('http://app/read', { headers: cookie }),
+    );
+    return (await read.json()).hits;
+  };
+
+  it('a read-only request slides the window WITHOUT overwriting a concurrent write (store.touch)', async () => {
+    const app = await raceApp();
+    asserts.assertEquals(await race(app), 2);
+    await app.stop();
+  });
+
+  it('a store without touch() falls back to re-setting the CURRENT record, not the stale snapshot', async () => {
+    const inner = memoryStore<never>();
+    // A Store shaped like a minimal redis adapter: get/set/delete only.
+    const minimal = {
+      get: (k: string) => inner.get(k),
+      set: (k: string, v: never, ttl?: number) => inner.set(k, v, ttl),
+      delete: (k: string) => inner.delete!(k),
+    };
+    const app = await raceApp(minimal as never);
+    asserts.assertEquals(await race(app), 2);
+    await app.stop();
+  });
+});

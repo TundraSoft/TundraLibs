@@ -60,6 +60,15 @@ export async function initCommand(
     console.error(`✗ invalid project name '${name}'`);
     return 1;
   }
+  // The name is interpolated UNESCAPED into YAML, JSON and TS strings — a
+  // quote or `: ` would corrupt the scaffold, so only package-name-safe
+  // characters pass.
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(name)) {
+    console.error(
+      `✗ invalid project name '${name}' — letters, digits, '.', '_' and '-' only (must start with a letter or digit)`,
+    );
+    return 1;
+  }
 
   // Runtime FIRST — everything else is shaped by it.
   let runtime: Runtime = 'deno';
@@ -169,7 +178,8 @@ export async function initCommand(
     }
   }
 
-  const rapidVersion = (await latestVersion('rapid')) ?? '1.0.0';
+  // null (offline / unpublished) → the manifest pins no version (= latest).
+  const rapidVersion = await latestVersion('rapid');
   const files = scaffold(
     {
       name,

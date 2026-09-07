@@ -31,21 +31,21 @@ import {
   setContainerProvider,
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
-import { isTemplate, normalizeRouteTemplate } from './ui/represent.ts';
-import { UI_HISTORY, UI_HISTORY_ETAG } from './ui/history.ts';
-import { UI_LIVE, UI_LIVE_ETAG } from './ui/live.ts';
-import { UI_RUNTIME, UI_RUNTIME_ETAG } from './ui/ui.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
 import {
+  type ApiSurface,
   buildExporter,
   buildState,
   currentContainer,
   djb2,
   hasDecorations,
   ifNoneMatch,
+  isTemplate,
   Meter,
   mountModule,
+  normalizeApiSurface,
+  normalizeRouteTemplate,
   normalizeStaticConfig,
   type StaticMount,
 } from './utils/mod.ts';
@@ -142,6 +142,8 @@ const UI_DATA_KEYS = new Set([
   'swapUnless',
   'redirectHeader',
 ]);
+/** RFC 9110 token — the legal shape of a header name. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const UI_CODE_KEYS = new Set([
   'core',
   'layout',
@@ -218,6 +220,10 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __onError?: RapidErrorHandler<S>;
   /** `server.static` normalized to ordered mounts (empty = none). */
   private __staticMounts: readonly StaticMount[] = [];
+  /** `server.api`, normalised at construction; `undefined` = no api surface. */
+  private __apiSurface?: ApiSurface;
+  /** The in-progress `stop()`, so a concurrent second call joins it. */
+  private __stopping?: Promise<this>;
   /**
    * `view.asset()`'s lazy version cache: URL path → content hash (djb2),
    * plus the mtime it was computed at (DEVELOPMENT re-checks it so a
@@ -510,6 +516,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         },
         uploads: {
           maxSize: 10_485_760, // 10 MB
+          maxFiles: 20,
           allowedExtensions: [], // FAIL-SAFE: no uploads until declared
           // The promised temp-dir default — uploads.path is ALWAYS set
           // at runtime.
@@ -519,7 +526,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       }, {
         mode: 'PRODUCTION',
         stateMode: 'CLONE',
-        shutdownTimeout: 25_000, // under Cloud Run's 30s SIGTERM window
+        shutdownTimeout: 25, // seconds — under Cloud Run's 30s SIGTERM window
       });
       this.__validate();
       // server.static → ordered mounts, boot-loud. Relative roots anchor
@@ -529,6 +536,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       if (staticConfig !== undefined) {
         this.__staticMounts = normalizeStaticConfig(staticConfig, configDir);
       }
+      this.__apiSurface = normalizeApiSurface(this.option('server')?.api);
     } catch (error) {
       if (ownedUploadPath !== undefined) {
         try {
@@ -1352,7 +1360,6 @@ export class Application<S extends RapidContextState = RapidContextState>
           `ui: runtimePath collides with the history module's /__rapid/history.js`,
       });
     }
-    const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
     for (
       const [key, value] of [
         ['swapHeader', data.swapHeader],
@@ -1390,13 +1397,25 @@ export class Application<S extends RapidContextState = RapidContextState>
       enabled,
       runtimePath,
     });
-    if (!enabled) return; // API replica: no runtime, no live, no history
-    this.__scriptRoute(runtimePath, UI_RUNTIME, UI_RUNTIME_ETAG);
+    if (!enabled) return; // no UI: no runtime, no live, no history
+    this.__scriptRoute(
+      runtimePath,
+      () => import('./ui/ui.ts').then((m) => [m.UI_RUNTIME, m.UI_RUNTIME_ETAG]),
+    );
     if (data.live === true) {
-      this.__scriptRoute('/__rapid/live.js', UI_LIVE, UI_LIVE_ETAG);
+      this.__scriptRoute(
+        '/__rapid/live.js',
+        () => import('./ui/live.ts').then((m) => [m.UI_LIVE, m.UI_LIVE_ETAG]),
+      );
     }
     if (data.history === true) {
-      this.__scriptRoute('/__rapid/history.js', UI_HISTORY, UI_HISTORY_ETAG);
+      this.__scriptRoute(
+        '/__rapid/history.js',
+        () =>
+          import('./ui/history.ts').then((
+            m,
+          ) => [m.UI_HISTORY, m.UI_HISTORY_ETAG]),
+      );
     }
   }
 
@@ -1407,10 +1426,17 @@ export class Application<S extends RapidContextState = RapidContextState>
    * changed ETag is never consulted on an immutable entry; an unchanged
    * script still costs only a 304). Liberal If-None-Match — `*`, comma
    * lists, W/ prefixes — and the 304 re-carries its validators per
-   * RFC 9110.
+   * RFC 9110. The script module loads on the FIRST request (then stays
+   * cached), so an app that never serves it never pays for it — and the
+   * route is `uiOnly`: absent from the api surface.
    */
-  private __scriptRoute(path: string, source: string, etag: string): void {
-    this.get(path, (ctx) => {
+  private __scriptRoute(
+    path: string,
+    load: () => Promise<readonly [source: string, etag: string]>,
+  ): void {
+    let script: Promise<readonly [string, string]> | undefined;
+    this.get(path, async (ctx) => {
+      const [source, etag] = await (script ??= load());
       const inm = ctx.headers.get('if-none-match');
       const matches = inm !== null && ifNoneMatch(inm, etag);
       const headers = { etag, 'cache-control': 'no-cache' };
@@ -1423,17 +1449,33 @@ export class Application<S extends RapidContextState = RapidContextState>
         },
       };
     });
+    this.__routes[this.__routes.length - 1]!.uiOnly = true;
   }
 
   /**
-   * Whether this replica represents templated routes at all — `false`
-   * only when the UI was configured with `enabled: false` (the per-
-   * replica API-only gate). Distinct from "UI never configured": route-
-   * level templates work without any app-level UI configuration, but a
-   * disabled replica serves JSON unconditionally.
+   * Whether this app ever emits HTML — `false` only when the UI was
+   * configured with `enabled: false`, which makes EVERY request the
+   * `'api'` surface: templated `prefer: 'json'` routes serve JSON, page
+   * routes (`prefer: 'html'`) and the UI runtime routes are 404, static
+   * files are not served. Distinct from "UI never configured": route-
+   * level templates work without any app-level UI configuration.
    */
   public get uiEnabled(): boolean {
     return this.__ui?.enabled !== false;
+  }
+
+  /**
+   * The app-wide `ui.prefer` as CONFIGURED (`'json'` when never set) —
+   * unlike {@link uiOptions}, still readable on a `ui.enabled: false`
+   * app, so the transport can tell a page from an API-first route there.
+   */
+  public get uiPrefer(): 'json' | 'html' {
+    return this.__ui?.prefer ?? 'json';
+  }
+
+  /** The normalised `server.api` surface, `undefined` when not configured. */
+  public get apiSurface(): ApiSurface | undefined {
+    return this.__apiSurface;
   }
 
   /** The normalized `server.static` mounts, in declaration order. */
@@ -1492,9 +1534,9 @@ export class Application<S extends RapidContextState = RapidContextState>
 
   /**
    * The resolved UI configuration, or `undefined` when the UI is not
-   * configured OR this replica set `ui.enabled: false` — the single
-   * switch the representer (and `ctx.isSwap`) reads, so a disabled
-   * replica serves JSON everywhere with zero further gating.
+   * configured OR this app set `ui.enabled: false` — the single switch
+   * the representer reads (the transport additionally gates it per
+   * request on `ctx.surface`).
    */
   public get uiOptions():
     | Readonly<
@@ -1655,10 +1697,18 @@ export class Application<S extends RapidContextState = RapidContextState>
    * process-exit backstop fires a little later — `shutdownTimeout` plus a
    * 10% grace, unref'd so it cannot hold the loop open — to guarantee exit
    * if the drain's own force-close or a later teardown step (jobs, module
-   * dispose) itself wedges. `shutdownTimeout: 0` disables both: the server
-   * force-closes immediately and no exit is armed.
+   * dispose) itself wedges. Memoised: a second `stop()` arriving during the
+   * drain (SIGTERM and SIGINT both bound to it, a supervisor calling twice)
+   * joins the in-progress teardown instead of removing the uploads dir and
+   * disposing modules under the requests still draining.
    */
-  public async stop(): Promise<this> {
+  public stop(): Promise<this> {
+    return this.__stopping ??= this.__stop().finally(() => {
+      this.__stopping = undefined;
+    });
+  }
+
+  private async __stop(): Promise<this> {
     if (!this.__started) {
       // The upload temp dir is created at CONSTRUCTION, not start() — an
       // instance that never started still owns one (e.g. a validation
@@ -1673,14 +1723,11 @@ export class Application<S extends RapidContextState = RapidContextState>
     // exit is armed a 10% grace beyond it so the drain's force-close and the
     // later teardown steps (jobs, module dispose) settle first in the normal
     // case, and the exit only fires when teardown is genuinely wedged.
-    const drainMs = this.option('shutdownTimeout')!;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (drainMs > 0) {
-      // Nuclear exit via compat (never a raw runtime global — golden rule);
-      // unref'd so it can't itself keep the process alive when teardown wins.
-      timer = setTimeout(() => exit(1), Math.ceil(drainMs * 1.1));
-      unrefTimer(timer);
-    }
+    const drainMs = this.option('shutdownTimeout')! * 1000; // configured in seconds
+    // Nuclear exit via compat (never a raw runtime global — golden rule);
+    // unref'd so it can't itself keep the process alive when teardown wins.
+    const timer = setTimeout(() => exit(1), Math.ceil(drainMs * 1.1));
+    unrefTimer(timer);
     try {
       const http = this.__http;
       const jobs = this.__jobTransport;
@@ -1722,7 +1769,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       if (failures.length > 0) throw RapidError.from(failures[0]);
       return this;
     } finally {
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimeout(timer);
     }
   }
 
@@ -1731,7 +1778,10 @@ export class Application<S extends RapidContextState = RapidContextState>
    * too — via a THROWAWAY transport that never touches lifecycle state.
    * `args` merge OVER the job's registration defaults for this firing.
    * `handlerRan` in the outcome is `false` when middleware
-   * short-circuited the run (the handler never executed).
+   * short-circuited the run (the handler never executed). BYPASSES the
+   * scheduler's overlap guard: a manual firing can run concurrently with
+   * a scheduled one of the same job — make the job idempotent, or check
+   * {@link jobMetrics} before triggering.
    *
    * @throws {RapidError} RAPID_CONFIG when no job is registered under
    *   `name` (as a rejection of the returned promise).
@@ -1843,10 +1893,47 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { key: 'unixSocketPath' },
       });
     }
-    const shutdownTimeout = this._getOption('shutdownTimeout')!;
-    if (!Number.isInteger(shutdownTimeout) || shutdownTimeout < 0) {
+    const requestIdHeader = this._getOption('server')?.requestIdHeader;
+    if (
+      requestIdHeader !== undefined && !HEADER_NAME.test(requestIdHeader)
+    ) {
+      // Caught HERE: an illegal name would throw a raw TypeError from
+      // `headers.get()` on every request, outside the disclosure path.
       throw new RapidError('RAPID_CONFIG', {
-        message: 'shutdownTimeout must be a non-negative integer (ms)',
+        message:
+          `server.requestIdHeader must be a valid header name (got '${requestIdHeader}')`,
+        details: { key: 'server.requestIdHeader', value: requestIdHeader },
+      });
+    }
+    const uploads = this._getOption('uploads') ?? {};
+    for (const ext of uploads.allowedExtensions ?? []) {
+      // The parser compares `extname(name).toLowerCase()` — `png` or
+      // `.PNG` could never match, so every upload would 415 with no hint.
+      if (!/^\.[a-z0-9]+$/.test(ext)) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            `uploads.allowedExtensions entry '${ext}' must be lowercase and dot-prefixed (e.g. '.png')`,
+          details: { key: 'uploads.allowedExtensions', value: ext },
+        });
+      }
+    }
+    if (
+      uploads.maxFiles !== undefined &&
+      (!Number.isInteger(uploads.maxFiles) || uploads.maxFiles < 1)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'uploads.maxFiles must be a positive integer',
+        details: { key: 'uploads.maxFiles', value: uploads.maxFiles },
+      });
+    }
+    const shutdownTimeout = this._getOption('shutdownTimeout')!;
+    if (
+      !Number.isInteger(shutdownTimeout) || shutdownTimeout < 1 ||
+      shutdownTimeout > 30
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'shutdownTimeout must be an integer number of SECONDS from 1 to 30',
         details: { key: 'shutdownTimeout', value: shutdownTimeout },
       });
     }

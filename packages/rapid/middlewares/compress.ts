@@ -111,6 +111,17 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
     if (encoding === null) return;
 
+    // RFC 9110 §8.8.3: a STRONG validator must change when the
+    // representation does — and Content-Encoding is part of it. An inner
+    // etag() hashed the identity body; weaken its tag (nginx does the
+    // same) so no cache splices gzip and identity bytes under one tag.
+    const weaken = (): void => {
+      const tag = ctx.responseHeaders.get('etag');
+      if (tag !== null && !tag.startsWith('W/')) {
+        ctx.setHeader('etag', `W/${tag}`);
+      }
+    };
+
     // MERGE into any existing Vary rather than replacing it — the response
     // setter overwrites per-key, so a bare `Vary: Accept-Encoding` would
     // drop `cors()`'s `Vary: Origin` and make a shared cache serve one
@@ -130,6 +141,7 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       const contentType = ctx.responseHeaders.get('content-type') ??
         'application/octet-stream';
       if (!isCompressible(contentType)) return;
+      weaken();
       ctx.response = {
         content: toReadableStream(streamBody).pipeThrough(
           // CompressionStream's writable is typed BufferSource; a byte stream is one.
@@ -155,6 +167,7 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     if (bytes.length < threshold || !isCompressible(contentType)) return;
 
     const compressed = await compressBytes(bytes, encoding);
+    weaken();
     ctx.response = {
       content: compressed,
       // content-type must be re-stated (we're handing bytes now, which

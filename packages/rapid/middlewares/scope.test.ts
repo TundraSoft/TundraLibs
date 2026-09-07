@@ -12,9 +12,11 @@ import {
   guardJOB,
   guardSOCKET,
   middlewareScope,
+  onlyApi,
   onlyHTTP,
   onlyJOB,
   onlySOCKET,
+  onlyUi,
 } from './scope.ts';
 
 describe('rapid.middlewares.scope', () => {
@@ -224,5 +226,65 @@ describe('rapid.middlewares.scope', () => {
     await app.start();
     await app.stop();
     asserts.assertEquals(warnings, []);
+  });
+});
+
+describe('rapid.middlewares.scope surfaces', () => {
+  const make = () =>
+    Application.initialize({
+      name: 'sc-surface',
+      server: { port: 0, hostname: '127.0.0.1', api: { prefix: '/api' } },
+      logger: { handlers: [] },
+    });
+
+  it('onlyApi runs on api requests and SKIPS ui requests; onlyUi is the mirror', async () => {
+    const app = await make();
+    const ran: string[] = [];
+    app.use(
+      onlyApi(async (ctx, next) => {
+        ran.push(`api:${ctx.action}`);
+        await next();
+      }),
+      onlyUi(async (ctx, next) => {
+        ran.push(`ui:${ctx.action}`);
+        await next();
+      }),
+    );
+    app.get('/x', () => ({ content: 'ok' }));
+    await (await app.fetch(new Request('http://h/api/x'))).text();
+    await (await app.fetch(new Request('http://h/x'))).text();
+    asserts.assertEquals(ran, ['api:GET /x', 'ui:GET /x']);
+    await app.stop();
+  });
+
+  it('off-HTTP (no surface) both wrappers RUN the middleware — fail-closed, unlike onlyHTTP', async () => {
+    const app = await Application.initialize({
+      name: 'sc-surface-job',
+      server: { enabled: false },
+      logger: { handlers: [] },
+    });
+    const ran: string[] = [];
+    app.use(
+      onlyApi(async (ctx, next) => {
+        ran.push(`api:${ctx.type}`);
+        await next();
+      }),
+      onlyUi(async (ctx, next) => {
+        ran.push(`ui:${ctx.type}`);
+        await next();
+      }),
+    );
+    app.job('j', '0 6 * * *', () => ({ content: 'ran' }));
+    const outcome = await app.triggerJob('j');
+    asserts.assertEquals(outcome.status, 200);
+    asserts.assertEquals(ran, ['api:JOB', 'ui:JOB']);
+  });
+
+  it('carries transport-scope metadata through', () => {
+    const inner = onlyHTTP(async (_ctx, next) => {
+      await next();
+    });
+    asserts.assertEquals(middlewareScope(onlyApi(inner)), ['HTTP']);
+    asserts.assertEquals(middlewareScope(onlyUi(inner)), ['HTTP']);
   });
 });

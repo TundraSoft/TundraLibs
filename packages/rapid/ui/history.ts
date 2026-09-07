@@ -98,7 +98,9 @@ export const UI_HISTORY: string = `(() => {
       console.warn('[rapid.history] swapped region needs an id to push');
       return;
     }
-    const target = '#' + region.id;
+    // CSS.escape: a legal HTML id ('2024-q3', 'a.b') is not a legal bare
+    // selector — unescaped, popstate would throw or select the wrong node.
+    const target = '#' + CSS.escape(region.id);
     try {
       // First push: stamp the INITIAL entry — page: true, because its
       // URL is a full PAGE, and re-fetching a page as a fragment would
@@ -139,7 +141,9 @@ export const UI_HISTORY: string = `(() => {
       location.replace(entry.url);
       return;
     }
-    const region = doc.querySelector(entry.target);
+    let region = null;
+    try { region = doc.querySelector(entry.target); }
+    catch { /* an unparsable stored selector → full navigation below */ }
     if (!region || !window.rapid || !window.rapid.swap) {
       // The region is gone (an outer swap replaced the shell) — a full
       // navigation is the honest restore.

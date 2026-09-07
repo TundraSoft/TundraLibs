@@ -101,3 +101,24 @@ describe('rapid.compose', () => {
     asserts.assert(ran);
   });
 });
+
+describe('rapid.compose — abandoned next()', () => {
+  it('a handler rejection after a middleware forgot to return/await next() is owned (logged), never unhandled', async () => {
+    const logged: unknown[] = [];
+    const ctx = {
+      requestId: 'r1',
+      action: 'GET /x',
+      app: { log: { error: (...args: unknown[]) => logged.push(args) } },
+    };
+    const run = compose<Ctx, Ctx>([
+      (_c, next) => {
+        void next(); // fire-and-forget — the chain resolves before the handler
+        return Promise.resolve();
+      },
+    ]);
+    await run(ctx, () => Promise.reject(new Error('late boom')));
+    await new Promise((r) => setTimeout(r, 0));
+    asserts.assertEquals(logged.length, 1);
+    asserts.assertStringIncludes(String(logged[0]), 'abandoned next()');
+  });
+});

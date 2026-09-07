@@ -13,7 +13,7 @@ import {
   removeDir,
   writeTextFile,
 } from '@tundralibs/compat/file';
-import { symlinkSync } from 'node:fs'; // cross-runtime; compat has no symlink creator
+import { symlinkSync, unlinkSync } from 'node:fs'; // cross-runtime; compat has no symlink creator
 import { Application } from '../Application.ts';
 import { html, template } from '../ui/html.ts';
 
@@ -272,5 +272,101 @@ describe('rapid.server.static fingerprint + view.asset()', () => {
     const out = await (await app.fetch(new Request('http://app/p'))).text();
     asserts.assertStringIncludes(out, '?v=manifest-pinned');
     await app.stop();
+  });
+});
+
+describe('rapid.server.static — index, re-pointed roots, If-Range (2026-09 review)', () => {
+  const staticApp = (root: string, extra: Record<string, unknown> = {}) =>
+    Application.initialize({
+      name: 'static-review',
+      server: {
+        port: 0,
+        hostname: '127.0.0.1',
+        static: { '/s': { root, ...extra } },
+      },
+      logger: { handlers: [] },
+    });
+
+  it('a NESTED directory serves its index — with or without the trailing slash', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-static-idx-' });
+    try {
+      await ensureDir(`${dir}/pub/docs`);
+      await writeTextFile(`${dir}/pub/docs/index.html`, '<h2>Docs</h2>');
+      const app = await staticApp(`${dir}/pub`);
+      for (const path of ['/s/docs/', '/s/docs']) {
+        const r = await app.fetch(new Request(`http://x${path}`));
+        asserts.assertEquals(r.status, 200, path);
+        asserts.assertEquals(await r.text(), '<h2>Docs</h2>', path);
+      }
+      const none = await staticApp(`${dir}/pub`, { index: false });
+      const r = await none.fetch(new Request('http://x/s/docs'));
+      asserts.assertEquals(r.status, 404);
+      await r.body?.cancel();
+      await app.stop();
+      await none.stop();
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+
+  it('a symlinked root that is RE-POINTED (current → release-N) keeps serving without a restart', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-static-link-' });
+    try {
+      await ensureDir(`${dir}/rel1/pub`);
+      await ensureDir(`${dir}/rel2/pub`);
+      await writeTextFile(`${dir}/rel1/pub/a.css`, 'one');
+      await writeTextFile(`${dir}/rel2/pub/a.css`, 'two');
+      symlinkSync(`${dir}/rel1`, `${dir}/current`, 'dir');
+      const app = await staticApp(`${dir}/current/pub`);
+      const first = await app.fetch(new Request('http://x/s/a.css'));
+      asserts.assertEquals(await first.text(), 'one');
+      unlinkSync(`${dir}/current`);
+      symlinkSync(`${dir}/rel2`, `${dir}/current`, 'dir');
+      const second = await app.fetch(new Request('http://x/s/a.css'));
+      asserts.assertEquals(second.status, 200);
+      asserts.assertEquals(await second.text(), 'two');
+      await app.stop();
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+
+  it('a Range with a stale If-Range serves the WHOLE entity (200), a matching one the slice (206)', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-static-ifrange-' });
+    try {
+      await ensureDir(`${dir}/pub`);
+      await writeTextFile(`${dir}/pub/big.txt`, '0123456789');
+      const app = await staticApp(`${dir}/pub`);
+      const head = await app.fetch(new Request('http://x/s/big.txt'));
+      const tag = head.headers.get('etag')!;
+      await head.body?.cancel();
+      const fresh = await app.fetch(
+        new Request('http://x/s/big.txt', {
+          headers: { range: 'bytes=0-3', 'if-range': tag },
+        }),
+      );
+      asserts.assertEquals(fresh.status, 206);
+      asserts.assertEquals(await fresh.text(), '0123');
+      const stale = await app.fetch(
+        new Request('http://x/s/big.txt', {
+          headers: { range: 'bytes=0-3', 'if-range': 'W/"other"' },
+        }),
+      );
+      asserts.assertEquals(stale.status, 200);
+      asserts.assertEquals(await stale.text(), '0123456789');
+      await app.stop();
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+
+  it('maxAge must be whole seconds within one year', async () => {
+    for (const maxAge of [-1, 1.5, 31_536_001]) {
+      await asserts.assertRejects(
+        () => staticApp('/tmp', { maxAge }),
+        Error,
+        'maxAge',
+      );
+    }
   });
 });

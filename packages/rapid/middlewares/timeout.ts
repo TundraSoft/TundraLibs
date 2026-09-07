@@ -34,7 +34,10 @@ import type { RapidMiddleware } from '../types/mod.ts';
  * cronus's overlap guard held until it settles (see the module
  * docblock). And a handler that settles in a photo-finish with the
  * deadline may still win the response — the deadline is best-effort,
- * not a fence.
+ * not a fence. Combined with `idempotency()` (either order) a fired
+ * deadline leaves that request's key PENDING until its `pendingTtlMs`
+ * — a retry is a 409 rather than a second execution of work that may
+ * still be running.
  *
  * @throws {RapidError} RAPID_CONFIG when `ms` is not a positive
  *   integer (factory time — a config error is a boot error).

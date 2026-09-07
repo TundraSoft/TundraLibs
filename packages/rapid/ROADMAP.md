@@ -23,7 +23,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   and the catalog: cors, secureHeaders, compress, etag, rateLimit (store-
   injection), requestId, requestLogger, responseTimer, healthCheck,
   timeout, **idempotency** (identity-scoped replays, bounded default
-  store), auth (`authenticate`/`authorize`/`permission`/`jwt`),
+  store), auth (`authenticate`/`authorize`),
   **session** (store-injection, signed id, rolling + absolute TTL, regenerate /
   destroy, loaded LAZILY on the first `await getSession(ctx)`), and **csrf**
   (signed double-submit, session-bound). `Store` gained an optional
@@ -129,7 +129,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `Vary: rapid-swap` stamped. Auto-escaping `html`/`raw`/`render`/
   `template` primitives (symbol-branded `Html`); layouts resolve route →
   `@Module` → app-level `ui` config; the frozen `view` bag exposes NOTHING from
-  `ctx.auth` without the opt-in projection. The ~80-line `data-*` runtime
+  `ctx.auth` without the opt-in projection. The ~300-line `data-*` runtime
   is served from a string at `/__rapid/ui.js` (content-keyed ETag,
   always-revalidate no-cache, Workers-safe), echoes the `csrf` cookie, follows
   `rapid-redirect` same-origin only, emits `rapid:swapped`/`rapid:error`.
@@ -180,6 +180,56 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `data-load` lazy regions (skeleton first — the answer to "partial
   prerendering"; D10 amended); csrf tokens session-bound (cookie tossing
   closed). JSX authoring parked (below).
+- **Surfaces — API and UI in one app (2026-09-06; DESIGN-ui D16)** —
+  `server.api: { hosts, prefix }` names the API surface; every HTTP
+  request resolves to `'ui' | 'api'` BEFORE routing (prefix stripped,
+  then a path-mode version) and `ctx.surface` / `ctx.basePath` /
+  `ctx.path` / `ctx.href()` carry it. The api surface is a SMALLER route
+  table: pages (`prefer: 'html'`), `server.static` and the `/__rapid/*`
+  runtime are true no-matches (no route middleware, absent from
+  405/`Allow`), API-first templates serve JSON with no `Vary`; the ui
+  surface is unchanged. `ui.enabled: false` ≡ every request is api (the
+  old "JSON unconditionally" semantics and their field-filter exposure
+  are gone). `onlyApi()` / `onlyUi()` scope middleware (pass-through
+  off-HTTP). Bundled fixes: bare routes keep JSON errors in a
+  pages-first app; a scheme-relative `redirect` is refused; the UI
+  runtime scripts load lazily (an API-only app no longer hashes 15 KB of
+  client script at import); OpenAPI omits pages when an api surface
+  exists and lists a page as `text/html` only; `x-forwarded-host` under
+  `trustProxy`; idempotency keys are per surface. Two adversarial passes
+  (security + design, 25 findings) shaped it — the register lives in
+  the session spec; the decisions in DESIGN-ui D16. Docs: Rapid-UI.md
+  "Surfaces".
+- **Adversarial review #3 + fixes (2026-09-07;
+  `reviews/rapid-review-2026-09-07.md`)** — 7 high / 16 medium / ~28 low
+  dispositioned the same day, all but the pact-adapter high (rides the
+  pact rewrite) fixed with regression tests. Headline fixes: the
+  redirect guard resolves against a sentinel origin (tab bypass);
+  `idempotency()` keeps a timed-out key PENDING in either order (the
+  poisoned-504-replay finding surfaced while fixing); route-bound
+  `RapidModule` methods seed the invoke frame (`ctx.auth` reaches `@Use`
+  guards); rolling sessions `Store.touch()` instead of overwriting a
+  concurrent write; `csrf()` re-binds on the rotating response and
+  `view.csrfToken` is the effective token; the `--module`/`--norm`/npm
+  scaffolds install and type-check (generate-then-check test);
+  `uploads.maxFiles`; static nested `index`, re-pointed symlink roots,
+  `If-Range`; `server.api.trustForwardedHost` explicit; app-level
+  durations in SECONDS (`shutdownTimeout` 1–30). Deferred to the
+  pact/middleware round: BREACH token masking, middleware duration units.
+- **pact adapter rebuilt for pact 0.7 (2026-09-07)** — `middlewares/pact/`
+  is ONE factory, `pactAuth(pact, options) → { authenticate, authorize }`,
+  in the shape of pact's own hono/oak adapters: `authenticate` fills
+  `ctx.auth` with the `PactAuthContext` (Bearer with a configurable
+  prefix or a cookie, Basic, ApiKey via `Authorization` or split
+  headers, HMAC over an async `canonical(ctx)`), absent → anonymous
+  (`optional: false` → 401), present-but-invalid → 401 never anonymous,
+  one `WWW-Authenticate` challenge shared by both middlewares;
+  `authorize(module, permission)` is typed by the instance and checked
+  against its catalog at the call site. The `pact()` initializer, doctor
+  label, `TOKEN` scheme and per-scheme `respond` hook are gone.
+  `login({ pact, cookie, fields })` sits on pact's real `login()`
+  contract. Deferred: HMAC response signing (needs a named standard),
+  the pact-side shared-core factory (a pact PR).
 - **OpenAPI from the decorators (2026-08-23)** — routes take `summary` /
   `description` / `tags` / `operationId` / `security`; `@Module` takes
   `description` / `tags` / `security` as the defaults its routes inherit. A

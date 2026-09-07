@@ -69,6 +69,18 @@ const resolveInstance = (
       });
     }
   }
+  // JS does not enforce arity: a constructor that REQUIRES arguments
+  // constructs fine with none, mounts, and 500s on first use of the
+  // missing dependency. `length` counts required params only.
+  if (ctor.length > 0) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `${ctor.name} declares ${ctor.length} constructor parameter(s) — ` +
+        `modules are constructed with NO arguments: pass an instance via ` +
+        `sources.instances, or register it with doctor`,
+      details: { module: ctor.name, parameters: ctor.length },
+    });
+  }
   try {
     // resolve() constructs with no args (Reflect.construct) but does so
     // with `registry` as the ambient container, so an `inject()` field

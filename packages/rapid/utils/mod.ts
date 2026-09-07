@@ -7,8 +7,19 @@
  * @module
  */
 
+export {
+  type ApiSurface,
+  normalizeApiSurface,
+  normalizeHostname,
+  requestHostname,
+  resolveSurface,
+  stripApiPrefix,
+} from './apiSurface.ts';
 export { buildExporter } from './buildExporter.ts';
 export { buildState, type StateMode } from './buildState.ts';
+export { isSwap, type SwapOptions } from './isSwap.ts';
+export { CSRF_TOKEN, mark, markOf, SESSION_ISSUED } from './requestMarks.ts';
+export { isTemplate, normalizeRouteTemplate } from './routeTemplate.ts';
 export { compose } from './compose.ts';
 export {
   type CookieOptions,

@@ -17,96 +17,27 @@ import type { HTTPContext } from '../context/HTTPContext.ts';
 import type {
   RapidContextResponse,
   RapidContextState,
-  RapidRouteOptions,
   RapidRouteTemplate,
   RapidTemplate,
   RapidView,
 } from '../types/mod.ts';
-import { escapeRegExp, negotiate } from '../utils/mod.ts';
+import {
+  CSRF_TOKEN,
+  escapeRegExp,
+  isSwap,
+  markOf,
+  negotiate,
+} from '../utils/mod.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
 import { type Html, isHtml, render } from './html.ts';
 import { DefaultErrorPage } from './errorPage.ts';
 
-/** Structurally a `RapidTemplate` — `{ name: string, render: fn }`. */
-export const isTemplate = (value: unknown): value is RapidTemplate<unknown> =>
-  typeof value === 'object' && value !== null &&
-  typeof (value as { render?: unknown }).render === 'function' &&
-  typeof (value as { name?: unknown }).name === 'string';
+export { isTemplate, normalizeRouteTemplate } from '../utils/routeTemplate.ts';
 
 /**
- * Normalize a route's `template`/`layout` options into the stored
- * {@link RapidRouteTemplate} — mount/registration time, fail-fast: a
- * wrong import or a typo'd shape throws NOW, never at first request.
- *
- * @throws {RapidError} RAPID_CONFIG on a non-template `template`/
- *   `layout`, or a `prefer` outside `'json' | 'html'`.
- */
-export function normalizeRouteTemplate(
-  template: NonNullable<RapidRouteOptions['template']>,
-  layout: RapidRouteOptions['layout'],
-  label: string,
-): RapidRouteTemplate {
-  const bare = isTemplate(template);
-  const given = bare ? undefined : template as RapidRouteTemplate;
-  const config: RapidRouteTemplate = {
-    render: bare ? template as RapidTemplate<unknown> : given!.render,
-    // `false` survives ?? — a route's explicit tier-2 opt-out must not
-    // be resurrected by the module/app default.
-    ...(given?.layout ?? layout) !== undefined
-      ? { layout: given?.layout ?? layout }
-      : {},
-    ...(given?.title !== undefined ? { title: given.title } : {}),
-    ...(given?.meta !== undefined ? { meta: given.meta } : {}),
-    ...(given?.prefer !== undefined ? { prefer: given.prefer } : {}),
-  };
-  if (
-    config.title !== undefined && typeof config.title !== 'string' &&
-    typeof config.title !== 'function'
-  ) {
-    throw new RapidError('RAPID_CONFIG', {
-      message: `route '${label}': title must be a string or (data) => string`,
-    });
-  }
-  if (!isTemplate(config.render)) {
-    throw new RapidError('RAPID_CONFIG', {
-      message:
-        `route '${label}': template is not a RapidTemplate (declare it via template() from @tundralibs/rapid/ui)`,
-    });
-  }
-  if (
-    config.layout !== undefined && config.layout !== false &&
-    !isTemplate(config.layout)
-  ) {
-    throw new RapidError('RAPID_CONFIG', {
-      message:
-        `route '${label}': layout is not a RapidTemplate (or false to opt out)`,
-    });
-  }
-  if (
-    config.meta !== undefined && typeof config.meta !== 'function' &&
-    (typeof config.meta !== 'object' || config.meta === null)
-  ) {
-    throw new RapidError('RAPID_CONFIG', {
-      message: `route '${label}': meta must be a record or (data) => record`,
-    });
-  }
-  if (
-    config.prefer !== undefined && config.prefer !== 'json' &&
-    config.prefer !== 'html'
-  ) {
-    throw new RapidError('RAPID_CONFIG', {
-      message:
-        `route '${label}': prefer must be 'json' or 'html' (got ${config.prefer})`,
-    });
-  }
-  // FROZEN: this object is shared by every request via ctx.routeTemplate
-  // — a handler mutating it must throw, not retarget the route.
-  return Object.freeze(config);
-}
-
-/**
- * The frozen per-request view bag (D1): `requestId`, `path`, raw `query`
- * (last value wins), and the `csrf` cookie's token when present. Nothing
+ * The frozen per-request view bag (D1): `requestId`, `path` (the routed
+ * path — api prefix and path-mode version stripped), raw `query` (last
+ * value wins), and the `csrf` cookie's token when present. Nothing
  * from the auth bag — identity reaches templates only through the
  * `ui.view` projection configured at `Application.initialize`.
  */
@@ -114,11 +45,18 @@ export function buildView<S extends RapidContextState>(
   ctx: HTTPContext<S>,
 ): RapidView {
   const url = new URL(ctx.url);
-  const csrfToken = ctx.cookies[ctx.app.uiOptions?.csrfCookie ?? 'csrf'];
+  // The token VALID FOR THIS RESPONSE: what csrf() issued or confirmed on
+  // the way in (the request cookie is absent on a first visit and stale on
+  // the response that rotates the session), else the cookie.
+  const csrfToken = markOf(ctx, CSRF_TOKEN) ??
+    ctx.cookies[ctx.app.uiOptions?.csrfCookie ?? 'csrf'];
   // The opt-in identity projection (`ui.view` at initialize) merges OVER
   // the defaults — its fields, and only its fields, cross from ctx into
   // template reach.
-  const extra = ctx.app.uiOptions?.view?.(ctx as never);
+  const extra = callChecked(
+    () => ctx.app.uiOptions?.view?.(ctx as never),
+    'the ui.view projection',
+  );
   const assets = ctx.app.uiOptions?.assets;
   const app = ctx.app;
   return Object.freeze({
@@ -132,7 +70,7 @@ export function buildView<S extends RapidContextState>(
       const version = assets?.[p] ?? app.assetVersion(p);
       return version === undefined ? p : `${p}?v=${version}`;
     },
-    path: url.pathname,
+    path: ctx.path,
     query: Object.freeze(
       Object.fromEntries(url.searchParams),
     ) as Readonly<Record<string, string>>,
@@ -141,24 +79,7 @@ export function buildView<S extends RapidContextState>(
   });
 }
 
-/**
- * Whether this request asked for the FRAGMENT: the swap header is
- * present AND none of the `swapUnless` headers are — the escape needed
- * by clients (htmx) that send their marker on full-page navigations
- * too (`HX-Boosted`, history restores).
- */
-export function isSwap<S extends RapidContextState>(
-  ctx: HTTPContext<S>,
-  appUi: ReturnType<typeof uiOf> = ctx.app.uiOptions,
-): boolean {
-  if (ctx.headers.get(appUi?.swapHeader ?? 'rapid-swap') === null) {
-    return false;
-  }
-  for (const name of appUi?.swapUnless ?? []) {
-    if (ctx.headers.get(name) !== null) return false;
-  }
-  return true;
-}
+export { isSwap } from '../utils/isSwap.ts';
 
 /** `ctx.app.uiOptions`, typed once (the accessor the helpers share). */
 const uiOf = <S extends RapidContextState>(ctx: HTTPContext<S>) =>
@@ -313,7 +234,7 @@ export function represent<S extends RapidContextState>(
   ctx: HTTPContext<S>,
 ): RapidContextResponse {
   const appUi = uiOf(ctx);
-  const vary = stampVary(ctx, appUi, returned);
+  let vary = stampVary(ctx, appUi, returned);
 
   const swap = isSwap(ctx, appUi);
   if (returned.redirect !== undefined) {
@@ -329,6 +250,18 @@ export function represent<S extends RapidContextState>(
       ? returned.redirect
       : returned.redirect.url;
     ctx.setHeader(appUi?.redirectHeader ?? 'rapid-redirect', url);
+    // Same personal-cache rule as a rendered reply: a per-user redirect
+    // target on an identity-bearing page must not come out of a shared
+    // cache for the next user.
+    if (
+      ctx.cookies[appUi?.csrfCookie ?? 'csrf'] !== undefined ||
+      appUi?.view !== undefined
+    ) {
+      vary = mergeVary(vary, 'Cookie');
+      if (ctx.responseHeaders.get('cache-control') === null) {
+        ctx.setHeader('cache-control', 'private');
+      }
+    }
     // `ctx.redirect()` embeds `headers.location` too — a 200 swap reply
     // must not leak it beside the redirect header.
     const headers = new Headers(
@@ -473,10 +406,18 @@ export function representError<S extends RapidContextState>(
   mode: 'DEVELOPMENT' | 'PRODUCTION' = 'PRODUCTION',
 ): RapidContextResponse | undefined {
   const appUi = uiOf(ctx);
-  if (appUi === undefined) return undefined;
+  // The api surface never renders — and never varies on the swap header.
+  if (appUi === undefined || ctx.surface === 'api') return undefined;
   const route = ctx.routeTemplate;
   const swap = isSwap(ctx, appUi);
-  const prefer = route?.prefer ?? appUi.prefer ?? 'json';
+  // A matched route WITHOUT a template is never a page: its errors are
+  // the JSON envelope whatever the app-level `prefer` says (a JSON route
+  // inside a pages-first app must not answer 404s in HTML). `prefer`
+  // resolves route → app only for templated routes, and app-level alone
+  // for the unmatched case below.
+  let prefer: 'json' | 'html' = appUi.prefer ?? 'json';
+  if (route !== undefined) prefer = route.prefer ?? prefer;
+  else if (ctx.matched) prefer = 'json';
   // An UNMATCHED request (the commonest error: a browser navigating to
   // an unknown URL) has no route `prefer` to consult — when the app
   // configured `errorTemplates`, the client's Accept decides instead
@@ -497,12 +438,15 @@ export function representError<S extends RapidContextState>(
     vary = mergeVary(vary, 'Accept');
     ctx.setHeader('vary', vary);
   }
-  const wantsHtml = swap || prefer === 'html' ||
-    (negotiated &&
-      negotiate(
-          ctx.headers.get('accept'),
-          ['application/json', 'text/html'],
-        ) === 'text/html');
+  // When Accept is consulted it decides in BOTH directions: a JSON
+  // client of a pages-first app keeps the envelope for an unknown URL
+  // (the standard negotiation every framework does for its 404 page).
+  const wantsHtml = swap || (negotiated
+    ? negotiate(
+      ctx.headers.get('accept'),
+      ['application/json', 'text/html'],
+    ) === 'text/html'
+    : prefer === 'html');
   if (!wantsHtml) return undefined;
   // The CLOSED registry, fixed resolution: exact status → class
   // ('4xx'/'5xx') → 'default' → the built-in DefaultErrorPage — so a

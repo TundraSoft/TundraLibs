@@ -39,7 +39,10 @@ export {
   test,
 } from '@tundralibs/compat/test';
 
-/** A doctor stub — a `[token, value]` pair, restored (revoked) on dispose. */
+/**
+ * A doctor stub — a `[token, value]` pair, REVOKED on dispose (a prior local
+ * binding under the same token is not restored — doctor has no snapshot).
+ */
 export type Stub = readonly [VialClass | Label | string, unknown];
 
 /** Options for {@link harness}. */
@@ -148,6 +151,12 @@ export type ClientOptions = {
    * later htmx config would silently miss.
    */
   swap?: boolean;
+  /**
+   * The hostname the request addresses (default `rapid.test`) — for
+   * `server.api.hosts` tests: `client(app).get('/users', { host:
+   * 'api.rapid.test' })`. An absolute `path` overrides it.
+   */
+  host?: string;
 };
 
 type ClientMethod = (
@@ -184,7 +193,7 @@ export function client(app: Application): Record<
   ClientMethod
 > {
   const call = (method: string): ClientMethod => async (path, options = {}) => {
-    const url = new URL(path, 'http://rapid.test');
+    const url = new URL(path, `http://${options.host ?? 'rapid.test'}`);
     for (const [k, v] of Object.entries(options.query ?? {})) {
       url.searchParams.set(k, v);
     }

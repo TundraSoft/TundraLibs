@@ -25,6 +25,14 @@ export type Store<V> = {
    * when a store doesn't implement it. `memoryStore` provides it.
    */
   delete?(key: string): void | Promise<void>;
+  /**
+   * Extend a live key's TTL WITHOUT rewriting its value (a no-op when
+   * absent). Optional: `session()` uses it to slide a rolling window on a
+   * read-only request, so a stale snapshot never overwrites a concurrent
+   * write; without it `session()` falls back to re-setting the CURRENT
+   * stored record. `memoryStore` provides it.
+   */
+  touch?(key: string, ttlMs: number): void | Promise<void>;
 };
 
 /** Amortised prune: sweep expired entries every N writes. */
@@ -110,6 +118,11 @@ export function memoryStore<V>(options: MemoryStoreOptions<V> = {}): Store<V> {
     },
     delete(key: string): void {
       entries.delete(key);
+    },
+    touch(key: string, ttlMs: number): void {
+      const entry = entries.get(key);
+      if (entry === undefined || entry.expiresAt <= Date.now()) return;
+      entry.expiresAt = Date.now() + ttlMs;
     },
   };
 }

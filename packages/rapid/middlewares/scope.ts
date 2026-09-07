@@ -55,12 +55,56 @@ function mark(
   wrapped: RapidMiddleware,
   scope: readonly RapidContextType[],
 ): RapidMiddleware {
+  return Object.assign(carry(wrapper, wrapped), { [MIDDLEWARE_SCOPE]: scope });
+}
+
+/** Copy every metadata symbol from `wrapped` onto `wrapper` (no scope). */
+function carry(
+  wrapper: RapidMiddleware,
+  wrapped: RapidMiddleware,
+): RapidMiddleware {
   for (const sym of Object.getOwnPropertySymbols(wrapped)) {
     Object.assign(wrapper, {
       [sym]: (wrapped as unknown as Record<symbol, unknown>)[sym],
     });
   }
-  return Object.assign(wrapper, { [MIDDLEWARE_SCOPE]: scope });
+  return wrapper;
+}
+
+/**
+ * Run `middleware` only on `'api'`-surface HTTP requests; SKIP it on the
+ * `'ui'` surface. Off-HTTP (sockets, jobs — no surface) the middleware
+ * RUNS: fail-closed, unlike `onlyHTTP`, so `onlyApi(authenticate(…))`
+ * never silently unguards a socket command (an HTTP-only middleware
+ * inside still self-skips there). Transport scope metadata is carried
+ * through unchanged.
+ */
+export function onlyApi(middleware: RapidMiddleware): RapidMiddleware {
+  return carry(
+    async (ctx, next) => {
+      if (ctx.type === 'HTTP' && ctx.surface === 'ui') return await next();
+      return await middleware(ctx, next);
+    },
+    middleware,
+  );
+}
+
+/**
+ * Run `middleware` only on `'ui'`-surface HTTP requests; SKIP it on the
+ * `'api'` surface; RUN it off-HTTP (see {@link onlyApi}). Do NOT wrap
+ * `csrf()` or `session()` in this unless nothing on the api surface
+ * authenticates from a cookie — on a shared host (`server.api.prefix`)
+ * the cookie jar is one, and an api-surface handler that trusts a
+ * cookie without csrf is a cross-site-POST hole. See the UI guide.
+ */
+export function onlyUi(middleware: RapidMiddleware): RapidMiddleware {
+  return carry(
+    async (ctx, next) => {
+      if (ctx.type === 'HTTP' && ctx.surface === 'api') return await next();
+      return await middleware(ctx, next);
+    },
+    middleware,
+  );
 }
 
 /** The fail-closed rejection every guard throws off-scope. */

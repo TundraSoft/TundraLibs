@@ -68,10 +68,14 @@ export const UI_RUNTIME: string = `(() => {
   // Replace and hand back the node rapid:swapped fires on — for 'outer'
   // that is the REPLACEMENT (the original is detached, so an event on it
   // could never bubble to document listeners).
+  // Sibling roots an 'outer' swap produced beyond the first — a fragment
+  // with several top-level elements must have ALL its lazy regions load.
+  let extraRoots = [];
   const apply = (target, mode, markup) => {
     if (mode === 'outer') {
       const parent = target.parentNode;
       const prev = target.previousSibling;
+      const after = target.nextSibling;
       target.outerHTML = markup;
       // *Element* walk: markup may open with whitespace, and the event
       // (and refresh keying) must land on the real replacement, never a
@@ -79,6 +83,14 @@ export const UI_RUNTIME: string = `(() => {
       const first = prev
         ? prev.nextElementSibling
         : parent && parent.firstElementChild;
+      extraRoots = [];
+      for (
+        let n = prev ? prev.nextSibling : parent && parent.firstChild;
+        n && n !== after;
+        n = n.nextSibling
+      ) {
+        if (n instanceof Element && n !== first) extraRoots.push(n);
+      }
       return first instanceof Element ? first : parent || target;
     }
     if (mode === 'append') target.insertAdjacentHTML('beforeend', markup);
@@ -240,6 +252,8 @@ export const UI_RUNTIME: string = `(() => {
       }
       emit(swapped, 'rapid:swapped', detail);
       loadLazy(swapped); // lazy regions the fragment brought with it
+      for (const root of extraRoots) loadLazy(root);
+      extraRoots = [];
       return true;
     } finally {
       // Cleared only NOW: an entry deleted at the headers phase would

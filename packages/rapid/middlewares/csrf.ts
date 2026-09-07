@@ -12,7 +12,15 @@
  * token an attacker PLANTED from a writable subdomain, minted under THEIR
  * session (or none), never verifies for a signed-in victim. The token
  * follows the session: when the binding no longer matches (login,
- * `regenerate()`, logout), the next response re-issues it.
+ * `regenerate()`, logout), the token is re-issued on the SAME response
+ * that rotated the session — provided `csrf()` is registered OUTSIDE
+ * `session()` (`app.use(csrf(), session())`), so the session's save
+ * phase has run when csrf's post-`next()` step reads the cookie it
+ * issued. Registered the other way round the re-issue lands one
+ * response late (the first state-changing request after a rotation is
+ * rejected once). The token valid for THIS response is published for
+ * the view bag (`view.csrfToken`), since the request cookie is absent on
+ * a first visit and stale on a rotating response.
  *
  * @module
  */
@@ -21,6 +29,12 @@ import { ulid } from '@tundralibs/id';
 import { RapidError } from '../errors/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 import { signValue, verifySignedValue } from '../utils/cookies.ts';
+import {
+  CSRF_TOKEN,
+  mark,
+  markOf,
+  SESSION_ISSUED,
+} from '../utils/requestMarks.ts';
 
 /** Options for {@link csrf}. The token is signed with the app `secret`. */
 export type CsrfOptions = {
@@ -110,16 +124,23 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
     // back: issue when absent, unsigned, or bound to another session
     // (login / regenerate / logout rotate the binding — the token follows).
     const secret = ctx.app.secret;
-    const binding = await bindingOf(ctx.cookies[sessionCookie], secret);
-    let token = ctx.cookies[cookieName];
-    if (!token || (await verifyToken(token, secret)) !== binding) {
-      token = await issueToken(binding, secret);
-      ctx.setCookie(cookieName, token, {
+    const issue = async (forBinding: string): Promise<string> => {
+      const fresh = await issueToken(forBinding, secret);
+      ctx.setCookie(cookieName, fresh, {
         httpOnly: false, // the app's JS must read it to echo into the header
         secure: options.secure ?? true,
         sameSite: options.sameSite ?? 'Lax',
         path: options.path ?? '/',
       });
+      mark(ctx, CSRF_TOKEN, fresh);
+      return fresh;
+    };
+    const binding = await bindingOf(ctx.cookies[sessionCookie], secret);
+    let token = ctx.cookies[cookieName];
+    if (!token || (await verifyToken(token, secret)) !== binding) {
+      token = await issue(binding);
+    } else {
+      mark(ctx, CSRF_TOKEN, token);
     }
 
     // Enforce on state-changing methods only.
@@ -143,6 +164,30 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
       }
     }
 
-    await next();
+    // The session cookie this response issues (an INNER session() ran its
+    // save phase inside next()) may carry a NEW binding — login,
+    // regenerate(), logout. Re-issue the token for it on THIS response, or
+    // the browser leaves with `sid=new` + `csrf=bound(old)` and its next
+    // state-changing request is rejected once. Runs on the throw path
+    // too (logout-then-throw still rotated). A later setCookie of the
+    // same name wins at finalize (call order), so this supersedes the
+    // one issued above.
+    let thrown = false;
+    let error: unknown;
+    try {
+      await next();
+    } catch (e) {
+      thrown = true;
+      error = e;
+    }
+    const issued = markOf(ctx, SESSION_ISSUED);
+    if (issued !== undefined) {
+      const outbound = await bindingOf(
+        issued === '' ? undefined : issued,
+        secret,
+      );
+      if (outbound !== binding) await issue(outbound);
+    }
+    if (thrown) throw error;
   };
 }

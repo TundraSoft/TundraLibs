@@ -73,6 +73,16 @@ export abstract class Context<
   protected _responded = false;
 
   /**
+   * Whether the response has already been materialised — after this the
+   * context is frozen (`ctx.response =`/`setHeader` throw). A middleware
+   * that awaited `next()` past an OUTER `timeout()`'s 504 sees `true`
+   * here and knows the request was answered without it.
+   */
+  public get responded(): boolean {
+    return this._responded;
+  }
+
+  /**
    * The application logger, delegated — context code (and subclasses)
    * log via `this._log`; correlation arrives through the framework's
    * contextProvider, no threading.

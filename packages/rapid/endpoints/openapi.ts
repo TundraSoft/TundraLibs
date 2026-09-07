@@ -52,6 +52,9 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
     if (cached !== undefined) return { content: cached };
     const doc = buildOpenApi(ctx.app.routes, {
       info: { title: ctx.app.option('name'), ...options.info },
+      uiPrefer: ctx.app.uiPrefer,
+      // Pages are not reachable where an api surface exists.
+      omitPages: ctx.app.apiSurface !== undefined || !ctx.app.uiEnabled,
       ...(options.servers !== undefined ? { servers: options.servers } : {}),
       ...(options.securitySchemes !== undefined
         ? { securitySchemes: options.securitySchemes }

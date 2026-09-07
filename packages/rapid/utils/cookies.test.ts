@@ -4,7 +4,12 @@
  */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { parseCookies, serializeCookie } from './cookies.ts';
+import {
+  parseCookies,
+  serializeCookie,
+  signValue,
+  verifySignedValue,
+} from './cookies.ts';
 import { RapidError } from '../errors/mod.ts';
 
 describe('rapid.cookies', () => {
@@ -46,5 +51,55 @@ describe('rapid.cookies', () => {
     ) as RapidError;
     asserts.assertEquals(err.code, 'RAPID_RESPONSE_INVALID');
     asserts.assertThrows(() => serializeCookie('a=b', 'v'), RapidError);
+  });
+});
+
+describe('rapid.cookies — signed values', () => {
+  const SECRET = 'test-secret-0123456789-abcdefghijklmnop';
+
+  it('a value signed under one cookie NAME never verifies under another', async () => {
+    const signed = await signValue('alice', SECRET, 'pref');
+    asserts.assertEquals(
+      await verifySignedValue(signed, SECRET, 'pref'),
+      'alice',
+    );
+    asserts.assertEquals(
+      await verifySignedValue(signed, SECRET, 'uid'),
+      undefined,
+    );
+    // Unbound (token) form stays self-consistent and distinct from the bound one.
+    const bare = await signValue('alice', SECRET);
+    asserts.assertEquals(await verifySignedValue(bare, SECRET), 'alice');
+    asserts.assertEquals(
+      await verifySignedValue(bare, SECRET, 'pref'),
+      undefined,
+    );
+  });
+
+  it('an EMPTY signed value round-trips (and is distinguishable from a forgery)', async () => {
+    const signed = await signValue('', SECRET, 'flag');
+    asserts.assertEquals(await verifySignedValue(signed, SECRET, 'flag'), '');
+    asserts.assertEquals(
+      await verifySignedValue('.deadbeef', SECRET, 'flag'),
+      undefined,
+    );
+    asserts.assertEquals(
+      await verifySignedValue(undefined, SECRET, 'flag'),
+      undefined,
+    );
+  });
+
+  it('serializeCookie rejects a Max-Age outside 0..400 days or non-integer', () => {
+    for (const maxAge of [-1, 1.5, 400 * 24 * 3600 + 1]) {
+      asserts.assertThrows(
+        () => serializeCookie('a', 'b', { maxAge }),
+        RapidError,
+        'maxAge',
+      );
+    }
+    asserts.assertStringIncludes(
+      serializeCookie('a', 'b', { maxAge: 0 }),
+      'Max-Age=0',
+    );
   });
 });

@@ -14,9 +14,12 @@ import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
 import {
   compose,
+  requestHostname,
+  resolveSurface,
   resolveVersion,
   serveStaticFile,
   socketOutcome,
+  stripApiPrefix,
 } from '../utils/mod.ts';
 import { isStreamBody } from '../utils/streams.ts';
 import type {
@@ -239,7 +242,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     const rpc = new RpcServer<SocketData>({
       upgrade: (request) => {
         const url = new URL(request.url);
-        if (url.pathname !== socketPath) return false;
+        // The api prefix is routing, so `/api/ws` upgrades like `/ws`.
+        const pathname =
+          stripApiPrefix(url.pathname, this._app.apiSurface?.prefix) ??
+            url.pathname;
+        if (pathname !== socketPath) return false;
         // Connection-scope capture: everything ctx.connection carries
         // exists only HERE, at upgrade time.
         return {
@@ -403,7 +410,8 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // Bun/Node) delivers `request.url` UN-normalized, so scanning it
     // would route `/a/../b` differently per runtime. The query is still
     // parsed only lazily, when a handler reads `ctx.args`.
-    let rawPathname = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    let rawPathname = url.pathname;
     // Trailing slash (ignored by default): strip it so `/users/` routes as
     // `/users`; the root `/` is left alone. Applied BEFORE version
     // resolution so a `path`-mode version segment and static prefixes see
@@ -414,6 +422,27 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     ) {
       rawPathname = rawPathname.slice(0, -1);
     }
+    // The SURFACE (server.api hosts/prefix, ui.enabled) — decided before
+    // version resolution so the api prefix comes off first:
+    // `/api/v1/users` → api → `/v1/users` → v1 → `/users`. The common
+    // no-api / ui-on app skips the resolver entirely.
+    const api = this._app.apiSurface;
+    const uiEnabled = this._app.uiEnabled;
+    const resolved = api === undefined && uiEnabled
+      ? undefined
+      : resolveSurface(
+        requestHostname(
+          url,
+          request.headers,
+          serverOptions.trustProxy,
+          api?.trustForwardedHost === true,
+        ),
+        rawPathname,
+        api,
+        uiEnabled,
+      );
+    const surface = resolved?.surface ?? 'ui';
+    if (resolved !== undefined) rawPathname = resolved.pathname;
     // Version + the pathname to route on, per the configured mode
     // (header/accept/path). `path` mode strips the version segment so the
     // router (and static/OpenAPI) see a clean path. Absent version →
@@ -425,13 +454,23 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       serverOptions.versioning!,
     );
     const match = this.__router.find(method, pathname, version);
-    const entry = match?.middlewares[0];
+    // On the api surface a PAGE (a `prefer: 'html'` template) or a UI
+    // runtime route is not a match at all — cleared BEFORE the chain is
+    // chosen, so its route middleware never runs (no 401 revealing a
+    // 404) and the 404 is byte-identical to a missing URL.
+    const entry = match !== undefined &&
+        (surface === 'ui' || !this.__hiddenOnApi(match.middlewares[0]!))
+      ? match.middlewares[0]
+      : undefined;
 
     const requestIdHeader = serverOptions.requestIdHeader!;
     const ctx = new HTTPContext<S>(this._app, {
       request,
       remoteAddress: remoteAddress ?? '',
-      params: match?.params ?? {},
+      surface,
+      basePath: resolved?.basePath ?? '',
+      path: pathname,
+      params: entry !== undefined ? match!.params : {},
       // Matched route PATTERN as identity (low cardinality); the raw
       // pathname only when nothing matched. Supplied for BOTH cases from
       // the pathname already in hand, so the context ctor's no-match
@@ -461,10 +500,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       // A `null` return means "no body" (→ 204) on templated routes
       // too — only a real reply is represented.
       const commit = (): void => {
-        // A ui.enabled:false replica short-circuits representation
-        // entirely — templated routes serve their content as JSON.
+        // The api surface short-circuits representation entirely —
+        // templated routes serve their content as JSON.
         ctx.response = returned !== null && entry?.template !== undefined &&
-            this._app.uiEnabled
+            surface === 'ui'
           ? represent(returned, entry.template, ctx)
           : returned;
       };
@@ -525,9 +564,13 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         // Config-driven static (`server.static`) serves HERE — on route
         // miss, before the 404 — so routes always win a collision, every
         // outer middleware has already run, and routed requests never
-        // pay a stat(). Entries try in declaration order.
+        // pay a stat(). Entries try in declaration order. UI surface
+        // only: assets are the UI's, an API host has none.
         const mounts = this._app.staticMounts;
-        if (mounts.length > 0 && (method === 'GET' || method === 'HEAD')) {
+        if (
+          mounts.length > 0 && surface === 'ui' &&
+          (method === 'GET' || method === 'HEAD')
+        ) {
           for (const mount of mounts) {
             if (await serveStaticFile(ctx, mount)) return;
           }
@@ -535,8 +578,17 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         // 405 / generic OPTIONS: the PATH exists under other methods. Gated
         // by server.methodNotAllowed (off → a wrong method is a plain 404,
         // hiding the path's existence). One radrouter walk, miss-path only.
+        // On the api surface the routes hidden there don't count — or the
+        // Allow header would reveal the page the 404 just denied.
         if (serverOptions.methodNotAllowed === true) {
-          const methods = this.__router.allowedMethods(pathname, version);
+          let methods = this.__router.allowedMethods(pathname, version);
+          if (surface === 'api' && methods.length > 0) {
+            methods = methods.filter((m) => {
+              const e = this.__router.find(m, pathname, version)
+                ?.middlewares[0];
+              return e !== undefined && !this.__hiddenOnApi(e);
+            });
+          }
           if (methods.length > 0) {
             // We answer OPTIONS ourselves, so advertise it in Allow too.
             const allow = methods.includes('OPTIONS')
@@ -586,6 +638,18 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         : undefined,
       () => this.__finalize(ctx, requestIdHeader),
     );
+  }
+
+  /**
+   * Whether a route is absent from the api surface's table: a UI runtime
+   * route, or a page — a templated route whose resolved `prefer`
+   * (route → app, the configured value even on a `ui.enabled: false`
+   * replica) is `'html'`.
+   */
+  private __hiddenOnApi(entry: RapidRouteEntry<S>): boolean {
+    return entry.uiOnly === true ||
+      (entry.template !== undefined &&
+        (entry.template.prefer ?? this._app.uiPrefer) === 'html');
   }
 
   private __finalize(

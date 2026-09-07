@@ -54,9 +54,11 @@ export type RapidApplicationOptions = {
    */
   stateMode?: 'CLONE' | 'PROTOTYPE' | 'SHARE';
   /**
-   * Graceful-shutdown deadline in ms before force-exit; `0` disables.
-   * Default sits under Cloud Run's 30s SIGTERM grace window.
-   * @default 25000
+   * Graceful-shutdown drain window in SECONDS (an integer, 1–30): in-flight
+   * requests get this long to finish on `stop()`, then the rest are
+   * force-closed and a process-exit backstop fires at 1.1× the window.
+   * Default sits under Cloud Run's 30 s SIGTERM grace window.
+   * @default 25
    */
   shutdownTimeout?: number;
 

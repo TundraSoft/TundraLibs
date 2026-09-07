@@ -388,24 +388,35 @@ describe('rapid.ui.tiers', () => {
     await app.stop();
   });
 
-  it('ui.enabled false: JSON everywhere, no runtime route, JSON errors — per replica', async () => {
+  it('ui.enabled false: every request is the api surface — pages 404, API-first routes serve JSON, no runtime route', async () => {
     const app = await Application.initialize({
       name: 'tiers-disabled',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
       ui: { enabled: false, prefer: 'html', core: Core, layout: PageShape },
     });
+    // Resolves to a page through the APP-level prefer — still hidden.
     app.get(
       '/p',
-      { template: { render: UserList, prefer: 'html' } },
+      { template: UserList },
       () => ({ content: { items: ['a'] } }),
     );
+    app.get(
+      '/api-first',
+      { template: { render: UserList, prefer: 'json' } },
+      () => ({ content: { items: ['b'] } }),
+    );
     const page = await app.fetch(new Request('http://app/p'));
+    asserts.assertEquals(page.status, 404);
     asserts.assertEquals(page.headers.get('content-type'), 'application/json');
-    asserts.assertEquals(await page.json(), { items: ['a'] });
+    await page.body?.cancel();
+    const json = await app.fetch(new Request('http://app/api-first'));
+    asserts.assertEquals(json.headers.get('content-type'), 'application/json');
+    asserts.assertEquals(json.headers.get('vary'), null);
+    asserts.assertEquals(await json.json(), { items: ['b'] });
     // The swap header is ignored too — JSON unconditionally.
     const swap = await app.fetch(
-      new Request('http://app/p', { headers: { 'rapid-swap': '1' } }),
+      new Request('http://app/api-first', { headers: { 'rapid-swap': '1' } }),
     );
     asserts.assertEquals(swap.headers.get('content-type'), 'application/json');
     await swap.body?.cancel();
@@ -617,6 +628,47 @@ describe('rapid.ui error negotiation + personal pages (2026-09 review)', () => {
     asserts.assertStringIncludes(await res.text(), '<who>abhinav</who>');
     asserts.assertStringIncludes(res.headers.get('vary') ?? '', 'Cookie');
     asserts.assertEquals(res.headers.get('cache-control'), 'private');
+    await app.stop();
+  });
+});
+
+describe('rapid.ui error negotiation — both directions (2026-09 review)', () => {
+  it('in a pages-first app with errorTemplates, a JSON client hitting an unknown URL keeps the envelope; a browser gets the page', async () => {
+    const Oops = template<Record<string, unknown>>(
+      (d) => html`<b>${String(d.status)}</b>`,
+      'Oops',
+    );
+    const app = await Application.initialize({
+      name: 'neg-both',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { prefer: 'html', errorTemplates: { default: Oops } },
+    });
+    const json = await app.fetch(
+      new Request('http://app/nope', {
+        headers: { accept: 'application/json' },
+      }),
+    );
+    asserts.assertEquals(json.status, 404);
+    asserts.assertEquals(json.headers.get('content-type'), 'application/json');
+    asserts.assertStringIncludes(json.headers.get('vary') ?? '', 'Accept');
+    await json.body?.cancel();
+    const page = await app.fetch(
+      new Request('http://app/nope', {
+        headers: { accept: 'text/html,*/*;q=0.8' },
+      }),
+    );
+    asserts.assertEquals(
+      page.headers.get('content-type'),
+      'text/html; charset=UTF-8',
+    );
+    asserts.assertEquals(await page.text(), '<b>404</b>');
+    // curl's `*/*` → the server's first offer, JSON.
+    const any = await app.fetch(
+      new Request('http://app/nope', { headers: { accept: '*/*' } }),
+    );
+    asserts.assertEquals(any.headers.get('content-type'), 'application/json');
+    await any.body?.cancel();
     await app.stop();
   });
 });

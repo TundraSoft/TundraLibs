@@ -77,7 +77,7 @@ server:
   # ${VAR} references are interpolated from the environment / .env
   tls:
     key: ${TLS_KEY_PATH}
-shutdownTimeout: 10000
+shutdownTimeout: 10 # seconds
 ```
 
 ```ts
@@ -285,6 +285,7 @@ request's async context. `stock()` an override to scope a fake or a per-app
 implementation to one app alone:
 
 ```ts
+// also: deno add @tundralibs/doctor
 import { Application } from '@tundralibs/rapid';
 import { inject, label } from '@tundralibs/doctor';
 
@@ -418,13 +419,13 @@ fields that may cross. Pages compose from THREE tiers: an irreplaceable
 app `core` (the document — head/css/scripts; `title` + `meta` are its
 per-page slots), the swappable module/route `layout` nesting inside it
 (route → `@Module` → app default; `false` opts out), and the content
-fragment built from plain view components. The small (~200-line) runtime
+fragment built from plain view components. The small (~300-line) runtime
 (`GET /__rapid/ui.js`, ETag-revalidated) swaps fragments via `data-action` /
 `data-target` / `data-swap` attributes (`data-load` for lazy regions —
 skeleton first, the slow-data answer) — no inline handlers
 (`script-src 'self'` suffices) — echoes the `csrf` cookie as `x-csrf-token`,
 follows the `rapid-redirect` header same-origin only, emits
-`rapid:swapped` / `rapid:error` DOM events, and exposes a two-function
+`rapid:swapped` / `rapid:error` DOM events, and exposes a two-function base
 API — `window.rapid.swap(url, target)` and `window.rapid.refresh(target)`
 — for app JS to drive multi-region updates from those events. The three
 contract headers are configurable (YAML: `ui.swapHeader: hx-request` +
@@ -437,7 +438,10 @@ routes. Error pages resolve through the `ui.errorTemplates` registry
 to swaps — and `ui.history: true` the history module: opt-in push-state
 per interaction (`data-push` / `rapid.history.push()`), no DOM cache
 (back re-fetches), `document.title` synced from `rapid-title`.
-`ui.enabled: false` turns a replica API-only from YAML. `htmlDocument()`, `withQuery()`, `when()` / `each()`
+`server.api` (`hosts` / `prefix`) splits an **api surface** off the same
+routes — `api.example.com/users` or `/api/users` answer JSON only, pages
+are 404 there, `onlyApi()` / `onlyUi()` scope middleware per side;
+`ui.enabled: false` makes every request that surface. `htmlDocument()`, `withQuery()`, `when()` / `each()`
 (value-truthiness branches and lists with an empty state — `0 && …` would
 render the `0`), `ctx.isSwap`, typed view projections, and `testing`'s
 `view()` / `swap: true` round out the layer. See
@@ -470,13 +474,15 @@ app.get('/openapi.json', openapi());
   3.0.3 document built from the mounted routes (cached per version; every
   declared version is listed as `x-versions`). `bearerAuth` is declared
   automatically; declare any other scheme routes name in `security` here.
-- `login({ pact, strategy })` — logs a user in through a `@tundralibs/pact`
-  instance and returns the token + principal (pact is a type-only import, so it
-  adds no runtime dependency until you pass an instance):
+- `login({ pact, cookie?, fields?, principal? })` — logs a user in through a
+  `@tundralibs/pact` instance (`{ identifier, password }` in the body) and
+  returns `{ token, expiresAt, principal }`; with `cookie` the token is also
+  set as an HttpOnly cookie for browser UIs. 401 on a bad credential, one
+  answer for every failure kind (pact is a type-only import here):
 
 ```ts ignore
 import { login } from '@tundralibs/rapid/endpoints';
-app.post('/login', login({ pact: myPactInstance }));
+app.post('/login', login({ pact, cookie: { name: 'session' } }));
 ```
 
 ## Auth
@@ -506,9 +512,11 @@ app.get(
 ```
 
 For `@tundralibs/pact`, use the dedicated adapter at
-`@tundralibs/rapid/middlewares/pact` instead — `pact(options)` once at boot,
-then `authenticate(schemes?)` + `authorize(module, permission)` on routes. See
-[Authentication & authorization](docs/Rapid-Auth.md) for the full guide.
+`@tundralibs/rapid/middlewares/pact` instead — one factory over your instance,
+`const { authenticate, authorize } = pactAuth(pact, options)`; `authenticate`
+fills `ctx.auth` with pact's auth context (Bearer / Basic / ApiKey / HMAC, a
+bearer cookie for UIs), `authorize('Module', 'PERMISSION')` is typed by the
+instance's catalog. See [Authentication & authorization](docs/Rapid-Auth.md).
 
 ## Cookies, sessions & CSRF
 
@@ -579,6 +587,7 @@ A signing feature used without a configured `secret` fails loudly with
   string:
 
   ```ts
+  // also: deno add @tundralibs/id
   import { Application } from '@tundralibs/rapid';
   import { ulid } from '@tundralibs/id';
 
@@ -595,13 +604,13 @@ A signing feature used without a configured `secret` fails loudly with
 ## Graceful shutdown
 
 `app.stop()` drains in-flight HTTP requests before closing. `shutdownTimeout`
-(default `25_000` ms) is the drain window: in-flight requests get up to that long
-to finish, then whatever is left is force-closed — WebSockets don't drain, so
-they are held to the deadline and then dropped. Jobs stop and the module runtime
-disposes (reverse init order) around the drain. A process-exit backstop fires a
-little past the window (`shutdownTimeout × 1.1`, unref'd) only if teardown itself
-wedges; `shutdownTimeout: 0` disables both — an immediate force-close with no
-exit.
+(seconds, an integer from 1 to 30; default `25`) is the drain window: in-flight
+requests get up to that long to finish, then whatever is left is force-closed —
+WebSockets don't drain, so they are held to the deadline and then dropped. Jobs
+stop and the module runtime disposes (reverse init order) around the drain. A
+process-exit backstop fires a little past the window (`shutdownTimeout × 1.1`,
+unref'd) only if teardown itself wedges. A second `stop()` during the drain
+(two signal handlers) joins the first.
 
 ```ts
 import { Application } from '@tundralibs/rapid';
@@ -609,7 +618,7 @@ import { Application } from '@tundralibs/rapid';
 // Give in-flight requests up to 10s to finish on stop(), then force-close.
 const app = await Application.initialize({
   name: 'api',
-  shutdownTimeout: 10_000,
+  shutdownTimeout: 10,
 });
 ```
 
@@ -641,6 +650,7 @@ one another; pass `container` to boot against an app's own `app.container`
 instead. `dispose()` (or `await using`) tears the runtime down.
 
 ```ts
+// also: deno add @tundralibs/doctor
 import { RapidModule } from '@tundralibs/rapid/modules';
 import { harness } from '@tundralibs/rapid/testing';
 import { inject, label } from '@tundralibs/doctor';
@@ -687,8 +697,8 @@ capabilities:
 
 ## CLI
 
-`rapid init` scaffolds a project. The **runtime is asked first** — it's a
-project-wide choice, not a container detail: it decides the primary config
+`rapid init` scaffolds a project. After the project name, the **runtime is the
+first option asked** — it's a project-wide choice, not a container detail: it decides the primary config
 file (one, never both), the dev/start/test commands, and the deploy artifact.
 
 ```bash
@@ -707,7 +717,8 @@ Alpine + s6-overlay, running as the unprivileged `tundra` user. Those images
 start the app from an **ENV contract** (`TASK=start` on Deno, with `ALLOW_*`
 mapped to `--allow-*` flags; `SCRIPT=start` on Bun/Node), so the generated
 Dockerfile deliberately has no `CMD`/`ENTRYPOINT`. `--github` (opt-in) adds a
-`.github/workflows/ci.yml` that runs fmt/lint/check/test on the chosen runtime.
+`.github/workflows/ci.yml` that runs the runtime's test command (and
+fmt/lint/check too on Deno).
 `--module` / `--norm` add the module system and a `norm` model; `--ui`
 scaffolds the three-tier UI starter (core + layout + a templated page on
 `server.static`), and `--with bootstrap|pico` adds a self-hosted CSS

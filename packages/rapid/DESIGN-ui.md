@@ -283,7 +283,10 @@ override. HTML errors hook **there**:
   set, the error path renders it (a fragment for a swap, layout-wrapped for a
   page) with the error's status preserved. Otherwise the JSON envelope is
   sent as today. An error on an unmatched route (404 before routing) has no
-  route `prefer`, so the app-level `prefer` decides.
+  route `prefer`, so the app-level `prefer` decides (later refined: with
+  `errorTemplates` configured, `Accept` decides — D12). A matched route
+  WITHOUT a template is never a page: its errors stay JSON whatever the
+  app-level `prefer` (D16 — closed the "no bare-route opt-out" asymmetry).
 - Because this runs post-onion, `compress`/`etag` do not see error HTML — the
   same is already true of JSON error envelopes; nothing new is lost.
 - The **runtime** checks the response `content-type`: a non-HTML body (the
@@ -358,8 +361,12 @@ middleware. `RapidUiOptions` = `{ layout?, prefer?: 'json' | 'html', view?,
 errorTemplate?, runtimePath? }` (defaults: no layout, `'json'`, no
 projection, no error template, `/__rapid/ui.js`). It stores these on the app
 and registers the runtime route. Types live one-per-file under `types/ui/`.
-The root barrel re-exports nothing from `ui/` — an API-only app pays nothing
-for it.
+The root barrel re-exports nothing from `ui/` (types only). Precisely what an
+API-only app pays (D16 audit): the transport imports the representer module
+(`ui/represent.ts` + `html.ts` + `errorPage.ts` — small, no import-time work);
+the three client scripts (`ui.ts`/`live.ts`/`history.ts`, ~15 KB of source
+hashed at load) are imported LAZILY on the first request to their route, so an
+app that never configures `ui` never loads them.
 
 ### D12 — The `{ status: 'ok' | 'empty' | 'error' }` union is an app convention
 
@@ -539,11 +546,11 @@ programmatic (factory options / the options object). Doctrine, from the
 exporter precedent: **config names code, never imports it** — no import
 paths in YAML or options, no views-folder scanning ("a string can't be
 a module edge": it breaks `deno compile` and Workers bundling and
-forfeits compile-time safety). `ui.enabled: false` is the per-replica
-API-only gate (`app.uiEnabled`); NOTE the exposure shift it implies —
-templates act as de-facto field filters on `prefer:'html'` routes, so
-handlers must only return what may serialize. `app.ui()` remains one
-release as deprecated sugar. A `cores` name registry (YAML picks a core
+forfeits compile-time safety). `ui.enabled: false` is the app-wide
+"never emit HTML" gate (`app.uiEnabled`) — since D16 it makes every request
+the `api` surface, so pages 404 rather than shipping their handler's full
+content as JSON (the exposure shift this note once warned about is closed).
+`app.ui()` remains one release as deprecated sugar. A `cores` name registry (YAML picks a core
 per replica) was DEFERRED — chrome moved to tier 2, thinning its use;
 additive later.
 
@@ -620,3 +627,61 @@ only.
   demand.
 - **No `errorTemplates` key-grammar growth**: dispatch beyond
   exact/class/default is a typed branch in one template.
+
+## The surfaces round (user-driven design, 2026-09-06 — built)
+
+### D16 — a request has a SURFACE; the api surface is a smaller route table
+
+The problem: teams deploy an API and a UI on different URL spaces —
+`api.hostname.com` vs `hostname.com`, or `hostname.com/api/…` vs
+`hostname.com/…` — and rapid had no notion of either. Mount-time prefixes,
+mount groups, per-replica module selection and a `host` constraint in
+radrouter were all designed and REJECTED: each splits the app by
+_declaration_, against the one-route-two-faces thesis, and each fought the
+next (a module prefix baked in at import time cannot move between the host
+and the prefix topology). The decision keeps routes dual-natured and lets
+the **request** pick the face:
+
+- `server.api: { hosts?, prefix? }` (under `server:`, beside `versioning` /
+  `static` — it is routing, not UI, and must survive `ui.enabled: false`).
+  Resolved ONCE per request before routing: prefix stripped first, then a
+  path-mode version, then the route; `ctx.surface` / `ctx.basePath` /
+  `ctx.path` (new — the routed path; `healthCheck`, static, `view.path` and
+  the `/ws` gate all read it, so one request has ONE path). Hosts are
+  punycode/lowercase/trailing-dot normalised at boot and per request;
+  `x-forwarded-host` only under `trustProxy`.
+- The api surface is "a smaller route table and no representer" — NOT
+  "representation only": pages (`prefer: 'html'` templates, app-level
+  `prefer` included), `server.static` and the `uiOnly` runtime routes do not
+  exist there. A hidden page is a TRUE no-match (entry cleared before the
+  chain is chosen, filtered out of the 405/`Allow` walk) — otherwise
+  route-scoped auth would answer 401 for a URL the surface says is 404, and
+  `Allow` would list it. This is also what makes `Host` spoofing inert.
+- `ui.enabled: false` ≡ every request is `api`. ONE rule; the old
+  "templated routes serve JSON unconditionally" (which shipped a page
+  handler's full return as JSON once its template stopped filtering) is
+  gone, with its four doc sentences and the scaffold's home-page text.
+- B1 closed as a corollary: a matched route WITHOUT a template is never a
+  page, so its errors are the JSON envelope whatever the app-level `prefer`.
+  Module-level `prefer` is therefore unnecessary and stays unbuilt.
+- Redirects are NOT rewritten. The adversarial pass proved auto-prefixing
+  turns every example's post-form redirect (`/posts/ui`, a page) into a
+  page-404 on the api surface, while the unrewritten 302 lands where the
+  author meant; a non-page target yields JSON either way. `ctx.href(path)`
+  is the explicit opt-in; the scheme-relative guard (`//host`, `/\host` →
+  RAPID_RESPONSE_INVALID) closed a pre-existing open-redirect vector.
+- `onlyApi()` / `onlyUi()` PASS THROUGH off-HTTP (fail-closed), unlike the
+  transport `only*` wrappers — `onlyApi(authenticate())` must never unguard
+  a socket frame. Documented rule, not mechanism: `csrf()`/`session()`
+  stay unscoped wherever the api surface accepts a cookie credential
+  (`csrf()` cannot skip cookie-less unsafe requests — the cookie-echo is
+  what defeats login CSRF — so a token-only api is the case that scopes).
+- Rejected from the round: `strict` (ui-surface 404 for non-templated
+  routes — it 404s `/__rapid/*` and every example's own links; an allow-list
+  if ever), auto-generated OpenAPI `servers` (no scheme in host config;
+  `openapi({ servers })` exists), `Vary: Host` (authority is the cache key,
+  RFC 9111 §4), a ui-origin for host-mode cross-surface redirects (absolute
+  URLs until proven insufficient), `redirect: { url, surface }` sugar.
+- Recipes it replaces: two entry files per role, and two `Application`s
+  behind an `app.fetch()` host dispatcher — both still work, neither is
+  needed.

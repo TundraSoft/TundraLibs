@@ -30,9 +30,19 @@ export async function generateBarrel(dir: string): Promise<string> {
     }
   }
   files.sort((a, b) => a.localeCompare(b));
+  const seen = new Map<string, string>();
   for (const file of files) {
     const classes = exportedClasses(await readTextFile(`${dir}/${file}`));
     for (const name of classes.sort((a, b) => a.localeCompare(b))) {
+      // Two files exporting one class name would emit two `export { X }`
+      // lines — a barrel that fails to compile. Name both offenders.
+      const prior = seen.get(name);
+      if (prior !== undefined) {
+        throw new Error(
+          `module class '${name}' is exported by both ${prior} and ${file} — rename one`,
+        );
+      }
+      seen.set(name, file);
       lines.push(`export { ${name} } from './${file}';`);
     }
   }
@@ -44,7 +54,15 @@ export async function modulesCommand(
   dir: string,
   opts: { check?: boolean } = {},
 ): Promise<number> {
-  const barrel = await generateBarrel(dir);
+  let barrel: string;
+  try {
+    barrel = await generateBarrel(dir);
+  } catch (error) {
+    console.error(
+      `✗ ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 1;
+  }
   const out = `${dir}/mod.ts`;
   if (opts.check) {
     let current = '';

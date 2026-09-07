@@ -23,7 +23,8 @@ import {
   moduleMetaOf,
 } from '../decorators/mod.ts';
 import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
-import { RapidModule } from '../modules/RapidModule.ts';
+import { _isAttached, RapidModule } from '../modules/RapidModule.ts';
+import { _seedRequestFrame } from '../modules/ModuleRuntime.ts';
 import { getSession } from '../middlewares/session.ts';
 import { isStreamBody } from './streams.ts';
 import type {
@@ -92,6 +93,20 @@ async function extractBind<S extends RapidContextState>(
   switch (binder.source) {
     case 'param':
       raw = ctx.args.params[binder.name!];
+      // A router param is always a string; a SOCKET frame / JOB args
+      // object may carry anything. Without a validator the binder is
+      // TYPED `string`, so anything else must be a 400 — not a `.trim()`
+      // TypeError, and never a `{ $gt: '' }` reaching a query filter.
+      if (
+        raw !== undefined && typeof raw !== 'string' &&
+        binder.validate === undefined
+      ) {
+        throw new RapidError('RAPID_VALIDATION_FAILED', {
+          message:
+            `param '${binder.name}' must be a string (got ${typeof raw}) — pass a validator to accept other shapes`,
+          details: { param: binder.name },
+        });
+      }
       break;
     case 'payload':
       raw = await ctx.payload;
@@ -230,16 +245,37 @@ function buildInvoker<S extends RapidContextState>(
   instance: object,
   label: string,
 ): (ctx: RapidContext<S>) => Promise<RapidContextResponse> {
+  // A RapidModule method may `this.invoke()` others: seed the ambient
+  // frame with the request's identity/state first, so the nested
+  // invocation inherits them (a plain @Module class has no invoke tier —
+  // nothing to seed, nothing allocated).
+  const seeded = instance instanceof RapidModule;
+  const dot = label.lastIndexOf('.');
+  const target = label.slice(0, dot);
+  const method = label.slice(dot + 1);
+  const seed = (ctx: RapidContext<S>, args: readonly unknown[]): void =>
+    _seedRequestFrame({
+      requestId: ctx.requestId,
+      action: ctx.action,
+      target,
+      method,
+      args,
+      state: ctx.state as Record<string, unknown>,
+      auth: ctx.auth,
+    });
   // No binds (e.g. `@GET('/health')`) → skip the per-request `binds.map` array
   // AND the `Promise.all([])` microtask; call the method with no arguments.
   if (binds.length === 0) {
-    return async (): Promise<RapidContextResponse> =>
-      assertModuleReply(await fn.apply(instance), label);
+    return async (ctx: RapidContext<S>): Promise<RapidContextResponse> => {
+      if (seeded) seed(ctx, []);
+      return assertModuleReply(await fn.apply(instance), label);
+    };
   }
   return async (ctx: RapidContext<S>): Promise<RapidContextResponse> => {
     const args = await Promise.all(
       binds.map((binder) => extractBind<S>(binder, ctx)),
     );
+    if (seeded) seed(ctx, args);
     const reply = await fn.apply(instance, args);
     return assertModuleReply(reply, label);
   };
@@ -375,6 +411,18 @@ export function mountModule<S extends RapidContextState>(
   // shape and OpenAPI grouping, never name/namespace. Declaring those in
   // both places is an error, not an override — one source of truth.
   const isModule = instance instanceof RapidModule;
+  // A RapidModule mounted here without a runtime would serve its routes
+  // while `@On` stays silently inert and `this.log/emit/invoke` 500 on
+  // first use — the exact silent outcome the @Use/@On check below throws
+  // to prevent for plain classes. Fail loud on the same principle.
+  if (isModule && !_isAttached(instance)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `${ctorName} is a RapidModule — mount it through ` +
+        `app.modules() / initModules() (which host its log, events and ` +
+        `invoke), not app.module()`,
+      details: { class: ctorName },
+    });
+  }
   if (
     isModule && meta !== undefined &&
     (meta.name !== undefined || meta.namespace !== undefined)
@@ -457,13 +505,21 @@ export function mountModule<S extends RapidContextState>(
       if (resolved !== fn) {
         const declaredOn = (level as { name?: string } | undefined)?.name ??
           '(anonymous)';
+        // An OWN instance property shadowing the prototype method is the
+        // constructor-autobind idiom (`this.find = this.find.bind(this)`)
+        // — a different mistake from an un-decorated subclass override,
+        // with different advice.
+        const shadowed = Object.hasOwn(instance, name);
         throw new RapidError('RAPID_CONFIG', {
-          message:
-            `${ctorName}.${String(name)} overrides a method decorated on ` +
-            `${declaredOn} without re-declaring its decorators — the ` +
-            `base class's routes/commands/jobs are unreachable through ` +
-            `this override. Either remove the override or re-apply the ` +
-            `same decorator(s) on ${ctorName}.prototype.${String(name)}.`,
+          message: shadowed
+            ? `${ctorName}.${String(name)}: an own instance property shadows ` +
+              `the decorated method (constructor autobind?) — rapid binds ` +
+              `\`this\` for you; remove the assignment.`
+            : `${ctorName}.${String(name)} overrides a method decorated on ` +
+              `${declaredOn} without re-declaring its decorators — the ` +
+              `base class's routes/commands/jobs are unreachable through ` +
+              `this override. Either remove the override or re-apply the ` +
+              `same decorator(s) on ${ctorName}.prototype.${String(name)}.`,
           details: { class: ctorName, method: String(name), declaredOn },
         });
       }

@@ -11,6 +11,7 @@ import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { idempotency, type IdempotencyOptions } from './idempotency.ts';
 import { memoryStore, type Store } from './store.ts';
+import { timeout } from './timeout.ts';
 import type { IdempotencyRecord } from './idempotency.ts';
 
 const KEY = { 'idempotency-key': 'k-1' };
@@ -444,6 +445,57 @@ describe('rapid.middlewares.idempotency (bounds + store hygiene)', () => {
     );
     asserts.assertEquals(r.status, 400); // the handler's error, not the store's
     asserts.assertEquals((await r.json()).code, 'RAPID_VALIDATION_FAILED');
+    await app.stop();
+  });
+});
+
+describe('rapid.middlewares.idempotency (timeout interplay)', () => {
+  const slowApp = async (order: 'idempotency-outer' | 'timeout-outer') => {
+    const app = await Application.initialize({
+      name: 'idem-timeout',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    const idem = idempotency({ scope: false });
+    const deadline = timeout(40);
+    if (order === 'idempotency-outer') app.use(idem, deadline);
+    else app.use(deadline, idem);
+    let runs = 0;
+    app.post('/charge', async () => {
+      runs++;
+      await new Promise((r) => setTimeout(r, 120));
+      return { content: { charged: true } };
+    });
+    const post = () =>
+      app.fetch(
+        new Request('http://app/charge', { method: 'POST', headers: KEY }),
+      );
+    return { app, post, runs: () => runs };
+  };
+
+  it('idempotency OUTSIDE timeout: a 504 keeps the key pending — the retry is a 409, the handler ran once', async () => {
+    const { app, post, runs } = await slowApp('idempotency-outer');
+    const first = await post();
+    asserts.assertEquals(first.status, 504);
+    await first.body?.cancel();
+    const retry = await post();
+    asserts.assertEquals(retry.status, 409);
+    await retry.body?.cancel();
+    await new Promise((r) => setTimeout(r, 150)); // let the detached handler settle
+    asserts.assertEquals(runs(), 1);
+    await app.stop();
+  });
+
+  it('timeout OUTSIDE idempotency: the 504 already went out when the detached chain rejects — the key stays pending, the retry is a 409, the handler ran once', async () => {
+    const { app, post, runs } = await slowApp('timeout-outer');
+    const first = await post();
+    asserts.assertEquals(first.status, 504);
+    await first.body?.cancel();
+    await new Promise((r) => setTimeout(r, 150)); // the detached handler settles
+    const retry = await post();
+    asserts.assertEquals(retry.status, 409);
+    await retry.body?.cancel();
+    asserts.assertEquals(runs(), 1);
     await app.stop();
   });
 });

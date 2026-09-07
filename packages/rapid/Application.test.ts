@@ -2276,7 +2276,7 @@ describe('rapid.Application', () => {
         // never fires.
         server: { port: 0, hostname: '127.0.0.1' },
         logger: { handlers: [] },
-        shutdownTimeout: 5_000,
+        shutdownTimeout: 5,
       });
       app.get('/slow', async () => {
         markEntered();
@@ -3449,7 +3449,7 @@ describe('rapid.Application graceful stop', () => {
     const app = await Application.initialize({
       name: 'stop-jobs',
       server: { port: 0, hostname: '127.0.0.1' },
-      shutdownTimeout: 2000,
+      shutdownTimeout: 2,
       logger: { handlers: [] },
     });
     let release!: () => void;
@@ -3470,5 +3470,92 @@ describe('rapid.Application graceful stop', () => {
     await stopping;
     asserts.assertEquals(finished, true); // resolved only after the job finished
     await firing;
+  });
+});
+
+describe('rapid.Application stop() concurrency + shutdownTimeout (seconds)', () => {
+  it('a second stop() during the drain joins the first — one teardown, one stop event', async () => {
+    const app = await Application.initialize({
+      name: 'stop-twice',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      shutdownTimeout: 2,
+    });
+    let stops = 0;
+    app.on('stop', () => stops++);
+    app.get('/', () => ({ content: 'x' }));
+    await app.start();
+    const first = app.stop();
+    const second = app.stop();
+    asserts.assertStrictEquals(first, second);
+    await Promise.all([first, second]);
+    asserts.assertEquals(stops, 1);
+    asserts.assertEquals(app.running, false);
+  });
+
+  it('shutdownTimeout is whole SECONDS from 1 to 30 — 0, 31 and 2.5 fail the boot', async () => {
+    for (const bad of [0, 31, 2.5, -1]) {
+      await asserts.assertRejects(
+        () =>
+          Application.initialize({
+            name: 'stop-cfg',
+            server: { port: 0 },
+            logger: { handlers: [] },
+            shutdownTimeout: bad,
+          }),
+        Error,
+        'SECONDS',
+      );
+    }
+    const ok = await Application.initialize({
+      name: 'stop-cfg',
+      server: { port: 0 },
+      logger: { handlers: [] },
+      shutdownTimeout: 30,
+    });
+    asserts.assertEquals(ok.option('shutdownTimeout'), 30);
+    await ok.stop();
+  });
+});
+
+describe('rapid.Application boot validation (2026-09 review)', () => {
+  const boot = (over: Record<string, unknown>) =>
+    Application.initialize({
+      name: 'cfg-loud',
+      server: { port: 0 },
+      logger: { handlers: [] },
+      ...over,
+    } as never);
+
+  it('an illegal requestIdHeader fails the boot instead of throwing a TypeError per request', async () => {
+    for (const bad of ['', 'x request', 'a:b']) {
+      await asserts.assertRejects(
+        () => boot({ server: { port: 0, requestIdHeader: bad } }),
+        Error,
+        'requestIdHeader',
+      );
+    }
+  });
+
+  it('uploads.allowedExtensions entries must be lowercase and dot-prefixed; maxFiles a positive integer', async () => {
+    for (const ext of ['png', '.PNG', ' .png']) {
+      await asserts.assertRejects(
+        () => boot({ uploads: { allowedExtensions: [ext] } }),
+        Error,
+        'allowedExtensions',
+      );
+    }
+    for (const maxFiles of [0, -1, 1.5]) {
+      await asserts.assertRejects(
+        () => boot({ uploads: { maxFiles } }),
+        Error,
+        'maxFiles',
+      );
+    }
+    const ok = await boot({
+      uploads: { allowedExtensions: ['.png'], maxFiles: 3 },
+    });
+    asserts.assertEquals(ok.option('uploads')!.maxFiles, 3);
+    await ok.stop();
   });
 });
