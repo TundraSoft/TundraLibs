@@ -1,4 +1,11 @@
 /**
+ * @fileoverview {@link PactMiddlewareRequest} — the request view the core
+ * authenticates.
+ *
+ * @module
+ */
+
+/**
  * The transport-neutral view of one incoming request. Each framework
  * adapter builds it from its own request object; a custom adapter needs
  * `method`, `path`, and `header` — the rest feed the HMAC template
@@ -7,9 +14,9 @@
  * when absent.
  */
 export type PactMiddlewareRequest = {
-  /** HTTP method; the template renders it uppercase. */
+  /** HTTP method, any case; the template renders it uppercase. */
   readonly method: string;
-  /** Request path without the query string (`/users/42`). */
+  /** Full request path as received, percent-encoding intact, no query. */
   readonly path: string;
   /** Raw query string with its leading `?`, or `''`/absent when none. */
   readonly query?: string;

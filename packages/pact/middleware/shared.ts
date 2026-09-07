@@ -1,27 +1,23 @@
 /**
  * @fileoverview Framework-neutral middleware pieces: the carrier
  * configuration (which header, which prefix, per scheme), credential
- * extraction, and the PactError → HTTP status mapping. The core and the
- * per-framework adapters are glue over these.
+ * extraction, HMAC payload rendering, and the PactError → HTTP status
+ * mapping. The core and the per-framework adapters are glue over these.
  *
  * @module
  */
 import type {
+  PactMiddlewareConfig,
   PactMiddlewareOptions,
   PactMiddlewareRequest,
 } from './types/mod.ts';
-import type {
-  PactCredential,
-  PactHmacAlgorithm,
-  PactJweEncryption,
-} from '../types/mod.ts';
+import type { PactCredential } from '../types/mod.ts';
 import { PACT_AUTH_FAILURE_CODES, PactError } from '../errors/mod.ts';
 import {
   compileTemplate,
   contentDigest,
   REQUEST_TEMPLATE,
   RESPONSE_TEMPLATE,
-  type SignatureTemplate,
 } from './template.ts';
 
 /** Schemes accepted when `options.schemes` is not given (HMAC joins
@@ -32,62 +28,78 @@ export const DEFAULT_SCHEMES: readonly PactCredential['scheme'][] = [
   'APIKEY',
 ];
 
-/** One options bag, resolved: every default filled, templates compiled. */
-export type PactMiddlewareConfig = {
-  readonly schemes: ReadonlySet<PactCredential['scheme']>;
-  readonly bearer: { header: string; prefix: string };
-  readonly basic: {
-    header: string;
-    prefix: string;
-    credential: 'user' | 'apiKey';
-  };
-  readonly apiKey:
-    | { header: string; prefix: string }
-    | { keyHeader: string; secretHeader: string };
-  readonly hmac: {
-    keyHeader: string;
-    signatureHeader: string;
-    timestampHeader: string;
-    nonceHeader: string;
-    template: SignatureTemplate;
-    response: SignatureTemplate | null;
-    algorithm: PactHmacAlgorithm;
-    maxSkew: number;
-  };
-  readonly encryption: { enc: PactJweEncryption; required: boolean } | null;
-};
-
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9a-z-]+$/i;
 
 /**
+ * An empty prefix reads the whole header, so it must not share that
+ * header with another enabled prefixed carrier — it would shadow it.
+ *
+ * @throws {PactError} INVALID_OPTION on such a clash.
+ */
+function rejectShadowingPrefix(config: PactMiddlewareConfig): void {
+  const prefixed: [PactCredential['scheme'], string, string, string][] = [
+    ['BEARER', 'bearer.prefix', config.bearer.header, config.bearer.prefix],
+    ['BASIC', 'basic.prefix', config.basic.header, config.basic.prefix],
+  ];
+  if ('header' in config.apiKey) {
+    prefixed.push([
+      'APIKEY',
+      'apiKey.prefix',
+      config.apiKey.header,
+      config.apiKey.prefix,
+    ]);
+  }
+  for (const [scheme, option, name, value] of prefixed) {
+    if (value !== '' || !config.schemes.has(scheme)) continue;
+    const clash = prefixed.find(([other, , otherName]) =>
+      other !== scheme && otherName === name && config.schemes.has(other)
+    );
+    if (clash !== undefined) {
+      throw new PactError('INVALID_OPTION', {
+        option,
+        reason: `an empty prefix on '${name}' would shadow the ${
+          clash[0]
+        } carrier`,
+      });
+    }
+  }
+}
+
+/**
  * Resolve the options once: defaults in, header names lowercased and
- * validated, HMAC templates compiled.
+ * validated, prefixes checked, HMAC templates compiled.
  *
  * @throws {PactError} INVALID_OPTION on a malformed header name, a
- *   non-positive `maxSkew`, or a template that fails to compile.
+ *   prefix containing whitespace, an empty prefix on a header another
+ *   enabled carrier also reads, a non-positive `maxSkew`, or a template
+ *   that fails to compile.
  */
 export function resolveOptions(
   options: PactMiddlewareOptions = {},
 ): PactMiddlewareConfig {
+  const invalid = (option: string, reason: string): never => {
+    throw new PactError('INVALID_OPTION', { option, reason });
+  };
   const header = (option: string, value: string): string => {
     if (!HEADER_NAME.test(value)) {
-      throw new PactError('INVALID_OPTION', {
-        option,
-        reason: `'${value}' is not a valid header name`,
-      });
+      invalid(option, `'${value}' is not a valid header name`);
     }
     return value.toLowerCase();
+  };
+  const prefix = (option: string, value: string): string => {
+    if (/\s/.test(value)) invalid(option, `'${value}' contains whitespace`);
+    return value;
   };
   const hmac = options.hmac ?? {};
   const maxSkew = hmac.maxSkew ?? 300;
   if (!Number.isFinite(maxSkew) || maxSkew <= 0) {
-    throw new PactError('INVALID_OPTION', {
-      option: 'hmac.maxSkew',
-      reason: 'must be a positive number of seconds',
-    });
+    invalid(
+      'hmac.maxSkew',
+      `${String(maxSkew)} is not a positive number of seconds`,
+    );
   }
   const apiKey = options.apiKey ?? {};
-  return {
+  const config: PactMiddlewareConfig = {
     schemes: new Set(
       options.schemes ??
         (options.hmac === undefined
@@ -99,11 +111,11 @@ export function resolveOptions(
         'bearer.header',
         options.bearer?.header ?? 'authorization',
       ),
-      prefix: options.bearer?.prefix ?? 'Bearer',
+      prefix: prefix('bearer.prefix', options.bearer?.prefix ?? 'Bearer'),
     },
     basic: {
       header: header('basic.header', options.basic?.header ?? 'authorization'),
-      prefix: options.basic?.prefix ?? 'Basic',
+      prefix: prefix('basic.prefix', options.basic?.prefix ?? 'Basic'),
       credential: options.basic?.credential ?? 'user',
     },
     apiKey: 'keyHeader' in apiKey
@@ -113,7 +125,7 @@ export function resolveOptions(
       }
       : {
         header: header('apiKey.header', apiKey.header ?? 'authorization'),
-        prefix: apiKey.prefix ?? 'ApiKey',
+        prefix: prefix('apiKey.prefix', apiKey.prefix ?? 'ApiKey'),
       },
     hmac: {
       keyHeader: header('hmac.keyHeader', hmac.keyHeader ?? 'x-key-id'),
@@ -138,12 +150,27 @@ export function resolveOptions(
       required: options.encryption.required ?? false,
     },
   };
+  rejectShadowingPrefix(config);
+  return config;
 }
 
-/** The query string with its leading `?`, or `''` — the RFC 9421 `@query`. */
+/** The query string with its leading `?`, or `''` — the RFC 9421
+ * `@query`. A bare `?` reads as no query, as `URL.search` does. */
 export function queryOf(req: PactMiddlewareRequest): string {
-  if (req.query === undefined || req.query === '') return '';
+  if (req.query === undefined || req.query === '' || req.query === '?') {
+    return '';
+  }
   return req.query.startsWith('?') ? req.query : `?${req.query}`;
+}
+
+/** True for integer Unix seconds within `maxSkew` seconds of now — the
+ * HMAC freshness rule `createPactMiddleware` applies. */
+export function isFreshTimestamp(
+  value: string | null,
+  maxSkew: number,
+): boolean {
+  if (value === null || !/^\d{1,12}$/.test(value)) return false;
+  return Math.abs(Math.floor(Date.now() / 1000) - Number(value)) <= maxSkew;
 }
 
 /** The token after a case-insensitive `<prefix> `; the whole value when
@@ -160,73 +187,11 @@ function afterPrefix(value: string, prefix: string): string | null {
   return null;
 }
 
-/** `id:secret` split on the FIRST colon (secrets may contain colons). */
+/** `id:secret` split on the first colon (secrets may contain colons). */
 function splitPair(value: string): [string, string] | null {
   const separator = value.indexOf(':');
   if (separator === -1) return null;
   return [value.slice(0, separator), value.slice(separator + 1)];
-}
-
-/** The HMAC headers of a request, or null when it is not HMAC-shaped. */
-function hmacHeaders(
-  req: PactMiddlewareRequest,
-  config: PactMiddlewareConfig,
-): { keyId: string; signature: string; timestamp: string | null } | null {
-  if (!config.schemes.has('HMAC')) return null;
-  const keyId = req.header(config.hmac.keyHeader);
-  const signature = req.header(config.hmac.signatureHeader);
-  if (keyId === null || signature === null) return null;
-  return {
-    keyId,
-    signature,
-    timestamp: req.header(config.hmac.timestampHeader),
-  };
-}
-
-/**
- * Render the request signing template — the string the client signed.
- * Derived components come from the request view, `${x-…}` keys from the
- * CONFIGURED headers, `${content-digest}` from the raw body, any other
- * key from the header of that name (empty when absent).
- */
-export async function requestPayload(
-  req: PactMiddlewareRequest,
-  config: PactMiddlewareConfig,
-): Promise<string> {
-  const query = queryOf(req);
-  const authority = (req.authority ?? '').toLowerCase();
-  const scheme = (req.scheme ?? '').toLowerCase();
-  const digest = config.hmac.template.keys.includes('content-digest')
-    ? await contentDigest(await req.body?.() ?? null)
-    : '';
-  return config.hmac.template.render((key) => {
-    switch (key) {
-      case '@method':
-        return req.method.toUpperCase();
-      case '@path':
-        return req.path;
-      case '@query':
-        return query;
-      case '@request-target':
-        return `${req.path}${query}`;
-      case '@authority':
-        return authority;
-      case '@scheme':
-        return scheme;
-      case '@target-uri':
-        return `${scheme}://${authority}${req.path}${query}`;
-      case 'x-timestamp':
-        return req.header(config.hmac.timestampHeader) ?? '';
-      case 'x-nonce':
-        return req.header(config.hmac.nonceHeader) ?? '';
-      case 'x-key-id':
-        return req.header(config.hmac.keyHeader) ?? '';
-      case 'content-digest':
-        return digest;
-      default:
-        return req.header(key) ?? '';
-    }
-  });
 }
 
 /** The value the carrier presents on its header, past the prefix. */
@@ -294,6 +259,78 @@ const READERS = {
 } as const;
 
 /**
+ * What a request carries, before any body work: a credential of one of
+ * the header-only schemes, the HMAC headers (the signed payload is
+ * rendered separately, after the freshness check), or nothing. A
+ * malformed carrier reads as nothing.
+ */
+export function readCarrier(
+  req: PactMiddlewareRequest,
+  config: PactMiddlewareConfig,
+):
+  | { kind: 'credential'; credential: PactCredential }
+  | { kind: 'hmac'; keyId: string; signature: string }
+  | null {
+  for (const scheme of ['BEARER', 'BASIC', 'APIKEY'] as const) {
+    if (!config.schemes.has(scheme)) continue;
+    const credential = READERS[scheme](req, config);
+    if (credential === null) return null;
+    if (credential !== undefined) return { kind: 'credential', credential };
+  }
+  if (!config.schemes.has('HMAC')) return null;
+  const keyId = req.header(config.hmac.keyHeader);
+  const signature = req.header(config.hmac.signatureHeader);
+  if (keyId === null || signature === null) return null;
+  return { kind: 'hmac', keyId, signature };
+}
+
+/**
+ * Render the request signing template — the string the client signed.
+ * Derived components come from the request view, `${x-…}` keys from the
+ * configured headers, `${content-digest}` from the raw body, any other
+ * key from the header of that name (empty when absent).
+ */
+export async function requestPayload(
+  req: PactMiddlewareRequest,
+  config: PactMiddlewareConfig,
+): Promise<string> {
+  const query = queryOf(req);
+  const authority = (req.authority ?? '').toLowerCase();
+  const scheme = (req.scheme ?? '').toLowerCase();
+  const digest = config.hmac.template.keys.includes('content-digest')
+    ? await contentDigest(await req.body?.() ?? null)
+    : '';
+  return config.hmac.template.render((key) => {
+    switch (key) {
+      case '@method':
+        return req.method.toUpperCase();
+      case '@path':
+        return req.path;
+      case '@query':
+        return query;
+      case '@request-target':
+        return `${req.path}${query}`;
+      case '@authority':
+        return authority;
+      case '@scheme':
+        return scheme;
+      case '@target-uri':
+        return `${scheme}://${authority}${req.path}${query}`;
+      case 'x-timestamp':
+        return req.header(config.hmac.timestampHeader) ?? '';
+      case 'x-nonce':
+        return req.header(config.hmac.nonceHeader) ?? '';
+      case 'x-key-id':
+        return req.header(config.hmac.keyHeader) ?? '';
+      case 'content-digest':
+        return digest;
+      default:
+        return req.header(key) ?? '';
+    }
+  });
+}
+
+/**
  * Extract one {@link PactCredential} from a request, or null when none
  * is presented. Carriers, each on its configured header and prefix:
  *
@@ -306,7 +343,12 @@ const READERS = {
  *
  * A malformed carrier (undecodable base64, missing halves) and a scheme
  * excluded by `options.schemes` both return null — the core then rejects
- * with 401 or continues, per `options.optional`.
+ * with 401 or continues, per `options.optional`. The HMAC timestamp
+ * window (`hmac.maxSkew`) is not applied here: `createPactMiddleware`
+ * enforces it; a direct caller applies {@link isFreshTimestamp} itself.
+ *
+ * @throws {PactError} INVALID_OPTION when a plain options bag fails to
+ *   resolve — see {@link resolveOptions}.
  */
 export async function extractCredential(
   req: PactMiddlewareRequest,
@@ -315,17 +357,13 @@ export async function extractCredential(
   const config = options !== undefined && options.schemes instanceof Set
     ? options as PactMiddlewareConfig
     : resolveOptions(options as PactMiddlewareOptions | undefined);
-  for (const scheme of ['BEARER', 'BASIC', 'APIKEY'] as const) {
-    if (!config.schemes.has(scheme)) continue;
-    const credential = READERS[scheme](req, config);
-    if (credential !== undefined) return credential;
-  }
-  const signed = hmacHeaders(req, config);
-  if (signed === null) return null;
+  const carrier = readCarrier(req, config);
+  if (carrier === null) return null;
+  if (carrier.kind === 'credential') return carrier.credential;
   return {
     scheme: 'HMAC',
-    keyId: signed.keyId,
-    signature: signed.signature,
+    keyId: carrier.keyId,
+    signature: carrier.signature,
     payload: await requestPayload(req, config),
     algorithm: config.hmac.algorithm,
   };

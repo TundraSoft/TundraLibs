@@ -17,8 +17,9 @@ import { createPactMiddleware } from './core.ts';
 export type PactHonoContext = {
   req: {
     method: string;
+    /** hono's path is percent-decoded; `url` is preferred when present. */
     path: string;
-    /** The full request URL; `@query`, `@authority`, `@scheme` come from it. */
+    /** The full request URL; path, `@query`, `@authority`, `@scheme` come from it. */
     url?: string;
     header: (name: string) => string | undefined;
     /** hono caches the body, so handlers can still read it afterwards. */
@@ -42,7 +43,11 @@ export type PactHonoMiddleware = (
   next: () => Promise<void>,
 ) => Promise<Response | void>;
 
-/** Replace `c.res` with its signed/encrypted form; event streams pass. */
+/**
+ * Replace `c.res` with its signed/encrypted form. A `Response` body is
+ * always a stream, so the whole body is read here; `text/event-stream`
+ * responses are the one kind left alone.
+ */
 async function seal(
   c: PactHonoContext,
   respond: PactMiddlewareResponder,
@@ -55,6 +60,7 @@ async function seal(
     : new Uint8Array(await res.arrayBuffer());
   const patch = await respond({ status: res.status, body: sent });
   const headers = new Headers(res.headers);
+  if (patch.body !== undefined) headers.delete('content-length');
   for (const [name, value] of Object.entries(patch.headers)) {
     headers.set(name, value);
   }
@@ -72,10 +78,11 @@ async function seal(
  * unless `optional`, 401 on an invalid one always, non-pact errors
  * rethrown to hono); `authorize(module, permission)` — typed by the
  * instance — asserts on the attached bound principal (401
- * unauthenticated, 403 denied). With `hmac` or `encryption` on,
- * `authenticate` also signs/encrypts `c.res` after `next()` (an
- * `text/event-stream` response is sent as-is) and exposes a decrypted
- * request payload as `c.get('pactBody')`.
+ * unauthenticated, 403 denied). When a response must be signed or
+ * encrypted, `authenticate` rebuilds `c.res` after `next()` — buffering
+ * the body, since hono cannot tell a stream from a value; only
+ * `text/event-stream` is exempt — and exposes a decrypted request
+ * payload as `c.get('pactBody')`.
  *
  * @example
  * ```ts ignore
@@ -86,6 +93,10 @@ async function seal(
  *   return c.json({ user: auth.principal.id });
  * });
  * ```
+ *
+ * @throws {PactError} INVALID_OPTION for a malformed option at build;
+ *   UNKNOWN_MODULE / PERMISSION_NOT_IN_MODULE from `authorize()` at the
+ *   call site.
  */
 export function honoPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
@@ -101,7 +112,7 @@ export function honoPact<B extends PermissionBits, M extends string>(
       const read = c.req.arrayBuffer;
       const verdict = await core.authenticate({
         method: c.req.method,
-        path: c.req.path,
+        path: url?.pathname ?? c.req.path,
         query: url?.search,
         authority: url?.host,
         scheme: url?.protocol.replace(/:$/, ''),

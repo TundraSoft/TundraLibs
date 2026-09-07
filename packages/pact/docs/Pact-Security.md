@@ -82,7 +82,11 @@ contract: cover at least what the default template covers.
   seen nonce within the window) is on the [roadmap](Pact-Roadmap.md) —
   until then, track nonces at the app layer where replays matter.
 - **Payload confidentiality** is separate from integrity: TLS in transit,
-  or the middleware's key-bound JWE option end to end.
+  or the middleware's key-bound JWE option end to end. That option derives
+  one AES-GCM key per API key (HKDF over the secret, salted with the key
+  id) and uses random 96-bit IVs, so the usual per-key message bound
+  applies across the key's lifetime — rotate keys rather than run one for
+  years at high volume.
 
 ## TOTP
 

@@ -181,6 +181,44 @@ describe('oakPact().authenticate', () => {
     );
   });
 
+  it('should sign primitive and byte-view bodies without replacing them, and leave a plain API-key caller untouched', async () => {
+    const n = run(await signedHeaders('GET', '/x', null), { respond: 42 });
+    await oakPact(pact, { hmac: {} }).authenticate(n.ctx, n.next);
+    asserts.assertStrictEquals(n.ctx.response.body, 42);
+    asserts.assertStrictEquals(n.ctx.response.type, undefined);
+    asserts.assert(
+      await verifyHMAC(
+        `200\n${n.sentHeaders.get('x-timestamp')}\n${await contentDigest(
+          '42',
+        )}`,
+        n.sentHeaders.get('x-signature')!,
+        's1',
+      ),
+    );
+    const bytes = new Uint16Array([1, 2]);
+    const b = run(await signedHeaders('GET', '/x', null), { respond: bytes });
+    await oakPact(pact, { hmac: {} }).authenticate(b.ctx, b.next);
+    asserts.assertStrictEquals(b.ctx.response.body, bytes);
+    asserts.assert(
+      await verifyHMAC(
+        `200\n${b.sentHeaders.get('x-timestamp')}\n${await contentDigest(
+          new Uint8Array(bytes.buffer),
+        )}`,
+        b.sentHeaders.get('x-signature')!,
+        's1',
+      ),
+    );
+    const plain = run({ authorization: 'ApiKey k1:s1' }, { respond: { a: 1 } });
+    plain.ctx.response.type = 'application/problem+json';
+    await oakPact(pact, { hmac: {} }).authenticate(plain.ctx, plain.next);
+    asserts.assertEquals(plain.ctx.response.body, { a: 1 });
+    asserts.assertStrictEquals(
+      plain.ctx.response.type,
+      'application/problem+json',
+    );
+    asserts.assertStrictEquals(plain.sentHeaders.size, 0);
+  });
+
   it('should leave a streamed response body alone', async () => {
     const stream = new ReadableStream();
     const m = run(await signedHeaders('GET', '/x', null), { respond: stream });

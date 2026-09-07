@@ -94,6 +94,12 @@ function rawBodyOf(request: PactFastifyRequest): Uint8Array | string | null {
   return typeof raw === 'string' || raw instanceof Uint8Array ? raw : null;
 }
 
+/** Path and raw query (with `?`) of a request target. */
+function splitTarget(target: string): [string, string] {
+  const at = target.indexOf('?');
+  return at === -1 ? [target, ''] : [target.slice(0, at), target.slice(at)];
+}
+
 /**
  * Build the fastify hooks over one pact instance: `authenticate` extracts
  * the credential, calls `pact.authenticate`, and attaches the auth
@@ -103,8 +109,9 @@ function rawBodyOf(request: PactFastifyRequest): Uint8Array | string | null {
  * asserts on the attached bound principal (401 unauthenticated, 403
  * denied). Both are async `preHandler` hooks: a sent reply ends the
  * request, a resolved hook continues it. `respond` is an `onSend` hook
- * that signs/encrypts the serialized payload when `hmac` or `encryption`
- * is on — register it once, globally; streams pass through untouched.
+ * that signs/encrypts the serialized payload for the callers
+ * `authenticate` marked — register it once, globally; everything else,
+ * streams included, passes through untouched.
  *
  * @example
  * ```ts ignore
@@ -115,6 +122,10 @@ function rawBodyOf(request: PactFastifyRequest): Uint8Array | string | null {
  *   preHandler: authorize('Projects', 'READ'), // per-route
  * }, async (request) => ({ user: request.pact.principal.id }));
  * ```
+ *
+ * @throws {PactError} INVALID_OPTION for a malformed option at build;
+ *   UNKNOWN_MODULE / PERMISSION_NOT_IN_MODULE from `authorize()` at the
+ *   call site.
  */
 export function fastifyPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
@@ -127,11 +138,11 @@ export function fastifyPact<B extends PermissionBits, M extends string>(
   const core = createPactMiddleware(pact, options);
   return {
     authenticate: async (request, reply) => {
-      const [path, query] = request.url.split('?', 2) as [string, string?];
+      const [path, query] = splitTarget(request.url);
       const verdict = await core.authenticate({
         method: request.method,
         path,
-        query: query === undefined ? '' : `?${query}`,
+        query,
         authority: headerOf(request, 'host') ?? undefined,
         scheme: request.protocol,
         header: (name) => headerOf(request, name),

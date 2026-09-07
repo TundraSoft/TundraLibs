@@ -10,6 +10,7 @@ import type { PactAuthContext, PermissionBits } from '../types/mod.ts';
 import type {
   PactMiddlewareDenial,
   PactMiddlewareOptions,
+  PactMiddlewareResponder,
 } from './types/mod.ts';
 import { createPactMiddleware } from './core.ts';
 
@@ -19,9 +20,13 @@ export type PactExpressRequest<
   B extends PermissionBits = PermissionBits,
 > = {
   method: string;
+  /** Mount-relative inside `app.use('/prefix', …)`; see `originalUrl`. */
   url: string;
-  /** Express provides `path` (no query string); plain Connect may not. */
-  path?: string;
+  /**
+   * The full request target as received. Preferred for the signed
+   * `${@path}`/`${@query}` — `url` and `path` are relative to the mount.
+   */
+  originalUrl?: string;
   /** `http` or `https`; express's `req.protocol`. */
   protocol?: string;
   headers: Record<string, string | string[] | undefined>;
@@ -47,6 +52,7 @@ export type PactExpressResponse = {
   json?: (body: unknown) => unknown;
   send?: (body: unknown) => unknown;
   statusCode?: number;
+  headersSent?: boolean;
 };
 
 /** An express middleware. */
@@ -70,11 +76,48 @@ function rawBodyOf(req: PactExpressRequest): Uint8Array | string | null {
   return typeof raw === 'string' || raw instanceof Uint8Array ? raw : null;
 }
 
+/** Path and raw query (with `?`) of a request target. */
+function splitTarget(target: string): [string, string] {
+  const at = target.indexOf('?');
+  return at === -1 ? [target, ''] : [target.slice(0, at), target.slice(at)];
+}
+
 function send(res: PactExpressResponse, denial: PactMiddlewareDenial): void {
   for (const [name, value] of Object.entries(denial.headers)) {
     res.setHeader?.(name, value);
   }
   res.status(denial.status).json(denial.body);
+}
+
+/**
+ * Replace `res.json` so the JSON the handler sends is sealed first. The
+ * write happens once `respond()` settles, so `res.json` returns before
+ * the bytes leave; a response already sent by then is left alone.
+ */
+function wrapJson(
+  res: PactExpressResponse,
+  respond: PactMiddlewareResponder,
+  next: (error?: unknown) => void,
+): void {
+  const raw = res.send;
+  if (raw === undefined) return;
+  res.json = (body: unknown) => {
+    const text = JSON.stringify(body);
+    respond({ status: res.statusCode ?? 200, body: text })
+      .then((patch) => {
+        if (res.headersSent === true) return;
+        res.setHeader?.(
+          'content-type',
+          patch.headers['content-type'] ?? 'application/json; charset=utf-8',
+        );
+        for (const [name, value] of Object.entries(patch.headers)) {
+          res.setHeader?.(name, value);
+        }
+        raw.call(res, patch.body ?? text);
+      })
+      .catch(next);
+    return res;
+  };
 }
 
 /**
@@ -84,9 +127,9 @@ function send(res: PactExpressResponse, denial: PactMiddlewareDenial): void {
  * unless `optional`, 401 on an invalid one always, non-pact errors go to
  * `next(error)`); `authorize(module, permission)` — typed by the
  * instance — asserts on the attached bound principal (401
- * unauthenticated, 403 denied). With `hmac` or `encryption` on,
- * `authenticate` wraps `res.json` so the JSON the handler sends is
- * signed/encrypted (plain `JSON.stringify`; other send paths go out
+ * unauthenticated, 403 denied). When a response must be signed or
+ * encrypted, `authenticate` wraps `res.json` so the JSON the handler
+ * sends is sealed (plain `JSON.stringify`; other send paths go out
  * as-is) and exposes a decrypted request payload as `req.pactBody`.
  *
  * @example
@@ -97,6 +140,10 @@ function send(res: PactExpressResponse, denial: PactMiddlewareDenial): void {
  *   res.json({ user: req.pact.principal.id });
  * });
  * ```
+ *
+ * @throws {PactError} INVALID_OPTION for a malformed option at build;
+ *   UNKNOWN_MODULE / PERMISSION_NOT_IN_MODULE from `authorize()` at the
+ *   call site.
  */
 export function expressPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
@@ -113,11 +160,11 @@ export function expressPact<B extends PermissionBits, M extends string>(
     authenticate: async (req, res, next) => {
       let verdict: Awaited<ReturnType<typeof core.authenticate>>;
       try {
-        const [path, query] = req.url.split('?', 2) as [string, string?];
+        const [path, query] = splitTarget(req.originalUrl ?? req.url);
         verdict = await core.authenticate({
           method: req.method,
-          path: req.path ?? path,
-          query: query === undefined ? '' : `?${query}`,
+          path,
+          query,
           authority: headerOf(req, 'host') ?? undefined,
           scheme: req.protocol,
           header: (name) => headerOf(req, name),
@@ -129,28 +176,7 @@ export function expressPact<B extends PermissionBits, M extends string>(
       if (!verdict.ok) return send(res, verdict.denial);
       if (verdict.auth !== undefined) req.pact = verdict.auth;
       if (verdict.body !== undefined) req.pactBody = verdict.body;
-      const respond = verdict.respond;
-      if (respond !== undefined && res.send !== undefined) {
-        const raw = res.send.bind(res);
-        res.json = (body: unknown) => {
-          const text = JSON.stringify(body);
-          respond({ status: res.statusCode ?? 200, body: text }).then(
-            (patch) => {
-              res.setHeader?.(
-                'content-type',
-                patch.headers['content-type'] ??
-                  'application/json; charset=utf-8',
-              );
-              for (const [name, value] of Object.entries(patch.headers)) {
-                res.setHeader?.(name, value);
-              }
-              raw(patch.body ?? text);
-            },
-            next,
-          );
-          return res;
-        };
-      }
+      if (verdict.respond !== undefined) wrapJson(res, verdict.respond, next);
       next();
     },
     authorize: (module, permission) => {

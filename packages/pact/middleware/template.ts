@@ -2,13 +2,14 @@
  * @fileoverview The HMAC signing template: frozen RFC 9421 component
  * names inside `${…}`, literal text between them as separators. A
  * template is compiled once at boot (unknown key, missing mandatory key,
- * or a response-only key in a request template = config error) and
- * rendered per message.
+ * a response-only key in a request template, or two keys with nothing
+ * between them = config error) and rendered per message.
  *
  * @module
  */
 import { encodeBase64 } from '@std/encoding';
 import { PactError } from '../errors/mod.ts';
+import type { SignatureTemplate } from './types/mod.ts';
 
 /** Request template used when `hmac.template` is not given. */
 export const REQUEST_TEMPLATE =
@@ -44,23 +45,25 @@ const MANDATORY = {
   request: ['@method', '@path', 'x-timestamp', 'content-digest'],
   response: ['@status', 'x-timestamp', 'content-digest'],
 } as const;
-const KEY_PATTERN = /\$\{([^}]*)\}/g;
+/**
+ * Key pairs that may sit side by side with no separator: the second
+ * value is empty or starts with a character the first can never contain
+ * (`?` for a query, `/` for a path), so the boundary stays unambiguous.
+ */
+const ADJACENT_OK = new Set([
+  '@path|@query',
+  '@authority|@path',
+  '@authority|@request-target',
+]);
+const KEY_CHARS = /^[a-z0-9@-]+$/;
 const ENCODER = new TextEncoder();
-
-/** A compiled template: the literal pieces and the keys between them. */
-export type SignatureTemplate = {
-  readonly kind: 'request' | 'response';
-  readonly source: string;
-  readonly keys: readonly string[];
-  /** The frozen keys plus, for requests, any other lowercase header name. */
-  render(value: (key: string) => string): string;
-};
 
 /**
  * Compile a template for one direction.
  *
  * @throws {PactError} INVALID_OPTION on an unknown key, a key not
- *   lowercase, a mandatory key missing, or an empty template.
+ *   lowercase, a mandatory key missing, two keys with no separator
+ *   between them, or an empty template.
  */
 export function compileTemplate(
   source: string,
@@ -73,23 +76,39 @@ export function compileTemplate(
   const known = kind === 'request' ? REQUEST_KEYS : RESPONSE_KEYS;
   const parts: (string | { key: string })[] = [];
   const keys: string[] = [];
-  let last = 0;
-  for (const match of source.matchAll(KEY_PATTERN)) {
-    const key = match[1] ?? '';
-    if (key !== key.toLowerCase() || key === '') {
+  let cursor = 0;
+  // A linear scan: `${` opens a key, the next `}` closes it. No
+  // backtracking, so a hostile template cannot make compilation slow.
+  for (;;) {
+    const open = source.indexOf('${', cursor);
+    if (open === -1) break;
+    const close = source.indexOf('}', open + 2);
+    if (close === -1) fail(`unterminated '\${' at offset ${open}`);
+    const key = source.slice(open + 2, close);
+    if (key === '' || key !== key.toLowerCase()) {
       fail(`template key '\${${key}}' must be a lowercase component name`);
     }
+    if (!KEY_CHARS.test(key)) fail(`invalid template key '\${${key}}'`);
     // Request templates may name any other header; response templates
     // only the frozen set (the server knows no other client header).
     if (!known.has(key) && (kind === 'response' || key.startsWith('@'))) {
       fail(`unknown template key '\${${key}}'`);
     }
-    if (!/^[a-z0-9@-]+$/.test(key)) fail(`invalid template key '\${${key}}'`);
-    parts.push(source.slice(last, match.index), { key });
+    const literal = source.slice(cursor, open);
+    const previous = keys.at(-1);
+    if (
+      previous !== undefined && literal === '' &&
+      !ADJACENT_OK.has(`${previous}|${key}`)
+    ) {
+      fail(
+        `keys '\${${previous}}' and '\${${key}}' need a separator between them`,
+      );
+    }
+    parts.push(literal, { key });
     keys.push(key);
-    last = match.index + match[0].length;
+    cursor = close + 1;
   }
-  parts.push(source.slice(last));
+  parts.push(source.slice(cursor));
   if (keys.length === 0) fail('template names no component');
   for (const required of MANDATORY[kind]) {
     if (!keys.includes(required)) {

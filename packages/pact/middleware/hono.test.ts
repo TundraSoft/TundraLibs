@@ -157,13 +157,27 @@ describe('honoPact().authenticate', () => {
     );
   });
 
+  it("should sign the encoded URL path, not hono's decoded c.req.path", async () => {
+    const m = run(await signedHeaders('GET', '/x%20y?q=1', null));
+    // hono hands the adapter a decoded path; the client signed the URL.
+    m.c.req.path = '/x y';
+    m.c.req.url = 'https://api.test/x%20y?q=1';
+    await honoPact(pact, { hmac: {} }).authenticate(m.c, m.next);
+    asserts.assertStrictEquals(m.nextCalls(), 1);
+  });
+
   it('should decrypt a JWE request into pactBody and encrypt the response', async () => {
     const jwe = await encryptJwe('s1', 'k1', 'hello', 'A256GCM');
     const m = run(
       { authorization: 'ApiKey k1:s1', 'content-type': 'application/jose' },
-      { method: 'POST', body: jwe, respond: new Response('reply') },
+      {
+        method: 'POST',
+        body: jwe,
+        respond: new Response('reply', { headers: { 'content-length': '5' } }),
+      },
     );
     await honoPact(pact, { encryption: {} }).authenticate(m.c, m.next);
+    asserts.assertStrictEquals(m.c.res!.headers.get('content-length'), null);
     asserts.assertStrictEquals(
       new TextDecoder().decode(m.vars.get('pactBody') as Uint8Array),
       'hello',

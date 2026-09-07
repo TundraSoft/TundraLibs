@@ -19,10 +19,11 @@ export type PactMiddlewareCore<
   /**
    * Extract the credential from `req` and authenticate it. Absent →
    * `{ ok: true, auth: undefined }` when `optional`, else a 401 denial;
-   * present but invalid → a 401 denial, never `auth: undefined`. For a
-   * key-bound caller with `hmac`/`encryption` on, the ok verdict carries
-   * the decrypted `body` and a `respond()` to run on the finished
-   * response.
+   * present but invalid → a 401 denial, never `auth: undefined`. When
+   * the response must be signed (HMAC caller) or encrypted (a caller who
+   * sent a JWE, accepts one, or `encryption.required`), the ok verdict
+   * carries a `respond()` to run on the finished response, and the
+   * decrypted `body` when one arrived.
    */
   authenticate(
     req: PactMiddlewareRequest,
@@ -31,7 +32,7 @@ export type PactMiddlewareCore<
    * A guard over an attached auth context: `undefined` to proceed, a 401
    * denial when `auth` is absent, a 403 denial when the grant is missing.
    * Typed by the instance; the catalog is checked when the guard is
-   * BUILT, so a typo fails at boot.
+   * built, so a typo fails at boot.
    */
   authorize(
     module: M,

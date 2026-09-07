@@ -1,6 +1,6 @@
 /**
  * @fileoverview `createPactMiddleware(pact, options)` — the framework-neutral
- * factory every adapter wraps: ONE options bag, ONE challenge, and the two
+ * factory every adapter wraps: one options bag, one challenge, and the two
  * halves as pure functions over a request view and an auth context. An
  * adapter for any stack is a few lines mapping a verdict to its response.
  *
@@ -10,6 +10,7 @@ import type { Pact } from '../Pact.ts';
 import type { PactAuthContext, PermissionBits } from '../types/mod.ts';
 import { PactError } from '../errors/mod.ts';
 import type {
+  PactMiddlewareConfig,
   PactMiddlewareCore,
   PactMiddlewareDenial,
   PactMiddlewareOptions,
@@ -17,10 +18,11 @@ import type {
   PactMiddlewareResponder,
 } from './types/mod.ts';
 import {
-  extractCredential,
   failureResponse,
-  type PactMiddlewareConfig,
+  isFreshTimestamp,
   queryOf,
+  readCarrier,
+  requestPayload,
   resolveOptions,
 } from './shared.ts';
 import { contentDigest } from './template.ts';
@@ -53,13 +55,35 @@ function memoBody(req: PactMiddlewareRequest): PactMiddlewareRequest {
   const read = req.body;
   if (read === undefined) return req;
   let pending: Promise<Uint8Array | string | null> | undefined;
-  return { ...req, body: () => pending ??= read() };
+  return {
+    method: req.method,
+    path: req.path,
+    query: req.query,
+    authority: req.authority,
+    scheme: req.scheme,
+    header: (name) => req.header(name),
+    body: () => pending ??= read.call(req),
+  };
 }
 
-/** True for integer Unix seconds within `maxSkew` of now. */
-function freshTimestamp(value: string | null, maxSkew: number): boolean {
-  if (value === null || !/^\d{1,12}$/.test(value)) return false;
-  return Math.abs(Math.floor(Date.now() / 1000) - Number(value)) <= maxSkew;
+/** The media type of a header value, without parameters, lowercased. */
+function mediaType(value: string | null): string {
+  return (value ?? '').split(';', 1)[0]!.trim().toLowerCase();
+}
+
+/**
+ * Whether the request carries a body. The raw bytes settle it when the
+ * adapter can see them; otherwise the framing headers do — a parser may
+ * have consumed the stream before the adapter ran.
+ */
+function hasBody(
+  req: PactMiddlewareRequest,
+  raw: Uint8Array | string | null,
+): boolean {
+  if (raw !== null) return raw.length > 0;
+  const length = req.header('content-length');
+  return (length !== null && length !== '0') ||
+    req.header('transfer-encoding') !== null;
 }
 
 /**
@@ -118,21 +142,24 @@ export function createPactMiddleware<
   /** Sign and/or encrypt the finished response for one key-bound caller. */
   const responder = (
     keyId: string,
-    signed: boolean,
+    signs: boolean,
+    encrypts: boolean,
     req: PactMiddlewareRequest,
   ): PactMiddlewareResponder =>
   async (res) => {
     const headers: Record<string, string> = {};
     let body = res.body;
     let patched: string | undefined;
-    if (config.encryption !== null && body !== null && body.length > 0) {
+    if (
+      encrypts && config.encryption !== null && body !== null && body.length > 0
+    ) {
       patched = await pact.encryptFor(keyId, body, {
         enc: config.encryption.enc,
       });
       body = patched;
       headers['content-type'] = JOSE;
     }
-    if (signed && config.hmac.response !== null) {
+    if (signs && config.hmac.response !== null) {
       const timestamp = String(Math.floor(Date.now() / 1000));
       const nonce = req.header(config.hmac.nonceHeader);
       const digest = await contentDigest(body);
@@ -162,9 +189,7 @@ export function createPactMiddleware<
       headers[config.hmac.signatureHeader] = await pact.signFor(
         keyId,
         payload,
-        {
-          algorithm: config.hmac.algorithm,
-        },
+        { algorithm: config.hmac.algorithm },
       );
       if (nonce !== null) headers[config.hmac.nonceHeader] = nonce;
     }
@@ -180,14 +205,16 @@ export function createPactMiddleware<
     req: PactMiddlewareRequest,
   ): Promise<Uint8Array | undefined | { denial: PactMiddlewareDenial }> => {
     if (config.encryption === null) return undefined;
-    const type = (req.header('content-type') ?? '').split(';', 1)[0]!.trim()
-      .toLowerCase();
     const raw = await req.body?.() ?? null;
-    if (raw === null || raw.length === 0) return undefined;
-    if (type !== JOSE) {
+    if (!hasBody(req, raw)) return undefined;
+    if (mediaType(req.header('content-type')) !== JOSE) {
       return config.encryption.required
         ? { denial: deny(400, 'ENCRYPTION_INVALID') }
         : undefined;
+    }
+    if (raw === null) {
+      // The adapter cannot see a JOSE body: nothing to decrypt with.
+      return { denial: deny(400, 'ENCRYPTION_INVALID') };
     }
     const jwe = typeof raw === 'string' ? raw : DECODER.decode(raw);
     try {
@@ -203,43 +230,63 @@ export function createPactMiddleware<
     challenge,
     async authenticate(incoming) {
       const req = memoBody(incoming);
-      const credential = await extractCredential(req, config);
-      if (credential === null) {
+      const carrier = readCarrier(req, config);
+      if (carrier === null) {
         if (options.optional === true) return { ok: true, auth: undefined };
         return { ok: false, denial: deny(401, 'NO_CREDENTIALS') };
       }
+      // Freshness is checked before the body is digested, so a stale or
+      // forged signed request costs no hashing and no key lookup.
       if (
-        credential.scheme === 'HMAC' &&
-        !freshTimestamp(
+        carrier.kind === 'hmac' &&
+        !isFreshTimestamp(
           req.header(config.hmac.timestampHeader),
           config.hmac.maxSkew,
         )
       ) {
         return { ok: false, denial: deny(401, 'STALE_TIMESTAMP') };
       }
+      const credential = carrier.kind === 'credential' ? carrier.credential : {
+        scheme: 'HMAC' as const,
+        keyId: carrier.keyId,
+        signature: carrier.signature,
+        payload: await requestPayload(req, config),
+        algorithm: config.hmac.algorithm,
+      };
       let auth: PactAuthContext<M, B>;
       try {
         auth = await pact.authenticate(credential);
       } catch (error) {
         return { ok: false, denial: denyFrom(error) };
       }
-      const keyId =
-        credential.scheme === 'APIKEY' || credential.scheme === 'HMAC'
-          ? credential.keyId
-          : null;
-      if (keyId === null) return { ok: true, auth };
+      if (credential.scheme !== 'APIKEY' && credential.scheme !== 'HMAC') {
+        return { ok: true, auth };
+      }
+      const keyId = credential.keyId;
       const opened = await openPayload(keyId, req);
       if (opened !== undefined && !(opened instanceof Uint8Array)) {
         return { ok: false, denial: opened.denial };
       }
-      const respond = responder(keyId, credential.scheme === 'HMAC', req);
-      return opened === undefined
-        ? { ok: true, auth, respond }
-        : { ok: true, auth, body: opened, respond };
+      const signs = credential.scheme === 'HMAC' &&
+        config.hmac.response !== null;
+      // The response is encrypted for callers who showed they can read
+      // one: they sent a JWE, asked for one, or the deployment demands it.
+      const encrypts = config.encryption !== null &&
+        (opened !== undefined || config.encryption.required ||
+          mediaType(req.header('accept')) === JOSE);
+      const respond = signs || encrypts
+        ? responder(keyId, signs, encrypts, req)
+        : undefined;
+      return {
+        ok: true,
+        auth,
+        ...(opened === undefined ? {} : { body: opened }),
+        ...(respond === undefined ? {} : { respond }),
+      };
     },
     authorize(module, permission) {
       // getModulePermissions throws UNKNOWN_MODULE itself; the ceiling
-      // check is ours. Both at BUILD time — a typo is a boot error.
+      // check is ours. Both at build time — a typo is a boot error.
       if (!pact.getModulePermissions(module).includes(permission)) {
         throw new PactError('PERMISSION_NOT_IN_MODULE', { permission, module });
       }
@@ -255,6 +302,3 @@ export function createPactMiddleware<
     },
   };
 }
-
-/** Re-exported for adapters that only need the failure set. */
-export { PACT_AUTH_FAILURE_CODES } from '../errors/mod.ts';

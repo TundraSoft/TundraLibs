@@ -170,13 +170,36 @@ describe('createPactMiddleware', () => {
     );
   });
 
-  it('a plain API-key caller gets a respond() that leaves the response alone', async () => {
-    const core = createPactMiddleware(pact, { hmac: {} });
-    const ok = await core.authenticate(req({ authorization: 'ApiKey k1:s1' }));
-    asserts.assert(ok.ok && ok.respond !== undefined);
-    asserts.assertEquals(await ok.respond({ status: 200, body: '{}' }), {
-      headers: {},
+  it('a plain API-key caller gets no respond() — nothing would sign or encrypt', async () => {
+    const core = createPactMiddleware(pact, { hmac: {}, encryption: {} });
+    const ok = await core.authenticate(
+      req(
+        { authorization: 'ApiKey k1:s1', 'content-type': 'application/json' },
+        {
+          body: () => Promise.resolve('{"plain":true}'),
+        },
+      ),
+    );
+    asserts.assert(ok.ok);
+    asserts.assertStrictEquals(ok.respond, undefined);
+    asserts.assertStrictEquals(ok.body, undefined);
+  });
+
+  it('the guard 401 carries the challenge like the authenticate 401', async () => {
+    const core = createPactMiddleware(pact, { realm: 'r' });
+    const denial = await core.authorize('Post', 'READ')(undefined);
+    asserts.assertEquals(denial?.headers, {
+      'www-authenticate': 'Bearer realm="r", Basic realm="r", ApiKey realm="r"',
     });
+  });
+
+  it('schemes listing HMAC without an hmac block uses the defaults end to end', async () => {
+    const core = createPactMiddleware(pact, { schemes: ['HMAC'] });
+    asserts.assertStrictEquals(core.challenge, 'HMAC');
+    const ok = await core.authenticate(await signed());
+    asserts.assert(ok.ok && ok.auth?.via === 'HMAC');
+    const bearer = await core.authenticate(req({ authorization: 'Bearer t' }));
+    asserts.assert(!bearer.ok && bearer.denial.body.error === 'NO_CREDENTIALS');
   });
 });
 
@@ -200,7 +223,7 @@ describe('createPactMiddleware — HMAC', () => {
     asserts.assert(!swapped.ok);
   });
 
-  it('rejects a missing, malformed, or stale timestamp before verifying', async () => {
+  it('rejects a missing, malformed, or stale timestamp before reading the body or verifying', async () => {
     const core = createPactMiddleware(pact, { hmac: { maxSkew: 60 } });
     const now = Math.floor(Date.now() / 1000);
     for (
@@ -211,7 +234,11 @@ describe('createPactMiddleware — HMAC', () => {
         { headers: { 'x-timestamp': '' } },
       ]
     ) {
-      const verdict = await core.authenticate(await signed(input));
+      const request = await signed(input);
+      const verdict = await core.authenticate({
+        ...request,
+        body: () => Promise.reject(new Error('body read for a stale request')),
+      });
       asserts.assert(!verdict.ok, JSON.stringify(input));
       asserts.assertEquals(verdict.denial.status, 401);
       asserts.assertEquals(verdict.denial.body, { error: 'STALE_TIMESTAMP' });
@@ -235,13 +262,11 @@ describe('createPactMiddleware — HMAC', () => {
     asserts.assert(
       await verifyHMAC(expected, patch.headers['x-signature']!, 's1'),
     );
-    // Off: only the request is verified.
+    // Off: only the request is verified, and nothing runs on the response.
     const quiet = createPactMiddleware(pact, { hmac: { response: false } });
     const silent = await quiet.authenticate(await signed());
-    asserts.assert(silent.ok && silent.respond !== undefined);
-    asserts.assertEquals(await silent.respond({ status: 200, body: null }), {
-      headers: {},
-    });
+    asserts.assert(silent.ok && silent.auth?.via === 'HMAC');
+    asserts.assertStrictEquals(silent.respond, undefined);
   });
 
   it('honours a custom response template, header names, and algorithm', async () => {
@@ -341,6 +366,44 @@ describe('createPactMiddleware — encryption', () => {
     );
   });
 
+  it('encrypts the response only for callers who can read one: a JWE sender, an Accept, or required', async () => {
+    const lax = createPactMiddleware(pact, { encryption: {} });
+    const accepting = await lax.authenticate(
+      req({ authorization: 'ApiKey k1:s1', accept: 'application/jose' }),
+    );
+    asserts.assert(accepting.ok && accepting.respond !== undefined);
+    const patch = await accepting.respond({ status: 200, body: 'x' });
+    asserts.assertStrictEquals(
+      patch.headers['content-type'],
+      'application/jose',
+    );
+    const strict = createPactMiddleware(pact, {
+      encryption: { required: true },
+    });
+    const bodiless = await strict.authenticate(
+      req({ authorization: 'ApiKey k1:s1' }),
+    );
+    asserts.assert(bodiless.ok && bodiless.respond !== undefined);
+    asserts.assertStrictEquals(
+      (await bodiless.respond({ status: 200, body: 'x' }))
+        .headers['content-type'],
+      'application/jose',
+    );
+    // A JOSE body with parameters on the content type still counts.
+    const jwe = await encryptJwe('s1', 'k1', 'p', 'A256GCM');
+    const parametrised = await lax.authenticate(
+      req(
+        {
+          authorization: 'ApiKey k1:s1',
+          'content-type': 'Application/JOSE; charset=utf-8',
+        },
+        { body: () => Promise.resolve(jwe) },
+      ),
+    );
+    asserts.assert(parametrised.ok && parametrised.body !== undefined);
+    asserts.assert(parametrised.respond !== undefined);
+  });
+
   it('rejects a bad JWE with 400 and a plaintext body only when required', async () => {
     const lax = createPactMiddleware(pact, { encryption: {} });
     const plain = await lax.authenticate(
@@ -350,9 +413,38 @@ describe('createPactMiddleware — encryption', () => {
       ),
     );
     asserts.assert(plain.ok && plain.body === undefined);
+    asserts.assertStrictEquals(plain.respond, undefined);
     const strict = createPactMiddleware(pact, {
       encryption: { required: true },
     });
+    // The adapter cannot see the body (a parser consumed it): the framing
+    // headers still prove a plaintext body arrived.
+    const unseen = await strict.authenticate(
+      req(
+        {
+          authorization: 'ApiKey k1:s1',
+          'content-type': 'application/json',
+          'content-length': '12',
+        },
+        { body: () => Promise.resolve(null) },
+      ),
+    );
+    asserts.assert(!unseen.ok);
+    asserts.assertEquals(unseen.denial.body, { error: 'ENCRYPTION_INVALID' });
+    const unseenJose = await strict.authenticate(
+      req(
+        {
+          authorization: 'ApiKey k1:s1',
+          'content-type': 'application/jose',
+          'transfer-encoding': 'chunked',
+        },
+        { body: () => Promise.resolve(null) },
+      ),
+    );
+    asserts.assert(
+      !unseenJose.ok,
+      'a JOSE body the adapter cannot read is a 400',
+    );
     const refused = await strict.authenticate(
       req(
         { authorization: 'ApiKey k1:s1', 'content-type': 'application/json' },

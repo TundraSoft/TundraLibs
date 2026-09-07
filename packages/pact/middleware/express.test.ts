@@ -150,11 +150,18 @@ describe('expressPact().authenticate', () => {
   });
 
   it('should verify a signed request from rawBody and sign what res.json sends', async () => {
-    const m = run(await signedHeaders('POST', '/x?q=1', '{"n":1}'), {
-      method: 'POST',
-      rawBody: new TextEncoder().encode('{"n":1}'),
-      body: { n: 1 },
-    });
+    // Mounted under /api: url and path are mount-relative, originalUrl is
+    // what the client signed — with a second ? inside the query.
+    const m = run(
+      await signedHeaders('POST', '/api/x?next=/y?z=1', '{"n":1}'),
+      {
+        method: 'POST',
+        url: '/x?next=/y?z=1',
+        originalUrl: '/api/x?next=/y?z=1',
+        rawBody: new TextEncoder().encode('{"n":1}'),
+        body: { n: 1 },
+      },
+    );
     await expressPact(pact, { hmac: {} }).authenticate(m.req, m.res, m.next);
     asserts.assertStrictEquals(m.nextCalls(), 1);
     asserts.assertStrictEquals(m.req.pact?.via, 'HMAC');
@@ -174,6 +181,29 @@ describe('expressPact().authenticate', () => {
         's1',
       ),
     );
+  });
+
+  it('should leave res.json alone for a plain API-key caller and bail once headers were sent', async () => {
+    const plain = run({ authorization: 'ApiKey k1:s1' });
+    const before = plain.res.json;
+    await expressPact(pact, { hmac: {}, encryption: {} }).authenticate(
+      plain.req,
+      plain.res,
+      plain.next,
+    );
+    asserts.assertStrictEquals(plain.res.json, before);
+
+    const late = run(await signedHeaders('GET', '/x?q=1', null));
+    await expressPact(pact, { hmac: {} }).authenticate(
+      late.req,
+      late.res,
+      late.next,
+    );
+    late.res.headersSent = true;
+    late.res.json!({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    asserts.assertStrictEquals(late.sent.body, undefined);
+    asserts.assertStrictEquals(late.nextError(), undefined);
   });
 
   it('should decrypt a JWE body into pactBody and encrypt what res.json sends', async () => {

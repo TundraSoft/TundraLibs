@@ -9,6 +9,8 @@ import { describe, it } from '@tundralibs/compat/test';
 import {
   extractCredential,
   failureResponse,
+  isFreshTimestamp,
+  queryOf,
   resolveOptions,
 } from './shared.ts';
 import { contentDigest } from './template.ts';
@@ -231,11 +233,17 @@ describe('resolveOptions', () => {
       resolveOptions({ bearer: { header: 'X-Token' } }).bearer.header,
       'x-token',
     );
+    // An empty prefix on its own header is fine; on a shared one it shadows.
+    resolveOptions({ bearer: { header: 'x-token', prefix: '' } });
+    resolveOptions({ schemes: ['BEARER'], bearer: { prefix: '' } });
     for (
       const [options, reason] of [
         [{ bearer: { header: 'bad header' } }, 'bearer.header'],
-        [{ hmac: { maxSkew: 0 } }, 'hmac.maxSkew'],
+        [{ hmac: { maxSkew: 0 } }, "'hmac.maxSkew': 0 is not a positive"],
         [{ hmac: { template: '${@path}' } }, 'hmac.template'],
+        [{ bearer: { prefix: 'Bearer ' } }, "'Bearer ' contains whitespace"],
+        [{ bearer: { prefix: '' } }, 'would shadow the BASIC carrier'],
+        [{ apiKey: { prefix: '' } }, 'would shadow the BEARER carrier'],
       ] as const
     ) {
       const error = asserts.assertThrows(
@@ -245,6 +253,30 @@ describe('resolveOptions', () => {
       asserts.assertStrictEquals(error.code, 'INVALID_OPTION');
       asserts.assertStringIncludes(error.message, reason);
     }
+  });
+});
+
+describe('queryOf and isFreshTimestamp', () => {
+  it('should read a bare ? as no query, like URL.search, and prefix a missing ?', () => {
+    const q = (query?: string) =>
+      queryOf({ method: 'GET', path: '/', header: () => null, query });
+    asserts.assertStrictEquals(q(undefined), '');
+    asserts.assertStrictEquals(q(''), '');
+    asserts.assertStrictEquals(q('?'), '');
+    asserts.assertStrictEquals(q('a=1'), '?a=1');
+    asserts.assertStrictEquals(q('?a=1&b=?'), '?a=1&b=?');
+  });
+
+  it('should accept only integer seconds inside the window', () => {
+    const now = Math.floor(Date.now() / 1000);
+    asserts.assert(isFreshTimestamp(String(now - 30), 60));
+    asserts.assertFalse(isFreshTimestamp(String(now - 61), 60));
+    asserts.assertFalse(
+      isFreshTimestamp(String(Date.now()), 60),
+      'milliseconds',
+    );
+    asserts.assertFalse(isFreshTimestamp('-1', 60));
+    asserts.assertFalse(isFreshTimestamp(null, 60));
   });
 });
 

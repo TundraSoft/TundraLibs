@@ -1359,7 +1359,7 @@ export class Pact<B extends PermissionBits, M extends string>
   }
 
   /**
-   * Sign `content` with an API KEY's secret — the secret never leaves pact.
+   * Sign `content` with an API key's secret — the secret never leaves pact.
    * The server-side half of a signed exchange: the caller signed its
    * request with this key (HMAC scheme); the response is signed back with
    * the same one. The key must exist and be active, with an active owner.

@@ -20,7 +20,7 @@ export type PactMiddlewareOptions = {
   /**
    * Credential schemes the middleware accepts. A presented credential
    * of a scheme not listed here is treated as absent. Scheme names refer
-   * to the CARRIER: `'BASIC'` with `basic.credential: 'apiKey'` still
+   * to the carrier: `'BASIC'` with `basic.credential: 'apiKey'` still
    * authenticates as an API key.
    *
    * @default ['BEARER', 'BASIC', 'APIKEY'] (plus 'HMAC' when `hmac` is set)
@@ -48,7 +48,11 @@ export type PactMiddlewareOptions = {
   readonly bearer?: {
     /** @default 'authorization' */
     readonly header?: string;
-    /** Case-insensitive; `''` reads the whole header as the token. @default 'Bearer' */
+    /**
+     * Case-insensitive, no whitespace; `''` reads the whole header as the
+     * token (then the header must not be shared with another carrier).
+     * @default 'Bearer'
+     */
     readonly prefix?: string;
   };
   /** Basic carrier (RFC 7617): `<header>: <prefix> base64(id:secret)`. */
@@ -88,7 +92,7 @@ export type PactMiddlewareOptions = {
    * the rendered `response` template with the same key.
    *
    * Templates use frozen RFC 9421 component names inside `${…}` — see
-   * `Pact-Middleware.md`. The HEADER NAMES below are what the wire
+   * `Pact-Middleware.md`. The header names below are what the wire
    * carries; the template keys never change.
    */
   readonly hmac?: {
@@ -127,9 +131,10 @@ export type PactMiddlewareOptions = {
   /**
    * Payload encryption for key-authenticated requests (API key, HMAC):
    * a request body sent as `application/jose` is a compact JWE for the
-   * key, opened with its secret and handed to the handler decrypted; the
-   * response body is encrypted back the same way. Session (Bearer)
-   * requests are untouched — they hold no shared secret.
+   * key, opened with its secret and handed to the handler decrypted. The
+   * response body is encrypted back for a caller who sent a JWE, sends
+   * `Accept: application/jose`, or when `required` is on. Session
+   * (Bearer) requests are untouched — they hold no shared secret.
    */
   readonly encryption?: {
     /** The one content encryption accepted and produced. @default 'A256GCM' */

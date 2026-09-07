@@ -65,14 +65,27 @@ function send(ctx: PactOakContext, denial: PactMiddlewareDenial): void {
   }
 }
 
-/** The response body as oak will send it, or `undefined` for a stream. */
+/**
+ * The bytes oak will send for a response body, following oak's own
+ * dispatch: strings and byte views as-is, primitives and
+ * `URLSearchParams` stringified, plain objects as JSON — and `undefined`
+ * for anything oak streams (functions, streams, blobs, forms, files,
+ * async iterables), which is sent unsealed.
+ */
 function finished(body: unknown): Uint8Array | string | null | undefined {
   if (body === undefined || body === null) return null;
   if (typeof body === 'string' || body instanceof Uint8Array) return body;
+  if (typeof body === 'function') return undefined;
+  if (typeof body !== 'object') return String(body);
+  if (ArrayBuffer.isView(body)) {
+    return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+  }
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (body instanceof URLSearchParams) return body.toString();
   if (
-    typeof body === 'function' || body instanceof ReadableStream ||
-    body instanceof Blob || body instanceof FormData ||
-    Symbol.asyncIterator in (body as object)
+    body instanceof ReadableStream || body instanceof Blob ||
+    body instanceof FormData || Symbol.asyncIterator in body ||
+    'readable' in body
   ) return undefined;
   return JSON.stringify(body);
 }
@@ -82,7 +95,8 @@ async function seal(
   ctx: PactOakContext,
   respond: PactMiddlewareResponder,
 ): Promise<void> {
-  const sent = finished(ctx.response.body);
+  const original = ctx.response.body;
+  const sent = finished(original);
   if (sent === undefined) return;
   const patch = await respond({ status: ctx.response.status, body: sent });
   const setType = (value: string): void => {
@@ -92,11 +106,15 @@ async function seal(
   if (patch.body !== undefined) {
     ctx.response.body = patch.body;
   } else if (
-    typeof ctx.response.body !== 'string' && typeof sent === 'string'
+    typeof sent === 'string' && typeof original === 'object' &&
+    original !== null && !(original instanceof URLSearchParams)
   ) {
-    // Serialized here so the signed bytes are the sent bytes.
+    // A plain object: serialized here so the signed bytes are the sent
+    // bytes (oak's own JSON step, minus any app-level replacer).
     ctx.response.body = sent;
-    setType('application/json; charset=UTF-8');
+    if (ctx.response.type === undefined) {
+      setType('application/json; charset=UTF-8');
+    }
   }
   for (const [name, value] of Object.entries(patch.headers)) {
     if (name === 'content-type') setType(value);
@@ -111,8 +129,8 @@ async function seal(
  * `optional`, 401 on an invalid one always, non-pact errors rethrown to
  * oak); `authorize(module, permission)` — typed by the instance — asserts
  * on the attached bound principal (401 unauthenticated, 403 denied).
- * With `hmac` or `encryption` on, `authenticate` also signs/encrypts the
- * finished response after `next()` (streamed bodies are sent as-is).
+ * When a response must be signed or encrypted, `authenticate` seals it
+ * after `next()` (streamed bodies are sent as-is).
  *
  * @example
  * ```ts ignore
@@ -122,6 +140,10 @@ async function seal(
  *   ctx.response.body = { user: ctx.state.pact.principal.id };
  * });
  * ```
+ *
+ * @throws {PactError} INVALID_OPTION for a malformed option at build;
+ *   UNKNOWN_MODULE / PERMISSION_NOT_IN_MODULE from `authorize()` at the
+ *   call site.
  */
 export function oakPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,

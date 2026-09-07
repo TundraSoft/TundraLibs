@@ -112,8 +112,9 @@ describe('fastifyPact().authenticate', () => {
 
   it('should verify a signed request from rawBody and sign the payload in onSend', async () => {
     const hooks = fastifyPact(pact, { hmac: {} });
-    const m = run(await signedHeaders('PUT', '/x?q=1', '{"n":1}'), {
+    const m = run(await signedHeaders('PUT', '/x?next=/y?z=1', '{"n":1}'), {
       method: 'PUT',
+      url: '/x?next=/y?z=1',
       rawBody: '{"n":1}',
       body: { n: 1 },
     });

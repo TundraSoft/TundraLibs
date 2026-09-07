@@ -6,7 +6,7 @@
  */
 
 /**
- * The status and the body AS IT WILL BE SENT — the signature covers
+ * The status and the body as it will be sent — the signature covers
  * these bytes. A streamed body cannot be signed or encrypted; adapters
  * skip `respond()` for streams.
  */

@@ -53,32 +53,59 @@ describe('compileTemplate', () => {
 
   it('should reject unknown, uppercase, misplaced, and missing keys at boot', () => {
     rejects(
-      '${@method}${@path}${x-timestamp}',
+      '${@method} ${@path} ${x-timestamp}',
       'request',
       "'${content-digest}'",
     );
-    rejects('${@status}${content-digest}', 'response', "'${x-timestamp}'");
+    rejects('${@status} ${content-digest}', 'response', "'${x-timestamp}'");
     rejects(
-      '${@status}${@method}${@path}${x-timestamp}${content-digest}',
+      '${@status} ${@method} ${@path} ${x-timestamp} ${content-digest}',
       'request',
       "unknown template key '${@status}'",
     );
     rejects(
-      '${@status}${x-timestamp}${content-digest}${x-tenant}',
+      '${@status} ${x-timestamp} ${content-digest} ${x-tenant}',
       'response',
       "unknown template key '${x-tenant}'",
     );
     rejects(
-      '${@METHOD}${@path}${x-timestamp}${content-digest}',
+      '${@METHOD} ${@path} ${x-timestamp} ${content-digest}',
       'request',
       'lowercase',
     );
     rejects('plain text', 'request', 'names no component');
     rejects(
-      '${@method}${@path}${x-timestamp}${content digest}',
+      '${@method} ${@path} ${x-timestamp} ${content digest}',
       'request',
       'invalid',
     );
+    rejects(
+      '${@method} ${@path} ${x-timestamp} ${content-digest',
+      'request',
+      'unterminated',
+    );
+  });
+
+  it('should reject two keys with nothing between them, except the unambiguous pairs', () => {
+    rejects(
+      '${@method}\n${@path}${x-tenant}\n${x-timestamp}\n${content-digest}',
+      'request',
+      "keys '${@path}' and '${x-tenant}' need a separator",
+    );
+    rejects(
+      '${@status}${x-timestamp}\n${content-digest}',
+      'response',
+      'need a separator',
+    );
+    for (
+      const ok of [
+        '${@method}\n${@path}${@query}\n${x-timestamp}\n${content-digest}',
+        '${@method}\n${@scheme}://${@authority}${@path}\n${x-timestamp}\n${content-digest}',
+        '${@method}\n${@authority}${@request-target}\n${@path}\n${x-timestamp}\n${content-digest}',
+      ]
+    ) {
+      compileTemplate(ok, 'request');
+    }
   });
 });
 

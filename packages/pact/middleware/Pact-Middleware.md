@@ -42,7 +42,7 @@ adapters are structural: pact depends on none of the frameworks.
 | Payload       | With `encryption` on, a key-authenticated `application/jose` body is decrypted for the handler (400 `ENCRYPTION_INVALID` when it cannot be)                      |
 | Guard         | `authorize(module, permission)` asserts on the attached bound principal — 403 `PERMISSION_DENIED` on refusal, 401 when unauthenticated                           |
 | Typing        | `authorize` takes the instance's own module names and permission keys; the catalog is checked when the guard is built, so a typo fails at boot                   |
-| Respond       | After the handler, an HMAC caller's response is signed and an encrypted exchange's response is encrypted — same key, same template rules; streams go out as-is   |
+| Respond       | After the handler, an HMAC caller's response is signed and a JWE-capable caller's response is encrypted — same key, same template rules; nothing else is touched |
 | Other errors  | Handed to the framework (express `next(error)`; the rest rethrow)                                                                                                |
 
 The attached principal is a bound principal: route handlers can call
@@ -106,14 +106,20 @@ app.use('/shop', shop.authenticate);
 ```
 
 The context attaches as `req.pact`. Non-pact errors go to `next(error)`
-and your express error handler. For the body-bound features (HMAC body
-digest, encryption) the adapter reads `req.rawBody` when your parser kept
-it — `express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } })`
-— else `req.body` when it is a string or buffer (`express.text()`,
+and your express error handler. The signed path and query come from
+`req.originalUrl`, so mounting under a prefix is fine. For the body-bound
+features (HMAC body digest, encryption) the adapter reads `req.rawBody`
+when your parser kept it —
+`express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } })` —
+else `req.body` when it is a string or buffer (`express.text()`,
 `express.raw({ type: 'application/jose' })`). A decrypted payload lands on
-`req.pactBody`; with signing or encryption on, `res.json(...)` is wrapped so
-the JSON it sends (plain `JSON.stringify`) is signed/encrypted — other send
-paths go out as-is.
+`req.pactBody`. When a response must be signed or encrypted, `res.json(...)`
+is wrapped so the JSON it sends (plain `JSON.stringify` — `json spaces` and
+`json replacer` do not apply) is sealed; other send paths go out as-is, and
+`res.json` returns before the bytes are written. Express appends
+`; charset=utf-8` to the `application/jose` type and answers conditional
+GETs with a bodyless 304 whose signature cannot verify — set
+`app.set('etag', false)` or `Cache-Control: no-store` on signed routes.
 
 ## fastify
 
@@ -161,9 +167,12 @@ router.get(
 The context attaches as `ctx.state.pact`. When a body-bound feature needs
 the request body the adapter consumes oak's stream and sets
 `ctx.state.pactBody` — the decrypted payload, or the raw bytes — so read
-it from there on such routes. After `next()` a JSON body is serialized by
-the adapter (so the signed bytes are the sent bytes); streams, blobs, and
-async iterables are sent unsigned. The
+it from there on such routes. After `next()`, strings, byte views,
+primitives, and `URLSearchParams` are signed as oak sends them; a plain
+object is serialized by the adapter (plain `JSON.stringify`, without an
+app-level `jsonBodyReplacer`) so the signed bytes are the sent bytes, and
+its type is set only when the handler set none; streams, blobs, forms,
+files, and async iterables are sent unsigned. The
 [oauth-signin example](../examples/oauth-signin/README.md) runs this
 adapter over live HTTP.
 
@@ -186,8 +195,11 @@ app.get('/projects', authorize('Projects', 'READ'), (c) => {
 
 The context attaches via `c.set('pact', ...)`, a decrypted payload via
 `c.set('pactBody', ...)`; hono caches the request body, so handlers can
-still read it. After `next()` the adapter replaces `c.res` with the
-signed/encrypted response (`text/event-stream` responses are left alone).
+still read it. The signed path is the URL's encoded pathname, not hono's
+decoded `c.req.path`. When a response must be signed or encrypted the
+adapter reads the whole body and replaces `c.res` — a `Response` body is
+always a stream, so only `text/event-stream` is exempt: do not stream
+large or long-lived bodies to HMAC or JWE callers on hono.
 Hono runs on Workers, where pact's fetch-based surface (JWT sessions,
 external caches over HTTP drivers) is the natural fit.
 
@@ -210,8 +222,12 @@ verifies that with the secret it holds. Response signing is on by default
 Templates name RFC 9421 components inside `${…}`; anything between them is
 literal separator text. Keys are frozen — renaming a header does not rename
 its key — and the template is compiled at boot: an unknown key, a
-non-lowercase key, a response-only key in a request template, or a missing
-mandatory key throws `INVALID_OPTION`.
+non-lowercase key, a response-only key in a request template, a missing
+mandatory key, or two keys with nothing between them throws
+`INVALID_OPTION`. The separator rule keeps the signed string unambiguous
+(`${@path}${x-tenant}` would let `/a` + `foo` collide with `/afoo`); the
+pairs whose boundary is self-evident — `${@path}${@query}`,
+`${@authority}${@path}`, `${@authority}${@request-target}` — are allowed.
 
 | Key                  | Request   | Response  | Value                                                                         |
 | -------------------- | --------- | --------- | ----------------------------------------------------------------------------- |
@@ -254,8 +270,8 @@ async function signedFetch(
   const digest = `sha-256=:${
     encodeBase64(await crypto.subtle.digest('SHA-256', bytes))
   }:`;
-  const payload =
-    `${init.method}\n${pathname}${search}\n${timestamp}\n${digest}`;
+  const method = init.method.toUpperCase();
+  const payload = `${method}\n${pathname}${search}\n${timestamp}\n${digest}`;
   return await fetch(url, {
     ...init,
     headers: {
@@ -268,7 +284,9 @@ async function signedFetch(
 ```
 
 `algorithm` (`SHA-256` default, `SHA-384`, `SHA-512`) is fixed per
-deployment and never read off the request. A custom template can add
+deployment and never read off the request. The default response template
+does not include the nonce: add `${x-nonce}` to `response` when a client
+must bind each reply to the request it sent. A custom template can add
 `${@authority}` (pins the host), `${x-nonce}`, or a tenant header:
 
 ```ts ignore
@@ -300,8 +318,14 @@ the second segment (encrypted key) is empty under `dir`. The server accepts
 only the configured `enc` (`A256GCM` default, or `A128GCM`) and only a
 `kid` equal to the authenticated key id — anything else, a bad tag
 included, is a 400 `ENCRYPTION_INVALID`. `required: true` also rejects a
-plaintext body from such a caller. Combined with HMAC, `${content-digest}`
-covers the JWE string as sent, in both directions.
+plaintext body from such a caller (judged by the framing headers when a
+body parser consumed the stream before the adapter). The response is
+encrypted for a caller who showed it can read one — it sent a JWE, sent
+`Accept: application/jose`, or `required` is on; a plaintext API-key call
+gets a plaintext reply. Combined with HMAC, `${content-digest}` covers the
+JWE string as sent, in both directions. One AES-GCM key serves a key id for
+its lifetime (random 96-bit IVs), so rotate API keys well inside the
+2^32-message bound.
 
 Clients encrypt with the same derivation — `hkdf(secret, { salt: keyId,
 info: 'pact-jwe-A256GCM', length: 32 })` from `@tundralibs/crypt/generators`
@@ -363,9 +387,14 @@ async function myGuard(req: MyRequest, res: MyResponse, pass: () => void) {
 }
 ```
 
+`respond()` throws `PactError` (`INVALID_CREDENTIALS` / `NOT_ACTIVE`) when
+the key was revoked between the request and the response — let the
+framework's error path take it; the handler has already run.
+
 The lower-level pieces remain exported: `resolveOptions` fills the
 defaults and compiles the templates; `extractCredential` (async — the
-body digest) turns a request view into a `PactCredential`;
+body digest) turns a request view into a `PactCredential` without applying
+the timestamp window — pair it with `isFreshTimestamp(value, maxSkew)`;
 `compileTemplate`/`contentDigest` are the template engine;
 `failureResponse` is the complete PactError → status mapping (401 for the
 auth-failure codes, 403 `PERMISSION_DENIED`, 409 `USER_EXISTS`, 400

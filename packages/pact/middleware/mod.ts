@@ -12,8 +12,8 @@ export {
   DEFAULT_SCHEMES,
   extractCredential,
   failureResponse,
+  isFreshTimestamp,
   NO_CREDENTIALS,
-  type PactMiddlewareConfig,
   resolveOptions,
 } from './shared.ts';
 export {
@@ -21,7 +21,6 @@ export {
   contentDigest,
   REQUEST_TEMPLATE,
   RESPONSE_TEMPLATE,
-  type SignatureTemplate,
 } from './template.ts';
 export {
   expressPact,
@@ -43,6 +42,7 @@ export {
   type PactHonoMiddleware,
 } from './hono.ts';
 export type {
+  PactMiddlewareConfig,
   PactMiddlewareCore,
   PactMiddlewareDenial,
   PactMiddlewareOptions,
@@ -51,4 +51,5 @@ export type {
   PactMiddlewareResponse,
   PactMiddlewareResponsePatch,
   PactMiddlewareVerdict,
+  SignatureTemplate,
 } from './types/mod.ts';
