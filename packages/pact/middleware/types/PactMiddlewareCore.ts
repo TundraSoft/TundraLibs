@@ -19,7 +19,10 @@ export type PactMiddlewareCore<
   /**
    * Extract the credential from `req` and authenticate it. Absent →
    * `{ ok: true, auth: undefined }` when `optional`, else a 401 denial;
-   * present but invalid → a 401 denial, never `auth: undefined`.
+   * present but invalid → a 401 denial, never `auth: undefined`. For a
+   * key-bound caller with `hmac`/`encryption` on, the ok verdict carries
+   * the decrypted `body` and a `respond()` to run on the finished
+   * response.
    */
   authenticate(
     req: PactMiddlewareRequest,

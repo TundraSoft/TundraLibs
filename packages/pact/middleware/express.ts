@@ -22,16 +22,31 @@ export type PactExpressRequest<
   url: string;
   /** Express provides `path` (no query string); plain Connect may not. */
   path?: string;
+  /** `http` or `https`; express's `req.protocol`. */
+  protocol?: string;
   headers: Record<string, string | string[] | undefined>;
+  /**
+   * The raw body for digests and decryption: `rawBody` when your body
+   * parser kept it (`express.json({ verify })`), else `body` when it is
+   * a string or bytes (`express.text()`, `express.raw()`).
+   */
+  rawBody?: Uint8Array | string;
+  body?: unknown;
   /** Attached by `authenticate` on successful authentication. */
   pact?: PactAuthContext<M, B>;
+  /** The decrypted request payload, when one arrived encrypted. */
+  pactBody?: Uint8Array;
 };
 
 /** The slice of an express response the middleware writes. */
 export type PactExpressResponse = {
   status: (code: number) => { json: (body: unknown) => unknown };
-  /** Express's `res.setHeader`; the challenge lands here when present. */
+  /** Express's `res.setHeader`; the challenge and signature land here. */
   setHeader?: (name: string, value: string) => unknown;
+  /** Wrapped by `authenticate` when the response must be signed/encrypted. */
+  json?: (body: unknown) => unknown;
+  send?: (body: unknown) => unknown;
+  statusCode?: number;
 };
 
 /** An express middleware. */
@@ -47,7 +62,12 @@ export type PactExpressMiddleware<
 function headerOf(req: PactExpressRequest, name: string): string | null {
   const value = req.headers[name.toLowerCase()];
   if (value === undefined) return null;
-  return Array.isArray(value) ? value[0] ?? null : value;
+  return Array.isArray(value) ? value.join(', ') : value;
+}
+
+function rawBodyOf(req: PactExpressRequest): Uint8Array | string | null {
+  const raw = req.rawBody ?? req.body;
+  return typeof raw === 'string' || raw instanceof Uint8Array ? raw : null;
 }
 
 function send(res: PactExpressResponse, denial: PactMiddlewareDenial): void {
@@ -64,7 +84,10 @@ function send(res: PactExpressResponse, denial: PactMiddlewareDenial): void {
  * unless `optional`, 401 on an invalid one always, non-pact errors go to
  * `next(error)`); `authorize(module, permission)` — typed by the
  * instance — asserts on the attached bound principal (401
- * unauthenticated, 403 denied).
+ * unauthenticated, 403 denied). With `hmac` or `encryption` on,
+ * `authenticate` wraps `res.json` so the JSON the handler sends is
+ * signed/encrypted (plain `JSON.stringify`; other send paths go out
+ * as-is) and exposes a decrypted request payload as `req.pactBody`.
  *
  * @example
  * ```ts ignore
@@ -90,16 +113,44 @@ export function expressPact<B extends PermissionBits, M extends string>(
     authenticate: async (req, res, next) => {
       let verdict: Awaited<ReturnType<typeof core.authenticate>>;
       try {
+        const [path, query] = req.url.split('?', 2) as [string, string?];
         verdict = await core.authenticate({
           method: req.method,
-          path: req.path ?? req.url.split('?', 2)[0] ?? req.url,
+          path: req.path ?? path,
+          query: query === undefined ? '' : `?${query}`,
+          authority: headerOf(req, 'host') ?? undefined,
+          scheme: req.protocol,
           header: (name) => headerOf(req, name),
+          body: () => Promise.resolve(rawBodyOf(req)),
         });
       } catch (error) {
         return next(error);
       }
       if (!verdict.ok) return send(res, verdict.denial);
       if (verdict.auth !== undefined) req.pact = verdict.auth;
+      if (verdict.body !== undefined) req.pactBody = verdict.body;
+      const respond = verdict.respond;
+      if (respond !== undefined && res.send !== undefined) {
+        const raw = res.send.bind(res);
+        res.json = (body: unknown) => {
+          const text = JSON.stringify(body);
+          respond({ status: res.statusCode ?? 200, body: text }).then(
+            (patch) => {
+              res.setHeader?.(
+                'content-type',
+                patch.headers['content-type'] ??
+                  'application/json; charset=utf-8',
+              );
+              for (const [name, value] of Object.entries(patch.headers)) {
+                res.setHeader?.(name, value);
+              }
+              raw(patch.body ?? text);
+            },
+            next,
+          );
+          return res;
+        };
+      }
       next();
     },
     authorize: (module, permission) => {

@@ -6,6 +6,9 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { expressPact } from './express.ts';
 import type { PactExpressRequest, PactExpressResponse } from './express.ts';
+import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
+import { contentDigest } from './template.ts';
+import { decryptJwe, encryptJwe } from '../jwe.ts';
 import { Pact } from '../mod.ts';
 import { serializeGrants } from '../grants.ts';
 
@@ -29,36 +32,65 @@ const pact = Pact.create({
 
 type Sent = { status?: number; body?: unknown };
 
-function run(headers: Record<string, string | string[]> = {}): {
+function run(
+  headers: Record<string, string | string[]> = {},
+  request: Partial<PactExpressRequest> = {},
+): {
   req: PactExpressRequest;
   res: PactExpressResponse;
   sent: Sent;
+  sentHeaders: Map<string, string>;
   nextCalls: () => number;
   nextError: () => unknown;
   next: (error?: unknown) => void;
 } {
   const sent: Sent = {};
+  const sentHeaders = new Map<string, string>();
   let calls = 0;
   let caught: unknown;
-  return {
-    req: { method: 'GET', url: '/x?q=1', headers },
-    res: {
-      status: (code) => {
-        sent.status = code;
-        return {
-          json: (body) => {
-            sent.body = body;
-          },
-        };
-      },
+  const res: PactExpressResponse = {
+    statusCode: 200,
+    status: (code) => {
+      sent.status = code;
+      res.statusCode = code;
+      return res as { json: (body: unknown) => unknown };
     },
+    json: (body) => {
+      sent.body = body;
+    },
+    send: (body) => {
+      sent.body = body;
+    },
+    setHeader: (name, value) => sentHeaders.set(name, value),
+  };
+  return {
+    req: { method: 'GET', url: '/x?q=1', headers, ...request },
+    res,
     sent,
+    sentHeaders,
     nextCalls: () => calls,
     nextError: () => caught,
     next: (error?: unknown) => {
       calls++;
       if (error !== undefined) caught = error;
     },
+  };
+}
+
+/** Headers for a client-signed request over the default template. */
+async function signedHeaders(
+  method: string,
+  target: string,
+  body: string | null,
+): Promise<Record<string, string>> {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const payload = `${method}\n${target}\n${timestamp}\n${await contentDigest(
+    body,
+  )}`;
+  return {
+    'x-key-id': 'k1',
+    'x-signature': await signHMAC(payload, 's1'),
+    'x-timestamp': timestamp,
   };
 }
 
@@ -110,10 +142,69 @@ describe('expressPact().authenticate', () => {
     asserts.assert(m.nextError() instanceof TypeError);
   });
 
-  it('should read array-valued headers by their first entry', async () => {
+  it('should comma-join array-valued headers, so a duplicated Authorization is invalid', async () => {
     const m = run({ authorization: ['ApiKey k1:s1', 'ApiKey k1:x'] });
     await expressPact(pact).authenticate(m.req, m.res, m.next);
-    asserts.assertStrictEquals(m.req.pact?.principal.id, 'k1');
+    asserts.assertStrictEquals(m.req.pact, undefined);
+    asserts.assertStrictEquals(m.sent.status, 401);
+  });
+
+  it('should verify a signed request from rawBody and sign what res.json sends', async () => {
+    const m = run(await signedHeaders('POST', '/x?q=1', '{"n":1}'), {
+      method: 'POST',
+      rawBody: new TextEncoder().encode('{"n":1}'),
+      body: { n: 1 },
+    });
+    await expressPact(pact, { hmac: {} }).authenticate(m.req, m.res, m.next);
+    asserts.assertStrictEquals(m.nextCalls(), 1);
+    asserts.assertStrictEquals(m.req.pact?.via, 'HMAC');
+    m.res.status(201).json({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    asserts.assertStrictEquals(m.sent.body, '{"ok":true}');
+    asserts.assertStrictEquals(
+      m.sentHeaders.get('content-type'),
+      'application/json; charset=utf-8',
+    );
+    asserts.assert(
+      await verifyHMAC(
+        `201\n${m.sentHeaders.get('x-timestamp')}\n${await contentDigest(
+          '{"ok":true}',
+        )}`,
+        m.sentHeaders.get('x-signature')!,
+        's1',
+      ),
+    );
+  });
+
+  it('should decrypt a JWE body into pactBody and encrypt what res.json sends', async () => {
+    const m = run(
+      { authorization: 'ApiKey k1:s1', 'content-type': 'application/jose' },
+      {
+        method: 'POST',
+        body: await encryptJwe('s1', 'k1', '{"a":1}', 'A256GCM'),
+      },
+    );
+    await expressPact(pact, { encryption: {} }).authenticate(
+      m.req,
+      m.res,
+      m.next,
+    );
+    asserts.assertStrictEquals(
+      new TextDecoder().decode(m.req.pactBody),
+      '{"a":1}',
+    );
+    m.res.json!({ b: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    asserts.assertStrictEquals(
+      m.sentHeaders.get('content-type'),
+      'application/jose',
+    );
+    asserts.assertStrictEquals(
+      new TextDecoder().decode(
+        await decryptJwe('s1', 'k1', m.sent.body as string, ['A256GCM']),
+      ),
+      '{"b":2}',
+    );
   });
 });
 

@@ -172,16 +172,21 @@ router.get('/projects', authenticate, authorize('Projects', 'READ'), () => {
 One factory per framework — `expressPact`, `fastifyPact`, `oakPact`,
 `honoPact` — each returning `{ authenticate, authorize }` over one instance
 and one options bag; `authorize` is typed by the instance's catalog and
-checked at the call site. The neutral core (`createPactMiddleware`) makes an
-adapter for any other stack a few lines. See
-[Middleware](middleware/Pact-Middleware.md).
+checked at the call site. Every carrier (header, scheme prefix) defaults to
+the standard and is configurable; the HMAC scheme verifies a templated,
+timestamped request signature and signs the response back; API-key callers
+can exchange JWE-encrypted payloads. The neutral core
+(`createPactMiddleware`) makes an adapter for any other stack a few lines.
+See [Middleware](middleware/Pact-Middleware.md).
 
 ## Highlights
 
 - **Four credential schemes** through one `authenticate()` — `BASIC`
   (identifier + password), `BEARER` (session token, opaque or JWT), `APIKEY`
   (key id + presented secret), `HMAC` (request signature; the secret never
-  travels). Junk input collapses to a 401, never a crash.
+  travels). Junk input collapses to a 401, never a crash. `signFor` /
+  `encryptFor` / `decryptFor` use a key's secret server-side without
+  exposing it.
 - **Bound principals** — `authenticate` and `principalOf(id)` return a
   principal whose `hasPermission`/`assert` evaluate in memory, re-resolving
   only when stale or after a revocation call. Hand-built objects have no

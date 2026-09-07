@@ -6,6 +6,9 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { honoPact } from './hono.ts';
 import type { PactHonoContext } from './hono.ts';
+import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
+import { contentDigest } from './template.ts';
+import { decryptJwe, encryptJwe } from '../jwe.ts';
 import { Pact } from '../mod.ts';
 import { serializeGrants } from '../grants.ts';
 
@@ -27,7 +30,10 @@ const pact = Pact.create({
   },
 });
 
-function run(headers: Record<string, string> = {}): {
+function run(
+  headers: Record<string, string> = {},
+  request: { method?: string; body?: string; respond?: Response } = {},
+): {
   c: PactHonoContext;
   vars: Map<string, unknown>;
   sent: { status?: number; body?: unknown };
@@ -39,30 +45,52 @@ function run(headers: Record<string, string> = {}): {
   const vars = new Map<string, unknown>();
   const sent: { status?: number; body?: unknown } = {};
   let calls = 0;
-  return {
-    c: {
-      req: {
-        method: 'GET',
-        path: '/x',
-        header: (name) => lower[name.toLowerCase()],
-      },
-      json: (body, status) => {
-        sent.body = body;
-        sent.status = status ?? 200;
-        return new Response(JSON.stringify(body), { status: status ?? 200 });
-      },
-      set: (key, value) => {
-        vars.set(key, value);
-      },
-      get: (key) => vars.get(key),
+  const c: PactHonoContext = {
+    req: {
+      method: request.method ?? 'GET',
+      path: '/x',
+      url: 'https://api.test/x?q=1',
+      header: (name) => lower[name.toLowerCase()],
+      arrayBuffer: () =>
+        Promise.resolve(new TextEncoder().encode(request.body ?? '').buffer),
     },
+    json: (body, status) => {
+      sent.body = body;
+      sent.status = status ?? 200;
+      return new Response(JSON.stringify(body), { status: status ?? 200 });
+    },
+    set: (key, value) => {
+      vars.set(key, value);
+    },
+    get: (key) => vars.get(key),
+  };
+  return {
+    c,
     vars,
     sent,
     nextCalls: () => calls,
     next: () => {
       calls++;
+      if (request.respond !== undefined) c.res = request.respond;
       return Promise.resolve();
     },
+  };
+}
+
+/** Headers for a client-signed request over the default template. */
+async function signedHeaders(
+  method: string,
+  target: string,
+  body: string | null,
+): Promise<Record<string, string>> {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const payload = `${method}\n${target}\n${timestamp}\n${await contentDigest(
+    body,
+  )}`;
+  return {
+    'x-key-id': 'k1',
+    'x-signature': await signHMAC(payload, 's1'),
+    'x-timestamp': timestamp,
   };
 }
 
@@ -98,6 +126,59 @@ describe('honoPact().authenticate', () => {
       status: 401,
       body: { error: 'INVALID_CREDENTIALS' },
     });
+  });
+
+  it('should verify a signed request and replace c.res with a signed one', async () => {
+    const m = run(await signedHeaders('POST', '/x?q=1', '{"n":1}'), {
+      method: 'POST',
+      body: '{"n":1}',
+      respond: new Response('{"ok":true}', {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+    await honoPact(pact, { hmac: {} }).authenticate(m.c, m.next);
+    asserts.assertStrictEquals(m.nextCalls(), 1);
+    const res = m.c.res!;
+    asserts.assertStrictEquals(res.status, 201);
+    asserts.assertStrictEquals(
+      res.headers.get('content-type'),
+      'application/json',
+    );
+    asserts.assertStrictEquals(await res.text(), '{"ok":true}');
+    asserts.assert(
+      await verifyHMAC(
+        `201\n${res.headers.get('x-timestamp')}\n${await contentDigest(
+          '{"ok":true}',
+        )}`,
+        res.headers.get('x-signature')!,
+        's1',
+      ),
+    );
+  });
+
+  it('should decrypt a JWE request into pactBody and encrypt the response', async () => {
+    const jwe = await encryptJwe('s1', 'k1', 'hello', 'A256GCM');
+    const m = run(
+      { authorization: 'ApiKey k1:s1', 'content-type': 'application/jose' },
+      { method: 'POST', body: jwe, respond: new Response('reply') },
+    );
+    await honoPact(pact, { encryption: {} }).authenticate(m.c, m.next);
+    asserts.assertStrictEquals(
+      new TextDecoder().decode(m.vars.get('pactBody') as Uint8Array),
+      'hello',
+    );
+    const res = m.c.res!;
+    asserts.assertStrictEquals(
+      res.headers.get('content-type'),
+      'application/jose',
+    );
+    asserts.assertStrictEquals(
+      new TextDecoder().decode(
+        await decryptJwe('s1', 'k1', await res.text(), ['A256GCM']),
+      ),
+      'reply',
+    );
   });
 
   it('should rethrow non-pact errors to hono', async () => {

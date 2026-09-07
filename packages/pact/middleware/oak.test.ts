@@ -6,6 +6,9 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { oakPact } from './oak.ts';
 import type { PactOakContext } from './oak.ts';
+import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
+import { contentDigest } from './template.ts';
+import { decryptJwe, encryptJwe } from '../jwe.ts';
 import { Pact } from '../mod.ts';
 import { serializeGrants } from '../grants.ts';
 
@@ -27,29 +30,66 @@ const pact = Pact.create({
   },
 });
 
-function run(headers: Record<string, string> = {}): {
+function run(
+  headers: Record<string, string> = {},
+  request: { method?: string; body?: string; respond?: unknown } = {},
+): {
   ctx: PactOakContext;
+  sentHeaders: Map<string, string>;
   nextCalls: () => number;
   next: () => Promise<unknown>;
 } {
   const lower: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers)) lower[k.toLowerCase()] = v;
+  const sentHeaders = new Map<string, string>();
   let calls = 0;
-  return {
-    ctx: {
-      request: {
-        method: 'GET',
-        url: { pathname: '/x' },
-        headers: { get: (name) => lower[name.toLowerCase()] ?? null },
+  const ctx: PactOakContext = {
+    request: {
+      method: request.method ?? 'GET',
+      url: { pathname: '/x', search: '', host: 'api.test', protocol: 'https:' },
+      headers: { get: (name) => lower[name.toLowerCase()] ?? null },
+      body: request.body === undefined ? undefined : {
+        has: true,
+        arrayBuffer: () =>
+          Promise.resolve(new TextEncoder().encode(request.body).buffer),
       },
-      response: { status: 404, body: undefined },
-      state: {},
     },
+    response: {
+      status: 404,
+      body: undefined,
+      headers: { set: (name, value) => sentHeaders.set(name, value) },
+    },
+    state: {},
+  };
+  return {
+    ctx,
+    sentHeaders,
     nextCalls: () => calls,
     next: () => {
       calls++;
+      if (request.respond !== undefined) {
+        ctx.response.status = 200;
+        ctx.response.body = request.respond;
+      }
       return Promise.resolve();
     },
+  };
+}
+
+/** Headers for a client-signed request over the default template. */
+async function signedHeaders(
+  method: string,
+  target: string,
+  body: string | null,
+): Promise<Record<string, string>> {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const payload = `${method}\n${target}\n${timestamp}\n${await contentDigest(
+    body,
+  )}`;
+  return {
+    'x-key-id': 'k1',
+    'x-signature': await signHMAC(payload, 's1'),
+    'x-timestamp': timestamp,
   };
 }
 
@@ -82,15 +122,71 @@ describe('oakPact().authenticate', () => {
     asserts.assertEquals(m.ctx.response.body, { error: 'INVALID_CREDENTIALS' });
   });
 
-  it('should extract HMAC credentials under a canonical contract', async () => {
-    // Wrong signature still proves the extraction path end to end: the
-    // request reaches authenticate and fails there, not at extraction.
-    const m = run({ 'x-key-id': 'k1', 'x-signature': 'ab12' });
-    await oakPact(pact, {
-      hmac: { canonical: (req) => `${req.method} ${req.path}` },
-    }).authenticate(m.ctx, m.next);
-    asserts.assertStrictEquals(m.ctx.response.status, 401);
-    asserts.assertEquals(m.ctx.response.body, { error: 'INVALID_CREDENTIALS' });
+  it('should verify a signed request, expose the consumed body, and sign the serialized response', async () => {
+    const m = run(await signedHeaders('POST', '/x', '{"n":1}'), {
+      method: 'POST',
+      body: '{"n":1}',
+      respond: { ok: true },
+    });
+    await oakPact(pact, { hmac: {} }).authenticate(m.ctx, m.next);
+    asserts.assertStrictEquals(m.nextCalls(), 1);
+    asserts.assertStrictEquals(m.ctx.state.pact?.via, 'HMAC');
+    asserts.assertEquals(
+      m.ctx.state.pactBody,
+      new TextEncoder().encode('{"n":1}'),
+    );
+    // Serialized by the adapter so the signed bytes are the sent bytes.
+    asserts.assertStrictEquals(m.ctx.response.body, '{"ok":true}');
+    asserts.assertStrictEquals(
+      m.ctx.response.type,
+      'application/json; charset=UTF-8',
+    );
+    const ts = m.sentHeaders.get('x-timestamp')!;
+    asserts.assert(
+      await verifyHMAC(
+        `200\n${ts}\n${await contentDigest('{"ok":true}')}`,
+        m.sentHeaders.get('x-signature')!,
+        's1',
+      ),
+    );
+    // A stale signature is refused before the handler runs.
+    const stale = run({
+      ...await signedHeaders('GET', '/x', null),
+      'x-timestamp': '1',
+    });
+    await oakPact(pact, { hmac: {} }).authenticate(stale.ctx, stale.next);
+    asserts.assertStrictEquals(stale.nextCalls(), 0);
+    asserts.assertEquals(stale.ctx.response.body, { error: 'STALE_TIMESTAMP' });
+  });
+
+  it('should decrypt a JWE request into state and encrypt the response', async () => {
+    const jwe = await encryptJwe('s1', 'k1', '{"pin":"0000"}', 'A256GCM');
+    const m = run(
+      { authorization: 'ApiKey k1:s1', 'content-type': 'application/jose' },
+      { method: 'POST', body: jwe, respond: 'plain reply' },
+    );
+    await oakPact(pact, { encryption: {} }).authenticate(m.ctx, m.next);
+    asserts.assertStrictEquals(
+      new TextDecoder().decode(m.ctx.state.pactBody),
+      '{"pin":"0000"}',
+    );
+    asserts.assertStrictEquals(m.ctx.response.type, 'application/jose');
+    asserts.assertStrictEquals(
+      new TextDecoder().decode(
+        await decryptJwe('s1', 'k1', m.ctx.response.body as string, [
+          'A256GCM',
+        ]),
+      ),
+      'plain reply',
+    );
+  });
+
+  it('should leave a streamed response body alone', async () => {
+    const stream = new ReadableStream();
+    const m = run(await signedHeaders('GET', '/x', null), { respond: stream });
+    await oakPact(pact, { hmac: {} }).authenticate(m.ctx, m.next);
+    asserts.assertStrictEquals(m.ctx.response.body, stream);
+    asserts.assertStrictEquals(m.sentHeaders.has('x-signature'), false);
   });
 
   it('should rethrow non-pact errors to oak', async () => {

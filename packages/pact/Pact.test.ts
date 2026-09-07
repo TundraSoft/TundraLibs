@@ -1045,6 +1045,71 @@ describe('Pact content signing', () => {
   });
 });
 
+describe('Pact key-bound seams', () => {
+  const store = makeStore();
+  const pact = Pact.create({ ...BASE, hooks: store.hooks });
+  store.seed('u1', 'ada@example.dev');
+
+  it('should sign, encrypt, and decrypt with an API key the caller never sees', async () => {
+    const { key, secret } = await pact.issueApiKey({
+      userId: 'u1',
+      grants: { Post: 1n },
+    });
+    const signature = await pact.signFor(key, 'GET /x', {
+      algorithm: 'SHA-512',
+    });
+    asserts.assertStrictEquals(
+      signature,
+      await signHMAC('GET /x', secret, { hashAlgorithm: 'SHA-512' }),
+    );
+    const jwe = await pact.encryptFor(key, 'hello', { enc: 'A128GCM' });
+    asserts.assertStringIncludes(jwe, '..');
+    asserts.assertEquals(
+      new TextDecoder().decode(await pact.decryptFor(key, jwe)),
+      'hello',
+    );
+    await expectCode(
+      pact.decryptFor(key, jwe, { enc: ['A256GCM'] }),
+      'ENCRYPTION_INVALID',
+    );
+    // Unknown, revoked-owner, and inactive keys fail loudly.
+    await expectCode(pact.signFor('nope', 'x'), 'INVALID_CREDENTIALS');
+    store.byId.set('u1', { ...store.byId.get('u1')!, status: 'SUSPENDED' });
+    await expectCode(pact.encryptFor(key, 'x'), 'NOT_ACTIVE');
+    store.byId.set('u1', { ...store.byId.get('u1')!, status: 'ACTIVE' });
+    store.keys.set(key, { ...store.keys.get(key)!, status: 'REVOKED' });
+    await expectCode(pact.decryptFor(key, jwe), 'NOT_ACTIVE');
+  });
+
+  it('should verify an HMAC credential under the algorithm it names', async () => {
+    const { key, secret } = await pact.issueApiKey({
+      userId: 'u1',
+      grants: { Post: 1n },
+    });
+    const payload = 'POST /orders';
+    const sha512 = await signHMAC(payload, secret, {
+      hashAlgorithm: 'SHA-512',
+    });
+    const auth = await pact.authenticate({
+      scheme: 'HMAC',
+      keyId: key,
+      signature: sha512,
+      payload,
+      algorithm: 'SHA-512',
+    });
+    asserts.assertStrictEquals(auth.via, 'HMAC');
+    await expectCode(
+      pact.authenticate({
+        scheme: 'HMAC',
+        keyId: key,
+        signature: sha512,
+        payload,
+      }),
+      'INVALID_CREDENTIALS',
+    );
+  });
+});
+
 // =============================================================================
 // Passkeys
 // =============================================================================

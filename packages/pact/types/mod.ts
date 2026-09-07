@@ -36,3 +36,5 @@ export type { PactStoredUser } from './PactStoredUser.ts';
 export type { PactUserQuery } from './PactUserQuery.ts';
 export type { PactVerifiedCredentials } from './PactVerifiedCredentials.ts';
 export type { PermissionBits } from './PermissionBits.ts';
+export type { PactHmacAlgorithm } from './PactHmacAlgorithm.ts';
+export type { PactJweEncryption } from './PactJweEncryption.ts';

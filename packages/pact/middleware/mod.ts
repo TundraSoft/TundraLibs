@@ -13,7 +13,16 @@ export {
   extractCredential,
   failureResponse,
   NO_CREDENTIALS,
+  type PactMiddlewareConfig,
+  resolveOptions,
 } from './shared.ts';
+export {
+  compileTemplate,
+  contentDigest,
+  REQUEST_TEMPLATE,
+  RESPONSE_TEMPLATE,
+  type SignatureTemplate,
+} from './template.ts';
 export {
   expressPact,
   type PactExpressMiddleware,
@@ -23,6 +32,7 @@ export {
 export {
   fastifyPact,
   type PactFastifyHook,
+  type PactFastifyOnSend,
   type PactFastifyReply,
   type PactFastifyRequest,
 } from './fastify.ts';
@@ -37,5 +47,8 @@ export type {
   PactMiddlewareDenial,
   PactMiddlewareOptions,
   PactMiddlewareRequest,
+  PactMiddlewareResponder,
+  PactMiddlewareResponse,
+  PactMiddlewareResponsePatch,
   PactMiddlewareVerdict,
 } from './types/mod.ts';
