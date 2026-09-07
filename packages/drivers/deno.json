@@ -23,7 +23,7 @@
     "./types": "./types/mod.ts"
   },
   "imports": {
-    "$maria": "npm:mariadb@^3.5.3",
+    "$maria": "npm:mariadb@^3.5.4",
     "$mongo": "npm:mongodb@^6.21.0",
     "$sqlite_deno": "jsr:@db/sqlite@^0.13.0"
   }
