@@ -1,5 +1,22 @@
 # DESIGN — Authentication & authorization (pact integration)
 
+> **Revision 2026-09-07 — the adapter was rebuilt for pact 0.7.** The
+> `pact(options)` initializer, the doctor `PACT` label, `inject(PACT)` at
+> factory time, the `TOKEN` scheme and the per-scheme `respond` hook below
+> are HISTORY. The shipped shape is one factory over an instance the app
+> creates at module load: `pactAuth(pact, options) → { authenticate,
+> authorize }` (`middlewares/pact/pactAuth.ts`), the same two-function
+> pattern as pact's own hono/oak adapters, with `authorize` typed by the
+> instance's catalog and checked at the call site. Why a factory and not two
+> free functions: the guard's `WWW-Authenticate` challenge must list what
+> `authenticate` accepts, both must agree on the `ctx.auth` shape, and the
+> typed `(module, permission)` needs the instance's generics. Why no label:
+> a decorator-level `authorize(...)` evaluates at import time, before any
+> `main.ts` could have stocked one. Absent credential → anonymous (or 401
+> with `optional: false`); present-but-invalid → 401, never anonymous.
+> Response signing (HMAC "respond with the signature") is NOT built — it
+> needs a named standard first.
+
 Status: **FROZEN 2026-08-26.** Design complete; implementation next. Records
 how auth works in rAPId, how pact 0.5.0 is integrated, and how norm + pact
 compose. Dev-only design note (publish-excluded).

@@ -38,28 +38,30 @@ export function demoTokenFor(username: string): string | undefined {
 }
 
 /**
- * A `PactLoginLike`-shaped service for `login({ pact: authService })`:
- * check the password, hand back `{ principal, token }` or `null`.
+ * A service shaped like pact 0.7's `login()` for `login({ pact: authService })`:
+ * check the password, hand back `{ principal, session }`, and THROW a
+ * coded error on a bad credential (the endpoint maps pact's auth-failure
+ * codes to one 401).
  */
 export const authService = {
-  login(
-    _strategy: string,
-    credentials: unknown,
-  ): Promise<
-    | { principal: { id: string } & Record<string, unknown>; token?: string }
-    | null
-  > {
-    const { username, password } = (credentials ?? {}) as {
-      username?: string;
-      password?: string;
-    };
-    const user = username ? USERS[username] : undefined;
-    if (user === undefined || user.password !== password) {
-      return Promise.resolve(null);
+  login(credentials: { identifier: string; password: string }): Promise<{
+    principal: { id: string } & Record<string, unknown>;
+    session: { token: string; expiresAt: Date };
+  }> {
+    const user = USERS[credentials.identifier];
+    if (user === undefined || user.password !== credentials.password) {
+      return Promise.reject(
+        Object.assign(new Error('invalid credentials'), {
+          code: 'INVALID_CREDENTIALS',
+        }),
+      );
     }
     return Promise.resolve({
-      principal: { id: user.id, username, roles: user.roles },
-      token: mint(username!, user.id),
+      principal: { id: user.id, username: credentials.identifier, roles: user.roles },
+      session: {
+        token: mint(credentials.identifier, user.id),
+        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
+      },
     });
   },
 };

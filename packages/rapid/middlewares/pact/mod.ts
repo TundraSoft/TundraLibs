@@ -1,23 +1,18 @@
 /**
- * @fileoverview Barrel for the pact auth adapter
- * (`@tundralibs/rapid/middlewares/pact`) — opt-in, deliberately separate
- * from `./middlewares` so importing the core middleware catalog never
- * pulls pact in. See `packages/rapid/DESIGN-Auth.md`.
+ * @fileoverview Barrel for the pact adapter
+ * (`@tundralibs/rapid/middlewares/pact`) — opt-in and deliberately
+ * separate from `./middlewares`, so importing the core middleware catalog
+ * never pulls `@tundralibs/pact` in. One factory, two middlewares: see
+ * {@link pactAuth}.
  *
  * @module
  */
 
-export { authenticate } from './authenticate.ts';
-export { authorize } from './authorize.ts';
+export { pactAuth, type PactAuthMiddlewares } from './pactAuth.ts';
 export {
-  type PactApiKeySchemeOptions,
-  type PactBasicSchemeOptions,
-  type PactBearerSchemeOptions,
-  type PactHmacSchemeOptions,
-  type PactResolvedScheme,
+  type PactAuthContextArg,
+  type PactAuthOptions,
   type PactScheme,
-  type PactSchemeExtractor,
-  type PactSchemeResponder,
-  type PactTokenSchemeOptions,
 } from './credentials.ts';
-export { PACT, pact, type PactMiddlewareOptions } from './pact.ts';
+/** The shape `ctx.auth` holds after `authenticate` — re-exported for handlers. */
+export type { PactAuthContext } from '@tundralibs/pact';

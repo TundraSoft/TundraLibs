@@ -112,15 +112,12 @@ import {
   responseTimer,
   secureHeaders,
 } from '../../middlewares/mod.ts';
-import {
-  authenticate as pactAuthenticate,
-  authorize as pactAuthorize,
-} from '../../middlewares/pact/mod.ts';
 import { health, login, metrics, openapi } from '../../endpoints/mod.ts';
+import type { PactAuthContext } from '../../middlewares/pact/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
 import { authService, type BlogAuth, demoTokenFor, verifyToken } from './auth.ts';
-import { registerPactAuth } from './pactAuth.ts';
+import { issueDemoApiKey, pactAuthenticate, pactAuthorize } from './pactAuth.ts';
 import { BlogSchema } from './models/mod.ts';
 import * as blog from './modules/mod.ts';
 import {
@@ -236,7 +233,7 @@ app.get(
 // Auth: POST /login runs the (stand-in) auth service and returns a token;
 // authenticate() fills ctx.auth from the bearer token, authorize() gates.
 // A real app swaps auth.ts for `@tundralibs/pact` — see login({ pact }).
-app.post('/login', login({ pact: authService }));
+app.post('/login', login({ pact: authService, fields: { identifier: 'username' } }));
 
 // DEMO-ONLY browser sign-in: mint the same token /login would and set it
 // as the `reader` cookie, so the permission-based nav is clickable
@@ -295,23 +292,21 @@ app.get(
 
 // The pact-backed counterpart to /admin/summary above — same job, real
 // @tundralibs/pact via @tundralibs/rapid/middlewares/pact instead of the
-// generic seam. authenticate()/authorize() resolve the Pact instance
-// registerPactAuth() registered via inject(PACT) — see DESIGN-Auth.md.
-const demoApiKey = await registerPactAuth();
+// generic seam: `pactAuth(pact, …)` in pactAuth.ts returned the two
+// middlewares; `pactAuthorize` is typed by the blog's own catalog.
+const demoApiKey = await issueDemoApiKey();
 app.get(
   '/admin/pact-summary',
-  pactAuthenticate(),
+  pactAuthenticate,
   pactAuthorize('Admin', 'READ'),
   async (ctx) => {
     const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
     // grants are BigInt masks — pick the fields that JSON can carry
     // rather than serializing ctx.auth whole.
-    const { id, authMode, keyId } = ctx.auth as {
-      id: string;
-      authMode: string;
-      keyId: string;
+    const { principal, via } = ctx.auth as PactAuthContext;
+    return {
+      content: { posts: count, you: { id: principal.id, kind: principal.kind, via } },
     };
-    return { content: { posts: count, you: { id, authMode, keyId } } };
   },
 );
 
@@ -392,7 +387,7 @@ const _liveDemo = setInterval(async () => {
 }, 8000);
 app.log.info(
   `pact demo key — curl -s localhost:${app.port}/admin/pact-summary ` +
-    `-H "x-api-key: ${demoApiKey.id}" -H "x-api-secret: ${demoApiKey.secret}"`,
+    `-H "x-api-key: ${demoApiKey.key}" -H "x-api-secret: ${demoApiKey.secret}"`,
 );
 app.log.info(
   `blog example listening — the LIVE page: http://localhost:${app.port}/posts/ui ` +

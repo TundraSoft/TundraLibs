@@ -9,10 +9,11 @@ Two layers: a generic, auth-agnostic seam in core, and an opt-in
 
 - **Bring your own auth** — `authenticate({ verify })` + `authorize(check?)`
   from `@tundralibs/rapid/middlewares`. Fills `ctx.auth`; you own identity.
-- **Using pact** — `@tundralibs/rapid/middlewares/pact` instead: `pact(options)`
-  once at boot, then `authenticate(schemes?)` + `authorize(module, permission)`
-  wherever you mount routes. pact is a real dependency of this subpath only —
-  importing `@tundralibs/rapid/middlewares` never pulls it in.
+- **Using pact** — `@tundralibs/rapid/middlewares/pact` instead: one factory
+  over your instance, `const { authenticate, authorize } = pactAuth(pact,
+  options)`; `authorize('Module', 'PERMISSION')` is typed by that instance.
+  pact is a real dependency of this subpath only — importing
+  `@tundralibs/rapid/middlewares` never pulls it in.
 - Both fill the same `ctx.auth` bag, so `authorize()` (the generic one) works
   on either, and one app can use pact on some routes and a custom `verify` on
   others.
@@ -48,144 +49,83 @@ cookie, a query param, or anything else. See the JSDoc on `authenticate`/
 
 ## Using the pact adapter
 
-### 1. Register pact once
+Requires `@tundralibs/pact` (`deno add @tundralibs/pact`). Create the instance
+and the two middlewares once, at module load, in an `auth.ts`:
 
 ```ts
-import { pact } from '@tundralibs/rapid/middlewares/pact';
+import { Pact } from '@tundralibs/pact';
+import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
 
-declare const db: {
-  getUser(id: string): Promise<{ id: string; status: 'ACTIVE' } | null>;
-  getApiKey(
-    id: string,
-  ): Promise<{ id: string; userId: string; secretHash: string } | null>;
-};
+declare const hooks: Parameters<typeof Pact.create>[0]['hooks'];
 
-// Exactly once, typically at boot. Creates the Pact instance AND registers
-// it (via doctor) for authenticate()/authorize() to resolve — no separate
-// registration step, and nothing to import from this call's return value.
-pact({
-  bits: { READ: 1n, WRITE: 2n },
-  modules: { Post: ['READ', 'WRITE'] },
-  apiKeys: true,
-  hooks: {
-    getUser: (q) => (q.by === 'ID' ? db.getUser(q.id) : null),
-    getApiKey: (id) => db.getApiKey(id),
-  },
-  // configure the schemes this app accepts — only the ones you list here
-  // are tried; everything else is off by default.
-  apiKey: {}, // x-api-key / x-api-secret headers, both defaults
+export const pact = Pact.create({
+  bits: { READ: 1n, EDIT: 2n },
+  modulePermissions: { Posts: ['READ', 'EDIT'], Admin: ['READ'] },
+  hooks, // getUser / getApiKey / saveSession / … — your storage
+});
+
+export const { authenticate, authorize } = pactAuth(pact, {
+  schemes: ['BEARER', 'APIKEY'], // default: BEARER, BASIC, APIKEY
+  bearer: { cookie: 'session' }, // browser UIs: the cookie login({ cookie }) set
+  apiKey: {}, // also x-api-key / x-api-secret headers
 });
 ```
 
-`pact()` calls `Pact.create()` internally, so the app never imports
-`@tundralibs/pact`'s `Pact` class directly. Every other pact option
-(`password`, `tokens`, `oauth`, `session`, …) passes straight through — see
-`@tundralibs/pact`'s own docs for those.
+Then wire them wherever routes are registered — `authenticate` once (global,
+or `onlyApi(authenticate)` on a split surface), `authorize` per route:
 
-### 2. Identify requests
+```ts ignore
+import { authenticate, authorize } from './auth.ts';
 
-```ts
-import { authenticate } from '@tundralibs/rapid/middlewares/pact';
-
-declare const app: import('@tundralibs/rapid').Application;
-
-app.use(authenticate()); // every configured scheme, in a fixed priority order
-app.get('/webhook', authenticate(['HMAC']), () => ({ content: 'ok' })); // this route: HMAC only
+app.use(authenticate);
+app.get('/posts', authorize('Posts', 'READ'), list);
+app.post('/posts', authorize('Posts', 'EDIT'), create);
 ```
 
-`authenticate(schemes?)` resolves the registered `Pact` via `inject(PACT)` at
-**call time** — the same timing modules already use for `inject(DB)`, not
-per-request — so it's safe to import and call from any number of route files.
-There is nothing to accidentally re-initialize: `pact()` runs once, this
-function never holds its own `Pact` instance.
+### What `authenticate` does
 
-The "fixed priority order" when `schemes` is omitted is always
-`bearer`/`basic`/`token`/`apiKey`/`hmac`, whichever of those you configured —
-**not** the order you wrote the keys in `pact(options)`.
+It looks for a credential — `Authorization: Bearer <token>` (or a custom
+`bearer.prefix`), `Authorization: Basic …`, `Authorization: ApiKey <key>:<secret>`,
+the split `apiKey` headers, HMAC (`x-key-id` + `x-signature`, when `hmac` is
+configured), or the `bearer.cookie` — runs `pact.authenticate()`, and sets
+`ctx.auth` to pact's `PactAuthContext`: `{ principal, via, sessionId? }`, where
+`principal` is the BOUND principal (`id`, `kind: 'USER' | 'APIKEY'`, `grants`,
+`hasPermission()`, `assert()`).
 
-If `ctx.auth` is already set (an earlier `authenticate()`, or BYO auth) and
-`schemes` restricts to specific scheme(s), the existing auth must already
-carry one of those schemes — otherwise this call denies with 403 rather than
-silently accepting whatever scheme authenticated the request first. With no
-restriction, an existing `ctx.auth` is left alone either way.
+- **No credential → the request continues anonymous** (`ctx.auth` unset) —
+  `authorize` still rejects it. `optional: false` makes it a 401 instead.
+- **A credential that fails → 401, never anonymous.** A wrong password, an
+  unknown key and a disabled account are ONE answer on the wire (the
+  distinction is in the server log); the body carries only the scheme.
+- Every 401 the adapter raises includes a `WWW-Authenticate` challenge listing
+  the accepted schemes (`challenge: false` to suppress, `realm` to name one).
+- Socket frames authenticate from the UPGRADE request's headers/cookies; jobs
+  pass through (there is no client) — a guard on a job fails closed.
+- `ctx.auth` holds the pact object by reference; pick the fields you return
+  from a JSON handler (`grants` are BigInts).
 
-### 3. Authorize
+### What `authorize(module, permission)` does
 
-```ts
-import { authorize } from '@tundralibs/rapid/middlewares/pact';
+`await principal.assert(module, permission)` on the authenticated principal
+— no store round-trip. 401 (with the challenge) when `ctx.auth` is unset,
+403 when the grant is missing. Both arguments are typed by the instance
+(`'Posts'`, `'READ'`), and a JS caller's typo is a `RAPID_CONFIG` at the
+call site, not on the first request.
 
-declare const app: import('@tundralibs/rapid').Application;
+### Sessions for a browser UI
 
-// 401 if ctx.auth is unset, 403 if the principal lacks WRITE on Post
-app.post('/posts', authorize('Post', 'WRITE'), (ctx) => ({
-  content: { authorId: ctx.auth?.id },
-}));
-```
+`login({ pact, cookie: { name: 'session' } })` (from
+`@tundralibs/rapid/endpoints`) logs a user in with `{ identifier, password }`
+and sets the session token as an HttpOnly cookie; `pactAuth(pact, { bearer:
+{ cookie: 'session' } })` reads it back. API clients keep sending the same
+token as `Authorization: Bearer`.
 
-Argument order is **`(module, permission)`**, matching pact's own
-`pact.can(principal, module, permission)` (pact 0.6.0+). Built on the generic
-`authorize(check)` internally, so 401/403 semantics are identical to the BYO
-path above.
+### HMAC
 
----
-
-## `ctx.auth` after a pact scheme matches
-
-The resolved principal (`id`, `grants`, `status`, `metadata`) is always
-present, plus `authMode` and whichever credential fields are safe to expose —
-never a secret:
-
-| scheme   | extra fields | never included         |
-| -------- | ------------ | ---------------------- |
-| `BASIC`  | `identifier` | `password`             |
-| `BEARER` | —            | `token`                |
-| `TOKEN`  | —            | `token`                |
-| `APIKEY` | `keyId`      | `secret`               |
-| `HMAC`   | `keyId`      | `signature`, `payload` |
-
-`grants` are BigInt masks — don't return `ctx.auth` whole from a JSON handler
-(`JSON.stringify` can't serialize a BigInt); pick the fields you need.
-
----
-
-## Responding to the request (HMAC signing, etc.)
-
-Each scheme accepts an optional `respond(ctx, pact)` hook, called after the
-handler runs, only when that scheme authenticated the request:
-
-```ts
-import { pact } from '@tundralibs/rapid/middlewares/pact';
-
-declare const db: {
-  getUser(id: string): Promise<{ id: string; status: 'ACTIVE' } | null>;
-  getApiKey(
-    id: string,
-  ): Promise<{ id: string; userId: string; secret: string } | null>;
-};
-
-pact({
-  bits: { READ: 1n },
-  apiKeys: true,
-  hooks: {
-    getUser: (q) => (q.by === 'ID' ? db.getUser(q.id) : null),
-    getApiKey: (id) => db.getApiKey(id),
-  },
-  hmac: {
-    canonical: (ctx) => `${ctx.action}`, // build the string the caller signed
-    respond: async (ctx, instance) => {
-      const keyId = (ctx.auth as { keyId: string }).keyId;
-      const signature = await instance.signAs(keyId, 'the response body');
-      if (ctx.type === 'HTTP' && signature !== null) {
-        ctx.setHeader('x-signature', signature);
-      }
-    },
-  },
-});
-```
-
-`signAs(keyId, content)` signs with the _same_ per-key secret the caller
-authenticated with, without ever exposing that secret to your code — rapid
-doesn't decide what a response needs to carry; the hook does.
+`hmac.canonical(ctx)` returns the exact string the caller signed (hex HMAC
+with the API key's secret) — the contract between your clients and this
+server, so there is no default; it receives the rapid context, so a body hash
+is `await ctx.payload` away. Response signing is not provided.
 
 ---
 

@@ -80,56 +80,73 @@ describe('rapid.endpoints', () => {
     await app.stop();
   });
 
-  it('login(pact): 200 + token on success, 401 on a null login', async () => {
+  it('login(pact): 200 + token on success, 401 when pact throws an auth failure, 400 on a malformed body', async () => {
+    // A double shaped like pact 0.7: login({ identifier, password }) →
+    // { principal, session }, THROWS a coded error on a bad credential.
     const pact = {
-      login: (_s: string, creds: unknown) =>
-        Promise.resolve(
-          (creds as { user?: string }).user === 'ada'
-            ? { principal: { id: 'ada' }, token: 'jwt-123' }
-            : null,
-        ),
+      login: (c: { identifier: string; password: string }) => {
+        if (c.identifier === 'ada' && c.password === 'pw') {
+          return Promise.resolve({
+            principal: { id: 'ada' },
+            session: {
+              token: 'st-123',
+              expiresAt: new Date(Date.now() + 60_000),
+            },
+          });
+        }
+        return Promise.reject(
+          Object.assign(new Error('bad'), { code: 'INVALID_CREDENTIALS' }),
+        );
+      },
     };
     const app = await make();
     app.post('/login', login({ pact }));
-    const ok = await app.fetch(
-      new Request('http://app/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ user: 'ada' }),
-      }),
-    );
-    asserts.assertEquals([ok.status, (await ok.json()).token], [
-      200,
-      'jwt-123',
-    ]);
-    const bad = await app.fetch(
-      new Request('http://app/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ user: 'x' }),
-      }),
-    );
+    const post = (body: unknown) =>
+      app.fetch(
+        new Request('http://app/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      );
+    const ok = await post({ identifier: 'ada', password: 'pw' });
+    asserts.assertEquals([ok.status, (await ok.json()).token], [200, 'st-123']);
+    const bad = await post({ identifier: 'ada', password: 'x' });
     asserts.assertEquals(bad.status, 401);
+    await bad.body?.cancel();
+    const malformed = await post({ identifier: 'ada' });
+    asserts.assertEquals(malformed.status, 400);
+    await malformed.body?.cancel();
     await app.stop();
   });
 
-  it('login(pact): the principal is MINIMAL by default ({ id }); a projection widens it', async () => {
-    // The strategy returns a fat record — the endpoint must NOT echo it whole.
+  it('login(pact): the principal is MINIMAL by default ({ id }); a projection widens it; a non-auth throw is a 500', async () => {
+    // The hook returns a fat record — the endpoint must NOT echo it whole.
     const fat = { id: 'ada', passwordHash: 'secret!', roles: ['admin'] };
-    const pact = {
-      login: () => Promise.resolve({ principal: fat, token: 't' }),
-    };
+    const session = { token: 't', expiresAt: new Date(Date.now() + 60_000) };
+    const pact = { login: () => Promise.resolve({ principal: fat, session }) };
     const app = await make();
     app.post('/login', login({ pact }));
     app.post('/login-full', login({ pact, principal: (p) => p }));
+    app.post(
+      '/login-broken',
+      login({ pact: { login: () => Promise.reject(new Error('db down')) } }),
+    );
+    const body = JSON.stringify({ identifier: 'ada', password: 'pw' });
+    const headers = { 'content-type': 'application/json' };
     const min = await (await app.fetch(
-      new Request('http://app/login', { method: 'POST' }),
+      new Request('http://app/login', { method: 'POST', headers, body }),
     )).json();
     asserts.assertEquals(min.principal, { id: 'ada' }); // no hash/roles leaked
     const full = await (await app.fetch(
-      new Request('http://app/login-full', { method: 'POST' }),
+      new Request('http://app/login-full', { method: 'POST', headers, body }),
     )).json();
-    asserts.assertEquals(full.principal.passwordHash, 'secret!'); // opt-in only
+    asserts.assertEquals(full.principal, fat);
+    const broken = await app.fetch(
+      new Request('http://app/login-broken', { method: 'POST', headers, body }),
+    );
+    asserts.assertEquals(broken.status, 500);
+    await broken.body?.cancel();
     await app.stop();
   });
 
