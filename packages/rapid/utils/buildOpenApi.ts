@@ -86,7 +86,6 @@ export function buildOpenApi(
   const groups = new Map<string, Set<string>>(); // namespace → its operation tags
   const versions = new Set<string>();
   let secured = false;
-  const declared: Record<string, Record<string, unknown>> = {};
 
   for (const route of routes) {
     // UI infrastructure (the client runtime scripts) is not API.
@@ -152,9 +151,6 @@ export function buildOpenApi(
     }
     if (meta?.security !== undefined && meta.security.length > 0) {
       secured = true;
-    }
-    if (meta?.securitySchemes !== undefined) {
-      Object.assign(declared, meta.securitySchemes);
     }
 
     const operation: Record<string, unknown> = {
@@ -280,7 +276,6 @@ export function buildOpenApi(
         ? {
           securitySchemes: {
             bearerAuth: BEARER_AUTH,
-            ...declared,
             ...options.securitySchemes,
           },
         }

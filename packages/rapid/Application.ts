@@ -32,7 +32,6 @@ import {
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
-import { middlewareOpenApi } from './middlewares/openapiMeta.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
 import {
   type ApiSurface,
@@ -980,35 +979,13 @@ export class Application<S extends RapidContextState = RapidContextState>
       });
     }
     const middlewares = chain.slice(0, -1) as RapidHTTPMiddleware[];
-    // A guard that carries OpenAPI metadata (pactAuth's authorize) documents
-    // the requirement it enforces; an explicit `security` on the route wins.
-    let openapi = opts.openapi;
-    for (const mw of middlewares) {
-      const meta = middlewareOpenApi(mw);
-      if (meta === undefined) continue;
-      const security = opts.openapi?.security !== undefined
-        ? opts.openapi.security
-        : [...new Set([...(openapi?.security ?? []), ...meta.security])];
-      openapi = {
-        ...openapi,
-        security,
-        ...(meta.securitySchemes !== undefined
-          ? {
-            securitySchemes: {
-              ...openapi?.securitySchemes,
-              ...meta.securitySchemes,
-            },
-          }
-          : {}),
-      };
-    }
     this.__routes.push({
       method,
       path,
       middlewares,
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
       ...(version !== undefined ? { version } : {}),
-      ...(openapi !== undefined ? { openapi } : {}),
+      ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
       ...(template !== undefined ? { template } : {}),
     });
     return this;

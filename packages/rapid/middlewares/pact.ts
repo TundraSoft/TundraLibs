@@ -43,7 +43,6 @@ import type {
   RapidMiddleware,
 } from '../types/mod.ts';
 import { parseCookies } from '../utils/cookies.ts';
-import { markOpenApi } from './openapiMeta.ts';
 import { isStreamBody } from '../utils/streams.ts';
 
 /** The shape `ctx.auth` holds after `authenticate` — re-exported for handlers. */
@@ -447,67 +446,13 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       });
     }
     const guard = core.authorize(module, permission);
-    return markOpenApi(async (ctx, next) => {
+    return async (ctx, next) => {
       const denial = await guard(ctx.auth as PactAuthContext<M, B> | undefined);
       if (denial !== undefined) {
         throw denied(ctx, denial, { module, permission });
       }
       return await next();
-    }, openapiMeta);
-  };
-
-  // ---- OpenAPI: what the guard requires, and the schemes it accepts, so a
-  // route guarded by authorize() documents itself.
-  const securitySchemes: Record<string, Record<string, unknown>> = {};
-  for (const scheme of config.schemes) {
-    if (scheme === 'BEARER') {
-      securitySchemes.bearerAuth = config.bearer.header === 'authorization' &&
-          config.bearer.prefix.toLowerCase() === 'bearer'
-        ? { type: 'http', scheme: 'bearer' }
-        : {
-          type: 'apiKey',
-          in: 'header',
-          name: config.bearer.header,
-          description: `\`${config.bearer.prefix} <token>\``.trim(),
-        };
-      if (cookie !== undefined) {
-        securitySchemes.cookieAuth = {
-          type: 'apiKey',
-          in: 'cookie',
-          name: cookie,
-        };
-      }
-    } else if (scheme === 'BASIC') {
-      securitySchemes.basicAuth = config.basic.header === 'authorization'
-        ? { type: 'http', scheme: 'basic' }
-        : { type: 'apiKey', in: 'header', name: config.basic.header };
-    } else if (scheme === 'APIKEY') {
-      securitySchemes.apiKeyAuth = 'header' in config.apiKey
-        ? {
-          type: 'apiKey',
-          in: 'header',
-          name: config.apiKey.header,
-          description: `\`${config.apiKey.prefix} <key>:<secret>\``.trim(),
-        }
-        : {
-          type: 'apiKey',
-          in: 'header',
-          name: config.apiKey.keyHeader,
-          description: `with the secret in \`${config.apiKey.secretHeader}\``,
-        };
-    } else if (scheme === 'HMAC') {
-      securitySchemes.hmacAuth = {
-        type: 'apiKey',
-        in: 'header',
-        name: config.hmac.signatureHeader,
-        description:
-          `RFC 9421 HTTP message signature — key in \`${config.hmac.keyHeader}\`, timestamp in \`${config.hmac.timestampHeader}\``,
-      };
-    }
-  }
-  const openapiMeta = {
-    security: Object.keys(securitySchemes),
-    securitySchemes,
+    };
   };
 
   // ---- Session handlers over the instance's login/logout/refresh.

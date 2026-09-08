@@ -503,8 +503,7 @@ instance: `const { authenticate, authorize, login, logout, refresh, me } =
 pactAuth(pact, options)`. `authenticate` sets `ctx.auth` to pact's auth
 context (Bearer / Basic / ApiKey / HMAC, a bearer cookie for UIs; signed
 responses and JWE payloads when configured); `authorize('Module',
-'PERMISSION')` is typed by the instance's catalog and documents itself in
-OpenAPI (the requirement and the configured schemes); the four session
+'PERMISSION')` is typed by the instance's catalog; the four session
 handlers wrap `pact.login` / `logout` / `refresh` with one cookie name
 declared once (`bearer.cookie`), one 401 for every failure and a minimal
 principal projection. The options are pact's own middleware options — the

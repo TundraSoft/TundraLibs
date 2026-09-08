@@ -375,9 +375,8 @@ typed by the instance's catalog and checked when called, so a typo fails at
 import, not on the first request; `authorize` fails closed on jobs (no
 identity there); a stale bearer COOKIE is cleared and treated as anonymous
 (a browser keeps sending it, and a 401 would lock the user out of `/login`),
-while a failing header credential stays a 401. `authorize()` carries OpenAPI
-metadata (`markOpenApi`) so `app.route()` documents the requirement and
-declares the schemes without the author repeating them. Storage is pact's hooks over the app's data layer (norm);
+while a failing header credential stays a 401. Storage is pact's hooks over
+the app's data layer (norm);
 caching the principal belongs in the app's `getUser` hook, never in the
 middleware, because that would bypass pact's revocation checks.
 

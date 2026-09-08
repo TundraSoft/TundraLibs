@@ -9,12 +9,6 @@
 
 export { compress, type CompressOptions } from './compress.ts';
 export { cors, type CorsOptions } from './cors.ts';
-export {
-  markOpenApi,
-  MIDDLEWARE_OPENAPI,
-  middlewareOpenApi,
-  type RapidMiddlewareOpenApi,
-} from './openapiMeta.ts';
 export { csrf, type CsrfOptions } from './csrf.ts';
 export { etag } from './etag.ts';
 export {

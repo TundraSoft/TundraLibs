@@ -267,9 +267,9 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `openapi({ securitySchemes })`); `[]` = public. `operationId` defaults to
   `<Module>_<method>` (the SDK generator's key). Version is no longer emitted
   as a tag — it is `x-version` per operation and `x-versions` at the root.
-  Deriving `security` from the `authorize()` middleware itself SHIPPED
-  2026-09-08: a guard carries OpenAPI metadata (`markOpenApi`), `app.route()`
-  fills the route's requirement and declares the schemes from it.
+  Deferred: deriving `security` from the `authorize()` middleware itself (a
+  guard-metadata mechanism was built and removed 2026-09-08 — a simpler
+  approach is wanted).
 - **Config in context + `config()` binder; complete `Application.yaml`
   (2026-08-23)** — `ctx.config` (= `app.config`, every set beside
   `Application`) on every context, and a `config(path, validate?)` binder on

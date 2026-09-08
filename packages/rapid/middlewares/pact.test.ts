@@ -5,8 +5,7 @@
  * the "present but invalid is 401, never anonymous" rule, the typed guard
  * (401 with challenge / 403 / boot-time catalog check), the signed HMAC
  * exchange both ways, encrypted payloads both ways, transports, the
- * session handlers (`login` / `logout` / `refresh` / `me`) and the OpenAPI
- * metadata `authorize()` carries.
+ * session handlers (`login` / `logout` / `refresh` / `me`).
  * @module
  */
 import { describe, it } from '@tundralibs/compat/test';
@@ -23,7 +22,6 @@ import { contentDigest } from '@tundralibs/pact/middleware';
 import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { pactAuth, type PactAuthOptions } from './pact.ts';
-import { buildOpenApi } from '../utils/mod.ts';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -623,49 +621,5 @@ describe('rapid.middlewares.pactAuth()', () => {
     asserts.assertEquals(res.status, 500);
     asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
     await app2.stop();
-  });
-
-  it('authorize() carries OpenAPI metadata: the route documents its requirement and the configured schemes are declared', async () => {
-    const pact = await makePact();
-    const { authorize } = pactAuth(pact, {
-      schemes: ['BEARER', 'APIKEY'],
-      bearer: { cookie: 'session' },
-      apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
-    });
-    const app = await Application.initialize({
-      name: 'pact-openapi',
-      server: { port: 0, hostname: '127.0.0.1' },
-      logger: { handlers: [] },
-    });
-    app.get('/read', authorize('Posts', 'READ'), () => ({ content: {} }));
-    app.get('/open', () => ({ content: {} }));
-    const doc = buildOpenApi(app.routes);
-    const paths = doc.paths as Record<
-      string,
-      Record<string, { security?: unknown }>
-    >;
-    asserts.assertEquals(paths['/read']!.get!.security, [
-      { bearerAuth: [] },
-      { cookieAuth: [] },
-      { apiKeyAuth: [] },
-    ]);
-    asserts.assertEquals(paths['/open']!.get!.security, undefined);
-    const schemes =
-      (doc.components as { securitySchemes: Record<string, unknown> })
-        .securitySchemes;
-    asserts.assertEquals(schemes.bearerAuth, {
-      type: 'http',
-      scheme: 'bearer',
-    });
-    asserts.assertEquals(schemes.cookieAuth, {
-      type: 'apiKey',
-      in: 'cookie',
-      name: 'session',
-    });
-    asserts.assertEquals(
-      (schemes.apiKeyAuth as { name: string }).name,
-      'x-api-key',
-    );
-    await app.stop();
   });
 });

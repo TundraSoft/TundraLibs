@@ -545,8 +545,7 @@ plus the \`bearer.cookie\`; \`logout()\` → 204 and the cookie cleared;
 \`session.refreshCookie\`); \`me()\` → \`{ principal, via }\` or 401. Options
 under \`session\`: \`fields\`, \`cookie\` attributes, \`refreshCookie\`,
 \`principal\` projection (default \`{ id }\`). Every failure is ONE 401.
-\`authorize()\` also documents itself in OpenAPI — the route gets the
-requirement and the configured schemes. Bring-your-own auth: a middleware
+Bring-your-own auth: a middleware
 that verifies its credential and calls \`ctx.setAuth(...)\`.
 
 ## Errors
@@ -1202,15 +1201,15 @@ export const MIDDLEWARE_CATALOG: readonly (readonly [
   ],
   [
     'pactAuth(pact, options) → { authenticate, authorize, login, logout, refresh, me }',
-    'the @tundralibs/pact adapter (subpath ./middlewares/pact): guards plus the session handlers; authorize() documents itself in OpenAPI',
+    'the @tundralibs/pact adapter (subpath ./middlewares/pact): guards plus the session handlers',
   ],
   [
     'onlyHTTP / onlySOCKET / onlyJOB · guardHTTP / guardSOCKET / guardJOB · onlyApi / onlyUi',
     'scope helpers: skip, fail-closed reject, or HTTP-surface gate',
   ],
   [
-    'markStateKeyUser(mw) · middlewareUsesStateKey · middlewareScope · markOpenApi(mw, meta) · middlewareOpenApi · getSession · memorySessionHooks / memoryRateLimitHooks / memoryIdempotencyHooks',
-    'the helpers around them — markOpenApi lets your own guard document its security requirement',
+    'markStateKeyUser(mw) · middlewareUsesStateKey · middlewareScope · getSession · memorySessionHooks / memoryRateLimitHooks / memoryIdempotencyHooks',
+    'the helpers around them',
   ],
 ];
 

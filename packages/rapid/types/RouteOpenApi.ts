@@ -29,18 +29,9 @@ export type RapidRouteOpenApi = {
    * Security-scheme NAMES the operation requires — `['bearerAuth']` emits
    * the requirement and the padlock. An EMPTY array marks a deliberately
    * public route (overriding a module default). `bearerAuth` is declared for
-   * you; a guard middleware that carries OpenAPI metadata (`pactAuth`'s
-   * `authorize`) fills this in — and {@link securitySchemes} — when the
-   * route does not set it; any other scheme is declared via
-   * `openapi({ securitySchemes })`.
+   * you; any other scheme is declared via `openapi({ securitySchemes })`.
    */
   security?: readonly string[];
-  /**
-   * Security schemes this route's guards declare, merged into
-   * `components.securitySchemes` by name. Normally filled by `app.route()`
-   * from the chain's middleware metadata, not written by hand.
-   */
-  securitySchemes?: Readonly<Record<string, Record<string, unknown>>>;
   /**
    * The owning module's doc identity — aggregated by the assembler into the
    * document's top-level `tags` (with the module `description`) and, when a
