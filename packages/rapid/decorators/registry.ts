@@ -189,6 +189,36 @@ export function moduleMetaOf(
 }
 
 /**
+ * Decoration-time check for a `middleware` option: every entry must be a
+ * function. Caught at import, the loudest moment — a mis-imported
+ * middleware (a factory not called, a module namespace) would otherwise
+ * surface as a confusing mount error or a 500 on first request.
+ *
+ * @throws {RapidError} RAPID_CONFIG naming the decorator and the index.
+ */
+export function assertMiddlewareList(
+  where: string,
+  middleware: readonly unknown[] | undefined,
+): void {
+  if (middleware === undefined) return;
+  if (!Array.isArray(middleware)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `${where} middleware must be an array of functions`,
+    });
+  }
+  middleware.forEach((m, i) => {
+    if (typeof m !== 'function') {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `${where} middleware[${i}] is not a function (got ${typeof m}) — ` +
+          'did you forget to call the factory?',
+        details: { index: i },
+      });
+    }
+  });
+}
+
+/**
  * Decoration-time guard shared by every rAPId decorator: the runtime
  * tripwire for the tsconfig trap. Under LEGACY compilation
  * (`experimentalDecorators` — the suite root's default) a decorator

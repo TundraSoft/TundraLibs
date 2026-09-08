@@ -503,7 +503,11 @@ options?)\`, \`@JOB(name, schedule, options?)\`, \`@Module(name?, options?)\`,
 they never wrap the method, so a class unit-tests with \`new\`. Route options:
 \`bind\`, \`version\`, \`summary\`, \`description\`, \`tags\`, \`operationId\`,
 \`security\`, \`response\` (a schema; ENFORCED in DEVELOPMENT), \`template\`,
-\`layout\`. Binders (\`bind: [...]\`, in parameter order): \`param(name,
+\`layout\`, \`middleware\` (route-scoped chain, HTTP-typed; \`@SOCKET\` takes a
+socket-typed one). \`@Module(name, { middleware })\` prepends a universal
+chain to every route and command in the class — app \`use()\` → module →
+route → handler; jobs take app-level middleware only. \`security\` documents,
+\`middleware\` enforces — declare both. Binders (\`bind: [...]\`, in parameter order): \`param(name,
 validate?)\`, \`payload(schemaOrValidate?)\` (a schema OBJECT also documents the
 body), \`query(validate?)\`, \`paging()\`, \`header(name)\`, \`cookie(name)\`,
 \`auth(validate?)\`, \`session()\` (decorators subpath only — the root exports

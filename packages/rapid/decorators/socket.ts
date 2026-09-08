@@ -6,8 +6,16 @@
  * @module
  */
 
-import type { RapidBinds, RapidModuleReply } from '../types/mod.ts';
-import { assertMethodContext, recordDecoration } from './registry.ts';
+import type {
+  RapidBinds,
+  RapidModuleReply,
+  RapidSOCKETMiddleware,
+} from '../types/mod.ts';
+import {
+  assertMethodContext,
+  assertMiddlewareList,
+  recordDecoration,
+} from './registry.ts';
 
 /** Options for {@link SOCKET}. */
 export type SocketDecoratorOptions<A extends readonly unknown[]> = {
@@ -16,6 +24,14 @@ export type SocketDecoratorOptions<A extends readonly unknown[]> = {
    * @default [] — the method takes no parameters
    */
   bind?: RapidBinds<A>;
+  /**
+   * Command-scoped middleware — the chain a plain `app.socket(command,
+   * ...middleware, handler)` takes; runs after the owning `@Module`'s
+   * `middleware`, in array order. Each entry must be a function — checked
+   * NOW.
+   * @default []
+   */
+  middleware?: readonly RapidSOCKETMiddleware[];
 };
 
 /** The decorator signature the factory returns. */
@@ -45,6 +61,10 @@ export const SOCKET: {
     command: string,
     options: SocketDecoratorOptions<A> & { bind: RapidBinds<A> },
   ): SocketDecorator<This, A>;
+  <This>(
+    command: string,
+    options: Omit<SocketDecoratorOptions<[]>, 'bind'>,
+  ): SocketDecorator<This, []>;
 } = (
   command: string,
   options: SocketDecoratorOptions<readonly unknown[]> = {},
@@ -55,11 +75,15 @@ export const SOCKET: {
     context: ClassMethodDecoratorContext,
   ): void => {
     assertMethodContext(context, 'SOCKET');
+    assertMiddlewareList('@SOCKET', options.middleware);
     recordDecoration(context, {
       kind: 'SOCKET',
       command,
       binds: options.bind ?? [],
       methodName: String(context.name),
+      ...(options.middleware !== undefined
+        ? { middleware: options.middleware }
+        : {}),
     });
   };
 };

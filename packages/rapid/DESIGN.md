@@ -173,12 +173,15 @@ because a handler rejection after the middleware returned would otherwise be
 an unhandled rejection.
 
 **Three registration points, no more.** `app.use()` (universal — every
-transport), route/command-scoped (inline before the handler, HTTP and
-SOCKET), and `@Use` on a `RapidModule` method, which guards module-to-module
-`invoke()` **only** — never a transport request. Within a level, order is
-registration order; there are no priority numbers (priority integers turn
-ordering into archaeology). Module-level HTTP middleware for decorated routes
-is the known gap on the backlog.
+transport), route/command-scoped (inline before the handler on a plain
+route; the `middleware` option on `@GET`/`@SOCKET` and, for a whole class,
+on `@Module` — the decorator records the same chain the plain call takes,
+module entries first), and `@Use` on a `RapidModule` method, which guards
+module-to-module `invoke()` **only** — never a transport request. Within a
+level, order is registration order; there are no priority numbers (priority
+integers turn ordering into archaeology). Jobs have no per-registration
+chain by design — a scheduler firing has no caller to guard against;
+`onlyJOB` scopes the universal chain.
 
 **Universal by default, scoped by wrapper.** `onlyHTTP` / `onlySOCKET` /
 `onlyJOB` skip other transports; `guardHTTP` / `guardSOCKET` / `guardJOB`
@@ -197,10 +200,12 @@ option never waits for the first request.
 
 **Units and names.** All durations are seconds (fractions where a sub-second
 value makes sense). Every non-standard header name is an option, so a client
-integrating with a different name never needs a fork. The direction of travel
-(ROADMAP) is that middleware options become part of `Application.yaml`
-grouped by **structure** (one `headers:` block, one `cookies:` block) rather
-than per middleware.
+integrating with a different name never needs a fork. Middleware options
+that are data live in `Application.yaml` grouped by **structure** — one
+`headers:` block, `logger.access`, `server.metrics` families — rather than
+per middleware, so swapping a built-in for a custom middleware keeps the same
+config; code-valued seams (stores, hooks, verify functions) stay programmatic.
+An explicit factory option wins over the shared key.
 
 **State is hooks, not a store.** Stateful middleware (`session`, `rateLimit`,
 `idempotency`) take a small object of purpose-named hooks the app implements
@@ -327,6 +332,14 @@ is an ordinary route and the one shape).
   never guesses.
 - **Prefix and namespace** are different joins on purpose: `prefix` joins
   HTTP paths; `namespace` dots onto flat socket command and job names.
+- **Route middleware is a decorator option, not a decorator.** `@GET(path,
+  { middleware })` / `@SOCKET(command, { middleware })` / `@Module(name, {
+  middleware })` are recorded as data and handed to the same `route()` /
+  `socket()` call a plain registration makes, so the entries, the
+  SHARE-mode boot check and OpenAPI see one shape. Entries are validated at
+  decoration time (a factory not called fails at import). A `@Guard`-style
+  method decorator was rejected: it would look like `@Use`, which runs on
+  `invoke()` only, and stacking order would start to matter again.
 - **Delivery semantics** are in-process and at-most-once by design; the bus
   is a seam for a durable sibling later. Synchronous cross-module reads are a
   boundary smell first and `invoke()` second.

@@ -17,7 +17,11 @@
 
 import { RapidError } from '../errors/mod.ts';
 import type { RapidModuleMeta } from '../types/mod.ts';
-import { assertClassContext, recordModule } from './registry.ts';
+import {
+  assertClassContext,
+  assertMiddlewareList,
+  recordModule,
+} from './registry.ts';
 
 /** Options for {@link Module}. */
 export type ModuleDecoratorOptions = {
@@ -59,6 +63,12 @@ export type ModuleDecoratorOptions = {
   security?: readonly string[];
   /** Default page layout for the class's templated routes (see `RapidModuleMeta`). */
   layout?: RapidModuleMeta['layout'];
+  /**
+   * Middleware for every `@GET`/… route and `@SOCKET` command in the
+   * class, run before each one's own `middleware` (see `RapidModuleMeta`).
+   * Not applied to `@JOB` — jobs take app-level middleware only.
+   */
+  middleware?: RapidModuleMeta['middleware'];
 };
 
 /**
@@ -68,7 +78,13 @@ export type ModuleDecoratorOptions = {
  */
 export type ModuleMountOptions = Pick<
   ModuleDecoratorOptions,
-  'prefix' | 'version' | 'description' | 'tags' | 'security' | 'layout'
+  | 'prefix'
+  | 'version'
+  | 'description'
+  | 'tags'
+  | 'security'
+  | 'layout'
+  | 'middleware'
 >;
 
 type ModuleClassDecorator = <
@@ -125,6 +141,7 @@ export function Module(
       message: '@Module name must be a non-empty string',
     });
   }
+  assertMiddlewareList('@Module', opts.middleware);
   const prefix = opts.prefix ?? '';
   if (prefix !== '' && !prefix.startsWith('/')) {
     throw new RapidError('RAPID_CONFIG', {
@@ -144,6 +161,7 @@ export function Module(
     ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
     ...(opts.security !== undefined ? { security: opts.security } : {}),
     ...(opts.layout !== undefined ? { layout: opts.layout } : {}),
+    ...(opts.middleware !== undefined ? { middleware: opts.middleware } : {}),
   };
   return (target, context): void => {
     assertClassContext(context, 'Module');

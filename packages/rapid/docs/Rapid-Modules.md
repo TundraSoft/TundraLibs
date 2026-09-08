@@ -66,14 +66,14 @@ other's classes, and a second `import()` of the same file is a cache hit.
 
 ### Decorators
 
-| Decorator                                        | Records                                                                                                                                       |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `template`, `layout`.   |
-| `@SOCKET(command, { bind? })`                    | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                            |
-| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`. |
-| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`.           |
-| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                              |
-| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                     |
+| Decorator                                        | Records                                                                                                                                                   |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `template`, `layout`, `middleware`. |
+| `@SOCKET(command, { bind?, middleware? })`       | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                        |
+| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.             |
+| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.         |
+| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                          |
+| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                 |
 
 Decorators stack: one method may be `@GET` and `@JOB` at once. Ordering of
 rapid decorators relative to third-party wrapping decorators does not
@@ -86,6 +86,50 @@ instance no longer runs.
 DEVELOPMENT mode **enforces** it — a success reply whose `content` fails the
 declared shape is a loud `RAPID_RESPONSE_INVALID` instead of a response the
 docs lie about. PRODUCTION never runs the check.
+
+#### Route middleware on decorated routes
+
+A decorated route takes the same route-scoped chain a plain
+`app.get(path, ...middleware, handler)` does — `middleware` on the route
+decorator for one route, `middleware` on `@Module` for every HTTP route and
+socket command in the class. Order inside the app onion: app-wide `use()`
+first, then the module's chain, then the route's, then the handler.
+
+```ts
+import { GET, Module, param } from '@tundralibs/rapid/decorators';
+import type { RapidContextResponse, RapidMiddleware } from '@tundralibs/rapid';
+
+// e.g. from pactAuth(pact) — the catalog's middlewares are all universal
+declare const authenticate: RapidMiddleware;
+declare const authorize: (
+  module: string,
+  permission: string,
+) => RapidMiddleware;
+
+@Module('Admin', {
+  prefix: '/admin',
+  middleware: [authenticate], // every route and command in the class
+})
+class Admin {
+  @GET('/users/:id:', {
+    bind: [param('id')],
+    middleware: [authorize('Admin', 'READ')], // this route only
+    security: ['bearerAuth'], // documents what the guard enforces
+  })
+  user(id: string): RapidContextResponse {
+    return { content: { id } };
+  }
+}
+```
+
+Entries are checked at decoration time — a non-function (a factory you forgot
+to call) fails at import as `RAPID_CONFIG` naming the decorator and index.
+The chain is HTTP-typed on `@GET`/…, socket-typed on `@SOCKET`, and universal
+on `@Module` — a universal middleware (every catalog middleware, anything
+from `pactAuth`) fits all three. Jobs are
+not covered: `@JOB` has no per-registration chain, only the app-wide
+`use()` scoped with `onlyJOB`. Middleware here is behaviour; the OpenAPI
+`security` option is documentation — declare both.
 
 ### Binders
 
@@ -265,9 +309,9 @@ see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
 ## Pitfalls
 
 - **Registering a module after `start()`** throws. Boot everything first.
-- **`@Use` is not route middleware.** It guards `invoke()`. Route middleware
-  for a decorated route is on the backlog; until then use `app.use()` with a
-  scope helper, or a plain `app.get()` route for the guarded handler.
+- **`@Use` is not route middleware.** It guards module-to-module `invoke()`
+  and never runs for a request. Guard a decorated route with the
+  `middleware` option on the route decorator or on `@Module`.
 - **Constructor autobinding** (`this.find = this.find.bind(this)`) installs
   an own property that shadows the decorated prototype method — mounting
   refuses it with a message naming the method.

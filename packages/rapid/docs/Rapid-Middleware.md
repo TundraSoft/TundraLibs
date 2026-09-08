@@ -116,8 +116,10 @@ otherwise be an unhandled rejection instead of a disclosed response.
 every HTTP request, every socket frame and every job firing, in
 registration order. Route- and command-scoped middleware go inline before
 the handler (`app.get('/x', a, b, handler)`) and run after the universal
-chain, in that order. Both chains are composed once at registration, not
-per request. Inside a `RapidModule`, `@Use` guards module-to-module
+chain, in that order; a decorated route declares the same chain with
+`@GET(path, { middleware: [a, b] })`, and `@Module(name, { middleware })`
+prepends one to every route and command in the class. Both chains are
+composed once at registration, not per request. Inside a `RapidModule`, `@Use` guards module-to-module
 `invoke()` only and never runs for a transport request. A job whose
 middleware never called `next()` is a distinct, logged outcome
 (`handlerRan: false`), not a silent success.

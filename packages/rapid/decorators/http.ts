@@ -26,10 +26,15 @@
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import type {
   RapidBinds,
+  RapidHTTPMiddleware,
   RapidModuleReply,
   RapidRouteOptions,
 } from '../types/mod.ts';
-import { assertMethodContext, recordDecoration } from './registry.ts';
+import {
+  assertMethodContext,
+  assertMiddlewareList,
+  recordDecoration,
+} from './registry.ts';
 
 /** Options for the HTTP route decorators. */
 export type RouteDecoratorOptions<A extends readonly unknown[]> = {
@@ -107,6 +112,16 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
   template?: RapidRouteOptions['template'];
   /** Page layout — sugar for the object form's `layout` (which wins). */
   layout?: RapidRouteOptions['layout'];
+  /**
+   * Route-scoped middleware for THIS route — the same chain a plain
+   * `app.get(path, ...middleware, handler)` takes, so an `authorize()` or
+   * a `rateLimit()` guards one decorated route. Runs inside the app onion,
+   * after the owning `@Module`'s `middleware`, in array order. HTTP only
+   * (a method also decorated `@SOCKET` declares that transport's chain on
+   * `@SOCKET` itself). Each entry must be a function — checked NOW.
+   * @default [] — the module's `middleware` alone, if any
+   */
+  middleware?: readonly RapidHTTPMiddleware[];
 };
 
 /** The decorator signature every route factory returns. */
@@ -152,6 +167,7 @@ function route<This, A extends readonly unknown[]>(
 ): RouteDecorator<This, A> {
   return (_target, context): void => {
     assertMethodContext(context, method);
+    assertMiddlewareList(`@${method}`, options.middleware);
     recordDecoration(context, {
       kind: 'HTTP',
       method,
@@ -171,6 +187,9 @@ function route<This, A extends readonly unknown[]>(
       ...(options.response !== undefined ? { response: options.response } : {}),
       ...(options.template !== undefined ? { template: options.template } : {}),
       ...(options.layout !== undefined ? { layout: options.layout } : {}),
+      ...(options.middleware !== undefined
+        ? { middleware: options.middleware }
+        : {}),
     });
   };
 }

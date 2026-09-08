@@ -5,7 +5,7 @@ shipped. Shipped capabilities and the reasoning behind them are recorded in
 [DESIGN.md](./DESIGN.md), the guides under `docs/` and the changelog; build
 history lives in git. One pool, no 1.0-vs-later gate: everything is in scope
 and up for scheduling. Where an item notes a dependency ("after caching",
-"needs per-route middleware") that is a sequencing fact, not a deferral. Last
+"downstream of OpenAPI") that is a sequencing fact, not a deferral. Last
 updated **2026-09-09**.
 
 ## Next up
@@ -14,9 +14,9 @@ updated **2026-09-09**.
   server-status page built on rapid's OWN UI layer (templates, `data-load`
   panels, the live bridge) — the showcase of the UI layer as well as of the
   server; no bundler, no CDN, runs wherever routes run. Mounted in one call
-  (`dashboard(app, { path, expose, guards })`) through plain `app.get()`
-  registrations so every route takes the guards, the same page-of-the-app
-  pattern as `docs()`; `uiOnly`; gated like `openapi()` (`expose` DEVELOPMENT
+  (`dashboard(app, { path, expose, guards })`) — a decorated module with
+  `@Module({ middleware: guards })`, or plain `app.get()` registrations —
+  the same page-of-the-app pattern as `docs()`; `uiOnly`; gated like `openapi()` (`expose` DEVELOPMENT
   by default). Panels, all from existing seams: overview (name, mode,
   instance, runtime, uptime, address, surfaces, static mounts, metrics/tracing
   on/off); traffic (in-flight, req/s and status classes from the server
@@ -29,12 +29,6 @@ updated **2026-09-09**.
   errors by code with request ids. Access under the cluster model: entering
   the cluster or node secret unlocks it; the master's dashboard shows the
   fleet.
-- **Per-route middleware on decorated routes.** `@Use` guards `invoke()`,
-  not the HTTP route; a decorated route today takes no route middleware, so
-  `authorize()` on a module route needs `app.use()` with a scope helper or a
-  plain `app.get()`. A decorator-level middleware list (or `@GET({ use })`)
-  unblocks route option sugar for caching (`{ cache }`) and the dashboard's
-  guarded routes.
 
 ## Backlog
 
@@ -70,26 +64,6 @@ updated **2026-09-09**.
 - **A11y recipe** — `aria-live` on swap regions + focus guidance off
   `rapid:swapped` (docs, not mechanism).
 
-### Middleware-as-config (direction set 2026-08-31)
-
-`server.static` is the PILOT: the default middlewares become YAML-
-configurable (per replica) the same way — data-only options in config,
-code-valued seams (stores, key extractors, verify fns) stay programmatic,
-"config names code, never imports it" throughout. The HARD problem to design
-first: **ordering** — the onion's sequence is semantics, and a config list
-must express or pin it. Per-middleware route/prefix scoping (e.g. session
-excluding asset prefixes) lands here too — never as a position knob on
-static.
-
-Shape already decided (2026-09-08) and followed by the shipped config: YAML is
-organised by STRUCTURE, not by middleware — one `headers:` key for every
-header name, seconds for every duration, built-ins reading the shared keys, a
-middleware's own knobs (compress `threshold`, cors `origin`) staying
-per-middleware. Still open, to settle when designing the middleware list:
-precedence between a shared key and an explicit factory option (`csrf({
-header })` vs `headers.csrf`) — explicit code should win, config is the
-default.
-
 ### Response caching (PINNED 2026-09-08 — after the first rapid release)
 
 Decided shape, not yet built. A **middleware**, `cache()`, hooks-backed like
@@ -113,8 +87,8 @@ Multi-replica purge: the shared backend is the source of truth; the memory
 default is per-process (document, optionally bump the generation over
 `app.publish()`). Stampede: coalesce concurrent misses per replica. Hits
 carry `age` + a configurable hit/miss header and the stored `etag`. Route
-option sugar (`{ cache: { ttl, tags } }`) once decorated routes take
-per-route middleware.
+option sugar (`{ cache: { ttl, tags } }`) over the decorators' `middleware`
+option.
 
 ### metro-man tidy-up (PINNED 2026-09-08 — discuss after caching)
 

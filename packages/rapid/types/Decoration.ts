@@ -7,6 +7,8 @@
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { RapidBinder } from './Binder.ts';
+import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
+import type { RapidSOCKETMiddleware } from './SOCKETMiddleware.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
 
@@ -53,6 +55,8 @@ export type RapidDecoration =
     template?: RapidTemplate<unknown> | RapidRouteTemplate;
     /** Raw `layout` route option (the object form's `layout` wins). */
     layout?: RapidRouteTemplate['layout'];
+    /** Route-scoped middleware, run after the owning module's, before the handler. */
+    middleware?: readonly RapidHTTPMiddleware[];
   }
   | {
     kind: 'SOCKET';
@@ -60,6 +64,8 @@ export type RapidDecoration =
     command: string;
     binds: readonly RapidBinder[];
     methodName: string;
+    /** Command-scoped middleware, run after the owning module's, before the handler. */
+    middleware?: readonly RapidSOCKETMiddleware[];
   }
   | {
     kind: 'JOB';

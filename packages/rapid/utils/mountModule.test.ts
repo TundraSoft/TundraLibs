@@ -8,8 +8,13 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
-import { GET, JOB, param } from '../decorators/mod.ts';
+import { GET, JOB, Module, param, SOCKET } from '../decorators/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import type {
+  RapidContextResponse,
+  RapidHTTPMiddleware,
+  RapidMiddleware,
+} from '../types/mod.ts';
 import {
   RapidModule,
   type RapidModuleInvokeMiddleware,
@@ -112,5 +117,138 @@ describe('rapid.utils.mountModule — binders off HTTP', () => {
       'RAPID_VALIDATION_FAILED',
     );
     await app.stop();
+  });
+});
+
+describe('rapid.utils.mountModule.middleware', () => {
+  const make = () =>
+    Application.initialize({
+      name: 'route-mw',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+
+  it('@Module middleware runs before @GET middleware, both inside the app onion; a guard short-circuits', async () => {
+    const order: string[] = [];
+    const tag = (label: string): RapidMiddleware => (_ctx, next) => {
+      order.push(label);
+      return next();
+    };
+    const deny: RapidHTTPMiddleware = (ctx, _next): Promise<void> => {
+      order.push('deny');
+      ctx.response = { status: 403, content: { denied: true } };
+      return Promise.resolve();
+    };
+    @Module('Admin', { prefix: '/admin', middleware: [tag('module')] })
+    class Admin {
+      @GET('/a', { middleware: [tag('route')] })
+      a(): RapidContextResponse {
+        order.push('handler');
+        return { content: { ok: true } };
+      }
+      @GET('/deny', { middleware: [deny] })
+      denied(): RapidContextResponse {
+        order.push('handler');
+        return { content: { ok: true } };
+      }
+      @GET('/plain')
+      plain(): RapidContextResponse {
+        order.push('handler');
+        return { content: { ok: true } };
+      }
+    }
+    const app = await make();
+    app.use(tag('app'));
+    app.module(new Admin());
+    const ok = await app.fetch(new Request('http://app/admin/a'));
+    asserts.assertEquals(ok.status, 200);
+    await ok.body?.cancel();
+    asserts.assertEquals(order, ['app', 'module', 'route', 'handler']);
+
+    order.length = 0;
+    const denied = await app.fetch(new Request('http://app/admin/deny'));
+    asserts.assertEquals(denied.status, 403);
+    asserts.assertEquals(await denied.json(), { denied: true });
+    asserts.assertEquals(order, ['app', 'module', 'deny']);
+
+    order.length = 0;
+    await (await app.fetch(new Request('http://app/admin/plain'))).body
+      ?.cancel();
+    asserts.assertEquals(order, ['app', 'module', 'handler']);
+    // The route entries carry the chains — the SHARE-mode boot check and
+    // tooling read them there.
+    const entry = app.routes.find((r) => r.path === '/admin/a');
+    asserts.assertEquals(entry?.middlewares.length, 2);
+    asserts.assertEquals(
+      app.routes.find((r) => r.path === '/admin/plain')?.middlewares.length,
+      1,
+    );
+    await app.stop();
+  });
+
+  it('@SOCKET middleware is registered after the module chain; @JOB takes none', async () => {
+    const noop: RapidMiddleware = (_ctx, next) => next();
+    @Module('Ops', { namespace: 'ops', middleware: [noop] })
+    class Ops {
+      @SOCKET('ping', { middleware: [noop, noop] })
+      ping(): RapidContextResponse {
+        return { content: 'pong' };
+      }
+      @JOB('tick', '* * * * *')
+      tick(): RapidContextResponse {
+        return { content: 'tock' };
+      }
+    }
+    const app = await make();
+    app.module(new Ops());
+    const command = app.socketCommands.find((c) => c.command === 'ops.ping');
+    asserts.assertEquals(command?.middlewares.length, 3);
+    asserts.assert(app.jobs.some((j) => j.name === 'ops.tick'));
+    await app.stop();
+  });
+
+  it('a non-function middleware entry is RAPID_CONFIG at decoration time, naming the decorator and index', () => {
+    const bad = ['nope'] as never;
+    const atRoute = asserts.assertThrows(
+      () => {
+        class X {
+          @GET('/x', { middleware: bad })
+          x(): RapidContextResponse {
+            return { content: 'x' };
+          }
+        }
+        return X;
+      },
+      RapidError,
+      '@GET middleware[0] is not a function',
+    );
+    asserts.assertEquals(atRoute.code, 'RAPID_CONFIG');
+    asserts.assertThrows(
+      () => {
+        @Module('Y', { middleware: bad })
+        class Y {
+          @GET('/y')
+          y(): RapidContextResponse {
+            return { content: 'x' };
+          }
+        }
+        return Y;
+      },
+      RapidError,
+      '@Module middleware[0]',
+    );
+    asserts.assertThrows(
+      () => {
+        class Z {
+          @SOCKET('z', { middleware: bad })
+          z(): RapidContextResponse {
+            return { content: 'x' };
+          }
+        }
+        return Z;
+      },
+      RapidError,
+      '@SOCKET middleware[0]',
+    );
   });
 });

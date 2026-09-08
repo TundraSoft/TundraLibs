@@ -7,6 +7,7 @@
  */
 
 import type { Html } from '../ui/html.ts';
+import type { RapidMiddleware } from './Middleware.ts';
 import type { RapidTemplate } from './Template.ts';
 
 /**
@@ -69,4 +70,12 @@ export type RapidModuleMeta = {
    * app default exists.
    */
   layout?: RapidTemplate<{ body: Html; title?: string }> | false;
+  /**
+   * Middleware every HTTP route and socket command in the class runs,
+   * before the route's own `middleware` — one `authorize()` for a whole
+   * admin module. Universal signature (narrow on `ctx.type` if needed).
+   * Jobs are NOT covered: a job has no per-registration chain, only the
+   * app-wide `use()` (scope it with `onlyJOB`).
+   */
+  middleware?: readonly RapidMiddleware[];
 };

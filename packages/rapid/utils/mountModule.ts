@@ -40,8 +40,11 @@ import type {
   RapidContextState,
   RapidDecoration,
   RapidHTTPHandler,
+  RapidHTTPMiddleware,
   RapidJOBHandler,
+  RapidMiddleware,
   RapidSOCKETHandler,
+  RapidSOCKETMiddleware,
 } from '../types/mod.ts';
 
 /**
@@ -54,15 +57,13 @@ export type ModuleMountTarget<S extends RapidContextState> = {
   route(
     method: HTTPMethod,
     path: string,
-    handler: RapidHTTPHandler<S>,
-  ): unknown;
-  route(
-    method: HTTPMethod,
-    path: string,
     options: RapidRouteOptions,
-    handler: RapidHTTPHandler<S>,
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): unknown;
-  socket(command: string, handler: RapidSOCKETHandler<S>): unknown;
+  socket(
+    command: string,
+    ...chain: [...RapidSOCKETMiddleware[], RapidSOCKETHandler<S>]
+  ): unknown;
   job(
     name: string,
     schedule: string,
@@ -236,6 +237,8 @@ type ModuleDoc = {
   description: string | undefined;
   /** The `@Module` layout default (route's own wins). */
   layout: RapidModuleMeta['layout'];
+  /** The `@Module` middleware, run before each route's / command's own. */
+  middleware: readonly RapidMiddleware[];
 };
 
 /** Build the per-transport closure `route`/`socket`/`job` receives. */
@@ -332,23 +335,33 @@ function registerDecoration<S extends RapidContextState>(
           ? { response: decoration.response }
           : {}),
       };
-      target.route(decoration.method, prefix + decoration.path, {
-        ...(version !== undefined ? { version } : {}),
-        openapi,
-        // Raw forms pass through; Application.route normalizes and
-        // fail-fast-validates them (RAPID_CONFIG on a wrong import).
-        ...(decoration.template !== undefined
-          ? { template: decoration.template }
-          : {}),
-        // The module-wide layout default applies only to TEMPLATED
-        // routes (a layout without a template is a loud config error at
-        // route()); an explicit per-route layout still surfaces so the
-        // same error fires for `@GET(path, { layout })` with no template.
-        ...(decoration.layout !== undefined ||
-            (decoration.template !== undefined && doc.layout !== undefined)
-          ? { layout: decoration.layout ?? doc.layout }
-          : {}),
-      }, invoker);
+      target.route(
+        decoration.method,
+        prefix + decoration.path,
+        {
+          ...(version !== undefined ? { version } : {}),
+          openapi,
+          // Raw forms pass through; Application.route normalizes and
+          // fail-fast-validates them (RAPID_CONFIG on a wrong import).
+          ...(decoration.template !== undefined
+            ? { template: decoration.template }
+            : {}),
+          // The module-wide layout default applies only to TEMPLATED
+          // routes (a layout without a template is a loud config error at
+          // route()); an explicit per-route layout still surfaces so the
+          // same error fires for `@GET(path, { layout })` with no template.
+          ...(decoration.layout !== undefined ||
+              (decoration.template !== undefined && doc.layout !== undefined)
+            ? { layout: decoration.layout ?? doc.layout }
+            : {}),
+          // Module chain first, then the route's own — the same order a
+          // plain route lists them; a universal middleware narrows to HTTP
+          // here by contravariance.
+        },
+        ...doc.middleware,
+        ...(decoration.middleware ?? []),
+        invoker,
+      );
       break;
     }
     case 'SOCKET':
@@ -356,6 +369,8 @@ function registerDecoration<S extends RapidContextState>(
         namespace !== undefined
           ? `${namespace}.${decoration.command}`
           : decoration.command,
+        ...doc.middleware,
+        ...(decoration.middleware ?? []),
         buildInvoker<S>(fn, decoration.binds, instance, label),
       );
       break;
@@ -447,6 +462,7 @@ export function mountModule<S extends RapidContextState>(
     security: meta?.security,
     description: meta?.description,
     layout: meta?.layout,
+    middleware: meta?.middleware ?? [],
   };
 
   const seen = new Set<PropertyKey>();

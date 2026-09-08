@@ -155,7 +155,8 @@ routing). On the decorator API the same slot is set with `@GET(path, { version }
 on every transport's invocation cycle (HTTP requests, socket frames, and job
 firings alike). Narrow to a transport inside the middleware via `ctx.type`, or
 use the scope helpers. Route- and command-scoped middleware are passed inline
-before the handler.
+before the handler — on a decorated route, through the `middleware` option of
+`@GET`/`@SOCKET` (one route) or `@Module` (every route in the class).
 
 ```ts
 import { Application } from '@tundralibs/rapid';
