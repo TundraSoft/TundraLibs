@@ -74,7 +74,8 @@ and fills the operation's `security` plus `components.securitySchemes`, so a
 guarded route documents itself without an `openapi.security` list on every
 registration. This is exactly what pact's `authorize()` does for its
 configured carriers; `markOpenApi` gives a hand-written guard the same
-ability:
+ability. The split stays the one above: the identifying middleware never
+rejects, the guard is what enforces — and the guard is what gets stamped:
 
 ```ts
 import {
@@ -87,14 +88,22 @@ import { openapi } from '@tundralibs/rapid/endpoints';
 
 declare function lookupKey(key: string): Promise<{ id: string } | null>;
 
-// The guard verifies `x-api-key`; the metadata says so in OpenAPI terms.
-const apiKey: RapidMiddleware = markOpenApi(
-  async (ctx, next) => {
-    if (ctx.type !== 'HTTP') throw new RapidError('RAPID_ACCESS_DENIED');
+// Identify (app-wide, never rejects): a valid `x-api-key` sets ctx.auth,
+// anything else continues anonymous so public routes keep working.
+const identify: RapidMiddleware = async (ctx, next) => {
+  if (ctx.type === 'HTTP') {
     const key = ctx.headers.get('x-api-key');
     const owner = key ? await lookupKey(key) : null;
-    if (owner === null) throw new RapidError('RAPID_UNAUTHENTICATED');
-    ctx.setAuth(owner);
+    if (owner !== null) ctx.setAuth(owner);
+  }
+  return next();
+};
+
+// Guard (per route, enforces): no identity → 401. The metadata describes
+// the credential `identify` accepts, in OpenAPI terms.
+const requireKey: RapidMiddleware = markOpenApi(
+  (ctx, next) => {
+    if (ctx.auth === undefined) throw new RapidError('RAPID_UNAUTHENTICATED');
     return next();
   },
   {
@@ -106,8 +115,9 @@ const apiKey: RapidMiddleware = markOpenApi(
 );
 
 const app = await Application.initialize({ name: 'keys' });
-app.get('/reports', apiKey, () => ({ content: { rows: [] } }));
-app.get('/status', () => ({ content: { ok: true } })); // no requirement
+app.use(identify);
+app.get('/reports', requireKey, () => ({ content: { rows: [] } }));
+app.get('/status', () => ({ content: { ok: true } })); // public, no requirement
 app.get('/openapi.json', openapi({ expose: 'ALL' }));
 ```
 
