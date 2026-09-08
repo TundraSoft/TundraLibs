@@ -19,7 +19,9 @@ import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import { contentTypeFor } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
+import { assertRedirectTarget } from '../utils/redirectTarget.ts';
 import {
+  bodyCapFor,
   type CookieOptions,
   isSwap,
   negotiate,
@@ -29,6 +31,7 @@ import {
   parseCookies,
   parsePaging,
   parseQueryFilters,
+  readCapped,
   resolveClientAddress,
   type ResolvedClientAddress,
   serializeCookie,
@@ -80,37 +83,6 @@ export type HTTPContextInit = {
   /** The matched route's template config (see {@link HTTPContext.routeTemplate}). */
   template?: RapidRouteTemplate;
 };
-
-/** A target with an explicit scheme — the author's deliberate, untouched choice. */
-const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
-
-/**
- * Refuse a redirect target a browser would resolve to ANOTHER origin
- * although it was written as a path. Decided the way the browser decides —
- * resolve against a sentinel origin and see whether the host survived —
- * not with a leading-character regex: the WHATWG parser strips ASCII
- * tab/newline and leading controls BEFORE parsing, so `/\t/evil.example`
- * and `' //evil.example'` are `//evil.example` to the browser.
- *
- * @throws {RapidError} RAPID_RESPONSE_INVALID when the target leaves the
- *   sentinel origin (`//host`, `/\host`, `/\t/host`, …).
- */
-function assertRedirectTarget(url: string): void {
-  if (ABSOLUTE_URL.test(url)) return;
-  let host = '';
-  try {
-    host = new URL(url, 'http://rapid.invalid').host;
-  } catch {
-    // unparsable: falls through to the throw below
-  }
-  if (host !== 'rapid.invalid') {
-    throw new RapidError('RAPID_RESPONSE_INVALID', {
-      message:
-        'redirect target resolves to another origin although it is not a full URL (a scheme-relative //host form) — write the full https://… URL to redirect cross-origin on purpose',
-      details: { url },
-    });
-  }
-}
 
 /**
  * The HTTP `args` view. `params` is known immediately from the route match;
@@ -250,6 +222,8 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    */
   private __payloadPromise: Promise<RapidHTTPRequestBody> | undefined =
     undefined;
+  /** The raw read, cached as a promise — see {@link rawPayload}. */
+  private __rawPromise: Promise<Uint8Array | null> | undefined = undefined;
   /** Lazy args cache — see the base {@link Context.args} contract. */
   private __args: Readonly<RapidContextArgs> | undefined = undefined;
   /** Lazy parsed inbound cookies — see {@link cookies}. */
@@ -257,7 +231,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /** Reply `cookies` awaiting the async apply — see {@link _applyReplyCookies}. */
   private __replyCookies: RapidContextResponse['cookies'] | undefined =
     undefined;
+  /** Temp paths of files written by the body parse — removed by {@link cleanup}. */
   protected readonly _fileUploads: string[] = [];
+  /** Outbound headers accumulated by `setHeader`/`appendHeader`/`deleteHeader`. */
   protected readonly _headers: Headers = new Headers();
 
   /** The inbound request headers. */
@@ -360,6 +336,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     return this.__resolveAddress().chain;
   }
 
+  /** Resolve (once) the client address per `server.trustProxy`. */
   private __resolveAddress(): ResolvedClientAddress {
     return this.__resolvedAddress ??= resolveClientAddress(
       this.__rawRemoteAddress,
@@ -408,16 +385,83 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     return this.__payloadPromise;
   }
 
+  /** The parse behind {@link payload}, over the raw bytes. */
   private async __parsePayload(): Promise<RapidHTTPRequestBody> {
-    const server = this.app.option('server')!;
-    const uploads = this.app.option('uploads')!;
-    const { value, files } = await parseBody(this.request, {
-      maxBodySize: server.maxBodySize!,
-      uploads: { ...uploads, path: uploads.path },
+    // The parse always runs over the raw bytes (the parser buffers the
+    // body under the cap anyway), so `rawPayload` stays readable AFTER
+    // `payload` — a body-bound middleware never depends on its position
+    // relative to one that parsed first.
+    const raw = await this.rawPayload;
+    const source = new Request(this.request.url, {
+      method: this.request.method === 'GET' || this.request.method === 'HEAD'
+        ? 'POST'
+        : this.request.method,
+      headers: this.request.headers,
+      body: raw === null ? undefined : (raw as unknown as BodyInit),
     });
+    const { value, files } = await parseBody(source, this.__parseOptions());
     // Track written uploads so cleanup() removes them post-response.
     this._fileUploads.push(...files);
     return value;
+  }
+
+  /** Body caps and upload policy from the app options. */
+  private __parseOptions() {
+    const server = this.app.option('server')!;
+    const uploads = this.app.option('uploads')!;
+    return {
+      maxBodySize: server.maxBodySize!,
+      uploads: { ...uploads, path: uploads.path },
+    };
+  }
+
+  /**
+   * The request body BYTES, exactly as received — for digests and
+   * decryption (the pact adapter's HMAC `${content-digest}` and JWE
+   * payloads). Read once under the same byte cap as {@link payload};
+   * `null` when the request has no body. Order-independent: the parse
+   * behind {@link payload} runs over these same bytes, so a middleware
+   * that needs them may sit before or after one that parsed the body.
+   * {@link _replacePayload} does not touch them — a decrypted body's
+   * raw bytes stay the ciphertext that was signed.
+   *
+   * @throws {RapidError} As a rejection: RAPID_PAYLOAD_TOO_LARGE over the
+   *   byte cap.
+   */
+  public get rawPayload(): Promise<Uint8Array | null> {
+    this.__rawPromise ??= this.__readRaw();
+    return this.__rawPromise;
+  }
+
+  /** The single capped read of the request stream behind {@link rawPayload}. */
+  private async __readRaw(): Promise<Uint8Array | null> {
+    if (this.request.body === null) return null;
+    return await readCapped(
+      this.request.body,
+      bodyCapFor(this.request, this.__parseOptions()),
+    );
+  }
+
+  /**
+   * Replace the request payload with `bytes` — what a decrypting
+   * middleware does after opening an encrypted body, so handlers and
+   * `payload(schema)` see the plaintext through {@link payload}. Parsed
+   * with no declared type: JSON when it parses, else the text.
+   */
+  public _replacePayload(bytes: Uint8Array): void {
+    const options = this.__parseOptions();
+    this.__payloadPromise = parseBody(
+      new Request(this.request.url, {
+        method: this.request.method === 'GET' || this.request.method === 'HEAD'
+          ? 'POST'
+          : this.request.method,
+        body: bytes as unknown as BodyInit,
+      }),
+      options,
+    ).then(({ value, files }) => {
+      this._fileUploads.push(...files);
+      return value;
+    });
   }
 
   /**
@@ -835,6 +879,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     }
   }
 
+  /** Materialise the Fetch `Response` — the HTTP half of {@link respond}. */
   protected _respond(): Response {
     // A HEAD request sends GET's status + headers (incl. a correct
     // content-length) with NO body — see serializeResponse's `head` arg.

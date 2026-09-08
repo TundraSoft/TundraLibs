@@ -3,7 +3,7 @@
 Forward-looking build plan. Completed work is summarized under **Shipped**;
 everything below it is the **Backlog** — one pool, no 1.0-vs-later gate, all in
 scope and up for scheduling. Full build-history detail lives in git and the
-project memory. Last updated **2026-09-05**.
+project memory. Last updated **2026-09-08**.
 
 ## Shipped
 
@@ -20,22 +20,26 @@ Core and the current capability set are built and green on Deno / Bun / Node
   **versioning** (`server.versioning { mode: header|accept|path, identifier,
   default }`; `@GET`/`@Module` `{ version }` override).
 - **Middleware** — universal `use()`, scope helpers (`onlyHTTP`/`guardHTTP`/…),
-  and the catalog: cors, secureHeaders, compress, etag, rateLimit (store-
-  injection), requestId, requestLogger, responseTimer, healthCheck,
-  timeout, **idempotency** (identity-scoped replays, bounded default
-  store), auth (`authenticate`/`authorize`),
-  **session** (store-injection, signed id, rolling + absolute TTL, regenerate /
-  destroy, loaded LAZILY on the first `await getSession(ctx)`), and **csrf**
-  (signed double-submit, session-bound). `Store` gained an optional
-  `delete`; `memoryStore` a `maxEntries` bound with an `evictable` guard.
+  and the catalog: cors, secureHeaders, compress, etag, rateLimit,
+  healthCheck, timeout, **idempotency** (identity-scoped, fingerprinted
+  replays), **session** (signed id, rolling + absolute TTL, regenerate /
+  destroy, loaded LAZILY on the first `await getSession(ctx)`), **csrf**
+  (signed double-submit, session-bound) and the pact adapter
+  (`middlewares/pact`, `pactAuth(pact) → { authenticate, authorize }`).
+  Durations are seconds, non-standard header names are options, and the
+  stateful three take pact-style `hooks` with bounded in-memory defaults
+  (the `Store` seam, the generic `auth`, `requestId`, `responseTimer` and
+  `requestLogger` middlewares were retired 2026-09-08 — the last three
+  live in core `headers` + `logger.access` config).
   Static serving is no longer a middleware — see `server.static` below.
 - **Decorators + modules** — `@GET/@POST/@PUT/@PATCH/@DELETE/@SOCKET/@JOB`,
   binders (`param`/`payload`/`query`/`paging`/`header`/`cookie`/`auth`/
   `session`/`connection`), `@Module`, `@On`/`@Use`, `RapidModule` +
   `initModules` + `app.modules()` (namespace scan, doctor-constructed zero-arg
   modules, instance mounting).
-- **Endpoints catalog** (`./endpoints`) — `health`, `metrics`, `openapi`,
-  `login`.
+- **Endpoints catalog** (`./endpoints`) — `health`, `metrics`, `openapi`
+  (the `login` endpoint was removed 2026-09-08: a login route is app code
+  over `pact.login()`, documented in Rapid-Auth.md).
 - **Request surface** — cookies, query/paging parsing with caps, body parsing
   (json/text/form/multipart) with size limits + an upload magic-byte gauntlet,
   `ctx.serve()` file download, MIME resolution, content negotiation
@@ -73,6 +77,20 @@ Core and the current capability set are built and green on Deno / Bun / Node
   crypt, restler, utils, slogger). Not built: a `rapid ai` REGENERATE
   subcommand — it would have to merge into a guide the user has since edited,
   a real design question; open follow-on if wanted.
+- **First-release prep (2026-09-08)** — six read-only audits (UI runtime,
+  docs-vs-API, config-vs-scaffold, middleware/app/module option types)
+  actioned: swap-redirect guarded server-side, response-origin check and
+  `defaultPrevented` in the runtime, self-referencing `data-load` skipped,
+  live-bridge jitter, `server.socketOrigins` (browser upgrades are
+  same-origin unless listed), `ctx.rawPayload` order-independent of
+  `payload`, boot validation for `stateMode` / `versioning` / `trustProxy` /
+  sizes, bounded `memoryRateLimitHooks`, export gaps closed, JSDoc lint at
+  zero. Docs: `Rapid-Configuration.md`, `Rapid-Middleware.md`,
+  `Rapid-Errors.md`, `examples/README.md`; the scaffold's `Application.yaml`
+  annotates every key with its consumer; `rapid init` ALWAYS writes
+  `AGENTS.md` + `CLAUDE.md` (generated middleware catalog, error table and
+  version-pinned doc links) with a drift-guard test that fails when the
+  public surface grows without the guide.
 - **Cluster seam** — `app.instanceId` (boot ULID) + a nullable `app.cluster`
   slot; the master/worker implementation is in the backlog (Scaling & ops).
 - **Review hardening (2026-08-22)** — the straightforward/unblocked fixes from
@@ -120,7 +138,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   the new `redirect` key (string → 302, `{ url, permanent }` → 301, `location`
   set, precedence over `status`), the Module HTTP ergonomics item is done:
   input binders (`cookie`/`auth`/`session`) in, cookies/redirect/stream out.
-- **UI layer (`./ui`) — SHIPPED 2026-08-27** (design DESIGN-ui.md, decided
+- **UI layer (`./ui`) — SHIPPED 2026-08-27** (design record: DESIGN.md "The UI layer", decided
   2026-08-23): a route names a **template by function** (`@GET('/users',
   { template: UserList })`, plain-API verb helpers gained the same options
   slot); the handler keeps returning JSON-shaped data. Deterministic
@@ -138,7 +156,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   routes advertise both media types in OpenAPI. Docs: docs/Rapid-UI.md +
   README "UI"; runnable `examples/dashboard/main.ts`. History shipped in the
   tiers round (below); polling/transitions stay deferred.
-- **UI tiers round (2026-08-31; DESIGN-ui D10–D15)** — three fixed layout
+- **UI tiers round (2026-08-31; DESIGN.md UI layer, tiers)** — three fixed layout
   tiers (core document > module/route layout > fragment; `layout: false`
   opts out); UI config split BY NATURE — the serializable half under YAML
   `ui:` (`enabled`, `runtimePath`, `live`, `history`, `prefer`, contract
@@ -155,8 +173,8 @@ Core and the current capability set are built and green on Deno / Bun / Node
   bootstrap|pico` self-hosts a CSS framework. Examples restructured into a
   showcase (blog: permission-driven nav via the `view` projection; kanban:
   history + `formState`; dashboard).
-- **Adversarial review + hardening (2026-09-01 → 04;
-  `reviews/rapid-review-2026-09-01.md`)** — 23 findings dispositioned, then
+- **Adversarial review + hardening (2026-09-01 → 04)** — 23 findings
+  dispositioned (the review notes were not kept in the repo), then
   a same-day pass over the fixes caught and corrected 8 regressions. The
   keepers: `idempotency()` REQUIRES an identity `scope` (`false` = explicit
   shared space), caps keys, skips unmatched requests, snapshots records
@@ -180,7 +198,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `data-load` lazy regions (skeleton first — the answer to "partial
   prerendering"; D10 amended); csrf tokens session-bound (cookie tossing
   closed). JSX authoring parked (below).
-- **Surfaces — API and UI in one app (2026-09-06; DESIGN-ui D16)** —
+- **Surfaces — API and UI in one app (2026-09-06; DESIGN.md UI layer, surfaces)** —
   `server.api: { hosts, prefix }` names the API surface; every HTTP
   request resolves to `'ui' | 'api'` BEFORE routing (prefix stripped,
   then a path-mode version) and `ctx.surface` / `ctx.basePath` /
@@ -198,10 +216,9 @@ Core and the current capability set are built and green on Deno / Bun / Node
   exists and lists a page as `text/html` only; `x-forwarded-host` under
   `trustProxy`; idempotency keys are per surface. Two adversarial passes
   (security + design, 25 findings) shaped it — the register lives in
-  the session spec; the decisions in DESIGN-ui D16. Docs: Rapid-UI.md
+  the session spec; the decisions in DESIGN.md, UI layer, surfaces. Docs: Rapid-UI.md
   "Surfaces".
-- **Adversarial review #3 + fixes (2026-09-07;
-  `reviews/rapid-review-2026-09-07.md`)** — 7 high / 16 medium / ~28 low
+- **Adversarial review #3 + fixes (2026-09-07)** — 7 high / 16 medium / ~28 low
   dispositioned the same day, all but the pact-adapter high (rides the
   pact rewrite) fixed with regression tests. Headline fixes: the
   redirect guard resolves against a sentinel origin (tab bypass);
@@ -216,7 +233,7 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `If-Range`; `server.api.trustForwardedHost` explicit; app-level
   durations in SECONDS (`shutdownTimeout` 1–30). Deferred to the
   pact/middleware round: BREACH token masking, middleware duration units.
-- **pact adapter rebuilt for pact 0.7 (2026-09-07)** — `middlewares/pact/`
+- **pact adapter rebuilt for pact 0.7 (2026-09-07)** — `middlewares/pact.ts`
   is ONE factory, `pactAuth(pact, options) → { authenticate, authorize }`,
   in the shape of pact's own hono/oak adapters: `authenticate` fills
   `ctx.auth` with the `PactAuthContext` (Bearer with a configurable
@@ -227,9 +244,9 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `authorize(module, permission)` is typed by the instance and checked
   against its catalog at the call site. The `pact()` initializer, doctor
   label, `TOKEN` scheme and per-scheme `respond` hook are gone.
-  `login({ pact, cookie, fields })` sits on pact's real `login()`
-  contract. Deferred: HMAC response signing (needs a named standard),
-  the pact-side shared-core factory (a pact PR).
+  A `login()` endpoint shipped here and was removed 2026-09-08 in favour
+  of a documented app-side route. Both deferrals landed 2026-09-08 with pact 0.8's middleware
+  core: RFC 9421 template signing both ways and `createPactMiddleware`.
 - **OpenAPI from the decorators (2026-08-23)** — routes take `summary` /
   `description` / `tags` / `operationId` / `security`; `@Module` takes
   `description` / `tags` / `security` as the defaults its routes inherit. A
@@ -332,6 +349,22 @@ Core and the current capability set are built and green on Deno / Bun / Node
 
 ## Backlog
 
+- **Extract to lower packages** (from the 2026-08-23 full-pass review; each
+  is its own cross-package PR — release the lower package, then rapid
+  consumes). `negotiate`, `parseRange` and `contentTypeFor` already moved to
+  `@tundralibs/compat/http`. The rapid side is done (2026-09-08): the
+  `:port`-in-XFF collapse is fixed, `pickEncoding` is its own
+  `utils/pickEncoding.ts`, and the hidden-slot define is one helper
+  (`utils/hiddenSlot.ts` `pinHidden`). Candidates still in rapid, each
+  self-contained: `utils/resolveClientAddress.ts` → utils (sibling of
+  `isPublicIP`); `utils/compose.ts` → utils (`ModuleRuntime` keeps its own
+  sync-through onion on purpose: invoke contexts are not `Context`s and a
+  sync `@Use` chain must stay promise-free); `utils/streams.ts` → a compat
+  stream subpath; `parseCookies`/`serializeCookie` in `utils/cookies.ts` →
+  compat/http; `utils/pickEncoding.ts` → compat/http beside `negotiate`;
+  the TC39 decorator-metadata side-table in `decorators/registry.ts` →
+  utils; `pinHidden` → ambient.
+
 No 1.0-vs-later split — everything here is in scope. A few items note a real
 technical **dependency** (e.g. "needs the streaming model"); that is a
 sequencing fact, not a deferral.
@@ -376,6 +409,55 @@ semantics, and a config list must express or pin it. Per-middleware
 route/prefix scoping (e.g. session excluding asset prefixes) lands
 here too — never as a position knob on static.
 
+**Shape decided 2026-09-08: organised by STRUCTURE, not by middleware.**
+The YAML groups config by what it is, not by which middleware consumes
+it — every header name under one `headers:` key (`headers.requestId`,
+`headers.csrf`, `headers.apiKey`/`headers.signature`/`headers.timestamp`,
+…), durations under one convention (SECONDS, app-wide — the ms-vs-s
+audit of the middlewares is the precondition), and so on — so an
+implementer swapping a built-in middleware for a custom one still reads
+the same config items instead of a `csrf:`/`session:` island that dies
+with the middleware it was named after. Built-ins read those shared keys;
+a middleware's own knobs that no other middleware could share (compress
+`threshold`, cors `origin`) stay per-middleware. Open question to settle
+when designing: precedence between a shared key and an explicit factory
+option (`csrf({ header })` vs `headers.csrf`) — explicit code should win,
+config is the default.
+
+### Response caching (PINNED 2026-09-08 — after the first rapid release)
+
+Decided shape, not yet built. A **middleware**, `cache()`, hooks-backed like
+`session`/`rateLimit`/`idempotency` (`getCached`/`saveCached`/`purgeKeys`/
+`purgeTags`/`reset`, memory default with a `maxEntries` bound, cacher adapter
+is the implementer's), plus a small **core** handle for invalidation
+(`app.cache.purge(tags)` / `app.cache.reset()` reachable from any write
+handler — the middleware registers its hooks, like `app.publish()` reaches
+subscribers). Why middleware: opt-in per route, must sit after
+`authenticate` and outside `etag`/`compress`, carries state. Key = surface +
+method + routed path + normalised query + Vary values, **anonymous replies
+only by default** — per-user caching is an explicit `scope: (ctx) =>
+principal`, so a wrong key can never leak one user's reply to another.
+Cacheability follows the handler's `Cache-Control` (`no-store`/`private`
+never stored, `max-age` overrides the configured `ttl`); 200 only, no
+streams, no `set-cookie`. Reset in three layers: a short default TTL
+(seconds, 60) as the safety net; route `tags` + purge for everyday
+invalidation (writes know WHAT changed, not which URLs rendered it); a
+generation prefix for `reset()` so backends without key scans still work.
+Multi-replica purge: the shared backend is the source of truth; the memory
+default is per-process (document, optionally bump the generation over
+`app.publish()`). Stampede: coalesce concurrent misses per replica. Hits
+carry `age` + a configurable hit/miss header and the stored `etag`. Route
+option sugar (`{ cache: { ttl, tags } }`) once decorated routes take
+per-route middleware.
+
+### metro-man tidy-up (PINNED 2026-09-08 — discuss after caching)
+
+A standard way for middleware to record their own counters (rate-limit
+rejections, idempotency replays, cache hit ratio) instead of ad-hoc
+`ctx.meter` use, and one clock: the meter's histogram measures the onion
+while the access line and `headers.responseTime` measure arrival→finalize
+from the transport's `started` — unify on the latter.
+
 ### Tooling & DX
 
 - **CLI `build`** — a scaffolded deno task wrapping `deno compile` / the
@@ -405,10 +487,12 @@ One item left from the HMAC-auth discussion (its two rapid-only siblings —
 `ctx.config` + `config()` binder, and the complete `Application.yaml` — shipped
 2026-08-23); gated on the pact decision.
 
-- **Signed-request auth scheme (HMAC) alongside Bearer.** `authenticate`
-  grows scheme dispatch on the `Authorization` scheme word (RFC 7235):
-  `authenticate({ schemes: [bearer(jwt(pact)), hmac(pact)] })`, with today's
-  `authenticate({ verify })` ≡ a lone bearer scheme. **Verified:** pact's
+- **Signed-request auth scheme (HMAC) alongside Bearer — SHIPPED 2026-09-08
+  via pact 0.8's middleware core** (`pactAuth(pact, { hmac: {} })`: RFC 9421
+  template, `x-timestamp` freshness, response signing, JWE payloads; the
+  generic `authenticate({ verify })` helper is gone). Original note kept for
+  the reasoning: `authenticate` was to grow scheme dispatch on the
+  `Authorization` scheme word (RFC 7235). **Verified:** pact's
   `sign`/`verify` are generic HMAC over bytes — there is NO request-signing
   protocol (no canonical string, header names, timestamp, replay window) and
   NO key storage (`groupResolver` / `isRevoked` / `strategies` / `oauth` are

@@ -75,6 +75,16 @@ describe('rapid.socketOutcome', () => {
     asserts.assertEquals(socketOutcome(503, null).code, 'RAPID_UNHANDLED');
     // 409 is no longer a fallback: RAPID_CONFLICT maps it exactly.
     asserts.assertEquals(socketOutcome(409, null).code, 'RAPID_CONFLICT');
+    // A `specific` code sharing the status is never derived: a handler's
+    // 422 is not an idempotency mismatch, a handler's 400 not a bad key.
+    asserts.assertEquals(
+      socketOutcome(422, null).code,
+      'RAPID_VALIDATION_FAILED',
+    );
+    asserts.assertEquals(
+      socketOutcome(400, null).code,
+      'RAPID_VALIDATION_FAILED',
+    );
   });
 
   it('null/undefined content adds no data field', () => {

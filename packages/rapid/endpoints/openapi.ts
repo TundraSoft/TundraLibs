@@ -9,6 +9,7 @@
  *
  * @module
  */
+import { RapidError } from '../errors/mod.ts';
 import {
   buildOpenApi,
   type OpenApiInfo,
@@ -19,7 +20,15 @@ import type { RapidHTTPHandler } from '../types/mod.ts';
 
 /** Options for {@link openapi}. */
 export type OpenApiOptions = {
+  /**
+   * The document's `info` block.
+   * @default title = the app `name`, version = '1.0.0'
+   */
   info?: OpenApiInfo;
+  /**
+   * The document's `servers` list.
+   * @default omitted
+   */
   servers?: readonly OpenApiServer[];
   /**
    * Security schemes routes may reference by name in `security`. `bearerAuth`
@@ -42,10 +51,9 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
   const cache = new Map<string, Record<string, unknown>>();
   return (ctx) => {
     if (expose !== 'ALL' && expose !== ctx.app.mode) {
-      return {
-        status: 404,
-        content: { code: 'RAPID_NOT_FOUND', message: 'Not found' },
-      };
+      // Indistinguishable from an unrouted path — same envelope, same
+      // requestId, same disclosure.
+      throw new RapidError('RAPID_NOT_FOUND');
     }
     const version = new URL(ctx.request.url).searchParams.get('version') ?? '';
     const cached = cache.get(version);

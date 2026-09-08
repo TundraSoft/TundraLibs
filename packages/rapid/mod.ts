@@ -1,9 +1,10 @@
 /**
- * @fileoverview `@tundralibs/rapid` — a config-driven API framework for
- * Deno, Bun, and Node. Phase 1 assembles an application from FUNCTIONS
- * (Oak-style route/middleware/job registration) with native
- * observability (slogger always on, tracer opt-in) and a
- * cronus-scheduled job transport.
+ * @fileoverview `@tundralibs/rapid` — a config-driven application
+ * framework for Deno, Bun, Node and Cloudflare Workers: HTTP routes,
+ * WebSocket commands and cron jobs behind one middleware onion, declared
+ * as functions or as decorated modules, with an HTML-over-the-wire UI
+ * layer, native observability (slogger always on, tracer opt-in) and
+ * the `@tundralibs/pact` adapter for authentication.
  *
  * @module
  */
@@ -21,7 +22,10 @@ export {
   type SOCKETContextInit,
 } from './context/mod.ts';
 export {
+  auth,
+  config,
   connection,
+  cookie,
   decorationsOf,
   DELETE,
   GET,
@@ -46,6 +50,7 @@ export {
   Use,
 } from './decorators/mod.ts';
 export {
+  asValidationError,
   RAPID_ERROR_CODES,
   RapidError,
   type RapidErrorCode,
@@ -64,10 +69,6 @@ export {
   reply,
 } from './modules/mod.ts';
 export {
-  type AuthBag,
-  authenticate,
-  type AuthenticateOptions,
-  authorize,
   compress,
   type CompressOptions,
   cors,
@@ -82,12 +83,14 @@ export {
   healthCheck,
   type HealthCheckOptions,
   idempotency,
+  type IdempotencyHooks,
   type IdempotencyOptions,
   type IdempotencyRecord,
   type IdempotentReply,
   markStateKeyUser,
-  memoryStore,
-  type MemoryStoreOptions,
+  memoryIdempotencyHooks,
+  memoryRateLimitHooks,
+  memorySessionHooks,
   MIDDLEWARE_SCOPE,
   MIDDLEWARE_STATE_KEY,
   middlewareScope,
@@ -99,26 +102,25 @@ export {
   onlyUi,
   type RapidSession,
   rateLimit,
+  type RateLimitHooks,
   type RateLimitOptions,
-  requestId,
-  type RequestIdOptions,
-  requestLogger,
-  type RequestLoggerOptions,
-  responseTimer,
-  type ResponseTimerOptions,
+  type RateLimitWindow,
   secureHeaders,
   type SecureHeadersOptions,
   session,
   type SessionData,
+  type SessionHooks,
   type SessionOptions,
-  type Store,
+  type SessionRecord,
   timeout,
 } from './middlewares/mod.ts';
 export type {
+  RapidAccessLogOptions,
   RapidApplicationEvents,
   RapidApplicationExporterConfig,
   RapidApplicationFactoryOptions,
   RapidApplicationFetchInfo,
+  RapidApplicationHeaderOptions,
   RapidApplicationJobMetrics,
   RapidApplicationJobsOptions,
   RapidApplicationOptions,
@@ -160,6 +162,7 @@ export type {
   RapidRouteOpenApi,
   RapidRouteOptions,
   RapidRouteTemplate,
+  RapidSchema,
   RapidSocketEntry,
   RapidSOCKETHandler,
   RapidSOCKETMiddleware,

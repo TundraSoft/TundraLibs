@@ -12,7 +12,11 @@ import type { RapidContextState, RapidHTTPHandler } from '../types/mod.ts';
 
 /** Options for {@link health}. */
 export type HealthOptions<S extends RapidContextState = RapidContextState> = {
-  /** Readiness probe — throw (or reject) to report unhealthy. */
+  /**
+   * Readiness probe — throw (or reject) to report unhealthy (503; the
+   * cause is logged at `warn`, never sent). Its return value is ignored.
+   * @default none — a bare liveness 200
+   */
   check?: (ctx: HTTPContext<S>) => unknown | Promise<unknown>;
 };
 

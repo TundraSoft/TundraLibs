@@ -27,6 +27,7 @@ import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
 import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
 import { attachContainer } from '../utils/requestContainer.ts';
+import { pinHidden } from '../utils/hiddenSlot.ts';
 import { EventContext } from './EventContext.ts';
 import {
   type EventSubscriber,
@@ -118,8 +119,10 @@ export function _seedRequestFrame(seed: {
 }): void {
   const bag = ambient.get() as Bag | undefined;
   if (bag === undefined) return;
-  Object.defineProperty(bag, CURRENT, {
-    value: new InvokeContext({
+  pinHidden(
+    bag,
+    CURRENT,
+    new InvokeContext({
       requestId: seed.requestId,
       action: seed.action,
       state: seed.state,
@@ -128,10 +131,7 @@ export function _seedRequestFrame(seed: {
       args: seed.args,
       ...(seed.auth !== undefined ? { auth: seed.auth } : {}),
     }),
-    enumerable: false,
-    configurable: true,
-    writable: true,
-  });
+  );
 }
 
 /** An explicit `reply()` passes through; `undefined` is 204; anything else is 200 content. */
@@ -161,6 +161,15 @@ const compose = (
   };
 };
 
+/**
+ * The module system's host: mounts {@link RapidModule} instances,
+ * validates names / events / decorations before committing, wires
+ * `@On` subscriptions at {@link finalize}, and runs every
+ * module-to-module {@link invoke} and {@link emit} through the
+ * invocation cycle (ambient correlation, `@Use` guards, error
+ * disclosure). One per application — `app.modules()` builds it;
+ * `initModules()` builds one standalone (tests, workers, CLIs).
+ */
 export class ModuleRuntime {
   /** The host's logger (ambient-correlated at emit time). */
   public readonly log: Slogger;
@@ -181,6 +190,8 @@ export class ModuleRuntime {
   private __disposing = false;
 
   /**
+   * Build an empty runtime; {@link mount} modules, then {@link finalize}.
+   *
    * @param context - The host context.
    * @param ownsLog - Whether the runtime BUILT `context.log` itself (the
    *   standalone path) and must `finalize()` it on dispose.
@@ -659,6 +670,7 @@ export class ModuleRuntime {
     }
   }
 
+  /** The rejection every method returns after {@link dispose}. */
   private __disposedError(what: string): RapidError {
     return new RapidError('RAPID_CONFIG', {
       message: `ModuleRuntime is disposed — ${what}() is no longer available`,
@@ -716,12 +728,7 @@ export class ModuleRuntime {
     finish: () => R,
   ): R | Promise<R> {
     const body = (): R | Promise<R> => {
-      Object.defineProperty(ambient.get() as Bag, CURRENT, {
-        value: ctx,
-        enumerable: false,
-        configurable: true,
-        writable: true,
-      });
+      pinHidden(ambient.get() as Bag, CURRENT, ctx);
       // Pin the app container so a module method's inject() resolves
       // against it (ambient.child spreads only enumerable keys, so each
       // invoke scope re-pins its own).

@@ -7,6 +7,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
 import { cors, type CorsOptions } from './cors.ts';
+import { RapidError } from '../errors/mod.ts';
 
 const spin = async (options?: CorsOptions) => {
   const app = await Application.initialize({
@@ -21,6 +22,56 @@ const spin = async (options?: CorsOptions) => {
   await app.start();
   return { app, base: `http://localhost:${app.port}` };
 };
+
+describe('rapid.middlewares.cors — options', () => {
+  it('rejects malformed options at build: origins, maxAge, tokens', () => {
+    const cases: [CorsOptions, string][] = [
+      [{ origin: 'ok.example' }, 'serialized origins'],
+      [{ origin: ['https://ok.example/path'] }, 'serialized origins'],
+      [{ origin: ['HTTPS://OK.example'] }, 'serialized origins'],
+      [{ origin: [] }, 'must not be empty'],
+      [{ maxAge: -1 }, 'maxAge'],
+      [{ maxAge: 1.5 }, 'maxAge'],
+      [{ methods: [] }, 'methods'],
+      [{ methods: ['GET', 'PO ST'] }, 'HTTP tokens'],
+      [{ allowedHeaders: ['x-thing', 'bad header'] }, 'HTTP tokens'],
+      [{ exposedHeaders: ['x-(thing)'] }, 'HTTP tokens'],
+    ];
+    for (const [options, message] of cases) {
+      asserts.assertThrows(() => cors(options), RapidError, message);
+    }
+    cors({
+      origin: ['https://ok.example', 'http://localhost:3000'],
+      maxAge: 0,
+    });
+    cors({ origin: 'https://ok.example:8443', allowedHeaders: [] });
+  });
+
+  it('a fixed allowedHeaders list is sent as-is and does not vary the preflight', async () => {
+    const { app, base } = await spin({
+      origin: 'https://ok.example',
+      allowedHeaders: ['content-type', 'x-thing'],
+    });
+    try {
+      const pre = await fetch(`${base}/r`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://ok.example',
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'x-other',
+        },
+      });
+      await pre.text();
+      asserts.assertEquals(
+        pre.headers.get('access-control-allow-headers'),
+        'content-type, x-thing',
+      );
+      asserts.assertEquals(pre.headers.get('vary'), 'origin');
+    } finally {
+      await app.stop();
+    }
+  });
+});
 
 describe('rapid.middlewares.cors', () => {
   it('default wildcard; no Origin header → untouched', async () => {
@@ -116,6 +167,11 @@ describe('rapid.middlewares.cors', () => {
         'content-type,x-thing',
       );
       asserts.assertEquals(pre.headers.get('access-control-max-age'), '600');
+      // Reflected allow-headers vary by what was asked.
+      asserts.assertEquals(
+        pre.headers.get('vary'),
+        'origin, access-control-request-headers',
+      );
       // Disallowed preflight: still 204, but bare:
       const deny = await fetch(`${base}/r`, {
         method: 'OPTIONS',

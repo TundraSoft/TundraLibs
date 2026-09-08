@@ -9,7 +9,9 @@
  */
 
 import type { HTTPContext } from '../context/mod.ts';
+import { RapidError } from '../errors/mod.ts';
 import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
+import { pickEncoding } from '../utils/pickEncoding.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -17,7 +19,7 @@ import { MIDDLEWARE_SCOPE } from './scope.ts';
 export type CompressOptions = {
   /**
    * Minimum body size (bytes) worth compressing — below this the
-   * overhead isn't worth it.
+   * overhead isn't worth it. A non-negative integer.
    * @default 1024
    */
   threshold?: number;
@@ -34,16 +36,6 @@ const NO_BODY = new Set([204, 205, 304]);
  * or a pure-JS encoder dependency. gzip is universally negotiated and within
  * a few percent of brotli for API payloads, so it is deliberately omitted.
  */
-
-/** Pick gzip (preferred) or deflate from `Accept-Encoding`, else null. The
- * `q=0` exclusion matches ONLY a true zero (`q=0`, `q=0.0`), not a high
- * priority like `q=0.9` — `(?![.\d])` stops `q=0` matching the `0` prefix. */
-const pickEncoding = (accept: string): 'gzip' | 'deflate' | null => {
-  const a = accept.toLowerCase();
-  if (/\bgzip\b(?!\s*;\s*q=0(?:\.0+)?(?![.\d]))/.test(a)) return 'gzip';
-  if (/\bdeflate\b(?!\s*;\s*q=0(?:\.0+)?(?![.\d]))/.test(a)) return 'deflate';
-  return null;
-};
 
 /** Text-ish content is worth compressing; binary/already-compressed isn't. */
 const isCompressible = (contentType: string): boolean =>
@@ -89,15 +81,26 @@ const compressBytes = async (
 /**
  * Compress the response body when the client accepts gzip/deflate, the
  * body is at least `threshold` bytes, is a compressible type, and isn't
- * already encoded. Sets `Content-Encoding` and merges `Accept-Encoding`
- * into `Vary`.
+ * already encoded. Sets `Content-Encoding`, and merges `Accept-Encoding`
+ * into `Vary` on every compressible response — encoded or not — so a
+ * shared cache never keys one client's identity copy for everyone. A
+ * HEAD carries the same headers its GET would (RFC 9110 §9.3.2).
+ *
+ * @throws {RapidError} RAPID_CONFIG at build when `threshold` is not a
+ *   non-negative integer.
  */
 export function compress(options: CompressOptions = {}): RapidMiddleware {
   const threshold = options.threshold ?? 1024;
+  if (!Number.isInteger(threshold) || threshold < 0) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'compress threshold must be a non-negative integer of bytes',
+      details: { threshold },
+    });
+  }
 
   const middleware: RapidMiddleware = async (ctx, next) => {
     await next();
-    if (ctx.type !== 'HTTP' || ctx.method === 'HEAD') return;
+    if (ctx.type !== 'HTTP') return;
     if (ctx.response === null) return;
     if (ctx.responseHeaders.has('content-encoding')) return; // already encoded
     if (NO_BODY.has(ctx.status)) return;
@@ -107,9 +110,6 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       // gzip bytes under identity offsets, reassembling garbage.
       return;
     }
-
-    const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
-    if (encoding === null) return;
 
     // RFC 9110 §8.8.3: a STRONG validator must change when the
     // representation does — and Content-Encoding is part of it. An inner
@@ -133,14 +133,22 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       ? priorVary
       : `${priorVary}, Accept-Encoding`;
 
+    const streamBody = ctx.response.content;
+    const streamed = isStreamBody(streamBody);
+    const contentType = streamed
+      ? ctx.responseHeaders.get('content-type') ?? 'application/octet-stream'
+      : bodyOf(ctx).contentType;
+    if (!isCompressible(contentType)) return;
+    // The representation varies by Accept-Encoding from here on, whether
+    // or not THIS client gets the encoded form.
+    ctx.setHeader('vary', vary);
+    const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
+    if (encoding === null) return;
+
     // A STREAM body is compressed chunk-wise through CompressionStream —
     // never buffered, so the threshold can't apply (length unknown) and any
     // content-length is dropped (the encoded size is unknowable).
-    const streamBody = ctx.response.content;
-    if (isStreamBody(streamBody)) {
-      const contentType = ctx.responseHeaders.get('content-type') ??
-        'application/octet-stream';
-      if (!isCompressible(contentType)) return;
+    if (streamed) {
       weaken();
       ctx.response = {
         content: toReadableStream(streamBody).pipeThrough(
@@ -153,7 +161,6 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
         headers: {
           'content-type': contentType,
           'content-encoding': encoding,
-          'vary': vary,
         },
       };
       // The encoded size is unknowable — drop any content-length the handler
@@ -163,8 +170,8 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       return;
     }
 
-    const { bytes, contentType } = bodyOf(ctx);
-    if (bytes.length < threshold || !isCompressible(contentType)) return;
+    const { bytes } = bodyOf(ctx);
+    if (bytes.length < threshold) return;
 
     const compressed = await compressBytes(bytes, encoding);
     weaken();
@@ -175,7 +182,6 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       headers: {
         'content-type': contentType,
         'content-encoding': encoding,
-        'vary': vary,
         // The body IS these bytes now — restate the length so a
         // content-length the handler set for the UNCOMPRESSED body can't
         // survive the per-key header merge and truncate/hang the client

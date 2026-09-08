@@ -53,15 +53,26 @@ export type HarnessOptions<
     RapidModule<RapidModuleEventMap>
   >,
 > = RapidModuleSources<M, I> & {
-  /** Boot context; defaults to a quiet in-memory logger. */
+  /**
+   * Boot context. Module `config` is always empty under the harness
+   * (`buildModuleContext` supplies `Config({})`) — a module that needs
+   * config reads it through a stubbed dependency instead.
+   * @default { name: 'rapid-test', logger: { handlers: [] } } — a quiet
+   *   in-memory logger
+   */
   context?: RapidModuleInitOptions;
-  /** Fakes stocked in the harness container before boot, revoked on dispose. */
+  /**
+   * Fakes stocked in the harness container before boot, revoked on
+   * dispose (a prior binding under the same token is not restored).
+   * @default []
+   */
   stub?: readonly Stub[];
   /**
    * Container the modules boot through and the stubs are stocked into.
    * Defaults to a FRESH child of the global `Doctor`, so a test never
    * touches (or leaks into) the process-wide registry. Pass an app's
    * `container` to boot against exactly what that app would resolve.
+   * @default a fresh child of the global `Doctor`
    */
   container?: DoctorContainer;
 };
@@ -141,8 +152,11 @@ export type TestResponse = {
 
 /** Per-call options for a {@link client} request. */
 export type ClientOptions = {
+  /** JSON-serialised as the body; sets `content-type: application/json` unless `headers` names one. */
   body?: unknown;
+  /** Request headers — explicit entries win over the defaults (a cookie goes here: `{ cookie: 'sid=…' }`). */
   headers?: Record<string, string>;
+  /** Query-string pairs appended to `path`. */
   query?: Record<string, string>;
   /**
    * Send the request as a SWAP — sets the app's RESOLVED swap header
@@ -155,6 +169,7 @@ export type ClientOptions = {
    * The hostname the request addresses (default `rapid.test`) — for
    * `server.api.hosts` tests: `client(app).get('/users', { host:
    * 'api.rapid.test' })`. An absolute `path` overrides it.
+   * @default 'rapid.test'
    */
   host?: string;
 };

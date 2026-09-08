@@ -8,6 +8,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { csrf } from './csrf.ts';
+import { RapidError } from '../errors/mod.ts';
 import { getSession, session } from './session.ts';
 import { html, template } from '../ui/html.ts';
 
@@ -28,6 +29,31 @@ const tokenFrom = (res: Response): string | undefined =>
   res.headers.get('set-cookie')?.match(/csrf=([^;]+)/)?.[1];
 
 describe('rapid csrf()', () => {
+  it('rejects a malformed configuration at build — names, path, SameSite=None, cookie prefixes', () => {
+    const cases: [Parameters<typeof csrf>[0], string][] = [
+      [{ cookie: 'csrf token' }, 'not a valid cookie name'],
+      [{ session: 'sid;' }, 'not a valid cookie name'],
+      [{ header: 'x csrf' }, 'not a valid header name'],
+      [{ field: '' }, 'field'],
+      [{ path: 'app' }, 'path must start with /'],
+      [{ sameSite: 'None', secure: false }, 'SameSite=None must be Secure'],
+      [{ cookie: '__Host-csrf', path: '/app' }, '__Host- prefix'],
+      [{ cookie: '__Host-csrf', secure: false }, '__Host- prefix'],
+      [{ cookie: '__Secure-csrf', secure: false }, '__Secure- prefix'],
+    ];
+    for (const [options, message] of cases) {
+      asserts.assertThrows(() => csrf(options), RapidError, message);
+    }
+    csrf({ cookie: '__Host-csrf' });
+    csrf({ sameSite: 'None' });
+    csrf({
+      cookie: 'x-csrf',
+      header: 'X-CSRF',
+      field: 'csrf_token',
+      path: '/app',
+    });
+  });
+
   it('is callable with no arguments (the documented app.use(csrf()) form)', () => {
     asserts.assertEquals(typeof csrf(), 'function');
   });

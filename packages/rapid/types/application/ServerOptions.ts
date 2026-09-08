@@ -12,8 +12,12 @@ import type { RapidApplicationQueryOptions } from './QueryOptions.ts';
 
 /**
  * The web server + request-cycle configuration. Every key is optional
- * at the type level; the rAPId constructor fills defaults, so the group
- * is ALWAYS present (and the request-cycle keys always set) at runtime.
+ * at the type level; the rAPId constructor fills defaults for the
+ * request-cycle keys (`paging`, `query`, `versioning`, `trustProxy`,
+ * `maxBodySize`, `socketPath`, `metrics`, `enabled`), so those are
+ * always set at runtime. `static`, `api`, `tls`, `port`, `hostname`
+ * and `unixSocketPath` stay absent until you set them; a nested object
+ * you pass for `static`/`api`/`tls` replaces the whole key.
  */
 export type RapidApplicationServerOptions = {
   /**
@@ -50,12 +54,6 @@ export type RapidApplicationServerOptions = {
    * `TLSOptions`).
    */
   tls?: TLSOptions;
-  /**
-   * Inbound correlation header the HTTP context adopts (validated —
-   * unsafe values are discarded and a fresh id is minted).
-   * @default 'x-request-id'
-   */
-  requestIdHeader?: string;
   /**
    * How many reverse proxies sit in front — a HOP COUNT for resolving
    * the client address from `x-forwarded-for`. `false`/`0` (the safe
@@ -156,6 +154,17 @@ export type RapidApplicationServerOptions = {
    */
   socketPath?: string;
   /**
+   * Origins allowed to open the websocket from a browser, as serialized
+   * origins (`https://app.example`). A browser upgrade always carries
+   * `Origin`; one whose host is not this server's own host and is not
+   * listed here is refused before any command runs — otherwise any site
+   * the user visits could open the socket with the user's cookies and
+   * read their channel pushes. Non-browser clients send no `Origin` and
+   * are unaffected. Same-origin pages need no entry.
+   * @default [] (same-origin only)
+   */
+  socketOrigins?: readonly string[];
+  /**
    * Pagination resolution (header names, default/max size) — see
    * {@link RapidApplicationPagingOptions}. Defaults fill missing keys.
    */
@@ -189,7 +198,7 @@ export type RapidApplicationServerOptions = {
     /**
      * Customises the active `mode`: the header name (`header`), the vendor
      * tag (`accept`), or a capture regex (`path`).
-     * @default 'x-api-version' (header) · '' (accept) · '^/(v[0-9]+)' (path)
+     * @default 'x-api-version' (header) · '' (accept) · '^/(v[0-9]+)(?=/|$)' (path)
      */
     identifier?: string;
     /** Version used when the request carries none — NOT a fallback for an unrecognized one. */

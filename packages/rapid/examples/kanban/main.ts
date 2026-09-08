@@ -53,8 +53,6 @@
 
 import { Application } from '../../mod.ts';
 import {
-  requestId,
-  requestLogger,
   secureHeaders,
 } from '../../middlewares/mod.ts';
 import { registerKanbanServices, TaskStore } from './store.ts';
@@ -70,11 +68,7 @@ const app = await Application.initialize({
   ui: { core: BoardCore },
 }, {});
 
-app.use(
-  requestLogger(),
-  secureHeaders(),
-  requestId(),
-);
+app.use(secureHeaders());
 // Static serving is CONFIG now — configs/Application.yaml `server.static`.
 
 // The swap runtime + the live bridge, and the one broadcast lane.

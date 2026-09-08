@@ -6,6 +6,10 @@
  * @module
  */
 export { health, type HealthOptions } from './health.ts';
-export { login, type LoginOptions } from './login.ts';
 export { metrics, type MetricsOptions } from './metrics.ts';
 export { openapi, type OpenApiOptions } from './openapi.ts';
+export type {
+  OpenApiInfo,
+  OpenApiSecuritySchemes,
+  OpenApiServer,
+} from '../utils/buildOpenApi.ts';

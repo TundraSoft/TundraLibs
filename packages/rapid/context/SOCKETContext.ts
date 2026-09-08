@@ -1,3 +1,9 @@
+/**
+ * @fileoverview `SOCKETContext` — the per-frame context of a websocket
+ * command: the frame's payload (synchronous), the connection envelope
+ * captured at upgrade, and the envelope-shaped reply.
+ * @module
+ */
 import type { StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { Context } from './Context.ts';

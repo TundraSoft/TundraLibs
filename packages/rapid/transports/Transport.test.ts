@@ -298,3 +298,175 @@ describe('rapid.HTTPTransport — finalization + prepare guard', () => {
     );
   });
 });
+
+type AccessLine = { level: string; msg: string; meta: Record<string, unknown> };
+
+/** Capture the app's log lines by shadowing the slogger methods. */
+function captureLog(app: Application): AccessLine[] {
+  const lines: AccessLine[] = [];
+  for (const level of ['debug', 'info', 'warn', 'error'] as const) {
+    (app.log as unknown as Record<string, unknown>)[level] = (
+      msg: string,
+      meta: Record<string, unknown> = {},
+    ) => {
+      lines.push({ level, msg, meta });
+    };
+  }
+  return lines;
+}
+/** Access lines carry `ms` + `status`; disclose lines carry neither. */
+const accessLines = (lines: AccessLine[]) =>
+  lines.filter((l) => typeof l.meta['ms'] === 'number' && 'status' in l.meta);
+
+describe('rapid Transport — logger.access', () => {
+  const boot = (logger?: Record<string, unknown>) =>
+    Application.initialize({
+      name: 'access',
+      server: { port: 0 },
+      ...(logger === undefined ? {} : { logger }),
+    });
+
+  it('writes one line per HTTP request after finalize: info / warn / error by status, with code, matched and surface', async () => {
+    const app = await boot();
+    const lines = captureLog(app);
+    app.get('/ok', () => ({ content: 'fine' }));
+    app.get('/denied', () => {
+      throw new RapidError('RAPID_ACCESS_DENIED', {});
+    });
+    app.get('/boom', () => {
+      throw new Error('kaboom');
+    });
+    for (const path of ['/ok', '/denied', '/boom', '/nope']) {
+      await (await app.fetch(new Request(`http://app${path}`))).text();
+    }
+    const logged = accessLines(lines);
+    asserts.assertEquals(logged.map((l) => l.level), [
+      'info',
+      'warn',
+      'error',
+      'info',
+    ]);
+    asserts.assertEquals(logged[0]!.meta['status'], 200);
+    asserts.assertEquals(logged[0]!.meta['action'], 'GET /ok');
+    // The message alone tells the story on a plain console.
+    asserts.assertMatch(logged[0]!.msg, /^GET \/ok 200 \d+ms$/);
+    asserts.assertMatch(logged[3]!.msg, /^GET \/nope 404 \d+ms$/);
+    asserts.assertEquals(logged[0]!.meta['type'], 'HTTP');
+    asserts.assertEquals(logged[0]!.meta['matched'], true);
+    asserts.assertEquals(logged[0]!.meta['surface'], 'ui');
+    asserts.assert(typeof logged[0]!.meta['ms'] === 'number');
+    asserts.assertEquals(logged[1]!.meta['status'], 403);
+    asserts.assertEquals(logged[1]!.meta['code'], 'RAPID_ACCESS_DENIED');
+    asserts.assertEquals(logged[2]!.meta['status'], 500);
+    // An unmatched 404 is scanner noise — info, flagged, never a warning.
+    asserts.assertEquals(logged[3]!.meta['status'], 404);
+    asserts.assertEquals(logged[3]!.meta['matched'], false);
+  });
+
+  it('disclose logs a 5xx at error with its stack and a 4xx only as a debug breadcrumb — no stack, no error-level flood', async () => {
+    const app = await boot();
+    const lines = captureLog(app);
+    app.get('/boom', () => {
+      throw new Error('kaboom');
+    });
+    app.get('/denied', () => {
+      throw new RapidError('RAPID_ACCESS_DENIED', {});
+    });
+    for (const path of ['/boom', '/denied', '/nope']) {
+      await (await app.fetch(new Request(`http://app${path}`))).text();
+    }
+    const disclosed = lines.filter((l) => !accessLines([l]).length);
+    asserts.assertEquals(disclosed.map((l) => l.level), [
+      'error',
+      'debug',
+      'debug',
+    ]);
+    asserts.assertEquals(disclosed[0]!.meta['code'], 'RAPID_UNHANDLED');
+    asserts.assert(typeof disclosed[0]!.meta['stack'] === 'string');
+    asserts.assertEquals(disclosed[1]!.meta['code'], 'RAPID_ACCESS_DENIED');
+    asserts.assertEquals(disclosed[1]!.meta['stack'], undefined);
+    asserts.assertEquals(disclosed[2]!.meta['code'], 'RAPID_NOT_FOUND');
+  });
+
+  it('logs job firings too, with the schedule drift', async () => {
+    const app = await Application.initialize({
+      name: 'access-jobs',
+      server: { enabled: false },
+    });
+    const lines = captureLog(app);
+    app.job('tick', '0 6 * * *', () => ({ content: 'ran' }));
+    asserts.assertEquals((await app.triggerJob('tick')).status, 200);
+    const logged = accessLines(lines);
+    asserts.assertEquals(logged.length, 1);
+    asserts.assertEquals(logged[0]!.level, 'info');
+    asserts.assertEquals(logged[0]!.meta['type'], 'JOB');
+    asserts.assertEquals(logged[0]!.meta['action'], 'tick');
+    asserts.assertMatch(logged[0]!.msg, /^JOB tick 200 \d+ms$/);
+    asserts.assert(typeof logged[0]!.meta['drift'] === 'number');
+  });
+
+  it('skip paths (exact and prefix) suppress the line, not the request; enabled: false silences everything', async () => {
+    const app = await boot({
+      access: { skip: ['/healthz', '/assets/*'] },
+    });
+    const lines = captureLog(app);
+    app.get('/healthz', () => ({ content: 'ok' }));
+    app.get('/assets/app.css', () => ({ content: 'ok' }));
+    app.get('/real', () => ({ content: 'ok' }));
+    for (const path of ['/healthz', '/assets/app.css', '/real']) {
+      const r = await app.fetch(new Request(`http://app${path}`));
+      asserts.assertEquals(r.status, 200);
+      await r.text();
+    }
+    asserts.assertEquals(
+      accessLines(lines).map((l) => l.meta['action']),
+      ['GET /real'],
+    );
+    const quiet = await boot({ access: { enabled: false } });
+    const silent = captureLog(quiet);
+    quiet.get('/real', () => ({ content: 'ok' }));
+    await (await quiet.fetch(new Request('http://app/real'))).text();
+    asserts.assertEquals(accessLines(silent), []);
+  });
+
+  it('slow lifts an info line to warn with slow: true; client fields are opt-in', async () => {
+    const app = await boot({ access: { slow: 0.01, client: true } });
+    const lines = captureLog(app);
+    app.get('/slow', async () => {
+      await new Promise((r) => setTimeout(r, 30));
+      return { content: 'ok' };
+    });
+    app.get('/fast', () => ({ content: 'ok' }));
+    const headers = { 'user-agent': 'probe/1', referer: 'https://x.example/' };
+    await (await app.fetch(new Request('http://app/slow', { headers }))).text();
+    await (await app.fetch(new Request('http://app/fast', { headers }))).text();
+    const [slow, fast] = accessLines(lines);
+    asserts.assertEquals(slow!.level, 'warn');
+    asserts.assertEquals(slow!.meta['slow'], true);
+    asserts.assertMatch(slow!.msg, /^GET \/slow 200 \d+ms slow$/);
+    asserts.assertEquals(slow!.meta['userAgent'], 'probe/1');
+    asserts.assertEquals(slow!.meta['referer'], 'https://x.example/');
+    asserts.assert('remoteAddress' in slow!.meta);
+    asserts.assertEquals(fast!.level, 'info');
+    asserts.assertEquals(fast!.meta['slow'], undefined);
+    const plain = await boot();
+    const plainLines = captureLog(plain);
+    plain.get('/fast', () => ({ content: 'ok' }));
+    await (await plain.fetch(new Request('http://app/fast', { headers })))
+      .text();
+    asserts.assertEquals(
+      accessLines(plainLines)[0]!.meta['userAgent'],
+      undefined,
+    );
+  });
+
+  it('rejects a relative skip path or a non-positive slow at boot', async () => {
+    for (const access of [{ skip: ['healthz'] }, { slow: 0 }, { slow: -1 }]) {
+      const err = await asserts.assertRejects(
+        () => boot({ access }),
+        RapidError,
+      );
+      asserts.assertEquals(err.code, 'RAPID_CONFIG');
+    }
+  });
+});

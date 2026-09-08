@@ -20,7 +20,12 @@ export function exportedClasses(source: string): string[] {
   return names;
 }
 
-/** Build the barrel text for `dir` (does not write). */
+/**
+ * Build the barrel text for `dir` (does not write).
+ *
+ * @throws {Error} when two files export a class of the same name — the
+ *   barrel would be ambiguous; the message names both files.
+ */
 export async function generateBarrel(dir: string): Promise<string> {
   const lines: string[] = [];
   const files: string[] = [];

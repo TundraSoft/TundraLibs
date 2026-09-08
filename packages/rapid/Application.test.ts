@@ -26,7 +26,15 @@ import { Application } from './Application.ts';
 import { HTTPContext, JOBContext, SOCKETContext } from './context/mod.ts';
 import type { SOCKETConnection } from './context/mod.ts';
 import { RapidError } from './errors/mod.ts';
-import { responseTimer } from './middlewares/mod.ts';
+import { markStateKeyUser } from './middlewares/mod.ts';
+import type { RapidMiddleware } from './types/mod.ts';
+
+/** A middleware that writes `ctx.state[key]` and says so (the boot guard's contract). */
+const stateWriter = (key: string): RapidMiddleware =>
+  markStateKeyUser(async (ctx, next) => {
+    (ctx.state as Record<string, unknown>)[key] = 1;
+    await next();
+  });
 import { session as sessionMw } from './middlewares/session.ts';
 import type { RapidSession } from './middlewares/session.ts';
 import {
@@ -214,13 +222,12 @@ describe('rapid.Application', () => {
 
   describe('stateMode SHARE vs. a stateKey-writing middleware', () => {
     it('fails LOUDLY at start() rather than corrupting state under concurrency', async () => {
-      const { responseTimer } = await import('./middlewares/mod.ts');
       const app = await Application.initialize({
         name: 'share-conflict',
         server: { port: 0 },
         stateMode: 'SHARE',
       });
-      app.use(responseTimer({ stateKey: 'tookMs' }));
+      app.use(stateWriter('tookMs'));
       app.get('/x', () => ({ content: 'ok' }));
       const err = await asserts.assertRejects(
         () => app.start(),
@@ -231,25 +238,23 @@ describe('rapid.Application', () => {
       asserts.assertEquals(app.running, false);
     });
 
-    it('requestId({stateKey}) is caught the same way', async () => {
-      const { requestId } = await import('./middlewares/mod.ts');
+    it('a second stateKey-writing middleware is caught the same way', async () => {
       const app = await Application.initialize({
         name: 'share-conflict-2',
         server: { port: 0 },
         stateMode: 'SHARE',
       });
-      app.use(requestId({ stateKey: 'rid' }));
+      app.use(stateWriter('rid'));
       app.get('/x', () => ({ content: 'ok' }));
       await asserts.assertRejects(() => app.start(), RapidError);
     });
 
     it('a stateKey-writing middleware boots fine under CLONE/PROTOTYPE (the default)', async () => {
-      const { responseTimer } = await import('./middlewares/mod.ts');
       const app = await Application.initialize({
         name: 'share-ok',
         server: { port: 0 },
       });
-      app.use(responseTimer({ stateKey: 'tookMs' }));
+      app.use(stateWriter('tookMs'));
       app.get('/x', () => ({ content: 'ok' }));
       await app.start();
       try {
@@ -278,11 +283,9 @@ describe('rapid.Application', () => {
       // scope.ts wraps a middleware in a brand-new closure — the guard
       // must carry the MIDDLEWARE_STATE_KEY stamp across that wrap, or
       // this documented, first-party composition
-      // (`use(onlyHTTP(responseTimer({stateKey})))`) silently defeats
+      // (`use(onlyHTTP(stateWriter(key)))`) silently defeats
       // the boot check M9 exists to provide.
-      const { onlyHTTP, guardHTTP, responseTimer } = await import(
-        './middlewares/mod.ts'
-      );
+      const { onlyHTTP, guardHTTP } = await import('./middlewares/mod.ts');
       const shareApp = () =>
         Application.initialize({
           name: 'share-wrapped',
@@ -291,12 +294,12 @@ describe('rapid.Application', () => {
         });
 
       const wrappedByOnly = await shareApp();
-      wrappedByOnly.use(onlyHTTP(responseTimer({ stateKey: 'tookMs' })));
+      wrappedByOnly.use(onlyHTTP(stateWriter('tookMs')));
       wrappedByOnly.get('/x', () => ({ content: 'ok' }));
       await asserts.assertRejects(() => wrappedByOnly.start(), RapidError);
 
       const wrappedByGuard = await shareApp();
-      wrappedByGuard.use(guardHTTP(responseTimer({ stateKey: 'tookMs' })));
+      wrappedByGuard.use(guardHTTP(stateWriter('tookMs')));
       wrappedByGuard.get('/x', () => ({ content: 'ok' }));
       await asserts.assertRejects(() => wrappedByGuard.start(), RapidError);
     });
@@ -1904,7 +1907,7 @@ describe('rapid.Application', () => {
 
     it("shares start()'s boot invariants: SHARE state + a stateKey middleware is refused", async () => {
       const app = await make('fetch-share', { stateMode: 'SHARE' });
-      app.use(responseTimer({ stateKey: 'duration' }));
+      app.use(stateWriter('duration'));
       const err = asserts.assertThrows(
         () => app.fetch(new Request('http://app/')),
         RapidError,
@@ -3113,7 +3116,7 @@ describe('rapid.Application', () => {
 }
 
 // ==========================================================================
-// @Use trust-boundary guards (REVIEW-3 #1, #2, #12) — fail loud, never silent
+// @Use trust-boundary guards — fail loud, never silent
 // ==========================================================================
 {
   const make = () =>
@@ -3218,7 +3221,7 @@ describe('rapid.Application', () => {
 }
 
 // ==========================================================================
-// REVIEW-3 #9 (post-start channel) + #4 (reply-cookie disclosure)
+// Post-start channel declaration + reply-cookie disclosure
 // ==========================================================================
 {
   const make = () =>
@@ -3527,12 +3530,12 @@ describe('rapid.Application boot validation (2026-09 review)', () => {
       ...over,
     } as never);
 
-  it('an illegal requestIdHeader fails the boot instead of throwing a TypeError per request', async () => {
+  it('an illegal headers.requestId fails the boot instead of throwing a TypeError per request', async () => {
     for (const bad of ['', 'x request', 'a:b']) {
       await asserts.assertRejects(
-        () => boot({ server: { port: 0, requestIdHeader: bad } }),
+        () => boot({ server: { port: 0 }, headers: { requestId: bad } }),
         Error,
-        'requestIdHeader',
+        'headers.requestId',
       );
     }
   });
@@ -3556,6 +3559,75 @@ describe('rapid.Application boot validation (2026-09 review)', () => {
       uploads: { allowedExtensions: ['.png'], maxFiles: 3 },
     });
     asserts.assertEquals(ok.option('uploads')!.maxFiles, 3);
+    await ok.stop();
+  });
+
+  it('stateMode and server.versioning.mode are closed enums; a path-mode identifier must compile', async () => {
+    await asserts.assertRejects(
+      () => boot({ stateMode: 'share' }),
+      Error,
+      'stateMode',
+    );
+    await asserts.assertRejects(
+      () => boot({ server: { port: 0, versioning: { mode: 'query' } } }),
+      Error,
+      'server.versioning.mode',
+    );
+    await asserts.assertRejects(
+      () =>
+        boot({
+          server: { port: 0, versioning: { mode: 'path', identifier: '(' } },
+        }),
+      Error,
+      'server.versioning.identifier',
+    );
+  });
+
+  it('server.trustProxy / maxBodySize / socketPath / socketOrigins and uploads.maxSize are range-checked', async () => {
+    for (
+      const [server, key] of [
+        [{ trustProxy: -1 }, 'server.trustProxy'],
+        [{ trustProxy: 1.5 }, 'server.trustProxy'],
+        [{ trustProxy: '1' }, 'server.trustProxy'],
+        [{ maxBodySize: -1 }, 'server.maxBodySize'],
+        [{ socketPath: 'ws' }, 'server.socketPath'],
+        [{ socketOrigins: ['app.example'] }, 'server.socketOrigins'],
+        [{ socketOrigins: ['https://App.example/'] }, 'server.socketOrigins'],
+      ] as const
+    ) {
+      await asserts.assertRejects(
+        () => boot({ server: { port: 0, ...server } }),
+        Error,
+        key,
+        JSON.stringify(server),
+      );
+    }
+    await asserts.assertRejects(
+      () => boot({ uploads: { maxSize: 0 } }),
+      Error,
+      'uploads.maxSize',
+    );
+    const ok = await boot({
+      server: {
+        port: 0,
+        trustProxy: 2,
+        maxBodySize: 0,
+        socketOrigins: ['https://spa.example'],
+      },
+    });
+    asserts.assertEquals(ok.option('server')!.socketOrigins, [
+      'https://spa.example',
+    ]);
+    await ok.stop();
+  });
+
+  it('headers.requestId: false is refused — only responseTime can be switched off', async () => {
+    await asserts.assertRejects(
+      () => boot({ headers: { requestId: false } }),
+      Error,
+      'headers.requestId',
+    );
+    const ok = await boot({ headers: { responseTime: false } });
     await ok.stop();
   });
 });

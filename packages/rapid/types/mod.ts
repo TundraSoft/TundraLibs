@@ -17,6 +17,8 @@ export type { RapidApplicationJobsOptions } from './application/JobsOptions.ts';
 export type { RapidApplicationOptions } from './application/Options.ts';
 export type { RapidApplicationPagingOptions } from './application/PagingOptions.ts';
 export type { RapidApplicationQueryOptions } from './application/QueryOptions.ts';
+export type { RapidAccessLogOptions } from './application/AccessLogOptions.ts';
+export type { RapidApplicationHeaderOptions } from './application/HeaderOptions.ts';
 export type { RapidApplicationServerOptions } from './application/ServerOptions.ts';
 export type { RapidApplicationStaticConfig } from './application/StaticConfig.ts';
 export type { RapidApplicationStaticEntry } from './application/StaticEntry.ts';

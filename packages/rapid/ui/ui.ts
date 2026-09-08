@@ -14,7 +14,7 @@
  * Everything else (polling, transitions) stays app-JS-over-events by
  * design — the attribute surface is frozen; `data-load` (2026-09, the
  * declarative lazy region) is its one recorded addition, see
- * DESIGN-ui D10.
+ * DESIGN.md, "The UI layer" (layout tiers).
  *
  * Invariants pinned by `ui.test.ts` over this source string: the exact
  * header names, the same-origin `rapid-redirect` guard, the csrf echo,
@@ -152,6 +152,12 @@ export const UI_RUNTIME: string = `(() => {
         emit(target, 'rapid:error', { status: 0, body: String(error) });
         return false;
       }
+      // fetch() follows redirects: a same-origin request can land on a
+      // foreign host. Never swap what THAT host answered.
+      if (res.url && new URL(res.url).origin !== location.origin) {
+        emit(target, 'rapid:error', { status: res.status, body: '' });
+        return false;
+      }
       const redirect = res.headers.get(REDIRECT_HEADER);
       if (redirect) {
         // Server-set, but the rule costs nothing: relative or same-origin
@@ -251,7 +257,7 @@ export const UI_RUNTIME: string = `(() => {
         catch { detail.title = title; }
       }
       emit(swapped, 'rapid:swapped', detail);
-      loadLazy(swapped); // lazy regions the fragment brought with it
+      loadLazy(swapped, url); // lazy regions the fragment brought with it
       for (const root of extraRoots) loadLazy(root);
       extraRoots = [];
       return true;
@@ -264,7 +270,17 @@ export const UI_RUNTIME: string = `(() => {
   };
 
   const perform = (el, form, submitter) => {
-    const target = el.dataset.target ? doc.querySelector(el.dataset.target) : el;
+    let target = el;
+    if (el.dataset.target) {
+      // An invalid selector (a bare numeric id) must not throw AFTER the
+      // default action was prevented — that leaves a dead control.
+      try {
+        target = doc.querySelector(el.dataset.target);
+      } catch (error) {
+        emit(el, 'rapid:error', { status: 0, body: String(error) });
+        return Promise.resolve(false);
+      }
+    }
     let body;
     if (form) {
       const data = new FormData(form, submitter);
@@ -284,11 +300,22 @@ export const UI_RUNTIME: string = `(() => {
   // Lazy regions — the skeleton-first pattern: a [data-action][data-load]
   // element fetches its own action once the DOM is ready, and any such
   // element a swap INSERTS loads right after that swap. Each element
-  // loads ONCE; a response that itself carries data-load chains (that
-  // is how a poll-by-chain works — deliberate, not guarded). GET only,
-  // like history pushes: a load that POSTs is a footgun, so it warns.
+  // loads ONCE; a response that carries data-load for ANOTHER action
+  // chains. A fragment carrying data-load for the action that just
+  // produced it would re-fetch at round-trip rate forever (the natural
+  // mistake: a region route rendering its own skeleton) — that one is
+  // skipped with a warning; poll with rapid.refresh() on a timer
+  // instead. GET only, like history pushes: a load that POSTs is a
+  // footgun, so it warns.
+  const sameAction = (a, b) => {
+    try {
+      return new URL(a, location.href).href === new URL(b, location.href).href;
+    } catch {
+      return false;
+    }
+  };
   const loaded = new WeakSet();
-  const loadLazy = (root) => {
+  const loadLazy = (root, from) => {
     const scope = root instanceof Element ? root : doc;
     const found = [];
     if (scope !== doc && scope.matches('[data-action][data-load]')) {
@@ -300,6 +327,10 @@ export const UI_RUNTIME: string = `(() => {
       loaded.add(el);
       if ((el.dataset.method || 'get').toLowerCase() !== 'get') {
         console.warn('[rapid] data-load is GET-only', el);
+        continue;
+      }
+      if (from !== undefined && sameAction(el.dataset.action, from)) {
+        console.warn('[rapid] data-load points at the action that produced it — skipped', el);
         continue;
       }
       perform(el, null);
@@ -333,6 +364,8 @@ export const UI_RUNTIME: string = `(() => {
   }));
 
   doc.addEventListener('click', (e) => {
+    // A page script that preventDefault()s (a confirm() veto) wins.
+    if (e.defaultPrevented) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const el = e.target instanceof Element
       ? e.target.closest('[data-action]')
@@ -345,6 +378,7 @@ export const UI_RUNTIME: string = `(() => {
     perform(el, null);
   });
   doc.addEventListener('submit', (e) => {
+    if (e.defaultPrevented) return;
     const form = e.target;
     if (!(form instanceof HTMLFormElement) || !form.dataset.action) return;
     e.preventDefault();

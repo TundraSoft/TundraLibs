@@ -8,6 +8,8 @@ import type { SloggerOptions } from '@tundralibs/slogger';
 import type { SpanExporter, TracerOptions } from '@tundralibs/tracer';
 import type { RapidApplicationExporterConfig } from './ExporterConfig.ts';
 import type { RapidApplicationJobsOptions } from './JobsOptions.ts';
+import type { RapidAccessLogOptions } from './AccessLogOptions.ts';
+import type { RapidApplicationHeaderOptions } from './HeaderOptions.ts';
 import type { RapidApplicationServerOptions } from './ServerOptions.ts';
 import type { RapidUiConfigOptions } from '../UiConfigOptions.ts';
 import type { RapidUiTemplateOptions } from '../UiTemplateOptions.ts';
@@ -66,6 +68,13 @@ export type RapidApplicationOptions = {
   server?: RapidApplicationServerOptions;
 
   /**
+   * Header names the core reads and stamps (correlation id, its extra
+   * echoes, response time). Grouped here — not per middleware — so a
+   * custom middleware reads the same names.
+   */
+  headers?: RapidApplicationHeaderOptions;
+
+  /**
    * UI configuration. YAML/config files can express only the
    * serializable DATA half ({@link RapidUiConfigOptions} — `enabled`,
    * `runtimePath`, `live`, `history`, the contract headers, `prefer`);
@@ -91,7 +100,14 @@ export type RapidApplicationOptions = {
    * integrate as handlers (slogger is a fan-out) — the module-facing
    * API stays uniform.
    */
-  logger?: Partial<Omit<SloggerOptions, 'appName' | 'contextProvider'>>;
+  logger?: Partial<Omit<SloggerOptions, 'appName' | 'contextProvider'>> & {
+    /**
+     * The per-invocation access line — see {@link RapidAccessLogOptions}.
+     * Separate from error disclosure logging (a 5xx at `error` with its
+     * stack, a 4xx at `debug`), which `access.enabled: false` leaves on.
+     */
+    access?: RapidAccessLogOptions;
+  };
   /**
    * Tracing — OPT-IN. Absent = no tracer, zero overhead. Present =
    * SERVER span per request (inbound traceparent honoured), outbound

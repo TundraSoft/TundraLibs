@@ -17,8 +17,9 @@ import { healthCommand } from './commands/health.ts';
 
 const HELP = `rapid <command>
 
-  init [name] [--runtime deno|bun|node|workers] [--module] [--norm] [--ui] [--with bootstrap|pico] [--docker] [--github] [--ai] [--yes]
-        scaffold a new project (interactive unless --yes); runtime is asked first
+  init [name] [--runtime deno|bun|node|workers] [--module] [--norm] [--ui] [--with bootstrap|pico] [--docker] [--github] [--yes]
+        scaffold a new project (interactive unless --yes); runtime is asked first;
+        always writes AGENTS.md + CLAUDE.md (the project's AI guide)
   upgrade [--dir .]
         bump @tundralibs/* dependencies to their latest release
   modules [dir] [--check]

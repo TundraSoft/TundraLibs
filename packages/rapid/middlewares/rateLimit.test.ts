@@ -8,14 +8,75 @@ import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { rateLimit } from './rateLimit.ts';
-import { memoryStore, type Store } from './store.ts';
+import { memoryRateLimitHooks, type RateLimitHooks } from './rateLimit.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('rapid.middlewares.rateLimit', () => {
+  it('the memory hooks hold at most maxKeys windows — the oldest goes first; the bound is validated', async () => {
+    const hooks = memoryRateLimitHooks({ maxKeys: 2 });
+    hooks.increment('a', 60);
+    hooks.increment('b', 60);
+    hooks.increment('c', 60); // evicts 'a'
+    asserts.assertEquals((await hooks.increment('a', 60)).count, 1); // evicts 'b'
+    asserts.assertEquals((await hooks.increment('c', 60)).count, 2);
+    asserts.assertThrows(
+      () => memoryRateLimitHooks({ maxKeys: 0 }),
+      RapidError,
+    );
+    asserts.assertThrows(() => rateLimit({ maxKeys: 1.5 }), RapidError);
+  });
+
+  it('renames the rate headers on request — the IETF draft names — and hands the hook the window in seconds', async () => {
+    const windows: number[] = [];
+    const backing = memoryRateLimitHooks();
+    const hooks: RateLimitHooks = {
+      increment(key, window) {
+        windows.push(window);
+        return backing.increment(key, window);
+      },
+    };
+    const app = await Application.initialize({
+      name: 'rl-names',
+      server: { port: 0 },
+      logger: { handlers: [] },
+    });
+    app.use(rateLimit({
+      max: 1,
+      window: 30,
+      hooks,
+      key: () => 'k',
+      headers: {
+        limit: 'RateLimit-Limit',
+        remaining: 'RateLimit-Remaining',
+        reset: 'RateLimit-Reset',
+        retryAfter: 'Retry-After-Seconds',
+      },
+    }));
+    app.get('/', () => ({ content: {} }));
+    const ok = await app.fetch(new Request('http://app/'));
+    await ok.text();
+    asserts.assertEquals(ok.headers.get('ratelimit-limit'), '1');
+    asserts.assertEquals(ok.headers.get('ratelimit-remaining'), '0');
+    asserts.assert(ok.headers.get('ratelimit-reset'));
+    asserts.assertEquals(ok.headers.get('x-ratelimit-limit'), null);
+    const over = await app.fetch(new Request('http://app/'));
+    await over.text();
+    asserts.assertEquals(over.status, 429);
+    asserts.assertEquals(over.headers.get('retry-after-seconds'), '30');
+    asserts.assertEquals(over.headers.get('retry-after'), null);
+    asserts.assertEquals(windows, [30, 30]);
+  });
+
   it('factory rejects non-positive budgets loudly', () => {
     asserts.assertThrows(() => rateLimit({ max: 0 }), RapidError);
-    asserts.assertThrows(() => rateLimit({ windowMs: -1 }), RapidError);
+    asserts.assertThrows(() => rateLimit({ window: -1 }), RapidError);
+    asserts.assertThrows(() => rateLimit({ window: 1.5 }), RapidError);
+    asserts.assertThrows(
+      () => rateLimit({ headers: { limit: 'bad name' } }),
+      RapidError,
+      'headers.limit',
+    );
   });
 
   it('over-budget HTTP requests get 429 + the full header set', async () => {
@@ -23,7 +84,7 @@ describe('rapid.middlewares.rateLimit', () => {
       name: 'rlim',
       server: { port: 0 },
     });
-    app.use(rateLimit({ max: 2, windowMs: 60_000 }));
+    app.use(rateLimit({ max: 2, window: 60 }));
     app.get('/r', () => ({ content: 'ok' }));
     await app.start();
     const base = `http://localhost:${app.port}`;
@@ -79,36 +140,33 @@ describe('rapid.middlewares.rateLimit', () => {
     }
   });
 
-  it('memoryStore: get/set round-trip with TTL expiry', async () => {
-    const store = memoryStore<{ n: number }>();
-    asserts.assertEquals(store.get('k'), undefined);
-    store.set('k', { n: 1 }, 30);
-    asserts.assertEquals(store.get('k'), { n: 1 });
-    await sleep(40);
-    asserts.assertEquals(store.get('k'), undefined); // expired
+  it('memoryRateLimitHooks: increment counts within the window and starts over once it passes (seconds)', async () => {
+    const hooks = memoryRateLimitHooks();
+    asserts.assertEquals((await hooks.increment('k', 0.05)).count, 1);
+    asserts.assertEquals((await hooks.increment('k', 0.05)).count, 2);
+    asserts.assertEquals((await hooks.increment('other', 0.05)).count, 1);
+    await sleep(60);
+    asserts.assertEquals((await hooks.increment('k', 0.05)).count, 1);
   });
 
-  it('memoryStore: set WITHOUT a ttl persists (expiresAt = Infinity)', async () => {
-    const store = memoryStore<{ n: number }>();
-    store.set('k', { n: 7 }); // no ttl → never expires
-    await sleep(20);
-    asserts.assertEquals(store.get('k'), { n: 7 }); // still there after a tick
-  });
-
-  it('accepts an injected { get, set } store (async, e.g. redis-shaped)', async () => {
-    const backing = new Map<string, { count: number; resetAt: number }>();
-    const store: Store<{ count: number; resetAt: number }> = {
-      get: (k) => Promise.resolve(backing.get(k)),
-      set: (k, v) => {
-        backing.set(k, v);
-        return Promise.resolve();
+  it('accepts injected async hooks (redis-shaped increment)', async () => {
+    const counts = new Map<string, { count: number; resetAt: number }>();
+    const hooks: RateLimitHooks = {
+      increment: (k, window) => {
+        const now = Date.now();
+        const current = counts.get(k);
+        const next = current === undefined || current.resetAt <= now
+          ? { count: 1, resetAt: now + window * 1000 }
+          : { count: current.count + 1, resetAt: current.resetAt };
+        counts.set(k, next);
+        return Promise.resolve(next);
       },
     };
     const app = await Application.initialize({
       name: 'rl-store',
       server: { port: 0 },
     });
-    app.use(rateLimit({ max: 1, windowMs: 10_000, store, key: () => 'k' }));
+    app.use(rateLimit({ max: 1, window: 10, hooks, key: () => 'k' }));
     app.get('/', () => ({ content: {} }));
     await app.start();
     try {
@@ -119,7 +177,7 @@ describe('rapid.middlewares.rateLimit', () => {
       const r2 = await fetch(`http://localhost:${app.port}/`);
       asserts.assertEquals(r2.status, 429); // budget of 1 exhausted
       await r2.text();
-      asserts.assertEquals(backing.get('k')?.count, 2); // the injected store saw both
+      asserts.assertEquals(counts.get('k')?.count, 2); // the injected hooks saw both
     } finally {
       await app.stop();
     }

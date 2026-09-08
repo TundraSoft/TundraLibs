@@ -1,81 +1,125 @@
 /**
- * A TINY, self-contained stand-in for `@tundralibs/pact` — just enough to
- * drive the `login()` endpoint and the `authenticate`/`authorize`
- * middleware without pulling a real auth dependency into the example. A
- * production app deletes this file and uses
- * `@tundralibs/rapid/middlewares/pact` with a real `pact` instance instead
- * — see `pactAuth.ts` for the runnable version.
+ * @fileoverview The blog's `@tundralibs/pact` wiring, through
+ * `@tundralibs/rapid/middlewares/pact`: one instance with in-memory hooks
+ * (users, sessions, API keys — a real app backs `getUser`/`getApiKey`/
+ * `saveSession` with norm the same way `Posts`/`Comments` are, see
+ * `docs/Rapid-Database.md`; pact's hooks are just persistence), two demo
+ * accounts, and the two middlewares every route imports.
  *
- * The "token" here is a plain `username.id` string — readable, NOT signed.
- * Never ship this; it exists so the demo is runnable with zero setup.
+ * Created at module load (not in `main.ts`) so `authorize` can be used
+ * inside route decorators too.
  *
  * @module
  */
 
-/** A demo user record. */
-type User = { id: string; password: string; roles: string[] };
+import {
+  Pact,
+  type PactAuthContext,
+  type PactStoredApiKey,
+  type PactStoredSession,
+  type PactStoredUser,
+} from '@tundralibs/pact';
+import { pactAuth } from '../../middlewares/pact.ts';
 
-/** The whole "user store" — two accounts, one author, one reader. */
-const USERS: Record<string, User> = {
-  ada: { id: 'u-ada', password: 'lovelace', roles: ['author'] },
-  bob: { id: 'u-bob', password: 'builder', roles: ['reader'] },
-};
+const users = new Map<string, PactStoredUser>();
+const byIdentifier = new Map<string, string>();
+const apiKeys = new Map<string, PactStoredApiKey>();
+const sessions = new Map<string, PactStoredSession>();
 
-/** The identity written to `ctx.auth` once a token verifies. */
-export type BlogAuth = { id: string; username: string; roles: string[] };
-
-/** Mint the demo token for a user — `<username>.<id>` (NOT secure). */
-const mint = (username: string, id: string): string => `${username}.${id}`;
+/** The blog's pact instance: one module, one permission. */
+export const pact = Pact.create({
+  name: 'blog',
+  bits: { READ: 1n },
+  modulePermissions: { Admin: ['READ'] },
+  hooks: {
+    getUser: (q) => {
+      if (q.by === 'ID') return users.get(q.id) ?? null;
+      if (q.by === 'IDENTIFIER') {
+        return users.get(byIdentifier.get(q.identifier) ?? '') ?? null;
+      }
+      return null;
+    },
+    createUser: (input) => {
+      const user: PactStoredUser = {
+        id: `u-${input.identifier}`,
+        status: input.status,
+        passwordHash: input.passwordHash,
+        grants: input.grants,
+        metadata: input.metadata,
+      };
+      users.set(user.id, user);
+      byIdentifier.set(input.identifier, user.id);
+      return user;
+    },
+    getApiKey: (id) => apiKeys.get(id) ?? null,
+    saveApiKey: (key) => {
+      apiKeys.set(key.id, key);
+    },
+    revokeApiKey: (id) => {
+      apiKeys.delete(id);
+    },
+    saveSession: (s) => {
+      sessions.set(s.id, s);
+    },
+    getSession: (id) => sessions.get(id) ?? null,
+    deleteSession: (id) => {
+      sessions.delete(id);
+    },
+    deleteSessions: (userId) => {
+      for (const [id, s] of sessions) {
+        if (s.userId === userId) sessions.delete(id);
+      }
+    },
+  },
+});
 
 /**
- * The demo token for a KNOWN username (`undefined` otherwise) — what the
- * /login/as/:username: browser convenience sets as its cookie; the same
- * value POST /login returns for that user's credentials.
+ * The two demo accounts — ada holds `Admin: READ` (an author), bob holds
+ * nothing (a reader). Passwords are here so the `/login/as/:username:`
+ * browser convenience can sign in without a form; a real app has neither.
  */
-export function demoTokenFor(username: string): string | undefined {
-  const user = USERS[username];
-  return user === undefined ? undefined : mint(username, user.id);
+export const DEMO_ACCOUNTS: Readonly<Record<string, string>> = {
+  ada: 'lovelace',
+  bob: 'builder',
+};
+await pact.register({
+  identifier: 'ada',
+  password: DEMO_ACCOUNTS['ada']!,
+  grants: { Admin: 1n },
+  metadata: { username: 'ada' },
+});
+await pact.register({
+  identifier: 'bob',
+  password: DEMO_ACCOUNTS['bob']!,
+  metadata: { username: 'bob' },
+});
+
+/**
+ * Sessions as a bearer token or the `session` cookie `login()` sets;
+ * API keys as the `x-api-key` / `x-api-secret` pair. `authenticate` runs
+ * app-wide, `authorize('Admin', 'READ')` gates the admin routes.
+ */
+export const { authenticate, authorize } = pactAuth(pact, {
+  bearer: { cookie: 'session' },
+  apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
+});
+
+/** The display name the projection hands templates (`metadata.username`). */
+export function usernameOf(auth: PactAuthContext): string {
+  const name = auth.principal.metadata?.['username'];
+  return typeof name === 'string' ? name : auth.principal.id;
 }
 
 /**
- * A service shaped like pact 0.7's `login()` for `login({ pact: authService })`:
- * check the password, hand back `{ principal, session }`, and THROW a
- * coded error on a bad credential (the endpoint maps pact's auth-failure
- * codes to one 401).
+ * Whether the caller holds `Admin: READ` — read synchronously off the
+ * bound principal's grants for the menu projection (the route guard is
+ * `authorize`, which asks pact properly).
  */
-export const authService = {
-  login(credentials: { identifier: string; password: string }): Promise<{
-    principal: { id: string } & Record<string, unknown>;
-    session: { token: string; expiresAt: Date };
-  }> {
-    const user = USERS[credentials.identifier];
-    if (user === undefined || user.password !== credentials.password) {
-      return Promise.reject(
-        Object.assign(new Error('invalid credentials'), {
-          code: 'INVALID_CREDENTIALS',
-        }),
-      );
-    }
-    return Promise.resolve({
-      principal: { id: user.id, username: credentials.identifier, roles: user.roles },
-      session: {
-        token: mint(credentials.identifier, user.id),
-        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
-      },
-    });
-  },
-};
+export function isAuthor(auth: PactAuthContext | undefined): boolean {
+  return ((auth?.principal.grants.Admin ?? 0n) & 1n) === 1n;
+}
 
-/**
- * `authenticate`'s `verify`: decode the demo token back into an auth bag,
- * or `null` if it doesn't match a known user (stays anonymous). A real app
- * verifies a JWT signature here instead.
- */
-export function verifyToken(token: string): BlogAuth | null {
-  const dot = token.indexOf('.');
-  if (dot < 0) return null;
-  const username = token.slice(0, dot);
-  const user = USERS[username];
-  if (user === undefined || mint(username, user.id) !== token) return null;
-  return { id: user.id, username, roles: user.roles };
+/** Mint the demo API key for `curl` — called explicitly from `main.ts`. */
+export function issueDemoApiKey(): Promise<{ key: string; secret: string }> {
+  return pact.issueApiKey({ userId: 'u-ada', grants: { Admin: 1n } });
 }

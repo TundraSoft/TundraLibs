@@ -1,643 +1,496 @@
-# rAPId — Design
-
-> **Status: pre-implementation design record.** Locked decisions and their
-> reasoning, captured before code exists. Like pact's DESIGN.md before it,
-> this document is expected to dissolve into real docs
-> (`Rapid-*.md` + README) once the package is built. Open questions are
-> listed at the end — nothing below them is settled.
-
-## The problem
-
-Existing frameworks fall apart on **large** applications. Past roughly ten
-modules, three things rot in every micro-framework codebase (Express, Koa,
-Hono, Fastify):
-
-- **Route management** — the route tree is assembled by convention-free
-  `app.use()` sprawl; there is no single place to _see_ the API surface;
-  versioning is path-prefix duplication; per-module middleware stacks drift.
-- **Service management** — module A's service imports module B's service,
-  cycles appear, someone invents a half-baked service locator. Singletons
-  are constructed at _import time_, so construction order is load order,
-  testing one module boots the world, and multi-instance deployment is
-  impossible because state lives in module scope.
-- **Data access management** — pool/engine ownership is never settled;
-  either every module news up a client (connection explosion) or everyone
-  imports a shared `db.ts` singleton (import-time side effects again).
-
-The pain is not missing features — it is that micro-frameworks have **no
-opinion about program shape**. The one framework with the right target
-(NestJS) buys its organization with decorator/reflect-metadata magic, an
-everything-is-a-class ontology, and a heavy abstraction tax.
-
-**rAPId's niche: organizational opinions at scale, without the metadata
-machinery** — built by composing the suite it lives in: radrouter (routing),
-guardian (validation/types/docs), doctor (DI), slogger/tracer/ambient
-(observability), pact (authz), norm (data), rpc (websockets, later).
-
-## Placement
-
-- **In the TundraLibs monorepo** — rAPId is the integrator keystone; its
-  early phase co-evolves with sibling seams, and `workspace:*` HEAD deps
-  beat cross-repo pin-bump loops. The CI/release/wiki infrastructure is
-  already paid for.
-- **Designed for extraction**: (1) nothing in the suite ever imports rAPId —
-  it is a leaf in the dependency DAG; (2) it reaches siblings only through
-  the same generic seams as everyone else — no in-repo back doors; (3) its
-  docs stay self-contained under `packages/rapid/`.
-- **Extraction triggers** (act only if they materialize): non-JSR artifacts
-  (images, CLI, control plane); e2e CI weight taxing sibling PRs (first
-  remedy: path-filtered jobs); community/issue divergence; release-cadence
-  divergence.
-- **One package with subpaths** (suite standard). "Plugins" come later as
-  independent packages.
-- **Naming (decided)**: the framework is **rAPId** — the acronym is
-  _Rapid API Development_ — and the package is lowercase
-  `packages/rapid` / `@tundralibs/rapid` per case-sensitivity rules.
-  Scaffold note: verify `workspace:add`'s display→kebab conversion
-  doesn't mangle the mixed-case display name (rAPId → `r-ap-id` would be
-  wrong); the dir/pkg name must come out as plain `rapid`.
-- Scope arc: HTTP API first → websockets (composing rpc) → multi-host and
-  friends. Multi-host coordination will likely land as a sibling library
-  (relay/herald) plus a thin rAPId integration, staying library-shaped.
-
-## Core ontology
-
-> **A module method is a handler with a contract; decorators attach
-> triggers and policies to it.**
-
-- A **module** is a plain class. Public methods become handlers.
-- A **contract** is what a handler means: validated input shape, declared
-  response shape, access requirements. Transport-agnostic.
-- A **trigger** is how a handler is reached: `@GET`/`@POST`/… (HTTP),
-  `@SCHEDULE` (cron), `@ON` (module events), websockets later. **Triggers
-  stack** — one method can be both an HTTP endpoint and a scheduled job.
-- A **policy** decorates the pipeline around a handler: `@Access` (pact
-  check), `@UseMiddleware` (per-method middleware).
-
-Modules are independent and do not know about each other (see
-[Inter-module communication](#inter-module-communication)).
-
-## Decorators
-
-- **TC39 stage-3 decorators** (TS 5 native). No `experimentalDecorators`,
-  no `emitDecoratorMetadata`, no reflect-metadata. The suite's scar tissue
-  here is documented: doctor's `design:type` metadata cannot be emitted by
-  tsx/esbuild, and its decorator tests are gated off on node+tsx to this
-  day. rAPId's decorators are **declarative** — they carry their
-  configuration explicitly and never infer types from parameters — so none
-  of that machinery is needed, and all three runtimes work.
-- **No parameter decorators.** They exist only in the deprecated legacy
-  flag, the standards track has no accepted path for them, and TS parameter
-  decorators structurally cannot participate in type derivation (a
-  parameter decorator can neither see nor constrain the parameter's type —
-  schema and annotation would drift silently). Bindings live in the method
-  decorator instead (see below), where the factory's generics can constrain
-  the entire signature.
-- **Spec-shift insurance**: decorators are a ~thin sugar layer over an
-  imperative registration API, which is the real, stable core. If the
-  decorator spec moves between stage 3 and 4, the migration is confined to
-  the sugar — and a decorator-free registration path exists for free.
-- **Decorators wrap the contract, and only the contract.** The prototype's
-  mistake was not wrapping at all — a naked method under test behaves
-  differently from production, which makes direct-invocation testing a lie.
-  But wrapping _transport_ concerns would force tests to fabricate fake
-  requests. Hence the two-layer split below.
-
-## The two-layer pipeline
-
-- **Contract layer — wrapped onto the method** (transport-agnostic, runs on
-  every invocation, including direct calls in tests):
-  input validation/coercion (guardian), response-shape validation,
-  `@Access` (given a principal).
-  Wrappers **late-bind app services** (the pact instance, etc.) through the
-  instance's injected dependencies — never captured at class-definition
-  time, because the composition root does not exist yet.
-- **Transport layer — lives in the dispatcher** (per trigger): route
-  matching, request parsing, principal extraction, `@UseMiddleware`,
-  rate limiting.
-
-Consequence, stated as a feature: direct invocation exercises the contract
-(validation, access, response shape) but bypasses transport (middleware,
-parsing). Unit tests test handler meaning; the pipeline gets its own
-integration harness.
-
-## Handler authoring model
-
-Bindings are a **tuple** in the trigger decorator's options (tuples have
-type-level order; records do not — positional enforcement is impossible
-from a record spec). A mapped tuple type derives the parameter list, and
-the decorator factory constrains the whole method signature — input types
-**and** return type — from the declaration:
-
-```typescript
-type CreateUser = GuardianInfer<typeof CreateUserSchema>; // the norm pattern
-
-@POST('/users/:id:/orders', {
-  bindings: [
-    param('id', G.string().uuid()),
-    body(CreateUserSchema), // or body('path.to.key', schema) for a sub-key
-    paging({ sort: ['createdAt', 'total'] }),
-  ],
-  response: OrderSchema,
-  status: 201, // static envelope — also what OpenAPI generation reads
-})
-createOrder(id: string, data: CreateUser, page: Paging) { … }
-// wrong order / wrong type / wrong return shape ⇒ compile error
-```
-
-- One declaration drives **validation, the inferred TS types, and OpenAPI**
-  (guardian's one-declaration pattern, as proven by norm and the OTLP
-  encoder).
-- Testing is positional and context-free:
-  `await orders.createOrder('42', { … }, paging)` — contract wrap applied,
-  nothing to fabricate.
-- At many bindings, positional gets clumsy; the escape valve is a single
-  `body(WholeInputSchema)` collapsing to one argument.
-
-### Binding sources
-
-| Helper                                    | Source       | Validation mode                                                                           |
-| ----------------------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
-| `param(name, guardian)`                   | route params | **coerce-then-validate** (stringly)                                                       |
-| `query(name, guardian)`                   | query string | coerce-then-validate; repeated keys → arrays when the schema is an array; defaults common |
-| `body(guardian)` / `body(path, guardian)` | payload      | **strict** — JSON has types; coercion would hide client bugs                              |
-| `header(name, guardian?)`                 | headers      | lowercase-normalized (restler precedent); sensitive headers never logged                  |
-
-The coerce-at-stringly-sources / strict-at-body asymmetry is a documented
-rule, not an accident.
-
-### Composite bindings
-
-`paging()` is the first **composite** — a convention over query params made
-first-class because every team reinvents it inconsistently:
-
-- App-configured once (param names, default limit), per-binding overridable.
-- **Max-limit cap is non-negotiable** (`?limit=10000000` is self-service
-  DoS; per-handler discipline never holds).
-- **Sort requires a whitelist** per handler — unconstrained sort keys leak
-  schema internals and invite unindexed scans.
-- Output shape aligns with norm's query options (`limit`, `offset`,
-  `orderBy`, `total`) — deliberate shape-alignment, not a coupling.
-- Offset-based v1; cursor paging is a later extension of the same binding.
-
-Other composites (same machinery, no new concepts): `principal()` (the
-pact-verified caller), `signal()`, `responseDescriptor()`,
-`httpContext()`.
-
-### Non-HTTP triggers supply bindings as declared args
-
-`@SCHEDULE('0 0 * * *')` passes nothing; `@SCHEDULE('0 0 * * *', { id:
-'123' })` supplies the method's arguments as a record keyed by binding
-name. Because a schedule's args are **static**, they are validated against
-the binding schemas at **boot** (consolidation), not at fire time — a
-stacked `@SCHEDULE` with missing or ill-typed args is a startup error.
-HTTP-only bindings (`header()`, `httpContext()`) on a scheduled method are
-likewise boot errors unless the schedule supplies a value or the binding
-is optional.
-
-### Context access is a binding, and it is enforced
-
-Handlers receive **no ctx by default**. A handler that needs the response
-descriptor or raw transport context declares it as a binding — which makes
-transport-boundness _visible_, so startup consolidation can reject
-incompatible stacking (a method binding `httpContext()` cannot carry
-`@SCHEDULE`): loud at boot, never `undefined` at 3am.
-
-## Context
-
-- **Abstract base context** + per-trigger subtypes (`HttpContext`,
-  `CronContext`, `WsContext` later). The app instantiates the right subtype
-  per invocation; middleware sees the full transport context; handlers see
-  only what they bind.
-- Base shape (roughly):
-  `{ requestType, name, principal?, correlationId, signal, state, response }`.
-  (**Naming decided 2026-08-10**: the runtime discriminant is
-  `RequestType` with UPPERCASE values — `HTTP | CRON | EVENT | WS` — the
-  ontology still speaks of "triggers".) `correlationId` is mutable so the
-  `requestId` middleware can adopt a trusted inbound id BEFORE anything
-  observes it; `signal` is LAZY (HTTP derives it from `request.signal` on
-  first read — eager access trips Deno's legacy-abort warning).
-- **The response descriptor lives on the base context** — it is plain data
-  (`body` / `status` / `headers` keys), so every trigger carries it and
-  interprets what it understands (HTTP uses all three; cron/events use
-  `body`). Touching the descriptor does not make a handler HTTP-only.
-- **`AbortSignal` from day one** — every trigger has a cancellation story
-  (client disconnect, cron deadline, ws close); retrofitting cancellation
-  into signatures later is miserable.
-- **Typed state** (oak-shaped): the app declares its state interface once;
-  state bindings type against it; typos are compile errors.
-- **No logger on ctx.** slogger's `contextProvider` + ambient already
-  auto-correlate every log line in the request scope. ctx carries
-  business-facing facts; ambient carries observability facts (the exact
-  division Ambient-Integration documents).
-- **No "secure data" bag in v1.** The useful guarantee is a rule about
-  state itself: rAPId never auto-logs or auto-serializes state; secrets
-  live on the principal or in explicitly-named fields. Adding a redaction
-  story later is additive.
-
-## Response model
-
-> **REVISED 2026-08-10 v2 (scratch session — the interpreted closed
-> payload; supersedes the descriptor bullets below where they
-> conflict):** ONE closed payload type across all contexts —
-> `{ content: string | Record | Uint8Array; status?: StatusCode;
-> headers?: Record | Headers }` (compat's `StatusCode`; NO index
-> signature — a typo'd key is a compile error). Set via the
-> `ctx.response` accessor pair — **overridable** up to materialization
-> (error handling replaces a half-built response), `null` clears.
-> Each context type INTERPRETS the payload in its setter override:
-> HTTP consumes status + headers (headers merge PER-KEY, so an
-> override without a `headers` key never wipes middleware
-> contributions); JOB reads status as the outcome; SOCKET/CLI take
-> content only. Generic middleware therefore writes ONE literal,
-> uniformly, on any context. Transport-specific future keys widen the
-> override's parameter type (visible only to transport-typed
-> middleware). HTTP additionally exposes `setHeader`/`appendHeader`/
-> `responseHeaders` (native `Headers` internally — case-insensitive,
-> multi-value). `ctx.respond()` is the **point of no return**
-> (polymorphic materialization: HTTP → `Response` with content
-> serialization string/bytes/JSON + content-type defaults; CLI →
-> printable string; SOCKET → frame body; JOB → `{ status, content }`
-> outcome); every mutation afterwards throws
-> `RAPID_RESPONSE_INVALID`.
-
-- **Handlers return; the return value is the body.** The dispatcher writes
-  it to `ctx.response.body`; transport materializes the real `Response` at
-  cycle end (cron/events take the data directly).
-- The return passes through the **declared response schema**. A validation
-  failure on the way out is a **server bug**: 500 + loud log, never a
-  half-shaped body leaked to the client.
-- **Static envelope in the decorator** (`status: 201`, fixed headers) —
-  OpenAPI needs status codes and per-status shapes statically, so the
-  decorator is where docs, validation, and behavior stay one declaration.
-- **Dynamic envelope via the response descriptor** (ETag, Location):
-  bind `responseDescriptor()` and mutate before returning.
-- Typed errors map to responses **centrally** — see [Errors](#errors).
-
-## Errors
-
-**Modules never throw "HTTP" errors.** They throw domain errors carrying a
-**standardized error code**; what a code _renders as_ is the transport
-layer's business — the contract/transport split applied to failure.
-
-- **The code registry is a declaration** (one-declaration pattern): each
-  code carries a default message, a details section, and a status-code
-  mapping. Apps register their own codes, **typed** — the registry is
-  `as const`, so the union of valid codes is derived and a typo'd `throw`
-  is a compile error. Duplicate code registration is a boot error (loud
-  consolidation, as everywhere).
-- **Code format (decided)**: SCREAMING_SNAKE — the suite's existing
-  convention (`INVALID_CONFIG_VALUE`, pact's stable codes). The `RAPID_`
-  prefix is **reserved**: an app registering a `RAPID_*` code is a boot
-  error. App codes adopt module prefixes by convention
-  (`ORDERS_OUT_OF_STOCK`). Open cosmetic: whether reserved codes carry an
-  `_ERROR` suffix or name the condition (`RAPID_VALIDATION_FAILED`).
-- **Starter reserved set** (one code per framework-generated condition):
-  `RAPID_UNHANDLED` (500, internal), `RAPID_VALIDATION_FAILED` (400,
-  guardian issues → `details`), `RAPID_RESPONSE_INVALID` (500, internal),
-  `RAPID_UNAUTHENTICATED` (401) vs `RAPID_ACCESS_DENIED` (403) — the
-  split is load-bearing with pact: "couldn't verify who" ≠ "insufficient
-  grants" — `RAPID_NOT_FOUND` (404), `RAPID_PAYLOAD_TOO_LARGE` (413),
-  `RAPID_UNSUPPORTED_MEDIA` (415), `RAPID_TIMEOUT` (504),
-  `RAPID_RATE_LIMITED` (429). Domain conditions (conflicts, stock) are
-  deliberately NOT reserved — app territory.
-- **Throw-site payload**: a message override, plus **two data channels
-  with different disclosure classes** — `details` (client-safe, rendered
-  into the error payload) and `debug` (environment-gated, never rendered
-  in production; always logged).
-- **Environment policy** (app env: DEBUG / TESTING / PRODUCTION):
-  - DEBUG/TESTING may render `debug` data and true messages.
-  - PRODUCTION renders only code + safe message + `details`; errors
-    flagged internal (or any code without a client-safe rendering) are
-    **promoted to an opaque 500**.
-  - Uncaught / non-registered errors are always an opaque 500 + full
-    structured log (with ambient correlation), never a leaked stack.
-- **Per-trigger rendering**: HTTP → mapped status + a stable error
-  envelope (`{ code, message, details? }` — itself a schema, so OpenAPI
-  documents error responses per status alongside the success shape);
-  cron/`@ON` → the error is the outcome: logged with correlation, the run
-  marked failed (subscriber isolation already guarantees containment).
-- **Contract-layer failures use reserved codes automatically**: input
-  validation failure renders the guardian issue list as `details` under
-  the framework's validation code; `@Access` denial maps to the access
-  code. Response-shape (outbound) validation failure is a server bug:
-  opaque 500 + loud log, per the response model.
-
-## Request processing
-
-**Parse to the contract, not eagerly to everything.** The declaration tells
-the framework exactly what to materialize before invoking — body fields,
-form data, query/param mapping. Everything undeclared stays lazy on the
-transport context. File uploads are the forcing case: eager buffering is a
-memory cliff, so a declared file field is **streamed** (temp file or stream
-handle in the input), and a handler that declares no files never pays
-upload processing at all.
-
-## Middleware
-
-- **Koa-style onion**: `(ctx, next) => Promise<void>` — wrap, not signal
-  (the suite's shape in rpc and every wrap-family recipe). Middleware
-  receives the **full transport context** (`HttpContext`).
-- **Three levels, no more**: app-level (global), module-level
-  (`@UseMiddleware` on the class), method-level (`@UseMiddleware` on the
-  method). No route-prefix groups — modules own their prefixes.
-  Execution: global → module → method → contract wrap → handler,
-  unwinding in reverse. Within a level: **registration order** — no
-  priority numbers (priority integers turn ordering into archaeology).
-- **Position in the pipeline**: transport parse + principal _extraction_
-  → middleware onion → contract wrap (validate → `@Access` enforcement →
-  handler). Middleware sees `ctx.principal` but runs before enforcement —
-  deliberate: rate limiting and CORS must run for callers who will be
-  denied.
-- **What middleware may do**: (a) **short-circuit** — write the response
-  descriptor and skip `next()`; (b) **enrich** `ctx.state` (typed by the
-  app's declared state interface; no per-middleware type extension in
-  v1); (c) **post-process** — after `await next()`, observe/mutate the
-  settled response descriptor; (d) **catch** around `next()` — permitted,
-  but anything uncaught flows to the central error mapper, and middleware
-  throws registry codes like everyone else.
-- **Dependencies via factories, not DI**: middleware are plain functions
-  produced at the composition root — `rateLimit(cacher, { rps: 50 })`
-  returns the middleware; closures do the wiring. The container stays a
-  module-construction concern.
-- **OPEN — middleware × non-HTTP triggers** (decide as we build): ws will
-  likely want an onion of its own; cron mostly won't. `@UseMiddleware` on
-  a method that also carries `@SCHEDULE` does not run for the cron path
-  in the current shape. This also surfaces the **scheduled-invocation
-  principal question**: `@Access` lives in the contract wrap and runs on
-  _every_ invocation — so what principal does a cron run carry? A
-  configured system principal on `@SCHEDULE` vs. schedule-skips-access —
-  unresolved.
-- **In-box middleware set — STARTED (2026-08-10)**: `requestId`
-  (adopt-or-mint + echo, `trustInbound` for public edges), `timing`
-  (`x-response-time`, lands via `finally` even on errors), `etag`
-  (post-processor: weak tags, 304 short-circuit, serializes JSON bodies
-  once). More later (CORS, rate limit, security headers — scratch/ has
-  proven drafts). `compose()` (double-next guard, loud non-function
-  check) ships in the same folder.
-
-## Composition & startup
-
-- **Auto-compose, never auto-discover.** Norm's `use()` is the model:
-  explicit inputs (`rapid.use(UserModule, OrdersModule, …)` at the
-  composition root), automatic wiring. Filesystem/glob discovery is
-  rejected — import-order sensitivity and invisible registration were the
-  root of most scratch-implementation issues, and scanning is fragile
-  across three runtimes + JSR bundling. The explicit list _is_ the "single
-  place to see the API surface."
-- **Startup consolidation fails loudly** (the suite's "config errors throw
-  at construction" rule), reporting:
-  - route collisions;
-  - event subscriptions referencing undeclared events;
-  - trigger/context incompatibilities (`httpContext()` binding +
-    `@SCHEDULE`);
-  - DI graph gaps (missing providers for injected dependencies).
-
-## Inter-module communication
-
-Modules never import each other. The primary mechanism is **one-way,
-namespaced events**: `Orders::Executed` with a payload; Inventory
-subscribes (`@ON('Orders::Executed')`) and adjusts stock. A subscription is
-**just another trigger** — the handler keeps its contract wrap, so event
-payloads are guardian-validated at delivery like any other input.
-
-- **Emits are declared**, with payload schemas, in module metadata. Startup
-  verifies every subscription references a declared event — a typo'd event
-  name is a boot failure, not a handler that silently never fires. The same
-  declarations can generate AsyncAPI docs later.
-- **In-process delivery semantics** (all with suite precedent):
-  - _Subscriber isolation_ — one handler throwing affects neither other
-    subscribers nor the emitter (restler/pact listener-isolation contract).
-  - _Emitter never awaits_ — emit returns immediately; the originating
-    request's latency and outcome are untouchable.
-  - _Context travels_ — delivery rebuilds the ambient scope from an
-    emit-time snapshot (correlationId flows; the handler's span links to
-    the originating trace). This is Ambient-Integration's
-    background-work pattern, applied.
-  - _Serial per subscriber_ — concurrent delivery of rapid successive
-    events to one subscriber is a race (inventory math); serial is the
-    default.
-- **The bus is a seam.** In-process fire-and-forget is _at-most-once_: a
-  crash between the order committing and the inventory handler running
-  loses the event — acceptable for cache invalidation, not for
-  business-consistency operations (the inventory example is precisely the
-  dangerous case). rAPId v1 does not build durability; it defines the bus
-  interface, ships the in-process default, and leaves durable/distributed
-  delivery to a sibling package (herald/relay) behind the same seam. The
-  multi-host future **requires** this seam anyway — in-process events do
-  not cross hosts.
-- **The synchronous-read gap is acknowledged, not wished away.** Events
-  cannot answer questions ("is this in stock?"). First response: treat it
-  as a module-boundary smell. When genuinely needed, the sanctioned path is
-  a _declared_ dependency — a module exposes a contract token (doctor's
-  import-free style), another requests it via DI, and the dependency is
-  visible in module metadata. Exact mechanism: **open question**. Teams
-  without a sanctioned path invent unsanctioned ones (usually reaching into
-  another module's tables — the worst outcome).
-
-## Data layer
-
-- **Independent of services** — the database section is its own part of
-  rAPId, never owned by a module.
-- **Norm is blessed, not forced.** rAPId defines the slot (a named registry
-  handed out by DI — `this._norm.get('Users')`-shaped); norm is the
-  first-class provider, likely behind a subpath so the coupling is opt-in
-  at import level. Reasons: a pure BFF/integration service (restler
-  clients, zero DB) must not bundle four database drivers (norm's barrel
-  currently imports all engine classes as values; drivers' barrels still
-  pull networking — the open edge-safety item); and blessed-defaults-over-
-  hard-coupling is the suite's proven philosophy.
-
-## Services & DI
-
-- **Providers are defined once, at the project level** (composition root):
-  the norm handle, loggers, pact, the event bus, and third-party API
-  suites (restler vendor clients) are all just providers — a module that
-  needs the GitHub client injects it exactly like it injects norm.
-  Modules declare what they need and receive it by injection
-  (`this._norm`, `this._log`, `this._github`).
-- **doctor is the container** — token-based, import-free style (not
-  `design:type` reflection, which is banned by the decorator decision
-  above). The "expansion" doctor needs is a TC39-compatible surface.
-- **OPEN — the module-side declaration syntax.** Constraint to respect:
-  TC39 _field_ decorators cannot see or constrain the field's type — an
-  `@Inject(NORM) _norm: NormRegistry` annotation would drift from its
-  token silently, the same trap that killed parameter decorators. The
-  type-safe candidates derive the types from a declaration: a static
-  `dependencies = { norm: NORM, github: GITHUB } as const` map with typed
-  tokens (`Token<T>`), surfaced as typed members via a `Module<typeof
-  dependencies>` base-class generic or constructor injection.
-- Injected logger = a slogger scoped with the module's name; ambient
-  carries per-request correlation underneath — module logs arrive tagged
-  `{ module, correlationId, traceId }` with zero threading.
-- Modules are singletons; per-request facts arrive as bound inputs or on
-  ctx, never via request-scoped providers (Nest's request-scope trap:
-  complexity + per-request construction cost).
-
-## Observability
-
-Inherited wholesale from the suite's seams — rAPId is where they were all
-pointed:
-
-- The transport layer opens `ambient.run` per invocation (correlationId,
-  trigger info) when it creates the context.
-- The first-class tracing middleware lives here at last (rAPId owns the
-  typed request context the recipes could not write to): SERVER span per
-  request, `extract` on the way in.
-- Container operations (event dispatch, later ws sessions) honor the
-  witness convention; outbound calls made with restler get
-  `witness: tracer.wrapClient` + `headerProvider: tracer.propagation` at
-  the composition root.
-- Guardian declarations double as the OpenAPI source; event declarations
-  double as the AsyncAPI source (later).
-
-## Non-goals for v1
-
-- Durable/distributed event bus (herald/relay's job, behind the seam).
-- Cursor paging (extension of `paging()`, not a redesign).
-- A "secure data" context bag.
-- `@SCHEDULE` as a priority feature (the trigger model carries it; the
-  scheduler itself can come later).
-- Filesystem/glob module discovery — permanently out, not just v1.
-- Parameter decorators — permanently out (standards + type-derivation).
-- Request-scoped DI providers.
-
-## Open questions
-
-1. ~~**Middleware × non-HTTP triggers**~~ — **DONE.** One universal onion
-   (`app.use`) runs on every transport's invocation cycle — HTTP, socket
-   frames, and job firings alike — with `onlyHTTP`/`guardHTTP`/… scope
-   helpers; a job skipped by middleware is a distinct logged outcome. The
-   in-box set is the middleware catalog (ROADMAP → Shipped).
-2. ~~**Synchronous inter-module dependency**~~ — **DONE** via doctor:
-   modules are doctor-constructed, each app owns a child container
-   (`app.container`), and `inject()` resolves against it even after an
-   `await` (see DESIGN-modules.md).
-3. ~~**WebSockets trigger**~~ — **DONE.** `@SOCKET` commands +
-   `SOCKETContext` on the shared `/ws` listener, composed on
-   `@tundralibs/rpc`, through the same invocation cycle as HTTP and jobs.
-4. ~~Prototype cross-check~~ — **DONE 2026-08-10**; see
-   [Prototype cross-check](#prototype-cross-check-2026-08-10). Its
-   outputs: the adopt-list below, stronger evidence on questions 2
-   (command bus) and the scheduled principal, and one new small
-   question (decorated-class inheritance).
-5. ~~**Decorated-class inheritance**~~ — **DONE.** Decorations live in a
-   name-keyed `Symbol.metadata` registry that follows the prototype chain,
-   so a subclass keeps the parent's routes; an override of a decorated
-   method must be re-decorated or mounting fails loudly (both cases
-   tested — see DESIGN-modules.md, the subclass-override policy).
-
-## Prototype cross-check (2026-08-10)
-
-Two prior implementations audited after this design was locked:
-`TundraSoft/rAPId` (src/ = Phase-3+ build; scratch/ = a NEWER
-command-kernel rebuild) and the live product `clearremit-services`
-(Oak-based, 7 modules, 160 routes, separate scheduler service).
-
-### The design is triple-confirmed
-
-- **scratch/ converged on this design independently**: bindings on the
-  method decorator (not param decorators), `@Inject(Class)` + container
-  (≈ class-as-token), a response envelope, codegen descoped.
-- **Wrap-the-contract**: the product's decorated handlers double as
-  internal service methods (~30 direct call sites; callers faking `[]`
-  for a `@Files()` param), so every handler has TWO calling conventions
-  with different validation guarantees — and the test doctrine
-  literally instructs manual `Schema.parse()`. The src/ build
-  implemented contract logic FOUR times with four semantics (cron never
-  validated at all). The contract wrap fixes both: internal reuse and
-  direct tests get the same guarantees as HTTP.
-- **Explicit compose, no import-time side effects**: the product's pain
-  was import-time composition (top-level-await config, modules
-  instantiated on import, THREE manager globals with a silently-empty
-  fallback, silent route loss, hand-matched metadata symbols across
-  files); src/'s was filesystem discovery forcing a six-file codegen
-  subsystem + stale-barrel boot gate + zero-arg-ctor rule + a 240-line
-  test boot that duplicated production boot and drifted. `rapid.use()`
-  - phased boot dissolves all of it — including the codegen (explicit
-    imports let types flow without generation).
-- **Tuple bindings + boot-time trigger compatibility**: src/'s param
-  decorators produced sparse metadata arrays, `any`-laundering in all
-  three transports, and `@Body` on a `@Cron` handler resolving to
-  SILENT `undefined` — our boot error, vindicated.
-- **Declarative `@Access`**: the product's documented #1 pitfall is
-  "handler forgot the in-method permission check", and its tenant rule
-  is written three times because no phase owns principal + matched
-  route params. Pipeline note made explicit by this: principal
-  extraction runs AFTER route match (params available), before the
-  onion.
-
-### Adopt-list (gems the design now includes)
-
-**Lifecycle/ops**: phased boot (config → log → providers → modules →
-onInit → transports); ordered `onInit` / REVERSE-order `onShutdown`
-with per-module status; graceful shutdown with an `unref()`d force-exit
-deadline sized under Cloud Run's SIGTERM window; signal handlers via
-compat with detach functions; a framework observability event stream
-(moduleRegistered/started/stopping/…) kept OFF the domain bus.
-
-**HTTP**: request-meta middleware (inbound request-id header or minted
-ULID, echoed + `X-Response-Time` in a `finally`); **proxy-aware URL
-canonicalization as a security-critical first-class concern** (the
-product HMAC-signs over the canonical URL — reconstruction from proxy
-headers must be framework-owned, not middleware folklore); rich return
-marshalling (`Response` passthrough incl. streams, `null` → 204,
-binary types as-is); lazy parse-to-contract (proven: zero body-parse
-cost on routes that don't declare a body); health endpoint BEFORE auth,
-with readiness/liveness split as a v1.x follow-up.
-
-**Uploads**: the full hardening set (size caps, extension allowlist,
-MIME-vs-extension cross-check, UUID disk names, symlink containment,
-traversal checks) + UNCONDITIONAL temp-file deletion in `finally`
-(handlers must persist artifacts) + pluggable storage seam — the
-product's local-disk roots are its single biggest obstacle to
-autoscaling.
-
-**Pagination**: counts as HEADERS with config-named keys (must be in
-CORS expose list), body stays a bare array; lesson: emit the total
-header even when the count is ZERO (falsy-guard bug in the product).
-
-**Errors**: disclosure ladder validated end-to-end by both codebases;
-realm-safe normalization (duck-type on `context.code`, repair the
-prototype chain — `instanceof` proved unreliable in BOTH prior builds).
-
-**Cron**: overlap prevention (skip + debug-log, default on); `unref()`d
-timers; per-replica disable flag; drift-measuring tick
-(scheduledAt/firedAt/count); pluggable Scheduler adapter (anticipates
-distributed/leader-elected scheduling AND the product's
-scheduler-as-separate-service topology — a cron job being also a route
-is exactly our stacked `@GET`+`@SCHEDULE`).
-
-**Scheduled principal (evidence in)**: the product's scheduler
-authenticates properly (HMAC) but then ESCALATES to a synthetic
-all-permissions, no-tenant context at ~30 call sites with no audit
-distinction from a human admin — the anti-pattern. Decision leaning
-hard toward: a configured, DISTINGUISHABLE system principal declared on
-`@SCHEDULE`, flowing through the normal `@Access` check, auditable.
-
-**Docs**: served endpoints (`/__docs/openapi.json`, AsyncAPI, cron
-manifest), built once at startup, conditionally registered, doc routes
-bypass user middleware.
-
-**WS (for later)**: `maxFrameSize` cap; upgrade-hook auth with typed
-per-connection data; internal-vs-exposed command security split.
-
-**Testing**: keep the bus recorder (fire-and-forget events are
-otherwise unobservable) and `triggerCron(name)` (synchronous, full
-chain, errors PROPAGATE instead of the tick path's swallow).
-
-**Events**: the product's hand-rolled outbox (PENDING rows + cron
-drain, 5 attempts, no backoff/dead-letter/concurrency) is the
-strongest field evidence yet for the pluggable-bus seam and
-herald/relay as its durable implementation.
-
-### Evidence on open question 2 (sync inter-module)
-
-src/ shipped a typed CommandBus (single-handler RPC, ctx propagation,
-in-process fast path) and used it to Phase 3+; scratch/ went further
-(command-as-primitive); the product's "modules never reference each
-other" held EXCEPT one middleware importing the manager directly (the
-escape valve materializing). Evidence now favors the **command bus**
-over declared-token DI for cross-module sync calls — with the design
-caveat that commands must carry compile-time types WITHOUT codegen,
-which explicit `use()` makes possible. To be decided.
+# rAPId — Design record
+
+**Status: as built, 2026-09-08.** This is the one design document for the
+package. It consolidates the earlier records (core design 2026-08-10, modules
+round 2026-08-14, UI rounds 2026-08-23 to 2026-09-06, auth design 2026-08-26
+to 2026-09-08) into a description of what rapid is, why each part is shaped
+the way it is, and which alternatives were considered and rejected so they
+are not re-proposed. It is publish-excluded: consumer-facing behaviour lives
+in [README.md](./README.md) and [docs/](./docs/); the backlog lives in
+[ROADMAP.md](./ROADMAP.md). Where this file and the code disagree, the code
+is right and this file is stale — fix it.
+
+Contents: [Problem](#1-the-problem-and-the-stance) · [Placement](#2-placement)
+· [Ontology](#3-ontology) · [Invocation cycle](#4-the-invocation-cycle) ·
+[Routing, versioning, surfaces](#5-routing-versioning-and-surfaces) ·
+[Middleware](#6-middleware) · [Context and response](#7-context-and-response) ·
+[Errors](#8-errors-and-disclosure) · [Decorators and modules](#9-decorators-binders-and-modules)
+· [Dependency injection](#10-dependency-injection) · [Auth](#11-authentication-and-authorization)
+· [UI layer](#12-the-ui-layer) · [Configuration](#13-configuration-doctrine) ·
+[Observability](#14-observability) · [Testing](#15-testing-doctrine) ·
+[Rejected](#16-rejected-alternatives-and-non-goals)
+
+---
+
+## 1. The problem and the stance
+
+Micro-frameworks (Express, Koa, Hono, Fastify) have no opinion about program
+shape, and past roughly ten modules three things rot: route management
+(`app.use()` sprawl, no single place to see the API, versioning by path
+duplication), service management (module-scope singletons constructed at
+import time, cycles, home-made service locators) and data-access management
+(pool ownership never settled). The framework with the right target, NestJS,
+buys its organisation with reflect-metadata, an everything-is-a-class
+ontology and a heavy abstraction tax.
+
+rapid's niche is **organisational opinions at scale without the metadata
+machinery**, built by composing the suite it lives in: radrouter (routing),
+guardian (validation), doctor (DI), slogger/tracer/ambient (observability),
+pact (auth), norm (data), rpc (websockets), cronus (jobs), compat (runtime
+portability).
+
+The stance that follows from it, and that every later decision honours:
+
+- **rapid is a transport adapter, not an application framework.** It binds
+  handlers to HTTP requests, socket frames and job firings and runs them
+  through one cycle. How the app constructs its objects, talks between
+  modules or owns its database is the app's business (with a blessed module
+  tier and DI container available, never required).
+- **Explicit composition, never discovery.** No filesystem scanning, no
+  import-time registration. What you hand the app is what it serves; two
+  apps in one process never see each other's routes.
+- **Loud at boot, never silent at 3 am.** Every configuration error, route
+  collision, bad option or unsupported combination throws `RAPID_CONFIG`
+  before the first request.
+- **Cross-runtime is a contract, not an aspiration.** Deno, Bun, Node,
+  Cloudflare Workers and the browser all load the package; a capability a
+  target lacks degrades with a typed error, never a crash.
+
+## 2. Placement
+
+rapid lives in the TundraLibs monorepo as the integrator keystone and is
+designed for extraction: nothing in the suite imports it (a leaf in the
+dependency graph), it reaches siblings only through their public seams, and
+its docs are self-contained under `packages/rapid/`. One package with
+subpaths (`./context`, `./decorators`, `./endpoints`, `./errors`,
+`./middlewares`, `./middlewares/pact`, `./modules`, `./testing`, `./types`,
+`./ui`, `./cli`). The name is rAPId (Rapid API Development); the package is
+lowercase `rapid`.
+
+## 3. Ontology
+
+- An **Application** is created once by `Application.initialize(source)`,
+  from plain options or a config directory. The constructor is private and
+  brand-gated so an app can never skip validation.
+- A **transport** delivers invocations: HTTP (requests, plus static files
+  and the UI runtime), SOCKET (websocket command frames over the same
+  listener, composed on `@tundralibs/rpc`), JOB (cron firings, composed on
+  `@tundralibs/cronus`). Transports are adapters: the same app serves from a
+  listener (`start()`) or a fetch handler (`fetch()`, Workers).
+- An **invocation** is one handler run: a request, a frame, a firing. Every
+  invocation gets a **context** (`HTTPContext`, `SOCKETContext`,
+  `JOBContext`) over one abstract `Context` with a uniform surface (`type`,
+  `requestId`, `action`, `args`, `state`, `auth`, `response`, `respond()`).
+- A **handler** is `(ctx) => reply | Promise<reply>` where the reply is the
+  closed envelope `{ content, status?, headers?, cookies?, redirect? }`.
+  Registered Oak-style (`app.get()`, `app.socket()`, `app.job()`) or as a
+  decorated method on a class (`@GET`, `@SOCKET`, `@JOB`) — both funnel into
+  the same registration core.
+- **Middleware** is `(ctx, next)` and universal: one onion runs on every
+  transport's invocation. Transport-specific behaviour is a scope helper or
+  a `ctx.type` branch, never a second pipeline.
+- A **module** is a class whose decorated methods are handlers. The richer
+  `RapidModule` tier adds identity, declared events, a scoped logger,
+  `emit`/`invoke`, and a lifecycle, hosted by a `ModuleRuntime`.
+
+## 4. The invocation cycle
+
+One spine, `Transport._invoke`, shared by all three transports:
+
+1. **Resolve** (HTTP only): trailing slash normalised → api prefix stripped
+   and the surface decided → path-mode version stripped → route matched.
+   Hidden routes (pages on the api surface) are true no-matches before any
+   chain is chosen.
+2. **Context** built with the correlation id: a safe inbound
+   `headers.requestId` value is adopted, otherwise
+   `Application.requestIdGenerator()` mints one.
+3. **Ambient scope** opened (`@tundralibs/ambient`) carrying `requestId`,
+   the app container and, for modules, the invoke frame — so `app.log`,
+   `inject()` and nested `invoke()` all see the right request without any
+   threading. **Tracer span** opened when a tracer is configured; nothing is
+   paid when it is not.
+4. **The onion**: the universal chain (`app.use`) then the route/command
+   chain, each composed once at registration, then the handler. A **sync
+   fast path** keeps a zero-middleware, synchronous handler promise-free.
+5. **Represent** (HTTP, templated routes only): the reply's `content` is
+   rendered to HTML when the request is a swap or the route prefers a page;
+   JSON passes through unchanged. Runs at the innermost point so every
+   middleware's post-`next()` view sees the final body.
+6. **Disclosure** for anything thrown: `RapidError.from()` classifies, the
+   transport logs (5xx at `error` with stack and `debug`, 4xx at `debug`),
+   `app.onError` may override, `payload(mode)` shapes the body.
+7. **Finalize**: HTTP materialises the `Response` (`respond()` is the point
+   of no return), stamps the request id, echo headers and `x-response-time`;
+   SOCKET returns the frame envelope; JOB returns the outcome.
+8. **Access line** written after finalize (`logger.access`), so it reports
+   the status actually sent.
+
+What is **core, not middleware**, and why: the correlation id, response-time
+header and access log (every deployment wants them and they must be present
+on the error path); static file serving (`server.static`, served on route
+miss so routes always win and every middleware applies); the api surface
+(routing, must survive `ui.enabled: false`); body limits, uploads, query caps
+and paging (security posture belongs in one validated config, not in an
+optional layer). Middleware handles what core won't.
+
+## 5. Routing, versioning and surfaces
+
+- **radrouter-native paths**: params are colon-wrapped (`/users/:id:`).
+  Route registration is explicit; collisions and grammar errors surface at
+  `start()` / first `fetch()`.
+- **Versioning is a dimension, not a path.** radrouter keeps a version slot
+  per route; `server.versioning.mode` decides where a request declares its
+  version (`header`, `accept` vendor tag, or a leading `path` segment that is
+  stripped so the router, static files and OpenAPI all see the clean path).
+  `@Module({ version })` sets a default, `@GET(path, { version })` overrides,
+  neither set means the unversioned slot. Purely additive.
+- **A request has a surface** (`ui` or `api`), decided once before routing
+  from `server.api: { hosts?, prefix?, trustForwardedHost? }` and
+  `ui.enabled`. The api surface is _a smaller route table with no
+  representer_: pages, `server.static` and the UI runtime routes do not exist
+  there (404, filtered from `405`/`Allow`), so `Host` spoofing is inert and
+  route-scoped auth never answers 401 for a URL the surface says is 404.
+  `ui.enabled: false` means every request is `api`. Redirects are never
+  rewritten (`ctx.href()` is the explicit opt-in); a path-shaped redirect that
+  would resolve to another origin is refused on both the navigation and the
+  swap path.
+  _Rejected for the same need_: mount-time prefixes, mount groups,
+  per-replica module selection, a `host` constraint in radrouter (each splits
+  the app by declaration against the one-route-two-faces thesis), a `strict`
+  ui mode, `Vary: Host`, auto-generated OpenAPI `servers`, a ui-origin for
+  cross-surface redirects, module-level `prefer`.
+
+## 6. Middleware
+
+**Shape.** `(ctx, next) => void | Promise<void>` — Koa's onion, the suite's
+shape in rpc too. Middleware receives the full transport context and may:
+short-circuit (set `ctx.response`, do not call `next()`); enrich
+(`ctx.state`, headers set before `next()`); post-process (after `await
+next()`, read or replace `ctx.response`); or throw a `RapidError`, which
+flows to disclosure. `next()` must be called at most once and its promise
+returned or awaited: a second call is a 500, an abandoned promise is logged
+because a handler rejection after the middleware returned would otherwise be
+an unhandled rejection.
+
+**Three registration points, no more.** `app.use()` (universal — every
+transport), route/command-scoped (inline before the handler, HTTP and
+SOCKET), and `@Use` on a `RapidModule` method, which guards module-to-module
+`invoke()` **only** — never a transport request. Within a level, order is
+registration order; there are no priority numbers (priority integers turn
+ordering into archaeology). Module-level HTTP middleware for decorated routes
+is the known gap on the backlog.
+
+**Universal by default, scoped by wrapper.** `onlyHTTP` / `onlySOCKET` /
+`onlyJOB` skip other transports; `guardHTTP` / `guardSOCKET` / `guardJOB`
+reject them with 403 (fail-closed, for auth-class middleware that must never
+be silently bypassed); `onlyApi` / `onlyUi` gate by HTTP surface and **run**
+off-HTTP (`onlyApi(authenticate)` must never unguard a socket frame). A job
+skipped by middleware is a distinct, logged outcome (`handlerRan: false`),
+not a silent success. Scope metadata (`MIDDLEWARE_SCOPE`) is informational;
+the framework attaches no behaviour to it — an earlier boot diagnostic built
+on it was removed as noise.
+
+**Factories, not DI.** Middleware are plain functions produced at the
+composition root (`rateLimit({ max: 100 })`); closures do the wiring. Every
+factory validates its options when called and throws `RAPID_CONFIG` — a bad
+option never waits for the first request.
+
+**Units and names.** All durations are seconds (fractions where a sub-second
+value makes sense). Every non-standard header name is an option, so a client
+integrating with a different name never needs a fork. The direction of travel
+(ROADMAP) is that middleware options become part of `Application.yaml`
+grouped by **structure** (one `headers:` block, one `cookies:` block) rather
+than per middleware.
+
+**State is hooks, not a store.** Stateful middleware (`session`, `rateLimit`,
+`idempotency`) take a small object of purpose-named hooks the app implements
+over redis, cacher or anything else (`getSession`/`saveSession`/
+`deleteSession`/`touchSession`; an atomic `increment`; a set-if-absent
+`claim`), the same seam shape pact uses. A generic `Store<V>` interface was
+built first and removed: it hid the one property each middleware actually
+needs (atomicity for the counter, set-if-absent for the claim, touch for the
+rolling session) behind get/set, and forced every backend to reimplement the
+middleware's semantics. Each middleware ships a bounded in-memory default so
+zero configuration works on one replica.
+
+**Per-invocation state under `SHARE`.** `stateMode: 'SHARE'` hands every
+invocation the same `ctx.state` object. A middleware that writes
+per-invocation values there declares it with `markStateKeyUser()`, and the
+boot refuses that combination — corruption under concurrency is not a
+warning.
+
+**Retired**: the generic `auth.ts` (`authenticate({ verify })` /
+`authorize(check)` — the seam is `ctx.setAuth` itself, the helpers were ten
+lines and their names collided with the pact factory's), `requestId`,
+`responseTimer`, `requestLogger` (core config now), `serveStatic` (config),
+`store.ts` (hooks). `healthCheck()` remains only because the deletion is a
+pending call; `endpoints/health()` is the recommended shape.
+
+## 7. Context and response
+
+- **One closed reply type** across transports: `{ content: string | object
+  | Uint8Array | stream; status?; headers?; cookies?; redirect? }` with no
+  index signature (a typo'd key is a compile error). Each context
+  _interprets_ it in its `response` setter: HTTP consumes everything; JOB
+  reads `status` as the outcome; SOCKET takes content and status and rejects
+  a 3xx or a stream at set time (it would otherwise launder into an ok
+  envelope). Generic middleware therefore writes one literal on any context.
+- **Setter semantics** are what make post-processing safe: `status` is
+  preserved across a body-only override (a transform never resets a 500 to
+  200), `headers` merge per key (an override never wipes middleware
+  contributions), `set-cookie` appends. `respond()` freezes the context;
+  every mutation after it throws `RAPID_RESPONSE_INVALID`.
+- **Streams are first-class** (`ReadableStream` or any async iterable),
+  never buffered; a replaced stream is cancelled so its handle does not
+  leak. Body-inspecting middleware skip them by design.
+- **Body reading is lazy and order-independent.** `ctx.payload` parses once
+  and caches the promise; `ctx.rawPayload` is the same bytes (the parser
+  always runs over them) so digests and decryption never depend on
+  registration order; `ctx.files` lists upload temp paths, removed after the
+  response. Uploads are hardened in one place (size caps, extension
+  allow-list that is empty by default, magic-byte check, ULID disk names,
+  unconditional cleanup).
+- **`ctx.args` is uniform**: `params` (route params / frame payload / job
+  args), `query` (parsed `$op` filters and sorts under DoS caps, lazily, HTTP
+  only), `paging` (clamped, never throws). Headers are envelope, never args.
+- **State** is built per invocation from `app.state` by `stateMode`:
+  `CLONE` (deep copy, unclonable values kept by reference rather than
+  dropped), `PROTOTYPE` (writes shadow), `SHARE` (one object). Typed once by
+  the app.
+- **`ctx.auth`** is a write-once bag set by whatever authenticates; it is
+  per-invocation, never shared through state, and it rides the module
+  `invoke()` seed so guards inside a module see the caller's identity.
+- **No logger on the context.** slogger's context provider plus ambient
+  already correlate every line; `app.log` / a module's `this.log` are the
+  loggers. `ctx.publish()` lives on the base so an HTTP handler or a job can
+  push to socket subscribers. `ctx.detach()` registers abandoned work the job
+  transport must wait for (so cronus's overlap guard stays held).
+
+## 8. Errors and disclosure
+
+- Every failure is a `RapidError` with a registered code, a status and one
+  disclosure rule; the registry is `as const` so the code union is derived.
+  The `RAPID_` prefix is reserved. Codes name conditions
+  (`RAPID_VALIDATION_FAILED`), not `_ERROR` suffixes.
+- Two data channels with different disclosure classes: `details`
+  (client-safe, rendered) and `debug` (DEVELOPMENT only, always logged).
+  4xx `message` and `details` are public in PRODUCTION by design (they
+  describe the client's own request); every 500 collapses to `Internal
+  server error` and other 5xx to their registry default.
+- `RapidError.from()` classifies foreign throws: a guardian failure is
+  recognised structurally (no import) and becomes a 400 with per-field
+  messages; anything else is an opaque 500 with the original in `debug` and
+  `cause`. `validated()` opts any other validator into the 400 path. The
+  asymmetry (guardian first-class, everything else explicit) is deliberate.
+- Realm-safe normalisation duck-types on `context.code`; `instanceof` proved
+  unreliable across re-imports in both prior implementations.
+- The same envelope goes out on every transport (JSON, socket error frame,
+  job outcome) and, on the ui surface, as an HTML error page through a
+  closed template registry. Codes flagged `specific` (the idempotency trio)
+  are never derived from a bare status, so a handler's own 422 is not
+  mislabelled.
+
+## 9. Decorators, binders and modules
+
+- **TC39 standard decorators only.** No `experimentalDecorators`, no
+  `emitDecoratorMetadata`, no reflect-metadata, no parameter decorators
+  (they cannot see or constrain the parameter type, so schema and
+  annotation drift). Decorators are metadata-only: they never wrap the
+  method, so `new Users().find('7')` runs in a unit test with no app.
+- **Bindings live in the method decorator as a tuple** (`bind: [param('id'),
+  payload(Schema)]`); the tuple types the method signature. Without a
+  validator `param` is `string` and `payload` is `unknown` — a type is earned
+  through a validator, never asserted. A schema object bound with
+  `payload()` both validates and documents the body; only the body documents
+  (context-derived binders are not part of the request contract).
+- **The registry is per class, keyed by method name**, in the class's own
+  `Symbol.metadata` object (polyfilled idempotently at load). Name keying
+  removed the wrapping-decorator stacking footgun; per-class buckets keep a
+  subclass from mutating its parent's records; a subclass that overrides a
+  decorated method must re-decorate or mounting fails loudly (a route bound
+  to a method the instance no longer runs is the silent-loss family).
+- **Discovery is what the caller hands over.** `app.module(instance)` binds
+  instances you built; `app.modules({ modules: [namespace] })` enumerates the
+  exports of an `import()` namespace (a second `import()` is a cache hit, so
+  a second app can mount the same file — the property a side-effect registry
+  can never have). No global list, no retention, no leakage.
+- **The `RapidModule` tier** adds `name`/`namespace` identity, declared
+  `events` (validated at mount; a subscription to an undeclared event fails
+  `finalize()` before anything is wired), `emit` (subscriber isolation; a
+  throwing subscriber is logged with its own message and never touches the
+  emitter), `invoke` (module-to-module, through the cycle, with a copy of the
+  caller's state and its auth; the target's `@Use` guards run; a denial is a
+  403 envelope, not a throw), `init`/`dispose` hooks (mount order / reverse),
+  and `this.log`/`this.config`. `reply(status, content)` is the explicit
+  envelope; a domain object with a `content` key stays content — the runtime
+  never guesses.
+- **Prefix and namespace** are different joins on purpose: `prefix` joins
+  HTTP paths; `namespace` dots onto flat socket command and job names.
+- **Delivery semantics** are in-process and at-most-once by design; the bus
+  is a seam for a durable sibling later. Synchronous cross-module reads are a
+  boundary smell first and `invoke()` second.
+
+## 10. Dependency injection
+
+Each app owns `app.container`, a child of the global doctor: it reads global
+registrations but holds its own instances, so two apps never share module
+instances and a test can `stock()` a fake into one app. The container is
+pinned on the ambient bag per invocation, so `inject()` resolves against the
+right app even after an `await`. `app.modules()` constructs zero-argument
+`RapidModule` classes (or dispenses ones doctor knows); anything with
+constructor arguments is handed over as an instance. Modules are singletons;
+per-request facts arrive on the context or as bound arguments, never as
+request-scoped providers.
+
+## 11. Authentication and authorization
+
+**Two layers, deliberately separated.**
+
+1. **The generic seam, in core and auth-agnostic**: `ctx.auth` /
+   `ctx.setAuth(identity)`, a write-once bag. Any identity system is a
+   middleware that verifies its credential and sets the bag. A login route
+   is app code (the body shape, the cookie and the principal projection are
+   app decisions — a shipped `login()` endpoint was removed for that
+   reason); the pact adapter fills the same bag, so an app can mix systems.
+2. **The pact adapter** (`middlewares/pact.ts`, its own subpath so the
+   middleware barrel stays pact-free): `pactAuth(pact, options) →
+   { authenticate, authorize }`, glue over pact 0.8's neutral
+   `createPactMiddleware` core exactly like pact's own express/hono/oak
+   adapters. rapid keeps only what pact leaves to the framework: the bearer
+   cookie carrier, sockets authenticating from the upgrade request, jobs
+   passing through, rapid's error codes, `ctx.rawPayload` for the body
+   digest, `_replacePayload` for a decrypted body, sealing the response
+   after `next()`. The wire contract (carriers, the RFC 9421 template with
+   frozen keys, timestamp freshness, response signing, JWE payloads) is
+   pact's and documented there.
+
+Decisions: absent credential → anonymous (`optional: false` → 401);
+present-but-invalid → 401, never anonymous; one `WWW-Authenticate` challenge
+listing what `authenticate` accepts; no pact reason code on the wire (an
+account oracle) — the reason is logged; `authorize(module, permission)` is
+typed by the instance's catalog and checked when called, so a typo fails at
+import, not on the first request; `authorize` fails closed on jobs (no
+identity there). Storage is pact's hooks over the app's data layer (norm);
+caching the principal belongs in the app's `getUser` hook, never in the
+middleware, because that would bypass pact's revocation checks.
+
+_Rejected_: registering pact on the app or via a doctor label resolved at
+factory time (a decorator-level `authorize` evaluates at import, before any
+`main.ts` could stock one); a `pact(options)` initialiser that owned the
+instance; per-scheme middlewares (`bearerAuth()`, `hmacAuth()`); a public
+`can()` helper; caching the principal in rapid; `app.provide/get` sugar.
+
+## 12. The UI layer
+
+The idea: a route names a **template**; the handler keeps returning
+JSON-shaped data. Two deterministic signals pick the representation and
+`Accept` is never consulted: a swap header (`rapid-swap`, sent by the
+bundled runtime) always gets the **fragment**; otherwise the route's
+`prefer` picks **JSON** (default) or the layout-wrapped **page**. Same
+route, same handler, same data — two representations.
+
+Decisions that define it:
+
+- **Templates are pure functions** wrapped by `template()`;
+  `` html`…` `` escapes every interpolation, `raw()` is the single audit
+  point, `Html` is branded by a private symbol so JSON can never impersonate
+  trusted markup. Synchronous only; a template that needs to await is a
+  handler that returned too little.
+- **Three layout tiers, fixed nesting**: an irreplaceable app `core` (the
+  document), a swappable module/route `layout` (route → `@Module` → app
+  default; `false` opts out), and the content fragment composed from plain
+  functions. `title` flows to both wrappers, `meta` to the core. No deeper
+  mechanism exists or will.
+- **The `view` bag exposes nothing from `ctx.auth`** by default; identity
+  reaches templates only through an app projection naming the fields. Safe
+  by construction rather than by discipline.
+- **Configuration is split by nature**: the serialisable data half
+  (`enabled`, `prefer`, `runtimePath`, `live`, `history`, header and cookie
+  names) is YAML-able per replica; the code half (`core`, `layout`, `view`,
+  error templates, `assets`) is programmatic. Config names code, never
+  imports it (no import paths in YAML, no views-folder scanning: it breaks
+  `deno compile` and Workers bundling and forfeits type safety).
+- **Error pages are a closed registry** (exact status → `4xx`/`5xx` →
+  `default` → the built-in page) rendered inside the core only, under the
+  same disclosure rules as JSON. Recoverable form errors are the form's own
+  200-state, never an error page.
+- **The runtime is small and frozen**: `data-action` / `data-method` /
+  `data-target` / `data-swap` / `data-load` / `data-push`, no inline
+  handlers (`script-src 'self'` suffices), same-origin only, CSRF cookie
+  echoed, View Transitions when available, `rapid.swap()` / `rapid.refresh()`
+  as the two programmatic hooks, events (`rapid:swapped`, `rapid:error`,
+  `rapid:push`) for everything else. The live bridge and the history module
+  are opt-in scripts; the history module keeps no DOM cache (back re-fetches)
+  — the moment one is proposed the module has failed.
+- **Static files are config** (`server.static`, served on route miss) and
+  `view.asset()` fingerprints lazily under a `fingerprint: true` mount; the
+  `immutable` stamp lives only with the minting/serving pair.
+- **A redirect on a swap** becomes `200` + `rapid-redirect` (fetch would
+  follow a 3xx and hand the runtime the target's body); the header's target
+  is guarded server-side and followed same-origin only.
+
+_Rejected / non-goals_: a template language or `.html` files; a curated CSS
+framework API; SPA history with a DOM cache; async or streaming templates
+(slow data is a lazy region); attribute growth beyond the frozen set;
+section-level error templates.
+
+## 13. Configuration doctrine
+
+- `initialize()` takes plain options or a directory; the `Application` set
+  becomes the options, every other set stays readable as `app.config` /
+  `ctx.config` / a module's `this.config` / the `config()` binder. Set names
+  are lowercased file basenames; keys are case-sensitive.
+- **Every value validated at boot**, with the offending key in the error.
+  Durations in seconds, sizes in bytes, header names as RFC 9110 tokens,
+  origins serialized.
+- `${VAR}` placeholders resolve from `.env`; an unset placeholder stays
+  literal text (so a commented `secret: ${APP_SECRET}` is the safe default in
+  the scaffold).
+- `mode` defaults to PRODUCTION: the safe posture is the default.
+- The scaffold's `Application.yaml` annotates every key with what reads it
+  and is drift-guarded by a test against the framework's own defaults;
+  [docs/Rapid-Configuration.md](./docs/Rapid-Configuration.md) is the
+  reference.
+
+## 14. Observability
+
+Inherited wholesale from the suite: slogger is always on with the request id
+composed through ambient's context provider; tracer is opt-in (a span per
+invocation around the onion, inbound `traceparent` honoured, trace ids on
+log lines); metrics are opt-in (`server.metrics` → `app.meter`, served by the
+`metrics()` endpoint). The correlation id is minted by a process-wide,
+replaceable generator (a monotonic `sequenceID` by default — a correlation id
+never needed a CSPRNG). The access line is core config, level by outcome, and
+never carries client identifiers unless opted in.
+
+## 15. Testing doctrine
+
+`client(app)` drives routes through `app.fetch` with no port; `harness()`
+boots the module system with stubs stocked into a fresh child container;
+`view()` builds a frozen view bag for template tests. A test must be able to
+fail: no assertion of what the type checker already proves. Everything runs
+on Deno, Bun and Node in CI; runtime-divergent behaviour is pinned per lane.
+The client runtime scripts are pinned by source-string invariants (no DOM
+runner in the suite) plus the examples for manual verification — stated as
+the honest limit.
+
+## 16. Rejected alternatives and non-goals
+
+Collected here so they are not re-proposed:
+
+- Filesystem or glob module discovery (permanently out); import-time
+  registration; a global route registry.
+- Parameter decorators; `emitDecoratorMetadata`; reflect-metadata.
+- Priority numbers for middleware ordering; a second pipeline per transport;
+  request-scoped DI providers.
+- A generic `Store<V>` seam for stateful middleware (hooks instead).
+- `Accept`-driven representation for templated routes; module-level
+  `prefer`; a `strict` ui mode; mount-time prefixes and mount groups;
+  per-replica module selection; `Vary: Host`.
+- Registering pact on the app; doctor-label resolution at decorator time;
+  per-scheme auth middlewares; caching principals in rapid.
+- A template language; `.html` template files; curated CSS-framework API;
+  SPA history with a DOM cache; async templates.
+- Auto-rewriting redirects onto the api prefix.
+- Durable or distributed events inside rapid (a sibling's job behind the
+  seam); cursor paging in v1; a "secure data" context bag.

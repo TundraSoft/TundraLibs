@@ -256,9 +256,20 @@ export function buildOpenApi(
           properties: {
             code: { type: 'string', enum: Object.keys(RAPID_ERROR_CODES) },
             message: { type: 'string' },
+            details: {
+              type: 'object',
+              description:
+                'Client-safe detail — on every 4xx; dropped from 5xx in PRODUCTION.',
+              additionalProperties: true,
+            },
+            debug: {
+              type: 'object',
+              description: 'DEVELOPMENT only — never sent in PRODUCTION.',
+              additionalProperties: true,
+            },
             requestId: { type: 'string' },
           },
-          required: ['code', 'message'],
+          required: ['code', 'message', 'requestId'],
         },
       },
       ...(secured || options.securitySchemes !== undefined

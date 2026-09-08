@@ -14,10 +14,12 @@ import { timeout } from './timeout.ts';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('rapid.middlewares.timeout', () => {
-  it('factory rejects a non-positive/non-integer budget loudly', () => {
-    for (const bad of [0, -5, 1.5, NaN]) {
-      asserts.assertThrows(() => timeout(bad), RapidError, 'positive integer');
+  it('factory rejects a non-positive, sub-millisecond, or non-finite budget loudly; fractions of a second are fine', () => {
+    for (const bad of [0, -5, 0.0004, NaN, Infinity]) {
+      asserts.assertThrows(() => timeout(bad), RapidError, 'seconds');
     }
+    timeout(0.5);
+    timeout(30);
   });
 
   it('a slow HTTP handler becomes a 504 RAPID_TIMEOUT', async () => {
@@ -25,7 +27,7 @@ describe('rapid.middlewares.timeout', () => {
       name: 'to',
       server: { port: 0 },
     });
-    app.use(timeout(20));
+    app.use(timeout(0.02));
     app.get('/slow', async () => {
       await sleep(120);
       return { content: 'too late' };
@@ -63,7 +65,7 @@ describe('rapid.middlewares.timeout', () => {
     let workSettled = false;
     await asserts.assertRejects(
       () =>
-        timeout(20)(ctx as unknown as RapidContext, async () => {
+        timeout(0.02)(ctx as unknown as RapidContext, async () => {
           await sleep(150);
           workSettled = true;
         }),
@@ -88,7 +90,7 @@ describe('rapid.middlewares.timeout', () => {
     });
     await asserts.assertRejects(
       () =>
-        timeout(20)(ctx as unknown as RapidContext, async () => {
+        timeout(0.02)(ctx as unknown as RapidContext, async () => {
           await sleep(60);
           throw new Error('late failure nobody is listening for');
         }),
@@ -103,7 +105,7 @@ describe('rapid.middlewares.timeout', () => {
       name: 'toj',
       server: { enabled: false },
     });
-    app.use(timeout(20));
+    app.use(timeout(0.02));
     app.job('stuck', '0 6 * * *', async () => {
       await sleep(120);
       return { content: 'late' };

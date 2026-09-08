@@ -3,9 +3,10 @@
  * `only*` wrappers SKIP other transports (the invocation continues),
  * `guard*` wrappers REJECT them (fail-closed — for auth-class
  * middleware that must never be silently bypassed by a transport it
- * doesn't understand). Wrapped middleware carry scope METADATA the
- * boot-time diagnostics read (e.g. "socket commands registered but no
- * middleware reaches SOCKET").
+ * doesn't understand). Wrapped middleware carry scope METADATA
+ * ({@link MIDDLEWARE_SCOPE}) so tooling can tell a transport-bound
+ * middleware from a universal one; the framework itself attaches no
+ * behaviour to it.
  *
  * @module
  */
@@ -74,7 +75,7 @@ function carry(
 /**
  * Run `middleware` only on `'api'`-surface HTTP requests; SKIP it on the
  * `'ui'` surface. Off-HTTP (sockets, jobs — no surface) the middleware
- * RUNS: fail-closed, unlike `onlyHTTP`, so `onlyApi(authenticate(…))`
+ * RUNS: fail-closed, unlike `onlyHTTP`, so `onlyApi(authenticate)`
  * never silently unguards a socket command (an HTTP-only middleware
  * inside still self-skips there). Transport scope metadata is carried
  * through unchanged.

@@ -35,6 +35,7 @@ export type ModuleDecoratorOptions = {
    * `@JOB`'s schedule — a bad prefix fails at import, the loudest
    * possible moment, rather than as a confusing joined-path error
    * later at `app.module()`.
+   * @default ''
    */
   prefix?: string;
   /**
@@ -47,7 +48,8 @@ export type ModuleDecoratorOptions = {
   description?: string;
   /**
    * OpenAPI tags every route in the class carries (a route's own `tags`
-   * are merged on top). Defaults to `[name]`; an explicit `[]` opts out.
+   * are merged on top). An explicit `[]` opts out.
+   * @default [name]
    */
   tags?: readonly string[];
   /**

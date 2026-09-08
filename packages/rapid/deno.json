@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/rapid",
   "version": "0.0.0",
-  "description": "rAPId \u2014 config-driven API framework: Oak-style function assembly (routes, middleware, cron jobs) with native observability (slogger, tracer, ambient correlation). Early development.",
+  "description": "rAPId \u2014 config-driven application framework: HTTP routes, WebSocket commands and cron jobs behind one middleware onion, decorated modules, an HTML-over-the-wire UI layer, native observability (slogger, tracer, ambient correlation) and pact authentication.",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -11,7 +11,7 @@
     "./endpoints": "./endpoints/mod.ts",
     "./errors": "./errors/mod.ts",
     "./middlewares": "./middlewares/mod.ts",
-    "./middlewares/pact": "./middlewares/pact/mod.ts",
+    "./middlewares/pact": "./middlewares/pact.ts",
     "./modules": "./modules/mod.ts",
     "./testing": "./testing/mod.ts",
     "./types": "./types/mod.ts",

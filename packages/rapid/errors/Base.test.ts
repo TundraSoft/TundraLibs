@@ -114,6 +114,22 @@ describe('rapid.errors.RapidError', () => {
     });
   });
 
+  it('PRODUCTION collapses every 500 to "Internal server error" — a RAPID_CONFIG must not announce a misconfiguration', () => {
+    const err = new RapidError('RAPID_CONFIG', {
+      message: "authorize(): 'Nope' is not a module of this pact instance",
+      details: { module: 'Nope' },
+    });
+    asserts.assertEquals(err.payload('PRODUCTION'), {
+      code: 'RAPID_CONFIG',
+      message: 'Internal server error',
+    });
+    asserts.assertEquals(err.payload('DEVELOPMENT'), {
+      code: 'RAPID_CONFIG',
+      message: "authorize(): 'Nope' is not a module of this pact instance",
+      details: { module: 'Nope' },
+    });
+  });
+
   it('PRODUCTION keeps a 4xx message + details but never debug', () => {
     const err = new RapidError('RAPID_ACCESS_DENIED', {
       message: 'you cannot see this',

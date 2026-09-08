@@ -1,3 +1,9 @@
+/**
+ * @fileoverview `JOBContext` — the per-firing context of a scheduled job:
+ * the tick (scheduled vs. fired time, run count), registration-default
+ * args merged with trigger overrides, and the envelope-shaped outcome.
+ * @module
+ */
 import type { StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { Context } from './Context.ts';

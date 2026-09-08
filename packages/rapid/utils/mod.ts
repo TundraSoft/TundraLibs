@@ -22,7 +22,9 @@ export { CSRF_TOKEN, mark, markOf, SESSION_ISSUED } from './requestMarks.ts';
 export { isTemplate, normalizeRouteTemplate } from './routeTemplate.ts';
 export { compose } from './compose.ts';
 export {
+  assertCookieConfig,
   type CookieOptions,
+  isToken,
   parseCookies,
   serializeCookie,
   signValue,
@@ -45,9 +47,11 @@ export {
   mountModule,
 } from './mountModule.ts';
 export {
+  bodyCapFor,
   parseBody,
   type ParseBodyOptions,
   type ParseBodyResult,
+  readCapped,
 } from './parseBody.ts';
 export {
   type PagingCandidates,
@@ -87,3 +91,7 @@ export {
   type OpenApiSecuritySchemes,
   type OpenApiServer,
 } from './buildOpenApi.ts';
+export { pinHidden } from './hiddenSlot.ts';
+export { pickEncoding } from './pickEncoding.ts';
+export { assertRedirectTarget } from './redirectTarget.ts';
+export { isSocketOriginAllowed } from './socketOrigin.ts';

@@ -5,7 +5,7 @@
  * imported directly here — see {@link ModuleMountTarget}).
  *
  * Three problems, one resolution (full reasoning in
- * `DESIGN-modules.md`): the decoration side-table is a `WeakMap`
+ * `DESIGN.md`, "Decorators, binders and modules"): the decoration side-table is a `WeakMap`
  * keyed by METHOD FUNCTION, so it cannot be enumerated and knows no
  * constructor — the mount tier never asks "what has been decorated?",
  * it walks the INSTANCE it was handed and asks the registry about each

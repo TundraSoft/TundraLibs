@@ -23,7 +23,10 @@ type JobDecorator<This, A extends readonly unknown[]> = (
 
 /** Options for {@link JOB}. */
 export type JobDecoratorOptions<A extends readonly unknown[]> = {
-  /** Argument binders, in method-parameter order (see `http.ts`). */
+  /**
+   * Argument binders, in method-parameter order (see `http.ts`).
+   * @default [] — the method takes no parameters
+   */
   bind?: RapidBinds<A>;
   /**
    * Registration-default invocation params — `ctx.args.params` starts

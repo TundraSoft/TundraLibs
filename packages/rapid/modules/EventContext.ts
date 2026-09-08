@@ -14,6 +14,12 @@ export type EventContextInit = {
   event: string;
 };
 
+/**
+ * What an `@On` handler receives beside the payload: the emission's
+ * correlation id, the emitting module's action, the event's fully
+ * qualified name and a fresh, frozen state — never the emitter's state
+ * or auth (an event carries no authority).
+ */
 export class EventContext {
   /** The context discriminator — always `'EVENT'`. */
   public readonly type = 'EVENT' as const;

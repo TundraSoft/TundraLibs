@@ -21,6 +21,24 @@ export type ResolvedClientAddress = {
 };
 
 /**
+ * A forwarded entry with a port (`203.0.113.7:4321`, `[2001:db8::7]:443`,
+ * or a bare bracketed `[::1]`) reduced to its address — some proxies
+ * forward `ip:port`, and a port would otherwise fail the public-IP test
+ * and collapse the client to `''`. A bare IPv6 (many colons, no
+ * brackets) is left alone.
+ */
+const stripPort = (entry: string): string => {
+  if (entry.startsWith('[')) {
+    const close = entry.indexOf(']');
+    return close === -1 ? entry : entry.slice(1, close);
+  }
+  const colon = entry.indexOf(':');
+  return colon !== -1 && colon === entry.lastIndexOf(':')
+    ? entry.slice(0, colon)
+    : entry;
+};
+
+/**
  * Resolve the client address from the socket peer and `x-forwarded-for`
  * / `x-real-ip`.
  *
@@ -51,12 +69,14 @@ export function resolveClientAddress(
 
   if (hops > 0) {
     const xff = (headers.get('x-forwarded-for') ?? '')
-      .split(',').map((ip) => ip.trim()).filter((ip) => ip.length > 0);
+      .split(',').map((ip) => stripPort(ip.trim())).filter((ip) =>
+        ip.length > 0
+      );
     chain.push(...xff);
     if (xff.length > 0) {
       resolved = xff[Math.max(0, xff.length - hops)]!;
     } else {
-      const realIp = headers.get('x-real-ip')?.trim();
+      const realIp = stripPort(headers.get('x-real-ip')?.trim() ?? '');
       if (realIp) {
         chain.push(realIp);
         resolved = realIp;

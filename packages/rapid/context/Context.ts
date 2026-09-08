@@ -1,3 +1,10 @@
+/**
+ * @fileoverview `Context` — the transport-neutral base of every per-invocation
+ * context: correlation id, state, auth, the response slot, detached-work
+ * tracking and the `respond()` point of no return. `HTTPContext`,
+ * `SOCKETContext` and `JOBContext` add what their transport has.
+ * @module
+ */
 import type { StatusCode } from '@tundralibs/compat/http';
 import type { Meter } from '../utils/Meter.ts';
 import type { Slogger } from '@tundralibs/slogger';
@@ -117,6 +124,7 @@ export abstract class Context<
     return this.app.publish(channel, data);
   }
 
+  /** Backing slot for {@link auth} — set once via {@link setAuth}. */
   protected _auth?: Record<string, unknown>;
 
   /**
@@ -232,8 +240,11 @@ export abstract class Context<
    * tracked (HTTP deletes the body parse's upload temp files). The base is
    * a no-op; only transports with something to release override it.
    */
+  /** Synchronous form — the base has nothing to release. */
   public cleanup(): void;
+  /** Asynchronous form — a subtype releasing resources (upload temp files) returns a promise. */
   public cleanup(): Promise<void>;
+  /** Implementation — see the overloads above. */
   public cleanup(): void | Promise<void> {
     return;
   }

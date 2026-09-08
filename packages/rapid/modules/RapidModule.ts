@@ -86,7 +86,9 @@ const attachmentOf = (instance: object, member: string): ModuleAttachment => {
  * `runtime.dispose()`, in reverse.
  */
 export interface RapidModuleLifecycle {
+  /** Runs once after every module is mounted, in mount order. */
   init?(): void | Promise<void>;
+  /** Runs on `runtime.dispose()`, in reverse mount order; a throw is logged, not fatal. */
   dispose?(): void | Promise<void>;
 }
 
@@ -94,6 +96,10 @@ export interface RapidModuleLifecycle {
 type AnyFn = (...args: any[]) => unknown;
 
 /**
+ * The base every module extends: identity (`name`, `namespace`), declared
+ * `events`, and the runtime-backed members (`log`, `config`, `emit`,
+ * `invoke`) that work once the module is mounted.
+ *
  * @typeParam E - The module's event map. Declare it once as a const and
  *   pass `typeof`: `const EVENTS = { PostCreated: event<{ id: string }>() };`
  *   `class Posts extends RapidModule<typeof EVENTS> { protected readonly

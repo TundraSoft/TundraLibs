@@ -36,6 +36,7 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
   /**
    * Argument binders, IN METHOD-PARAMETER ORDER — `bind[0]` produces
    * the first parameter, and the tuple types the signature.
+   * @default [] — the method takes no parameters
    */
   bind?: RapidBinds<A>;
   /**
@@ -44,6 +45,7 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * `bind`: most routes need neither versioning nor an explicit bind
    * tuple, and a REQUIRED version would force every route in an
    * unversioned API to declare one for no benefit.
+   * @default the owning `@Module`'s `version`, else unversioned
    */
   version?: string;
   /** One-line OpenAPI operation summary. */
@@ -56,8 +58,10 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    */
   tags?: readonly string[];
   /**
-   * OpenAPI operation id. Defaults at mount to `<ModuleName>_<method>` —
-   * the key an SDK generator names its client methods by.
+   * OpenAPI operation id — the key an SDK generator names its client
+   * methods by.
+   * @default `<ModuleName>_<method>` at mount (the bare method name for
+   *   an unnamed class)
    */
   operationId?: string;
   /**

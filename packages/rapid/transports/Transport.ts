@@ -3,8 +3,10 @@ import { SpanKind } from '@tundralibs/tracer';
 import type { Application } from '../Application.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import { isThenable } from '../utils/isThenable.ts';
 import { representError } from '../ui/represent.ts';
 import type { HTTPContext } from '../context/HTTPContext.ts';
+import type { JOBContext } from '../context/JOBContext.ts';
 import type { Meter } from '../utils/Meter.ts';
 import { attachContainer } from '../utils/requestContainer.ts';
 import type {
@@ -71,6 +73,8 @@ export abstract class Transport<
     parent?: unknown,
     attributes?: Record<string, string | number | boolean>,
     finalize?: () => R | Promise<R>,
+    /** The arrival clock — HTTP passes its own so `ms` matches `headers.responseTime`. */
+    started?: number,
   ): R | Promise<R> {
     const meter: Meter | undefined = this._app.meter;
     if (meter === undefined) {
@@ -101,6 +105,7 @@ export abstract class Transport<
         parent,
         attributes,
         finalize,
+        started,
       );
     } catch (error) {
       // A synchronous throw from `__runInvoke` (e.g. a logging handler in
@@ -147,6 +152,68 @@ export abstract class Transport<
     return ctx.action;
   }
 
+  /**
+   * The access line — after finalize, so an HTTP line reports the status
+   * and size actually sent (finalize-time failures included). Level by
+   * outcome; `slow` lifts an `info` to `warn`. Never throws into the
+   * cycle: a logging failure is slogger's to report.
+   */
+  private __access(
+    ctx: Context<S, unknown>,
+    started: number,
+    sent: unknown,
+    thrown: RapidError | undefined,
+  ): void {
+    const policy = this._app._accessLog;
+    if (!policy.enabled) return;
+    const http = ctx.type === 'HTTP'
+      ? ctx as unknown as HTTPContext<S>
+      : undefined;
+    if (http !== undefined) {
+      const path = http.path;
+      if (
+        policy.skipExact.has(path) ||
+        policy.skipPrefixes.some((p) => path.startsWith(p))
+      ) return;
+    }
+    const response = sent instanceof Response ? sent : undefined;
+    const status = response?.status ?? ctx.status;
+    const ms = Math.round(performance.now() - started);
+    const line: Record<string, unknown> = {
+      type: ctx.type,
+      action: ctx.action,
+      status,
+      ms,
+      ...(thrown !== undefined ? { code: thrown.code } : {}),
+      ...(http !== undefined
+        ? { matched: http.matched, surface: http.surface }
+        : {}),
+      ...(ctx.type === 'JOB'
+        ? { drift: (ctx as unknown as JOBContext<S>).drift }
+        : {}),
+      ...(policy.client && http !== undefined
+        ? {
+          remoteAddress: http.remoteAddress,
+          userAgent: http.headers.get('user-agent'),
+          referer: http.headers.get('referer'),
+        }
+        : {}),
+    };
+    const slow = policy.slowMs !== undefined && ms > policy.slowMs;
+    if (slow) line['slow'] = true;
+    // The message is the whole story on a plain console (`GET /users 200
+    // 12ms`); structured handlers (logfmt, JSON) get the fields too.
+    const message = `${
+      http !== undefined ? '' : `${ctx.type} `
+    }${ctx.action} ${status} ${ms}ms${slow ? ' slow' : ''}`;
+    const log = this._app.log;
+    if (status >= 500) log.error(message, line);
+    else if (status >= 400 && !(status === 404 && http?.matched === false)) {
+      log.warn(message, line);
+    } else if (slow) log.warn(message, line);
+    else log.info(message, line);
+  }
+
   private __runInvoke<C extends Context<S, unknown>, R = void>(
     ctx: C,
     chain: (ctx: C, next: () => void | Promise<void>) => void | Promise<void>,
@@ -154,6 +221,7 @@ export abstract class Transport<
     parent?: unknown,
     attributes?: Record<string, string | number | boolean>,
     finalize?: () => R | Promise<R>,
+    started: number = performance.now(),
   ): R | Promise<R> {
     return ambient.run(
       { requestId: ctx.requestId, action: ctx.action },
@@ -164,14 +232,28 @@ export abstract class Transport<
         // Turn any throw from the onion into the disclosure override —
         // legal right up to respond(); echo headers survive. Synchronous
         // (no await), so it runs on both the sync and async paths.
+        let thrown: RapidError | undefined;
         const disclose = (error: unknown): void => {
           const err = RapidError.from(error);
-          this._app.log.error(err.message, {
-            code: err.code,
-            requestId: ctx.requestId,
-            stack: err.stack,
-            ...err.context.debug,
-          });
+          thrown = err;
+          // A 5xx is the server's bug report: error level, stack, debug
+          // context. A 4xx is the CLIENT's error — the access line records
+          // it at warn; here it is a debug breadcrumb with no stack, so a
+          // scanner's 404s cannot flood the error log (or make the server
+          // capture a stack per probe).
+          if (err.status >= 500) {
+            this._app.log.error(err.message, {
+              code: err.code,
+              requestId: ctx.requestId,
+              stack: err.stack,
+              ...err.context.debug,
+            });
+          } else {
+            this._app.log.debug(err.message, {
+              code: err.code,
+              requestId: ctx.requestId,
+            });
+          }
           // The payload carries `requestId` so it appears in the BODY
           // too, consistent with the 404 shape (the header always has it).
           try {
@@ -242,8 +324,17 @@ export abstract class Transport<
             // response stands; the failure is already logged above.
           }
         };
-        const finish = (): R | Promise<R> =>
-          finalize !== undefined ? finalize() : (undefined as R);
+        const finish = (): R | Promise<R> => {
+          const out = finalize !== undefined ? finalize() : (undefined as R);
+          if (isThenable(out)) {
+            return (out as Promise<R>).then((sent) => {
+              this.__access(ctx, started, sent, thrown);
+              return sent;
+            });
+          }
+          this.__access(ctx, started, out, thrown);
+          return out;
+        };
 
         const tracer = this._app.tracer;
         if (tracer !== undefined) {

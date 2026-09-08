@@ -475,6 +475,42 @@ describe('rapid.http.surface', () => {
       await res.body?.cancel();
     }
     await app.stop();
+
+    // The SWAP path (a UI app, `rapid-swap` request) never reaches the
+    // response setter — it must refuse the same targets before stamping
+    // the redirect header, or a BYO client following `HX-Redirect`
+    // verbatim is an open redirect.
+    const Core = template<{ body: unknown }>(
+      (d) => html`<main>${d.body as string}</main>`,
+      'Core',
+    );
+    const uiApp = await surfaceApp({}, { core: Core });
+    // Only a TEMPLATED route is represented (and so swap-redirected).
+    uiApp.get('/plain', { template: List }, () => ({
+      content: { items: [] },
+      redirect: '/posts',
+    }));
+    uiApp.get('/evil', { template: List }, () => ({
+      content: { items: [] },
+      redirect: '//evil.example',
+    }));
+    const swapOk = await uiApp.fetch(
+      new Request('http://example.test/plain', {
+        headers: { 'rapid-swap': '1' },
+      }),
+    );
+    asserts.assertEquals(swapOk.status, 200);
+    asserts.assertEquals(swapOk.headers.get('rapid-redirect'), '/posts');
+    await swapOk.body?.cancel();
+    const swapEvil = await uiApp.fetch(
+      new Request('http://example.test/evil', {
+        headers: { 'rapid-swap': '1' },
+      }),
+    );
+    asserts.assertEquals(swapEvil.status, 500);
+    asserts.assertEquals(swapEvil.headers.get('rapid-redirect'), null);
+    await swapEvil.body?.cancel();
+    await uiApp.stop();
   });
 
   it('idempotency keys are per surface — a ui replay never answers the api', async () => {
@@ -564,5 +600,69 @@ describe('rapid.http.surface', () => {
       RapidError,
       'server.api.hosts',
     );
+  });
+});
+
+describe('rapid HTTPTransport — headers.* stamps', () => {
+  const spin = (headers?: Record<string, unknown>) =>
+    Application.initialize({
+      name: 'stamps',
+      server: { port: 0 },
+      logger: { handlers: [] },
+      ...(headers === undefined ? {} : { headers }),
+    });
+
+  it('echoes the request id under headers.requestId and every requestIdEcho name, and times every response', async () => {
+    const app = await spin({
+      requestId: 'x-trace',
+      requestIdEcho: ['x-correlation-id'],
+    });
+    app.get('/ok', () => ({ content: 'ok' }));
+    app.get('/boom', () => {
+      throw new Error('kaboom');
+    });
+    const ok = await app.fetch(
+      new Request('http://app/ok', { headers: { 'x-trace': 'edge-7' } }),
+    );
+    await ok.text();
+    asserts.assertEquals(ok.headers.get('x-trace'), 'edge-7');
+    asserts.assertEquals(ok.headers.get('x-correlation-id'), 'edge-7');
+    asserts.assertEquals(ok.headers.get('x-request-id'), null);
+    asserts.assertMatch(ok.headers.get('x-response-time')!, /^\d+ms$/);
+    for (const path of ['/boom', '/missing']) {
+      const r = await app.fetch(new Request(`http://app${path}`));
+      await r.text();
+      asserts.assert(r.headers.get('x-trace'));
+      asserts.assertEquals(
+        r.headers.get('x-correlation-id'),
+        r.headers.get('x-trace'),
+      );
+      asserts.assertMatch(r.headers.get('x-response-time')!, /^\d+ms$/);
+    }
+  });
+
+  it('headers.responseTime: false omits the timing; a custom name renames it', async () => {
+    const off = await spin({ responseTime: false });
+    off.get('/ok', () => ({ content: 'ok' }));
+    const r = await off.fetch(new Request('http://app/ok'));
+    await r.text();
+    asserts.assertEquals(r.headers.get('x-response-time'), null);
+    const renamed = await spin({ responseTime: 'server-timing-ms' });
+    renamed.get('/ok', () => ({ content: 'ok' }));
+    const r2 = await renamed.fetch(new Request('http://app/ok'));
+    await r2.text();
+    asserts.assertMatch(r2.headers.get('server-timing-ms')!, /^\d+ms$/);
+    asserts.assertEquals(r2.headers.get('x-response-time'), null);
+  });
+
+  it('rejects an illegal echo or timing header name at boot', async () => {
+    for (
+      const headers of [{ requestIdEcho: ['bad name'] }, {
+        responseTime: 'x:y',
+      }]
+    ) {
+      const err = await asserts.assertRejects(() => spin(headers), RapidError);
+      asserts.assertEquals(err.code, 'RAPID_CONFIG');
+    }
   });
 });

@@ -59,11 +59,13 @@ export class RapidEvents extends Events<Record<string, EventSubscriber>> {
     super();
   }
 
+  /** Register `subscriber` for `event` (counted, so a no-subscriber publish stays allocation-free). */
   public subscribe(event: string, subscriber: EventSubscriber): void {
     this.on(event, subscriber);
     this.__counts.set(event, (this.__counts.get(event) ?? 0) + 1);
   }
 
+  /** Remove `subscriber` from `event`. */
   public unsubscribe(event: string, subscriber: EventSubscriber): void {
     this.off(event, subscriber);
     this.__counts.set(event, Math.max(0, (this.__counts.get(event) ?? 1) - 1));

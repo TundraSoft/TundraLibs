@@ -224,14 +224,12 @@ export const AdminChrome = template<{ body: Html; title?: string }, BlogView>(
 
 /** The admin summary page — same data the /admin/summary API serves. */
 export const AdminSummaryView = template<
-  { posts: number; you: { username?: string; roles?: string[] } }
+  { posts: number; you: { username: string; via: string } }
 >((data) =>
   html`<div class="stat-cards">
     <div class="card"><div class="n">${data.posts}</div><p>guides on the shelf</p></div>
-    <div class="card"><div class="n">${data.you.roles?.length ?? 0}</div>
-      <p>roles on ${data.you.username ?? 'you'} (${
-    data.you.roles?.join(', ') ?? '—'
-  })</p></div>
+    <div class="card"><div class="n">${data.you.via}</div>
+      <p>how ${data.you.username} signed in</p></div>
   </div>`, 'AdminSummaryView');
 
 /**

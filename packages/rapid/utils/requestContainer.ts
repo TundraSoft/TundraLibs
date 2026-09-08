@@ -11,6 +11,7 @@
  */
 import { ambient } from '@tundralibs/ambient';
 import type { DoctorContainer } from '@tundralibs/doctor';
+import { pinHidden } from './hiddenSlot.ts';
 
 /** Ambient-bag slot holding the app container for the in-flight request. */
 const CONTAINER: unique symbol = Symbol('rapid.container');
@@ -28,12 +29,7 @@ type ContainerBag = Record<string, unknown> & {
 export function attachContainer(container: DoctorContainer): void {
   const bag = ambient.get();
   if (bag === undefined) return;
-  Object.defineProperty(bag, CONTAINER, {
-    value: container,
-    enumerable: false,
-    configurable: true,
-    writable: true,
-  });
+  pinHidden(bag, CONTAINER, container);
 }
 
 /**

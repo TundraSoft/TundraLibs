@@ -11,7 +11,10 @@ import { assertMethodContext, recordDecoration } from './registry.ts';
 
 /** Options for {@link SOCKET}. */
 export type SocketDecoratorOptions<A extends readonly unknown[]> = {
-  /** Argument binders, in method-parameter order (see `http.ts`). */
+  /**
+   * Argument binders, in method-parameter order (see `http.ts`).
+   * @default [] — the method takes no parameters
+   */
   bind?: RapidBinds<A>;
 };
 

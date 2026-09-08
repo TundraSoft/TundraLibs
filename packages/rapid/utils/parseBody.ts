@@ -63,13 +63,32 @@ const FILE_SIGNATURES: Record<string, (b: Uint8Array) => boolean> = {
 };
 
 /**
+ * The byte ceiling `parseBody` applies to `request`. Multipart carries
+ * file uploads gated by their OWN per-file cap — subjecting it to the
+ * small JSON body cap would make uploads larger than `maxBodySize`
+ * unreachable. An app that accepts NO files (the fail-safe default) has
+ * nothing to write, so its multipart forms get the ordinary body cap.
+ */
+export function bodyCapFor(
+  request: Request,
+  options: ParseBodyOptions,
+): number {
+  const contentType = (request.headers.get('content-type') ?? '')
+    .split(';')[0]!.trim().toLowerCase();
+  const acceptsFiles = (options.uploads.allowedExtensions?.length ?? 0) > 0;
+  return contentType === 'multipart/form-data' && acceptsFiles
+    ? Math.max(options.maxBodySize, options.uploads.maxSize ?? 0)
+    : options.maxBodySize;
+}
+
+/**
  * Read a body stream with a hard byte ceiling — enforced on bytes
  * ACTUALLY read, so a chunked body (no content-length), a missing
  * header, or a lying header cannot bypass it.
  * @throws {RapidError} RAPID_PAYLOAD_TOO_LARGE past `cap` (`cap <= 0`
  *   disables).
  */
-async function readCapped(
+export async function readCapped(
   stream: ReadableStream<Uint8Array> | null,
   cap: number,
 ): Promise<Uint8Array> {
@@ -223,16 +242,7 @@ export async function parseBody(
   const isForm = isMultipart ||
     contentType === 'application/x-www-form-urlencoded';
 
-  // Multipart carries file uploads gated by their OWN per-file cap —
-  // subjecting it to the small JSON body cap would make uploads larger
-  // than `maxBodySize` unreachable (the 1 MB vs 10 MB contradiction). An
-  // app that accepts NO files (the fail-safe default) has nothing to
-  // write, so its multipart forms get the ordinary body cap.
-  const acceptsFiles = (options.uploads.allowedExtensions?.length ?? 0) > 0;
-  const cap = isMultipart && acceptsFiles
-    ? Math.max(options.maxBodySize, options.uploads.maxSize ?? 0)
-    : options.maxBodySize;
-  const bytes = await readCapped(request.body, cap);
+  const bytes = await readCapped(request.body, bodyCapFor(request, options));
 
   if (isForm) {
     const response = new Response(

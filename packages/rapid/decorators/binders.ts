@@ -30,8 +30,14 @@ import type { RapidSession } from '../middlewares/session.ts';
  * inference from silently flexing an unvalidated binder to whatever
  * type the method parameter claims. Pass a guardian schema (or any
  * function) to coerce/narrow.
+ *
+ * @throws {RapidError} RAPID_VALIDATION_FAILED (400) at invocation when
+ *   the value is present but not a string and no validator was given;
+ *   a validator's own throw follows the usual rules (guardian → 400,
+ *   anything else → 500 unless wrapped in `validated()`).
  */
 export function param(name: string): RapidBinder<string>;
+/** With a validator — the parameter takes the validator's return type. */
 export function param<T>(
   name: string,
   validate: (value: unknown) => T | Promise<T>,
@@ -48,10 +54,14 @@ export function param(
  * raw socket frame value; jobs have none). Without a validator the
  * parameter is PINNED to `unknown` — a typed payload parameter must
  * earn its type through a validator; the binder never just asserts
- * it. Exact off-HTTP semantics are settled in the modules round; the
- * descriptor shape is final.
+ * it.
+ *
+ * @throws {RapidError} As a rejection at invocation, from the body
+ *   parse: RAPID_PAYLOAD_TOO_LARGE (413), RAPID_VALIDATION_FAILED (400,
+ *   malformed JSON/form), RAPID_UNSUPPORTED_MEDIA (415, upload gauntlet).
  */
 export function payload(): RapidBinder<unknown>;
+/** With a validator — the parameter takes the validator's return type. */
 export function payload<T>(
   validate: (value: unknown) => T | Promise<T>,
 ): RapidBinder<T>;
@@ -82,9 +92,14 @@ export function payload(
  * Bind the parsed query (`ctx.args.query` — `$op` filters + sorting).
  * UNTRUSTED as-is: the validator is where the allowlist/re-casing
  * belongs. Without one the parameter is PINNED to the raw
- * {@link RapidContextQuery} shape.
+ * {@link RapidContextQuery} shape. Not emitted into OpenAPI (the query
+ * grammar is uniform, not per-route).
+ *
+ * @throws {RapidError} RAPID_QUERY_INVALID (400) at invocation when the
+ *   query string breaches a `server.query` cap.
  */
 export function query(): RapidBinder<RapidContextQuery>;
+/** With a validator — the parameter takes the validator's return type. */
 export function query<T>(
   validate: (value: unknown) => T | Promise<T>,
 ): RapidBinder<T>;
@@ -105,6 +120,7 @@ export function paging(): RapidBinder<RapidContextPaging> {
  * the parameter is PINNED to `string | null`.
  */
 export function header(name: string): RapidBinder<string | null>;
+/** With a validator — the parameter takes the validator's return type. */
 export function header<T>(
   name: string,
   validate: (value: unknown) => T | Promise<T>,
@@ -122,6 +138,7 @@ export function header(
  * {@link header} — read from the parsed request cookies.
  */
 export function cookie(name: string): RapidBinder<string | null>;
+/** With a validator — the parameter takes the validator's return type. */
 export function cookie<T>(
   name: string,
   validate: (value: unknown) => T | Promise<T>,
@@ -140,6 +157,7 @@ export function cookie(
  * principal (`auth(asUser)`).
  */
 export function auth(): RapidBinder<Record<string, unknown> | undefined>;
+/** With a validator — the parameter takes the validator's return type. */
 export function auth<T>(
   validate: (value: unknown) => T | Promise<T>,
 ): RapidBinder<T>;
@@ -161,8 +179,10 @@ export function session(): RapidBinder<RapidSession | undefined> {
 
 /**
  * Bind the socket connection envelope (`ctx.connection` — upgrade
- * identity). SOCKET-only by nature; off-socket behaviour is settled
- * in the modules round.
+ * identity). SOCKET-only.
+ *
+ * @throws {RapidError} RAPID_CONFIG at MOUNT when used on a method that
+ *   is not a `@SOCKET` command.
  */
 export function connection(): RapidBinder<SOCKETConnection> {
   return { source: 'connection' };
@@ -178,6 +198,7 @@ export function connection(): RapidBinder<SOCKETConnection> {
  * is not part of the request contract.
  */
 export function config(path: string): RapidBinder<unknown>;
+/** With a validator — the parameter takes the validator's return type. */
 export function config<T>(
   path: string,
   validate: (value: unknown) => T | Promise<T>,

@@ -3,7 +3,7 @@
  * render primitives and the template factory routes reference via
  * `{ template }`. The root barrel re-exports NOTHING from here — an
  * API-only app pays nothing at runtime. See docs/Rapid-UI.md (the
- * consumer contract; design record in DESIGN-ui.md).
+ * consumer contract; design record in DESIGN.md, "The UI layer").
  *
  * @module
  */

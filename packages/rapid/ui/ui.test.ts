@@ -10,7 +10,6 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
 import { GET, Module } from '../decorators/mod.ts';
-import { authenticate } from '../middlewares/auth.ts';
 import type {
   RapidContextResponse,
   RapidTemplate,
@@ -129,9 +128,12 @@ describe('rapid.ui.app', () => {
           : undefined,
       }),
     });
-    app.use(authenticate({
-      verify: (t) => (t === 'tok' ? { id: 'u1', role: 'admin' } : null),
-    }));
+    app.use((ctx, next) => {
+      if (
+        ctx.type === 'HTTP' && ctx.headers.get('authorization') === 'Bearer tok'
+      ) ctx.setAuth({ id: 'u1', role: 'admin' });
+      return next();
+    });
     app.get('/spy', { template: Spy }, () => ({ content: {} }));
 
     await app.fetch(
@@ -551,8 +553,17 @@ describe('rapid.ui.app', () => {
     // Capped reconnect backoff — with the timer TRACKED, so
     // disconnect() can cancel a queued reconnect instead of letting it
     // resurrect the socket.
-    asserts.assertStringIncludes(UI_LIVE, 'timer = setTimeout(open, delay)');
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'timer = setTimeout(open, delay * (0.75 + Math.random() * 0.5))',
+    );
     asserts.assertStringIncludes(UI_LIVE, 'Math.min(delay * 1.5, 15000)');
+    // The backoff resets only after a connection STAYED open — an
+    // accept-then-close server must not loop at the floor.
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'if (Date.now() - opened >= 5000) delay = 2000;',
+    );
     asserts.assertStringIncludes(UI_LIVE, 'clearTimeout(timer)');
     // open() is idempotent (never stacks a duplicate socket) and the
     // second copy of a double-loaded script bails out.
@@ -608,7 +619,30 @@ describe('rapid.ui.app', () => {
     // and after the swap that inserted it — and only via GET.
     asserts.assertStringIncludes(UI_RUNTIME, "'[data-action][data-load]'");
     asserts.assertStringIncludes(UI_RUNTIME, 'const loaded = new WeakSet()');
-    asserts.assertStringIncludes(UI_RUNTIME, 'loadLazy(swapped)');
+    asserts.assertStringIncludes(UI_RUNTIME, 'loadLazy(swapped, url)');
+    // A fragment carrying data-load for the action that produced it would
+    // re-fetch forever — skipped, not chained.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'sameAction(el.dataset.action, from)',
+    );
+    // A page script's preventDefault() wins over the delegated handlers.
+    asserts.assertEquals(
+      UI_RUNTIME.split('if (e.defaultPrevented) return;').length,
+      3,
+    );
+    // fetch() follows redirects: the RESPONSE origin is checked, not only
+    // the request URL.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'new URL(res.url).origin !== location.origin',
+    );
+    // An invalid data-target selector reports instead of throwing after
+    // preventDefault() left the control dead.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'target = doc.querySelector(el.dataset.target);',
+    );
     asserts.assertStringIncludes(UI_RUNTIME, "doc.readyState === 'loading'");
     asserts.assertStringIncludes(UI_RUNTIME, 'data-load is GET-only');
     // The default csrf cookie name.

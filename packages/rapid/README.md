@@ -17,8 +17,8 @@ listening server (`app.start()`) or a fetch handler (`app.fetch(request)`).
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
 ![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
-> Early development (`0.0.0`). The API described here is real and verified
-> against source, but pre-1.0 — expect movement.
+> Pre-1.0. The API described here is real and verified against source; minor
+> releases may still move it.
 
 ## Installation
 
@@ -97,7 +97,7 @@ import { Application } from '@tundralibs/rapid';
 
 const app = await Application.initialize({
   path: './configs',
-  env: '.env.production', // true | false | a path (default: true)
+  env: '.env.production', // true | false | a path — omit for NO substitution (the string form implies true)
   applicationSet: 'Api', // read Api.yaml instead of Application.yaml
 });
 await app.start();
@@ -159,29 +159,30 @@ before the handler.
 
 ```ts
 import { Application } from '@tundralibs/rapid';
-import {
-  cors,
-  requestId,
-  requestLogger,
-  responseTimer,
-  secureHeaders,
-} from '@tundralibs/rapid';
+import { cors, secureHeaders } from '@tundralibs/rapid';
 
 const app = await Application.initialize({ name: 'api' });
 
-app.use(
-  requestLogger(),
-  responseTimer(),
-  secureHeaders(),
-  cors(),
-  requestId(),
-);
+app.use(secureHeaders(), cors());
 ```
+
+The correlation id, the response time and the access log are the core's,
+not middleware: every HTTP response carries `x-request-id` (a validated
+inbound value is adopted, else one is minted) and `x-response-time` —
+rename or extend them under the `headers` option — and every invocation
+(request, socket frame, job firing) writes one access line through the
+app's slogger — `GET /users 200 12ms` on a console, with `status`, `ms`,
+`matched`, `surface` and the error `code` as structured fields for
+logfmt/JSON handlers — level by outcome. Tune or silence it under `logger.access`
+(`enabled`, `skip` paths, a `slow` threshold in seconds, opt-in `client`
+fields).
 
 Shipped middleware factories (all exported from the root and from
 `@tundralibs/rapid/middlewares`): `cors`, `secureHeaders`, `compress`, `etag`,
-`idempotency`, `rateLimit`, `requestId`, `requestLogger`, `responseTimer`,
-`timeout`, and `healthCheck`. Static file serving is CONFIG, not a
+`csrf`, `session`, `rateLimit`, `idempotency`, `timeout`, and `healthCheck`;
+`pactAuth` lives on its own subpath, `@tundralibs/rapid/middlewares/pact`.
+Every option, default, unit and pitfall is in the
+[middleware catalog](./docs/Rapid-Middleware.md). Static file serving is CONFIG, not a
 middleware — `server.static` maps URL prefixes to directories, served
 framework-side on route miss (routes always win; `secureHeaders`/`cors`/
 logging always apply; traversal/symlink-guarded, weak-ETag 304s, byte
@@ -195,10 +196,16 @@ subject); `scope: false` explicitly opts into a shared key space (e.g. a
 webhook receiver keyed by the provider's event id). Note the stateful
 middlewares (`session`, `rateLimit`, `idempotency`) default to a
 per-process in-memory store — correct on one replica, invisible across
-replicas: inject a shared `Store` (redis/cacher) the moment you scale
-out, and bound it yourself (the bundled default is bounded only for
-idempotency's attacker-mintable keys).
+replicas: hand each factory its persistence `hooks` (pact-style, one
+purpose per hook — `session`'s `getSession`/`saveSession`/`deleteSession`,
+`rateLimit`'s atomic `increment`, `idempotency`'s set-if-absent `claim`)
+over redis/cacher the moment you scale out, and bound that store yourself
+(the bundled default is bounded only for idempotency's attacker-mintable
+keys).
 
+How the onion runs — `next()`'s contract, short-circuiting, post-processing,
+which headers survive an error, and how to write your own factory — is the
+first section of the [middleware catalog](./docs/Rapid-Middleware.md).
 Scope helpers turn a transport-specific middleware into a universal one:
 `onlyHTTP` / `onlySOCKET` / `onlyJOB` run it only on that transport (a no-op
 elsewhere), while `guardHTTP` / `guardSOCKET` / `guardJOB` run it there and
@@ -209,7 +216,7 @@ import { Application } from '@tundralibs/rapid';
 import { guardHTTP, timeout } from '@tundralibs/rapid';
 
 const app = await Application.initialize({ name: 'api' });
-app.use(guardHTTP(timeout(5000)));
+app.use(guardHTTP(timeout(5))); // seconds
 ```
 
 ## Modules
@@ -239,7 +246,8 @@ app.module(new Users());
 `@SOCKET`/`@JOB` names), and a default route `version`. Argument binders
 (`param`, `query`, `payload`, `paging`, `header`, `cookie`, `auth`, `session`,
 `connection`, `config`) type the method signature via the decorator's `bind`
-tuple. `config('auth.hmac.maxSkew')` binds a value from the loaded config sets
+tuple (all from `@tundralibs/rapid/decorators`; the root re-exports them too,
+except the `session` binder — the root's `session` is the middleware). `config('auth.hmac.maxSkew')` binds a value from the loaded config sets
 on any transport (the set is the file basename lowercased — `Auth.yaml` →
 `auth.…` — and the keys after it are case-sensitive; a missing path binds
 `undefined`); middleware reads the same sets via `ctx.config`.
@@ -310,7 +318,10 @@ request into a **400** — but only if rapid can tell the throw is a _validation
 failure, not a server bug. The rule, in order of precedence:
 
 1. **You throw a `RapidError` yourself** → used verbatim (full control over code
-   / status / detail).
+   / status / detail). Disclosure is by `mode`: in PRODUCTION every 500
+   collapses to `Internal server error` and any 5xx drops its `details`, but
+   a **4xx keeps its `message` and `details`** — they describe the client's
+   own request and are public by design, so write them as client-facing text.
 2. **A `@tundralibs/guardian` failure** → **automatic 400** (`RAPID_VALIDATION_FAILED`,
    with a client-safe message per failing field). Guardian is this repo's
    validator, recognized structurally — no wrapper, no import needed.
@@ -474,49 +485,45 @@ app.get('/openapi.json', openapi());
   3.0.3 document built from the mounted routes (cached per version; every
   declared version is listed as `x-versions`). `bearerAuth` is declared
   automatically; declare any other scheme routes name in `security` here.
-- `login({ pact, cookie?, fields?, principal? })` — logs a user in through a
-  `@tundralibs/pact` instance (`{ identifier, password }` in the body) and
-  returns `{ token, expiresAt, principal }`; with `cookie` the token is also
-  set as an HttpOnly cookie for browser UIs. 401 on a bad credential, one
-  answer for every failure kind (pact is a type-only import here):
 
-```ts ignore
-import { login } from '@tundralibs/rapid/endpoints';
-app.post('/login', login({ pact, cookie: { name: 'session' } }));
-```
+A login route is deliberately not an endpoint: its body shape, cookie and
+what the principal exposes are app decisions — see the pattern in
+[Authentication & authorization](docs/Rapid-Auth.md).
 
 ## Auth
 
-rAPId owns only the auth bag (`ctx.auth`); the auth middleware are optional and
-take your own logic. `authenticate({ verify })` identifies the caller and fills
-`ctx.auth` (it never rejects — anonymous requests flow through); `authorize(check)`
-enforces (401 when `ctx.auth` is absent, 403 when `check` returns falsy):
+rAPId owns only the auth bag: `ctx.auth`, written once by `ctx.setAuth()`,
+`undefined` when anonymous. The `@tundralibs/pact` adapter at
+`@tundralibs/rapid/middlewares/pact` fills it — one factory over your
+instance, `const { authenticate, authorize } = pactAuth(pact, options)`;
+`authenticate` sets `ctx.auth` to pact's auth context (Bearer / Basic / ApiKey
+/ HMAC, a bearer cookie for UIs; signed responses and JWE payloads when
+configured), `authorize('Module', 'PERMISSION')` is typed by the instance's
+catalog. The options are pact's own middleware options — the same wire
+contract as its express/fastify/oak/hono adapters:
 
 ```ts
 import { Application } from '@tundralibs/rapid';
-import { authenticate, authorize } from '@tundralibs/rapid';
+import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
+import type { Pact } from '@tundralibs/pact';
+
+declare const pact: Pact<{ READ: 1n }, 'Admin'>;
 
 const app = await Application.initialize({ name: 'api' });
+const { authenticate, authorize } = pactAuth(pact, {
+  bearer: { cookie: 'session' },
+});
 
-app.use(
-  authenticate({
-    verify: (token) => token === 'secret' ? { id: 'u1', role: 'admin' } : null,
-  }),
-);
-
+app.use(authenticate);
 app.get(
   '/admin',
-  authorize((auth) => auth.role === 'admin'),
+  authorize('Admin', 'READ'),
   () => ({ content: { ok: true } }),
 );
 ```
 
-For `@tundralibs/pact`, use the dedicated adapter at
-`@tundralibs/rapid/middlewares/pact` instead — one factory over your instance,
-`const { authenticate, authorize } = pactAuth(pact, options)`; `authenticate`
-fills `ctx.auth` with pact's auth context (Bearer / Basic / ApiKey / HMAC, a
-bearer cookie for UIs), `authorize('Module', 'PERMISSION')` is typed by the
-instance's catalog. See [Authentication & authorization](docs/Rapid-Auth.md).
+Any other identity system is a ten-line middleware over the same bag — see
+[Authentication & authorization](docs/Rapid-Auth.md).
 
 ## Cookies, sessions & CSRF
 
@@ -564,7 +571,8 @@ decorated for several transports can return them without branching on the
 transport.
 
 `session()` — store-backed, per-client state across requests, keyed by a
-signed id cookie with a rolling idle TTL and a hard absolute cap; call
+signed id cookie with a rolling idle TTL and a hard absolute cap (both in
+seconds, like every duration in rapid — the hooks' TTLs included); call
 `regenerate()` on login (rotates the id, keeps the data) and `destroy()` on
 logout. `csrf()` — a stateless signed double-submit token; state-changing
 requests must echo the token cookie back in `x-csrf-token` (or a form field)
@@ -725,14 +733,16 @@ scaffolds the three-tier UI starter (core + layout + a templated page on
 framework under `public/vendor/`; `--yes` accepts every default
 non-interactively. A `.gitignore` is written; `git init` is left to you.
 
-`--ai` (on by default) writes AI-assistant instructions so an agent building
-the project starts with rapid's conventions pre-loaded: **one** real guide,
-`AGENTS.md`, plus two thin pointers to it — `CLAUDE.md` (Claude Code) and
-`.github/copilot-instructions.md` (Copilot) — so every tool resolves to a
-single source that can't drift. The guide is rendered for _this_ project: its
-runtime's commands, its module layout if you chose `--module`, rapid's actual
-API (the `:id:` route grammar, the `{ content }` reply, `validated()`,
-`harness()`/`client()`), the org coding conventions fitted to an app, and the
+Every scaffold also writes the project's AI guide: **one** real file,
+`AGENTS.md`, plus `CLAUDE.md` (which imports it with `@AGENTS.md`, so Claude
+Code loads the full guide) and `.github/copilot-instructions.md` — every tool
+resolves to a single source that can't drift. The guide is rendered for _this_
+project and _this_ rapid version: its runtime's commands, its module layout if
+you chose `--module`, the context API, the middleware catalog and the error
+registry (generated from the code), doc links pinned to the installed version,
+rapid's actual API (the `:id:` route grammar, the `{ content }` reply,
+`validated()`, `harness()`/`client()`), the org coding conventions fitted to an
+app, and the
 verified shape of each `@tundralibs/*` package an agent may reach for
 (guardian, norm, oql, pact, cacher, id, crypt, restler, utils, slogger, …).
 
@@ -747,10 +757,27 @@ A full module-based blog API (posts + nested comments over `@tundralibs/norm`,
 DI via `@tundralibs/doctor`, versioning, a cron digest job, a WebSocket module,
 and the endpoint + auth catalog) lives in
 [`examples/`](./examples/) — run it with
-`deno run -A packages/rapid/examples/blog/main.ts`.
+`deno run -A packages/rapid/examples/blog/main.ts`. The
+[examples walkthrough](./examples/README.md) maps all four apps (blog, kanban,
+dashboard, htmx) to what each one shows and where to start reading.
 
 Guides:
 
+- [The context and the application object](./docs/Rapid-Context.md) — what
+  `ctx` carries on each transport, reading input, shaping output, reaching
+  services, and every `app.*` member.
+- [Modules](./docs/Rapid-Modules.md) — decorators, binders, the
+  `RapidModule` tier, events, `invoke`, lifecycle, and booting with
+  `app.modules()`.
+- [Testing](./docs/Rapid-Testing.md) — `client()`, `harness()`, `view()`,
+  running on Deno, Bun and Node, and what each kind of test should cover.
+- [Configuration reference](./docs/Rapid-Configuration.md) — every
+  `Application.yaml` key: type, default, unit, what validates it at boot, and
+  which part of the framework reads it.
+- [Middleware catalog](./docs/Rapid-Middleware.md) — registration order and
+  every shipped middleware's options, hooks and pitfalls.
+- [Errors](./docs/Rapid-Errors.md) — how a throw becomes a response, what
+  PRODUCTION discloses, and every `RAPID_*` code.
 - [Database access & connection pooling](./docs/Rapid-Database.md) — sharing one
   pool across modules and middleware (with or without Norm), and staying safe
   under concurrency and pool limits.

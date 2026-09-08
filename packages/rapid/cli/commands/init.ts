@@ -148,12 +148,6 @@ export async function initCommand(
     'Add a GitHub Actions CI workflow?',
     false,
   );
-  const ai = await pick(
-    'ai',
-    'Add AI-assistant instructions (AGENTS.md / CLAUDE.md / Copilot)?',
-    true,
-  );
-
   const root = base === '.' ? name : `${base}/${name}`;
   if (await pathExists(root)) {
     console.error(`✗ '${name}' already exists`);
@@ -188,7 +182,6 @@ export async function initCommand(
       runtime,
       docker,
       github,
-      ai,
       ui,
       ...(withCss !== undefined ? { vendorCss: withCss.file } : {}),
     },

@@ -11,11 +11,16 @@ import {
   makeDir,
   makeTempDir,
   pathExists,
+  readDir,
   readTextFile,
   removeDir,
   writeTextFile,
 } from '@tundralibs/compat/file';
 import { Application } from '../Application.ts';
+import * as decoratorsBarrel from '../decorators/mod.ts';
+import * as endpointsBarrel from '../endpoints/mod.ts';
+import { RAPID_ERROR_CODES } from '../errors/mod.ts';
+import * as middlewaresBarrel from '../middlewares/mod.ts';
 import {
   exportedClasses,
   generateBarrel,
@@ -23,7 +28,7 @@ import {
 } from './commands/modules.ts';
 import { healthCommand } from './commands/health.ts';
 import { initCommand } from './commands/init.ts';
-import { scaffold } from './templates.ts';
+import { MIDDLEWARE_CATALOG, PACKAGE_DOCS, scaffold } from './templates.ts';
 
 describe('rapid.cli modules generator', () => {
   it('exportedClasses picks concrete classes and skips abstract bases', () => {
@@ -77,7 +82,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'bun',
         docker: true,
         github: true,
-        ai: false,
       },
       '1.2.3',
     );
@@ -130,7 +134,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: false,
       },
       '1.0.0',
     );
@@ -158,7 +161,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: true,
         github: true,
-        ai: false,
       },
       '1.0.0',
     );
@@ -187,7 +189,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'node',
         docker: true,
         github: true,
-        ai: false,
       },
       '1.0.0',
     );
@@ -213,7 +214,6 @@ describe('rapid.cli init scaffold', () => {
           runtime: 'deno',
           docker: false,
           github: false,
-          ai: false,
         },
         '1.0.0',
       )['configs/Application.yaml']!;
@@ -249,6 +249,12 @@ describe('rapid.cli init scaffold', () => {
         'server.versioning': server.versioning as Record<string, unknown>,
         jobs: app.option('jobs') as Record<string, unknown>,
         uploads: app.option('uploads') as Record<string, unknown>,
+        headers: app.option('headers') as Record<string, unknown>,
+        'logger.access': {
+          enabled: true,
+          skip: [],
+          client: false,
+        } as Record<string, unknown>,
       };
       // Documented as a COMMENTED example on purpose (its default is a temp dir).
       const commentedByDesign = new Set(['uploads.path']);
@@ -278,7 +284,7 @@ describe('rapid.cli init scaffold', () => {
     }
   });
 
-  it('scaffold() --ai emits ONE AGENTS.md source + two pointers, runtime- and module-aware', () => {
+  it('scaffold() always emits ONE AGENTS.md source + two pointers, runtime- and module-aware', () => {
     const f = scaffold(
       {
         name: 'aiapp',
@@ -287,7 +293,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'bun',
         docker: false,
         github: false,
-        ai: true,
       },
       '1.0.0',
     );
@@ -307,6 +312,8 @@ describe('rapid.cli init scaffold', () => {
       !f['CLAUDE.md']!.includes('colon-wrapped'),
       'pointer must not duplicate the guide',
     );
+    // Claude Code loads the guide itself through the import line.
+    asserts.assertStringIncludes(f['CLAUDE.md']!, '\n@AGENTS.md\n');
     // True for THIS project: its runtime commands, its name, its module layout.
     asserts.assertStringIncludes(agents, 'running on **bun**');
     asserts.assertStringIncludes(agents, 'bun run dev');
@@ -337,7 +344,7 @@ describe('rapid.cli init scaffold', () => {
       'shapes must lead with the job, not the bare package name',
     );
 
-    // No module system → no Modules section; deno → deno commands; --ai off → no files.
+    // No module system → no Modules section; deno → deno commands.
     const plain = scaffold(
       {
         name: 'p',
@@ -346,25 +353,108 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: true,
       },
       '1.0.0',
     );
     asserts.assert(!plain['AGENTS.md']!.includes('## Modules'));
     asserts.assertStringIncludes(plain['AGENTS.md']!, 'deno task test');
-    const off = scaffold(
+    // Doc links are pinned to the scaffolded version; offline (null) falls
+    // back to the package page rather than inventing a version.
+    asserts.assertStringIncludes(
+      plain['AGENTS.md']!,
+      'https://jsr.io/@tundralibs/rapid/1.0.0/docs/Rapid-Errors.md',
+    );
+    const offline = scaffold(
       {
         name: 'o',
+        module: false,
+        norm: false,
+        runtime: 'node',
+        docker: false,
+        github: false,
+      },
+      null,
+    )['AGENTS.md']!;
+    asserts.assertStringIncludes(
+      offline,
+      'https://jsr.io/@tundralibs/rapid/README.md',
+    );
+    asserts.assertStringIncludes(offline, 'node_modules/@tundralibs/rapid/');
+  });
+
+  it('AGENTS.md drift guard: the guide names every public surface the package exports', async () => {
+    const agents = scaffold(
+      {
+        name: 'guide',
         module: true,
         norm: false,
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: false,
+        ui: true,
       },
-      '1.0.0',
+      '9.9.9',
+    )['AGENTS.md']!;
+    const missing = (what: string, names: readonly string[]) =>
+      names.filter((n) => !agents.includes(n)).map((n) => `${what}: ${n}`);
+    const functions = (barrel: Record<string, unknown>) =>
+      Object.keys(barrel).filter((k) => typeof barrel[k] === 'function');
+    const pkg = new URL('../', import.meta.url).pathname;
+    const manifest = JSON.parse(await readTextFile(`${pkg}deno.json`)) as {
+      exports: Record<string, string>;
+    };
+    const docs: string[] = [];
+    for await (const entry of readDir(`${pkg}docs`)) {
+      if (entry.name.endsWith('.md')) docs.push(`docs/${entry.name}`);
+    }
+    const catalogText = MIDDLEWARE_CATALOG.map(([f]) => f).join(' ');
+    const gaps = [
+      // every subpath a consumer can import
+      ...missing(
+        'subpath',
+        Object.keys(manifest.exports)
+          .filter((k) => k !== '.')
+          .map((k) => `@tundralibs/rapid/${k.slice(2)}`),
+      ),
+      // every middleware factory / helper the barrel exports, in the catalog
+      ...functions(middlewaresBarrel)
+        .filter((n) => !catalogText.includes(n))
+        .map((n) => `middleware catalog: ${n}`),
+      // every decorator and binder
+      ...missing('decorator/binder', functions(decoratorsBarrel)),
+      // every endpoint
+      ...missing('endpoint', functions(endpointsBarrel).map((n) => `${n}(`)),
+      // every error code (the table is generated from the registry)
+      ...missing('error code', Object.keys(RAPID_ERROR_CODES)),
+      // every doc shipped in the package, linked at the installed version
+      ...missing(
+        'doc',
+        docs.map((f) => `https://jsr.io/@tundralibs/rapid/9.9.9/${f}`),
+      ),
+      ...docs.filter((f) => !PACKAGE_DOCS.some(([file]) => file === f))
+        .map((f) => `PACKAGE_DOCS: ${f}`),
+      // every config group the annotated YAML carries
+      ...missing('config group', [
+        'headers',
+        'server.',
+        'jobs.enabled',
+        'uploads',
+        'logger.access',
+        'tracer',
+        'ui:',
+      ]),
+      ...missing('CLI command', [
+        'init [name]',
+        'upgrade',
+        'modules [dir]',
+        'health [url]',
+      ]),
+    ];
+    asserts.assertEquals(
+      gaps,
+      [],
+      'update AGENTS_MD / MIDDLEWARE_CATALOG / PACKAGE_DOCS in cli/templates.ts',
     );
-    asserts.assert(!('AGENTS.md' in off) && !('CLAUDE.md' in off));
   });
 
   it('scaffold() --ui emits the three-tier views, static+ui config, and a templated home', () => {
@@ -376,7 +466,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: false,
         ui: true,
         vendorCss: 'pico.min.css',
       },
@@ -429,7 +518,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: false,
         ui: true,
       },
       '1.0.0',
@@ -452,7 +540,6 @@ describe('rapid.cli init scaffold', () => {
         runtime: 'workers',
         docker: true,
         github: true,
-        ai: false,
       },
       '1.0.0',
     );
@@ -584,7 +671,6 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: false,
         ...over,
       },
       '1.2.3',
@@ -619,7 +705,6 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
         runtime: 'deno',
         docker: false,
         github: false,
-        ai: false,
       },
       null,
     );

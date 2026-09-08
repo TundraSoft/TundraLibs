@@ -84,6 +84,30 @@ describe('rapid.resolveClientAddress', () => {
     asserts.assertEquals(r.address, '');
   });
 
+  it('a forwarded entry carrying a port keeps its address instead of collapsing to none', () => {
+    for (
+      const [forwarded, expected] of [
+        ['8.8.8.8:4321', '8.8.8.8'],
+        ['[2001:db8::7]:443', '2001:db8::7'],
+        ['[2001:db8::7]', '2001:db8::7'],
+        ['2001:db8::7', '2001:db8::7'],
+      ] as const
+    ) {
+      const r = resolveClientAddress(
+        '10.0.0.1',
+        h({ 'x-forwarded-for': forwarded }),
+        1,
+      );
+      asserts.assertEquals(r.address, expected, forwarded);
+    }
+    const real = resolveClientAddress(
+      '10.0.0.1',
+      h({ 'x-real-ip': '8.8.8.8:9000' }),
+      1,
+    );
+    asserts.assertEquals(real.address, '8.8.8.8');
+  });
+
   it('chain records socket peer + forwarded hops in order', () => {
     const r = resolveClientAddress(
       '10.0.0.1',

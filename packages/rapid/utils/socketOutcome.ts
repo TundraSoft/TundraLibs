@@ -21,12 +21,19 @@ import { RAPID_ERROR_CODES, type RapidErrorCode } from '../errors/mod.ts';
 
 /** Status → framework code, for outcomes that carry no code of their own. */
 const STATUS_CODES: ReadonlyMap<number, RapidErrorCode> = new Map(
-  (Object.entries(RAPID_ERROR_CODES) as [RapidErrorCode, { status: number }][])
-    // First registration wins: the table is ordered with the generic
-    // codes first, so 500 resolves to RAPID_UNHANDLED rather than a
-    // later, more specific 500-mapped code.
+  (Object.entries(RAPID_ERROR_CODES) as [
+    RapidErrorCode,
+    { status: number; specific?: true },
+  ][])
+    // First GENERIC registration wins: the table is ordered with the
+    // generic codes first, so 500 resolves to RAPID_UNHANDLED rather than
+    // a later 500-mapped code, and a `specific` code (an idempotency
+    // failure) is never pinned on a handler's bare status.
     .reduce((acc, [code, spec]) => {
-      if (!acc.some(([status]) => status === spec.status)) {
+      if (
+        spec.specific !== true &&
+        !acc.some(([status]) => status === spec.status)
+      ) {
         acc.push([spec.status, code]);
       }
       return acc;

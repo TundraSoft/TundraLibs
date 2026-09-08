@@ -24,6 +24,7 @@ export type RapidErrorMeta = {
  * cause chains, and JSON serialization come along.
  */
 export class RapidError extends BaseError<RapidErrorMeta> {
+  /** Raise `code`; `message` defaults to the registry's client-safe text. */
   constructor(
     code: RapidErrorCode,
     options: {
@@ -54,8 +55,12 @@ export class RapidError extends BaseError<RapidErrorMeta> {
   /**
    * The client-facing body under the app's disclosure mode:
    * - DEVELOPMENT — true message, `details`, and `debug`.
-   * - PRODUCTION — 5xx collapse to the registry's opaque default and drop
-   *   `details`; 4xx keep message + `details`; `debug` NEVER renders.
+   * - PRODUCTION — a 500 collapses to "Internal server error" whatever
+   *   its code (a misconfiguration must not announce itself), any other
+   *   5xx to its registry default (`Request timed out`), and both drop
+   *   `details`; 4xx keep message + `details` — they describe the
+   *   client's own request and are PUBLIC by design, so write them as
+   *   such; `debug` NEVER renders.
    */
   public payload(
     mode: 'DEVELOPMENT' | 'PRODUCTION',
@@ -70,7 +75,12 @@ export class RapidError extends BaseError<RapidErrorMeta> {
       };
     }
     if (this.status >= 500) {
-      return { code, message: RAPID_ERROR_CODES[code].message };
+      return {
+        code,
+        message: this.status === 500
+          ? RAPID_ERROR_CODES.RAPID_UNHANDLED.message
+          : RAPID_ERROR_CODES[code].message,
+      };
     }
     return {
       code,

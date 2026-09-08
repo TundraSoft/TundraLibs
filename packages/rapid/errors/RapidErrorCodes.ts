@@ -10,6 +10,7 @@
  */
 import type { StatusCode } from '@tundralibs/compat/http';
 
+/** The framework's error registry — code → status, PRODUCTION message, and whether the code is `specific` (never derived from a bare status). */
 export const RAPID_ERROR_CODES = {
   /** Uncaught / unregistered error. Always opaque to clients. */
   RAPID_UNHANDLED: { status: 500, message: 'Internal server error' },
@@ -36,8 +37,30 @@ export const RAPID_ERROR_CODES = {
   RAPID_NOT_FOUND: { status: 404, message: 'Not found' },
   /** The path matched but not for this method (see `server.methodNotAllowed`). */
   RAPID_METHOD_NOT_ALLOWED: { status: 405, message: 'Method not allowed' },
-  /** The request conflicts with in-flight state (e.g. a concurrent idempotent retry). */
+  /** The request conflicts with in-flight state. */
   RAPID_CONFLICT: { status: 409, message: 'Conflict' },
+  /**
+   * An `Idempotency-Key` that is not an opaque token (over 255
+   * characters). `specific`: never derived from a bare status — a
+   * handler's own 400 is not an idempotency failure.
+   */
+  RAPID_IDEMPOTENCY_KEY_INVALID: {
+    status: 400,
+    message: 'Idempotency key invalid',
+    specific: true,
+  },
+  /** The key's first attempt is still running — retry after it settles. */
+  RAPID_IDEMPOTENCY_IN_FLIGHT: {
+    status: 409,
+    message: 'A request with this idempotency key is already in flight',
+    specific: true,
+  },
+  /** The key was first used for a different request (method, path or body). */
+  RAPID_IDEMPOTENCY_MISMATCH: {
+    status: 422,
+    message: 'Idempotency key reused with a different request',
+    specific: true,
+  },
   /** Request body over the configured limit. */
   RAPID_PAYLOAD_TOO_LARGE: { status: 413, message: 'Payload too large' },
   /** Content type (or file type) not accepted. */
@@ -53,7 +76,16 @@ export const RAPID_ERROR_CODES = {
   },
 } as const satisfies Record<
   string,
-  { status: StatusCode; message: string }
+  {
+    status: StatusCode;
+    message: string;
+    /**
+     * A purpose-specific code: never chosen when a code is DERIVED from a
+     * bare status (a socket envelope for a handler-authored 422), only
+     * when thrown by name.
+     */
+    specific?: true;
+  }
 >;
 
 /** The union of framework error codes — derived, never hand-maintained. */

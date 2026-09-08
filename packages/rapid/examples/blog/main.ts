@@ -15,13 +15,13 @@
  *   modules/Audit.ts   event-only module — subscribes, logs, no transport
  *   modules/mod.ts     the static barrel app.modules() boots from
  *   schemas.ts         guardian request schemas (validated() bridges 400s)
- *   auth.ts            a stand-in for pact — login service + token verify
+ *   auth.ts            the @tundralibs/pact instance + authenticate/authorize
  *   types.ts           domain types
  *   main.ts            boot: open db → mount endpoints + modules
  *
  * Beyond the modules it also mounts the `./endpoints` catalog —
  * `health`, `metrics` (metro-man), `openapi` (the assembled 3.0.3 doc),
- * and `login` — plus the `authenticate`/`authorize` middleware on a
+ * — plus pact's `authenticate`/`authorize` middleware on a
  * protected `/admin/summary` route. See the curl block below.
  *
  * The modules take NO constructor args — `BlogModule` pulls `Norm` with an
@@ -70,16 +70,12 @@
  * curl -s  localhost:8001/healthz | jq        # readiness — pings the DB
  * curl -s  localhost:8001/metrics             # Prometheus text (server.metrics)
  * curl -s  localhost:8001/openapi.json | jq   # the assembled OpenAPI 3.0.3 doc
- * curl -si localhost:8001/admin/summary       # 401 — needs an author token
+ * curl -si localhost:8001/admin/summary       # 401 — needs an author
  * TOKEN=$(curl -s -X POST localhost:8001/login -H 'content-type: application/json' \
  *   -d '{"username":"ada","password":"lovelace"}' | jq -r .token)
  * curl -s localhost:8001/admin/summary -H "authorization: Bearer $TOKEN" | jq
- *
- * # the pact-backed counterpart — same shape, real @tundralibs/pact via
- * # @tundralibs/rapid/middlewares/pact instead of the generic seam.
- * # Boot logs the demo key/secret to use here.
- * curl -si localhost:8001/admin/pact-summary   # 401 — needs an api key
- * curl -s localhost:8001/admin/pact-summary \
+ * # the same route over an API key — boot logs the demo key/secret
+ * curl -s localhost:8001/admin/summary \
  *   -H "x-api-key: <id from the boot log>" -H "x-api-secret: <secret from the boot log>" | jq
  * ```
  *
@@ -103,21 +99,20 @@
  */
 
 import { Application, RapidError } from '../../mod.ts';
+import { cors, secureHeaders } from '../../middlewares/mod.ts';
+import { health, metrics, openapi } from '../../endpoints/mod.ts';
+import type { PactAuthContext } from '../../middlewares/pact.ts';
+import { openBlogDatabase } from './db.ts';
+import { registerBlogServices } from './di.ts';
 import {
   authenticate,
   authorize,
-  cors,
-  requestId,
-  requestLogger,
-  responseTimer,
-  secureHeaders,
-} from '../../middlewares/mod.ts';
-import { health, login, metrics, openapi } from '../../endpoints/mod.ts';
-import type { PactAuthContext } from '../../middlewares/pact/mod.ts';
-import { openBlogDatabase } from './db.ts';
-import { registerBlogServices } from './di.ts';
-import { authService, type BlogAuth, demoTokenFor, verifyToken } from './auth.ts';
-import { issueDemoApiKey, pactAuthenticate, pactAuthorize } from './pactAuth.ts';
+  DEMO_ACCOUNTS,
+  isAuthor,
+  issueDemoApiKey,
+  pact,
+  usernameOf,
+} from './auth.ts';
 import { BlogSchema } from './models/mod.ts';
 import * as blog from './modules/mod.ts';
 import {
@@ -148,12 +143,12 @@ const app = await Application.initialize({
     // 1' /posts/nope). API-first plain GETs keep the JSON envelope.
     errorTemplates: { 404: NotFoundView },
     view: (ctx): BlogView => {
-      const auth = ctx.auth as BlogAuth | undefined;
+      const auth = ctx.auth as PactAuthContext | undefined;
       const menu: { label: string; href: string }[] = [
         { label: 'The library', href: '/posts/ui' },
         { label: 'OpenAPI', href: '/openapi.json' },
       ];
-      if (auth?.roles.includes('author')) {
+      if (isAuthor(auth)) {
         menu.push({ label: 'Admin', href: '/admin/ui' });
         menu.push({ label: 'Sign out', href: '/logout' });
       } else {
@@ -161,30 +156,21 @@ const app = await Application.initialize({
       }
       return {
         menu,
-        ...(auth !== undefined ? { user: { username: auth.username } } : {}),
+        ...(auth !== undefined ? { user: { username: usernameOf(auth) } } : {}),
       };
     },
   },
 }, {});
 
 app.use(
-  requestLogger(),
-  responseTimer(),
   secureHeaders(),
   cors(),
-  requestId({ socketEcho: true }),
   // IDENTIFICATION only, app-wide (gating stays per-route via
-  // authorize): bearer header first, else the demo `reader` cookie —
-  // the cookie is what lets a BROWSER be signed in, so the projection
-  // above can vary the nav per caller on ordinary page loads.
-  authenticate({
-    extract: (ctx) =>
-      ctx.type === 'HTTP'
-        ? (ctx.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-          ctx.cookies['reader'] ?? null)
-        : null,
-    verify: verifyToken,
-  }),
+  // authorize): a bearer token or API key on the headers, else the
+  // `session` cookie the /login route set — the cookie is what lets a BROWSER be
+  // signed in, so the projection above can vary the nav per caller on
+  // ordinary page loads. Anonymous requests flow through.
+  authenticate,
 );
 // Static serving is CONFIG now — see configs/Application.yaml's
 // `server.static` (`/public` → ../public): served framework-side on
@@ -230,26 +216,88 @@ app.get(
   }),
 );
 
-// Auth: POST /login runs the (stand-in) auth service and returns a token;
-// authenticate() fills ctx.auth from the bearer token, authorize() gates.
-// A real app swaps auth.ts for `@tundralibs/pact` — see login({ pact }).
-app.post('/login', login({ pact: authService, fields: { identifier: 'username' } }));
+// Auth: POST /login runs pact's login and returns the session token, also
+// setting it as the HttpOnly `session` cookie authenticate reads. A login
+// route is app code — the body shape, the cookie and what the principal
+// exposes are yours. `secure: false` only because this demo is plain http.
+const AUTH_FAILURE = new Set([
+  'INVALID_CREDENTIALS',
+  'NOT_ACTIVE',
+  'SESSION_EXPIRED',
+  'REFRESH_REUSED',
+]);
+app.post('/login', async (ctx) => {
+  const body = (await ctx.payload) as Record<string, unknown> | null;
+  const username = body?.username;
+  const password = body?.password;
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    throw new RapidError('RAPID_VALIDATION_FAILED', {
+      message: 'body must carry string username and password',
+      details: { fields: ['username', 'password'] },
+    });
+  }
+  let result: Awaited<ReturnType<typeof pact.login>>;
+  try {
+    result = await pact.login({ identifier: username, password });
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && AUTH_FAILURE.has(code)) {
+      // One 401 for every failure kind — never an account oracle.
+      throw new RapidError('RAPID_UNAUTHENTICATED', {
+        message: 'invalid credentials',
+      });
+    }
+    throw error;
+  }
+  const { token, expiresAt } = result.session;
+  return {
+    content: {
+      token,
+      expiresAt: expiresAt.toISOString(),
+      principal: { id: result.principal.id }, // a projection, never the whole principal
+    },
+    cookies: [{
+      name: 'session',
+      value: token,
+      options: {
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
+        maxAge: Math.max(
+          0,
+          Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+        ),
+      },
+    }],
+  };
+});
 
-// DEMO-ONLY browser sign-in: mint the same token /login would and set it
-// as the `reader` cookie, so the permission-based nav is clickable
-// (visit /login/as/ada → the menu gains Admin). A real app does this in
-// its login handler with a SIGNED cookie or a session.
-app.get('/login/as/:username:', (ctx) => {
-  const token = demoTokenFor(ctx.params.username);
-  if (token === undefined) throw new RapidError('RAPID_NOT_FOUND');
+// DEMO-ONLY browser sign-in: log the demo account in with its known
+// password and set the same cookie /login would, so the permission-based
+// nav is clickable (visit /login/as/ada → the menu gains Admin). A real
+// app has a login form posting to /login instead.
+app.get('/login/as/:username:', async (ctx) => {
+  const password = DEMO_ACCOUNTS[ctx.params.username];
+  if (password === undefined) throw new RapidError('RAPID_NOT_FOUND');
+  const { session } = await pact.login({
+    identifier: ctx.params.username,
+    password,
+  });
   return {
     content: '',
-    cookies: [{ name: 'reader', value: token, options: { path: '/' } }],
+    cookies: [{
+      name: 'session',
+      value: session.token,
+      options: { path: '/', httpOnly: true },
+    }],
     redirect: '/posts/ui',
   };
 });
-app.get('/logout', (ctx) => {
-  ctx.deleteCookie('reader', { path: '/' });
+app.get('/logout', async (ctx) => {
+  const token = ctx.cookies['session'];
+  if (token !== undefined) await pact.logout(token).catch(() => {});
+  ctx.deleteCookie('session', { path: '/' });
   return { content: '', redirect: '/posts/ui' };
 });
 
@@ -266,43 +314,25 @@ app.get(
       title: 'Admin — The Library',
     },
   },
-  authorize((auth) =>
-    (auth as BlogAuth | undefined)?.roles.includes('author') === true
-  ),
+  authorize('Admin', 'READ'),
   async (ctx) => {
     const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
-    const you = ctx.auth as BlogAuth;
+    const you = ctx.auth as PactAuthContext;
     return {
-      content: {
-        posts: count,
-        you: { username: you.username, roles: you.roles },
-      },
+      content: { posts: count, you: { username: usernameOf(you), via: you.via } },
     };
   },
 );
-app.get(
-  '/admin/summary',
-  authenticate({ verify: verifyToken }),
-  authorize((auth) => (auth as BlogAuth).roles.includes('author')),
-  async (ctx) => {
-    const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
-    return { content: { posts: count, you: ctx.auth } };
-  },
-);
-
-// The pact-backed counterpart to /admin/summary above — same job, real
-// @tundralibs/pact via @tundralibs/rapid/middlewares/pact instead of the
-// generic seam: `pactAuth(pact, …)` in pactAuth.ts returned the two
-// middlewares; `pactAuthorize` is typed by the blog's own catalog.
+// The API twin: a session (bearer or cookie) or the demo API key — the
+// app-wide `authenticate` accepted either; `authorize` is typed by the
+// blog's own catalog. grants are BigInt masks, so pick the fields JSON
+// can carry rather than serializing ctx.auth whole.
 const demoApiKey = await issueDemoApiKey();
 app.get(
-  '/admin/pact-summary',
-  pactAuthenticate,
-  pactAuthorize('Admin', 'READ'),
+  '/admin/summary',
+  authorize('Admin', 'READ'),
   async (ctx) => {
     const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
-    // grants are BigInt masks — pick the fields that JSON can carry
-    // rather than serializing ctx.auth whole.
     const { principal, via } = ctx.auth as PactAuthContext;
     return {
       content: { posts: count, you: { id: principal.id, kind: principal.kind, via } },
@@ -386,7 +416,7 @@ const _liveDemo = setInterval(async () => {
   }
 }, 8000);
 app.log.info(
-  `pact demo key — curl -s localhost:${app.port}/admin/pact-summary ` +
+  `pact demo key — curl -s localhost:${app.port}/admin/summary ` +
     `-H "x-api-key: ${demoApiKey.key}" -H "x-api-secret: ${demoApiKey.secret}"`,
 );
 app.log.info(

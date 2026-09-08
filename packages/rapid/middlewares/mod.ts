@@ -7,12 +7,6 @@
  * @module
  */
 
-export {
-  type AuthBag,
-  authenticate,
-  type AuthenticateOptions,
-  authorize,
-} from './auth.ts';
 export { compress, type CompressOptions } from './compress.ts';
 export { cors, type CorsOptions } from './cors.ts';
 export { csrf, type CsrfOptions } from './csrf.ts';
@@ -20,15 +14,19 @@ export { etag } from './etag.ts';
 export { healthCheck, type HealthCheckOptions } from './healthCheck.ts';
 export {
   idempotency,
+  type IdempotencyHooks,
   type IdempotencyOptions,
   type IdempotencyRecord,
   type IdempotentReply,
+  memoryIdempotencyHooks,
 } from './idempotency.ts';
-export { rateLimit, type RateLimitOptions } from './rateLimit.ts';
-export { memoryStore, type MemoryStoreOptions, type Store } from './store.ts';
-export { requestId, type RequestIdOptions } from './requestId.ts';
-export { requestLogger, type RequestLoggerOptions } from './requestLogger.ts';
-export { responseTimer, type ResponseTimerOptions } from './responseTimer.ts';
+export {
+  memoryRateLimitHooks,
+  rateLimit,
+  type RateLimitHooks,
+  type RateLimitOptions,
+  type RateLimitWindow,
+} from './rateLimit.ts';
 export {
   guardHTTP,
   guardJOB,
@@ -44,10 +42,13 @@ export {
 export { secureHeaders, type SecureHeadersOptions } from './secureHeaders.ts';
 export {
   getSession,
+  memorySessionHooks,
   type RapidSession,
   session,
   type SessionData,
+  type SessionHooks,
   type SessionOptions,
+  type SessionRecord,
 } from './session.ts';
 export {
   markStateKeyUser,

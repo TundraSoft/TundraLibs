@@ -6,12 +6,15 @@
 
 /**
  * Upload handling configuration. Defaults are filled by the rAPId
- * constructor — the group is ALWAYS present at runtime.
+ * constructor — the group is always present at runtime.
  */
 export type RapidApplicationUploadOptions = {
   /**
-   * Where uploaded files land - defaults to a temp dir (created by the
-   * rAPId constructor when absent — always present at runtime).
+   * Where uploaded files land — defaults to a temp dir the rAPId
+   * constructor creates (and removes at `stop()`). On Cloudflare Workers
+   * and in the browser there is no filesystem: no directory is created
+   * and a multipart request carrying a file part fails with
+   * `RAPID_UPLOADS_UNAVAILABLE` (501); text-only forms still parse.
    */
   path?: string;
   /**

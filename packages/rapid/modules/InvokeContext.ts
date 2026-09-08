@@ -19,6 +19,12 @@ export type InvokeContextInit = {
   auth?: Record<string, unknown>;
 };
 
+/**
+ * The frame a module-to-module `invoke()` runs in — what `@Use` guards
+ * see: the target module and method, the arguments, a copy of the
+ * caller's state, the caller's auth, and the reply slot a guard fills
+ * to deny (`reply(403, …)`) instead of calling `next()`.
+ */
 export class InvokeContext {
   /** The context discriminator — always `'INVOKE'`. */
   public readonly type = 'INVOKE' as const;

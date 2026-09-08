@@ -8,7 +8,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { getSession, session } from './session.ts';
-import { memoryStore } from './store.ts';
+import { memorySessionHooks, type SessionHooks } from './session.ts';
 
 const makeApp = async () => {
   const app = await Application.initialize({
@@ -121,30 +121,25 @@ describe('rapid session()', () => {
   it('is LAZY: a request that never touches the session does zero store I/O and never slides the window', async () => {
     let reads = 0;
     let writes = 0;
-    const counting = {
-      get(key: string) {
+    const backing = memorySessionHooks();
+    const counting: SessionHooks = {
+      ...backing,
+      getSession(id) {
         reads++;
-        return backing.get(key);
+        return backing.getSession(id);
       },
-      set(
-        key: string,
-        value: { data: Record<string, unknown>; createdAt: number },
-        ttl?: number,
-      ) {
+      saveSession(id, record, ttl) {
         writes++;
-        backing.set(key, value, ttl);
+        return backing.saveSession(id, record, ttl);
       },
     };
-    const backing = memoryStore<
-      { data: Record<string, unknown>; createdAt: number }
-    >();
     const app = await Application.initialize({
       name: 'session-lazy',
       secret: 'a'.repeat(32),
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
     });
-    app.use(session({ secure: false, store: counting }));
+    app.use(session({ secure: false, hooks: counting }));
     app.get('/untouched', () => ({ content: { ok: true } }));
     app.get('/touched', async (ctx) => ({
       content: { id: (await getSession(ctx))!.id ?? null },
@@ -176,22 +171,15 @@ describe('rapid session()', () => {
   });
 
   it('a transient store-read failure 500s the request but never wipes the live record', async () => {
-    const backing = memoryStore<
-      { data: Record<string, unknown>; createdAt: number }
-    >();
+    const backing = memorySessionHooks();
     let failReads = false;
-    const flaky = {
+    const flaky: SessionHooks = {
+      ...backing,
       // deno-lint-ignore require-await
-      get: async (key: string) => {
+      getSession: async (id) => {
         if (failReads) throw new Error('redis blip');
-        return backing.get(key);
+        return backing.getSession(id);
       },
-      set: (
-        key: string,
-        value: { data: Record<string, unknown>; createdAt: number },
-        ttl?: number,
-      ) => backing.set(key, value, ttl),
-      delete: (key: string) => backing.delete!(key),
     };
     const app = await Application.initialize({
       name: 'session-flaky',
@@ -199,7 +187,7 @@ describe('rapid session()', () => {
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
     });
-    app.use(session({ secure: false, store: flaky }));
+    app.use(session({ secure: false, hooks: flaky }));
     app.post('/hit', async (ctx) => {
       const s = (await getSession(ctx))!;
       s.set('hits', (s.get<number>('hits') ?? 0) + 1);
@@ -342,14 +330,14 @@ describe('rapid session() rolling save', () => {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   /** App whose read route holds its stale snapshot across a concurrent write. */
-  const raceApp = async (store?: ReturnType<typeof memoryStore<never>>) => {
+  const raceApp = async (hooks?: SessionHooks) => {
     const app = await Application.initialize({
       name: 'sess-race',
       secret: 'test-secret-0123456789-abcdefghijklmnop',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
     });
-    app.use(session({ secure: false, ...(store ? { store } : {}) }));
+    app.use(session({ secure: false, ...(hooks ? { hooks } : {}) }));
     app.post('/hit', async (ctx) => {
       const s = (await getSession(ctx))!;
       s.set('hits', (s.get<number>('hits') ?? 0) + 1);
@@ -392,14 +380,9 @@ describe('rapid session() rolling save', () => {
   });
 
   it('a store without touch() falls back to re-setting the CURRENT record, not the stale snapshot', async () => {
-    const inner = memoryStore<never>();
-    // A Store shaped like a minimal redis adapter: get/set/delete only.
-    const minimal = {
-      get: (k: string) => inner.get(k),
-      set: (k: string, v: never, ttl?: number) => inner.set(k, v, ttl),
-      delete: (k: string) => inner.delete!(k),
-    };
-    const app = await raceApp(minimal as never);
+    // Hooks shaped like a minimal redis adapter: no touchSession.
+    const { touchSession: _touch, ...minimal } = memorySessionHooks();
+    const app = await raceApp(minimal);
     asserts.assertEquals(await race(app), 2);
     await app.stop();
   });

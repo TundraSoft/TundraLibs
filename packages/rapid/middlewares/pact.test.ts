@@ -1,15 +1,16 @@
 /**
  * @fileoverview `pactAuth()` against a REAL `@tundralibs/pact` instance with
  * in-memory hooks: every carrier (Bearer header / custom prefix / cookie,
- * Basic, ApiKey header + split headers, HMAC), the optional-vs-required
- * rule, the "present but invalid is 401, never anonymous" rule, the typed
- * guard (401 with challenge / 403 / boot-time catalog check), transports,
- * and the `login()` endpoint end to end.
+ * Basic, ApiKey header + two-header form), the optional-vs-required rule,
+ * the "present but invalid is 401, never anonymous" rule, the typed guard
+ * (401 with challenge / 403 / boot-time catalog check), the signed HMAC
+ * exchange both ways, encrypted payloads both ways, transports, and an
+ * app-written login route feeding the bearer-cookie carrier end to end.
  * @module
  */
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
-import { signHMAC } from '@tundralibs/crypt';
+import { signHMAC, verifyHMAC } from '@tundralibs/crypt';
 import {
   Pact,
   type PactAuthContext,
@@ -17,10 +18,10 @@ import {
   type PactStoredSession,
   type PactStoredUser,
 } from '@tundralibs/pact';
-import { Application } from '../../Application.ts';
-import { RapidError } from '../../errors/mod.ts';
-import { login } from '../../endpoints/mod.ts';
-import { pactAuth, type PactAuthOptions } from './mod.ts';
+import { contentDigest } from '@tundralibs/pact/middleware';
+import { Application } from '../Application.ts';
+import { RapidError } from '../errors/mod.ts';
+import { pactAuth, type PactAuthOptions } from './pact.ts';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -87,7 +88,7 @@ async function makePact() {
 
 type TestPact = Awaited<ReturnType<typeof makePact>>;
 
-/** An app with `authenticate` global and three guarded routes. */
+/** An app with `authenticate` global and guarded + echoing routes. */
 async function makeApp(pact: TestPact, options: PactAuthOptions = {}) {
   const { authenticate, authorize } = pactAuth(pact, options);
   const app = await Application.initialize({
@@ -114,6 +115,10 @@ async function makeApp(pact: TestPact, options: PactAuthOptions = {}) {
     authorize('Posts', 'EDIT'),
     () => ({ content: { ok: true } }),
   );
+  app.post('/echo', async (ctx) => ({
+    status: 201,
+    content: { got: await ctx.payload },
+  }));
   return { app, authorize };
 }
 
@@ -123,7 +128,31 @@ const get = (
   headers: Record<string, string> = {},
 ) => app.fetch(new Request(`http://app${path}`, { headers }));
 
-describe('rapid.middlewares.pact pactAuth()', () => {
+const TEXT = new TextDecoder();
+
+/** Headers for a request signed over pact's default template. */
+async function signed(
+  secret: string,
+  key: string,
+  method: string,
+  target: string,
+  body: string | null,
+  extra: Record<string, string> = {},
+): Promise<Record<string, string>> {
+  const timestamp = extra['x-timestamp'] ??
+    String(Math.floor(Date.now() / 1000));
+  const payload = `${method}\n${target}\n${timestamp}\n${await contentDigest(
+    body,
+  )}`;
+  return {
+    'x-key-id': key,
+    'x-signature': await signHMAC(payload, secret),
+    'x-timestamp': timestamp,
+    ...extra,
+  };
+}
+
+describe('rapid.middlewares.pactAuth()', () => {
   it('Bearer session token → ctx.auth is the PactAuthContext; a bad token is 401 with a challenge, never anonymous', async () => {
     const pact = await makePact();
     const { app } = await makeApp(pact);
@@ -147,7 +176,7 @@ describe('rapid.middlewares.pact pactAuth()', () => {
     );
     const body = await bad.json();
     asserts.assertEquals(body.code, 'RAPID_UNAUTHENTICATED');
-    asserts.assertEquals(body.details, { scheme: 'BEARER' }); // no pact code on the wire
+    asserts.assertEquals(body.message, 'invalid credential'); // no pact code on the wire
     await app.stop();
   });
 
@@ -167,7 +196,9 @@ describe('rapid.middlewares.pact pactAuth()', () => {
       r.headers.get('www-authenticate'),
       'Bearer realm="api", Basic realm="api", ApiKey realm="api"',
     );
-    await r.body?.cancel();
+    asserts.assertEquals((await r.json()).details, {
+      schemes: ['BEARER', 'BASIC', 'APIKEY'],
+    });
     await strict.stop();
   });
 
@@ -197,7 +228,7 @@ describe('rapid.middlewares.pact pactAuth()', () => {
     await app.stop();
   });
 
-  it('authorize() checks the catalog at the CALL site — an unknown module or permission is RAPID_CONFIG at boot', async () => {
+  it('authorize() checks the catalog at the CALL site, and a bad option is RAPID_CONFIG at build', async () => {
     const pact = await makePact();
     const { authorize } = pactAuth(pact);
     asserts.assertThrows(
@@ -210,9 +241,14 @@ describe('rapid.middlewares.pact pactAuth()', () => {
       RapidError,
       "'EDIT' is not a permission of module 'Admin'",
     );
+    asserts.assertThrows(
+      () => pactAuth(pact, { hmac: { template: '${@path}' } }),
+      RapidError,
+      'hmac.template',
+    );
   });
 
-  it('Basic, split API-key headers, a custom Bearer prefix, and the bearer cookie all resolve', async () => {
+  it('Basic, the two-header API-key carrier, a custom Bearer prefix, and the bearer cookie all resolve', async () => {
     const pact = await makePact();
     const { session } = await pact.login({
       identifier: 'ada',
@@ -223,7 +259,7 @@ describe('rapid.middlewares.pact pactAuth()', () => {
       grants: { Posts: 1n },
     });
     const { app } = await makeApp(pact, {
-      apiKey: {},
+      apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
       bearer: { prefix: 'Token', cookie: 'sid' },
     });
     const basic = await get(app, '/whoami', {
@@ -243,7 +279,7 @@ describe('rapid.middlewares.pact pactAuth()', () => {
       authorization: `Token ${session.token}`,
     });
     asserts.assertEquals((await custom.json()).via, 'SESSION');
-    // A custom prefix REPLACES `Bearer`: the standard word is now absent → anonymous.
+    // A custom prefix replaces `Bearer`: the standard word is now absent → anonymous.
     const standard = await get(app, '/whoami', {
       authorization: `Bearer ${session.token}`,
     });
@@ -252,42 +288,121 @@ describe('rapid.middlewares.pact pactAuth()', () => {
       cookie: `sid=${session.token}`,
     });
     asserts.assertEquals((await cookie.json()).via, 'SESSION');
+    // A header beats the cookie; a bad cookie token is 401, never anonymous.
+    const badCookie = await get(app, '/whoami', { cookie: 'sid=nope' });
+    asserts.assertEquals(badCookie.status, 401);
+    await badCookie.body?.cancel();
     await app.stop();
   });
 
-  it('HMAC: the caller signs the canonical string with the key secret; a tampered signature is 401', async () => {
+  it('HMAC: verifies the default template over the raw body, rejects a stale timestamp, and signs the JSON response', async () => {
     const pact = await makePact();
     const { key, secret } = await pact.issueApiKey({
       userId: 'u-1',
       grants: { Posts: 1n },
     });
-    const { app } = await makeApp(pact, {
-      hmac: {
-        canonical: (ctx) =>
-          ctx.type === 'HTTP' ? `${ctx.method} ${ctx.path}` : '',
-      },
-    });
-    const signature = await signHMAC('GET /whoami', secret);
-    const ok = await get(app, '/whoami', {
-      'x-key-id': key,
-      'x-signature': signature,
-    });
-    asserts.assertEquals(await ok.json(), {
-      id: key,
-      kind: 'APIKEY',
-      via: 'HMAC',
-    });
-    const other = await get(app, '/read', {
-      'x-key-id': key,
-      'x-signature': signature,
-    }); // signed for another path
+    const { app } = await makeApp(pact, { hmac: { maxSkew: 60 } });
+    const body = '{"n":1}';
+    const ok = await app.fetch(
+      new Request('http://app/echo?x=1', {
+        method: 'POST',
+        headers: {
+          ...await signed(secret, key, 'POST', '/echo?x=1', body),
+          'content-type': 'application/json',
+        },
+        body,
+      }),
+    );
+    asserts.assertEquals(ok.status, 201);
+    const text = await ok.text();
+    asserts.assertEquals(JSON.parse(text), { got: { n: 1 } });
+    asserts.assertEquals(ok.headers.get('content-type'), 'application/json');
+    const ts = ok.headers.get('x-timestamp')!;
+    asserts.assert(
+      await verifyHMAC(
+        `201\n${ts}\n${await contentDigest(text)}`,
+        ok.headers.get('x-signature')!,
+        secret,
+      ),
+      'the response signature covers the bytes sent',
+    );
+    // Signed for another target, or with a body the digest does not match.
+    const other = await get(
+      app,
+      '/read',
+      await signed(secret, key, 'GET', '/whoami', null),
+    );
     asserts.assertEquals(other.status, 401);
     asserts.assertEquals(
       other.headers.get('www-authenticate'),
       'Bearer, Basic, ApiKey, HMAC',
     );
+    asserts.assertStrictEquals(other.headers.get('x-signature'), null);
     await other.body?.cancel();
+    const stale = await get(
+      app,
+      '/whoami',
+      await signed(secret, key, 'GET', '/whoami', null, {
+        'x-timestamp': '1700000000',
+      }),
+    );
+    asserts.assertEquals(stale.status, 401);
+    asserts.assertEquals((await stale.json()).details, {
+      reason: 'STALE_TIMESTAMP',
+    });
+    // A plain API-key caller is not signed back.
+    const plain = await get(app, '/whoami', {
+      authorization: `ApiKey ${key}:${secret}`,
+    });
+    asserts.assertStrictEquals(plain.headers.get('x-signature'), null);
+    await plain.body?.cancel();
     await app.stop();
+  });
+
+  it('encryption: a JWE body reaches the handler decrypted through ctx.payload and the reply comes back as a JWE', async () => {
+    const pact = await makePact();
+    const { key, secret } = await pact.issueApiKey({
+      userId: 'u-1',
+      grants: { Posts: 1n },
+    });
+    const { app } = await makeApp(pact, { encryption: {} });
+    const jwe = await pact.encryptFor(key, '{"card":"4111"}');
+    const ok = await app.fetch(
+      new Request('http://app/echo', {
+        method: 'POST',
+        headers: {
+          authorization: `ApiKey ${key}:${secret}`,
+          'content-type': 'application/jose',
+        },
+        body: jwe,
+      }),
+    );
+    asserts.assertEquals(ok.status, 201);
+    asserts.assertEquals(ok.headers.get('content-type'), 'application/jose');
+    const plaintext = TEXT.decode(await pact.decryptFor(key, await ok.text()));
+    asserts.assertEquals(JSON.parse(plaintext), { got: { card: '4111' } });
+    // A plaintext caller gets a plaintext reply; a broken JWE is a 400.
+    const plain = await get(app, '/whoami', {
+      authorization: `ApiKey ${key}:${secret}`,
+    });
+    asserts.assertEquals(plain.headers.get('content-type'), 'application/json');
+    await plain.body?.cancel();
+    const broken = await app.fetch(
+      new Request('http://app/echo', {
+        method: 'POST',
+        headers: {
+          authorization: `ApiKey ${key}:${secret}`,
+          'content-type': 'application/jose',
+        },
+        body: 'not.a.jwe',
+      }),
+    );
+    asserts.assertEquals(broken.status, 400);
+    asserts.assertEquals((await broken.json()).details, {
+      reason: 'ENCRYPTION_INVALID',
+    });
+    await app.stop();
+    void secret;
   });
 
   it('a job passes through authenticate (no client) but authorize fails CLOSED there', async () => {
@@ -313,13 +428,38 @@ describe('rapid.middlewares.pact pactAuth()', () => {
     asserts.assertEquals(outcome.handlerRan, false);
   });
 
-  it('login({ pact, cookie }): 200 + token + HttpOnly cookie the bearer-cookie carrier then accepts; 401 on a wrong password; 400 on a malformed body', async () => {
+  it('an app-written login route over pact.login(): 200 + token + HttpOnly cookie the bearer-cookie carrier then accepts; 401 on a wrong password; 400 on a malformed body', async () => {
     const pact = await makePact();
     const { app } = await makeApp(pact, { bearer: { cookie: 'session' } });
-    app.post(
-      '/login',
-      login({ pact, cookie: { name: 'session', secure: false } }),
-    );
+    // The documented pattern (Rapid-Auth.md) — rapid ships no login endpoint.
+    app.post('/login', async (ctx) => {
+      const body = (await ctx.payload) as Record<string, unknown> | null;
+      const identifier = body?.identifier;
+      const password = body?.password;
+      if (typeof identifier !== 'string' || typeof password !== 'string') {
+        throw new RapidError('RAPID_VALIDATION_FAILED');
+      }
+      let result: Awaited<ReturnType<typeof pact.login>>;
+      try {
+        result = await pact.login({ identifier, password });
+      } catch {
+        throw new RapidError('RAPID_UNAUTHENTICATED', {
+          message: 'invalid credentials',
+        });
+      }
+      return {
+        content: {
+          token: result.session.token,
+          expiresAt: result.session.expiresAt.toISOString(),
+          principal: { id: result.principal.id },
+        },
+        cookies: [{
+          name: 'session',
+          value: result.session.token,
+          options: { path: '/', httpOnly: true, secure: false },
+        }],
+      };
+    });
     const post = (body: unknown) =>
       app.fetch(
         new Request('http://app/login', {

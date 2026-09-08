@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
+import { RapidError } from '../errors/mod.ts';
 import { compress } from './compress.ts';
 import { cors } from './cors.ts';
 import { etag } from './etag.ts';
@@ -32,6 +33,7 @@ describe('rapid.middlewares.compress', () => {
       content: big,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     }));
+    app.get('/headbig', () => ({ content: { data: big } }));
     app.route('HEAD', '/headbig', () => ({ content: { data: big } }));
     // Large body on a 204 → only the NO_BODY status guard (not the size
     // guard) can be what skips it.
@@ -110,12 +112,47 @@ describe('rapid.middlewares.compress', () => {
     asserts.assertEquals(r.headers.get('content-encoding'), null);
   });
 
-  it('does nothing without an acceptable encoding', async () => {
+  it('does nothing without an acceptable encoding — but still marks the response as varying', async () => {
     const r = await fetch(`${base}/big`, {
       headers: { 'accept-encoding': 'br' }, // brotli — unsupported here
     });
     await r.json();
     asserts.assertEquals(r.headers.get('content-encoding'), null);
+    asserts.assertEquals(r.headers.get('vary'), 'Accept-Encoding');
+    // A non-compressible type never varies.
+    const bin = await fetch(`${base}/bin`, {
+      headers: { 'accept-encoding': 'gzip' },
+    });
+    await bin.arrayBuffer();
+    asserts.assertEquals(bin.headers.get('vary'), null);
+  });
+
+  it('honours a wildcard: `*` alone means gzip; `gzip;q=0, *` falls to deflate; `*;q=0` means nothing', async () => {
+    const cases: [string, string | null][] = [
+      ['*', 'gzip'],
+      ['identity;q=0.5, *;q=0.1', 'gzip'],
+      ['gzip;q=0, *', 'deflate'],
+      ['gzip;q=0, deflate;q=0, *', null],
+      ['*;q=0', null],
+    ];
+    for (const [accept, expected] of cases) {
+      const r = await fetch(`${base}/big`, {
+        headers: { 'accept-encoding': accept },
+      });
+      await r.arrayBuffer();
+      asserts.assertEquals(r.headers.get('content-encoding'), expected, accept);
+    }
+  });
+
+  it('rejects a threshold that is not a non-negative integer at build', () => {
+    for (const threshold of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      asserts.assertThrows(
+        () => compress({ threshold }),
+        RapidError,
+        'threshold',
+      );
+    }
+    compress({ threshold: 0 });
   });
 
   it('deflate: accept-encoding deflate → content-encoding deflate', async () => {
@@ -155,14 +192,23 @@ describe('rapid.middlewares.compress', () => {
     asserts.assertEquals((await r.text()).length, 2000);
   });
 
-  it('skips a HEAD request even over the threshold', async () => {
-    const r = await fetch(`${base}/headbig`, {
+  it('a HEAD carries the same encoding headers its GET would (RFC 9110 §9.3.2)', async () => {
+    const get = await fetch(`${base}/headbig`, {
+      headers: { 'accept-encoding': 'gzip' },
+    });
+    await get.arrayBuffer();
+    const head = await fetch(`${base}/headbig`, {
       method: 'HEAD',
       headers: { 'accept-encoding': 'gzip' },
     });
-    await r.arrayBuffer();
-    asserts.assertEquals(r.status, 200);
-    asserts.assertEquals(r.headers.get('content-encoding'), null);
+    await head.arrayBuffer();
+    asserts.assertEquals(head.status, 200);
+    asserts.assertEquals(head.headers.get('content-encoding'), 'gzip');
+    asserts.assertEquals(head.headers.get('vary'), 'Accept-Encoding');
+    asserts.assertEquals(
+      head.headers.get('content-length'),
+      get.headers.get('content-length'),
+    );
   });
 
   it('skips a 204 no-body response', async () => {

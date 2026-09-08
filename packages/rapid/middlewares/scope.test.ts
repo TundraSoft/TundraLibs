@@ -18,6 +18,8 @@ import {
   onlySOCKET,
   onlyUi,
 } from './scope.ts';
+import { csrf } from './csrf.ts';
+import { session } from './session.ts';
 
 describe('rapid.middlewares.scope', () => {
   it('onlyHTTP runs on HTTP and SKIPS jobs (chain continues)', async () => {
@@ -89,6 +91,9 @@ describe('rapid.middlewares.scope', () => {
   it('scope metadata is readable; unscoped middleware are universal', () => {
     const scoped = onlyHTTP(async (_ctx, next) => await next());
     asserts.assertEquals(middlewareScope(scoped), ['HTTP']);
+    // The cookie-bound factories declare HTTP like the rest of the catalog.
+    asserts.assertEquals(middlewareScope(csrf({ secure: false })), ['HTTP']);
+    asserts.assertEquals(middlewareScope(session({ secure: false })), ['HTTP']);
     asserts.assertEquals(
       middlewareScope(async (_ctx, next) => await next()),
       undefined,

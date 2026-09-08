@@ -64,7 +64,12 @@ export const UI_LIVE: string = `(() => {
         location.host + (cfg.livePath || '/ws'),
     );
     ws.onopen = () => {
-      delay = 2000;
+      // Backoff resets only once the socket has STAYED open: a server
+      // that accepts and closes at once must not loop at the floor.
+      const opened = Date.now();
+      ws.addEventListener('close', () => {
+        if (Date.now() - opened >= 5000) delay = 2000;
+      });
       channels.forEach(sub);
       emit('rapid:live', { connected: true });
     };
@@ -82,7 +87,9 @@ export const UI_LIVE: string = `(() => {
     ws.onclose = () => {
       emit('rapid:live', { connected: false });
       if (wanted) {
-        timer = setTimeout(open, delay);
+        // ±25% jitter: every tab a deploy restart disconnected must not
+        // reconnect in lockstep.
+        timer = setTimeout(open, delay * (0.75 + Math.random() * 0.5));
         delay = Math.min(delay * 1.5, 15000);
       }
     };

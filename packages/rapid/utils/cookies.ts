@@ -99,6 +99,49 @@ export const parseCookies = (
  *   characters illegal in a cookie name (a separator/control char) — a server
  *   bug producing a broken header, surfaced loudly as a 500.
  */
+/** RFC 6265 cookie-name / RFC 9110 header-name token. */
+const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/**
+ * Validate a middleware's cookie configuration at BUILD time, so a
+ * misconfiguration is a boot error rather than a 500 (or a cookie the
+ * browser silently drops) on the first response: the name must be a
+ * token, `path` must be absolute, `SameSite=None` requires `Secure`
+ * (RFC 6265bis §5.4.7 — browsers reject it otherwise), and the
+ * `__Host-` / `__Secure-` name prefixes carry their own requirements
+ * (§4.1.3: `Secure`, and for `__Host-` also `Path=/`).
+ *
+ * @throws {RapidError} RAPID_CONFIG naming the offending option.
+ */
+export function assertCookieConfig(
+  owner: string,
+  name: string,
+  options: { secure?: boolean; sameSite?: string; path?: string },
+): void {
+  const bad = (reason: string, details: Record<string, unknown>): never => {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `${owner} cookie '${name}' ${reason}`,
+      details,
+    });
+  };
+  if (!TOKEN.test(name)) bad('is not a valid cookie name', { cookie: name });
+  const secure = options.secure ?? true;
+  const path = options.path ?? '/';
+  if (!path.startsWith('/')) bad('path must start with /', { path });
+  if (options.sameSite === 'None' && !secure) {
+    bad('with SameSite=None must be Secure', { sameSite: 'None', secure });
+  }
+  if (name.startsWith('__Host-') && (!secure || path !== '/')) {
+    bad('with the __Host- prefix must be Secure with path /', { secure, path });
+  }
+  if (name.startsWith('__Secure-') && !secure) {
+    bad('with the __Secure- prefix must be Secure', { secure });
+  }
+}
+
+/** True when `value` is an RFC 9110 token (a legal header or cookie name). */
+export const isToken = (value: string): boolean => TOKEN.test(value);
+
 export const serializeCookie = (
   name: string,
   value: string,

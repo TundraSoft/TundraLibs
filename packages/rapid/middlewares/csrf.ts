@@ -27,8 +27,14 @@
 import { signHMAC } from '@tundralibs/crypt';
 import { ulid } from '@tundralibs/id';
 import { RapidError } from '../errors/mod.ts';
+import { MIDDLEWARE_SCOPE } from './scope.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
-import { signValue, verifySignedValue } from '../utils/cookies.ts';
+import {
+  assertCookieConfig,
+  isToken,
+  signValue,
+  verifySignedValue,
+} from '../utils/cookies.ts';
 import {
   CSRF_TOKEN,
   mark,
@@ -44,11 +50,14 @@ export type CsrfOptions = {
   header?: string;
   /** Form field checked when the header is absent. @default '_csrf' */
   field?: string;
-  /** `SameSite` of the token cookie. @default 'Lax' */
+  /**
+   * `SameSite` of the token cookie. `'None'` requires `secure` (browsers
+   * drop a non-Secure SameSite=None cookie). @default 'Lax'
+   */
   sameSite?: 'Strict' | 'Lax' | 'None';
   /** Set the cookie's `Secure` flag. @default true */
   secure?: boolean;
-  /** Cookie path. @default '/' */
+  /** Cookie path; must be absolute. @default '/' */
   path?: string;
   /**
    * The session-id cookie the token is BOUND to — `session()`'s cookie
@@ -100,6 +109,10 @@ const verifyToken = async (
  * fallback when the header is absent, so header-based clients never trigger a
  * body parse.
  *
+ * @throws {@link RapidError} `RAPID_CONFIG` at build when `cookie`,
+ *   `session` or `header` is not a token, `field` is empty, `path` is not
+ *   absolute, `sameSite: 'None'` is paired with `secure: false`, or a
+ *   `__Host-`/`__Secure-` cookie name lacks what its prefix requires.
  * @throws {@link RapidError} `RAPID_CSRF_INVALID` (403) on a missing/mismatched
  *   /unsigned token — or one bound to another session — for a
  *   state-changing method.
@@ -116,8 +129,28 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
   const headerName = options.header ?? 'x-csrf-token';
   const fieldName = options.field ?? '_csrf';
   const sessionCookie = options.session ?? 'sid';
+  assertCookieConfig('csrf', cookieName, options);
+  if (!isToken(sessionCookie)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `csrf session cookie '${sessionCookie}' is not a valid cookie name`,
+      details: { session: sessionCookie },
+    });
+  }
+  if (!isToken(headerName)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `csrf header '${headerName}' is not a valid header name`,
+      details: { header: headerName },
+    });
+  }
+  if (fieldName === '' || /[\r\n\0]/.test(fieldName)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'csrf field must be a non-empty form field name',
+      details: { field: fieldName },
+    });
+  }
 
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP') return await next();
 
     // Ensure the client holds a valid token for THIS session to mirror
@@ -190,4 +223,5 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
     }
     if (thrown) throw error;
   };
+  return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }

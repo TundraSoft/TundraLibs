@@ -23,8 +23,9 @@ import { RapidError } from '../errors/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 
 /**
- * Build the deadline middleware. `ms` is the budget for EVERYTHING
- * inside this middleware (downstream middleware + handler).
+ * Build the deadline middleware. `seconds` is the budget for EVERYTHING
+ * inside this middleware (downstream middleware + handler) — a positive
+ * number of seconds; fractions are fine (`timeout(0.5)` is 500 ms).
  *
  * LIMITS, by design: JavaScript has no preemptive cancellation — on
  * timeout the response is overridden (504 RAPID_TIMEOUT) but the
@@ -35,20 +36,23 @@ import type { RapidMiddleware } from '../types/mod.ts';
  * docblock). And a handler that settles in a photo-finish with the
  * deadline may still win the response — the deadline is best-effort,
  * not a fence. Combined with `idempotency()` (either order) a fired
- * deadline leaves that request's key PENDING until its `pendingTtlMs`
- * — a retry is a 409 rather than a second execution of work that may
- * still be running.
+ * deadline leaves that request's key PENDING until its pending TTL — a
+ * retry is a 409 rather than a second execution of work that may still
+ * be running.
  *
- * @throws {RapidError} RAPID_CONFIG when `ms` is not a positive
- *   integer (factory time — a config error is a boot error).
+ * @throws {RapidError} RAPID_CONFIG when `seconds` is not a positive
+ *   finite number of at least one millisecond (factory time — a config
+ *   error is a boot error).
  * @throws {RapidError} RAPID_TIMEOUT (504) as a rejection of the
  *   middleware's promise when the deadline fires.
  */
-export function timeout(ms: number): RapidMiddleware {
-  if (!Number.isInteger(ms) || ms < 1) {
+export function timeout(seconds: number): RapidMiddleware {
+  const ms = Math.round(seconds * 1000);
+  if (!Number.isFinite(seconds) || seconds <= 0 || ms < 1) {
     throw new RapidError('RAPID_CONFIG', {
-      message: 'timeout(ms) must be a positive integer',
-      details: { ms },
+      message:
+        'timeout(seconds) must be a positive number of seconds (fractions allowed, at least 0.001)',
+      details: { seconds },
     });
   }
   return async (ctx, next) => {
@@ -70,7 +74,7 @@ export function timeout(ms: number): RapidMiddleware {
             ctx.detach(work);
             reject(
               new RapidError('RAPID_TIMEOUT', {
-                details: { ms, action: ctx.action },
+                details: { seconds, action: ctx.action },
               }),
             );
           }, ms);

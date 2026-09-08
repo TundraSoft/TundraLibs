@@ -1,7 +1,7 @@
 /**
- * @fileoverview Boot-time guard for the `stateKey` option shipped
- * middlewares (`responseTimer`, `requestId`) offer: writing a
- * PER-INVOCATION value into `ctx.state[stateKey]` is safe under the
+ * @fileoverview Boot-time guard for middleware that writes a
+ * PER-INVOCATION value into `ctx.state` (marked via `markStateKeyUser`):
+ * doing so is safe under the
  * `CLONE`/`PROTOTYPE` state modes, but corrupts silently under `SHARE`
  * — every invocation reads and writes the SAME state object, so
  * concurrent invocations overwrite each other's duration/correlation-id
@@ -25,7 +25,14 @@ export const MIDDLEWARE_STATE_KEY: unique symbol = Symbol.for(
   'rapid.middleware.stateKey',
 ) as never;
 
-/** Stamp `middleware` as writing per-invocation state (called by the factory that owns a `stateKey` option). */
+/**
+ * Stamp `middleware` as writing per-invocation values into `ctx.state`.
+ * Call it from your own factory: at boot, `stateMode: 'SHARE'` then
+ * refuses the app (`RAPID_CONFIG`, thrown by `Application.start()` /
+ * the first `fetch()`) instead of letting concurrent invocations read
+ * each other's entries. The scan covers `app.use()`, route and socket
+ * command chains. Mutates and returns the same function.
+ */
 export function markStateKeyUser(middleware: RapidMiddleware): RapidMiddleware {
   return Object.assign(middleware, { [MIDDLEWARE_STATE_KEY]: true });
 }

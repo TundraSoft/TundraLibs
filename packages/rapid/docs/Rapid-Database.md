@@ -182,17 +182,16 @@ the app's doctor container into the request's ambient scope, so it resolves even
 after an `await`. So auth/middleware hit the **same** pool:
 
 ```ts ignore
-// an HMAC/verify middleware — same shared pool, no second connection
-app.use(authenticate({
-  verify: async (token, ctx) => {
-    const engine = inject(DB); // or close over `db` from boot
-    const { keyId, sig, ts } = parseHmac(ctx.headers.get('authorization'));
-    const key = await lookupKey(engine, keyId); // ⚠ per-request DB op — cache it
-    return key && verifyRequest(pact, key.secret, ctx.request, sig, ts)
-      ? { keyId }
-      : null;
+// a pact hook — same shared pool, no second connection
+const pact = Pact.create({
+  bits,
+  modulePermissions,
+  hooks: {
+    getApiKey: (id) => lookupKey(inject(DB), id), // ⚠ per-request DB op — cache it
+    // …
   },
-}));
+});
+app.use(pactAuth(pact).authenticate);
 ```
 
 ---

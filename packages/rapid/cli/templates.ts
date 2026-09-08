@@ -9,6 +9,8 @@
  */
 
 /** The choices `rapid init` gathers. */
+import { RAPID_ERROR_CODES } from '../errors/mod.ts';
+
 export type ScaffoldAnswers = {
   name: string;
   module: boolean;
@@ -38,13 +40,6 @@ export type ScaffoldAnswers = {
   docker: boolean;
   /** A GitHub Actions CI workflow (fmt / lint / check / test on the chosen runtime). */
   github: boolean;
-  /**
-   * AI-assistant instructions: one real `AGENTS.md` (rapid's conventions,
-   * this project's runtime commands and layout) plus thin pointers
-   * `CLAUDE.md` and `.github/copilot-instructions.md`, so Claude Code,
-   * Cursor, Codex and Copilot all resolve to ONE source and never drift.
-   */
-  ai: boolean;
 };
 
 /** Replace every `{{key}}` in `tpl` from `vars`. */
@@ -64,8 +59,10 @@ const GITIGNORE = `node_modules/
 const APPLICATION_YAML =
   `# {{name}} — the \`Application\` config set. Every key except \`name\` is
 # optional; the values below ARE rapid's defaults unless a comment says
-# otherwise. \`\${VAR}\` placeholders are filled from the environment / .env
+# otherwise. Each comment says which part of rapid reads the key. Durations
+# are SECONDS, sizes are BYTES. \`\${VAR}\` placeholders are filled from .env
 # at load; an UNSET placeholder is left as literal text — never commit secrets.
+# Reference: docs/Rapid-Configuration.md in the @tundralibs/rapid package.
 name: {{name}}
 # DEVELOPMENT | PRODUCTION — error disclosure and the default log level
 # (rapid defaults to PRODUCTION; a new project starts in DEVELOPMENT)
@@ -74,10 +71,15 @@ mode: DEVELOPMENT
 # from the environment. Uncomment once APP_SECRET is set: an unset
 # placeholder is NOT a valid secret and fails validation at boot.
 # secret: \${APP_SECRET}
-# CLONE | PROTOTYPE | SHARE — how each request's ctx.state is built
+# CLONE | PROTOTYPE | SHARE — how each invocation's ctx.state is built from app.state
 stateMode: CLONE
-# Graceful-shutdown drain window in SECONDS (1-30) before force-close
+# Graceful-shutdown drain window in SECONDS (1-30) before force-close — app.stop()
 shutdownTimeout: 25
+
+headers: # header NAMES the core reads and stamps — one place, shared by custom middleware too
+  requestId: x-request-id # inbound correlation id adopted per request (ctx.requestId), echoed on every response
+  requestIdEcho: [] # extra response headers carrying the same id, e.g. [x-correlation-id]
+  responseTime: x-response-time # "<ms>ms" on every response; false to omit
 
 server:
   enabled: true # run the HTTP listener on this replica
@@ -85,52 +87,81 @@ server:
   hostname: localhost
   # unixSocketPath: /tmp/{{name}}.sock # replaces TCP entirely when set
   # tls: # see @tundralibs/compat TLSOptions — inline PEM or file paths
-  requestIdHeader: x-request-id # inbound correlation id adopted per request
-  trustProxy: false # false | true | <reverse-proxy hop count>
-  maxBodySize: 1048576 # bytes, non-file bodies (0 disables)
+  trustProxy: false # false | true | <reverse-proxy hop count> — ctx.remoteAddress, rateLimit() keys, x-forwarded-host
+  maxBodySize: 1048576 # bytes, non-file bodies (0 disables) — ctx.payload / ctx.rawPayload (413 past it)
   metrics: false # app.meter + the metrics() endpoint
   autoHead: true # a HEAD route for every GET
   methodNotAllowed: false # 405 + Allow instead of 404 on a wrong method
   ignoreTrailingSlash: true # /users and /users/ are the same route
-  socketPath: /ws # websocket upgrade path for socket commands
+  socketPath: /ws # websocket upgrade path for app.socket() commands and channels
+  socketOrigins: [] # browser origins (https://spa.example) allowed to open the socket besides this host
+  # static: # framework-served files on route miss (ui surface only); routes always win
+  #   /public:
+  #     root: ../public # relative to this config directory
+  #     index: index.html # or false
+  #     maxAge: 3600 # seconds → cache-control: public, max-age
+  #     fingerprint: true # immutable ?v= URLs via view.asset()
   # api: # the API SURFACE — these requests get JSON only, pages are 404 there
-  #   hosts: [api.example.com] # by hostname (x-forwarded-host under trustProxy)
+  #   hosts: [api.example.com] # by hostname
   #   prefix: /api # by path — stripped before routing (/api/users → /users)
-  paging:
+  #   trustForwardedHost: false # match hosts on x-forwarded-host (needs trustProxy too)
+  paging: # ctx.args.paging — query (page, pagelimit|limit) wins over the headers; clamped, never throws
     pageHeader: x-page-number
     sizeHeader: x-page-size
     defaultSize: 10
     maxSize: 1000 # larger requests are clamped
     maxPage: 1000
-  query: # structural caps for the query-string parser
+  query: # structural caps for the query-string parser (ctx.args.query → 400 RAPID_QUERY_INVALID)
     maxFilters: 50
     maxSorts: 5
     maxValueLength: 2048
     maxArrayItems: 100
-  versioning:
+  versioning: # how a route version is picked (route/@Module { version })
     mode: header # header | accept | path
-    identifier: x-api-version # header name | accept vendor token | path regex
-    default: v1 # the version a request without one resolves to
+    identifier: x-api-version # header name | accept vendor token | path regex (default '^/(v[0-9]+)(?=/|$)')
+    # default: v1 # the version a request without one resolves to (rapid has no default)
 
 jobs:
-  enabled: true # run scheduled (@JOB / app.job) jobs on this replica
+  enabled: true # run scheduled (@JOB / app.job) jobs on this replica — every enabled replica runs every job
 
-uploads:
-  # path: ./uploads # default: a temp dir created at boot
-  maxSize: 10485760 # bytes per file
+uploads: # multipart file parts (ctx.payload / ctx.files)
+  # path: ./uploads # default: a temp dir created at boot, removed at stop()
+  maxSize: 10485760 # bytes per file (413 past it)
   maxFiles: 20 # file parts per request
-  allowedExtensions: [] # FAIL-SAFE: nothing accepted until listed, e.g. [.png, .pdf]
+  allowedExtensions: [] # FAIL-SAFE: nothing accepted until listed, e.g. [.png, .pdf] (415 otherwise)
 
-logger:
+logger: # @tundralibs/slogger options behind app.log / this.log (appName is the app name)
+  access: # one access line per request / socket frame / job firing, level by outcome
+    enabled: true # the access line only — error disclosure logging stays on
+    skip: [/healthz, /metrics] # routed HTTP paths, exact or '<prefix>/*' (rapid's default is [])
+    # slow: 2 # seconds — past it the line is a warn carrying slow: true
+    client: false # remoteAddress/userAgent/referer — personal data, opt in
   # Syslog severity NUMBER: 0 EMERGENCY · 1 ALERT · 2 CRITICAL · 3 ERROR
   # · 4 WARNING · 5 NOTICE · 6 INFO · 7 DEBUG (names are not accepted)
-  # (default: 7 DEBUG in DEVELOPMENT, 6 INFO in PRODUCTION)
-  level: 6
+  # (default: 7 DEBUG in DEVELOPMENT, 6 INFO in PRODUCTION — this project pins 7)
+  level: 7
+  # handlers: # default: one ConsoleHandler — 'logfmt' in DEVELOPMENT, 'standard' in PRODUCTION
+  #   - { name: console, type: ConsoleHandler, formatter: json } # standard | logfmt | json | compact
+  # sampling: { sampleRate: 1 } # slogger sampling, passed through
 
-# Tracing is opt-in — uncomment to enable.
+# Tracing is opt-in — uncomment to enable (spans per invocation, trace ids on log lines).
 # tracer:
 #   exporter:
 #     type: CONSOLE # CONSOLE | OTLP (OTLP also takes baseURL + headers)
+#   resource: { deployment.environment: production } # extra resource attributes
+
+# The UI layer's DATA half — the code half (core, layout, view, errorTemplates,
+# assets) is passed to Application.initialize({ ui }). See docs/Rapid-UI.md.
+# ui:
+#   enabled: true # false = never emit HTML (pages 404, every request is the api surface)
+#   prefer: json # json | html — a templated route's default representation
+#   runtimePath: /__rapid/ui.js # the swap runtime script
+#   live: false # serve /__rapid/live.js (channels over the websocket)
+#   history: false # serve /__rapid/history.js (push-state navigation)
+#   csrfCookie: csrf # the cookie the runtime echoes as x-csrf-token
+#   swapHeader: rapid-swap # a request carrying it gets the fragment
+#   swapUnless: [] # header names whose presence cancels the swap (htmx: HX-Boosted)
+#   redirectHeader: rapid-redirect # a swap reply's redirect target
 `;
 
 const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
@@ -322,7 +353,9 @@ const AGENTS_MD = `# {{name}} — agent guide
 A [rAPId](https://jsr.io/@tundralibs/rapid) application running on **{{runtime}}**.
 This file is the always-on baseline for any AI working in this repo. It is read
 by Claude Code (via \`CLAUDE.md\`), Cursor and Codex (via \`AGENTS.md\`), and GitHub
-Copilot (via \`.github/copilot-instructions.md\`) — all three resolve here.
+Copilot (via \`.github/copilot-instructions.md\`) — all three resolve here. It
+was generated by \`rapid init\` for rapid {{rapidVersionLabel}}; the package
+docs it links are the same version, so prefer them over memory.
 
 ## Commands
 
@@ -332,51 +365,255 @@ Copilot (via \`.github/copilot-instructions.md\`) — all three resolve here.
 
 Run the relevant ones before you consider a change done.
 
+## Package layout (subpaths)
+
+\`@tundralibs/rapid\` is the root (\`Application\`, \`RapidError\`, the middleware
+factories, decorators, binders, \`validated\`). The rest by concern:
+\`@tundralibs/rapid/context\` (\`HTTPContext\` / \`SOCKETContext\` / \`JOBContext\`
+and their init types), \`@tundralibs/rapid/decorators\` (decorators, binders and
+the registry introspection tooling reads: \`decorationsOf\`, \`decoratedNamesOf\`,
+\`moduleMetaOf\`, \`recordDecoration\`, \`recordModule\`),
+\`@tundralibs/rapid/middlewares\` (+ \`/pact\`), \`@tundralibs/rapid/modules\`
+(\`RapidModule\`, \`event\`, \`reply\`, \`initModules\`, \`buildModuleContext\`,
+\`ModuleRuntime\`), \`@tundralibs/rapid/endpoints\`, \`@tundralibs/rapid/errors\`
+(\`RapidError\`, \`RAPID_ERROR_CODES\`, \`asValidationError\`),
+\`@tundralibs/rapid/testing\`, \`@tundralibs/rapid/types\` (every public type),
+\`@tundralibs/rapid/ui\` (\`html\`, \`raw\`, \`template\`, \`when\`, \`each\`, the form
+helpers) and \`@tundralibs/rapid/cli\`.
+
 ## How this app is built
 
 - **One entry point.** \`Application.initialize(source)\` is the ONLY way to make
-  an app (the constructor is private). \`main.ts\` passes the \`configs/\` directory,
-  so \`configs/Application.yaml\` supplies the options and every other config
-  set stays readable via \`app.config\` (on Cloudflare Workers \`worker.ts\`
-  passes the options inline instead — there is no filesystem to read a YAML
-  from). Never construct \`new Application()\`.
+  an app (the constructor is private). \`main.ts\` passes the \`configs/\`
+  directory, so \`configs/Application.yaml\` supplies the options and every other
+  config file in that directory stays readable via \`app.config\` / \`ctx.config\`
+  (set name = lowercased file name, keys case-sensitive). On Cloudflare Workers
+  \`worker.ts\` passes the options inline instead. Never construct
+  \`new Application()\`; register everything before \`app.start()\` (or the first
+  \`app.fetch()\`).
+- **\`configs/Application.yaml\` is annotated** — every key carries a comment
+  saying what reads it. A wrong value fails the boot with \`RAPID_CONFIG\` naming
+  the key; nothing fails on the first request. Durations are SECONDS, sizes
+  are BYTES. \`\${VAR}\` placeholders come from \`.env\`; an UNSET placeholder stays
+  literal text, so keep \`secret: \${APP_SECRET}\` commented until the variable
+  exists. \`mode\` defaults to \`PRODUCTION\` (opaque 500s); a new project starts
+  in \`DEVELOPMENT\`.
 - **Routes are radrouter-native.** Path params are COLON-WRAPPED: \`/users/:id:\`,
-  never express-style \`:id\`. The five verb helpers (\`app.get\`/\`post\`/\`put\`/
-  \`patch\`/\`delete\`) take optional route-scoped middleware, then the handler last.
+  never express-style \`:id\`. \`app.get/post/put/patch/delete(path, [options],
+  ...middleware, handler)\` — the handler is always last; \`options\` is
+  \`{ version?, template?, layout?, openapi? }\`. \`app.route(method, path, …)\`
+  for other methods. A \`HEAD\` route is synthesised for every \`GET\`; a trailing
+  slash is ignored; \`405 + Allow\` needs \`server.methodNotAllowed: true\`.
 - **A handler returns the reply.** Return \`{ content, status?, headers? }\`
   (\`content\` is a string, a plain object → JSON, a \`Uint8Array\`, or a
-  \`ReadableStream\` / async iterable to stream). For HTTP replies you may also
-  return \`cookies: [...]\` and \`redirect: '/path'\`; both are silently ignored
-  on JOB/SOCKET transports.
+  \`ReadableStream\` / async iterable to stream). HTTP replies may also carry
+  \`cookies: [...]\` and \`redirect: '/path'\` (302; \`{ url, permanent }\` for
+  301); both are ignored on JOB/SOCKET. A redirect written as a path may not
+  resolve to another origin (\`//host\` is refused) — write the full URL to
+  leave the site on purpose. Set a status without a body via \`ctx.response\`.
 - **Middleware is universal.** \`app.use(mw)\` runs on HTTP requests, socket
-  frames AND job firings. Narrow with \`ctx.type\` or the \`onlyHTTP\` /
-  \`guardHTTP\` scope helpers (\`guard*\` fails closed — use it for auth).
-- **Errors:** throw a \`RapidError(code)\` for a known condition — the code maps
-  to the HTTP status and a client-safe message. An unknown throw is an opaque
-  500 by design. A \`@tundralibs/guardian\` validation failure is automatically
-  a 400; wrap any OTHER validator in \`validated()\` to get the same.
+  frames AND job firings, as an onion in registration order; per-route
+  middleware sits between the path and the handler. Narrow with \`ctx.type\`
+  (\`'HTTP' | 'SOCKET' | 'JOB'\`), \`onlyHTTP\` / \`onlySOCKET\` / \`onlyJOB\` (skip
+  elsewhere) or \`guardHTTP\` / \`guardSOCKET\` / \`guardJOB\` (reject elsewhere —
+  use these for auth), and by HTTP surface with \`onlyApi\` / \`onlyUi\`. Set
+  headers BEFORE \`next()\` if they must survive an error; read the reply after
+  \`next()\` via \`ctx.response\` / \`ctx.status\` / \`ctx.responseHeaders\`.
+- **Errors:** throw \`new RapidError(code, { message?, details?, debug? })\` for
+  a known condition — the code maps to the status and a client-safe message. An
+  unknown throw is an opaque 500 by design. A \`@tundralibs/guardian\` failure is
+  automatically a 400; wrap any OTHER validator in \`validated()\` for the same.
+  4xx \`message\`/\`details\` are PUBLIC in PRODUCTION; put internals in \`debug\`.
 - **Secrets:** the app \`secret\` option (≥ 32 chars, from the environment —
   never committed) is the one HMAC key for signed cookies, \`session()\` and
-  \`csrf()\`.
-- **UI (optional, \`@tundralibs/rapid/ui\`):** a route may name an HTML
-  template — \`app.get('/x', { template: MyView }, handler)\` — while the
-  handler keeps returning JSON-shaped data. A \`rapid-swap\` request header
-  gets the fragment; otherwise the route's \`prefer\` (\`'json'\` default)
-  picks JSON or the layout-wrapped page — \`Accept\` is never consulted.
-  \`html\` escapes every interpolation (\`raw()\` is the only opt-out);
-  the \`ui\` option of \`Application.initialize({ ui: { core, layout,
-  errorTemplates, view } })\` sets app defaults and serves the swap
-  runtime at \`/__rapid/ui.js\`. Templates never see \`ctx\` — the frozen
-  \`view\` bag exposes nothing from \`ctx.auth\` unless the \`view\`
-  projection names the fields.
+  \`csrf()\`. It is read when first used, so a missing secret is a 500 on that
+  request, not a boot error.
+- **Identity:** \`ctx.auth\` is \`undefined\` until an auth middleware calls
+  \`ctx.setAuth(identity)\` (write-once). The pact adapter fills it; anything
+  else (a JWT you verify yourself) does the same.
 {{aiModules}}
+## The context (\`ctx\`)
+
+Every handler and middleware receives the transport's context. Shared members:
+\`type\`, \`requestId\` (correlation id; adopted from \`headers.requestId\` when
+safe, else minted), \`action\` (route pattern / command / job name — the RAW
+pathname on an unmatched HTTP request), \`args\` (\`params\`, \`query\`, \`paging\`),
+\`state\` (per-invocation bag, built per \`stateMode\`), \`auth\` / \`setAuth()\`,
+\`status\` (the interpreted outcome), \`config\`, \`meter\` (when \`server.metrics\`),
+\`publish(channel, data)\` (push to socket subscribers from ANY transport),
+\`detach(work)\` (abandoned-but-running work the job transport waits for),
+\`response\` (set/override until \`respond()\`), \`app\`.
+
+- **HTTP** adds \`request\`, \`headers\`, \`method\`, \`url\`, \`path\` (what the router
+  saw: prefix/version stripped), \`params\`, \`matched\`, \`surface\` (\`'api' |
+  'ui'\`), \`basePath\`, \`remoteAddress\` (honours \`server.trustProxy\`),
+  \`cookies\`, \`payload\` (parsed body, once, cached), \`rawPayload\` (the bytes;
+  order-independent of \`payload\`), \`files\` (upload temp paths), \`isSwap\`,
+  \`accepts(...types)\`, \`href(path)\` (prefix-aware), \`setHeader\` /
+  \`appendHeader\` / \`deleteHeader\`, \`setCookie\` (\`{ signed: true }\` uses the
+  app secret) / \`signedCookie\` / \`deleteCookie\`, \`redirect(url, permanent?)\`,
+  \`serve(filePath, { download? })\` (trusted paths only — no traversal guard),
+  \`sse(asyncIterable)\`, \`html(string, status?)\`.
+- **SOCKET** adds \`connection\` (\`id\`, upgrade \`query\`, upgrade \`headers\`),
+  \`connectionId\`, \`command\`, \`frameId\`; \`payload\` is the frame's value,
+  synchronous; \`args.params\` IS the frame payload (must be a plain object).
+- **JOB** adds \`job\`, \`tick\` (\`scheduledAt\`, \`firedAt\`, \`count\` — \`-1\` when
+  triggered by hand), \`drift\`; \`args.params\` = registration \`args\` merged with
+  \`triggerJob\` overrides; no body.
+
+## Sockets, channels and jobs
+
+- \`app.socket('name', handler)\` registers a websocket command; frames arrive on
+  \`server.socketPath\` (\`/ws\`) over the same listener, dispatched through the
+  same middleware onion. \`app.channel('name', { authorize? })\` declares a
+  pub/sub channel clients may subscribe to; \`ctx.publish('name', data)\` pushes.
+  Browser upgrades from another origin are refused unless listed in
+  \`server.socketOrigins\`. \`app.fetch()\` (Workers, tests) serves HTTP only.
+- \`app.job('name', '*/5 * * * *', handler, { args? })\` registers a cron job
+  (5-field schedule, validated at registration). Every replica with
+  \`jobs.enabled\` runs every job — there is no leader election; schedules use
+  the server's local time; a tick that fires while the previous run is still
+  going is SKIPPED. \`app.triggerJob('name', args)\` runs one now (bypasses the
+  overlap guard) and returns the outcome.
+
+## Middleware catalog
+
+All factories are exported from \`@tundralibs/rapid\` and
+\`@tundralibs/rapid/middlewares\`; the pact adapter from
+\`@tundralibs/rapid/middlewares/pact\`. Options are validated when the factory
+is called. Durations are seconds; every non-standard header name is an
+option; stateful ones take pact-style \`hooks\` with bounded in-memory defaults
+(per process — inject redis/cacher-backed hooks before scaling out).
+
+{{aiMiddleware}}
+
+Register in this order: \`secureHeaders()\`, \`cors()\`, \`timeout(s)\`,
+\`rateLimit()\`, \`compress()\`, \`etag()\`, \`csrf()\`, \`session()\`, \`authenticate\`,
+\`idempotency({ scope })\`; \`authorize(...)\` per route. The correlation id,
+response-time header and access log are core config (\`headers\`,
+\`logger.access\`), not middleware.
+
+## Decorators, binders and modules
+
+From \`@tundralibs/rapid/decorators\` (also re-exported from the root unless
+noted): \`@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)\`, \`@SOCKET(command,
+options?)\`, \`@JOB(name, schedule, options?)\`, \`@Module(name?, options?)\`,
+\`@On(...events)\`, \`@Use(...invokeMiddleware)\`. Decorators are metadata-only —
+they never wrap the method, so a class unit-tests with \`new\`. Route options:
+\`bind\`, \`version\`, \`summary\`, \`description\`, \`tags\`, \`operationId\`,
+\`security\`, \`response\` (a schema; ENFORCED in DEVELOPMENT), \`template\`,
+\`layout\`. Binders (\`bind: [...]\`, in parameter order): \`param(name,
+validate?)\`, \`payload(schemaOrValidate?)\` (a schema OBJECT also documents the
+body), \`query(validate?)\`, \`paging()\`, \`header(name)\`, \`cookie(name)\`,
+\`auth(validate?)\`, \`session()\` (decorators subpath only — the root exports
+the \`session()\` middleware), \`connection()\` (socket only), \`config('set.key')\`.
+Without a validator \`param\` is \`string\` and \`payload\` is \`unknown\`.
+
+Modules: \`class Posts extends RapidModule<typeof EVENTS> { name = 'Posts';
+namespace = 'blog'; protected readonly events = EVENTS; … }\` with
+\`const EVENTS = { PostCreated: event<{ id: string }>() }\`. Members: \`this.log\`
+(scoped), \`this.config\`, \`this.emit('PostCreated', payload)\`,
+\`this.invoke(Target, 'method', args)\` (runs the target's \`@Use\` guards; a
+denial is a 403 envelope, not a throw), optional \`init()\` / \`dispose()\`
+hooks. Methods return the \`{ content }\` shape or \`reply(status, content)\`.
+\`app.modules({ modules: [namespaces], instances? })\` boots the module system
+ONCE (before start), mounts every decorated instance, and exposes
+\`app.moduleRuntime\`. \`@Module\` options: \`prefix\` (HTTP paths), \`namespace\`
+(socket commands \`ns.command\`, jobs \`ns.name\`), \`version\`, \`description\`,
+\`tags\`, \`security\`, \`layout\`. \`@On('ns:Module:Event')\` handlers get
+\`(payload, EventContext)\`; \`@Use\` guards module-to-module \`invoke()\` ONLY.
+
+## Authentication
+
+\`import { pactAuth } from '@tundralibs/rapid/middlewares/pact'\`;
+\`const { authenticate, authorize } = pactAuth(pact, options)\`. \`authenticate\`
+fills \`ctx.auth\` with a \`PactAuthContext\` (\`principal\`, \`via\`) from Bearer
+(header or \`bearer.cookie\`), Basic, ApiKey or HMAC carriers; absent →
+anonymous (\`optional: false\` → 401); present-but-invalid → 401, never
+anonymous. \`authorize('Module', 'PERMISSION')\` is typed by the pact instance
+and checked against its catalog when called. Options are pact's own
+middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
+signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
+authenticate from the upgrade request's headers/cookies. A login route is
+app code over \`pact.login()\` (body shape, cookie and principal projection
+are yours; map every failure to ONE 401) — see Rapid-Auth.md. Bring-your-own
+auth: a middleware that verifies its credential and calls \`ctx.setAuth(...)\`.
+
+## Errors
+
+Registry (\`RAPID_ERROR_CODES\`): code → status → PRODUCTION message. In
+PRODUCTION every 500 reads \`Internal server error\` and \`debug\` never leaves
+the process; other 5xx keep their default message; 4xx send \`message\` and
+\`details\` verbatim. Every error body carries \`requestId\`. \`app.onError(fn)\`
+may replace the envelope (sync, one per app).
+
+{{aiErrors}}
+
+## Observability
+
+- \`headers.requestId\` (\`x-request-id\`) is adopted or minted per request and
+  stamped on every response (plus \`headers.requestIdEcho\` names);
+  \`headers.responseTime\` (\`x-response-time\`, \`<ms>ms\`) is stamped last.
+- \`logger.access\` writes one line per request / frame / job firing after the
+  response is final (\`GET /users 200 12ms\` + fields); 5xx at \`error\`, 4xx at
+  \`warn\`, unmatched 404 and success at \`info\`. \`app.log\` / \`this.log\` are
+  slogger loggers that carry the request id; \`logger.level\` is a syslog
+  NUMBER (7 DEBUG … 0 EMERGENCY).
+- \`tracer\` (opt-in) wraps every invocation in a span and composes trace ids
+  onto log lines; \`server.metrics: true\` creates \`app.meter\` for the
+  \`metrics()\` endpoint.
+
+## UI layer (\`@tundralibs/rapid/ui\`)
+
+A route may name an HTML template — \`app.get('/x', { template: MyView },
+handler)\` — while the handler keeps returning JSON-shaped data. A request
+carrying the swap header (\`rapid-swap\`) gets the fragment; otherwise the
+route's \`prefer\` (\`'json'\` default, \`'html'\` for pages) picks JSON or the
+layout-wrapped page — \`Accept\` is never consulted; the api surface
+(\`server.api\`) never renders HTML. \`html\` escapes every interpolation
+(\`raw()\` is the only opt-out); \`template(fn, name)\` builds a view; the frozen
+\`view\` bag exposes \`requestId\`, \`path\`, \`query\`, \`asset()\`, \`csrfToken\` and
+nothing from \`ctx.auth\` unless the app's \`view\` projection names it. The
+factory's \`ui\` option (\`core\`, \`layout\`, \`errorTemplates\`, \`view\`, \`assets\`)
+is code; the YAML \`ui:\` block (\`enabled\`, \`prefer\`, \`live\`, \`history\`,
+header/cookie names) is data. The runtime script (\`/__rapid/ui.js\`) handles
+\`data-action\` / \`data-target\` / \`data-swap\` / \`data-load\` elements and
+\`rapid.swap()\` / \`rapid.refresh()\`, same-origin only, echoing the CSRF
+cookie; \`/__rapid/live.js\` (channels over \`/ws\`) and \`/__rapid/history.js\`
+(push-state) are opt-in. Static assets: \`server.static\` (fingerprinted
+\`?v=\` URLs via \`view.asset()\`).{{aiUi}}
+
+## Endpoints (\`@tundralibs/rapid/endpoints\`)
+
+Mount where you like: \`app.get('/healthz', health({ check? }))\` (503 when
+\`check\` throws; the cause is logged, never sent), \`app.get('/metrics',
+metrics({ format: 'prometheus' | 'json' }))\` (503 until \`server.metrics\`),
+\`app.get('/openapi.json', openapi({ info, servers, securitySchemes, expose }))\`
+(built from the routes + decorators; \`expose\` defaults to DEVELOPMENT only).
+
 ## Testing
 
 Use \`@tundralibs/rapid/testing\`: \`client(app)\` drives routes through
-\`app.fetch\` with no port (\`await api.get('/path')\` → \`{ status, body }\`);
-\`harness({ modules, stub })\` boots the module system with fakes stocked into
-an isolated DI container. A test must be able to FAIL — never assert something
-the type-checker already proves.
+\`app.fetch\` with no port (\`await api.get('/path', { query, headers, body,
+swap, host })\` → \`{ status, headers, body }\`); \`harness({ modules, instances?,
+stub, container? })\` boots the module system with fakes stocked into an
+isolated DI container (\`await using h = harness(...)\`; \`h.invoke\`,
+\`h.modules\`); \`view(overrides)\` builds a frozen view bag for template unit
+tests. A test must be able to FAIL — never assert something the type-checker
+already proves.
+
+## CLI (\`deno run -A jsr:@tundralibs/rapid/cli\` / \`npx rapid\`)
+
+\`init [name] [--runtime deno|bun|node|workers] [--module] [--norm] [--ui]
+[--with bootstrap|pico] [--docker] [--github] [--yes]\` scaffolds a project
+(this file included); \`upgrade [--dir .]\` bumps \`@tundralibs/*\` to their
+latest release; \`modules [dir] [--check]\` regenerates the module barrel
+(\`--check\` exits 1 when stale — put it in CI); \`health [url] [--path /health]\`
+probes a running app.
+
+## Reference docs (rapid {{rapidVersionLabel}})
+
+{{aiDocs}}
 
 ## Coding conventions (the org standard, fitted to an app)
 
@@ -439,17 +676,11 @@ using it — do not guess.
   supply. \`Pact.create({ bits: { READ: 1n, EDIT: 2n }, modulePermissions:
   { Post: ['READ','EDIT'] }, hooks: { getUser, getApiKey, saveApiKey, … } })\`.
   \`await pact.authenticate(credential)\` → \`{ principal, via }\` (throws on a
-  bad credential); \`await principal.assert(module, permission)\`. rapid's
-  adapter (\`@tundralibs/rapid/middlewares/pact\`): \`const { authenticate,
-  authorize } = pactAuth(pact, { schemes, bearer: { cookie }, apiKey: {} })\`
-  in an \`auth.ts\` at module load; \`app.use(authenticate)\` fills
-  \`ctx.auth\` (a \`PactAuthContext\`: \`principal\`, \`via\`), and
-  \`authorize('Module', 'PERMISSION')\` — typed by the instance — guards a
-  route (401 with a WWW-Authenticate challenge / 403). API keys:
-  \`pact.issueApiKey({ userId })\` → \`{ key, secret }\` (show the secret
-  once; your \`saveApiKey\` hook stores it encrypted, never hashed — HMAC
-  needs the raw secret). HMAC over any content: \`pact.sign(content, key?)\`
-  / \`pact.verifySignature(content, sig, key?)\`.
+  bad credential); \`await principal.assert(module, permission)\`. API keys:
+  \`pact.issueApiKey({ userId })\` → \`{ key, secret }\` (show the secret once;
+  your \`saveApiKey\` hook stores it encrypted, never hashed — HMAC needs the
+  raw secret). HMAC over any content: \`pact.sign(content, key?)\` /
+  \`pact.verifySignature(content, sig, key?)\`.
 - **ORM — \`@tundralibs/norm\`.** \`Entity('users', { id: Column.uuid(), email:
   Column.varchar(255).encrypt().hash() }, { pk: ['id'] })\` → \`Schema('Identity',
   { Users })\` → \`new Norm({ database: { dialect: 'sqlite', path }, secret })\`
@@ -466,8 +697,10 @@ using it — do not guess.
   Cacher.create('MEMORY', 'my-cache', { defaultExpiry: 300 })\` (or \`'REDIS'\`,
   \`'MEMCACHED'\`); \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`,
   \`has\`, \`delete\`, \`clear\`. Same API across backends, so start in-memory and
-  switch by config. rapid's \`rateLimit()\`/\`session()\` take any \`{ get, set }\`
-  store — a cacher instance fits.
+  switch by config. rapid's \`session()\`/\`rateLimit()\`/\`idempotency()\` take
+  persistence \`hooks\` (\`getSession\`/\`saveSession\`/\`deleteSession\`/
+  \`touchSession\`, an atomic \`increment\`, a set-if-absent \`claim\`) — a cacher
+  instance implements them in a few lines (same seconds unit).
 - **Ids — \`@tundralibs/id\`.** \`nanoID()\` (21-char URL-safe; \`nanoID(10,
   NUMBERS)\` for length/alphabet), \`ulid()\` (sortable), \`sequenceID()\` (a
   FACTORY: \`const seq = sequenceID(); seq()\` → a bigint, counter-based,
@@ -494,10 +727,9 @@ using it — do not guess.
 - **Logging — \`@tundralibs/slogger\`.** The logger behind \`app.log\`; reach
   for it directly only outside the app. \`new Slogger({ appName, level:
   SyslogSeverities.INFO, handlers: [{ name: 'console', type:
-  'ConsoleHandler', level }] })\` (a \`formatter\` is a FUNCTION, never a
-  preset name);
-  \`logger.info('msg', { ...context })\`. Inside a handler or module use
-  \`app.log\` / \`this.log\` — they carry the request id for you.
+  'ConsoleHandler', level, formatter: 'logfmt' }] })\` (a preset name or a
+  function); \`logger.info('msg', { ...context })\`. Inside a handler or module
+  use \`app.log\` / \`this.log\` — they carry the request id for you.
 - **Router — \`@tundralibs/radrouter\`.** Already inside rapid; you normally
   don't touch it. Its grammar is why params are \`/users/:id:\`. Constructor
   options rapid passes through: \`caseSensitive\`, \`ignoreTrailingSlash\`.
@@ -515,9 +747,12 @@ using it — do not guess.
 
 const CLAUDE_MD = `# {{name}}
 
-The project guide for any AI working here lives in [\`AGENTS.md\`](./AGENTS.md) —
-commands, how the app is built, testing, and the rules. Read it first. This
-file exists so Claude Code finds it; do not duplicate content here.
+@AGENTS.md
+
+The line above imports [\`AGENTS.md\`](./AGENTS.md) — the single project guide
+(commands, how rapid is used here, the middleware/error catalogs, testing,
+the rules). Edit that file, never this one: every tool (Claude Code, Cursor,
+Codex, Copilot) resolves to the same source.
 `;
 
 const COPILOT_MD = `# GitHub Copilot instructions
@@ -754,6 +989,19 @@ export function scaffold(
 `
       : '',
   };
+  vars.rapidVersionLabel = rapidVersion ?? 'latest';
+  vars.aiErrors = errorTable();
+  vars.aiMiddleware = middlewareTable();
+  vars.aiDocs = docLinks(rapidVersion, answers.runtime);
+  vars.aiUi = answers.ui === true
+    ? `
+
+This project was scaffolded with \`--ui\`: \`views/core.ts\` is the document
+shell (\`CoreShell\`), \`views/layout.ts\` the page frame (\`PageShape\`),
+\`views/components.ts\` the shared pieces; \`public/\` is mounted under
+\`server.static\` with fingerprinting on; \`configs/Application.yaml\`'s
+\`ui:\` block sets \`prefer: html\`.`
+    : '';
   const put = (tpl: string) => render(tpl, vars);
   const files: Record<string, string> = {
     '.gitignore': GITIGNORE,
@@ -801,21 +1049,21 @@ export function scaffold(
     files['views/components.ts'] = VIEWS_COMPONENTS;
     files['views/mod.ts'] = VIEWS_BARREL;
     files['public/site.css'] = render(SITE_CSS, vars);
-    // The DATA half in YAML (per replica), inside the server block…
+    // The DATA half in YAML (per replica): uncomment the static mount and
+    // the ui block the base template carries, pages-first.
     files['configs/Application.yaml'] = files['configs/Application.yaml']!
       .replace(
-        '  hostname: localhost\n',
-        '  hostname: localhost\n' +
-          '  static: # framework-served on route miss; routes always win\n' +
-          '    /public:\n' +
-          '      root: ../public # relative to this config directory\n' +
-          '      fingerprint: true # immutable ?v= URLs via view.asset()\n',
-      ) + `
-ui:
-  enabled: true # false = never emit HTML (pages 404, API-first routes JSON)
-  prefer: html # pages-first; an API route sets prefer: json to override
-  history: false # true serves /__rapid/history.js (opt-in push-state)
-`;
+        / {2}# static:[^\n]*\n(?: {2}# {3}[^\n]*\n)+/,
+        (block) => block.replace(/^ {2}# /gm, '  '),
+      )
+      .replace(
+        /# ui:\n(?:# {3}[^\n]*\n)+/,
+        (block) =>
+          block.replace(/^# /gm, '').replace(
+            'prefer: json # json | html',
+            'prefer: html # json | html',
+          ),
+      );
     // …the CODE half at initialize.
     const main = answers.module ? 'main.ts' : 'main.ts';
     if (files[main] !== undefined) {
@@ -885,11 +1133,151 @@ app.get(
   if (answers.github) {
     files['.github/workflows/ci.yml'] = put(CI_WORKFLOW);
   }
-  if (answers.ai) {
-    // ONE source (AGENTS.md) + two pointers — mirrors how tools resolve them.
-    files['AGENTS.md'] = render(put(AGENTS_MD), vars); // 2nd pass: {{name}} inside aiModules
-    files['CLAUDE.md'] = put(CLAUDE_MD);
-    files['.github/copilot-instructions.md'] = put(COPILOT_MD);
-  }
+  // ONE source (AGENTS.md) + two pointers — always written, mirroring how
+  // the tools resolve them; CLAUDE.md imports the guide with `@AGENTS.md`.
+  files['AGENTS.md'] = render(put(AGENTS_MD), vars); // 2nd pass: {{name}} inside aiModules
+  files['CLAUDE.md'] = put(CLAUDE_MD);
+  files['.github/copilot-instructions.md'] = put(COPILOT_MD);
   return files;
+}
+
+/**
+ * The middleware catalog the generated guide carries — one row per shipped
+ * factory. `cli.test.ts` asserts every factory the barrel exports is here.
+ */
+export const MIDDLEWARE_CATALOG: readonly (readonly [
+  factory: string,
+  purpose: string,
+])[] = [
+  [
+    'secureHeaders()',
+    'helmet set: nosniff, frame-options, referrer, HSTS (opt-in), CSP, COOP/COEP/OAC (ui surface), permissions-policy',
+  ],
+  [
+    'cors({ origin, methods, allowedHeaders, exposedHeaders, credentials, maxAge })',
+    'CORS + preflight; a disallowed origin gets no headers (the browser blocks)',
+  ],
+  [
+    'timeout(seconds)',
+    '504 past the deadline; the work keeps running detached (jobs hold their overlap slot)',
+  ],
+  [
+    'rateLimit({ max, window, key, headers, hooks, maxKeys })',
+    'fixed window per address/connection; x-ratelimit-* + retry-after; hooks.increment is atomic',
+  ],
+  [
+    'compress({ threshold })',
+    'gzip/deflate for compressible types; Vary: Accept-Encoding; weakens an inner ETag',
+  ],
+  [
+    'etag()',
+    'strong content ETag + 304 for GET/HEAD 200s; register INSIDE compress()',
+  ],
+  [
+    'csrf({ cookie, header, field, session, sameSite, secure, path })',
+    'signed, session-bound double-submit token; register OUTSIDE session()',
+  ],
+  [
+    'session({ hooks, cookie, idleTtl, absoluteTtl, rolling, sameSite, secure, path })',
+    'lazy, hook-backed session — getSession(ctx) → get/set/delete/regenerate/destroy',
+  ],
+  [
+    'idempotency({ scope, ttl, pendingTtl, header, replayedHeader, hooks, maxRecords })',
+    'Idempotency-Key replays (fingerprinted): 409 in flight, 422 mismatch; scope is REQUIRED',
+  ],
+  [
+    'healthCheck({ path, check })',
+    'pre-router liveness at /health (prefer the health() endpoint)',
+  ],
+  [
+    'pactAuth(pact, options) → { authenticate, authorize }',
+    'the @tundralibs/pact adapter (subpath ./middlewares/pact)',
+  ],
+  [
+    'onlyHTTP / onlySOCKET / onlyJOB · guardHTTP / guardSOCKET / guardJOB · onlyApi / onlyUi',
+    'scope helpers: skip, fail-closed reject, or HTTP-surface gate',
+  ],
+  [
+    'markStateKeyUser(mw) · middlewareUsesStateKey · middlewareScope · getSession · memorySessionHooks / memoryRateLimitHooks / memoryIdempotencyHooks',
+    'the helpers around them',
+  ],
+];
+
+/** The docs shipped in the package — every `docs/*.md` (asserted by `cli.test.ts`). */
+export const PACKAGE_DOCS: readonly (readonly [file: string, title: string])[] =
+  [
+    [
+      'README.md',
+      'README — the tour: installation, routing, middleware, modules, DI, validation, streaming, UI, endpoints, auth, observability, testing, CLI',
+    ],
+    [
+      'docs/Rapid-Configuration.md',
+      'Configuration — every Application.yaml key: type, default, unit, validation, consumer',
+    ],
+    [
+      'docs/Rapid-Middleware.md',
+      'Middleware — order and every option, hook and pitfall',
+    ],
+    [
+      'docs/Rapid-Context.md',
+      'Context & application object — what ctx carries per transport, input, output, services, every app.* member',
+    ],
+    [
+      'docs/Rapid-Modules.md',
+      'Modules — decorators, binders, RapidModule, events, invoke, lifecycle, app.modules()',
+    ],
+    [
+      'docs/Rapid-Testing.md',
+      'Testing — client(), harness(), view(), the three lanes',
+    ],
+    [
+      'docs/Rapid-Errors.md',
+      'Errors — the throw→response pipeline, disclosure by mode, every RAPID_* code',
+    ],
+    [
+      'docs/Rapid-Auth.md',
+      'Authentication & authorization — bring-your-own auth and the pact adapter (HMAC, JWE)',
+    ],
+    [
+      'docs/Rapid-UI.md',
+      'UI — templates, layouts, swaps, forms, lazy regions, live channels, history',
+    ],
+    ['docs/Rapid-Database.md', 'Database access & connection pooling'],
+    [
+      'examples/README.md',
+      'Examples — four runnable apps (blog, kanban, dashboard, htmx) and where to start',
+    ],
+  ];
+
+function errorTable(): string {
+  const rows = Object.entries(RAPID_ERROR_CODES).map(([code, meta]) =>
+    `| \`${code}\` | ${meta.status} | ${meta.message} |`
+  );
+  return [
+    '| Code | Status | PRODUCTION message |',
+    '| ---- | ------ | ------------------ |',
+    ...rows,
+  ].join('\n');
+}
+
+function middlewareTable(): string {
+  return [
+    '| Factory | Purpose |',
+    '| ------- | ------- |',
+    ...MIDDLEWARE_CATALOG.map(([f, p]) => `| \`${f}\` | ${p} |`),
+  ].join('\n');
+}
+
+function docLinks(version: string | null, runtime: string): string {
+  const base = version === null
+    ? 'https://jsr.io/@tundralibs/rapid'
+    : `https://jsr.io/@tundralibs/rapid/${version}`;
+  const local = runtime === 'deno'
+    ? ''
+    : ' (installed copy: `node_modules/@tundralibs/rapid/`)';
+  return [
+    `Pinned to the installed version${local}:`,
+    '',
+    ...PACKAGE_DOCS.map(([file, title]) => `- [${title}](${base}/${file})`),
+  ].join('\n');
 }

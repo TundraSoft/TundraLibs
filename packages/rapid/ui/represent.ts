@@ -29,6 +29,7 @@ import {
   negotiate,
 } from '../utils/mod.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
+import { assertRedirectTarget } from '../utils/redirectTarget.ts';
 import { type Html, isHtml, render } from './html.ts';
 import { DefaultErrorPage } from './errorPage.ts';
 
@@ -249,6 +250,10 @@ export function represent<S extends RapidContextState>(
     const url = typeof returned.redirect === 'string'
       ? returned.redirect
       : returned.redirect.url;
+    // The navigation path asserts this in the `ctx.response` setter; a
+    // swap never reaches it, and a BYO client (htmx's HX-Redirect)
+    // follows the header verbatim — so the guard lives here too.
+    assertRedirectTarget(url);
     ctx.setHeader(appUi?.redirectHeader ?? 'rapid-redirect', url);
     // Same personal-cache rule as a rendered reply: a per-user redirect
     // target on an identity-bearing page must not come out of a shared

@@ -14,6 +14,7 @@ import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
 import {
   compose,
+  isSocketOriginAllowed,
   requestHostname,
   resolveSurface,
   resolveVersion,
@@ -29,6 +30,16 @@ import type {
   RapidRouteEntry,
 } from '../types/mod.ts';
 import { Transport } from './Transport.ts';
+
+/** What finalize stamps on every response, success or failure. */
+type ResponseStamps = {
+  /** `headers.requestId` — echoed on every response. */
+  requestId: string;
+  /** `headers.responseTime`, or `false` when off. */
+  responseTime: string | false;
+  /** `performance.now()` at arrival. */
+  started: number;
+};
 
 /** A pre-composed onion runner for an {@link HTTPContext}. */
 type ComposedHTTPChain<S extends RapidContextState> = (
@@ -239,6 +250,9 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
    * command, error disclosure by mode).
    */
   private __buildSocket(socketPath: string): WebSocketHandler<SocketData> {
+    const socketOrigins = new Set(
+      this._app.option('server')?.socketOrigins ?? [],
+    );
     const rpc = new RpcServer<SocketData>({
       upgrade: (request) => {
         const url = new URL(request.url);
@@ -247,6 +261,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           stripApiPrefix(url.pathname, this._app.apiSurface?.prefix) ??
             url.pathname;
         if (pathname !== socketPath) return false;
+        if (!isSocketOriginAllowed(request, socketOrigins)) return false;
         // Connection-scope capture: everything ctx.connection carries
         // exists only HERE, at upgrade time.
         return {
@@ -403,6 +418,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         message: 'HTTPTransport.handle() called before prepare()',
       });
     }
+    const started = performance.now();
     const serverOptions = this._app.option('server')!;
     const method = request.method.trim().toUpperCase() as HTTPMethod;
     // `new URL(...).pathname` — NOT a raw substring scan: it also
@@ -463,7 +479,13 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       ? match.middlewares[0]
       : undefined;
 
-    const requestIdHeader = serverOptions.requestIdHeader!;
+    const headerNames = this._app.option('headers')!;
+    const requestIdHeader = headerNames.requestId!;
+    const stamps: ResponseStamps = {
+      requestId: requestIdHeader,
+      responseTime: headerNames.responseTime ?? false,
+      started,
+    };
     const ctx = new HTTPContext<S>(this._app, {
       request,
       remoteAddress: remoteAddress ?? '',
@@ -485,6 +507,9 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // Correlation echo at cycle START — every response carries it,
     // including 404s and errors (framework-owned, no middleware needed).
     ctx.setHeader(requestIdHeader, ctx.requestId);
+    for (const name of headerNames.requestIdEcho ?? []) {
+      ctx.setHeader(name, ctx.requestId);
+    }
 
     // The return-value channel: applied only when nothing was set. A
     // SYNC handler stays sync (no await) — the whole request then
@@ -636,7 +661,8 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           'http.route': entry !== undefined ? entry.path : '<unmatched>',
         }
         : undefined,
-      () => this.__finalize(ctx, requestIdHeader),
+      () => this.__finalize(ctx, stamps),
+      started,
     );
   }
 
@@ -654,7 +680,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
 
   private __finalize(
     ctx: HTTPContext<S>,
-    requestIdHeader: string,
+    stamps: ResponseStamps,
   ): Response | Promise<Response> {
     // Reply `cookies` apply right before respond(). SYNC-THROUGH: a plain
     // request (no reply cookies, or only unsigned ones) gets `undefined`
@@ -670,15 +696,20 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     try {
       signing = ctx._applyReplyCookies();
     } catch (error) {
-      return this.__errorResponse(ctx, error, requestIdHeader);
+      return this.__errorResponse(ctx, error, stamps);
     }
     if (signing !== undefined) {
       return signing.then(
-        () => this.__materialize(ctx, requestIdHeader),
-        (error) => this.__errorResponse(ctx, error, requestIdHeader),
+        () => this.__materialize(ctx, stamps),
+        (error) => this.__errorResponse(ctx, error, stamps),
       );
     }
-    return this.__materialize(ctx, requestIdHeader);
+    return this.__materialize(ctx, stamps);
+  }
+
+  /** `<ms>ms` since the request arrived — what `headers.responseTime` carries. */
+  private __elapsed(stamps: ResponseStamps): string {
+    return `${Math.round(performance.now() - stamps.started)}ms`;
   }
 
   /**
@@ -691,7 +722,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   private __errorResponse(
     ctx: HTTPContext<S>,
     error: unknown,
-    requestIdHeader: string,
+    stamps: ResponseStamps,
   ): Response {
     const err = RapidError.from(error);
     this._app.log.error('response finalization failed', {
@@ -707,7 +738,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     if (ctx.hasPendingCleanup) ctx.detach(ctx.cleanup());
     const headers = ctx.responseHeaders;
     headers.set('content-type', 'application/json');
-    headers.set(requestIdHeader, ctx.requestId);
+    headers.set(stamps.requestId, ctx.requestId);
+    if (stamps.responseTime !== false) {
+      headers.set(stamps.responseTime, this.__elapsed(stamps));
+    }
     return new Response(
       JSON.stringify(
         typeof payload === 'object' && payload !== null
@@ -721,17 +755,21 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   /** The respond() + cleanup half of finalize, sync-through (see above). */
   private __materialize(
     ctx: HTTPContext<S>,
-    requestIdHeader: string,
+    stamps: ResponseStamps,
   ): Response | Promise<Response> {
     let response: Response;
     try {
+      // Stamped last, right before the headers leave: arrival to send.
+      if (stamps.responseTime !== false && !ctx.responded) {
+        ctx.setHeader(stamps.responseTime, this.__elapsed(stamps));
+      }
       response = ctx.respond();
     } catch (error) {
       // respond() itself failing (bad status, serialization) must NOT escape
       // into the WebServer as a raw handler rejection — surface it through the
       // same disclosure model, keeping the accumulated headers (see
       // __errorResponse: a just-queued Set-Cookie must not vanish).
-      response = this.__errorResponse(ctx, error, requestIdHeader);
+      response = this.__errorResponse(ctx, error, stamps);
     }
     // Cleanup (settle a still-in-flight body parse, unlink upload temp files)
     // runs AFTER the response — and must NOT delay it, as the client gains

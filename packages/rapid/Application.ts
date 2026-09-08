@@ -60,6 +60,7 @@ import {
   type RapidModule,
 } from './modules/mod.ts';
 import type {
+  RapidAccessLogOptions,
   RapidApplicationEvents,
   RapidApplicationFactoryOptions,
   RapidApplicationFetchInfo,
@@ -144,6 +145,51 @@ const UI_DATA_KEYS = new Set([
 ]);
 /** RFC 9110 token — the legal shape of a header name. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/** `logger.access`, resolved once: the skip sets built, `slow` in ms. */
+export type ResolvedAccessLog = {
+  enabled: boolean;
+  skipExact: ReadonlySet<string>;
+  skipPrefixes: readonly string[];
+  slowMs: number | undefined;
+  client: boolean;
+};
+
+/**
+ * @throws {RapidError} RAPID_CONFIG when a `skip` entry is not an absolute
+ *   path, or `slow` is not a positive number of seconds.
+ */
+function resolveAccessLog(
+  options: RapidAccessLogOptions | undefined,
+): ResolvedAccessLog {
+  const skipExact = new Set<string>();
+  const skipPrefixes: string[] = [];
+  for (const entry of options?.skip ?? []) {
+    if (typeof entry !== 'string' || !entry.startsWith('/')) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `logger.access.skip entries must be absolute paths, exact or '<prefix>/*' (got '${entry}')`,
+        details: { key: 'logger.access.skip', value: entry },
+      });
+    }
+    if (entry.endsWith('/*')) skipPrefixes.push(entry.slice(0, -1));
+    else skipExact.add(entry);
+  }
+  const slow = options?.slow;
+  if (slow !== undefined && (!Number.isFinite(slow) || slow <= 0)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'logger.access.slow must be a positive number of seconds',
+      details: { key: 'logger.access.slow', value: slow },
+    });
+  }
+  return {
+    enabled: options?.enabled !== false,
+    skipExact,
+    skipPrefixes,
+    slowMs: slow === undefined ? undefined : slow * 1000,
+    client: options?.client === true,
+  };
+}
 const UI_CODE_KEYS = new Set([
   'core',
   'layout',
@@ -186,6 +232,8 @@ export class Application<S extends RapidContextState = RapidContextState>
    * plus live trace identity when tracing is enabled.
    */
   public readonly log: Slogger;
+  /** The resolved `logger.access` policy the transports consult per invocation. */
+  public readonly _accessLog: ResolvedAccessLog;
 
   /**
    * The tracer, when `tracer` options are configured. Exposed readonly
@@ -253,6 +301,7 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   private __started = false;
 
+  /** The resolved `mode` — steers error disclosure and log defaults. */
   get mode(): 'DEVELOPMENT' | 'PRODUCTION' {
     return this.option('mode') ?? 'PRODUCTION';
   }
@@ -479,9 +528,14 @@ export class Application<S extends RapidContextState = RapidContextState>
       // send complete groups.
       this._setOptions({
         ...options,
+        headers: {
+          requestId: 'x-request-id',
+          requestIdEcho: [],
+          responseTime: 'x-response-time',
+          ...options.headers,
+        },
         server: {
           enabled: true,
-          requestIdHeader: 'x-request-id',
           trustProxy: false, // secure by default — no proxy-header trust
           socketPath: '/ws',
           maxBodySize: 1_048_576, // 1 MB — 0 disables
@@ -569,7 +623,8 @@ export class Application<S extends RapidContextState = RapidContextState>
     // correlation is the framework's job, not the app's. The console
     // handler is the constructor-set default; callers may send partial
     // logger options (or none).
-    const logger = this.option('logger');
+    const { access, ...logger } = this.option('logger') ?? {};
+    this._accessLog = resolveAccessLog(access);
     const level = logger?.level ??
       (this.mode === 'DEVELOPMENT'
         ? SyslogSeverities.DEBUG
@@ -582,6 +637,11 @@ export class Application<S extends RapidContextState = RapidContextState>
         name: 'console',
         type: 'ConsoleHandler',
         level,
+        // DEVELOPMENT prints the structured context too (a 500's real
+        // message, the access fields) — slogger's named `logfmt` format,
+        // so the default is exactly what a config file could say
+        // (`logger.handlers[].formatter: logfmt | json | standard`).
+        ...(this.mode === 'DEVELOPMENT' ? { formatter: 'logfmt' } : {}),
       }],
       contextProvider: this.__logContext,
     });
@@ -840,6 +900,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Implementation — see the overloads above. */
   public route(
     method: HTTPMethod,
     path: string,
@@ -916,63 +977,78 @@ export class Application<S extends RapidContextState = RapidContextState>
     return this;
   }
 
+  /** Register a `GET` route — `route('GET', path, ...chain)`. */
   public get(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Register a `GET` route with {@link RapidRouteOptions} (version, template, OpenAPI). */
   public get(
     path: string,
     options: RapidRouteOptions,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Implementation — see the overloads above. */
   public get(path: string, ...args: unknown[]): this {
     return this.__verb('GET', path, args);
   }
+  /** Register a `POST` route — `route('POST', path, ...chain)`. */
   public post(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Register a `POST` route with {@link RapidRouteOptions} (version, template, OpenAPI). */
   public post(
     path: string,
     options: RapidRouteOptions,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Implementation — see the overloads above. */
   public post(path: string, ...args: unknown[]): this {
     return this.__verb('POST', path, args);
   }
+  /** Register a `PUT` route — `route('PUT', path, ...chain)`. */
   public put(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Register a `PUT` route with {@link RapidRouteOptions} (version, template, OpenAPI). */
   public put(
     path: string,
     options: RapidRouteOptions,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Implementation — see the overloads above. */
   public put(path: string, ...args: unknown[]): this {
     return this.__verb('PUT', path, args);
   }
+  /** Register a `PATCH` route — `route('PATCH', path, ...chain)`. */
   public patch(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Register a `PATCH` route with {@link RapidRouteOptions} (version, template, OpenAPI). */
   public patch(
     path: string,
     options: RapidRouteOptions,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Implementation — see the overloads above. */
   public patch(path: string, ...args: unknown[]): this {
     return this.__verb('PATCH', path, args);
   }
+  /** Register a `DELETE` route — `route('DELETE', path, ...chain)`. */
   public delete(
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Register a `DELETE` route with {@link RapidRouteOptions} (version, template, OpenAPI). */
   public delete(
     path: string,
     options: RapidRouteOptions,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
   ): this;
+  /** Implementation — see the overloads above. */
   public delete(path: string, ...args: unknown[]): this {
     return this.__verb('DELETE', path, args);
   }
@@ -1036,7 +1112,7 @@ export class Application<S extends RapidContextState = RapidContextState>
    * rAPId never constructs the instance — `new Users(db)`, a DI
    * container, a factory, whatever your own module system does is
    * invisible here; this only binds what you hand it. See
-   * `DESIGN-modules.md` for the full boundary and the subclass-
+   * `DESIGN.md` (Decorators, binders and modules) for the boundary and the subclass-
    * override policy.
    *
    * @throws {RapidError} RAPID_CONFIG when an instance has no
@@ -1101,6 +1177,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     return this.__moduleRuntime;
   }
 
+  /** Dispose the module runtime (reverse mount order), once. */
   private async __disposeModules(): Promise<void> {
     const runtime = this.__moduleRuntime;
     if (runtime === undefined) return;
@@ -1439,7 +1516,11 @@ export class Application<S extends RapidContextState = RapidContextState>
       const [source, etag] = await (script ??= load());
       const inm = ctx.headers.get('if-none-match');
       const matches = inm !== null && ifNoneMatch(inm, etag);
-      const headers = { etag, 'cache-control': 'no-cache' };
+      const headers = {
+        etag,
+        'cache-control': 'no-cache',
+        'x-content-type-options': 'nosniff',
+      };
       if (matches) return { status: 304, content: '', headers };
       return {
         content: source,
@@ -1567,7 +1648,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       if (offender !== undefined) {
         throw new RapidError('RAPID_CONFIG', {
           message:
-            "stateMode: 'SHARE' is incompatible with a stateKey-writing middleware (responseTimer/requestId) — every invocation would read and write the SAME state object, corrupting per-invocation values (duration, correlation id) under concurrency",
+            "stateMode: 'SHARE' is incompatible with a stateKey-writing middleware (one marked with markStateKeyUser) — every invocation would read and write the SAME state object, corrupting per-invocation values under concurrency",
           details: { stateMode: 'SHARE' },
         });
       }
@@ -1586,7 +1667,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     try {
       // `stateMode: 'SHARE'` hands every invocation the SAME state
       // object; a middleware writing a per-invocation value there
-      // (responseTimer/requestId's `stateKey`) corrupts under
+      // (one marked with `markStateKeyUser`) corrupts under
       // concurrency (last write wins, across unrelated invocations).
       // Unlike the removed R2-H3 heuristic, this is a deterministic
       // check — no false negatives to lie about — so it fails the
@@ -1600,7 +1681,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         // lived here and was REMOVED (adversarial review R2-H3). It
         // asked only whether SOME middleware reaches SOCKET, which any
         // unscoped middleware (a logger) answers yes to — so it went
-        // silent for the exact `use(requestLogger(), onlyHTTP(auth))`
+        // silent for the exact `use(someLogger(), onlyHTTP(auth))`
         // hole it existed to catch, while firing for `guardHTTP(auth)`,
         // which fails CLOSED and is safe. Its message therefore pushed
         // developers from `guard*` to `only*` — from safe to unsafe.
@@ -1657,6 +1738,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     return http.handle(request, info?.remoteAddress ?? null);
   }
 
+  /** Build (once) the listener-less HTTP transport behind {@link fetch}. */
   private __prepareFetch(): HTTPTransport<S> {
     if (this.__socketCommands.size > 0) {
       throw new RapidError('RAPID_CONFIG', {
@@ -1708,6 +1790,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     });
   }
 
+  /** The single-flight body of {@link stop}. */
   private async __stop(): Promise<this> {
     if (!this.__started) {
       // The upload temp dir is created at CONSTRUCTION, not start() — an
@@ -1841,6 +1924,18 @@ export class Application<S extends RapidContextState = RapidContextState>
       });
     }
     if (mode !== upper) this._setOption('mode', upper);
+    // `stateMode` steers how ctx.state is built; an unknown value would
+    // silently fall through to CLONE ('share' from YAML meaning SHARE).
+    const stateMode = this._getOption('stateMode') as unknown;
+    if (
+      stateMode !== 'CLONE' && stateMode !== 'PROTOTYPE' &&
+      stateMode !== 'SHARE'
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `stateMode must be 'CLONE', 'PROTOTYPE' or 'SHARE'`,
+        details: { key: 'stateMode', value: stateMode },
+      });
+    }
     // Required + slogger's appName contract, surfaced as OUR error
     // (missing name from a bad Application file must fail loudly here,
     // not deep inside Slogger construction).
@@ -1864,7 +1959,89 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { key: 'secret' },
       });
     }
-    const { port, hostname, unixSocketPath } = this._getOption('server') ?? {};
+    const {
+      port,
+      hostname,
+      unixSocketPath,
+      trustProxy,
+      maxBodySize,
+      socketPath,
+      socketOrigins,
+      versioning,
+    } = this._getOption('server') ?? {};
+    if (
+      trustProxy !== undefined && typeof trustProxy !== 'boolean' &&
+      (!Number.isInteger(trustProxy) || trustProxy < 0)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'server.trustProxy must be a boolean or a non-negative integer hop count',
+        details: { key: 'server.trustProxy', value: trustProxy },
+      });
+    }
+    if (
+      maxBodySize !== undefined &&
+      (!Number.isInteger(maxBodySize) || maxBodySize < 0)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'server.maxBodySize must be a non-negative integer number of bytes (0 disables the cap)',
+        details: { key: 'server.maxBodySize', value: maxBodySize },
+      });
+    }
+    if (
+      socketPath !== undefined &&
+      (typeof socketPath !== 'string' || !socketPath.startsWith('/'))
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `server.socketPath must be a path starting with '/'`,
+        details: { key: 'server.socketPath', value: socketPath },
+      });
+    }
+    for (const origin of socketOrigins ?? []) {
+      // Browsers send the serialized origin verbatim — lowercase, no
+      // path — so anything else could never match.
+      let ok = false;
+      try {
+        ok = new URL(origin).origin === origin;
+      } catch {
+        // unparsable: refused below
+      }
+      if (!ok) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            `server.socketOrigins entry '${origin}' is not a serialized origin (scheme://host[:port])`,
+          details: { key: 'server.socketOrigins', value: origin },
+        });
+      }
+    }
+    const versionMode = versioning?.mode;
+    if (
+      versionMode !== undefined && versionMode !== 'header' &&
+      versionMode !== 'accept' && versionMode !== 'path'
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `server.versioning.mode must be 'header', 'accept' or 'path'`,
+        details: { key: 'server.versioning.mode', value: versionMode },
+      });
+    }
+    if (versionMode === 'path' && versioning?.identifier !== undefined) {
+      // Compiled per request otherwise — a bad pattern would throw on the
+      // first request, outside the disclosure path.
+      try {
+        new RegExp(versioning.identifier);
+      } catch (cause) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            `server.versioning.identifier is not a valid regular expression in path mode`,
+          details: {
+            key: 'server.versioning.identifier',
+            value: versioning.identifier,
+          },
+          cause: cause as Error,
+        });
+      }
+    }
     if (
       port !== undefined &&
       (!Number.isInteger(port) || port < 0 || port > 65535)
@@ -1893,19 +2070,37 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { key: 'unixSocketPath' },
       });
     }
-    const requestIdHeader = this._getOption('server')?.requestIdHeader;
-    if (
-      requestIdHeader !== undefined && !HEADER_NAME.test(requestIdHeader)
-    ) {
-      // Caught HERE: an illegal name would throw a raw TypeError from
-      // `headers.get()` on every request, outside the disclosure path.
-      throw new RapidError('RAPID_CONFIG', {
-        message:
-          `server.requestIdHeader must be a valid header name (got '${requestIdHeader}')`,
-        details: { key: 'server.requestIdHeader', value: requestIdHeader },
-      });
+    // Caught HERE: an illegal name would throw a raw TypeError from
+    // `headers.get()`/`set()` on every request, outside the disclosure path.
+    const headerNames = this._getOption('headers') ?? {};
+    const named: [string, unknown][] = [
+      ['headers.requestId', headerNames.requestId],
+      ['headers.responseTime', headerNames.responseTime],
+      ...(headerNames.requestIdEcho ?? []).map((
+        name,
+      ): [string, unknown] => ['headers.requestIdEcho', name]),
+    ];
+    for (const [key, value] of named) {
+      if (value === undefined) continue;
+      // Only the response-time stamp can be switched off with `false`.
+      if (value === false && key === 'headers.responseTime') continue;
+      if (typeof value !== 'string' || !HEADER_NAME.test(value)) {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `${key} must be a valid header name (got '${value}')`,
+          details: { key, value },
+        });
+      }
     }
     const uploads = this._getOption('uploads') ?? {};
+    if (
+      uploads.maxSize !== undefined &&
+      (!Number.isInteger(uploads.maxSize) || uploads.maxSize < 1)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'uploads.maxSize must be a positive integer number of bytes',
+        details: { key: 'uploads.maxSize', value: uploads.maxSize },
+      });
+    }
     for (const ext of uploads.allowedExtensions ?? []) {
       // The parser compares `extname(name).toLowerCase()` — `png` or
       // `.PNG` could never match, so every upload would 415 with no hint.
