@@ -1266,6 +1266,10 @@ export const PACKAGE_DOCS: readonly (readonly [file: string, title: string])[] =
       'UI — templates, layouts, swaps, forms, lazy regions, live channels, history',
     ],
     [
+      'docs/Rapid-Endpoints.md',
+      'Endpoints — health(), ready(), metrics(), openapi(), docs(): replies, options, probes and scrape target',
+    ],
+    [
       'docs/Rapid-OpenAPI.md',
       'OpenAPI — the document, security schemes, the docs() reference page, credential box, customization, third-party viewers',
     ],

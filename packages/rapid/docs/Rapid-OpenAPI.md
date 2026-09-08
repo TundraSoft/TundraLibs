@@ -30,6 +30,10 @@ generated credential box, try-it forms, and two ways to make it yours.
 
 ## Where the document comes from
 
+(The handlers' mounting rules, the probes and the metrics endpoint are in
+the [endpoints guide](./Rapid-Endpoints.md); this guide is about the document
+and its page.)
+
 Every registered HTTP route becomes an operation. A plain `app.get()` route
 contributes its path, method and path parameters; a decorated module route
 adds what its declarations say — `summary`, `description`, `tags`,

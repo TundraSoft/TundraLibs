@@ -501,6 +501,8 @@ docs(app, { spec: '/openapi.json', tryIt: true }); // GET /docs
 Session endpoints (`login`, `logout`, `refresh`, `me`) come from the pact
 adapter's factory, not from here, so they share one cookie name with
 `authenticate` — see [Authentication & authorization](docs/Rapid-Auth.md).
+Every handler's replies, options and probe guidance are in the
+[endpoints guide](docs/Rapid-Endpoints.md).
 
 ## Auth
 
@@ -809,6 +811,9 @@ Guides:
 - [Authentication & authorization](./docs/Rapid-Auth.md) — the generic
   `ctx.auth` seam for bring-your-own auth, and the opt-in `@tundralibs/pact`
   adapter (five credential schemes, permission checks, response signing).
+- [Endpoints](./docs/Rapid-Endpoints.md) — `health()`, `ready()`,
+  `metrics()`, `openapi()`, `docs()`: what each answers, its options, and
+  wiring the platform's probes and scrape target.
 - [OpenAPI and the API reference](./docs/Rapid-OpenAPI.md) — where the
   document comes from, declaring security schemes, the `docs()` page with its
   credential box and try-it forms, and the two ways to customize it.
