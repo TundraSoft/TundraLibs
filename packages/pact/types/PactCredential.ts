@@ -1,3 +1,5 @@
+import type { PactHmacAlgorithm } from './PactHmacAlgorithm.ts';
+
 /**
  * One per-request credential, EXTRACTED by the framework adapter — pact
  * never touches headers, cookies, or transport. `scheme` routes
@@ -27,4 +29,9 @@ export type PactCredential =
      * bytes.
      */
     readonly payload: string;
+    /**
+     * The digest the caller used. Fixed per deployment (the middleware
+     * options), never read off the request. @default 'SHA-256'
+     */
+    readonly algorithm?: PactHmacAlgorithm;
   };

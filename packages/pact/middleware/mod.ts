@@ -1,32 +1,55 @@
 /**
- * Framework middleware adapters for pact: drop-in authentication and
- * permission-guard handlers for express, fastify, oak, and hono, plus
- * the framework-neutral core (`extractCredential`, `failureResponse`)
- * that makes an adapter for any other stack a few lines of glue.
+ * Framework middleware for pact: one factory per framework — express,
+ * fastify, oak, hono — each returning `{ authenticate, authorize }` over
+ * one instance and one options bag, plus the framework-neutral core
+ * (`createPactMiddleware`, `extractCredential`, `failureResponse`) that
+ * makes an adapter for any other stack a few lines of glue.
  *
  * @module
  */
+export { createPactMiddleware } from './core.ts';
 export {
   DEFAULT_SCHEMES,
   extractCredential,
   failureResponse,
+  isFreshTimestamp,
   NO_CREDENTIALS,
+  resolveOptions,
 } from './shared.ts';
 export {
-  expressAuth,
-  expressGuard,
+  compileTemplate,
+  contentDigest,
+  REQUEST_TEMPLATE,
+  RESPONSE_TEMPLATE,
+} from './template.ts';
+export {
+  expressPact,
+  type PactExpressMiddleware,
   type PactExpressRequest,
   type PactExpressResponse,
 } from './express.ts';
 export {
-  fastifyAuth,
-  fastifyGuard,
+  fastifyPact,
+  type PactFastifyHook,
+  type PactFastifyOnSend,
   type PactFastifyReply,
   type PactFastifyRequest,
 } from './fastify.ts';
-export { oakAuth, oakGuard, type PactOakContext } from './oak.ts';
-export { honoAuth, honoGuard, type PactHonoContext } from './hono.ts';
+export { oakPact, type PactOakContext, type PactOakMiddleware } from './oak.ts';
+export {
+  honoPact,
+  type PactHonoContext,
+  type PactHonoMiddleware,
+} from './hono.ts';
 export type {
+  PactMiddlewareConfig,
+  PactMiddlewareCore,
+  PactMiddlewareDenial,
   PactMiddlewareOptions,
   PactMiddlewareRequest,
+  PactMiddlewareResponder,
+  PactMiddlewareResponse,
+  PactMiddlewareResponsePatch,
+  PactMiddlewareVerdict,
+  SignatureTemplate,
 } from './types/mod.ts';

@@ -86,6 +86,14 @@ export const PactErrorCodes = {
   INVALID_CREDENTIALS: 'Invalid credentials',
 
   /**
+   * A key-bound encrypted payload (JWE) could not be opened: malformed,
+   * an `alg`/`enc` outside the allow-list, a `kid` that is not the
+   * authenticated key, or a failed authentication tag.
+   * Variables: reason
+   */
+  ENCRYPTION_INVALID: 'Encrypted payload rejected: ${reason}',
+
+  /**
    * Credentials verified but the account's status is not in
    * activeStatuses. Only thrown AFTER a successful password check, so
    * it is not an enumeration oracle.

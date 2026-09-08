@@ -6,102 +6,141 @@
  * @module
  */
 import type { Pact } from '../Pact.ts';
-import type { PactAuthContext, PermissionBits } from '../types/mod.ts';
-import type { PactMiddlewareOptions } from './types/mod.ts';
-import {
-  extractCredential,
-  failureResponse,
-  NO_CREDENTIALS,
-} from './shared.ts';
+import type { PermissionBits } from '../types/mod.ts';
+import type {
+  PactMiddlewareOptions,
+  PactMiddlewareResponder,
+} from './types/mod.ts';
+import { createPactMiddleware } from './core.ts';
 
 /** The slice of a hono context the middleware reads and writes. */
 export type PactHonoContext = {
   req: {
     method: string;
+    /** hono's path is percent-decoded; `url` is preferred when present. */
     path: string;
+    /** The full request URL; path, `@query`, `@authority`, `@scheme` come from it. */
+    url?: string;
     header: (name: string) => string | undefined;
+    /** hono caches the body, so handlers can still read it afterwards. */
+    arrayBuffer?: () => Promise<ArrayBuffer>;
   };
-  json: (body: unknown, status?: number) => Response;
+  /** The handler's response; replaced when it is signed or encrypted. */
+  res?: Response;
+  /** hono's `c.json(body, status, headers)`. */
+  json: (
+    body: unknown,
+    status?: number,
+    headers?: Record<string, string>,
+  ) => Response;
   set: (key: string, value: unknown) => void;
   get: (key: string) => unknown;
 };
 
-function requestView(c: PactHonoContext): {
-  method: string;
-  path: string;
-  header: (name: string) => string | null;
-} {
-  return {
-    method: c.req.method,
-    path: c.req.path,
-    header: (name) => c.req.header(name) ?? null,
-  };
+/** A hono middleware. */
+export type PactHonoMiddleware = (
+  c: PactHonoContext,
+  next: () => Promise<void>,
+) => Promise<Response | void>;
+
+/**
+ * Replace `c.res` with its signed/encrypted form. A `Response` body is
+ * always a stream, so the whole body is read here; `text/event-stream`
+ * responses are the one kind left alone.
+ */
+async function seal(
+  c: PactHonoContext,
+  respond: PactMiddlewareResponder,
+): Promise<void> {
+  const res = c.res;
+  if (res === undefined) return;
+  if (res.headers.get('content-type')?.startsWith('text/event-stream')) return;
+  const sent = res.body === null
+    ? null
+    : new Uint8Array(await res.arrayBuffer());
+  const patch = await respond({ status: res.status, body: sent });
+  const headers = new Headers(res.headers);
+  if (patch.body !== undefined) headers.delete('content-length');
+  for (const [name, value] of Object.entries(patch.headers)) {
+    headers.set(name, value);
+  }
+  c.res = new Response(patch.body ?? sent, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
 }
 
 /**
- * Authentication middleware: extracts the credential, calls
- * `pact.authenticate`, and attaches the auth context via
- * `c.set('pact', ...)`. Returns a 401 response itself on a missing or
- * invalid credential (unless `options.optional`); non-pact errors are
- * rethrown to hono.
+ * Build the two hono middlewares over one pact instance: `authenticate`
+ * extracts the credential, calls `pact.authenticate`, and attaches the
+ * auth context via `c.set('pact', …)` (401 on a missing credential
+ * unless `optional`, 401 on an invalid one always, non-pact errors
+ * rethrown to hono); `authorize(module, permission)` — typed by the
+ * instance — asserts on the attached bound principal (401
+ * unauthenticated, 403 denied). When a response must be signed or
+ * encrypted, `authenticate` rebuilds `c.res` after `next()` — buffering
+ * the body, since hono cannot tell a stream from a value; only
+ * `text/event-stream` is exempt — and exposes a decrypted request
+ * payload as `c.get('pactBody')`.
  *
  * @example
  * ```ts ignore
- * app.use(honoAuth(pact));
- * app.get('/projects', honoGuard('Projects', 'READ'), (c) => {
+ * const { authenticate, authorize } = honoPact(pact);
+ * app.use(authenticate);
+ * app.get('/projects', authorize('Projects', 'READ'), (c) => {
  *   const auth = c.get('pact') as PactAuthContext;
  *   return c.json({ user: auth.principal.id });
  * });
  * ```
+ *
+ * @throws {PactError} INVALID_OPTION for a malformed option at build;
+ *   UNKNOWN_MODULE / PERMISSION_NOT_IN_MODULE from `authorize()` at the
+ *   call site.
  */
-export function honoAuth<B extends PermissionBits, M extends string>(
+export function honoPact<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
   options?: PactMiddlewareOptions,
-): (
-  c: PactHonoContext,
-  next: () => Promise<void>,
-) => Promise<Response | void> {
-  return async (c, next) => {
-    const credential = extractCredential(requestView(c), options);
-    if (credential === null) {
-      if (options?.optional === true) return await next();
-      return c.json(NO_CREDENTIALS.body, NO_CREDENTIALS.status);
-    }
-    try {
-      c.set('pact', await pact.authenticate(credential));
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) throw error;
-      return c.json(failure.body, failure.status);
-    }
-    await next();
-  };
-}
-
-/**
- * Permission guard: requires a request authenticated by {@link honoAuth}
- * whose principal holds `permission` in `module`. Returns 401 when
- * unauthenticated and 403 when denied.
- */
-export function honoGuard(
-  module: string,
-  permission: string,
-): (
-  c: PactHonoContext,
-  next: () => Promise<void>,
-) => Promise<Response | void> {
-  return async (c, next) => {
-    const auth = c.get('pact') as PactAuthContext | undefined;
-    if (auth === undefined) {
-      return c.json(NO_CREDENTIALS.body, NO_CREDENTIALS.status);
-    }
-    try {
-      await auth.principal.assert(module, permission);
-    } catch (error) {
-      const failure = failureResponse(error);
-      if (failure === null) throw error;
-      return c.json(failure.body, failure.status);
-    }
-    await next();
+): {
+  authenticate: PactHonoMiddleware;
+  authorize: (module: M, permission: keyof B & string) => PactHonoMiddleware;
+} {
+  const core = createPactMiddleware(pact, options);
+  return {
+    authenticate: async (c, next) => {
+      const url = c.req.url === undefined ? undefined : new URL(c.req.url);
+      const read = c.req.arrayBuffer;
+      const verdict = await core.authenticate({
+        method: c.req.method,
+        path: url?.pathname ?? c.req.path,
+        query: url?.search,
+        authority: url?.host,
+        scheme: url?.protocol.replace(/:$/, ''),
+        header: (name) => c.req.header(name) ?? null,
+        body: read === undefined
+          ? undefined
+          : async () => new Uint8Array(await read.call(c.req)),
+      });
+      if (!verdict.ok) {
+        const { status, body, headers } = verdict.denial;
+        return c.json(body, status, { ...headers });
+      }
+      if (verdict.auth !== undefined) c.set('pact', verdict.auth);
+      if (verdict.body !== undefined) c.set('pactBody', verdict.body);
+      await next();
+      if (verdict.respond !== undefined) await seal(c, verdict.respond);
+    },
+    authorize: (module, permission) => {
+      const guard = core.authorize(module, permission);
+      return async (c, next) => {
+        const denial = await guard(
+          c.get('pact') as Parameters<typeof guard>[0],
+        );
+        if (denial !== undefined) {
+          return c.json(denial.body, denial.status, { ...denial.headers });
+        }
+        await next();
+      };
+    },
   };
 }
