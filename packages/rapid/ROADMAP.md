@@ -21,16 +21,17 @@ Core and the current capability set are built and green on Deno / Bun / Node
   default }`; `@GET`/`@Module` `{ version }` override).
 - **Middleware** — universal `use()`, scope helpers (`onlyHTTP`/`guardHTTP`/…),
   and the catalog: cors, secureHeaders, compress, etag, rateLimit,
-  healthCheck, timeout, **idempotency** (identity-scoped, fingerprinted
+  timeout, **idempotency** (identity-scoped, fingerprinted
   replays), **session** (signed id, rolling + absolute TTL, regenerate /
   destroy, loaded LAZILY on the first `await getSession(ctx)`), **csrf**
   (signed double-submit, session-bound) and the pact adapter
   (`middlewares/pact`, `pactAuth(pact) → { authenticate, authorize }`).
   Durations are seconds, non-standard header names are options, and the
   stateful three take pact-style `hooks` with bounded in-memory defaults
-  (the `Store` seam, the generic `auth`, `requestId`, `responseTimer` and
-  `requestLogger` middlewares were retired 2026-09-08 — the last three
-  live in core `headers` + `logger.access` config).
+  (the `Store` seam, the generic `auth`, `requestId`, `responseTimer`,
+  `requestLogger` and `healthCheck` middlewares were retired 2026-09-08 —
+  the id/timer/logger live in core `headers` + `logger.access` config,
+  health is the `health()` endpoint).
   Static serving is no longer a middleware — see `server.static` below.
 - **Decorators + modules** — `@GET/@POST/@PUT/@PATCH/@DELETE/@SOCKET/@JOB`,
   binders (`param`/`payload`/`query`/`paging`/`header`/`cookie`/`auth`/

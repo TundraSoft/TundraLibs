@@ -77,17 +77,17 @@ app.get(
 );
 ```
 
-| Position       | Middleware                      | Why there                                                                                   |
-| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
-| outermost      | `secureHeaders`, `cors`         | stamp headers before `next()`, so a 429/500 from anything inside still carries them         |
-| outer          | `timeout`                       | its budget covers everything registered after it                                            |
-| outer          | `rateLimit`                     | reject before any work is done                                                              |
-| before etag    | `compress`                      | `etag` must hash the identity body; `compress` then weakens the tag                         |
-| before session | `csrf`                          | reads the session cookie the inner `session()` issued on THIS response to re-bind its token |
-| after csrf     | `session`                       | loads lazily; must be inside `csrf`                                                         |
-| after session  | `authenticate` (pact)           | may read the session cookie; sets `ctx.auth` for guards and `idempotency`'s `scope`         |
-| after auth     | `idempotency`                   | needs the caller's identity for its key; must be outside the handler it protects            |
-| per route      | `authorize(...)`, `healthCheck` | route-level guards and endpoints                                                            |
+| Position       | Middleware              | Why there                                                                                   |
+| -------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
+| outermost      | `secureHeaders`, `cors` | stamp headers before `next()`, so a 429/500 from anything inside still carries them         |
+| outer          | `timeout`               | its budget covers everything registered after it                                            |
+| outer          | `rateLimit`             | reject before any work is done                                                              |
+| before etag    | `compress`              | `etag` must hash the identity body; `compress` then weakens the tag                         |
+| before session | `csrf`                  | reads the session cookie the inner `session()` issued on THIS response to re-bind its token |
+| after csrf     | `session`               | loads lazily; must be inside `csrf`                                                         |
+| after session  | `authenticate` (pact)   | may read the session cookie; sets `ctx.auth` for guards and `idempotency`'s `scope`         |
+| after auth     | `idempotency`           | needs the caller's identity for its key; must be outside the handler it protects            |
+| per route      | `authorize(...)`        | route-level guards; liveness is the `health()` endpoint, an ordinary route                  |
 
 Scope helpers narrow any middleware to one transport or surface:
 `onlyHTTP(m)` / `onlySOCKET(m)` / `onlyJOB(m)` run it there and pass through
@@ -495,15 +495,6 @@ tick would start another copy of a wedged handler. Combined with
 `idempotency()` the key stays pending until `pendingTtl`. A handler that
 finishes in a photo-finish with the deadline may still win — best-effort, not
 a fence.
-
-## healthCheck
-
-`healthCheck({ path?, check? })` answers `path` (default `/health`) on `GET`/
-`HEAD` before routing with `200 { status: 'ok', ...check() }`, or `503
-{ status: 'unhealthy' }` when `check` throws. Prefer the mountable endpoint
-`app.get('/healthz', health())` from `@tundralibs/rapid/endpoints`: it logs
-why a readiness check failed, reports the instance id, appears in OpenAPI and
-respects surfaces.
 
 ## pact (`@tundralibs/rapid/middlewares/pact`)
 

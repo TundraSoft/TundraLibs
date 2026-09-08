@@ -1186,10 +1186,6 @@ export const MIDDLEWARE_CATALOG: readonly (readonly [
     'Idempotency-Key replays (fingerprinted): 409 in flight, 422 mismatch; scope is REQUIRED',
   ],
   [
-    'healthCheck({ path, check })',
-    'pre-router liveness at /health (prefer the health() endpoint)',
-  ],
-  [
     'pactAuth(pact, options) → { authenticate, authorize }',
     'the @tundralibs/pact adapter (subpath ./middlewares/pact)',
   ],

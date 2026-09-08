@@ -80,8 +80,6 @@ export {
   guardHTTP,
   guardJOB,
   guardSOCKET,
-  healthCheck,
-  type HealthCheckOptions,
   idempotency,
   type IdempotencyHooks,
   type IdempotencyOptions,

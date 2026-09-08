@@ -223,8 +223,9 @@ warning.
 `authorize(check)` — the seam is `ctx.setAuth` itself, the helpers were ten
 lines and their names collided with the pact factory's), `requestId`,
 `responseTimer`, `requestLogger` (core config now), `serveStatic` (config),
-`store.ts` (hooks). `healthCheck()` remains only because the deletion is a
-pending call; `endpoints/health()` is the recommended shape.
+`store.ts` (hooks), `healthCheck()` (a path-intercepting middleware that
+bypassed the router, OpenAPI, surfaces and the 405 walk — `endpoints/health()`
+is an ordinary route and the one shape).
 
 ## 7. Context and response
 

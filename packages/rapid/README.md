@@ -179,7 +179,7 @@ fields).
 
 Shipped middleware factories (all exported from the root and from
 `@tundralibs/rapid/middlewares`): `cors`, `secureHeaders`, `compress`, `etag`,
-`csrf`, `session`, `rateLimit`, `idempotency`, `timeout`, and `healthCheck`;
+`csrf`, `session`, `rateLimit`, `idempotency`, and `timeout`;
 `pactAuth` lives on its own subpath, `@tundralibs/rapid/middlewares/pact`.
 Every option, default, unit and pitfall is in the
 [middleware catalog](./docs/Rapid-Middleware.md). Static file serving is CONFIG, not a

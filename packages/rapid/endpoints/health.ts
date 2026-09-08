@@ -1,9 +1,9 @@
 /**
  * @fileoverview `health()` — a mountable liveness/readiness endpoint:
  * `app.get('/healthz', health())`. Runs an optional readiness `check`
- * (503 if it throws), else 200. The `healthCheck` middleware
- * (`./middlewares`) is the path-intercepting flavour; this is the explicit
- * route.
+ * (503 if it throws), else 200. An ordinary route, so it appears in
+ * OpenAPI, respects surfaces and versioning, and takes route middleware
+ * like any other.
  *
  * @module
  */

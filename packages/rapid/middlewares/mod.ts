@@ -11,7 +11,6 @@ export { compress, type CompressOptions } from './compress.ts';
 export { cors, type CorsOptions } from './cors.ts';
 export { csrf, type CsrfOptions } from './csrf.ts';
 export { etag } from './etag.ts';
-export { healthCheck, type HealthCheckOptions } from './healthCheck.ts';
 export {
   idempotency,
   type IdempotencyHooks,
