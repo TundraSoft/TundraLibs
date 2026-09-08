@@ -66,6 +66,65 @@ app.get('/admin', admins, (ctx) => ({ content: { auth: ctx.auth } }));
 `setAuth` is write-once (a second call is `RAPID_CONFIG`), so two identity
 middlewares cannot silently overwrite each other.
 
+### Documenting your guard in OpenAPI — `markOpenApi`
+
+A guard can carry the security requirement it enforces and the schemes it
+accepts. `app.route()` reads that metadata off the route's middleware chain
+and fills the operation's `security` plus `components.securitySchemes`, so a
+guarded route documents itself without an `openapi.security` list on every
+registration. This is exactly what pact's `authorize()` does for its
+configured carriers; `markOpenApi` gives a hand-written guard the same
+ability:
+
+```ts
+import {
+  Application,
+  markOpenApi,
+  RapidError,
+  type RapidMiddleware,
+} from '@tundralibs/rapid';
+import { openapi } from '@tundralibs/rapid/endpoints';
+
+declare function lookupKey(key: string): Promise<{ id: string } | null>;
+
+// The guard verifies `x-api-key`; the metadata says so in OpenAPI terms.
+const apiKey: RapidMiddleware = markOpenApi(
+  async (ctx, next) => {
+    if (ctx.type !== 'HTTP') throw new RapidError('RAPID_ACCESS_DENIED');
+    const key = ctx.headers.get('x-api-key');
+    const owner = key ? await lookupKey(key) : null;
+    if (owner === null) throw new RapidError('RAPID_UNAUTHENTICATED');
+    ctx.setAuth(owner);
+    return next();
+  },
+  {
+    security: ['apiKeyAuth'],
+    securitySchemes: {
+      apiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+    },
+  },
+);
+
+const app = await Application.initialize({ name: 'keys' });
+app.get('/reports', apiKey, () => ({ content: { rows: [] } }));
+app.get('/status', () => ({ content: { ok: true } })); // no requirement
+app.get('/openapi.json', openapi({ expose: 'ALL' }));
+```
+
+The document then carries, for `GET /reports`:
+
+```json
+{ "security": [{ "apiKeyAuth": [] }] }
+```
+
+and under `components.securitySchemes` the `apiKeyAuth` entry exactly as
+declared (beside the `bearerAuth` rapid always declares). `/status` has no
+`security` key. Rules: an explicit `openapi.security` on the route wins over
+the guard's (so `{ openapi: { security: [] } }` still marks a guarded route
+public in the docs); several stamped guards on one route union their names;
+`middlewareOpenApi(mw)` reads the metadata back. Decorated routes cannot take
+route middleware yet, so they keep the `security` decorator option.
+
 ---
 
 ## Using the pact adapter
