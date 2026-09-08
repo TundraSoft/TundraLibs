@@ -527,7 +527,8 @@ ONCE (before start), mounts every decorated instance, and exposes
 ## Authentication
 
 \`import { pactAuth } from '@tundralibs/rapid/middlewares/pact'\`;
-\`const { authenticate, authorize } = pactAuth(pact, options)\`. \`authenticate\`
+\`const { authenticate, authorize, login, logout, refresh, me } = pactAuth(pact,
+options)\`. \`authenticate\`
 fills \`ctx.auth\` with a \`PactAuthContext\` (\`principal\`, \`via\`) from Bearer
 (header or \`bearer.cookie\`), Basic, ApiKey or HMAC carriers; absent →
 anonymous (\`optional: false\` → 401); present-but-invalid → 401, never
@@ -535,10 +536,18 @@ anonymous. \`authorize('Module', 'PERMISSION')\` is typed by the pact instance
 and checked against its catalog when called. Options are pact's own
 middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
 signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
-authenticate from the upgrade request's headers/cookies. A login route is
-app code over \`pact.login()\` (body shape, cookie and principal projection
-are yours; map every failure to ONE 401) — see Rapid-Auth.md. Bring-your-own
-auth: a middleware that verifies its credential and calls \`ctx.setAuth(...)\`.
+authenticate from the upgrade request's headers/cookies. A stale bearer
+COOKIE is cleared and treated as anonymous (a browser keeps sending it; a 401
+would lock the user out of /login). The session handlers wrap the instance:
+\`app.post('/login', login())\` → \`{ token, expiresAt, refreshToken?, principal }\`
+plus the \`bearer.cookie\`; \`logout()\` → 204 and the cookie cleared;
+\`refresh()\` rotates a JWT session (body \`refreshToken\` or
+\`session.refreshCookie\`); \`me()\` → \`{ principal, via }\` or 401. Options
+under \`session\`: \`fields\`, \`cookie\` attributes, \`refreshCookie\`,
+\`principal\` projection (default \`{ id }\`). Every failure is ONE 401.
+\`authorize()\` also documents itself in OpenAPI — the route gets the
+requirement and the configured schemes. Bring-your-own auth: a middleware
+that verifies its credential and calls \`ctx.setAuth(...)\`.
 
 ## Errors
 
@@ -589,8 +598,10 @@ cookie; \`/__rapid/live.js\` (channels over \`/ws\`) and \`/__rapid/history.js\`
 
 ## Endpoints (\`@tundralibs/rapid/endpoints\`)
 
-Mount where you like: \`app.get('/healthz', health({ check? }))\` (503 when
-\`check\` throws; the cause is logged, never sent), \`app.get('/metrics',
+Mount where you like: \`app.get('/healthz', health({ check? }))\` (liveness;
+503 when \`check\` throws; the cause is logged, never sent),
+\`app.get('/readyz', ready({ check? }))\` (readiness: 503 \`draining\` once
+\`stop()\` began, 503 on a failing check), \`app.get('/metrics',
 metrics({ format: 'prometheus' | 'json' }))\` (503 until \`server.metrics\`),
 \`app.get('/openapi.json', openapi({ info, servers, securitySchemes, expose }))\`
 (built from the routes + decorators; \`expose\` defaults to DEVELOPMENT only).
@@ -1190,16 +1201,16 @@ export const MIDDLEWARE_CATALOG: readonly (readonly [
     'Idempotency-Key replays (fingerprinted): 409 in flight, 422 mismatch; scope is REQUIRED',
   ],
   [
-    'pactAuth(pact, options) → { authenticate, authorize }',
-    'the @tundralibs/pact adapter (subpath ./middlewares/pact)',
+    'pactAuth(pact, options) → { authenticate, authorize, login, logout, refresh, me }',
+    'the @tundralibs/pact adapter (subpath ./middlewares/pact): guards plus the session handlers; authorize() documents itself in OpenAPI',
   ],
   [
     'onlyHTTP / onlySOCKET / onlyJOB · guardHTTP / guardSOCKET / guardJOB · onlyApi / onlyUi',
     'scope helpers: skip, fail-closed reject, or HTTP-surface gate',
   ],
   [
-    'markStateKeyUser(mw) · middlewareUsesStateKey · middlewareScope · getSession · memorySessionHooks / memoryRateLimitHooks / memoryIdempotencyHooks',
-    'the helpers around them',
+    'markStateKeyUser(mw) · middlewareUsesStateKey · middlewareScope · markOpenApi(mw, meta) · middlewareOpenApi · getSession · memorySessionHooks / memoryRateLimitHooks / memoryIdempotencyHooks',
+    'the helpers around them — markOpenApi lets your own guard document its security requirement',
   ],
 ];
 

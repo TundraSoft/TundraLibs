@@ -4,8 +4,9 @@
  * Basic, ApiKey header + two-header form), the optional-vs-required rule,
  * the "present but invalid is 401, never anonymous" rule, the typed guard
  * (401 with challenge / 403 / boot-time catalog check), the signed HMAC
- * exchange both ways, encrypted payloads both ways, transports, and an
- * app-written login route feeding the bearer-cookie carrier end to end.
+ * exchange both ways, encrypted payloads both ways, transports, the
+ * session handlers (`login` / `logout` / `refresh` / `me`) and the OpenAPI
+ * metadata `authorize()` carries.
  * @module
  */
 import { describe, it } from '@tundralibs/compat/test';
@@ -22,11 +23,18 @@ import { contentDigest } from '@tundralibs/pact/middleware';
 import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { pactAuth, type PactAuthOptions } from './pact.ts';
+import { buildOpenApi } from '../utils/mod.ts';
 
 const PASSWORD = 'correct horse battery staple';
 
 /** A real pact with in-memory persistence; one registered user. */
-async function makePact() {
+async function makePact(
+  session?: {
+    strategy: 'JWT';
+    secret: string;
+    refresh?: { ttl?: number; grace?: number };
+  },
+) {
   const users = new Map<string, PactStoredUser>();
   const byIdentifier = new Map<string, string>();
   const apiKeys = new Map<string, PactStoredApiKey>();
@@ -35,6 +43,7 @@ async function makePact() {
     name: 'rapid-adapter-test',
     bits: { READ: 1n, EDIT: 2n },
     modulePermissions: { Posts: ['READ', 'EDIT'], Admin: ['READ'] },
+    ...(session !== undefined ? { options: { session } } : {}),
     hooks: {
       getUser: (q) => {
         if (q.by === 'ID') return users.get(q.id) ?? null;
@@ -288,10 +297,14 @@ describe('rapid.middlewares.pactAuth()', () => {
       cookie: `sid=${session.token}`,
     });
     asserts.assertEquals((await cookie.json()).via, 'SESSION');
-    // A header beats the cookie; a bad cookie token is 401, never anonymous.
+    // A STALE cookie is the one credential treated as anonymous — and it is
+    // cleared, so a logged-out browser can reach /login again.
     const badCookie = await get(app, '/whoami', { cookie: 'sid=nope' });
-    asserts.assertEquals(badCookie.status, 401);
-    await badCookie.body?.cancel();
+    asserts.assertEquals(await badCookie.json(), { anonymous: true });
+    asserts.assertMatch(
+      badCookie.headers.get('set-cookie') ?? '',
+      /sid=;.*(Max-Age=0|Expires=)/,
+    );
     await app.stop();
   });
 
@@ -428,68 +441,231 @@ describe('rapid.middlewares.pactAuth()', () => {
     asserts.assertEquals(outcome.handlerRan, false);
   });
 
-  it('an app-written login route over pact.login(): 200 + token + HttpOnly cookie the bearer-cookie carrier then accepts; 401 on a wrong password; 400 on a malformed body', async () => {
+  it('login() / me() / logout(): one cookie name, one 401 for every failure, a minimal principal, idempotent logout', async () => {
     const pact = await makePact();
-    const { app } = await makeApp(pact, { bearer: { cookie: 'session' } });
-    // The documented pattern (Rapid-Auth.md) — rapid ships no login endpoint.
-    app.post('/login', async (ctx) => {
-      const body = (await ctx.payload) as Record<string, unknown> | null;
-      const identifier = body?.identifier;
-      const password = body?.password;
-      if (typeof identifier !== 'string' || typeof password !== 'string') {
-        throw new RapidError('RAPID_VALIDATION_FAILED');
-      }
-      let result: Awaited<ReturnType<typeof pact.login>>;
-      try {
-        result = await pact.login({ identifier, password });
-      } catch {
-        throw new RapidError('RAPID_UNAUTHENTICATED', {
-          message: 'invalid credentials',
-        });
-      }
-      return {
-        content: {
-          token: result.session.token,
-          expiresAt: result.session.expiresAt.toISOString(),
-          principal: { id: result.principal.id },
-        },
-        cookies: [{
-          name: 'session',
-          value: result.session.token,
-          options: { path: '/', httpOnly: true, secure: false },
-        }],
-      };
+    const { authenticate, login, logout, me } = pactAuth(pact, {
+      bearer: { cookie: 'session' },
+      session: { cookie: { secure: false } },
     });
-    const post = (body: unknown) =>
+    const app = await Application.initialize({
+      name: 'pact-session',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(authenticate);
+    app.post('/login', login());
+    app.post('/logout', logout());
+    app.get('/me', me());
+    app.get('/anon', (ctx) => ({
+      content: { anonymous: ctx.auth === undefined },
+    }));
+    const post = (path: string, body?: unknown, cookie?: string) =>
       app.fetch(
-        new Request('http://app/login', {
+        new Request(`http://app${path}`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
+          headers: {
+            'content-type': 'application/json',
+            ...(cookie !== undefined ? { cookie } : {}),
+          },
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         }),
       );
-    const ok = await post({ identifier: 'ada', password: PASSWORD });
+
+    const malformed = await post('/login', { user: 'ada' });
+    asserts.assertEquals(malformed.status, 400);
+    await malformed.body?.cancel();
+    for (
+      const creds of [{ identifier: 'ada', password: 'nope' }, {
+        identifier: 'nobody',
+        password: 'nope',
+      }]
+    ) {
+      const res = await post('/login', creds);
+      asserts.assertEquals(res.status, 401);
+      const body = await res.json();
+      asserts.assertEquals(body.code, 'RAPID_UNAUTHENTICATED');
+      asserts.assertEquals(body.message, 'invalid credentials'); // no account oracle
+    }
+    const ok = await post('/login', { identifier: 'ada', password: PASSWORD });
     asserts.assertEquals(ok.status, 200);
     const body = await ok.json();
     asserts.assertEquals(body.principal, { id: 'u-1' });
-    asserts.assert(
-      typeof body.token === 'string' && body.expiresAt.endsWith('Z'),
-    );
+    asserts.assertEquals(typeof body.token, 'string');
+    asserts.assert(body.expiresAt.endsWith('Z'));
+    asserts.assertEquals(body.refreshToken, undefined); // OPAQUE strategy
     const setCookie = ok.headers.get('set-cookie') ?? '';
     asserts.assertStringIncludes(setCookie, `session=${body.token}`);
     asserts.assertStringIncludes(setCookie, 'HttpOnly');
-    const me = await get(app, '/whoami', { cookie: `session=${body.token}` });
-    asserts.assertEquals((await me.json()).via, 'SESSION');
+    asserts.assertStringIncludes(setCookie, 'SameSite=Lax');
+    asserts.assertMatch(setCookie, /Max-Age=\d+/);
 
-    const wrong = await post({ identifier: 'ada', password: 'nope' });
-    asserts.assertEquals(wrong.status, 401);
-    asserts.assertEquals((await wrong.json()).code, 'RAPID_UNAUTHENTICATED');
-    const unknown = await post({ identifier: 'nobody', password: 'nope' });
-    asserts.assertEquals(unknown.status, 401); // same answer — no account oracle
-    await unknown.body?.cancel();
-    const malformed = await post({ user: 'ada' });
-    asserts.assertEquals(malformed.status, 400);
-    await malformed.body?.cancel();
+    const anon = await app.fetch(new Request('http://app/me'));
+    asserts.assertEquals(anon.status, 401);
+    await anon.body?.cancel();
+    const who = await get(app, '/me', { cookie: `session=${body.token}` });
+    asserts.assertEquals(await who.json(), {
+      principal: { id: 'u-1' },
+      via: 'SESSION',
+    });
+
+    const out = await post('/logout', undefined, `session=${body.token}`);
+    asserts.assertEquals(out.status, 204);
+    asserts.assertMatch(
+      out.headers.get('set-cookie') ?? '',
+      /session=;.*(Max-Age=0|Expires=)/,
+    );
+    const after = await get(app, '/me', { cookie: `session=${body.token}` });
+    asserts.assertEquals(after.status, 401); // the session is gone
+    await after.body?.cancel();
+    const again = await post('/logout', undefined, `session=${body.token}`);
+    asserts.assertEquals(again.status, 204); // idempotent
+    await again.body?.cancel();
+    // A STALE cookie is cleared and the request continues anonymous — the
+    // browser keeps sending it, and a 401 would lock the user out of /login.
+    const stale = await get(app, '/anon', { cookie: `session=${body.token}` });
+    asserts.assertEquals(await stale.json(), { anonymous: true });
+    asserts.assertMatch(
+      stale.headers.get('set-cookie') ?? '',
+      /session=;.*(Max-Age=0|Expires=)/,
+    );
+    const relogin = await post(
+      '/login',
+      { identifier: 'ada', password: PASSWORD },
+      `session=${body.token}`,
+    );
+    asserts.assertEquals(relogin.status, 200);
+    await relogin.body?.cancel();
+    await app.stop();
+  });
+
+  it('refresh(): rotates a JWT session from the body or the refresh cookie; a reused token is 401; OPAQUE is RAPID_CONFIG', async () => {
+    // grace: 0 — pact honours a reused refresh token inside the grace window
+    // by design; the test wants the reuse verdict immediately.
+    const jwt = await makePact({
+      strategy: 'JWT',
+      secret: 'a'.repeat(40),
+      refresh: { grace: 0 },
+    });
+    const { login, refresh } = pactAuth(jwt, {
+      bearer: { cookie: 'session' },
+      session: { cookie: { secure: false }, refreshCookie: 'refresh' },
+    });
+    const app = await Application.initialize({
+      name: 'pact-refresh',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.post('/login', login());
+    app.post('/refresh', refresh());
+    const post = (
+      path: string,
+      headers: Record<string, string> = {},
+      body?: unknown,
+    ) =>
+      app.fetch(
+        new Request(`http://app${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...headers },
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        }),
+      );
+    const ok = await post('/login', {}, {
+      identifier: 'ada',
+      password: PASSWORD,
+    });
+    const first = await ok.json();
+    asserts.assertEquals(first.refreshToken, undefined); // rides the cookie instead
+    const cookies = ok.headers.get('set-cookie') ?? '';
+    asserts.assertStringIncludes(cookies, 'refresh=');
+    const refreshToken = /refresh=([^;]+)/.exec(cookies)![1]!;
+
+    const rotated = await post('/refresh', {
+      cookie: `refresh=${refreshToken}`,
+    });
+    asserts.assertEquals(rotated.status, 200);
+    const second = await rotated.json();
+    // Rotation is proven by the OLD refresh token being refused below — two
+    // JWTs minted in the same second for the same session are byte-identical.
+    asserts.assertEquals(typeof second.token, 'string');
+    asserts.assertStringIncludes(
+      rotated.headers.get('set-cookie') ?? '',
+      'refresh=',
+    );
+    // Leave pact's concurrent-refresh window (`grace: 0` still spans the
+    // rotation's own millisecond) before presenting the old token again.
+    await new Promise((r) => setTimeout(r, 10));
+    const reused = await post('/refresh', {
+      cookie: `refresh=${refreshToken}`,
+    });
+    asserts.assertEquals(reused.status, 401);
+    await reused.body?.cancel();
+    const missing = await post('/refresh');
+    asserts.assertEquals(missing.status, 400);
+    await missing.body?.cancel();
+    await app.stop();
+
+    // Body form, and the OPAQUE strategy has no refresh at all.
+    const opaque = await makePact();
+    const bodyForm = pactAuth(opaque, {});
+    const app2 = await Application.initialize({
+      name: 'pact-refresh-opaque',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app2.post('/refresh', bodyForm.refresh());
+    const res = await app2.fetch(
+      new Request('http://app/refresh', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ refreshToken: 'x' }),
+      }),
+    );
+    asserts.assertEquals(res.status, 500);
+    asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
+    await app2.stop();
+  });
+
+  it('authorize() carries OpenAPI metadata: the route documents its requirement and the configured schemes are declared', async () => {
+    const pact = await makePact();
+    const { authorize } = pactAuth(pact, {
+      schemes: ['BEARER', 'APIKEY'],
+      bearer: { cookie: 'session' },
+      apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
+    });
+    const app = await Application.initialize({
+      name: 'pact-openapi',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.get('/read', authorize('Posts', 'READ'), () => ({ content: {} }));
+    app.get('/open', () => ({ content: {} }));
+    const doc = buildOpenApi(app.routes);
+    const paths = doc.paths as Record<
+      string,
+      Record<string, { security?: unknown }>
+    >;
+    asserts.assertEquals(paths['/read']!.get!.security, [
+      { bearerAuth: [] },
+      { cookieAuth: [] },
+      { apiKeyAuth: [] },
+    ]);
+    asserts.assertEquals(paths['/open']!.get!.security, undefined);
+    const schemes =
+      (doc.components as { securitySchemes: Record<string, unknown> })
+        .securitySchemes;
+    asserts.assertEquals(schemes.bearerAuth, {
+      type: 'http',
+      scheme: 'bearer',
+    });
+    asserts.assertEquals(schemes.cookieAuth, {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'session',
+    });
+    asserts.assertEquals(
+      (schemes.apiKeyAuth as { name: string }).name,
+      'x-api-key',
+    );
     await app.stop();
   });
 });

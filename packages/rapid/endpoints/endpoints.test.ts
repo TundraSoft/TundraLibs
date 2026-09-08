@@ -6,7 +6,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { health, metrics, openapi } from './mod.ts';
+import { health, metrics, openapi, ready } from './mod.ts';
 import { buildOpenApi } from '../utils/mod.ts';
 
 const make = (metricsOn = false) =>
@@ -53,6 +53,33 @@ describe('rapid.endpoints', () => {
       .json();
     asserts.assert(typeof body === 'object' && body !== null);
     await app.stop();
+  });
+
+  it('ready(): 200 ready; 503 unhealthy when the check throws; 503 draining once stop() began', async () => {
+    const app = await make();
+    app.get('/readyz', ready());
+    app.get(
+      '/readyz-db',
+      ready({
+        check: () => {
+          throw new Error('db down');
+        },
+      }),
+    );
+    const ok = await (await app.fetch(new Request('http://app/readyz')))
+      .json();
+    asserts.assertEquals(ok, { status: 'ready', instance: app.instanceId });
+    const bad = await app.fetch(new Request('http://app/readyz-db'));
+    asserts.assertEquals(bad.status, 503);
+    asserts.assertEquals(await bad.json(), { status: 'unhealthy' });
+    asserts.assertEquals(app.stopping, false);
+    const stopping = app.stop();
+    asserts.assertEquals(app.stopping, true);
+    const draining = await app.fetch(new Request('http://app/readyz'));
+    asserts.assertEquals(draining.status, 503);
+    asserts.assertEquals(await draining.json(), { status: 'draining' });
+    await stopping;
+    asserts.assertEquals(app.stopping, false);
   });
 
   it('health(): 200 ok with the instance id; 503 when the check throws', async () => {

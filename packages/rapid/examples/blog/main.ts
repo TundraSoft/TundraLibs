@@ -110,6 +110,9 @@ import {
   DEMO_ACCOUNTS,
   isAuthor,
   issueDemoApiKey,
+  login,
+  logout,
+  me,
   pact,
   usernameOf,
 } from './auth.ts';
@@ -216,62 +219,13 @@ app.get(
   }),
 );
 
-// Auth: POST /login runs pact's login and returns the session token, also
-// setting it as the HttpOnly `session` cookie authenticate reads. A login
-// route is app code — the body shape, the cookie and what the principal
-// exposes are yours. `secure: false` only because this demo is plain http.
-const AUTH_FAILURE = new Set([
-  'INVALID_CREDENTIALS',
-  'NOT_ACTIVE',
-  'SESSION_EXPIRED',
-  'REFRESH_REUSED',
-]);
-app.post('/login', async (ctx) => {
-  const body = (await ctx.payload) as Record<string, unknown> | null;
-  const username = body?.username;
-  const password = body?.password;
-  if (typeof username !== 'string' || typeof password !== 'string') {
-    throw new RapidError('RAPID_VALIDATION_FAILED', {
-      message: 'body must carry string username and password',
-      details: { fields: ['username', 'password'] },
-    });
-  }
-  let result: Awaited<ReturnType<typeof pact.login>>;
-  try {
-    result = await pact.login({ identifier: username, password });
-  } catch (error) {
-    const code = (error as { code?: unknown } | null)?.code;
-    if (typeof code === 'string' && AUTH_FAILURE.has(code)) {
-      // One 401 for every failure kind — never an account oracle.
-      throw new RapidError('RAPID_UNAUTHENTICATED', {
-        message: 'invalid credentials',
-      });
-    }
-    throw error;
-  }
-  const { token, expiresAt } = result.session;
-  return {
-    content: {
-      token,
-      expiresAt: expiresAt.toISOString(),
-      principal: { id: result.principal.id }, // a projection, never the whole principal
-    },
-    cookies: [{
-      name: 'session',
-      value: token,
-      options: {
-        path: '/',
-        httpOnly: true,
-        secure: false,
-        sameSite: 'Lax',
-        maxAge: Math.max(
-          0,
-          Math.floor((expiresAt.getTime() - Date.now()) / 1000),
-        ),
-      },
-    }],
-  };
-});
+// Auth: the pact adapter's session handlers — POST /login returns the
+// session token and sets the HttpOnly `session` cookie authenticate reads
+// (one cookie name, declared once in auth.ts); /me echoes the projected
+// principal; POST /logout ends the session and clears the cookie.
+app.post('/login', login());
+app.post('/logout', logout());
+app.get('/me', me());
 
 // DEMO-ONLY browser sign-in: log the demo account in with its known
 // password and set the same cookie /login would, so the permission-based
@@ -294,10 +248,10 @@ app.get('/login/as/:username:', async (ctx) => {
     redirect: '/posts/ui',
   };
 });
+// The nav's sign-out LINK (a GET, so it can be an <a>): run the same
+// handler as POST /logout, then back to the page.
 app.get('/logout', async (ctx) => {
-  const token = ctx.cookies['session'];
-  if (token !== undefined) await pact.logout(token).catch(() => {});
-  ctx.deleteCookie('session', { path: '/' });
+  await logout()(ctx);
   return { content: '', redirect: '/posts/ui' };
 });
 

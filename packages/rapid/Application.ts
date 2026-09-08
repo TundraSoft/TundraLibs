@@ -32,6 +32,7 @@ import {
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
+import { middlewareOpenApi } from './middlewares/openapiMeta.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
 import {
   type ApiSurface,
@@ -978,13 +979,36 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { method, path },
       });
     }
+    const middlewares = chain.slice(0, -1) as RapidHTTPMiddleware[];
+    // A guard that carries OpenAPI metadata (pactAuth's authorize) documents
+    // the requirement it enforces; an explicit `security` on the route wins.
+    let openapi = opts.openapi;
+    for (const mw of middlewares) {
+      const meta = middlewareOpenApi(mw);
+      if (meta === undefined) continue;
+      const security = opts.openapi?.security !== undefined
+        ? opts.openapi.security
+        : [...new Set([...(openapi?.security ?? []), ...meta.security])];
+      openapi = {
+        ...openapi,
+        security,
+        ...(meta.securitySchemes !== undefined
+          ? {
+            securitySchemes: {
+              ...openapi?.securitySchemes,
+              ...meta.securitySchemes,
+            },
+          }
+          : {}),
+      };
+    }
     this.__routes.push({
       method,
       path,
-      middlewares: chain.slice(0, -1) as RapidHTTPMiddleware[],
+      middlewares,
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
       ...(version !== undefined ? { version } : {}),
-      ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
+      ...(openapi !== undefined ? { openapi } : {}),
       ...(template !== undefined ? { template } : {}),
     });
     return this;
@@ -1201,6 +1225,11 @@ export class Application<S extends RapidContextState = RapidContextState>
   /** `true` between a successful start() and stop(). */
   public get running(): boolean {
     return this.__started;
+  }
+
+  /** `true` while {@link stop} is draining — what the `ready()` endpoint reports as 503. */
+  public get stopping(): boolean {
+    return this.__stopping !== undefined;
   }
 
   /** HTTP listener address; `null` when not listening. */

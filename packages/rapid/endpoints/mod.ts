@@ -8,6 +8,7 @@
 export { health, type HealthOptions } from './health.ts';
 export { metrics, type MetricsOptions } from './metrics.ts';
 export { openapi, type OpenApiOptions } from './openapi.ts';
+export { ready, type ReadyOptions } from './ready.ts';
 export type {
   OpenApiInfo,
   OpenApiSecuritySchemes,

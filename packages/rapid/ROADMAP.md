@@ -267,8 +267,9 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `openapi({ securitySchemes })`); `[]` = public. `operationId` defaults to
   `<Module>_<method>` (the SDK generator's key). Version is no longer emitted
   as a tag — it is `x-version` per operation and `x-versions` at the root.
-  Deferred (pact in flux): deriving `security` from the `authorize()`
-  middleware itself.
+  Deriving `security` from the `authorize()` middleware itself SHIPPED
+  2026-09-08: a guard carries OpenAPI metadata (`markOpenApi`), `app.route()`
+  fills the route's requirement and declares the schemes from it.
 - **Config in context + `config()` binder; complete `Application.yaml`
   (2026-08-23)** — `ctx.config` (= `app.config`, every set beside
   `Application`) on every context, and a `config(path, validate?)` binder on
@@ -470,6 +471,27 @@ from the transport's `started` — unify on the latter.
 
 - **CLI `build`** — a scaffolded deno task wrapping `deno compile` / the
   fetch-adapter bundle, rather than a heavy CLI command.
+- **Dashboard (`@tundralibs/rapid/dashboard`) — agreed 2026-09-08, build
+  next.** A server-status page built on rapid's OWN UI layer (templates,
+  `data-load` panels, the live bridge) — the showcase of the UI layer as
+  well as of the server; no bundler, no CDN, runs wherever routes run.
+  Mounted in one call (`dashboard(app, { path, expose, guards })`) through
+  plain `app.get()` registrations so every route takes the guards; `uiOnly`;
+  gated like `openapi()` (`expose` DEVELOPMENT by default). Panels, all from
+  existing seams: overview (name, mode, instance, runtime, uptime, address,
+  surfaces, static mounts, metrics/tracing on/off); traffic (in-flight, req/s
+  and status classes from the server counters, the latency histogram and
+  error codes from the meter when `server.metrics` is on); inventory
+  (routes with version and surface, socket commands, channels, jobs with
+  schedule / last run / running-now and a guarded "run now" →
+  `triggerJob`); a live feed of the last N invocations (the one new
+  primitive: a bounded ring buffer fed from the access-log path, on only
+  while mounted) streamed over a `__rapid.dashboard` channel; recent errors
+  by code with request ids. Access under the cluster model: entering the
+  cluster or node secret unlocks it; the master's dashboard shows the fleet.
+  Sequencing agreed the same day: `ready()` (readiness that 503s during the
+  drain) and the pact session handlers on `pactAuth` (`login`, `logout`,
+  `refresh`, `me`) first, then the dashboard.
 - **Dev console (TUI). 🎨 design frozen 2026-08-22; build pending.** A
   full-screen alternate-buffer terminal console that replaces plain log spew on
   a TTY. Regions each back onto an existing getter (banner + bind line;
@@ -530,6 +552,14 @@ One item left from the HMAC-auth discussion (its two rapid-only siblings —
     traffic) and N **WORKERS** (the full app). Workers dial the master over an
     authed WS (shared secret on upgrade), register, and send pings + stat
     summaries + a sampled log tail.
+  - **Refined 2026-09-08 (user):** ONE master container, no master replica
+    for now. The master's job is to track the workers, designate the job
+    node, and MAYBE push config updates dynamically. Joining and viewing go
+    through endpoints authenticated by a **cluster secret** (per cluster) or
+    a **node secret** (per worker). The dashboard below rides the same
+    secrets: it is not visible until the cluster or node secret is entered;
+    on the master it shows the fleet (`ClusterSnapshot`), on a worker it
+    shows that node. Not fully designed yet — the idea, not the contract.
   - **Exactly-once cron** by a master-designated leader (lowest instance-ULID;
     sticky through a master outage), enforced by an `onlyIfCronLeader()` job
     middleware reusing the skipped-by-middleware outcome — every worker

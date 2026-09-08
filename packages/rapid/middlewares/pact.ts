@@ -17,7 +17,14 @@
  * @module
  */
 
-import type { Pact, PactAuthContext, PermissionBits } from '@tundralibs/pact';
+import {
+  type Pact,
+  PACT_AUTH_FAILURE_CODES,
+  type PactAuthContext,
+  type PactLoginResult,
+  type PactPrincipal,
+  type PermissionBits,
+} from '@tundralibs/pact';
 import {
   createPactMiddleware,
   type PactMiddlewareDenial,
@@ -30,10 +37,13 @@ import type { HTTPContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
   RapidContext,
+  RapidContextResponse,
   RapidContextState,
+  RapidHTTPHandler,
   RapidMiddleware,
 } from '../types/mod.ts';
 import { parseCookies } from '../utils/cookies.ts';
+import { markOpenApi } from './openapiMeta.ts';
 import { isStreamBody } from '../utils/streams.ts';
 
 /** The shape `ctx.auth` holds after `authenticate` — re-exported for handlers. */
@@ -63,6 +73,44 @@ export type PactAuthOptions = Omit<PactMiddlewareOptions, 'bearer'> & {
      */
     cookie?: string;
   };
+  /**
+   * The session handlers (`login` / `logout` / `refresh` / `me`). The
+   * cookie they set and clear is `bearer.cookie` — declared once, so the
+   * cookie `login` sets is exactly the one `authenticate` reads. Without
+   * `bearer.cookie` the token travels in the body only.
+   */
+  session?: {
+    /**
+     * Body field names `login` reads.
+     * @default { identifier: 'identifier', password: 'password' }
+     */
+    fields?: { identifier?: string; password?: string };
+    /**
+     * Attributes of the session cookie (always `HttpOnly`; `Max-Age` is the
+     * session's remaining life, capped at 400 days).
+     * @default { secure: true, sameSite: 'Lax', path: '/' }
+     */
+    cookie?: {
+      secure?: boolean;
+      sameSite?: 'Strict' | 'Lax' | 'None';
+      path?: string;
+    };
+    /**
+     * A cookie carrying the REFRESH token for browser flows (JWT strategy):
+     * `login` sets it, `refresh` reads it and rotates it, `logout` clears
+     * it. Without it the refresh token is returned in the body and
+     * `refresh` reads `refreshToken` from the body.
+     * @default none — body only
+     */
+    refreshCookie?: string;
+    /**
+     * What of the principal `login`, `refresh` and `me` return. The
+     * default is deliberately minimal — grants, status and metadata are
+     * yours to expose field by field.
+     * @default (p) => ({ id: p.id })
+     */
+    principal?: (principal: PactPrincipal<string>) => unknown;
+  };
 };
 
 /** What {@link pactAuth} returns. */
@@ -89,6 +137,34 @@ export type PactAuthMiddlewares<B extends PermissionBits, M extends string> = {
    * RAPID_CONFIG at the call site.
    */
   authorize: (module: M, permission: keyof B & string) => RapidMiddleware;
+  /**
+   * `POST` handler: `pact.login({ identifier, password })` from the body
+   * (`session.fields` names) → `200 { token, expiresAt, refreshToken?,
+   * principal }` and the session cookie when `bearer.cookie` is set. A
+   * malformed body is 400; every pact authentication failure is ONE 401
+   * (`invalid credentials`) — never an account oracle; anything else is a
+   * real 500.
+   */
+  login: () => RapidHTTPHandler;
+  /**
+   * `POST` handler: ends the presented session (`pact.logout`, from the
+   * bearer header or the cookie; idempotent — an unknown token still
+   * clears the cookie) → 204.
+   */
+  logout: () => RapidHTTPHandler;
+  /**
+   * `POST` handler (JWT strategy): `pact.refresh(refreshToken)` from the
+   * refresh cookie or the body → the same reply shape as `login` with the
+   * rotated tokens. 401 on an expired or reused token; `RAPID_CONFIG` when
+   * the instance is not on the JWT strategy.
+   */
+  refresh: () => RapidHTTPHandler;
+  /**
+   * `GET` handler: `{ principal, via }` for the current credential, through
+   * the same `session.principal` projection `login` uses; 401 when
+   * anonymous. Mount it after `authenticate`.
+   */
+  me: () => RapidHTTPHandler;
 };
 
 const JOSE = 'application/jose';
@@ -309,7 +385,30 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       return await next();
     }
     const verdict = await core.authenticate(viewOf(ctx));
-    if (!verdict.ok) throw denied(ctx, verdict.denial);
+    if (!verdict.ok) {
+      // A STALE BEARER COOKIE is the one credential a browser keeps
+      // presenting after the session ended (logout elsewhere, expiry): a
+      // 401 here would lock the user out of /login itself. It is cleared
+      // and the request continues anonymous — a header credential that
+      // fails stays a 401, never anonymous.
+      if (
+        cookie !== undefined && verdict.denial.status === 401 &&
+        ctx.headers.get(config.bearer.header) === null &&
+        ctx.cookies[cookie] !== undefined
+      ) {
+        ctx.app.log.info('stale session cookie cleared', {
+          requestId: ctx.requestId,
+        });
+        ctx.deleteCookie(cookie, {
+          path: options.session?.cookie?.path ?? '/',
+        });
+        if (optional === false) {
+          throw unauthenticated(ctx, 'NO_CREDENTIALS', undefined);
+        }
+        return await next();
+      }
+      throw denied(ctx, verdict.denial);
+    }
     if (verdict.auth !== undefined) {
       // Stored by reference: the bound principal's assert/hasPermission
       // live in a WeakMap keyed by this object; a copy would lose them.
@@ -348,14 +447,229 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       });
     }
     const guard = core.authorize(module, permission);
-    return async (ctx, next) => {
+    return markOpenApi(async (ctx, next) => {
       const denial = await guard(ctx.auth as PactAuthContext<M, B> | undefined);
       if (denial !== undefined) {
         throw denied(ctx, denial, { module, permission });
       }
       return await next();
+    }, openapiMeta);
+  };
+
+  // ---- OpenAPI: what the guard requires, and the schemes it accepts, so a
+  // route guarded by authorize() documents itself.
+  const securitySchemes: Record<string, Record<string, unknown>> = {};
+  for (const scheme of config.schemes) {
+    if (scheme === 'BEARER') {
+      securitySchemes.bearerAuth = config.bearer.header === 'authorization' &&
+          config.bearer.prefix.toLowerCase() === 'bearer'
+        ? { type: 'http', scheme: 'bearer' }
+        : {
+          type: 'apiKey',
+          in: 'header',
+          name: config.bearer.header,
+          description: `\`${config.bearer.prefix} <token>\``.trim(),
+        };
+      if (cookie !== undefined) {
+        securitySchemes.cookieAuth = {
+          type: 'apiKey',
+          in: 'cookie',
+          name: cookie,
+        };
+      }
+    } else if (scheme === 'BASIC') {
+      securitySchemes.basicAuth = config.basic.header === 'authorization'
+        ? { type: 'http', scheme: 'basic' }
+        : { type: 'apiKey', in: 'header', name: config.basic.header };
+    } else if (scheme === 'APIKEY') {
+      securitySchemes.apiKeyAuth = 'header' in config.apiKey
+        ? {
+          type: 'apiKey',
+          in: 'header',
+          name: config.apiKey.header,
+          description: `\`${config.apiKey.prefix} <key>:<secret>\``.trim(),
+        }
+        : {
+          type: 'apiKey',
+          in: 'header',
+          name: config.apiKey.keyHeader,
+          description: `with the secret in \`${config.apiKey.secretHeader}\``,
+        };
+    } else if (scheme === 'HMAC') {
+      securitySchemes.hmacAuth = {
+        type: 'apiKey',
+        in: 'header',
+        name: config.hmac.signatureHeader,
+        description:
+          `RFC 9421 HTTP message signature — key in \`${config.hmac.keyHeader}\`, timestamp in \`${config.hmac.timestampHeader}\``,
+      };
+    }
+  }
+  const openapiMeta = {
+    security: Object.keys(securitySchemes),
+    securitySchemes,
+  };
+
+  // ---- Session handlers over the instance's login/logout/refresh.
+  const session = options.session ?? {};
+  const fields = {
+    identifier: session.fields?.identifier ?? 'identifier',
+    password: session.fields?.password ?? 'password',
+  };
+  const project = session.principal ??
+    ((p: PactPrincipal<string>) => ({ id: p.id }));
+  const cookieAttrs = {
+    httpOnly: true,
+    secure: session.cookie?.secure ?? true,
+    sameSite: session.cookie?.sameSite ?? 'Lax',
+    path: session.cookie?.path ?? '/',
+  } as const;
+  /** Chrome / RFC 6265bis cap a cookie's lifetime at 400 days. */
+  const MAX_COOKIE_AGE = 400 * 24 * 60 * 60;
+  const remaining = (expiresAt: Date): number =>
+    Math.min(
+      MAX_COOKIE_AGE,
+      Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)),
+    );
+  const sessionReply = (
+    result: PactLoginResult<M>,
+  ): RapidContextResponse => {
+    const { token, expiresAt, refreshToken } = result.session;
+    const cookies: NonNullable<RapidContextResponse['cookies']>[number][] = [];
+    if (cookie !== undefined) {
+      cookies.push({
+        name: cookie,
+        value: token,
+        options: { ...cookieAttrs, maxAge: remaining(expiresAt) },
+      });
+    }
+    if (session.refreshCookie !== undefined && refreshToken !== undefined) {
+      cookies.push({
+        name: session.refreshCookie,
+        value: refreshToken,
+        options: { ...cookieAttrs, maxAge: MAX_COOKIE_AGE },
+      });
+    }
+    return {
+      content: {
+        token,
+        expiresAt: expiresAt.toISOString(),
+        ...(refreshToken !== undefined && session.refreshCookie === undefined
+          ? { refreshToken }
+          : {}),
+        principal: project(result.principal as PactPrincipal<string>),
+      },
+      ...(cookies.length > 0 ? { cookies } : {}),
+    };
+  };
+  /** pact's authentication failures → ONE 401; anything else is the caller's 500. */
+  const authFailure = (ctx: RapidContext, error: unknown): unknown => {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (
+      typeof code === 'string' &&
+      (PACT_AUTH_FAILURE_CODES as ReadonlySet<string>).has(code)
+    ) {
+      ctx.app.log.info('pact session operation refused', {
+        requestId: ctx.requestId,
+        code,
+      });
+      return new RapidError('RAPID_UNAUTHENTICATED', {
+        message: 'invalid credentials',
+      });
+    }
+    return error;
+  };
+  const bodyOf = async (
+    ctx: HTTPContext,
+  ): Promise<Record<string, unknown> | null> => {
+    const body = await ctx.payload;
+    return body !== null && typeof body === 'object' && !Array.isArray(body)
+      ? body as Record<string, unknown>
+      : null;
+  };
+  /** The presented bearer token — header (prefix stripped) or the cookie. */
+  const presentedToken = (ctx: HTTPContext): string | undefined => {
+    const raw = headerOf(ctx.headers)(config.bearer.header);
+    if (raw === null) return undefined;
+    if (bearerPrefix === '') return raw;
+    return raw.toLowerCase().startsWith(`${bearerPrefix.toLowerCase()} `)
+      ? raw.slice(bearerPrefix.length + 1).trim()
+      : raw;
+  };
+
+  const login = (): RapidHTTPHandler => async (ctx) => {
+    const body = await bodyOf(ctx);
+    const identifier = body?.[fields.identifier];
+    const password = body?.[fields.password];
+    if (typeof identifier !== 'string' || typeof password !== 'string') {
+      throw new RapidError('RAPID_VALIDATION_FAILED', {
+        message:
+          `body must carry string '${fields.identifier}' and '${fields.password}'`,
+        details: { fields: [fields.identifier, fields.password] },
+      });
+    }
+    let result: PactLoginResult<M>;
+    try {
+      result = await pact.login({ identifier, password });
+    } catch (error) {
+      throw authFailure(ctx, error);
+    }
+    return sessionReply(result);
+  };
+
+  const logout = (): RapidHTTPHandler => async (ctx) => {
+    const token = presentedToken(ctx);
+    // Idempotent: an unknown or already-ended token still clears the cookie.
+    if (token !== undefined) await pact.logout(token).catch(() => {});
+    if (cookie !== undefined) {
+      ctx.deleteCookie(cookie, { path: cookieAttrs.path });
+    }
+    if (session.refreshCookie !== undefined) {
+      ctx.deleteCookie(session.refreshCookie, { path: cookieAttrs.path });
+    }
+    return { status: 204, content: '' };
+  };
+
+  const refresh = (): RapidHTTPHandler => async (ctx) => {
+    const fromCookie = session.refreshCookie !== undefined
+      ? ctx.cookies[session.refreshCookie]
+      : undefined;
+    const token = fromCookie ?? (await bodyOf(ctx))?.refreshToken;
+    if (typeof token !== 'string' || token === '') {
+      throw new RapidError('RAPID_VALIDATION_FAILED', {
+        message: session.refreshCookie !== undefined
+          ? `refresh token cookie '${session.refreshCookie}' missing`
+          : "body must carry a string 'refreshToken'",
+      });
+    }
+    let result: PactLoginResult<M>;
+    try {
+      result = await pact.refresh(token);
+    } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === 'INVALID_OPTION') {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            "refresh() needs the pact instance on session.strategy 'JWT'",
+          cause: error instanceof Error ? error : undefined,
+        });
+      }
+      throw authFailure(ctx, error);
+    }
+    return sessionReply(result);
+  };
+
+  const me = (): RapidHTTPHandler => (ctx) => {
+    const auth = ctx.auth as PactAuthContext<M, B> | undefined;
+    if (auth === undefined) {
+      throw unauthenticated(ctx, 'NO_CREDENTIALS', undefined);
+    }
+    return {
+      content: {
+        principal: project(auth.principal as unknown as PactPrincipal<string>),
+        via: auth.via,
+      },
     };
   };
 
-  return { authenticate, authorize };
+  return { authenticate, authorize, login, logout, refresh, me };
 }

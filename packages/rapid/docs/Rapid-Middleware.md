@@ -502,10 +502,15 @@ a fence.
 
 ## pact (`@tundralibs/rapid/middlewares/pact`)
 
-`pactAuth(pact, options) → { authenticate, authorize }` — rapid's adapter over
-pact's neutral middleware core. Options are pact's `PactMiddlewareOptions`
+`pactAuth(pact, options) → { authenticate, authorize, login, logout, refresh,
+me }` — rapid's adapter over pact's neutral middleware core plus the session
+handlers over the instance. Options are pact's `PactMiddlewareOptions`
 (carriers per scheme, `hmac`, `encryption`, `challenge`, `realm`) plus
-`bearer.cookie` and `optional` defaulting to `true`. Fully described in
+`bearer.cookie`, `optional` defaulting to `true`, and `session` (`fields`,
+`cookie` attributes, `refreshCookie`, `principal` projection). `authorize()`
+carries OpenAPI metadata, so a guarded route documents its requirement and
+the configured schemes; `markOpenApi()` gives your own guard the same
+ability. Fully described in
 [Authentication & authorization](./Rapid-Auth.md).
 
 ## Writing your own

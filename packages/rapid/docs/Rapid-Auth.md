@@ -131,6 +131,11 @@ the BOUND principal (`id`, `kind: 'USER' | 'APIKEY'`, `grants`,
   distinction is in the server log): `RAPID_UNAUTHENTICATED`, "invalid
   credential". A stale HMAC timestamp says so (`details.reason:
   'STALE_TIMESTAMP'`) — the caller's own clock is not a secret.
+  The one exception is a **stale bearer cookie**: a browser keeps sending it
+  after the session ended, and a 401 would lock the user out of `/login`
+  itself — so it is cleared (`Set-Cookie` with `Max-Age=0`) and the request
+  continues anonymous (or is a `NO_CREDENTIALS` 401 under `optional: false`).
+  A header credential never gets that treatment.
 - Every 401 the adapter raises includes a `WWW-Authenticate` challenge listing
   the accepted schemes (`challenge: false` to suppress, `realm` to name one).
 - Socket frames authenticate from the UPGRADE request's headers/cookies with
@@ -150,57 +155,52 @@ the BOUND principal (`id`, `kind: 'USER' | 'APIKEY'`, `grants`,
 (`'Posts'`, `'READ'`), and a JS caller's typo is a `RAPID_CONFIG` at the
 call site, not on the first request.
 
-### Sessions for a browser UI
+### Sessions — `login`, `logout`, `refresh`, `me`
 
-A login route is app code over `pact.login()` — the body shape, the cookie
-and what the principal exposes are yours. The shape that keeps the browser
-and API clients on one token:
+The factory also returns the four session handlers, thin HTTP wrappers over
+`pact.login()`, `pact.logout()` and `pact.refresh()`. Hanging them off
+`pactAuth` is what keeps the cookie `login` sets and the cookie
+`authenticate` reads one declaration: `bearer.cookie`.
 
 ```ts
-import { Application, RapidError } from '@tundralibs/rapid';
+import { Application } from '@tundralibs/rapid';
+import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
 import type { Pact } from '@tundralibs/pact';
 
 declare const pact: Pact<{ READ: 1n }, 'Admin'>;
-const app = await Application.initialize({ name: 'login' });
+const app = await Application.initialize({ name: 'sessions' });
 
-app.post('/login', async (ctx) => {
-  const body = (await ctx.payload) as Record<string, unknown> | null;
-  const identifier = body?.identifier;
-  const password = body?.password;
-  if (typeof identifier !== 'string' || typeof password !== 'string') {
-    throw new RapidError('RAPID_VALIDATION_FAILED', {
-      message: 'identifier and password are required',
-    });
-  }
-  let result: Awaited<ReturnType<typeof pact.login>>;
-  try {
-    result = await pact.login({ identifier, password });
-  } catch {
-    // One answer for every failure kind — never an account oracle.
-    throw new RapidError('RAPID_UNAUTHENTICATED', {
-      message: 'invalid credentials',
-    });
-  }
-  return {
-    content: {
-      token: result.session.token,
-      principal: { id: result.principal.id }, // project — never the whole principal
-    },
-    cookies: [{
-      name: 'session',
-      value: result.session.token,
-      options: { path: '/', httpOnly: true, secure: true, sameSite: 'Lax' },
-    }],
-  };
+const { authenticate, login, logout, refresh, me } = pactAuth(pact, {
+  bearer: { cookie: 'session' },
+  session: {
+    fields: { identifier: 'email' }, // body field names (default identifier/password)
+    cookie: { sameSite: 'Lax' }, // + secure: true, path: '/' — always HttpOnly
+    refreshCookie: 'refresh', // JWT strategy: refresh token as an HttpOnly cookie
+    principal: (p) => ({ id: p.id, kind: p.kind }), // default: { id }
+  },
 });
+
+app.use(authenticate);
+app.post('/login', login());
+app.post('/logout', logout());
+app.post('/refresh', refresh());
+app.get('/me', me());
 ```
 
-`pactAuth(pact, { bearer: { cookie: 'session' } })` then reads the cookie
-back on page requests, while API clients send the same token as
-`Authorization: Bearer`. Rules worth keeping: validate the body yourself, map
-every pact failure to one 401 (a distinct message per reason is an account
-oracle), never put `set-cookie` behind `idempotency()`, and rotate any
-`session()` state with `regenerate()` on login.
+| Handler     | Does                                                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `login()`   | Reads the two body fields → `pact.login()` → `200 { token, expiresAt, refreshToken?, principal }` and sets the session cookie (`Max-Age` = remaining session life, capped at 400 days). Malformed body → 400. Every pact authentication failure → one 401 `invalid credentials`; anything else is a real 500. |
+| `logout()`  | Ends the presented session (header or cookie) via `pact.logout()`, clears the session and refresh cookies, answers 204. Idempotent — an unknown or already-ended token still clears the cookie.                                                                                                               |
+| `refresh()` | JWT strategy only: `pact.refresh()` with the token from `refreshCookie` (or `refreshToken` in the body) → the same reply as `login` with rotated tokens. A reused or expired token is 401; an OPAQUE instance is a `RAPID_CONFIG` 500.                                                                        |
+| `me()`      | `{ principal, via }` for the current credential through the same projection; 401 when anonymous. Mount it after `authenticate`.                                                                                                                                                                               |
+
+Rules worth knowing: the principal projection defaults to `{ id }` on purpose
+(grants, status and metadata are yours to expose field by field, and grants
+are BigInts); `sameSite: 'None'` needs `secure: true`; the handlers are
+ordinary routes, so `csrf()` applies to the POSTs if installed and
+`idempotency()` should not sit in front of `login` (`set-cookie` is never
+replayed). API clients ignore the cookie and send the same token as
+`Authorization: Bearer`.
 
 ### HMAC — signed both ways
 

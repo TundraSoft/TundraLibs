@@ -349,10 +349,12 @@ request-scoped providers.
 
 1. **The generic seam, in core and auth-agnostic**: `ctx.auth` /
    `ctx.setAuth(identity)`, a write-once bag. Any identity system is a
-   middleware that verifies its credential and sets the bag. A login route
-   is app code (the body shape, the cookie and the principal projection are
-   app decisions — a shipped `login()` endpoint was removed for that
-   reason); the pact adapter fills the same bag, so an app can mix systems.
+   middleware that verifies its credential and sets the bag. The pact adapter fills the same bag, so an app can mix systems. Session
+   endpoints are the adapter's, not `endpoints/`: pact already owns `login` /
+   `logout` / `refresh`, and hanging the HTTP wrapping off `pactAuth` means
+   the cookie `login` sets is the one `authenticate` reads, declared once (a
+   pact-free `endpoints/login.ts` was tried and removed for repeating the
+   name in two places).
 2. **The pact adapter** (`middlewares/pact.ts`, its own subpath so the
    middleware barrel stays pact-free): `pactAuth(pact, options) →
    { authenticate, authorize }`, glue over pact 0.8's neutral
@@ -371,7 +373,11 @@ listing what `authenticate` accepts; no pact reason code on the wire (an
 account oracle) — the reason is logged; `authorize(module, permission)` is
 typed by the instance's catalog and checked when called, so a typo fails at
 import, not on the first request; `authorize` fails closed on jobs (no
-identity there). Storage is pact's hooks over the app's data layer (norm);
+identity there); a stale bearer COOKIE is cleared and treated as anonymous
+(a browser keeps sending it, and a 401 would lock the user out of `/login`),
+while a failing header credential stays a 401. `authorize()` carries OpenAPI
+metadata (`markOpenApi`) so `app.route()` documents the requirement and
+declares the schemes without the author repeating them. Storage is pact's hooks over the app's data layer (norm);
 caching the principal belongs in the app's `getUser` hook, never in the
 middleware, because that would bypass pact's revocation checks.
 

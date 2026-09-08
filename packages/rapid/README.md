@@ -477,8 +477,12 @@ app.get('/metrics', metrics()); // 503 unless server.metrics is on
 app.get('/openapi.json', openapi());
 ```
 
-- `health({ check })` — liveness/readiness; the `check` throws/rejects to report
-  503, else 200.
+- `health({ check })` — liveness; the `check` throws/rejects to report 503,
+  else 200.
+- `ready({ check })` — readiness: 503 `draining` the moment `stop()` begins
+  (so the load balancer stops sending traffic during the drain window), 503
+  when the `check` throws, else 200. Point the platform's readiness probe
+  here and its liveness probe at `health()`.
 - `metrics({ format })` — serves `app.meter` as Prometheus text (default) or
   JSON; returns 503 when `server.metrics` is off.
 - `openapi({ info, servers, expose, securitySchemes })` — the assembled OpenAPI
@@ -486,21 +490,25 @@ app.get('/openapi.json', openapi());
   declared version is listed as `x-versions`). `bearerAuth` is declared
   automatically; declare any other scheme routes name in `security` here.
 
-A login route is deliberately not an endpoint: its body shape, cookie and
-what the principal exposes are app decisions — see the pattern in
-[Authentication & authorization](docs/Rapid-Auth.md).
+Session endpoints (`login`, `logout`, `refresh`, `me`) come from the pact
+adapter's factory, not from here, so they share one cookie name with
+`authenticate` — see [Authentication & authorization](docs/Rapid-Auth.md).
 
 ## Auth
 
 rAPId owns only the auth bag: `ctx.auth`, written once by `ctx.setAuth()`,
 `undefined` when anonymous. The `@tundralibs/pact` adapter at
 `@tundralibs/rapid/middlewares/pact` fills it — one factory over your
-instance, `const { authenticate, authorize } = pactAuth(pact, options)`;
-`authenticate` sets `ctx.auth` to pact's auth context (Bearer / Basic / ApiKey
-/ HMAC, a bearer cookie for UIs; signed responses and JWE payloads when
-configured), `authorize('Module', 'PERMISSION')` is typed by the instance's
-catalog. The options are pact's own middleware options — the same wire
-contract as its express/fastify/oak/hono adapters:
+instance: `const { authenticate, authorize, login, logout, refresh, me } =
+pactAuth(pact, options)`. `authenticate` sets `ctx.auth` to pact's auth
+context (Bearer / Basic / ApiKey / HMAC, a bearer cookie for UIs; signed
+responses and JWE payloads when configured); `authorize('Module',
+'PERMISSION')` is typed by the instance's catalog and documents itself in
+OpenAPI (the requirement and the configured schemes); the four session
+handlers wrap `pact.login` / `logout` / `refresh` with one cookie name
+declared once (`bearer.cookie`), one 401 for every failure and a minimal
+principal projection. The options are pact's own middleware options — the
+same wire contract as its express/fastify/oak/hono adapters:
 
 ```ts
 import { Application } from '@tundralibs/rapid';
@@ -510,11 +518,14 @@ import type { Pact } from '@tundralibs/pact';
 declare const pact: Pact<{ READ: 1n }, 'Admin'>;
 
 const app = await Application.initialize({ name: 'api' });
-const { authenticate, authorize } = pactAuth(pact, {
+const { authenticate, authorize, login, logout, me } = pactAuth(pact, {
   bearer: { cookie: 'session' },
 });
 
 app.use(authenticate);
+app.post('/login', login()); // { token, expiresAt, principal } + the cookie
+app.post('/logout', logout()); // 204, cookie cleared
+app.get('/me', me()); // { principal, via } or 401
 app.get(
   '/admin',
   authorize('Admin', 'READ'),
