@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.7.0...pact-v0.8.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pact:** expressAuth, fastifyAuth, oakAuth, honoAuth and the matching Guard functions are replaced by expressPact, fastifyPact, oakPact and honoPact. hmac.canonical is replaced by hmac.template. HMAC requests must carry a fresh x-timestamp and include the body digest in the signed string. extractCredential is async. Array-valued headers are comma-joined, so a duplicated Authorization header no longer authenticates.
+
+### Features
+
+* **pact:** middleware factories with configurable carriers, templated HMAC signing, and JWE payloads ([#650](https://github.com/TundraSoft/TundraLibs/issues/650)) ([1abb38a](https://github.com/TundraSoft/TundraLibs/commit/1abb38a8a6707c44946503f3ed487fd7f0ba49b8))
+
 ## [0.7.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.6.0...pact-v0.7.0) (2026-09-06)
 
 
