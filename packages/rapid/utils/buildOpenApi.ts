@@ -11,7 +11,7 @@
  * @module
  */
 
-import { RAPID_ERROR_CODES } from '../errors/mod.ts';
+import { RAPID_ERROR_CODES, RapidError } from '../errors/mod.ts';
 import type { RapidRouteEntry } from '../types/mod.ts';
 
 /** Document metadata + servers. */
@@ -24,12 +24,161 @@ export type OpenApiInfo = {
 /** `{ url, description? }` server entries. */
 export type OpenApiServer = { url: string; description?: string };
 
+/** One OAuth 2.0 flow (OpenAPI 3.0 `OAuth Flow Object`). */
+export type OpenApiOAuthFlow = {
+  /** Required by the `implicit` and `authorizationCode` flows. */
+  authorizationUrl?: string;
+  /** Required by the `password`, `clientCredentials` and `authorizationCode` flows. */
+  tokenUrl?: string;
+  refreshUrl?: string;
+  /** Scope name → human description; `{}` when the API defines none. */
+  scopes: Readonly<Record<string, string>>;
+};
+
+/** The flows an `oauth2` scheme offers — at least one. */
+export type OpenApiOAuthFlows = {
+  implicit?: OpenApiOAuthFlow;
+  password?: OpenApiOAuthFlow;
+  clientCredentials?: OpenApiOAuthFlow;
+  authorizationCode?: OpenApiOAuthFlow;
+};
+
+/**
+ * One security scheme (OpenAPI 3.0 `Security Scheme Object`), exactly the
+ * four kinds the spec defines. `http` covers `Authorization: Bearer …`
+ * (`scheme: 'bearer'`, optionally `bearerFormat: 'JWT'`) and HTTP basic;
+ * `apiKey` names the header, query parameter or cookie that carries the
+ * key; `oauth2` / `openIdConnect` point at the provider.
+ */
+export type OpenApiSecurityScheme =
+  | {
+    type: 'http';
+    /** An IANA HTTP authentication scheme — `'bearer'`, `'basic'`, … */
+    // deno-lint-ignore ban-types
+    scheme: 'bearer' | 'basic' | (string & {});
+    /** A hint for bearer tokens, e.g. `'JWT'`. */
+    bearerFormat?: string;
+    description?: string;
+  }
+  | {
+    type: 'apiKey';
+    in: 'header' | 'query' | 'cookie';
+    /** The header / query parameter / cookie name. */
+    name: string;
+    description?: string;
+  }
+  | { type: 'oauth2'; flows: OpenApiOAuthFlows; description?: string }
+  | {
+    type: 'openIdConnect';
+    /** The discovery document URL (`…/.well-known/openid-configuration`). */
+    openIdConnectUrl: string;
+    description?: string;
+  };
+
 /**
  * Security schemes to declare under `components.securitySchemes`, keyed by
- * the name routes reference in `security`. `bearerAuth` (HTTP bearer) is
- * always declared; entries here are merged over it.
+ * the name routes reference in `security` (`[A-Za-z0-9._-]+`). `bearerAuth`
+ * (HTTP bearer) is always declared; entries here are merged over it.
  */
-export type OpenApiSecuritySchemes = Record<string, Record<string, unknown>>;
+export type OpenApiSecuritySchemes = Readonly<
+  Record<string, OpenApiSecurityScheme>
+>;
+
+const SCHEME_KEY = /^[A-Za-z0-9._-]+$/;
+const SCHEME_TYPES = ['http', 'apiKey', 'oauth2', 'openIdConnect'] as const;
+const FLOW_URLS: Record<keyof OpenApiOAuthFlows, (keyof OpenApiOAuthFlow)[]> = {
+  implicit: ['authorizationUrl'],
+  password: ['tokenUrl'],
+  clientCredentials: ['tokenUrl'],
+  authorizationCode: ['authorizationUrl', 'tokenUrl'],
+};
+
+const isUrl = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Validate `securitySchemes` beyond what the type proves — a JS caller or a
+ * YAML-loaded object gets the same checks: key grammar, a known `type`,
+ * the fields each type requires, at least one OAuth flow with its required
+ * URLs parseable, a parseable `openIdConnectUrl`.
+ *
+ * @param where - the caller named in the message (`openapi()`, `docs()`).
+ * @throws {RapidError} RAPID_CONFIG naming the offending scheme.
+ */
+export function assertSecuritySchemes(
+  schemes: OpenApiSecuritySchemes,
+  where = 'openapi()',
+): void {
+  const fail = (name: string, message: string): never => {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `${where}: securitySchemes.${name} ${message}`,
+      details: { scheme: name },
+    });
+  };
+  for (const [name, scheme] of Object.entries(schemes)) {
+    if (!SCHEME_KEY.test(name)) {
+      fail(name, 'must be named [A-Za-z0-9._-]+ — it is referenced by name');
+    }
+    if (scheme === null || typeof scheme !== 'object') {
+      fail(name, 'must be an object');
+    }
+    const s = scheme as Record<string, unknown>;
+    if (!SCHEME_TYPES.includes(s.type as typeof SCHEME_TYPES[number])) {
+      fail(name, `type must be one of ${SCHEME_TYPES.join(' | ')}`);
+    }
+    switch (s.type) {
+      case 'http':
+        if (typeof s.scheme !== 'string' || s.scheme === '') {
+          fail(name, "needs a non-empty scheme ('bearer', 'basic', …)");
+        }
+        break;
+      case 'apiKey':
+        if (!['header', 'query', 'cookie'].includes(s.in as string)) {
+          fail(name, "needs in: 'header' | 'query' | 'cookie'");
+        }
+        if (typeof s.name !== 'string' || s.name === '') {
+          fail(name, 'needs the header / parameter / cookie name');
+        }
+        break;
+      case 'oauth2': {
+        const flows = s.flows;
+        if (flows === null || typeof flows !== 'object') {
+          fail(name, 'needs flows');
+        }
+        const entries = Object.entries(flows as Record<string, unknown>);
+        if (entries.length === 0) fail(name, 'needs at least one flow');
+        for (const [flow, config] of entries) {
+          const required = FLOW_URLS[flow as keyof OpenApiOAuthFlows];
+          if (required === undefined) {
+            fail(name, `has an unknown flow '${flow}'`);
+          }
+          const c = config as Record<string, unknown>;
+          for (const key of required) {
+            if (!isUrl(c[key])) {
+              fail(name, `flow '${flow}' needs a valid ${key}`);
+            }
+          }
+          if (c.scopes === null || typeof c.scopes !== 'object') {
+            fail(name, `flow '${flow}' needs scopes ({} when none)`);
+          }
+        }
+        break;
+      }
+      case 'openIdConnect':
+        if (!isUrl(s.openIdConnectUrl)) {
+          fail(name, 'needs a valid openIdConnectUrl');
+        }
+        break;
+    }
+  }
+}
 
 /** Declared for every document that has a secured route — rapid's `authenticate` default. */
 const BEARER_AUTH = { type: 'http', scheme: 'bearer' } as const;

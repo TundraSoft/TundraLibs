@@ -6,8 +6,19 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { health, metrics, openapi, ready } from './mod.ts';
-import { buildOpenApi } from '../utils/mod.ts';
+import {
+  docs,
+  DocsAuth,
+  DocsReference,
+  health,
+  metrics,
+  openapi,
+  type OpenApiSecuritySchemes,
+  ready,
+} from './mod.ts';
+import { assertSecuritySchemes, buildOpenApi } from '../utils/mod.ts';
+import { html, render, template } from '../ui/mod.ts';
+import { RapidError } from '../errors/mod.ts';
 
 const make = (metricsOn = false) =>
   Application.initialize({
@@ -196,6 +207,358 @@ describe('rapid.endpoints', () => {
     const unknown = await get('?version=nope');
     asserts.assertEquals(unknown.status, 200);
     asserts.assertEquals((await unknown.json()).openapi, '3.0.3');
+    await app.stop();
+  });
+});
+
+describe('rapid.endpoints.securitySchemes', () => {
+  const valid: OpenApiSecuritySchemes = {
+    bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+    basic: { type: 'http', scheme: 'basic' },
+    apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+    oauth: {
+      type: 'oauth2',
+      flows: {
+        authorizationCode: {
+          authorizationUrl: 'https://idp.example.com/authorize',
+          tokenUrl: 'https://idp.example.com/token',
+          scopes: { read: 'Read' },
+        },
+      },
+    },
+    oidc: {
+      type: 'openIdConnect',
+      openIdConnectUrl:
+        'https://idp.example.com/.well-known/openid-configuration',
+    },
+  };
+
+  it('accepts every spec kind and merges them over bearerAuth in the document', () => {
+    assertSecuritySchemes(valid);
+    const doc = buildOpenApi([], { securitySchemes: valid }) as {
+      components: { securitySchemes: Record<string, unknown> };
+    };
+    asserts.assertEquals(
+      Object.keys(doc.components.securitySchemes).sort(),
+      ['apiKey', 'basic', 'bearerAuth', 'oauth', 'oidc'],
+    );
+  });
+
+  it('rejects a bad key, an unknown type, and each kind missing its required field (RAPID_CONFIG)', async () => {
+    const bad: [string, unknown][] = [
+      ['bad key', { 'my key': { type: 'http', scheme: 'bearer' } }],
+      ['unknown type', { x: { type: 'mutual-tls' } }],
+      ['http without scheme', { x: { type: 'http' } }],
+      ['apiKey without name', { x: { type: 'apiKey', in: 'header' } }],
+      ['apiKey bad in', { x: { type: 'apiKey', in: 'body', name: 'k' } }],
+      ['oauth2 no flows', { x: { type: 'oauth2', flows: {} } }],
+      ['oauth2 unknown flow', {
+        x: { type: 'oauth2', flows: { device: { scopes: {} } } },
+      }],
+      ['oauth2 missing tokenUrl', {
+        x: { type: 'oauth2', flows: { password: { scopes: {} } } },
+      }],
+      ['oauth2 bad url', {
+        x: {
+          type: 'oauth2',
+          flows: { implicit: { authorizationUrl: 'nope', scopes: {} } },
+        },
+      }],
+      ['oidc bad url', { x: { type: 'openIdConnect', openIdConnectUrl: '/' } }],
+    ];
+    for (const [label, schemes] of bad) {
+      const error = asserts.assertThrows(
+        () => openapi({ securitySchemes: schemes as OpenApiSecuritySchemes }),
+        RapidError,
+        undefined,
+        label,
+      );
+      asserts.assertEquals(error.code, 'RAPID_CONFIG', label);
+      asserts.assertStringIncludes(error.message, 'openapi()', label);
+    }
+    const app = await make();
+    const viaDocs = asserts.assertThrows(
+      () =>
+        docs(app, {
+          securitySchemes: {
+            x: { type: 'http' },
+          } as unknown as OpenApiSecuritySchemes,
+        }),
+      RapidError,
+    );
+    asserts.assertStringIncludes(viaDocs.message, 'docs()');
+    await app.stop();
+  });
+});
+
+describe('rapid.endpoints.docs', () => {
+  const secured = async (extra: Record<string, unknown> = {}) => {
+    const app = await Application.initialize({
+      name: 'docs-test',
+      mode: 'DEVELOPMENT',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ...extra,
+    });
+    app.route(
+      'GET',
+      '/posts/:id:',
+      {
+        openapi: {
+          summary: 'One post',
+          security: ['bearerAuth'],
+          tags: ['Posts'],
+        },
+      },
+      () => ({ content: {} }),
+    );
+    app.post('/posts', () => ({ content: {} }));
+    return app;
+  };
+  const page = async (
+    app: Application,
+    path = '/docs',
+  ): Promise<
+    { status: number; body: string; flat: string; type: string }
+  > => {
+    const r = await app.fetch(new Request(`http://app${path}`));
+    const body = await r.text();
+    return {
+      status: r.status,
+      body,
+      // The formatter breaks long tags across lines — compare collapsed.
+      flat: body.replace(/\s+/g, ' '),
+      type: r.headers.get('content-type') ?? '',
+    };
+  };
+
+  it('default: a standalone HTML reference — nav, tagged operations, params, badges, schema anchors; no try-it', async () => {
+    const app = await secured();
+    docs(app, { spec: '/openapi.json' });
+    const { status, body, flat, type } = await page(app);
+    asserts.assertEquals(status, 200);
+    asserts.assertStringIncludes(type, 'text/html');
+    asserts.assert(body.startsWith('<!doctype html>'), 'full document');
+    asserts.assertStringIncludes(flat, '<title>docs-test API</title>');
+    asserts.assertStringIncludes(flat, 'id="tag-posts"');
+    asserts.assertStringIncludes(flat, 'id="op-get-posts-id"');
+    asserts.assertStringIncludes(flat, '<code>/posts/{id}</code>');
+    asserts.assertStringIncludes(flat, 'One post');
+    asserts.assertStringIncludes(flat, 'docs-secured">bearerAuth<');
+    asserts.assertStringIncludes(flat, 'href="#schema-rapiderror"');
+    asserts.assertStringIncludes(flat, 'id="schema-rapiderror"');
+    asserts.assertStringIncludes(flat, 'href="/openapi.json"');
+    asserts.assert(!flat.includes('data-path="/docs"'), 'not self-listed');
+    asserts.assert(!body.includes('data-docs-try'), 'try-it is opt-in');
+    asserts.assert(!body.includes('/__rapid/docs.js'));
+    // The script route is not registered when try-it is off.
+    asserts.assertEquals(
+      (await app.fetch(new Request('http://app/__rapid/docs.js'))).status,
+      404,
+    );
+    await app.stop();
+  });
+
+  it('tryIt: credential box per scheme + login form, per-operation forms, and the rapid-served script', async () => {
+    const app = await secured();
+    docs(app, {
+      tryIt: { login: { path: '/login', fields: ['email', 'password'] } },
+      securitySchemes: {
+        basic: { type: 'http', scheme: 'basic' },
+        key: { type: 'apiKey', in: 'query', name: 'api_key' },
+        oidc: {
+          type: 'openIdConnect',
+          openIdConnectUrl: 'https://idp.example.com/.well-known/oidc',
+        },
+      },
+    });
+    const { body, flat } = await page(app);
+    asserts.assertStringIncludes(flat, 'data-docs-auth');
+    asserts.assertStringIncludes(
+      flat,
+      'data-docs-login="/login" data-docs-login-fields="email,password"',
+    );
+    asserts.assertStringIncludes(flat, 'data-docs-credential="bearerAuth"');
+    asserts.assertStringIncludes(flat, 'data-docs-part="user"');
+    asserts.assertStringIncludes(
+      flat,
+      'data-docs-in="query" data-docs-name="api_key"',
+    );
+    asserts.assertStringIncludes(
+      flat,
+      'https://idp.example.com/.well-known/oidc',
+    );
+    asserts.assertStringIncludes(
+      flat,
+      'data-method="GET" data-path="/posts/{id}" data-security="bearerAuth"',
+    );
+    asserts.assertStringIncludes(
+      flat,
+      'data-docs-param="id" data-docs-in="path"',
+    );
+    asserts.assertStringIncludes(flat, '<script src="/__rapid/docs.js" defer>');
+
+    const script = await app.fetch(new Request('http://app/__rapid/docs.js'));
+    asserts.assertEquals(script.status, 200);
+    asserts.assertStringIncludes(
+      script.headers.get('content-type') ?? '',
+      'text/javascript',
+    );
+    asserts.assertEquals(
+      script.headers.get('x-content-type-options'),
+      'nosniff',
+    );
+    const etag = script.headers.get('etag') ?? '';
+    asserts.assert(etag.length > 0);
+    const source = await script.text();
+    new Function(source); // parses
+    asserts.assertStringIncludes(source, 'rapid.docs.credentials');
+    asserts.assertStringIncludes(source, 'setCredential');
+    const again = await app.fetch(
+      new Request('http://app/__rapid/docs.js', {
+        headers: { 'if-none-match': etag },
+      }),
+    );
+    asserts.assertEquals(again.status, 304);
+    await again.body?.cancel();
+    await app.stop();
+  });
+
+  it('expose gates like openapi(); pages do not exist on an api-only app', async () => {
+    const app = await secured();
+    docs(app, { expose: 'PRODUCTION' });
+    const hidden = await page(app);
+    asserts.assertEquals(hidden.status, 404);
+    asserts.assertStringIncludes(hidden.body, 'RAPID_NOT_FOUND');
+    await app.stop();
+
+    const api = await secured({ ui: { enabled: false } });
+    docs(api);
+    asserts.assertEquals((await page(api)).status, 404);
+    await api.stop();
+  });
+
+  it('renders inside the app core/layout (no doctype of its own); layout: false skips the module tier', async () => {
+    const Core = template<{ body: unknown; title?: string }>(
+      (d) => html`<core title="${d.title ?? ''}">${d.body}</core>`,
+      'Core',
+    );
+    const Shape = template<{ body: unknown; title?: string }>(
+      (d) => html`<shape>${d.body}</shape>`,
+      'Shape',
+    );
+    const app = await secured({
+      ui: { prefer: 'html', core: Core, layout: Shape },
+    });
+    docs(app, { title: 'Ref' });
+    docs(app, { path: '/docs-bare', layout: false });
+    const wrapped = (await page(app)).flat;
+    asserts.assert(
+      wrapped.startsWith('<core title="Ref"><shape>'),
+      wrapped.slice(0, 60),
+    );
+    asserts.assert(!wrapped.includes('<!doctype'));
+    const bare = (await page(app, '/docs-bare')).flat;
+    asserts.assert(
+      bare.startsWith('<core title="docs-test API"><style>'),
+      bare.slice(0, 60),
+    );
+    asserts.assert(!bare.includes('<shape>'));
+    await app.stop();
+  });
+
+  it('render: composes a custom page from the exported parts', async () => {
+    const app = await secured();
+    docs(app, {
+      tryIt: true,
+      render: (doc, view, opts) =>
+        html`<h1>Custom ${view.path}</h1>${DocsAuth(doc, opts)}${
+          DocsReference(doc, opts)
+        }`,
+    });
+    const { body, flat } = await page(app);
+    asserts.assert(body.startsWith('<!doctype html>'));
+    asserts.assertStringIncludes(flat, '<h1>Custom /docs</h1>');
+    asserts.assertStringIncludes(flat, 'data-docs-auth');
+    asserts.assertStringIncludes(flat, 'data-docs-try');
+    asserts.assertStringIncludes(flat, '<script src="/__rapid/docs.js" defer>');
+    asserts.assert(
+      !body.includes('id="schemas"'),
+      'schemas part not composed in',
+    );
+    await app.stop();
+  });
+
+  it('parts render standalone: DocsAuth explains an empty scheme set, DocsReference groups untagged routes under Other', () => {
+    const doc = buildOpenApi([{
+      method: 'GET',
+      path: '/x',
+      middlewares: [],
+      handler: () => ({ content: {} }),
+    }]);
+    const auth = render(DocsAuth(doc as never));
+    asserts.assertStringIncludes(auth, 'No security schemes are declared');
+    const ref = render(DocsReference(doc as never));
+    asserts.assertStringIncludes(ref, 'id="tag-other"');
+    asserts.assertStringIncludes(ref, 'id="op-get-x"');
+  });
+
+  it('third-party viewers: pinned SRI shell, spec required, swagger gets its init script', async () => {
+    const app = await secured();
+    asserts.assertThrows(
+      () => docs(app, { viewer: 'scalar' }),
+      RapidError,
+      'needs the JSON document URL',
+    );
+    asserts.assertThrows(
+      () =>
+        docs(app, {
+          viewer: {
+            kind: 'redoc',
+            script: { src: 'https://x/r.js', integrity: '' },
+          },
+          spec: '/openapi.json',
+        }),
+      RapidError,
+      'integrity',
+    );
+    asserts.assertThrows(
+      () =>
+        docs(app, {
+          viewer: 'redoc',
+          spec: '/openapi.json',
+          render: () => html``,
+        }),
+      RapidError,
+      'rapid viewer only',
+    );
+    docs(app, { viewer: 'scalar', spec: '/openapi.json', tryIt: true });
+    docs(app, { path: '/swagger', viewer: 'swagger', spec: '/openapi.json' });
+    const scalar = (await page(app)).flat;
+    asserts.assert(scalar.startsWith('<!doctype html>'));
+    asserts.assertStringIncludes(
+      scalar,
+      'id="api-reference" data-url="/openapi.json"',
+    );
+    asserts.assertMatch(
+      scalar,
+      /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@scalar\/api-reference@[\d.]+\/[^"]+" integrity="sha384-[A-Za-z0-9+/=]+" crossorigin="anonymous"/,
+    );
+    asserts.assert(
+      !scalar.includes('/__rapid/docs.js'),
+      "tryIt is the rapid viewer's",
+    );
+    const swagger = (await page(app, '/swagger')).flat;
+    asserts.assertStringIncludes(swagger, 'swagger-ui.css" integrity="sha384-');
+    asserts.assertStringIncludes(
+      swagger,
+      '<script src="/__rapid/docs-swagger.js" defer>',
+    );
+    const init = await app.fetch(
+      new Request('http://app/__rapid/docs-swagger.js'),
+    );
+    asserts.assertEquals(init.status, 200);
+    new Function(await init.text());
     await app.stop();
   });
 });

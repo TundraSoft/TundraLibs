@@ -783,7 +783,10 @@ final HTML. Slow DATA is a different problem, answered by lazy regions
 
 ## OpenAPI
 
-A templated route's `200` lists both `application/json` and `text/html`.
+A templated route's `200` lists both `application/json` and `text/html`;
+a page (`prefer: 'html'`) lists `text/html` only. The reference page the
+`docs()` endpoint mounts is itself a page of the app — rendered inside your
+core/layout — see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
 
 Runnable examples: [`examples/dashboard/main.ts`](../examples/dashboard/main.ts)
 (a sales dashboard: period chips, both swapped-chain patterns,

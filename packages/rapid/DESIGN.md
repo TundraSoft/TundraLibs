@@ -434,6 +434,19 @@ Decisions that define it:
 - **A redirect on a swap** becomes `200` + `rapid-redirect` (fetch would
   follow a 3xx and hand the runtime the target's body); the header's target
   is guarded server-side and followed same-origin only.
+- **The API reference is a page of the app** (`endpoints/docs()`), not a
+  CDN viewer bolted on: the OpenAPI document is rendered server-side with
+  rapid's own templates inside the configured core/layout, from exported
+  parts (`DocsAuth` / `DocsReference` / `DocsOperation` / `DocsSchemas`) so
+  the two customization paths are the UI layer's own — branding through the
+  tiers, composition through `render`. Its one script is rapid-served like
+  the runtime (`script-src 'self'`), keeps credentials in session storage
+  and applies them per declared scheme. Security schemes are DECLARED by the
+  app with the precise OpenAPI shapes and validated at mount; nothing is
+  inferred from middleware (a guard is behaviour, a requirement is
+  documentation — a gateway-authenticated API documents a scheme rapid never
+  sees). Scalar / Redoc / Swagger UI remain available as pinned, SRI-checked
+  shells around the same document.
 
 _Rejected / non-goals_: a template language or `.html` files; a curated CSS
 framework API; SPA history with a DOM cache; async or streaming templates

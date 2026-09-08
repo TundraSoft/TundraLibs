@@ -86,8 +86,12 @@ export {
 } from './resolveVersion.ts';
 export { Meter, type MeterSample } from './Meter.ts';
 export {
+  assertSecuritySchemes,
   buildOpenApi,
   type OpenApiInfo,
+  type OpenApiOAuthFlow,
+  type OpenApiOAuthFlows,
+  type OpenApiSecurityScheme,
   type OpenApiSecuritySchemes,
   type OpenApiServer,
 } from './buildOpenApi.ts';

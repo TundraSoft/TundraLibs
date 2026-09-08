@@ -100,7 +100,7 @@
 
 import { Application, RapidError } from '../../mod.ts';
 import { cors, secureHeaders } from '../../middlewares/mod.ts';
-import { health, metrics, openapi } from '../../endpoints/mod.ts';
+import { docs, health, metrics, openapi } from '../../endpoints/mod.ts';
 import type { PactAuthContext } from '../../middlewares/pact.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
@@ -211,13 +211,28 @@ app.get('/metrics', metrics());
 
 // The assembled OpenAPI 3.0.3 document, built from the mounted routes
 // (module routes included) and cached. `?version=v2` selects a version.
-app.get(
-  '/openapi.json',
-  openapi({
-    info: { description: 'A tiny blog API — posts + nested comments.' },
-    servers: [{ url: 'http://localhost:8001', description: 'local dev' }],
-  }),
-);
+// The security schemes are DECLARED (rapid infers nothing from middleware):
+// the session bearer token and the two API-key headers auth.ts reads.
+const OPENAPI = {
+  info: { description: 'A tiny blog API — posts + nested comments.' },
+  servers: [{ url: 'http://localhost:8001', description: 'local dev' }],
+  securitySchemes: {
+    bearerAuth: { type: 'http', scheme: 'bearer', description: 'The session token /login returns (also sent as the `session` cookie).' },
+    apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+    apiSecret: { type: 'apiKey', in: 'header', name: 'x-api-secret' },
+  },
+} as const;
+app.get('/openapi.json', openapi(OPENAPI));
+
+// The API reference at /docs — rendered inside BlogCore like every other
+// page, with a credential box for the schemes above and a sign-in form that
+// posts to /login (the blog's identifier field is `username`). Try it:
+// sign in as ada, then "Try it" on an admin route.
+docs(app, {
+  ...OPENAPI,
+  spec: '/openapi.json',
+  tryIt: { login: { path: '/login', fields: ['username', 'password'] } },
+});
 
 // Auth: the pact adapter's session handlers — POST /login returns the
 // session token and sets the HttpOnly `session` cookie authenticate reads

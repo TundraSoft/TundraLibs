@@ -38,9 +38,10 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `session`/`connection`), `@Module`, `@On`/`@Use`, `RapidModule` +
   `initModules` + `app.modules()` (namespace scan, doctor-constructed zero-arg
   modules, instance mounting).
-- **Endpoints catalog** (`./endpoints`) — `health`, `metrics`, `openapi`
-  (the `login` endpoint was removed 2026-09-08: a login route is app code
-  over `pact.login()`, documented in Rapid-Auth.md).
+- **Endpoints catalog** (`./endpoints`) — `health`, `ready`, `metrics`,
+  `openapi`, `docs` (the `login` endpoint was removed 2026-09-08: session
+  routes are the pact adapter's `login` / `logout` / `refresh` / `me`,
+  documented in Rapid-Auth.md).
 - **Request surface** — cookies, query/paging parsing with caps, body parsing
   (json/text/form/multipart) with size limits + an upload magic-byte gauntlet,
   `ctx.serve()` file download, MIME resolution, content negotiation
@@ -78,6 +79,17 @@ Core and the current capability set are built and green on Deno / Bun / Node
   crypt, restler, utils, slogger). Not built: a `rapid ai` REGENERATE
   subcommand — it would have to merge into a guide the user has since edited,
   a real design question; open follow-on if wanted.
+- **OpenAPI security schemes + the API reference page (2026-09-09)** —
+  `OpenApiSecurityScheme` is the precise OpenAPI 3.0 union (http / apiKey /
+  oauth2 / openIdConnect), validated at mount (`RAPID_CONFIG`); no automatic
+  injection from middleware. `docs(app, options)` mounts the reference page:
+  the `rapid` viewer renders server-side inside the app's core/layout from
+  exported parts (`DocsAuth`, `DocsReference`, `DocsOperation`,
+  `DocsSchemas`), with a credential box generated from the declared schemes,
+  an optional sign-in form and try-it forms driven by the rapid-served
+  `/__rapid/docs.js` (session-storage credentials, per-scheme application,
+  `rapid.docs.setCredential`); `scalar` / `redoc` / `swagger` are pinned
+  SRI shells. Guide: docs/Rapid-OpenAPI.md.
 - **Metric families (2026-09-08)** — `server.metrics: true | { requests,
   errors, jobs, sockets, middleware, bodies, ui }`; `Meter` declares only
   the enabled families and records error codes at disclosure, job outcomes
@@ -267,9 +279,9 @@ Core and the current capability set are built and green on Deno / Bun / Node
   `openapi({ securitySchemes })`); `[]` = public. `operationId` defaults to
   `<Module>_<method>` (the SDK generator's key). Version is no longer emitted
   as a tag — it is `x-version` per operation and `x-versions` at the root.
-  Deferred: deriving `security` from the `authorize()` middleware itself (a
-  guard-metadata mechanism was built and removed 2026-09-08 — a simpler
-  approach is wanted).
+  Decided 2026-09-09: `security` is never derived from the `authorize()`
+  middleware (a guard-metadata mechanism was built and removed 2026-09-08);
+  the app declares its schemes.
 - **Config in context + `config()` binder; complete `Application.yaml`
   (2026-08-23)** — `ctx.config` (= `app.config`, every set beside
   `Application`) on every context, and a `config(path, validate?)` binder on
@@ -489,30 +501,8 @@ from the transport's `started` — unify on the latter.
   while mounted) streamed over a `__rapid.dashboard` channel; recent errors
   by code with request ids. Access under the cluster model: entering the
   cluster or node secret unlocks it; the master's dashboard shows the fleet.
-  Sequencing agreed the same day: `ready()` (readiness that 503s during the
-  drain) and the pact session handlers on `pactAuth` (`login`, `logout`,
-  `refresh`, `me`) first, then the dashboard.
-- **OpenAPI docs UI (`docs()`) — agreed 2026-09-09, build next (before the
-  dashboard).** Auth schemes stay the user's: `openapi({ securitySchemes })`
-  gets a PRECISE `OpenApiSecurityScheme` union (http basic/bearer, apiKey
-  header/query/cookie, oauth2, openIdConnect) validated at mount; no
-  automatic injection (the guard-metadata attempt was removed 2026-09-08).
-  `app.get('/docs', docs({ spec, viewer }))` — `uiOnly`, `expose` like
-  `openapi()`. Default viewer `'rapid'`: the reference rendered
-  server-side with rapid's own templates inside the app's `core`/`layout`
-  (branding for free; `layout: false` opts out), built from exported parts
-  (`DocsReference`, `DocsOperation`, `DocsSchemas`, `DocsAuth`) so `render:
-  (doc, view) => html` composes a custom page. **Default credential box**
-  generated from the document's `securitySchemes` (token / user+password /
-  header, query or cookie key / OAuth link) plus an optional sign-in form
-  posting to the app's login route (`tryIt: { login: { path, fields } }`);
-  a rapid-served `tryIt` script (no CDN, `script-src 'self'`) stores
-  credentials in session storage, applies them to try-it requests, and
-  exposes `rapid.docs.setCredential(scheme, value)` so a custom box mixes
-  with the default. Third-party viewers (`scalar` / `redoc` / `swagger`)
-  later, via a pinned SRI CDN shell with `viewerOptions` passthrough.
-  Order: scheme type + validation → `docs()` + default box + the two
-  customization paths → `tryIt` execution → third-party viewers.
+  Its prerequisites shipped 2026-09-08/09: `ready()`, the pact session
+  handlers, and the `docs()` page (the same page-of-the-app pattern).
 - **Dev console (TUI). 🎨 design frozen 2026-08-22; build pending.** A
   full-screen alternate-buffer terminal console that replaces plain log spew on
   a TTY. Regions each back onto an existing getter (banner + bind line;
@@ -531,38 +521,6 @@ from the transport's `started` — unify on the latter.
 - **SDK generator (via RESTler)** — a typed client SDK generated from the
   OpenAPI/decorator metadata — one typed method per route, schemas reused.
   Downstream of OpenAPI; likely its own tool/package.
-
-### Auth & config (TODO — 🔍 user to review pact first, 2026-08-23)
-
-One item left from the HMAC-auth discussion (its two rapid-only siblings —
-`ctx.config` + `config()` binder, and the complete `Application.yaml` — shipped
-2026-08-23); gated on the pact decision.
-
-- **Signed-request auth scheme (HMAC) alongside Bearer — SHIPPED 2026-09-08
-  via pact 0.8's middleware core** (`pactAuth(pact, { hmac: {} })`: RFC 9421
-  template, `x-timestamp` freshness, response signing, JWE payloads; the
-  generic `authenticate({ verify })` helper is gone). Original note kept for
-  the reasoning: `authenticate` was to grow scheme dispatch on the
-  `Authorization` scheme word (RFC 7235). **Verified:** pact's
-  `sign`/`verify` are generic HMAC over bytes — there is NO request-signing
-  protocol (no canonical string, header names, timestamp, replay window) and
-  NO key storage (`groupResolver` / `isRevoked` / `strategies` / `oauth` are
-  its only seams; API keys hand the app `{ id, secret, secretHash }` to
-  persist id + hash). **Decision B (taken):** the protocol lives in **pact**,
-  not rapid, so a client (restler's `headerProvider`) and the server share one
-  definition — `signRequest` / `verifyRequest` over the existing `sign`/
-  `verify`, `Authorization: HMAC KeyId=…, Ts=…, Sig=…` format/parse, skew
-  check. **Open for the pact review:** a `keyResolver` option mirroring
-  `groupResolver` (consumer-owned lookup, pact calls it; per-call override) so
-  rapid hands pact only **headers + request material, never a secret** —
-  rapid's `hmac(pact, { keys?: 'auth.hmac.keys', maxSkew? })` would supply a
-  config-backed resolver when `keys` is set. Canonical string proposal:
-  `METHOD \n path?query \n timestamp \n hex(sha256(body))`; raw body via
-  `ctx.request.clone()` capped at `server.maxBodySize`. Per-caller keys need
-  the plaintext secret server-side (pact's hash-only API-key storage cannot
-  HMAC) — config-held (env-sourced) or app-resolved. Guard: reject a resolved
-  key that still looks like an unresolved `${VAR}` placeholder (see item 3).
-  pact change = own branch off `main` → PR → release, then rapid consumes.
 
 ### Scaling & ops
 

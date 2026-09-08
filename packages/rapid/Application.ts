@@ -1494,18 +1494,18 @@ export class Application<S extends RapidContextState = RapidContextState>
       runtimePath,
     });
     if (!enabled) return; // no UI: no runtime, no live, no history
-    this.__scriptRoute(
+    this._scriptRoute(
       runtimePath,
       () => import('./ui/ui.ts').then((m) => [m.UI_RUNTIME, m.UI_RUNTIME_ETAG]),
     );
     if (data.live === true) {
-      this.__scriptRoute(
+      this._scriptRoute(
         '/__rapid/live.js',
         () => import('./ui/live.ts').then((m) => [m.UI_LIVE, m.UI_LIVE_ETAG]),
       );
     }
     if (data.history === true) {
-      this.__scriptRoute(
+      this._scriptRoute(
         '/__rapid/history.js',
         () =>
           import('./ui/history.ts').then((
@@ -1524,9 +1524,11 @@ export class Application<S extends RapidContextState = RapidContextState>
    * lists, W/ prefixes — and the 304 re-carries its validators per
    * RFC 9110. The script module loads on the FIRST request (then stays
    * cached), so an app that never serves it never pays for it — and the
-   * route is `uiOnly`: absent from the api surface.
+   * route is `uiOnly`: absent from the api surface. Internal (the `_`
+   * prefix): the UI runtimes and `docs()` register their scripts here;
+   * an app's own scripts belong under `server.static`.
    */
-  private __scriptRoute(
+  public _scriptRoute(
     path: string,
     load: () => Promise<readonly [source: string, etag: string]>,
   ): void {

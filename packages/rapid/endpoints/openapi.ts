@@ -5,21 +5,27 @@
  * version's routes (header-versioned routes sharing a path can't coexist
  * in one document). `expose` gates which app modes serve it — DEVELOPMENT
  * only by default, so the full route inventory isn't exposed anonymously in
- * production. JSON only — point your own Swagger/Redoc route at this URL.
+ * production. JSON only — `docs()` is the page over it.
  *
  * @module
  */
+import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
+  assertSecuritySchemes,
   buildOpenApi,
   type OpenApiInfo,
   type OpenApiSecuritySchemes,
   type OpenApiServer,
 } from '../utils/mod.ts';
-import type { RapidHTTPHandler } from '../types/mod.ts';
+import type {
+  RapidContextState,
+  RapidHTTPHandler,
+  RapidRouteEntry,
+} from '../types/mod.ts';
 
-/** Options for {@link openapi}. */
-export type OpenApiOptions = {
+/** The document-shaping options `openapi()` and `docs()` share. */
+export type OpenApiDocumentOptions = {
   /**
    * The document's `info` block.
    * @default title = the app `name`, version = '1.0.0'
@@ -34,8 +40,13 @@ export type OpenApiOptions = {
    * Security schemes routes may reference by name in `security`. `bearerAuth`
    * (HTTP bearer) is always declared; declare anything else here, e.g.
    * `{ apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' } }`.
+   * Validated when the endpoint is created (RAPID_CONFIG).
    */
   securitySchemes?: OpenApiSecuritySchemes;
+};
+
+/** Options for {@link openapi}. */
+export type OpenApiOptions = OpenApiDocumentOptions & {
   /**
    * Which app modes serve the spec. Secure-by-default: DEVELOPMENT only, so
    * mounting it doesn't leak the full route inventory to anonymous clients in
@@ -45,8 +56,48 @@ export type OpenApiOptions = {
   expose?: 'DEVELOPMENT' | 'PRODUCTION' | 'ALL';
 };
 
-/** An endpoint handler serving the assembled OpenAPI document. */
+/**
+ * Build (or fetch from `cache`) the document for `version` (`''` = all
+ * routes). Cache ONLY real versions: `?version=` is client-controlled and
+ * unbounded, so caching every distinct value (each a full doc) would be a
+ * memory-exhaustion vector — an unknown version is built fresh, uncached.
+ * Shared by `openapi()` and `docs()`.
+ */
+export function assembleOpenApi<S extends RapidContextState>(
+  app: Application<S>,
+  options: OpenApiDocumentOptions,
+  cache: Map<string, Record<string, unknown>>,
+  version: string,
+): Record<string, unknown> {
+  const cached = cache.get(version);
+  if (cached !== undefined) return cached;
+  // The assembler reads only state-free route fields.
+  const routes = app.routes as unknown as readonly RapidRouteEntry[];
+  const doc = buildOpenApi(routes, {
+    info: { title: app.option('name'), ...options.info },
+    uiPrefer: app.uiPrefer,
+    // Pages are not reachable where an api surface exists.
+    omitPages: app.apiSurface !== undefined || !app.uiEnabled,
+    ...(options.servers !== undefined ? { servers: options.servers } : {}),
+    ...(options.securitySchemes !== undefined
+      ? { securitySchemes: options.securitySchemes }
+      : {}),
+    ...(version !== '' ? { version } : {}),
+  });
+  const known = version === '' || routes.some((r) => r.version === version);
+  if (known) cache.set(version, doc);
+  return doc;
+}
+
+/**
+ * An endpoint handler serving the assembled OpenAPI document.
+ *
+ * @throws {RapidError} RAPID_CONFIG when a security scheme is malformed.
+ */
 export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
+  if (options.securitySchemes !== undefined) {
+    assertSecuritySchemes(options.securitySchemes, 'openapi()');
+  }
   const expose = options.expose ?? 'DEVELOPMENT';
   const cache = new Map<string, Record<string, unknown>>();
   return (ctx) => {
@@ -56,25 +107,6 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
       throw new RapidError('RAPID_NOT_FOUND');
     }
     const version = new URL(ctx.request.url).searchParams.get('version') ?? '';
-    const cached = cache.get(version);
-    if (cached !== undefined) return { content: cached };
-    const doc = buildOpenApi(ctx.app.routes, {
-      info: { title: ctx.app.option('name'), ...options.info },
-      uiPrefer: ctx.app.uiPrefer,
-      // Pages are not reachable where an api surface exists.
-      omitPages: ctx.app.apiSurface !== undefined || !ctx.app.uiEnabled,
-      ...(options.servers !== undefined ? { servers: options.servers } : {}),
-      ...(options.securitySchemes !== undefined
-        ? { securitySchemes: options.securitySchemes }
-        : {}),
-      ...(version !== '' ? { version } : {}),
-    });
-    // Cache ONLY real versions. `?version=` is client-controlled and
-    // unbounded, so caching every distinct value (each a full doc) is a
-    // memory-exhaustion vector — an unknown version is built fresh, uncached.
-    const known = version === '' ||
-      ctx.app.routes.some((r) => r.version === version);
-    if (known) cache.set(version, doc);
-    return { content: doc };
+    return { content: assembleOpenApi(ctx.app, options, cache, version) };
   };
 }

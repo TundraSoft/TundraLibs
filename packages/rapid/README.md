@@ -465,7 +465,7 @@ Ready-made handlers you mount where you like — nothing is auto-registered:
 
 ```ts
 import { Application } from '@tundralibs/rapid';
-import { health, metrics, openapi } from '@tundralibs/rapid/endpoints';
+import { docs, health, metrics, openapi } from '@tundralibs/rapid/endpoints';
 
 const app = await Application.initialize({
   name: 'api',
@@ -475,6 +475,7 @@ const app = await Application.initialize({
 app.get('/healthz', health({ check: () => Promise.resolve() }));
 app.get('/metrics', metrics()); // 503 unless server.metrics is on
 app.get('/openapi.json', openapi());
+docs(app, { spec: '/openapi.json', tryIt: true }); // GET /docs
 ```
 
 - `health({ check })` — liveness; the `check` throws/rejects to report 503,
@@ -488,7 +489,14 @@ app.get('/openapi.json', openapi());
 - `openapi({ info, servers, expose, securitySchemes })` — the assembled OpenAPI
   3.0.3 document built from the mounted routes (cached per version; every
   declared version is listed as `x-versions`). `bearerAuth` is declared
-  automatically; declare any other scheme routes name in `security` here.
+  automatically; declare any other scheme routes name in `security` here,
+  with the exact OpenAPI shapes (`http` / `apiKey` / `oauth2` /
+  `openIdConnect`, validated at mount).
+- `docs(app, { path, viewer, spec, tryIt, render, layout, guards, expose })` —
+  the API reference page, rendered server-side from rapid's own templates
+  inside your core/layout (no CDN), with a credential box generated from the
+  declared schemes and a try-it form per operation; or a pinned Scalar /
+  Redoc / Swagger UI shell. See [OpenAPI and the API reference](docs/Rapid-OpenAPI.md).
 
 Session endpoints (`login`, `logout`, `refresh`, `me`) come from the pact
 adapter's factory, not from here, so they share one cookie name with
@@ -801,6 +809,9 @@ Guides:
 - [Authentication & authorization](./docs/Rapid-Auth.md) — the generic
   `ctx.auth` seam for bring-your-own auth, and the opt-in `@tundralibs/pact`
   adapter (five credential schemes, permission checks, response signing).
+- [OpenAPI and the API reference](./docs/Rapid-OpenAPI.md) — where the
+  document comes from, declaring security schemes, the `docs()` page with its
+  credential box and try-it forms, and the two ways to customize it.
 
 Every public symbol carries JSDoc; the subpath exports are `.` (root),
 `./cli`, `./context`, `./decorators`, `./endpoints`, `./errors`,

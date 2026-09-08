@@ -200,7 +200,10 @@ are BigInts); `sameSite: 'None'` needs `secure: true`; the handlers are
 ordinary routes, so `csrf()` applies to the POSTs if installed and
 `idempotency()` should not sit in front of `login` (`set-cookie` is never
 replayed). API clients ignore the cookie and send the same token as
-`Authorization: Bearer`.
+`Authorization: Bearer`. The API reference's sign-in form posts here too:
+`docs(app, { tryIt: { login: { path: '/login' } } })` reads `token` from
+the reply and the cookie comes along for free — see
+[OpenAPI and the API reference](./Rapid-OpenAPI.md).
 
 ### HMAC — signed both ways
 

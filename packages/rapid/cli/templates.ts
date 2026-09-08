@@ -603,7 +603,20 @@ Mount where you like: \`app.get('/healthz', health({ check? }))\` (liveness;
 \`stop()\` began, 503 on a failing check), \`app.get('/metrics',
 metrics({ format: 'prometheus' | 'json' }))\` (503 until \`server.metrics\`),
 \`app.get('/openapi.json', openapi({ info, servers, securitySchemes, expose }))\`
-(built from the routes + decorators; \`expose\` defaults to DEVELOPMENT only).
+(built from the routes + decorators; \`expose\` defaults to DEVELOPMENT only;
+\`securitySchemes\` takes the exact OpenAPI shapes — http / apiKey / oauth2 /
+openIdConnect — validated at mount, and \`bearerAuth\` is always declared).
+\`docs(app, { path, viewer, spec, tryIt, render, layout, guards, expose,
+info, servers, securitySchemes })\` mounts the API reference PAGE itself:
+rendered server-side from rapid's templates inside the app's core/layout (no
+CDN; \`layout: false\` opts out), a credential box generated from the declared
+schemes plus an optional sign-in form (\`tryIt: { login: { path, fields } }\`),
+try-it forms served by \`/__rapid/docs.js\`; compose a custom body with
+\`render: (doc, view, opts) => html\` from the parts \`DocsAuth(doc, opts)\`,
+\`DocsReference(doc, opts)\`, \`DocsOperation(path, method, op, opts)\`,
+\`DocsSchemas(doc)\`; or \`viewer: 'scalar' | 'redoc' | 'swagger'\` for a
+pinned SRI shell (\`spec\` required). Give \`docs()\` the SAME info / servers /
+securitySchemes as \`openapi()\`.
 
 ## Testing
 
@@ -1251,6 +1264,10 @@ export const PACKAGE_DOCS: readonly (readonly [file: string, title: string])[] =
     [
       'docs/Rapid-UI.md',
       'UI — templates, layouts, swaps, forms, lazy regions, live channels, history',
+    ],
+    [
+      'docs/Rapid-OpenAPI.md',
+      'OpenAPI — the document, security schemes, the docs() reference page, credential box, customization, third-party viewers',
     ],
     ['docs/Rapid-Database.md', 'Database access & connection pooling'],
     [

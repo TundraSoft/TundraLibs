@@ -259,7 +259,8 @@ its `description` the tag's; a route's `summary`, `description`, `tags`,
 `operationId` (default `<Module>_<method>`), `security` (`['bearerAuth']`;
 `[]` marks it deliberately public) and `response` describe the operation;
 `payload(Schema)` with a schema object documents the request body. Serve the
-document with the `openapi()` endpoint.
+document with the `openapi()` endpoint and the reference page with `docs()` —
+see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
 
 ## Pitfalls
 
