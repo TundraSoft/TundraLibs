@@ -604,10 +604,17 @@ A signing feature used without a configured `secret` fails loudly with
 - **Tracing is opt-in.** Pass a `tracer` option and rAPId emits a SERVER span per
   request (honouring an inbound `traceparent`), propagates on outbound calls, and
   composes trace ids onto every log line. Read it via `app.tracer`.
-- **Metrics are opt-in.** Set `server.metrics: true` and the invocation cycle
-  records into a `@tundralibs/metro-man` meter (`app.meter`) plus server counters
+- **Metrics are opt-in.** Set `server.metrics: true` and rapid records into a
+  `@tundralibs/metro-man` meter (`app.meter`) plus server counters
   (`app.metrics`, `app.socketMetrics`); serve them with the `metrics()` endpoint.
-  Cron statistics (`app.jobMetrics`) are tracked unconditionally.
+  Seven switchable families cover the invocation cycle (counts, a latency
+  histogram on the same clock as `x-response-time`, in-flight), every
+  disclosed error code, job outcomes and drift, socket upgrades and channel
+  subscriptions, the decisions each shipped middleware takes, request bytes
+  and uploads, and UI representations and static hits — the object form
+  (`server.metrics: { ui: false }`) turns a family off, and an off family
+  declares nothing. Register your own metrics on `app.meter.registry`. Cron
+  statistics (`app.jobMetrics`) are tracked unconditionally.
 
 ## Graceful shutdown
 

@@ -402,6 +402,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     const { value, files } = await parseBody(source, this.__parseOptions());
     // Track written uploads so cleanup() removes them post-response.
     this._fileUploads.push(...files);
+    this.app.meter?.uploads(files.length);
     return value;
   }
 
@@ -436,10 +437,12 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /** The single capped read of the request stream behind {@link rawPayload}. */
   private async __readRaw(): Promise<Uint8Array | null> {
     if (this.request.body === null) return null;
-    return await readCapped(
+    const bytes = await readCapped(
       this.request.body,
       bodyCapFor(this.request, this.__parseOptions()),
     );
+    this.app.meter?.requestBytes('HTTP', bytes.byteLength);
+    return bytes;
   }
 
   /**
@@ -460,6 +463,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       options,
     ).then(({ value, files }) => {
       this._fileUploads.push(...files);
+      this.app.meter?.uploads(files.length);
       return value;
     });
   }

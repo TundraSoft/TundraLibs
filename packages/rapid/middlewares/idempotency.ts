@@ -55,6 +55,7 @@ import type {
   RapidMiddleware,
 } from '../types/mod.ts';
 import { expiringMap } from '../utils/expiringMap.ts';
+import { meterAction } from '../utils/Meter.ts';
 import { isStreamBody } from '../utils/streams.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -396,15 +397,18 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
     }
     if (prior !== undefined) {
       if (prior.fingerprint !== fingerprint) {
+        ctx.meter?.middleware('idempotency', 'mismatch', meterAction(ctx));
         throw new RapidError('RAPID_IDEMPOTENCY_MISMATCH', {
           details: { header, key: clientKey },
         });
       }
       if (prior.state === 'pending') {
+        ctx.meter?.middleware('idempotency', 'in_flight', meterAction(ctx));
         throw new RapidError('RAPID_IDEMPOTENCY_IN_FLIGHT', {
           details: { header, key: clientKey },
         });
       }
+      ctx.meter?.middleware('idempotency', 'replayed', meterAction(ctx));
       ctx.setHeader(replayedHeader, 'true');
       // Cloned per replay: a mutation by outer middleware on one replay
       // must not compound into the store or the next replay.
@@ -427,6 +431,7 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
       if (
         !ctx.responded && RapidError.from(error).code !== 'RAPID_TIMEOUT'
       ) {
+        ctx.meter?.middleware('idempotency', 'released', meterAction(ctx));
         await release(hooks, key);
       }
       throw error;

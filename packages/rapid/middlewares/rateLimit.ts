@@ -13,6 +13,7 @@
 import { RapidError } from '../errors/mod.ts';
 import type { RapidContext, RapidMiddleware } from '../types/mod.ts';
 import { expiringMap } from '../utils/expiringMap.ts';
+import { meterAction } from '../utils/Meter.ts';
 
 /** One fixed-window counter for a key. */
 export type RateLimitWindow = {
@@ -201,6 +202,7 @@ export function rateLimit(options: RateLimitOptions = {}): RapidMiddleware {
           String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))),
         );
       }
+      ctx.meter?.middleware('rateLimit', 'rejected', meterAction(ctx));
       throw new RapidError('RAPID_RATE_LIMITED', {
         details: { max, window },
       });

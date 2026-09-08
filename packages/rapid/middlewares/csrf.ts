@@ -27,6 +27,7 @@
 import { signHMAC } from '@tundralibs/crypt';
 import { ulid } from '@tundralibs/id';
 import { RapidError } from '../errors/mod.ts';
+import { meterAction } from '../utils/Meter.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 import {
@@ -191,6 +192,7 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
         sent !== token ||
         (await verifyToken(sent, secret)) !== binding
       ) {
+        ctx.meter?.middleware('csrf', 'rejected', meterAction(ctx));
         throw new RapidError('RAPID_CSRF_INVALID', {
           message: 'CSRF token missing or invalid',
         });

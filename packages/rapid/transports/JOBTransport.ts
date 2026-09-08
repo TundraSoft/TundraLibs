@@ -41,6 +41,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     // lifecycle — a pending tick must never block shutdown.
     const cronus = new Cronus({ unref: true });
     cronus.on('skip', (name) => {
+      this._app.meter?.job({ job: name, outcome: 'overlap' });
       this._app.log.debug('job tick skipped — previous run still going', {
         job: name,
       });
@@ -178,6 +179,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       params: { ...job.args, ...overrides },
     });
     let handlerRan = false;
+    const startedAt = performance.now();
     this.__composedChain ??= compose<S, JOBContext<S>>(
       // The universal onion runs on job firings too — same chain, same
       // order as HTTP and sockets. Base-typed middleware fit the
@@ -216,6 +218,16 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
         content: { code: err.code, message: 'Internal server error' },
       };
     }
+    this._app.meter?.job({
+      job: job.name,
+      outcome: !handlerRan
+        ? 'skipped'
+        : outcome.status >= 500
+        ? 'failed'
+        : 'ok',
+      durationMs: performance.now() - startedAt,
+      driftMs: ctx.drift,
+    });
     if (!handlerRan) {
       // A middleware short-circuited (never called next()). On HTTP
       // that is a visible response; on a background job it would be an

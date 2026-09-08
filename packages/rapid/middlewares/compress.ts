@@ -12,6 +12,7 @@ import type { HTTPContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
 import { pickEncoding } from '../utils/pickEncoding.ts';
+import { meterAction } from '../utils/Meter.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 
@@ -144,6 +145,7 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     ctx.setHeader('vary', vary);
     const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
     if (encoding === null) return;
+    ctx.meter?.middleware('compress', encoding, meterAction(ctx));
 
     // A STREAM body is compressed chunk-wise through CompressionStream —
     // never buffered, so the threshold can't apply (length unknown) and any

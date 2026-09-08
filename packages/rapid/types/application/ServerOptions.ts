@@ -7,6 +7,7 @@
 
 import type { RapidApplicationStaticConfig } from './StaticConfig.ts';
 import type { TLSOptions } from '@tundralibs/compat/common';
+import type { RapidApplicationMetricsOptions } from './MetricsOptions.ts';
 import type { RapidApplicationPagingOptions } from './PagingOptions.ts';
 import type { RapidApplicationQueryOptions } from './QueryOptions.ts';
 
@@ -73,13 +74,15 @@ export type RapidApplicationServerOptions = {
    */
   maxBodySize?: number;
   /**
-   * Collect per-request server metrics (request/status/latency counters,
-   * websocket counters) — read back via {@link Application.metrics}.
-   * OPT-IN: off by default so the request path pays nothing for
-   * bookkeeping no one reads.
+   * Metrics — OPT-IN: off by default so the request path pays nothing
+   * for bookkeeping no one reads. `true` creates `app.meter` (a
+   * metro-man registry served by the `metrics()` endpoint) with every
+   * family on, plus the listener's own counters (`app.metrics`); the
+   * object form switches families off individually — see
+   * {@link RapidApplicationMetricsOptions}.
    * @default false
    */
-  metrics?: boolean;
+  metrics?: boolean | RapidApplicationMetricsOptions;
   /**
    * Auto-register a `HEAD` route for every `GET` route that lacks its own,
    * at boot: the synthesized `HEAD` reuses the `GET` handler + middleware

@@ -121,6 +121,7 @@ export type {
   RapidApplicationHeaderOptions,
   RapidApplicationJobMetrics,
   RapidApplicationJobsOptions,
+  RapidApplicationMetricsOptions,
   RapidApplicationOptions,
   RapidApplicationPagingOptions,
   RapidApplicationQueryOptions,

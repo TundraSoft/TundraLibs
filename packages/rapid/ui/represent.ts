@@ -254,6 +254,7 @@ export function represent<S extends RapidContextState>(
     // swap never reaches it, and a BYO client (htmx's HX-Redirect)
     // follows the header verbatim — so the guard lives here too.
     assertRedirectTarget(url);
+    ctx.meter?.representation('redirect');
     ctx.setHeader(appUi?.redirectHeader ?? 'rapid-redirect', url);
     // Same personal-cache rule as a rendered reply: a per-user redirect
     // target on an identity-bearing page must not come out of a shared
@@ -279,6 +280,7 @@ export function represent<S extends RapidContextState>(
     return { ...rest, status: 200, content: '', headers };
   }
   if (!swap && (template.prefer ?? appUi?.prefer ?? 'json') === 'json') {
+    ctx.meter?.representation('json');
     // The reply goes out as-is — but when it carries its OWN headers
     // with a `vary`, hand back a copy carrying the merged value (reply
     // headers overwrite ctx's at finalize).
@@ -306,6 +308,7 @@ export function represent<S extends RapidContextState>(
   }
 
   const view = buildView(ctx);
+  ctx.meter?.representation(swap ? 'fragment' : 'page');
   // An identity-bearing view — a csrf token, or the app's `view`
   // projection (which typically reads ctx.auth) — makes the rendered
   // HTML per-user: a shared cache must never hand one user's page (and

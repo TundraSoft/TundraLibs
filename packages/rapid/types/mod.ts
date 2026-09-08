@@ -19,6 +19,7 @@ export type { RapidApplicationPagingOptions } from './application/PagingOptions.
 export type { RapidApplicationQueryOptions } from './application/QueryOptions.ts';
 export type { RapidAccessLogOptions } from './application/AccessLogOptions.ts';
 export type { RapidApplicationHeaderOptions } from './application/HeaderOptions.ts';
+export type { RapidApplicationMetricsOptions } from './application/MetricsOptions.ts';
 export type { RapidApplicationServerOptions } from './application/ServerOptions.ts';
 export type { RapidApplicationStaticConfig } from './application/StaticConfig.ts';
 export type { RapidApplicationStaticEntry } from './application/StaticEntry.ts';

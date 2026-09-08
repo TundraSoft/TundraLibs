@@ -223,7 +223,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       ? new WebServer(this._app.option('name'), {
         mode: 'UNIX',
         unixSocketPath: server.unixSocketPath,
-        metrics: server.metrics,
+        metrics: this._app.meter !== undefined,
         handler: (request, info) => this.handle(request, info.remoteAddress),
         websocket,
       })
@@ -232,7 +232,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         port: server.port,
         hostname: server.hostname,
         tls: server.tls,
-        metrics: server.metrics,
+        metrics: this._app.meter !== undefined,
         handler: (request, info) => this.handle(request, info.remoteAddress),
         websocket,
       });
@@ -261,7 +261,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           stripApiPrefix(url.pathname, this._app.apiSurface?.prefix) ??
             url.pathname;
         if (pathname !== socketPath) return false;
-        if (!isSocketOriginAllowed(request, socketOrigins)) return false;
+        if (!isSocketOriginAllowed(request, socketOrigins)) {
+          this._app.meter?.upgrade('refused');
+          return false;
+        }
+        this._app.meter?.upgrade('accepted');
         // Connection-scope capture: everything ctx.connection carries
         // exists only HERE, at upgrade time.
         return {
@@ -346,14 +350,19 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // ChannelOptions to rpc's (mapping the connection's SocketData to a
     // SOCKETConnection). Clients subscribe over this same /ws socket.
     for (const [name, opts] of this._app.channels) {
-      rpc.channel(name, this.__adaptChannel(opts));
+      rpc.channel(name, this.__adaptChannel(name, opts));
     }
     this.__rpc = rpc;
     return rpc.handlers();
   }
 
-  /** Map a rapid {@link RapidChannelOptions} onto rpc's channel hooks. */
+  /**
+   * Map a rapid {@link RapidChannelOptions} onto rpc's channel hooks. With
+   * a meter, every hook is installed so subscriptions and refusals count;
+   * without one only the app's own hooks are wired.
+   */
   private __adaptChannel(
+    name: string,
     opts: RapidChannelOptions,
   ): ChannelOptions<SocketData> {
     const conn = (data: SocketData | undefined): SOCKETConnection => ({
@@ -361,15 +370,34 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       query: data?.query ?? {},
       headers: data?.headers ?? new Headers(),
     });
+    const meter = this._app.meter;
     return {
-      ...(opts.authorize
-        ? { authorize: (c) => opts.authorize!(conn(c.ws.data)) }
+      ...(opts.authorize || meter
+        ? {
+          authorize: async (c) => {
+            const ok = opts.authorize
+              ? await opts.authorize(conn(c.ws.data))
+              : true;
+            if (!ok) meter?.subscription(name, 'refused');
+            return ok;
+          },
+        }
         : {}),
-      ...(opts.onSubscribe
-        ? { onSubscribe: (c) => opts.onSubscribe!(conn(c.ws.data)) }
+      ...(opts.onSubscribe || meter
+        ? {
+          onSubscribe: async (c) => {
+            meter?.subscription(name, 'subscribed');
+            await opts.onSubscribe?.(conn(c.ws.data));
+          },
+        }
         : {}),
-      ...(opts.onUnsubscribe
-        ? { onUnsubscribe: (c) => opts.onUnsubscribe!(conn(c.ws.data)) }
+      ...(opts.onUnsubscribe || meter
+        ? {
+          onUnsubscribe: async (c) => {
+            meter?.subscription(name, 'unsubscribed');
+            await opts.onUnsubscribe?.(conn(c.ws.data));
+          },
+        }
         : {}),
     };
   }
@@ -381,12 +409,14 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
 
   /** Declare a channel on the live rpc server (post-start app.channel()). */
   public declareChannel(name: string, opts: RapidChannelOptions): void {
-    this.__rpc?.channel(name, this.__adaptChannel(opts));
+    this.__rpc?.channel(name, this.__adaptChannel(name, opts));
   }
 
   /** Server-initiated publish; no-op until the socket listener is up. */
   public publish(channel: string, data: unknown): Promise<void> {
-    return this.__rpc?.publish(channel, data) ?? Promise.resolve();
+    if (this.__rpc === undefined) return Promise.resolve();
+    this._app.meter?.published(channel);
+    return this.__rpc.publish(channel, data);
   }
 
   public async stop(drainMs = 0): Promise<void> {
@@ -596,9 +626,22 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           mounts.length > 0 && surface === 'ui' &&
           (method === 'GET' || method === 'HEAD')
         ) {
+          const meter = this._app.meter;
           for (const mount of mounts) {
-            if (await serveStaticFile(ctx, mount)) return;
+            if (await serveStaticFile(ctx, mount)) {
+              meter?.static(
+                ctx.status === 304
+                  ? 'not_modified'
+                  : ctx.status === 206
+                  ? 'range'
+                  : ctx.status === 416
+                  ? 'unsatisfiable'
+                  : 'hit',
+              );
+              return;
+            }
           }
+          meter?.static('miss');
         }
         // 405 / generic OPTIONS: the PATH exists under other methods. Gated
         // by server.methodNotAllowed (off → a wrong method is a plain 404,

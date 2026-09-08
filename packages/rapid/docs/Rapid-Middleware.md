@@ -26,6 +26,10 @@ of them come first; read those once.
   is the order to register them in.
 - The correlation id, the response-time header and the access log are **not
   middleware** — the core does them (`headers`, `logger.access` config).
+- With `server.metrics` on, every decision the shipped middleware take is a
+  series: `rapid_middleware_events_total{middleware,event,action}` — the
+  `middleware` family in the
+  [configuration reference](./Rapid-Configuration.md#servermetrics--metric-families).
 
 ---
 

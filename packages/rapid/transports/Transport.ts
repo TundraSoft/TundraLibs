@@ -7,7 +7,7 @@ import { isThenable } from '../utils/isThenable.ts';
 import { representError } from '../ui/represent.ts';
 import type { HTTPContext } from '../context/HTTPContext.ts';
 import type { JOBContext } from '../context/JOBContext.ts';
-import type { Meter } from '../utils/Meter.ts';
+import { type Meter, meterAction } from '../utils/Meter.ts';
 import { attachContainer } from '../utils/requestContainer.ts';
 import type {
   RapidContext,
@@ -88,7 +88,7 @@ export abstract class Transport<
       );
     }
     const transport = ctx.type;
-    const start = meter.begin(transport);
+    const start = meter.begin(transport, started);
     const close = (): void =>
       meter.end({
         transport,
@@ -142,14 +142,9 @@ export abstract class Transport<
    * / job names), so they pass through unchanged.
    */
   private __identity(ctx: Context<S, unknown>): string {
-    if (
-      ctx.type === 'HTTP' && (ctx as { matched?: boolean }).matched === false
-    ) {
-      const sp = ctx.action.indexOf(' ');
-      const method = sp === -1 ? ctx.action : ctx.action.slice(0, sp);
-      return `${method} <unmatched>`;
-    }
-    return ctx.action;
+    return meterAction(
+      ctx as { type: string; action: string; matched?: boolean },
+    );
   }
 
   /**
@@ -236,6 +231,7 @@ export abstract class Transport<
         const disclose = (error: unknown): void => {
           const err = RapidError.from(error);
           thrown = err;
+          this._app.meter?.error(err.code, ctx.type);
           // A 5xx is the server's bug report: error level, stack, debug
           // context. A 4xx is the CLIENT's error — the access line records
           // it at warn; here it is a debug breadcrumb with no stack, so a

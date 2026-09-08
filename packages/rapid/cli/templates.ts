@@ -89,7 +89,8 @@ server:
   # tls: # see @tundralibs/compat TLSOptions — inline PEM or file paths
   trustProxy: false # false | true | <reverse-proxy hop count> — ctx.remoteAddress, rateLimit() keys, x-forwarded-host
   maxBodySize: 1048576 # bytes, non-file bodies (0 disables) — ctx.payload / ctx.rawPayload (413 past it)
-  metrics: false # app.meter + the metrics() endpoint
+  metrics: false # app.meter + the metrics() endpoint; true = every family on, or pick families:
+  # metrics: { requests: true, errors: true, jobs: true, sockets: true, middleware: true, bodies: true, ui: true }
   autoHead: true # a HEAD route for every GET
   methodNotAllowed: false # 405 + Allow instead of 404 on a wrong method
   ignoreTrailingSlash: true # /users and /users/ are the same route
@@ -560,8 +561,11 @@ may replace the envelope (sync, one per app).
   slogger loggers that carry the request id; \`logger.level\` is a syslog
   NUMBER (7 DEBUG … 0 EMERGENCY).
 - \`tracer\` (opt-in) wraps every invocation in a span and composes trace ids
-  onto log lines; \`server.metrics: true\` creates \`app.meter\` for the
-  \`metrics()\` endpoint.
+  onto log lines; \`server.metrics: true\` creates \`app.meter\` (a metro-man
+  registry) for the \`metrics()\` endpoint with seven switchable families —
+  requests, error codes, jobs, sockets, middleware decisions, bodies, ui —
+  \`server.metrics: { ui: false }\` turns one off; register app metrics on
+  \`app.meter.registry\`.
 
 ## UI layer (\`@tundralibs/rapid/ui\`)
 

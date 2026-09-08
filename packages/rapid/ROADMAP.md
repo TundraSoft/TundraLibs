@@ -78,6 +78,13 @@ Core and the current capability set are built and green on Deno / Bun / Node
   crypt, restler, utils, slogger). Not built: a `rapid ai` REGENERATE
   subcommand — it would have to merge into a guide the user has since edited,
   a real design question; open follow-on if wanted.
+- **Metric families (2026-09-08)** — `server.metrics: true | { requests,
+  errors, jobs, sockets, middleware, bodies, ui }`; `Meter` declares only
+  the enabled families and records error codes at disclosure, job outcomes
+  and drift, socket upgrades and channel subscriptions, each middleware's
+  decisions, request bytes and uploads, UI representations and static
+  outcomes; the latency histogram now uses the transport's arrival clock
+  (the metro-man tidy-up's "unify clocks" item).
 - **First-release prep (2026-09-08)** — six read-only audits (UI runtime,
   docs-vs-API, config-vs-scaffold, middleware/app/module option types)
   actioned: swap-redirect guarded server-side, response-origin check and

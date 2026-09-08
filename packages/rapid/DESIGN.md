@@ -458,8 +458,14 @@ section-level error templates.
 Inherited wholesale from the suite: slogger is always on with the request id
 composed through ambient's context provider; tracer is opt-in (a span per
 invocation around the onion, inbound `traceparent` honoured, trace ids on
-log lines); metrics are opt-in (`server.metrics` → `app.meter`, served by the
-`metrics()` endpoint). The correlation id is minted by a process-wide,
+log lines); metrics are opt-in (`server.metrics` → `app.meter`, a metro-man
+registry served by the `metrics()` endpoint — metro-man ships no scrape
+endpoint by design, so that route is rapid's). The meter records seven
+switchable families (invocation cycle, error codes, jobs, sockets,
+middleware decisions, bodies, ui); a family that is off declares no series
+and its recorder is one boolean check, and with metrics off no meter exists.
+The latency histogram shares the arrival clock with `x-response-time` and
+the access line. The correlation id is minted by a process-wide,
 replaceable generator (a monotonic `sequenceID` by default — a correlation id
 never needed a CSPRNG). The access line is core config, level by outcome, and
 never carries client identifiers unless opted in.

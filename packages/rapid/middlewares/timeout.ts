@@ -20,6 +20,7 @@
  */
 
 import { RapidError } from '../errors/mod.ts';
+import { meterAction } from '../utils/Meter.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 
 /**
@@ -71,6 +72,7 @@ export function timeout(seconds: number): RapidMiddleware {
             // Hand the still-running work to the context BEFORE
             // rejecting: transports that own a concurrency slot (jobs)
             // must not free it while this is in flight.
+            ctx.meter?.middleware('timeout', 'fired', meterAction(ctx));
             ctx.detach(work);
             reject(
               new RapidError('RAPID_TIMEOUT', {

@@ -145,6 +145,16 @@ const UI_DATA_KEYS = new Set([
 ]);
 /** RFC 9110 token — the legal shape of a header name. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+/** The metric families `server.metrics` may switch (see RapidApplicationMetricsOptions). */
+const METRIC_FAMILIES = new Set([
+  'requests',
+  'errors',
+  'jobs',
+  'sockets',
+  'middleware',
+  'bodies',
+  'ui',
+]);
 
 /** `logger.access`, resolved once: the skip sets built, `slow` in ms. */
 export type ResolvedAccessLog = {
@@ -605,7 +615,10 @@ export class Application<S extends RapidContextState = RapidContextState>
     this.__ownedUploadPath = ownedUploadPath;
     // Metrics are opt-in — a Meter exists only when server.metrics is on,
     // so the invoke cycle pays nothing otherwise.
-    if (this.option('server')?.metrics === true) this.__meter = new Meter();
+    const metrics = this.option('server')?.metrics;
+    if (metrics === true || (typeof metrics === 'object' && metrics !== null)) {
+      this.__meter = new Meter(metrics === true ? {} : metrics);
+    }
     this._state = defaultState ?? ({} as S);
     this.config = config ?? Config({});
 
@@ -1965,6 +1978,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       unixSocketPath,
       trustProxy,
       maxBodySize,
+      metrics: metricsOption,
       socketPath,
       socketOrigins,
       versioning,
@@ -1978,6 +1992,34 @@ export class Application<S extends RapidContextState = RapidContextState>
           'server.trustProxy must be a boolean or a non-negative integer hop count',
         details: { key: 'server.trustProxy', value: trustProxy },
       });
+    }
+    if (metricsOption !== undefined && typeof metricsOption !== 'boolean') {
+      if (
+        typeof metricsOption !== 'object' || metricsOption === null ||
+        Array.isArray(metricsOption)
+      ) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            'server.metrics must be a boolean or an object of per-family booleans',
+          details: { key: 'server.metrics', value: metricsOption },
+        });
+      }
+      for (const [family, on] of Object.entries(metricsOption)) {
+        if (!METRIC_FAMILIES.has(family)) {
+          throw new RapidError('RAPID_CONFIG', {
+            message: `server.metrics: unknown family '${family}' (valid: ${
+              [...METRIC_FAMILIES].join(', ')
+            })`,
+            details: { key: 'server.metrics', value: family },
+          });
+        }
+        if (typeof on !== 'boolean') {
+          throw new RapidError('RAPID_CONFIG', {
+            message: `server.metrics.${family} must be a boolean`,
+            details: { key: `server.metrics.${family}`, value: on },
+          });
+        }
+      }
     }
     if (
       maxBodySize !== undefined &&

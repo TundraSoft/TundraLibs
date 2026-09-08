@@ -29,6 +29,7 @@ import {
   verifySignedValue,
 } from '../utils/cookies.ts';
 import { expiringMap } from '../utils/expiringMap.ts';
+import { meterAction } from '../utils/Meter.ts';
 import { mark, SESSION_ISSUED } from '../utils/requestMarks.ts';
 
 /** Arbitrary per-client data held in a session. */
@@ -254,6 +255,11 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
         }
       }
       loaded = true;
+      ctx.meter?.middleware(
+        'session',
+        id !== undefined ? 'loaded' : 'missed',
+        meterAction(ctx),
+      );
       return {
         get id() {
           return id;
@@ -269,12 +275,14 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
         },
         keys: () => Object.keys(data),
         regenerate: () => {
+          ctx.meter?.middleware('session', 'regenerated', meterAction(ctx));
           if (id !== undefined) evict = id; // drop the pre-login record at save
           id = undefined; // new id minted at save
           createdAt = Date.now(); // fresh absolute window post-login
           dirty = true;
         },
         destroy: () => {
+          ctx.meter?.middleware('session', 'destroyed', meterAction(ctx));
           destroyed = true;
         },
       };
@@ -341,6 +349,7 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
             // mutation must not persist); (b) a value no backend could
             // serialize (a function) fails THIS request loudly instead
             // of poisoning the record and wedging every later load.
+            ctx.meter?.middleware('session', 'saved', meterAction(ctx));
             await hooks.saveSession(
               id,
               { data: structuredClone(data), createdAt },
@@ -355,6 +364,7 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
             // in parallel (a page render overlapping a POST), and saving
             // it back would erase that write. `touchSession` when the
             // hooks have it; else re-save whatever the backend holds NOW.
+            ctx.meter?.middleware('session', 'touched', meterAction(ctx));
             if (hooks.touchSession !== undefined) {
               await hooks.touchSession(id, idleTtl);
             } else {
