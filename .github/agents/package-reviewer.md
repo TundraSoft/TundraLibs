@@ -16,7 +16,8 @@ Follow the guidelines in `.github/instructions/package-review.instructions.md` t
    - 🎯 Usability (High, Medium, Low priority)
    - 📚 Documentation (Missing, Incomplete)
 
-2. Create a `REVIEW.md` file with:
+2. Deliver the report as chat output (or a PR / tracking issue when asked)
+   — never as a file inside `packages/<pkg>/` — with:
    - Progress tracking section
    - Action item checklist
    - Detailed analysis for each issue
@@ -168,7 +169,10 @@ Organize recommendations into phases:
 
 ## Deliverable
 
-Create a `REVIEW.md` file in the package root containing:
+Deliver the report as chat output, or as a PR description / tracking issue
+when asked. Do not write it to disk inside a package: `packages/<pkg>/` ships
+to consumers (`**/REVIEW*.md` is publish-excluded only as a backstop), and the
+repo keeps no review archive. The report contains:
 
 1. Header with date and scope
 2. Progress tracking section
@@ -185,7 +189,7 @@ When asked to "review the [package-name] package":
 
 1. Read all TypeScript/JavaScript files in the package
 2. Analyze for security, performance, usability, documentation
-3. Create comprehensive `REVIEW.md` following the template
+3. Produce the report following the template above (chat / PR / issue)
 4. Include specific file/line references
 5. Provide code examples for all recommendations
 6. Organize by priority and effort
