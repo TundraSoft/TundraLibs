@@ -156,29 +156,37 @@ frameworks: an authentication handler that extracts the credential, calls
 
 ```typescript
 import { Pact } from '@tundralibs/pact';
-import { oakAuth, oakGuard } from '@tundralibs/pact/middleware/oak';
+import { oakPact } from '@tundralibs/pact/middleware/oak';
 
 declare const pact: Pact<{ READ: 1n }, 'Projects'>;
 declare const router: {
   get: (path: string, ...handlers: unknown[]) => void;
 };
 
-router.get('/projects', oakAuth(pact), oakGuard('Projects', 'READ'), () => {
+const { authenticate, authorize } = oakPact(pact);
+router.get('/projects', authenticate, authorize('Projects', 'READ'), () => {
   // ctx.state.pact.principal is the authenticated, bound principal
 });
 ```
 
-`expressAuth`/`expressGuard`, `fastifyAuth`/`fastifyGuard`, and
-`honoAuth`/`honoGuard` follow the same shape, and the neutral core makes an
-adapter for any other stack a few lines. See
-[Middleware](middleware/Pact-Middleware.md).
+One factory per framework — `expressPact`, `fastifyPact`, `oakPact`,
+`honoPact` — each returning `{ authenticate, authorize }` over one instance
+and one options bag; `authorize` is typed by the instance's catalog and
+checked at the call site. Every carrier (header, scheme prefix) defaults to
+the standard and is configurable; the HMAC scheme verifies a templated,
+timestamped request signature and signs the response back; API-key callers
+can exchange JWE-encrypted payloads. The neutral core
+(`createPactMiddleware`) makes an adapter for any other stack a few lines.
+See [Middleware](middleware/Pact-Middleware.md).
 
 ## Highlights
 
 - **Four credential schemes** through one `authenticate()` — `BASIC`
   (identifier + password), `BEARER` (session token, opaque or JWT), `APIKEY`
   (key id + presented secret), `HMAC` (request signature; the secret never
-  travels). Junk input collapses to a 401, never a crash.
+  travels). Junk input collapses to a 401, never a crash. `signFor` /
+  `encryptFor` / `decryptFor` use a key's secret server-side without
+  exposing it.
 - **Bound principals** — `authenticate` and `principalOf(id)` return a
   principal whose `hasPermission`/`assert` evaluate in memory, re-resolving
   only when stale or after a revocation call. Hand-built objects have no

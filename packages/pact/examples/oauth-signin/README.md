@@ -65,8 +65,8 @@ GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... node --import tsx main.ts
    curl -H 'Authorization: Bearer pact_st_...' http://localhost:8735/notes
    ```
 
-   `/me` is behind `oakAuth` (401 without a valid token); `/notes` adds
-   `oakGuard('Notes', 'READ')` (403 without the permission).
+   `/me` is behind `authenticate` from `oakPact(pact)` (401 without a valid
+   token); `/notes` adds `authorize('Notes', 'READ')` (403 without the permission).
 
 Sessions here are cache-only (`cache: { ttl: { session: 60 } }`, MEMORY
 engine): pact's session cache is the store, so the demo needs no session

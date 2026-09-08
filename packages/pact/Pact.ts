@@ -11,6 +11,7 @@ import {
 } from '@tundralibs/crypt/OTP';
 import { issueJWT, JWTError, verifyJWT } from '@tundralibs/crypt/JWT';
 import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
+import { decryptJwe, encryptJwe, JWE_ENCRYPTIONS } from './jwe.ts';
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import { AbstractEngine, Cacher } from '@tundralibs/cacher';
 import { decodeBase64Url, encodeBase64Url } from '@std/encoding';
@@ -22,7 +23,9 @@ import type {
   PactCacheType,
   PactCredential,
   PactEvents,
+  PactHmacAlgorithm,
   PactHooks,
+  PactJweEncryption,
   PactLoginResult,
   PactOAuthProfile,
   PactOAuthRedirect,
@@ -1356,6 +1359,79 @@ export class Pact<B extends PermissionBits, M extends string>
   }
 
   /**
+   * Sign `content` with an API key's secret — the secret never leaves pact.
+   * The server-side half of a signed exchange: the caller signed its
+   * request with this key (HMAC scheme); the response is signed back with
+   * the same one. The key must exist and be active, with an active owner.
+   *
+   * @throws {PactError} INVALID_CREDENTIALS for an unknown key,
+   *   NOT_ACTIVE for a disabled key or owner.
+   */
+  public async signFor(
+    keyId: string,
+    content: string,
+    options: { algorithm?: PactHmacAlgorithm } = {},
+  ): Promise<string> {
+    const key = await this.__activeKey(keyId);
+    return await signHMAC(content, key.secret, {
+      hashAlgorithm: options.algorithm ?? 'SHA-256',
+    });
+  }
+
+  /**
+   * Encrypt `plaintext` for an API key as a compact JWE (`alg: dir`,
+   * AES-GCM, `kid` = the key id; content key HKDF-derived from the secret).
+   * The confidentiality layer over a key-authenticated exchange.
+   *
+   * @throws {PactError} INVALID_CREDENTIALS / NOT_ACTIVE as {@link signFor}.
+   */
+  public async encryptFor(
+    keyId: string,
+    plaintext: string | Uint8Array,
+    options: { enc?: PactJweEncryption } = {},
+  ): Promise<string> {
+    const key = await this.__activeKey(keyId);
+    return await encryptJwe(
+      key.secret,
+      keyId,
+      plaintext,
+      options.enc ?? 'A256GCM',
+    );
+  }
+
+  /**
+   * Open a compact JWE a client encrypted for `keyId` (see
+   * {@link encryptFor}); `options.enc` restricts the accepted content
+   * encryptions (default: every one pact offers).
+   *
+   * @throws {PactError} ENCRYPTION_INVALID when the token is malformed,
+   *   uses another `alg`/`enc`, names another `kid`, or fails its tag;
+   *   INVALID_CREDENTIALS / NOT_ACTIVE as {@link signFor}.
+   */
+  public async decryptFor(
+    keyId: string,
+    jwe: string,
+    options: { enc?: readonly PactJweEncryption[] } = {},
+  ): Promise<Uint8Array> {
+    const key = await this.__activeKey(keyId);
+    return await decryptJwe(
+      key.secret,
+      keyId,
+      jwe,
+      options.enc ?? JWE_ENCRYPTIONS,
+    );
+  }
+
+  /** The stored key, active with an active owner, or a loud PactError. */
+  private async __activeKey(keyId: string): Promise<PactStoredApiKey> {
+    const key = await this.__getApiKey(keyId);
+    if (key === null) throw new PactError('INVALID_CREDENTIALS');
+    this.__keyPrincipal(key); // NOT_ACTIVE / INVALID_GRANTS
+    await this.__requireActiveOwner(key);
+    return key;
+  }
+
+  /**
    * Evict one principal from the cache and stale-mark every outstanding
    * bound principal (each re-resolves at its next check). Grants live in
    * app storage where pact cannot see writes, so call this after
@@ -1927,11 +2003,9 @@ export class Pact<B extends PermissionBits, M extends string>
   /** HMAC scheme: recompute the signature over the caller-canonicalized
    * payload with the key's raw secret; malformed material is a 401,
    * never a 500. */
-  private async __authHmac(credential: {
-    keyId: string;
-    signature: string;
-    payload: string;
-  }): Promise<PactAuthContext<M, B>> {
+  private async __authHmac(
+    credential: Extract<PactCredential, { scheme: 'HMAC' }>,
+  ): Promise<PactAuthContext<M, B>> {
     const key = await this.__getApiKey(credential.keyId);
     if (key === null) throw new PactError('INVALID_CREDENTIALS');
     let valid = false;
@@ -1940,6 +2014,7 @@ export class Pact<B extends PermissionBits, M extends string>
         credential.payload,
         credential.signature,
         key.secret,
+        { hashAlgorithm: credential.algorithm ?? 'SHA-256' },
       );
     } catch {
       // Malformed signature material must 401, not 500.

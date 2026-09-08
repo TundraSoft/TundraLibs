@@ -14,7 +14,7 @@ import {
   type PactOAuthRedirect,
 } from '@tundralibs/pact';
 import { failureResponse } from '@tundralibs/pact/middleware';
-import { oakAuth, oakGuard } from '@tundralibs/pact/middleware/oak';
+import { oakPact } from '@tundralibs/pact/middleware/oak';
 import { PactError } from '@tundralibs/pact/errors';
 import { hooks } from './store.ts';
 
@@ -118,15 +118,16 @@ router.get('/auth/:provider/callback', async (ctx) => {
 });
 
 // Protected routes via the shipped middleware.
-router.get('/me', oakAuth(pact), (ctx) => {
+const { authenticate, authorize } = oakPact(pact);
+router.get('/me', authenticate, (ctx) => {
   const auth = ctx.state.pact!;
   ctx.response.body = { id: auth.principal.id, via: auth.via };
 });
 
 router.get(
   '/notes',
-  oakAuth(pact),
-  oakGuard('Notes', 'READ') as Parameters<Router['get']>[2],
+  authenticate,
+  authorize('Notes', 'READ') as Parameters<Router['get']>[2],
   (ctx) => {
     ctx.response.body = { notes: ['pact ships its own middleware now'] };
   },

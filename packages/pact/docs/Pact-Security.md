@@ -68,18 +68,25 @@ never read as "denied".
 
 ## HMAC requests
 
-The HMAC scheme verifies a signature over a caller-supplied canonical
-payload; pact never guesses which request bytes are signed. Two things are
-the app's contract, documented here because omitting them weakens the
-scheme:
+The HMAC scheme verifies a signature over a canonical payload; the engine
+never guesses which request bytes are signed — the
+[middleware](../middleware/Pact-Middleware.md#signed-exchanges-hmac)
+renders it from a template whose mandatory keys are the method, the path,
+a timestamp, and an RFC 9530 body digest, rejects timestamps outside
+`maxSkew`, and signs the response back over status, server timestamp, and
+body digest. Calling `authenticate` directly makes canonicalization your
+contract: cover at least what the default template covers.
 
-- **Canonicalization** must cover everything you need integrity for —
-  method and path at minimum; add a timestamp and body digest for real
-  deployments.
-- **Replay**: pact verifies the signature, not uniqueness. Include a
-  timestamp in the canonical string and reject stale ones (and/or track
-  nonces) at the app layer. Native replay support is on the
-  [roadmap](Pact-Roadmap.md).
+- **Replay**: the timestamp window bounds it; it does not remove it. A
+  nonce header is carried and echoed today, and a nonce store (reject a
+  seen nonce within the window) is on the [roadmap](Pact-Roadmap.md) —
+  until then, track nonces at the app layer where replays matter.
+- **Payload confidentiality** is separate from integrity: TLS in transit,
+  or the middleware's key-bound JWE option end to end. That option derives
+  one AES-GCM key per API key (HKDF over the secret, salted with the key
+  id) and uses random 96-bit IVs, so the usual per-key message bound
+  applies across the key's lifetime — rotate keys rather than run one for
+  years at high volume.
 
 ## TOTP
 

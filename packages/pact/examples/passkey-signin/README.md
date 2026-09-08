@@ -35,7 +35,7 @@ works for the demo.
    user's credentials in `allowCredentials`; left empty, the browser
    offers its discoverable credentials and the server resolves the user
    from the asserted credential. Either way a session token comes back.
-3. **Call the API** — `GET /me` goes through `oakAuth` with the session
+3. **Call the API** — `GET /me` goes through `oakPact(pact).authenticate` with the session
    token; from here on a passkey login is indistinguishable from any
    other pact session.
 
