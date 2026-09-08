@@ -492,6 +492,27 @@ from the transport's `started` — unify on the latter.
   Sequencing agreed the same day: `ready()` (readiness that 503s during the
   drain) and the pact session handlers on `pactAuth` (`login`, `logout`,
   `refresh`, `me`) first, then the dashboard.
+- **OpenAPI docs UI (`docs()`) — agreed 2026-09-09, build next (before the
+  dashboard).** Auth schemes stay the user's: `openapi({ securitySchemes })`
+  gets a PRECISE `OpenApiSecurityScheme` union (http basic/bearer, apiKey
+  header/query/cookie, oauth2, openIdConnect) validated at mount; no
+  automatic injection (the guard-metadata attempt was removed 2026-09-08).
+  `app.get('/docs', docs({ spec, viewer }))` — `uiOnly`, `expose` like
+  `openapi()`. Default viewer `'rapid'`: the reference rendered
+  server-side with rapid's own templates inside the app's `core`/`layout`
+  (branding for free; `layout: false` opts out), built from exported parts
+  (`DocsReference`, `DocsOperation`, `DocsSchemas`, `DocsAuth`) so `render:
+  (doc, view) => html` composes a custom page. **Default credential box**
+  generated from the document's `securitySchemes` (token / user+password /
+  header, query or cookie key / OAuth link) plus an optional sign-in form
+  posting to the app's login route (`tryIt: { login: { path, fields } }`);
+  a rapid-served `tryIt` script (no CDN, `script-src 'self'`) stores
+  credentials in session storage, applies them to try-it requests, and
+  exposes `rapid.docs.setCredential(scheme, value)` so a custom box mixes
+  with the default. Third-party viewers (`scalar` / `redoc` / `swagger`)
+  later, via a pinned SRI CDN shell with `viewerOptions` passthrough.
+  Order: scheme type + validation → `docs()` + default box + the two
+  customization paths → `tryIt` execution → third-party viewers.
 - **Dev console (TUI). 🎨 design frozen 2026-08-22; build pending.** A
   full-screen alternate-buffer terminal console that replaces plain log spew on
   a TTY. Regions each back onto an existing getter (banner + bind line;
