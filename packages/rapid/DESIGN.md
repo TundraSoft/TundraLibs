@@ -52,9 +52,12 @@ The stance that follows from it, and that every later decision honours:
 - **Loud at boot, never silent at 3 am.** Every configuration error, route
   collision, bad option or unsupported combination throws `RAPID_CONFIG`
   before the first request.
-- **Cross-runtime is a contract, not an aspiration.** Deno, Bun, Node,
-  Cloudflare Workers and the browser all load the package; a capability a
-  target lacks degrades with a typed error, never a crash.
+- **Cross-runtime is a contract, not an aspiration.** Deno, Bun, Node and
+  Cloudflare Workers all load and serve the package; a capability a target
+  lacks degrades with a typed error, never a crash. A browser tab loads the
+  package too, but cannot serve a request — no `AsyncLocalStorage` for
+  `@tundralibs/ambient`'s correlation, so `app.fetch()` throws a typed error
+  there rather than crashing.
 
 ## 2. Placement
 

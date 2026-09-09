@@ -1,7 +1,7 @@
 # rAPId
 
-A cross-runtime API framework for Deno, Bun, Node.js, Cloudflare Workers, and
-the browser. One application object registers HTTP routes, WebSocket (RPC)
+A cross-runtime API framework for Deno, Bun, Node.js and Cloudflare Workers.
+One application object registers HTTP routes, WebSocket (RPC)
 commands, and cron jobs, and runs them through a single universal
 middleware/context cycle — assembled either Oak-style from functions
 (`app.get(...)`, `app.use(...)`, `app.job(...)`) or from decorated classes
@@ -15,7 +15,6 @@ listening server (`app.start()`) or a fetch handler (`app.fetch(request)`).
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
-![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 > Pre-1.0. The API described here is real and verified against source; minor
 > releases may still move it.
@@ -721,8 +720,8 @@ capabilities:
 - **Deno / Bun / Node.js** — full support: `app.start()` opens a listening
   server (TCP or Unix socket), cron jobs are scheduled, WebSocket commands and
   file uploads work.
-- **Cloudflare Workers / browser** — no listening socket, filesystem, or
-  scheduler. Serve requests through the fetch handler instead of `start()`:
+- **Cloudflare Workers** — no listening socket, filesystem, or scheduler.
+  Serve requests through the fetch handler instead of `start()`:
 
   ```ts ignore
   export default { fetch: (request: Request) => app.fetch(request) };
