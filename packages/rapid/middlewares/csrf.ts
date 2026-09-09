@@ -28,6 +28,7 @@ import { signHMAC } from '@tundralibs/crypt';
 import { ulid } from '@tundralibs/id';
 import { RapidError } from '../errors/mod.ts';
 import { meterAction } from '../utils/Meter.ts';
+import { unmaskToken } from '../utils/csrfMask.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
 import {
@@ -189,10 +190,14 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
           if (typeof v === 'string') sent = v;
         }
       }
+      // A form field or meta tag carries the per-response MASKED form
+      // (`view.csrfToken`); the swap runtime echoes the bare cookie.
+      // Either unmasks to the token — a malformed mask is invalid.
+      const bare = sent === undefined ? undefined : unmaskToken(sent);
       if (
-        sent === undefined ||
-        sent !== token ||
-        (await verifyToken(sent, secret)) !== binding
+        bare === undefined ||
+        bare !== token ||
+        (await verifyToken(bare, secret)) !== binding
       ) {
         ctx.meter?.middleware('csrf', 'rejected', meterAction(ctx));
         throw new RapidError('RAPID_CSRF_INVALID', {

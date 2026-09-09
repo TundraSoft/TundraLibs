@@ -305,8 +305,9 @@ only.
 Every template receives a frozen, read-only `view` as its second parameter:
 `{ requestId, runtimePath, path, query, asset, csrfToken? }` (`csrfToken` is
 the token valid for THIS response — what `csrf()` issued or confirmed on the
-way in, else the request's `csrf` cookie; set `ui.csrfCookie` if you renamed
-it in `csrf()`).
+way in, else the request's `csrf` cookie — in a per-response MASKED form:
+render it verbatim into a hidden field or meta tag and send it back as-is,
+`csrf()` unmasks it; set `ui.csrfCookie` if you renamed the cookie).
 **Nothing from `ctx.auth` is reachable by default** — the projection names
 exactly which fields cross, so identity exposure is safe by construction,
 not by discipline.

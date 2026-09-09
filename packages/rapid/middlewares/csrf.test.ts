@@ -11,6 +11,7 @@ import { csrf } from './csrf.ts';
 import { RapidError } from '../errors/mod.ts';
 import { getSession, session } from './session.ts';
 import { html, template } from '../ui/html.ts';
+import { unmaskToken } from '../utils/csrfMask.ts';
 
 const makeApp = async () => {
   const app = await Application.initialize({
@@ -270,7 +271,11 @@ describe('rapid csrf() with session() — token follows the session on the SAME 
     const res = await app.fetch(new Request('http://app/page'));
     const issued = tokenFrom(res)!;
     asserts.assert(issued);
-    asserts.assertEquals(await res.text(), `<i>${issued}</i>`);
+    const rendered = (await res.text()).slice(3, -4);
+    // MASKED per response: never the cookie's bytes, always the cookie's token.
+    asserts.assertNotEquals(rendered, issued);
+    asserts.assert(!rendered.includes(issued.slice(0, 12)));
+    asserts.assertEquals(unmaskToken(rendered), issued);
     await app.stop();
   });
 });
@@ -286,6 +291,72 @@ describe('rapid csrf() — cookie attributes', () => {
       asserts.assert(!/HttpOnly/i.test(cookie), 'the runtime must read it');
       asserts.assertMatch(cookie, /; SameSite=Lax/);
       asserts.assertMatch(cookie, /; Path=\//);
+    } finally {
+      await app.stop();
+    }
+  });
+});
+
+describe('rapid csrf() — masked tokens (BREACH)', () => {
+  it('two renders mask differently, both echo back valid in the header and in the form field; a tampered mask is 403; the bare cookie still works', async () => {
+    const app = await Application.initialize({
+      name: 'csrf-mask',
+      secret: 'test-secret-0123456789-abcdefghijklmnop',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(csrf({ secure: false }));
+    const Form = template<unknown>(
+      (_d, view) => html`<i>${view.csrfToken ?? ''}</i>`,
+      'Form',
+    );
+    app.get('/page', { template: { render: Form, prefer: 'html' } }, () => ({
+      content: {},
+    }));
+    app.post('/submit', () => ({ content: { ok: true } }));
+    try {
+      const first = await app.fetch(new Request('http://app/page'));
+      const cookie = tokenFrom(first)!;
+      const maskA = (await first.text()).slice(3, -4);
+      const second = await app.fetch(
+        new Request('http://app/page', {
+          headers: { cookie: `csrf=${cookie}` },
+        }),
+      );
+      const maskB = (await second.text()).slice(3, -4);
+      asserts.assertNotEquals(maskA, maskB);
+      asserts.assertNotEquals(maskA, cookie);
+
+      const post = (headers: Record<string, string>, body?: BodyInit) =>
+        app.fetch(
+          new Request('http://app/submit', {
+            method: 'POST',
+            headers: { cookie: `csrf=${cookie}`, ...headers },
+            body,
+          }),
+        );
+      const viaHeader = await post({ 'x-csrf-token': maskA });
+      asserts.assertEquals(viaHeader.status, 200);
+      await viaHeader.body?.cancel();
+      const viaField = await post(
+        { 'content-type': 'application/x-www-form-urlencoded' },
+        new URLSearchParams({ _csrf: maskB }).toString(),
+      );
+      asserts.assertEquals(viaField.status, 200);
+      await viaField.body?.cancel();
+      const bare = await post({ 'x-csrf-token': cookie });
+      asserts.assertEquals(bare.status, 200);
+      await bare.body?.cancel();
+
+      const at = maskA.indexOf('~') + 1;
+      const tampered = maskA.slice(0, at) +
+        (maskA[at] === '0' ? '1' : '0') + maskA.slice(at + 1);
+      const rejected = await post({ 'x-csrf-token': tampered });
+      asserts.assertEquals(rejected.status, 403);
+      await rejected.body?.cancel();
+      const malformed = await post({ 'x-csrf-token': 'zz~zz' });
+      asserts.assertEquals(malformed.status, 403);
+      await malformed.body?.cancel();
     } finally {
       await app.stop();
     }

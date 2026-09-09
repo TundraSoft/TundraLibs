@@ -299,12 +299,12 @@ bodies.
 (`app.use(compress(), etag())`). The other way round, the tag would hash
 compressed bytes and change with the negotiated encoding.
 
-**Compressed HTML and secrets (BREACH).** A CSRF token is one value for the
-life of the session and is rendered into every page; compressing a page that
-also reflects attacker-chosen input (a search-box echo) lets the token be
-recovered from response lengths over HTTPS. Keep `compress()` off pages that
-render `view.csrfToken` alongside reflected input, or exclude `text/html` by
-placing `compress()` behind an `onlyApi` scope.
+**Compressed HTML and secrets (BREACH).** Compressing a page that carries a
+stable secret next to attacker-reflected input (a search-box echo) lets the
+secret be recovered from response lengths over HTTPS. `view.csrfToken` is
+safe — it is masked under a fresh pad per response — but any OTHER secret a
+template renders (an API key, a signed link) is not; keep `compress()` off
+such pages, or exclude `text/html` by placing it behind an `onlyApi` scope.
 
 ## etag
 
@@ -341,7 +341,11 @@ subdomain — never verifies for another. When the session changes (login,
 `regenerate()`, logout) the token is re-issued **on the same response**,
 provided `csrf()` is registered **outside** `session()`. The token valid for
 the current response is published to the view bag as `view.csrfToken`, so a
-first-visit form is never empty.
+first-visit form is never empty — **masked**: the view gets the token XORed
+under a fresh random pad on every response (`<hex pad>~<hex masked>`), so a
+compressed page never carries the same secret bytes twice (the BREACH
+defence); `csrf()` unmasks a header or field value before verifying, and the
+bare cookie value the swap runtime echoes stays valid.
 
 **Pitfalls.** Registered inside `session()`, the re-issue lands one response
 late: the first state-changing request after a login is rejected once. The
@@ -356,8 +360,7 @@ side of it.
 
 **Pitfalls.** `csrf()` needs the app `secret` at REQUEST time — installed
 without one, every HTTP request (GETs included) is a `RAPID_CONFIG` 500, not a
-boot error. See the BREACH note under `compress` before compressing pages that
-render the token.
+boot error.
 
 ## session
 

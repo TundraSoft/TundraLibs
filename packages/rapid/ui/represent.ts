@@ -26,6 +26,7 @@ import {
   escapeRegExp,
   isSwap,
   markOf,
+  maskToken,
   negotiate,
 } from '../utils/mod.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
@@ -49,8 +50,13 @@ export function buildView<S extends RapidContextState>(
   // The token VALID FOR THIS RESPONSE: what csrf() issued or confirmed on
   // the way in (the request cookie is absent on a first visit and stale on
   // the response that rotates the session), else the cookie.
-  const csrfToken = markOf(ctx, CSRF_TOKEN) ??
+  // Published MASKED under a fresh pad per response (BREACH: a stable
+  // secret next to reflected input in a compressed body leaks by length);
+  // csrf() unmasks whatever comes back, and the bare cookie value the swap
+  // runtime echoes stays valid.
+  const bare = markOf(ctx, CSRF_TOKEN) ??
     ctx.cookies[ctx.app.uiOptions?.csrfCookie ?? 'csrf'];
+  const csrfToken = bare === undefined ? undefined : maskToken(bare);
   // The opt-in identity projection (`ui.view` at initialize) merges OVER
   // the defaults — its fields, and only its fields, cross from ctx into
   // template reach.
