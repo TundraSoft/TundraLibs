@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/rapid",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "rAPId — config-driven application framework: HTTP routes, WebSocket commands and cron jobs behind one middleware onion, decorated modules, an HTML-over-the-wire UI layer, native observability (slogger, tracer, ambient correlation) and pact authentication.",
   "license": "MIT",
   "type": "module",
