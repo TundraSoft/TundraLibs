@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.6.0...norm-v1.7.0) (2026-09-09)
+
+
+### Features
+
+* **norm:** add a CLI (init, upgrade, ping) ([#655](https://github.com/TundraSoft/TundraLibs/issues/655)) ([8daddae](https://github.com/TundraSoft/TundraLibs/commit/8daddaeb392f18aa32864d1c537fe0ebbd1f46e5))
+
+
+### Documentation
+
+* **norm,rapid:** document the CLI in both READMEs; fix release-PR guard ([#658](https://github.com/TundraSoft/TundraLibs/issues/658)) ([5421ddd](https://github.com/TundraSoft/TundraLibs/commit/5421ddda1e44967041114719703482eac756dc2b))
+
 ## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.5.0...norm-v1.6.0) (2026-09-06)
 
 
