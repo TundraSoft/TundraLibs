@@ -21,6 +21,18 @@ listening server (`app.start()`) or a fetch handler (`app.fetch(request)`).
 
 ## Installation
 
+The fastest way in is the CLI — it scaffolds a whole runnable app (`main.ts`,
+`configs/Application.yaml`, both `deno.json` and `package.json`, and the
+project's AI guide) in one step, adding `@tundralibs/rapid` itself as part of
+the scaffold:
+
+```bash
+deno run -A jsr:@tundralibs/rapid/cli init my-api --module --norm --ui
+```
+
+See [CLI](#cli) below for every command and flag. To add rapid to an
+**existing** project instead:
+
 **Deno:**
 
 ```bash
@@ -38,6 +50,46 @@ bunx jsr add @tundralibs/rapid
 ```bash
 npx jsr add @tundralibs/rapid
 ```
+
+## CLI
+
+| Command                                                                   | Does                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `init [name] [--module] [--norm] [--ui] [--with bootstrap\|pico] [--yes]` | Scaffold a project (interactive unless `--yes`).                                                                         |
+| `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                             |
+| `modules [dir] [--check] [--force]`                                       | (Re)generate the modules barrel (`--check` fails CI when it's stale; an existing hand-written `mod.ts` needs `--force`). |
+| `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                          |
+
+`init` has **no runtime prompt** — both `deno.json` and `package.json` are
+always written (every package in this monorepo ships both), so the scaffold
+runs on Deno, Bun, or Node unmodified; there's no Docker or CI-workflow
+generation in this pass.
+`--module` adds the module system (a sample `Greeter` module); `--ui`
+scaffolds the three-tier UI starter (core + layout + a templated page on
+`server.static`), and `--with bootstrap|pico` adds a self-hosted CSS
+framework under `public/vendor/`; `--yes` accepts every default
+non-interactively. A `.gitignore` is written; `git init` is left to you.
+
+`--norm` adds a `norm` schema (`models/Users.ts` + `models/mod.ts`) and a
+dialect-agnostic `db.ts` — the dialect itself is DATA, not code: it lives in
+`configs/Norm.yaml` (every dialect norm supports is shown there, one active
+at a time) next to `configs/Application.yaml`, loaded the same way. `db.ts`
+never changes when you switch dialects.
+
+Every scaffold also writes the project's AI guide: **one** real file,
+`AGENTS.md`, plus `CLAUDE.md` (which imports it with `@AGENTS.md`, so Claude
+Code loads the full guide) and `.github/copilot-instructions.md` — every tool
+resolves to a single source that can't drift. The guide is rendered for _this_
+project and _this_ rapid version: its module layout if you chose `--module`,
+the context API, the middleware catalog and the error registry (generated
+from the code), doc links pinned to the installed version, rapid's actual API
+(the `:id:` route grammar, the `{ content }` reply, `validated()`,
+`harness()`/`client()`), the org coding conventions fitted to an app, and the
+verified shape of each `@tundralibs/*` package an agent may reach for
+(guardian, norm, oql, pact, cacher, id, crypt, restler, utils, slogger, …). If
+you chose `--norm`, that guide also carries a **real merge** of norm's own AI
+guide (schema, hooks, querying, transactions, scoping, encryption, caching,
+events, errors) — not a shorter summary.
 
 ## Quick start
 
@@ -731,50 +783,6 @@ capabilities:
   registered), jobs are not scheduled (fire them from a cron trigger with
   `app.triggerJob(name)`), and file uploads degrade gracefully: they are rejected
   with a typed `RAPID_UPLOADS_UNAVAILABLE` (501) rather than crashing.
-
-## CLI
-
-```bash
-deno run -A jsr:@tundralibs/rapid/cli init my-api --module --norm --ui
-```
-
-| Command                                                                   | Does                                                                                                                     |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `init [name] [--module] [--norm] [--ui] [--with bootstrap\|pico] [--yes]` | Scaffold a project (interactive unless `--yes`).                                                                         |
-| `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                             |
-| `modules [dir] [--check] [--force]`                                       | (Re)generate the modules barrel (`--check` fails CI when it's stale; an existing hand-written `mod.ts` needs `--force`). |
-| `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                          |
-
-`init` has **no runtime prompt** — both `deno.json` and `package.json` are
-always written (every package in this monorepo ships both), so the scaffold
-runs on Deno, Bun, or Node unmodified; there's no Docker or CI-workflow
-generation in this pass.
-`--module` adds the module system (a sample `Greeter` module); `--ui`
-scaffolds the three-tier UI starter (core + layout + a templated page on
-`server.static`), and `--with bootstrap|pico` adds a self-hosted CSS
-framework under `public/vendor/`; `--yes` accepts every default
-non-interactively. A `.gitignore` is written; `git init` is left to you.
-
-`--norm` adds a `norm` schema (`models/Users.ts` + `models/mod.ts`) and a
-dialect-agnostic `db.ts` — the dialect itself is DATA, not code: it lives in
-`configs/Norm.yaml` (every dialect norm supports is shown there, one active
-at a time) next to `configs/Application.yaml`, loaded the same way. `db.ts`
-never changes when you switch dialects.
-
-Every scaffold also writes the project's AI guide: **one** real file,
-`AGENTS.md`, plus `CLAUDE.md` (which imports it with `@AGENTS.md`, so Claude
-Code loads the full guide) and `.github/copilot-instructions.md` — every tool
-resolves to a single source that can't drift. The guide is rendered for _this_
-project and _this_ rapid version: its module layout if you chose `--module`,
-the context API, the middleware catalog and the error registry (generated
-from the code), doc links pinned to the installed version, rapid's actual API
-(the `:id:` route grammar, the `{ content }` reply, `validated()`,
-`harness()`/`client()`), the org coding conventions fitted to an app, and the
-verified shape of each `@tundralibs/*` package an agent may reach for
-(guardian, norm, oql, pact, cacher, id, crypt, restler, utils, slogger, …). If
-you chose `--norm`, that guide also carries a **real merge** of norm's own AI
-guide (schema, hooks, querying, transactions, scoping, encryption, caching,
-events, errors) — not a shorter summary.
 
 ## Examples & docs
 
