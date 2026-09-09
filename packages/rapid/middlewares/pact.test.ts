@@ -20,6 +20,7 @@ import {
 } from '@tundralibs/pact';
 import { contentDigest } from '@tundralibs/pact/middleware';
 import { Application } from '../Application.ts';
+import { SOCKETContext } from '../context/SOCKETContext.ts';
 import { RapidError } from '../errors/mod.ts';
 import { pactAuth, type PactAuthOptions } from './pact.ts';
 
@@ -712,6 +713,138 @@ describe('rapid.middlewares.pactAuth() — carriers', () => {
         /refresh=;.*(Max-Age=0|Expires=)/,
       );
       await dead.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+});
+
+describe('rapid.middlewares.pactAuth() — the SOCKET branch', () => {
+  // A socket frame authenticates from its UPGRADE request's headers. The
+  // shipped rpc client cannot set upgrade headers (WHATWG WebSocket), so
+  // the branch is driven through a directly built SOCKETContext whose
+  // fake connection carries them — the same shape the transport builds.
+  const frame = (
+    app: Application,
+    headers: Record<string, string>,
+    command = 'who',
+  ) =>
+    new SOCKETContext(app, {
+      connection: { id: 'conn-1', query: {}, headers: new Headers(headers) },
+      command,
+      payload: {},
+      frameId: 'f-1',
+    });
+  const run = async (
+    middleware: (
+      ctx: SOCKETContext,
+      next: () => Promise<void>,
+    ) => Promise<void>,
+    ctx: SOCKETContext,
+  ): Promise<{ reached: boolean; error?: RapidError }> => {
+    let reached = false;
+    try {
+      await middleware(ctx, () => {
+        reached = true;
+        return Promise.resolve();
+      });
+      return { reached };
+    } catch (error) {
+      return { reached, error: error as RapidError };
+    }
+  };
+
+  it('a bearer token or basic credential on the upgrade sets ctx.auth; a bad one is 401; none is anonymous, or 401 under optional: false', async () => {
+    const pact = await makePact();
+    const { session } = await pact.login({
+      identifier: 'ada',
+      password: PASSWORD,
+    });
+    const app = await Application.initialize({
+      name: 'pact-socket',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    try {
+      const { authenticate } = pactAuth(pact, { bearer: { cookie: 'sid' } });
+      const bearer = await run(
+        authenticate,
+        frame(app, { authorization: `Bearer ${session.token}` }),
+      );
+      asserts.assertEquals(bearer.reached, true);
+      const ctxBearer = frame(app, {
+        authorization: `Bearer ${session.token}`,
+      });
+      await authenticate(ctxBearer, () => Promise.resolve());
+      asserts.assertEquals(
+        (ctxBearer.auth as PactAuthContext | undefined)?.via,
+        'SESSION',
+      );
+
+      const basic = frame(app, {
+        authorization: `Basic ${btoa(`ada:${PASSWORD}`)}`,
+      });
+      await authenticate(basic, () => Promise.resolve());
+      asserts.assertEquals((basic.auth as PactAuthContext).via, 'BASIC');
+
+      // The bearer COOKIE on the upgrade request works too (a browser tab).
+      const viaCookie = frame(app, { cookie: `sid=${session.token}` });
+      await authenticate(viaCookie, () => Promise.resolve());
+      asserts.assertEquals((viaCookie.auth as PactAuthContext).via, 'SESSION');
+
+      const bad = await run(
+        authenticate,
+        frame(app, { authorization: 'Bearer nope' }),
+      );
+      asserts.assertEquals(bad.reached, false);
+      asserts.assertEquals(bad.error?.code, 'RAPID_UNAUTHENTICATED');
+
+      const anonymous = frame(app, {});
+      await authenticate(anonymous, () => Promise.resolve());
+      asserts.assertEquals(anonymous.auth, undefined);
+
+      const { authenticate: required } = pactAuth(pact, { optional: false });
+      const refused = await run(required, frame(app, {}));
+      asserts.assertEquals(refused.reached, false);
+      asserts.assertEquals(refused.error?.code, 'RAPID_UNAUTHENTICATED');
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('HMAC is never accepted on a frame (nothing to sign), and authorize gates the command by grant', async () => {
+    const pact = await makePact();
+    const { key, secret } = await pact.issueApiKey({
+      userId: 'u-1',
+      grants: { Posts: 1n }, // READ only
+    });
+    const app = await Application.initialize({
+      name: 'pact-socket-authz',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    try {
+      const { authenticate, authorize } = pactAuth(pact, {
+        apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
+        hmac: {},
+      });
+      // Valid HMAC material for HTTP is just absent headers to the socket core.
+      const signedHeaders = await signed(secret, key, 'GET', '/', null);
+      const hmac = frame(app, signedHeaders);
+      await authenticate(hmac, () => Promise.resolve());
+      asserts.assertEquals(hmac.auth, undefined);
+
+      const apiKey = frame(app, { 'x-api-key': key, 'x-api-secret': secret });
+      await authenticate(apiKey, () => Promise.resolve());
+      asserts.assertEquals((apiKey.auth as PactAuthContext).via, 'APIKEY');
+      const read = await run(authorize('Posts', 'READ'), apiKey);
+      asserts.assertEquals(read.reached, true);
+      const edit = await run(authorize('Posts', 'EDIT'), apiKey);
+      asserts.assertEquals(edit.reached, false);
+      asserts.assertEquals(edit.error?.code, 'RAPID_ACCESS_DENIED');
+      const anonymous = frame(app, {});
+      const denied = await run(authorize('Posts', 'READ'), anonymous);
+      asserts.assertEquals(denied.error?.code, 'RAPID_UNAUTHENTICATED');
     } finally {
       await app.stop();
     }
