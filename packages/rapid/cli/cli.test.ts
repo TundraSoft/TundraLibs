@@ -77,164 +77,89 @@ describe('rapid.cli modules generator', () => {
 });
 
 describe('rapid.cli init scaffold', () => {
-  it('scaffold() maps files by the toggles — ONE config file, by runtime', () => {
+  it('scaffold() always emits both manifests, and --norm adds Norm.yaml/db.ts + declares deps in both', () => {
     const full = scaffold(
-      {
-        name: 'demo',
-        module: true,
-        norm: true,
-        runtime: 'bun',
-        docker: true,
-        github: true,
-      },
+      { name: 'demo', module: true, norm: true },
       '1.2.3',
+      { norm: '2.0.0', utils: '3.0.0' },
     );
     for (
       const f of [
         'main.ts',
         'configs/Application.yaml',
+        'configs/Norm.yaml',
+        'deno.json',
         'package.json',
         'modules/Greeter.ts',
         'models/mod.ts',
         'db.ts',
-        'Dockerfile',
-        '.dockerignore',
-        '.github/workflows/ci.yml',
       ]
     ) {
       asserts.assert(f in full, `missing ${f}`);
     }
-    // A bun project is NOT a deno project: no deno.json alongside.
-    asserts.assert(
-      !('deno.json' in full),
-      'bun scaffold must not emit deno.json',
-    );
-    asserts.assertStringIncludes(full['Dockerfile']!, 'FROM tundrasoft/bun:');
-    // The image only STARTS the app — dependencies must be installed at build.
-    asserts.assertStringIncludes(full['Dockerfile']!, 'RUN bun install');
-    // A fresh scaffold has no test files; bun would otherwise exit 1.
-    asserts.assertStringIncludes(
-      full['package.json']!,
-      'bun test --pass-with-no-tests',
-    );
-    // S6-image contract: the app is started from ENV, never a CMD/ENTRYPOINT.
-    asserts.assertStringIncludes(full['Dockerfile']!, 'ENV SCRIPT=start');
-    asserts.assert(
-      !/^(CMD|ENTRYPOINT)/m.test(full['Dockerfile']!),
-      'no CMD/ENTRYPOINT',
-    );
-    asserts.assertStringIncludes(
-      full['package.json']!,
-      '"dev": "bun --watch main.ts"',
-    );
     asserts.assertStringIncludes(
       full['package.json']!,
       'tundralibs__rapid@^1.2.3',
     );
-    asserts.assertStringIncludes(
-      full['.github/workflows/ci.yml']!,
-      'oven-sh/setup-bun',
-    );
     asserts.assertStringIncludes(full['main.ts']!, 'app.modules');
+    // deno.json: norm + utils + the sqlite import-map entry the Deno
+    // backend needs to resolve `$sqlite_deno` — all pinned to the
+    // resolved versions, not a made-up floor.
+    asserts.assertStringIncludes(
+      full['deno.json']!,
+      '"@tundralibs/norm": "jsr:@tundralibs/norm@^2.0.0"',
+    );
+    asserts.assertStringIncludes(
+      full['deno.json']!,
+      '"@tundralibs/utils": "jsr:@tundralibs/utils@^3.0.0"',
+    );
+    asserts.assertStringIncludes(
+      full['deno.json']!,
+      '"$sqlite_deno": "jsr:@db/sqlite@^0.13.0"',
+    );
+    asserts.assertStringIncludes(
+      full['deno.json']!,
+      'deno check main.ts db.ts',
+    );
+    // package.json: same two deps, npm-shaped specifiers.
+    asserts.assertStringIncludes(
+      full['package.json']!,
+      '"@tundralibs/norm": "npm:@jsr/tundralibs__norm@^2.0.0"',
+    );
+    asserts.assertStringIncludes(
+      full['package.json']!,
+      '"@tundralibs/utils": "npm:@jsr/tundralibs__utils@^3.0.0"',
+    );
+    // Norm.yaml/db.ts are dialect-agnostic — never mention a specific dialect.
+    asserts.assertStringIncludes(full['configs/Norm.yaml']!, 'dialect: sqlite');
+    asserts.assertStringIncludes(full['db.ts']!, "config.get('norm.NORM_DB')");
+    asserts.assert(!full['db.ts']!.includes('postgres'));
 
     const minimal = scaffold(
-      {
-        name: 'bare',
-        module: false,
-        norm: false,
-        runtime: 'deno',
-        docker: false,
-        github: false,
-      },
+      { name: 'bare', module: false, norm: false },
       '1.0.0',
     );
     asserts.assert('deno.json' in minimal);
-    asserts.assert(
-      !('package.json' in minimal),
-      'deno scaffold must not emit package.json',
-    );
+    asserts.assert('package.json' in minimal, 'package.json is always written');
     asserts.assert(!('modules/Greeter.ts' in minimal));
-    asserts.assert(!('Dockerfile' in minimal));
-    asserts.assert(!('.github/workflows/ci.yml' in minimal));
+    asserts.assert(!('configs/Norm.yaml' in minimal));
+    asserts.assert(!('db.ts' in minimal));
+    asserts.assertStringIncludes(minimal['deno.json']!, 'deno check main.ts');
     asserts.assertStringIncludes(
       minimal['deno.json']!,
       '@tundralibs/rapid@^1.0.0',
     );
     asserts.assertStringIncludes(minimal['main.ts']!, "app.get('/'");
-  });
-
-  it('scaffold() for deno Docker sets the TASK + ALLOW_* env contract', () => {
-    const f = scaffold(
-      {
-        name: 'd',
-        module: false,
-        norm: false,
-        runtime: 'deno',
-        docker: true,
-        github: true,
-      },
-      '1.0.0',
-    );
-    asserts.assertStringIncludes(f['Dockerfile']!, 'FROM tundrasoft/deno:');
-    asserts.assertStringIncludes(f['Dockerfile']!, 'RUN deno install');
-    asserts.assertStringIncludes(f['Dockerfile']!, 'TASK=start');
-    asserts.assertStringIncludes(f['Dockerfile']!, 'ALLOW_NET=1');
-    asserts.assertStringIncludes(
-      f['.github/workflows/ci.yml']!,
-      'denoland/setup-deno',
-    );
-    asserts.assertStringIncludes(
-      f['.github/workflows/ci.yml']!,
-      'deno test -A',
-    );
-  });
-
-  it('scaffold() for node pins the image major tundrasoft/node actually publishes', () => {
-    // tundrasoft/node builds the 5 newest LTS (all 24.x); only the newest gets
-    // the <major> tag, so `:22` will never exist — a Dockerfile pinning it
-    // would fail to pull. Pin 24, and keep setup-node in step.
-    const f = scaffold(
-      {
-        name: 'n',
-        module: false,
-        norm: false,
-        runtime: 'node',
-        docker: true,
-        github: true,
-      },
-      '1.0.0',
-    );
-    asserts.assertStringIncludes(f['Dockerfile']!, 'FROM tundrasoft/node:24');
-    asserts.assertStringIncludes(f['Dockerfile']!, 'RUN npm install');
-    // tsx runs the app at start time — a runtime dependency, not a dev one.
-    const pkg = JSON.parse(f['package.json']!) as {
-      dependencies: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
-    asserts.assert('tsx' in pkg.dependencies, 'tsx under dependencies');
-    asserts.assertEquals(pkg.devDependencies, undefined);
-    asserts.assert(
-      !f['Dockerfile']!.includes('node:22'),
-      'the :22 tag is never published',
-    );
-    asserts.assertStringIncludes(
-      f['.github/workflows/ci.yml']!,
-      'node-version: 24',
-    );
+    // Every scaffold gets the fmt config that keeps a fresh project's own
+    // `deno fmt --check` clean out of the box.
+    asserts.assertStringIncludes(minimal['deno.json']!, '"singleQuote": true');
   });
 
   it('the scaffolded Application.yaml BOOTS an app and documents every option rapid defaults', async () => {
     const base = await makeTempDir({ prefix: 'rapid-yaml-' });
     try {
       const yaml = scaffold(
-        {
-          name: 'cfgapp',
-          module: false,
-          norm: false,
-          runtime: 'deno',
-          docker: false,
-          github: false,
-        },
+        { name: 'cfgapp', module: false, norm: false },
         '1.0.0',
       )['configs/Application.yaml']!;
       await makeDir(`${base}/configs`, { recursive: true });
@@ -304,17 +229,11 @@ describe('rapid.cli init scaffold', () => {
     }
   });
 
-  it('scaffold() always emits ONE AGENTS.md source + two pointers, runtime- and module-aware', () => {
+  it('scaffold() always emits ONE AGENTS.md source + two pointers, module- and norm-aware', () => {
     const f = scaffold(
-      {
-        name: 'aiapp',
-        module: true,
-        norm: false,
-        runtime: 'bun',
-        docker: false,
-        github: false,
-      },
+      { name: 'aiapp', module: true, norm: true },
       '1.0.0',
+      { norm: null, utils: null },
     );
     for (
       const p of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']
@@ -334,20 +253,24 @@ describe('rapid.cli init scaffold', () => {
     );
     // Claude Code loads the guide itself through the import line.
     asserts.assertStringIncludes(f['CLAUDE.md']!, '\n@AGENTS.md\n');
-    // True for THIS project: its runtime commands, its name, its module layout.
-    asserts.assertStringIncludes(agents, 'running on **bun**');
-    asserts.assertStringIncludes(agents, 'bun run dev');
     asserts.assertStringIncludes(agents, '# aiapp');
     asserts.assertStringIncludes(agents, '## Modules');
     asserts.assertStringIncludes(agents, 'modules/Greeter.ts');
+    // --norm merges norm's OWN ai guide in, not a shorter summary — same
+    // depth (relations, transactions, scoping) a standalone norm project's
+    // guide gets, not just Entity/Schema basics.
+    asserts.assertStringIncludes(agents, '## Database (norm)');
+    asserts.assertStringIncludes(agents, 'db.scope(');
+    asserts.assertStringIncludes(agents, 'db.transaction(');
+    asserts.assertStringIncludes(agents, 'REGISTRY KEY');
+    // No runtime prompt — every scaffold's guide shows all three ways to run.
+    asserts.assertStringIncludes(agents, 'Deno:');
+    asserts.assertStringIncludes(agents, 'Node:');
+    asserts.assertStringIncludes(agents, 'Bun:');
     // And rapid's real API facts, not generic advice.
     asserts.assertStringIncludes(agents, '/users/:id:');
     asserts.assertStringIncludes(agents, 'Application.initialize');
     asserts.assertStringIncludes(agents, 'validated()');
-    asserts.assert(
-      !agents.includes('deno task'),
-      'bun project must not show deno commands',
-    );
     // Package lookup is NEED-first (the names aren't self-describing): a table
     // row maps the job to the full specifier, and each shape leads with the job.
     asserts.assertMatch(
@@ -364,20 +287,10 @@ describe('rapid.cli init scaffold', () => {
       'shapes must lead with the job, not the bare package name',
     );
 
-    // No module system → no Modules section; deno → deno commands.
-    const plain = scaffold(
-      {
-        name: 'p',
-        module: false,
-        norm: false,
-        runtime: 'deno',
-        docker: false,
-        github: false,
-      },
-      '1.0.0',
-    );
+    // No module system → no Modules section; no --norm → no Database section.
+    const plain = scaffold({ name: 'p', module: false, norm: false }, '1.0.0');
     asserts.assert(!plain['AGENTS.md']!.includes('## Modules'));
-    asserts.assertStringIncludes(plain['AGENTS.md']!, 'deno task test');
+    asserts.assert(!plain['AGENTS.md']!.includes('## Database (norm)'));
     // Doc links are pinned to the scaffolded version; offline (null) falls
     // back to the package page rather than inventing a version.
     asserts.assertStringIncludes(
@@ -385,14 +298,7 @@ describe('rapid.cli init scaffold', () => {
       'https://jsr.io/@tundralibs/rapid/1.0.0/docs/Rapid-Errors.md',
     );
     const offline = scaffold(
-      {
-        name: 'o',
-        module: false,
-        norm: false,
-        runtime: 'node',
-        docker: false,
-        github: false,
-      },
+      { name: 'o', module: false, norm: false },
       null,
     )['AGENTS.md']!;
     asserts.assertStringIncludes(
@@ -404,15 +310,7 @@ describe('rapid.cli init scaffold', () => {
 
   it('AGENTS.md drift guard: the guide names every public surface the package exports', async () => {
     const agents = scaffold(
-      {
-        name: 'guide',
-        module: true,
-        norm: false,
-        runtime: 'deno',
-        docker: false,
-        github: false,
-        ui: true,
-      },
+      { name: 'guide', module: true, norm: false, ui: true },
       '9.9.9',
     )['AGENTS.md']!;
     const missing = (what: string, names: readonly string[]) =>
@@ -483,9 +381,6 @@ describe('rapid.cli init scaffold', () => {
         name: 'shop',
         module: true,
         norm: false,
-        runtime: 'deno',
-        docker: false,
-        github: false,
         ui: true,
         vendorCss: 'pico.min.css',
       },
@@ -531,15 +426,7 @@ describe('rapid.cli init scaffold', () => {
 
   it('scaffold() --ui without modules swaps the JSON sample for a templated page', () => {
     const f = scaffold(
-      {
-        name: 'shop',
-        module: false,
-        norm: false,
-        runtime: 'deno',
-        docker: false,
-        github: false,
-        ui: true,
-      },
+      { name: 'shop', module: false, norm: false, ui: true },
       '1.0.0',
     );
     asserts.assertStringIncludes(f['main.ts']!, 'template: { render: HomePage');
@@ -551,53 +438,11 @@ describe('rapid.cli init scaffold', () => {
     );
   });
 
-  it('scaffold() for workers emits wrangler.toml + worker.ts, never a Dockerfile', () => {
-    const f = scaffold(
-      {
-        name: 'edge',
-        module: true,
-        norm: false,
-        runtime: 'workers',
-        docker: true,
-        github: true,
-      },
-      '1.0.0',
-    );
-    asserts.assert('wrangler.toml' in f);
-    asserts.assert('worker.ts' in f);
-    asserts.assert(!('main.ts' in f), 'workers uses worker.ts, not main.ts');
-    asserts.assert(
-      !('Dockerfile' in f),
-      'no container for workers, even with docker:true',
-    );
-    asserts.assertStringIncludes(
-      f['worker.ts']!,
-      'fetch: (request: Request) => app.fetch(request)',
-    );
-    asserts.assertStringIncludes(
-      f['worker.ts']!,
-      'app.modules({ modules: [modules] })',
-    );
-    asserts.assertStringIncludes(f['wrangler.toml']!, 'name = "edge"');
-    asserts.assertStringIncludes(f['package.json']!, '"wrangler"');
-    asserts.assertStringIncludes(
-      f['.github/workflows/ci.yml']!,
-      'wrangler deploy --dry-run',
-    );
-  });
-
   it('initCommand writes the project tree under a base dir (no cwd juggling)', async () => {
     const base = await makeTempDir({ prefix: 'rapid-init-' });
     try {
       const code = await initCommand(
-        {
-          _: ['sample'],
-          module: true,
-          norm: false,
-          runtime: 'deno',
-          docker: false,
-          yes: true,
-        },
+        { _: ['sample'], module: true, norm: false, yes: true },
         base,
       );
       asserts.assertEquals(code, 0);
@@ -684,50 +529,40 @@ describe('rapid.cli health', () => {
 describe('rapid.cli init scaffold — installable and type-correct', () => {
   const base = (over: Partial<Parameters<typeof scaffold>[0]>) =>
     scaffold(
-      {
-        name: 'demo',
-        module: true,
-        norm: true,
-        runtime: 'deno',
-        docker: false,
-        github: false,
-        ...over,
-      },
+      { name: 'demo', module: true, norm: true, ...over },
       '1.2.3',
     );
 
-  it('npm-shaped runtimes get an .npmrc pointing @jsr at npm.jsr.io; deno does not', () => {
-    for (const runtime of ['bun', 'node', 'workers'] as const) {
-      const f = base({ runtime });
-      asserts.assertEquals(f['.npmrc'], '@jsr:registry=https://npm.jsr.io\n');
-    }
-    asserts.assert(!('.npmrc' in base({ runtime: 'deno' })));
+  it('always writes an .npmrc pointing @jsr at npm.jsr.io — package.json needs it too now', () => {
+    asserts.assertEquals(
+      base({})['.npmrc'],
+      '@jsr:registry=https://npm.jsr.io\n',
+    );
   });
 
-  it('--norm declares @tundralibs/norm in the chosen manifest, beside rapid', () => {
+  it('--norm declares @tundralibs/norm + @tundralibs/utils in BOTH manifests', () => {
     asserts.assertStringIncludes(
-      base({ runtime: 'deno' })['deno.json']!,
-      '"@tundralibs/norm": "jsr:@tundralibs/norm@^1"',
+      base({})['deno.json']!,
+      '"@tundralibs/norm": "jsr:@tundralibs/norm"',
     );
     asserts.assertStringIncludes(
-      base({ runtime: 'node' })['package.json']!,
-      '"@tundralibs/norm": "npm:@jsr/tundralibs__norm@^1"',
+      base({})['deno.json']!,
+      '"@tundralibs/utils": "jsr:@tundralibs/utils"',
+    );
+    asserts.assertStringIncludes(
+      base({})['package.json']!,
+      '"@tundralibs/norm": "npm:@jsr/tundralibs__norm"',
+    );
+    asserts.assertStringIncludes(
+      base({})['package.json']!,
+      '"@tundralibs/utils": "npm:@jsr/tundralibs__utils"',
     );
     asserts.assert(!base({ norm: false })['deno.json']!.includes('norm'));
+    asserts.assert(!base({ norm: false })['package.json']!.includes('norm'));
   });
 
   it('an unknown rapid version pins nothing (= latest) instead of a made-up floor', () => {
-    const f = scaffold(
-      {
-        name: 'demo',
-        module: false,
-        norm: false,
-        runtime: 'deno',
-        docker: false,
-        github: false,
-      },
-      null,
-    );
+    const f = scaffold({ name: 'demo', module: false, norm: false }, null);
     asserts.assertStringIncludes(
       f['deno.json']!,
       '"@tundralibs/rapid": "jsr:@tundralibs/rapid"',
@@ -746,7 +581,7 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
     fn: async () => {
       const dir = await makeTempDir({ prefix: 'rapid-scaffold-check-' });
       try {
-        const files = base({ runtime: 'deno' });
+        const files = base({});
         for (const [path, body] of Object.entries(files)) {
           const slash = path.lastIndexOf('/');
           if (slash > 0) {
@@ -787,20 +622,14 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
     try {
       for (const name of ["it's", 'a"b', 'x: y', '-lead', 'sp ace']) {
         const code = await initCommand(
-          { _: [name], module: false, norm: false, runtime: 'deno', yes: true },
+          { _: [name], module: false, norm: false, yes: true },
           tmp,
         );
         asserts.assertEquals(code, 1, name);
         asserts.assertEquals(await pathExists(`${tmp}/${name}`), false, name);
       }
       const ok = await initCommand(
-        {
-          _: ['my-app.v2'],
-          module: false,
-          norm: false,
-          runtime: 'deno',
-          yes: true,
-        },
+        { _: ['my-app.v2'], module: false, norm: false, yes: true },
         tmp,
       );
       asserts.assertEquals(ok, 0);

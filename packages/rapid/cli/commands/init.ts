@@ -1,25 +1,19 @@
 /**
  * @fileoverview `rapid init [name]` — scaffold a new project. Interactive
- * prompts (or flags / `--yes`), then write the template set. The RUNTIME is
- * asked first: it is a project-wide choice (config file, commands, deploy
- * artifact), not a container detail. Runs on Deno/Bun/Node via compat; no
- * subprocesses (git is yours to init — a `.gitignore` is written for you).
+ * prompts (or flags / `--yes`), then write the template set. No runtime
+ * prompt: both `deno.json` and `package.json` are always written (every
+ * package in this monorepo ships both). Runs on Deno/Bun/Node via compat;
+ * no subprocesses (git is yours to init — a `.gitignore` is written for you).
  * @module
  */
 import { makeDir, pathExists, writeTextFile } from '@tundralibs/compat/file';
 import { prompt } from '@tundralibs/compat/cli';
 import type { ParsedArgs } from '@tundralibs/compat/cli';
 import { latestVersion } from '../latestVersion.ts';
-import { scaffold, type ScaffoldAnswers } from '../templates.ts';
-
-const RUNTIMES = ['deno', 'bun', 'node', 'workers'] as const;
-type Runtime = ScaffoldAnswers['runtime'];
+import { scaffold } from '../templates.ts';
 
 const asBool = (v: unknown): boolean | undefined =>
   v === true ? true : v === false ? false : undefined;
-
-const isRuntime = (v: unknown): v is Runtime =>
-  typeof v === 'string' && (RUNTIMES as readonly string[]).includes(v);
 
 const ask = async (q: string, def: boolean): Promise<boolean> => {
   const a = (await prompt(`${q} (${def ? 'Y/n' : 'y/N'})`, {
@@ -28,13 +22,58 @@ const ask = async (q: string, def: boolean): Promise<boolean> => {
   return a === '' ? def : a.startsWith('y');
 };
 
-/** The per-runtime "now run this" hint printed at the end. */
-const NEXT: Record<Runtime, string> = {
-  deno: 'deno task dev',
-  bun: 'bun install && bun run dev',
-  node: 'npm install && npm run dev',
-  workers: 'npm install && npx wrangler dev',
+// --with <css>: self-host a starter stylesheet under public/vendor/ —
+// downloaded at scaffold time, never a CDN link at runtime.
+const WITH_CSS: Record<string, { file: string; url: string }> = {
+  bootstrap: {
+    file: 'bootstrap.min.css',
+    url:
+      'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+  },
+  pico: {
+    file: 'pico.min.css',
+    url: 'https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css',
+  },
 };
+
+/**
+ * Validate `--with` and download the stylesheet. `error` set means the
+ * command should print it and exit 1; otherwise `css` (possibly
+ * undefined — no `--with`, or a failed download degrading gracefully)
+ * is what `scaffold()`/the file map need.
+ */
+async function resolveVendorCss(
+  args: ParsedArgs,
+  ui: boolean,
+): Promise<
+  { error: string } | {
+    error?: undefined;
+    css?: { file: string; body: string };
+  }
+> {
+  if (args.with === undefined) return {};
+  if (!ui) return { error: '✗ --with needs --ui' };
+  const withCss = WITH_CSS[String(args.with)];
+  if (withCss === undefined) {
+    return {
+      error: `✗ unknown --with '${String(args.with)}' (expected ${
+        Object.keys(WITH_CSS).join('|')
+      })`,
+    };
+  }
+  try {
+    const res = await fetch(withCss.url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { css: { file: withCss.file, body: await res.text() } };
+  } catch (error) {
+    console.error(
+      `! could not download ${withCss.url} (${
+        error instanceof Error ? error.message : String(error)
+      }) — scaffolding without it`,
+    );
+    return {};
+  }
+}
 
 /** The `init` command. Returns the process exit code. */
 export async function initCommand(
@@ -70,27 +109,6 @@ export async function initCommand(
     return 1;
   }
 
-  // Runtime FIRST — everything else is shaped by it.
-  let runtime: Runtime = 'deno';
-  const flag = args.runtime;
-  if (isRuntime(flag)) {
-    runtime = flag;
-  } else if (flag !== undefined) {
-    console.error(
-      `✗ unknown runtime '${String(flag)}' (expected ${RUNTIMES.join('|')})`,
-    );
-    return 1;
-  } else if (!yes) {
-    const r = (await prompt(`Runtime (${RUNTIMES.join('/')})`, {
-      default: 'deno',
-    })).trim().toLowerCase();
-    if (isRuntime(r)) runtime = r;
-    else if (r !== '') {
-      console.error(`✗ unknown runtime '${r}'`);
-      return 1;
-    }
-  }
-
   const pick = async (
     key: string,
     q: string,
@@ -99,96 +117,42 @@ export async function initCommand(
 
   const module = await pick('module', 'Include the module system?', true);
   const norm = await pick('norm', 'Include a database (norm)?', false);
-  // The UI scaffold is server-runtime only — Workers assets need a
-  // bundler manifest, so the combination is refused rather than half-built.
-  const ui = runtime === 'workers'
-    ? false
-    : await pick('ui', 'Include the UI layer (three-tier pages)?', false);
-  if (runtime === 'workers' && (args.ui === true || args.with !== undefined)) {
-    console.error(
-      '✗ --ui targets server runtimes (Workers assets need a bundler manifest)',
-    );
-    return 1;
-  }
-  // --with <css>: self-host a starter stylesheet under public/vendor/ —
-  // downloaded at scaffold time, never a CDN link at runtime.
-  const WITH_CSS: Record<string, { file: string; url: string }> = {
-    bootstrap: {
-      file: 'bootstrap.min.css',
-      url:
-        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-    },
-    pico: {
-      file: 'pico.min.css',
-      url: 'https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css',
-    },
-  };
-  let withCss: { file: string; url: string } | undefined;
-  if (args.with !== undefined) {
-    if (!ui) {
-      console.error('✗ --with needs --ui');
-      return 1;
-    }
-    withCss = WITH_CSS[String(args.with)];
-    if (withCss === undefined) {
-      console.error(
-        `✗ unknown --with '${String(args.with)}' (expected ${
-          Object.keys(WITH_CSS).join('|')
-        })`,
-      );
-      return 1;
-    }
-  }
-  // No container for Workers — never offer a Dockerfile there.
-  const docker = runtime === 'workers'
-    ? false
-    : await pick('docker', `Add a Dockerfile (tundrasoft/${runtime})?`, false);
-  const github = await pick(
-    'github',
-    'Add a GitHub Actions CI workflow?',
+  const ui = await pick(
+    'ui',
+    'Include the UI layer (three-tier pages)?',
     false,
   );
+  const vendor = await resolveVendorCss(args, ui);
+  if (vendor.error !== undefined) {
+    console.error(vendor.error);
+    return 1;
+  }
   const root = base === '.' ? name : `${base}/${name}`;
   if (await pathExists(root)) {
     console.error(`✗ '${name}' already exists`);
     return 1;
   }
 
-  // Fetch the vendor stylesheet FIRST — a failed download degrades to a
-  // scaffold without the link (warned), never a broken reference.
-  let vendorBody: string | undefined;
-  if (withCss !== undefined) {
-    try {
-      const res = await fetch(withCss.url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      vendorBody = await res.text();
-    } catch (error) {
-      console.error(
-        `! could not download ${withCss.url} (${
-          error instanceof Error ? error.message : String(error)
-        }) — scaffolding without it`,
-      );
-      withCss = undefined;
-    }
-  }
-
   // null (offline / unpublished) → the manifest pins no version (= latest).
-  const rapidVersion = await latestVersion('rapid');
+  // norm/utils are only ever fetched when --norm — no network cost otherwise.
+  const [rapidVersion, normVersion, utilsVersion] = await Promise.all([
+    latestVersion('rapid'),
+    norm ? latestVersion('norm') : Promise.resolve(null),
+    norm ? latestVersion('utils') : Promise.resolve(null),
+  ]);
   const files = scaffold(
     {
       name,
       module,
       norm,
-      runtime,
-      docker,
-      github,
       ui,
-      ...(withCss !== undefined ? { vendorCss: withCss.file } : {}),
+      ...(vendor.css !== undefined ? { vendorCss: vendor.css.file } : {}),
     },
     rapidVersion,
+    { norm: normVersion, utils: utilsVersion },
   );
-  if (withCss !== undefined && vendorBody !== undefined) {
-    files[`public/vendor/${withCss.file}`] = vendorBody;
+  if (vendor.css !== undefined) {
+    files[`public/vendor/${vendor.css.file}`] = vendor.css.body;
   }
 
   for (const [rel, content] of Object.entries(files)) {
@@ -198,9 +162,11 @@ export async function initCommand(
     await writeTextFile(path, content);
   }
 
-  console.log(`\n✓ created ${name}/ (${runtime})`);
+  console.log(`\n✓ created ${name}/`);
   console.log(`  ${Object.keys(files).length} files`);
   console.log(`\n  cd ${name}`);
-  console.log(`  ${NEXT[runtime]}\n`);
+  console.log(
+    `  deno task dev        (or: npm run dev / bun --watch main.ts)\n`,
+  );
   return 0;
 }
