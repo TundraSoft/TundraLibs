@@ -129,6 +129,38 @@ bunx jsr add @tundralibs/norm
 npx jsr add @tundralibs/norm
 ```
 
+Or scaffold a schema project (or add norm to one that already exists) with
+the CLI — see [CLI](#cli) below:
+
+```bash
+deno run -A jsr:@tundralibs/norm/cli init
+```
+
+## CLI
+
+| Command             | Does                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `init [--yes]`      | Scaffold a schema project in the current directory, or add norm to one that already exists.                                          |
+| `upgrade [--dir .]` | Bump `@tundralibs/norm`/`@tundralibs/utils` (and any other `@tundralibs/*` dep) to the latest release.                               |
+| `ping [dir]`        | Open the connection described by `configs/Norm.yaml` and report success/failure (exit 0/1) — a connectivity smoke test, not a query. |
+
+`init` has no dialect or runtime prompt: `Entity`/`Schema` never touch a
+dialect, so it lives as DATA in `configs/Norm.yaml` (every dialect norm
+supports is shown there — common network fields once, each dialect's own
+delta after) instead, and both `deno.json` and `package.json` are always
+written (every package in this monorepo ships both). It operates on the
+current directory rather than creating a subfolder: run it inside an
+existing project to add a `models/` schema layer (and `configs/Norm.yaml` +
+`db.ts`) to it, or in an empty directory for a standalone schema project.
+Existing files are always merged into or left alone, never clobbered —
+re-running `init` is safe.
+
+`init` also writes (or merges into) `CLAUDE.md`/`AGENTS.md`: entity kinds
+(TABLE/VIEW/QUERY), hooks, the full repo method set (`insert`/`find`/
+`update`/`upsert`/`delete`/`truncate`), transaction/cache dialect caveats,
+the events/witness observability surface, and the `NormError` hierarchy —
+the same guide this README documents, not a shorter summary.
+
 ## Choosing an entry point
 
 **`@tundralibs/norm`** serves Deno, Bun, and Node, and Workers and
@@ -609,35 +641,6 @@ through its base dialect's translator, and `executor.capabilities`
 reports the two gaps above. See
 [Browser / Worker compatibility](#browser--worker-compatibility) for
 where each dialect runs.
-
-## CLI
-
-```bash
-deno run -A jsr:@tundralibs/norm/cli init
-```
-
-| Command             | Does                                                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `init [--yes]`      | Scaffold a schema project in the current directory, or add norm to one that already exists.                                          |
-| `upgrade [--dir .]` | Bump `@tundralibs/norm`/`@tundralibs/utils` (and any other `@tundralibs/*` dep) to the latest release.                               |
-| `ping [dir]`        | Open the connection described by `configs/Norm.yaml` and report success/failure (exit 0/1) — a connectivity smoke test, not a query. |
-
-`init` has no dialect or runtime prompt: `Entity`/`Schema` never touch a
-dialect, so it lives as DATA in `configs/Norm.yaml` (every dialect norm
-supports is shown there — common network fields once, each dialect's own
-delta after) instead, and both `deno.json` and `package.json` are always
-written (every package in this monorepo ships both). It operates on the
-current directory rather than creating a subfolder: run it inside an
-existing project to add a `models/` schema layer (and `configs/Norm.yaml` +
-`db.ts`) to it, or in an empty directory for a standalone schema project.
-Existing files are always merged into or left alone, never clobbered —
-re-running `init` is safe.
-
-`init` also writes (or merges into) `CLAUDE.md`/`AGENTS.md`: entity kinds
-(TABLE/VIEW/QUERY), hooks, the full repo method set (`insert`/`find`/
-`update`/`upsert`/`delete`/`truncate`), transaction/cache dialect caveats,
-the events/witness observability surface, and the `NormError` hierarchy —
-the same guide this README documents, not a shorter summary.
 
 ## Guides
 
