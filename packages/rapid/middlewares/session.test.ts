@@ -453,3 +453,35 @@ describe('rapid session() — idleTtl cap', () => {
     asserts.assertEquals(err.code, 'RAPID_CONFIG');
   });
 });
+
+describe('rapid session() — cookie attributes', () => {
+  it('the sid cookie is HttpOnly, SameSite=Lax, Path=/ with Max-Age=idleTtl; destroy() expires it', async () => {
+    const app = await makeApp();
+    try {
+      const hit = await app.fetch(
+        new Request('http://app/hit', { method: 'POST' }),
+      );
+      const sid = hit.headers.get('set-cookie') ?? '';
+      await hit.body?.cancel();
+      asserts.assertMatch(sid, /^sid=[^;]+; /);
+      asserts.assertMatch(sid, /; HttpOnly/);
+      asserts.assertMatch(sid, /; SameSite=Lax/);
+      asserts.assertMatch(sid, /; Path=\//);
+      asserts.assertMatch(sid, /; Max-Age=1800/);
+      asserts.assert(!sid.includes('Secure'), 'secure: false in the test app');
+      const gone = await app.fetch(
+        new Request('http://app/logout', {
+          method: 'POST',
+          headers: { cookie: `sid=${sidFrom(hit)}` },
+        }),
+      );
+      asserts.assertMatch(
+        gone.headers.get('set-cookie') ?? '',
+        /sid=;.*Max-Age=0/,
+      );
+      await gone.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+});

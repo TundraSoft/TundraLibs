@@ -104,8 +104,11 @@ describe('rapid.Application', () => {
       asserts.assertEquals(outcome.status, 200);
       asserts.assertEquals(app.running, false); // no lifecycle pollution
       await app.start();
-      asserts.assert(app.address !== null); // the server actually boots
-      await app.stop();
+      try {
+        asserts.assert(app.address !== null); // the server actually boots
+      } finally {
+        await app.stop();
+      }
     });
 
     it('start/stop are idempotent and event-symmetric, even bootless', async () => {
@@ -134,14 +137,18 @@ describe('rapid.Application', () => {
       });
       app.get('/', () => ({ content: 'x' }));
       await app.start();
-      const first = app.port;
       await app.stop();
       asserts.assertEquals(app.running, false);
       await app.start();
-      asserts.assert(app.port !== null); // listening again
-      void first;
-      asserts.assertEquals(app.running, true);
-      await app.stop();
+      try {
+        asserts.assert(app.port !== null); // listening again
+        asserts.assertEquals(app.running, true);
+        // The restarted listener actually serves.
+        const res = await fetch(`http://localhost:${app.port}/`);
+        asserts.assertEquals(await res.text(), 'x');
+      } finally {
+        await app.stop();
+      }
     });
   });
 
@@ -3250,8 +3257,11 @@ describe('rapid.Application', () => {
       const app = await make();
       app.channel('news'); // before start → listener will be mounted
       await app.start();
-      app.channel('more'); // listener exists now → no throw
-      await app.stop();
+      try {
+        app.channel('more'); // listener exists now → no throw
+      } finally {
+        await app.stop();
+      }
     });
 
     it('#4 an illegal reply-cookie name is disclosed as a themed error, not a raw crash', async () => {
@@ -3375,17 +3385,20 @@ describe('rapid.Application boot-loud config', () => {
     const out = await app.triggerJob('nightly');
     asserts.assertEquals(out.status, 200);
     await app.start();
-    asserts.assertThrows(
-      () => app.job('later', '0 7 * * *', () => ({ content: '' })),
-      RapidError,
-      'after start()',
-    );
-    asserts.assertThrows(
-      () => app.socket('late-cmd', () => ({ content: {} })),
-      RapidError,
-      'after start()',
-    );
-    await app.stop();
+    try {
+      asserts.assertThrows(
+        () => app.job('later', '0 7 * * *', () => ({ content: '' })),
+        RapidError,
+        'after start()',
+      );
+      asserts.assertThrows(
+        () => app.socket('late-cmd', () => ({ content: {} })),
+        RapidError,
+        'after start()',
+      );
+    } finally {
+      await app.stop();
+    }
   });
 
   it('a route registered after the first fetch() throws instead of silently never serving', async () => {
@@ -3442,10 +3455,13 @@ describe('rapid.Application graceful stop', () => {
     await new Promise((resolve) => setTimeout(resolve, 50)); // reach the handler
     const stopping = app.stop();
     setTimeout(release, 50);
-    const res = await inflight;
-    asserts.assertEquals(res.status, 200); // removed-dir-first would ENOENT → 500
-    asserts.assertEquals((await res.json()).got, ['doc']);
-    await stopping;
+    try {
+      const res = await inflight;
+      asserts.assertEquals(res.status, 200); // removed-dir-first would ENOENT → 500
+      asserts.assertEquals((await res.json()).got, ['doc']);
+    } finally {
+      await stopping;
+    }
   });
 
   it('stop() waits, within the drain window, for an in-flight job firing', async () => {
@@ -3470,9 +3486,12 @@ describe('rapid.Application graceful stop', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     const stopping = app.stop();
     setTimeout(release, 50);
-    await stopping;
-    asserts.assertEquals(finished, true); // resolved only after the job finished
-    await firing;
+    try {
+      await stopping;
+      asserts.assertEquals(finished, true); // resolved only after the job finished
+    } finally {
+      await firing;
+    }
   });
 });
 
@@ -3652,5 +3671,47 @@ describe('rapid.Application — uploads.allowedExtensions shape', () => {
       uploads: { allowedExtensions: null as unknown as string[] },
     });
     await app.stop();
+  });
+});
+
+describe('rapid.Application — the SCHEDULED job path', () => {
+  it('a firing through the scheduler runs the handler with a tick, refuses an overlapping firing, counts one run, and stop() drains it', async () => {
+    const app = await Application.initialize({
+      name: 'cron-path',
+      server: { port: 0, hostname: '127.0.0.1' },
+      shutdownTimeout: 2,
+      logger: { handlers: [] },
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ticks: { scheduledAt: Date; firedAt: Date; count: number }[] = [];
+    let finished = false;
+    app.job('every', '* * * * *', async (ctx) => {
+      ticks.push(ctx.tick);
+      await gate;
+      finished = true;
+      return { content: 'ok' };
+    });
+    await app.start();
+    try {
+      const scheduler = app._scheduler!;
+      const first = scheduler._trigger('every');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      // The overlap guard: a second firing while the first runs is refused.
+      asserts.assertEquals(await scheduler._trigger('every'), false);
+      asserts.assertEquals(ticks.length, 1);
+      asserts.assert(ticks[0]!.scheduledAt instanceof Date);
+      asserts.assertEquals(typeof ticks[0]!.count, 'number');
+      // stop() waits for the running firing before tearing down.
+      const stopping = app.stop();
+      setTimeout(release, 30);
+      await stopping;
+      asserts.assertEquals(finished, true);
+      asserts.assertEquals(await first, true);
+    } finally {
+      await app.stop();
+    }
   });
 });

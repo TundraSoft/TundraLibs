@@ -98,6 +98,16 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     if (timer !== undefined) clearTimeout(timer);
   }
 
+  /**
+   * Fire a registered job THROUGH the scheduler, exactly as a tick would
+   * (the scheduled callback, the overlap guard, the held slot) — `false`
+   * when the job is already running. Internal (the `_` prefix): the test
+   * seam for the cron path; app code uses `app.triggerJob()`.
+   */
+  public _trigger(name: string): Promise<boolean> {
+    return this.__cronus?.trigger(name) ?? Promise.resolve(false);
+  }
+
   /** Scheduler observability passthrough (vitals later). */
   public jobs() {
     return this.__cronus?.list() ?? [];

@@ -103,3 +103,16 @@ describe('rapid.cookies — signed values', () => {
     );
   });
 });
+
+describe('rapid cookies — malformed signatures', () => {
+  const SECRET = 'test-secret-0123456789-abcdefghijklmnop';
+  it('a non-hex or empty signature reads as undefined, never a throw', async () => {
+    for (const wire of ['dark.zz', 'dark.', 'dark.zz.zz', '.deadbeef']) {
+      asserts.assertEquals(
+        await verifySignedValue(wire, SECRET, 'prefs'),
+        undefined,
+        wire,
+      );
+    }
+  });
+});

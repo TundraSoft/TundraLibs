@@ -112,7 +112,17 @@ describe('rapid.server.static (live)', () => {
   });
 
   it('blocks traversal — encoded dot-segments cannot escape the root', async () => {
-    for (const probe of ['%2e%2e/secret.txt', '..%2fsecret.txt']) {
+    // `%2e%2e/` is a dot segment to the URL parser and never reaches the
+    // guard — the encoded-slash forms are the ones that exercise it.
+    for (
+      const probe of [
+        '%2e%2e/secret.txt',
+        '..%2fsecret.txt',
+        '..%2f..%2fsecret.txt',
+        'a%2f..%2f..%2fsecret.txt',
+        '%2e%2e%2fsecret.txt',
+      ]
+    ) {
       const r = await fetch(`${url}/s/${probe}`);
       const body = await r.text();
       asserts.assertEquals(r.status, 404);
@@ -367,6 +377,29 @@ describe('rapid.server.static — index, re-pointed roots, If-Range (2026-09 rev
         Error,
         'maxAge',
       );
+    }
+  });
+});
+
+describe('rapid static — malformed percent-encoding', () => {
+  it('an undecodable path is a 404, never a URIError 500', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-static-enc-' });
+    const app = await Application.initialize({
+      name: 'static-enc',
+      server: {
+        port: 0,
+        hostname: '127.0.0.1',
+        static: { '/s': dir },
+      },
+      logger: { handlers: [] },
+    });
+    try {
+      const r = await app.fetch(new Request('http://app/s/%zz'));
+      asserts.assertEquals(r.status, 404);
+      await r.body?.cancel();
+    } finally {
+      await app.stop();
+      await removeDir(dir, { recursive: true });
     }
   });
 });

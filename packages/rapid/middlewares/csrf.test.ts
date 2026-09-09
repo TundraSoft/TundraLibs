@@ -274,3 +274,20 @@ describe('rapid csrf() with session() — token follows the session on the SAME 
     await app.stop();
   });
 });
+
+describe('rapid csrf() — cookie attributes', () => {
+  it('the token cookie is readable by page scripts (never HttpOnly) and SameSite=Lax', async () => {
+    const app = await makeApp();
+    try {
+      const r = await app.fetch(new Request('http://app/form'));
+      const cookie = r.headers.get('set-cookie') ?? '';
+      await r.body?.cancel();
+      asserts.assertMatch(cookie, /^csrf=[^;]+; /);
+      asserts.assert(!/HttpOnly/i.test(cookie), 'the runtime must read it');
+      asserts.assertMatch(cookie, /; SameSite=Lax/);
+      asserts.assertMatch(cookie, /; Path=\//);
+    } finally {
+      await app.stop();
+    }
+  });
+});

@@ -155,13 +155,6 @@ class HTTPArgs {
   }
 }
 
-/**
- * The HTTP transport context — one per request. Adopts the inbound
- * request's correlation header, parses body/query/cookies/client-address
- * lazily (most requests touch few of them), and interprets the full
- * `status`/`headers` response, emitting a Fetch `Response` at
- * {@link respond}.
- */
 /** Whether a reply's `headers` (object or `Headers`) names `name`, case-insensitively. */
 const hasHeader = (
   headers: RapidContextResponse['headers'],
@@ -199,6 +192,13 @@ const assertReplyCookie = (
   }
 };
 
+/**
+ * The HTTP transport context — one per request. Adopts the inbound
+ * request's correlation header, parses body/query/cookies/client-address
+ * lazily (most requests touch few of them), and interprets the full
+ * `status`/`headers` response, emitting a Fetch `Response` at
+ * {@link respond}.
+ */
 export class HTTPContext<S extends RapidContextState = RapidContextState>
   extends Context<S, Response> {
   /** The transport discriminator — always `'HTTP'`. */

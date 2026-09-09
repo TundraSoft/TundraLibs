@@ -483,7 +483,11 @@ describe('rapid.ui.app', () => {
       swap.headers.get('content-type'),
       'text/html; charset=UTF-8',
     );
-    asserts.assertStringIncludes(await swap.text(), 'rapid-error');
+    const devBody = await swap.text();
+    asserts.assertStringIncludes(devBody, 'rapid-error');
+    asserts.assertStringIncludes(devBody, 'kaput'); // the real message
+    asserts.assertStringIncludes(devBody, 'RAPID_UNHANDLED');
+    asserts.assertStringIncludes(devBody, '<pre'); // the debug block
 
     const prod = await make(); // default mode: PRODUCTION
     prod.ui({});
@@ -702,5 +706,185 @@ describe('rapid.ui.runtime — outer swaps with several roots', () => {
       UI_RUNTIME,
       'for (const root of extraRoots) loadLazy(root);',
     );
+  });
+});
+
+describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
+  class FakeElement {
+    dataset: Record<string, string> = {};
+    innerHTML = '';
+    id = '';
+    tagName = 'DIV';
+    events: CustomEvent[] = [];
+    insertAdjacentHTML(position: string, markup: string): void {
+      this.innerHTML = position === 'beforeend'
+        ? this.innerHTML + markup
+        : markup + this.innerHTML;
+    }
+    contains(): boolean {
+      return false;
+    }
+    matches(): boolean {
+      return false;
+    }
+    querySelectorAll(): unknown[] {
+      return [];
+    }
+    closest(): null {
+      return null;
+    }
+    dispatchEvent(event: CustomEvent): boolean {
+      this.events.push(event);
+      return true;
+    }
+    focus(): void {}
+  }
+  class FakeForm extends FakeElement {}
+  type Rapid = {
+    swap(url: string, target: unknown, opts?: unknown): Promise<boolean>;
+  };
+  const boot = (fetchImpl: typeof fetch) => {
+    const document = {
+      body: { dataset: {} },
+      cookie: 'csrf=tok; other=1',
+      readyState: 'complete',
+      activeElement: null,
+      addEventListener() {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: () => null,
+      dispatchEvent: () => true,
+    };
+    const assigned: string[] = [];
+    const location = {
+      href: 'https://app.test/page',
+      origin: 'https://app.test',
+      assign: (href: string) => assigned.push(href),
+    };
+    const window: { rapid?: Rapid } = {};
+    new Function(
+      'window',
+      'document',
+      'location',
+      'fetch',
+      'Element',
+      'HTMLFormElement',
+      UI_RUNTIME,
+    )(window, document, location, fetchImpl, FakeElement, FakeForm);
+    return { rapid: window.rapid!, assigned };
+  };
+  const htmlResponse = (body: string, headers: Record<string, string> = {}) =>
+    new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=UTF-8', ...headers },
+    });
+
+  it('refuses a cross-origin URL before any fetch, and never ships the csrf header there', async () => {
+    let calls = 0;
+    const { rapid } = boot(
+      (() => {
+        calls++;
+        return Promise.resolve(htmlResponse('<p>x</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(
+      await rapid.swap('https://evil.test/x', target),
+      false,
+    );
+    asserts.assertEquals(await rapid.swap('//evil.test/x', target), false);
+    asserts.assertEquals(await rapid.swap('/ok', null), false);
+    asserts.assertEquals(calls, 0);
+  });
+
+  it('a same-origin swap sends the swap header and the csrf cookie, replaces the target, and fires a bubbling rapid:swapped', async () => {
+    let seen: RequestInit | undefined;
+    const { rapid } = boot(
+      ((_url: string, init: RequestInit) => {
+        seen = init;
+        return Promise.resolve(htmlResponse('<p>hi</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(await rapid.swap('/frag', target), true);
+    const headers = seen!.headers as Record<string, string>;
+    asserts.assertEquals(headers['rapid-swap'], '1');
+    asserts.assertEquals(headers['x-csrf-token'], 'tok');
+    asserts.assertEquals(headers['accept'], 'text/html');
+    asserts.assertEquals(target.innerHTML, '<p>hi</p>');
+    const swapped = target.events.find((e) => e.type === 'rapid:swapped')!;
+    asserts.assert(swapped !== undefined);
+    asserts.assertEquals(swapped.bubbles, true);
+    asserts.assertEquals(
+      (swapped.detail as { status: number; method: string }).status,
+      200,
+    );
+  });
+
+  it('rapid-redirect is followed same-origin only', async () => {
+    let next = 'https://evil.test/';
+    const { rapid, assigned } = boot(
+      (() =>
+        Promise.resolve(
+          htmlResponse('', { 'rapid-redirect': next }),
+        )) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(await rapid.swap('/go', target), false);
+    asserts.assertEquals(assigned, []);
+    asserts.assertEquals(target.innerHTML, '');
+    next = '/next';
+    asserts.assertEquals(await rapid.swap('/go', target), false);
+    asserts.assertEquals(assigned, ['https://app.test/next']);
+  });
+
+  it('a non-HTML or non-2xx body is never swapped in — rapid:error carries it instead', async () => {
+    const bodies = [
+      new Response('{"code":"RAPID_NOT_FOUND"}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+      new Response('<p>err</p>', {
+        status: 500,
+        headers: { 'content-type': 'text/html' },
+      }),
+    ];
+    const { rapid } = boot(
+      (() => Promise.resolve(bodies.shift()!)) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(await rapid.swap('/a', target), false);
+    asserts.assertEquals(await rapid.swap('/b', target), false);
+    asserts.assertEquals(target.innerHTML, '');
+    const errors = target.events.filter((e) => e.type === 'rapid:error');
+    asserts.assertEquals(
+      errors.map((e) => (e.detail as { status: number }).status),
+      [200, 500],
+    );
+  });
+
+  it('last write wins: a newer swap on the same target aborts the older request', async () => {
+    const signals: AbortSignal[] = [];
+    let releaseFirst!: (r: Response) => void;
+    let call = 0;
+    const { rapid } = boot(
+      ((_url: string, init: RequestInit) => {
+        signals.push(init.signal!);
+        if (call++ === 0) {
+          return new Promise<Response>((resolve) => {
+            releaseFirst = resolve;
+          });
+        }
+        return Promise.resolve(htmlResponse('<p>second</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    const first = rapid.swap('/slow', target);
+    const second = rapid.swap('/fast', target);
+    asserts.assertEquals(await second, true);
+    asserts.assertEquals(signals[0]!.aborted, true);
+    releaseFirst(htmlResponse('<p>first</p>'));
+    asserts.assertEquals(await first, false);
+    asserts.assertEquals(target.innerHTML, '<p>second</p>');
   });
 });

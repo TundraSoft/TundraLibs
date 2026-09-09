@@ -576,3 +576,102 @@ describe('rapid.middlewares.idempotency (timeout interplay)', () => {
     await app.stop();
   });
 });
+
+describe('rapid.middlewares.idempotency — cookies and the lost claim', () => {
+  it('a Set-Cookie minted by the first attempt is NOT replayed to the retry', async () => {
+    const app = await Application.initialize({
+      name: 'idem-cookie',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(idempotency({ scope: false }));
+    app.post('/login', (ctx) => {
+      ctx.setCookie('login', 'secret');
+      return { content: { ok: true } };
+    });
+    try {
+      const first = await app.fetch(
+        new Request('http://app/login', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'c1' },
+        }),
+      );
+      asserts.assertEquals(first.headers.getSetCookie().length, 1);
+      await first.body?.cancel();
+      const replay = await app.fetch(
+        new Request('http://app/login', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'c1' },
+        }),
+      );
+      asserts.assertEquals(replay.headers.get('idempotency-replayed'), 'true');
+      asserts.assertEquals(replay.headers.getSetCookie().length, 0);
+      await replay.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('losing the claim to a concurrent replica re-reads the record: one execution, one 409', async () => {
+    // A store shaped like a shared backend: the first read of a key sees
+    // nothing (the other replica has not stored yet), the claim is won
+    // exactly once, and the loser's re-read finds the pending marker.
+    const records = new Map<string, IdempotencyRecord>();
+    const claimed = new Set<string>();
+    let reads = 0;
+    const hooks: IdempotencyHooks = {
+      getRecord: (key) => (reads++ < 2 ? undefined : records.get(key)),
+      claim: (key, record) => {
+        if (claimed.has(key)) return false;
+        claimed.add(key);
+        records.set(key, record);
+        return true;
+      },
+      saveRecord: (key, record) => {
+        records.set(key, record);
+      },
+      release: (key) => {
+        records.delete(key);
+        claimed.delete(key);
+      },
+    };
+    const app = await Application.initialize({
+      name: 'idem-claim',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    let runs = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    app.use(idempotency({ scope: false, hooks }));
+    app.post('/charge', async () => {
+      runs++;
+      await gate;
+      return { content: { charged: true } };
+    });
+    const post = () =>
+      app.fetch(
+        new Request('http://app/charge', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'k' },
+        }),
+      );
+    try {
+      const a = post();
+      const b = post();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      release();
+      const [ra, rb] = await Promise.all([a, b]);
+      const statuses = [ra.status, rb.status].sort();
+      asserts.assertEquals(statuses, [200, 409]);
+      asserts.assertEquals(runs, 1);
+      asserts.assert(reads >= 3, 'the loser re-read after the failed claim');
+      await ra.body?.cancel();
+      await rb.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+});

@@ -1250,6 +1250,15 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * The live cron transport (after `start()` with jobs registered), or
+   * `undefined`. Internal (the `_` prefix) — the test seam for the
+   * scheduled path.
+   */
+  public get _scheduler(): JOBTransport<S> | undefined {
+    return this.__jobTransport;
+  }
+
+  /**
    * Live cron scheduler statistics (registered/running counts + per-job
    * run count, last run, executing) — `undefined` when the job transport
    * is not running. NOT gated on `server.metrics`; cronus always tracks

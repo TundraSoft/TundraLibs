@@ -159,6 +159,14 @@ describe('rapid.Transport._invoke — tracer span path', () => {
     const body = await bad.json();
     asserts.assertEquals(body.code, 'RAPID_UNHANDLED');
     asserts.assertEquals(body.message, 'Internal server error');
+    // Key-exact: nothing else (no details, no debug, no stack) rides a
+    // PRODUCTION 500.
+    asserts.assertEquals(Object.keys(body).sort(), [
+      'code',
+      'message',
+      'requestId',
+    ]);
+    asserts.assert(!JSON.stringify(body).includes('boom'));
 
     // startActiveSpan ran for BOTH: a SERVER span named by the matched
     // route, carrying the low-cardinality attributes setAttributes stamped.

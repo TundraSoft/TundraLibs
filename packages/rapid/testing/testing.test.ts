@@ -24,17 +24,23 @@ class Stamper extends RapidModule {
 }
 
 describe('rapid/testing harness', () => {
-  it('boots modules with a stubbed dependency, then restores it on dispose', async () => {
-    asserts.assertEquals(Doctor.has(CLOCK), false);
+  it("boots modules with a stubbed dependency, then revokes it from the CALLER's container on dispose", async () => {
+    // A caller-supplied container is where a leaked stub would be visible
+    // (the default is a fresh child, so the global `Doctor` never sees it).
+    const container = Doctor.createContainer();
+    asserts.assertEquals(container.has(CLOCK), false);
     const h = await harness({
       modules: [{ Stamper }],
       stub: [[CLOCK, { now: () => 'FROZEN' }]],
+      container,
     });
+    asserts.assertEquals(container.has(CLOCK), true);
     asserts.assertEquals(h.modules.Stamper.stamp(), { at: 'FROZEN' });
     const res = await h.invoke(Stamper, 'stamp', []);
     asserts.assertEquals(res.content, { at: 'FROZEN' });
     await h.dispose();
-    asserts.assertEquals(Doctor.has(CLOCK), false); // stub revoked
+    asserts.assertEquals(container.has(CLOCK), false); // stub revoked
+    asserts.assertEquals(Doctor.has(CLOCK), false); // and the global untouched
   });
 
   it('await using disposes automatically', async () => {
