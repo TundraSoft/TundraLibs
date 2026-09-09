@@ -23,6 +23,7 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./cli": "./cli/mod.ts",
     "./core": "./core.ts",
     "./errors": "./errors/mod.ts",
     "./definition": "./definition/mod.ts",
