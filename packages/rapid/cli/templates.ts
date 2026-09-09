@@ -1118,8 +1118,9 @@ shell (\`CoreShell\`), \`views/layout.ts\` the page frame (\`PageShape\`),
             'prefer: html # json | html',
           ),
       );
-    // …the CODE half at initialize.
-    const main = answers.module ? 'main.ts' : 'main.ts';
+    // …the CODE half at initialize. Always 'main.ts' (see the write at
+    // `files['main.ts'] = …` above) — no scaffold branch names it differently.
+    const main = 'main.ts';
     if (files[main] !== undefined) {
       files[main] = files[main]!
         .replace(
