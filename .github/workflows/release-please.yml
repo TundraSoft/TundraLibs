@@ -4,6 +4,42 @@ on:
   push:
     branches:
       - main
+  # Manual escape hatch for the known release-please failure where a
+  # release gets tagged (by hand, matching the existing tag/release
+  # format) outside the action's own run — e.g. after manual tag surgery
+  # recovering from "untagged, merged release PRs outstanding" (see
+  # googleapis/release-please#1946). The automatic `publish` job only
+  # fires in the SAME run where release-please's action reports it just
+  # created a release, so a release stitched together by hand afterward
+  # is never picked up on its own. This lets a maintainer publish exactly
+  # one already-released package on demand instead.
+  workflow_dispatch:
+    inputs:
+      path:
+        description: Package directory to publish (must already be tagged/released)
+        required: true
+        type: choice
+        options:
+          - packages/ambient
+          - packages/cacher
+          - packages/compat
+          - packages/cronus
+          - packages/crypt
+          - packages/doctor
+          - packages/drivers
+          - packages/guardian
+          - packages/id
+          - packages/metro-man
+          - packages/norm
+          - packages/oql
+          - packages/pact
+          - packages/radrouter
+          - packages/rapid
+          - packages/restler
+          - packages/rpc
+          - packages/slogger
+          - packages/tracer
+          - packages/utils
 
 permissions:
   contents: read
@@ -45,10 +81,16 @@ jobs:
     needs: release-please
     # Publishes ONLY from the real repository — the internal staging repo
     # can merge release PRs to validate the pipeline without shipping.
+    # Either release-please just created a release in THIS run, or a
+    # maintainer explicitly asked to (re-)publish one package by hand —
+    # see the workflow_dispatch comment above for why that path exists.
     if: |
       github.repository == 'TundraSoft/TundraLibs' &&
-      needs.release-please.outputs.paths_released != '' &&
-      needs.release-please.outputs.paths_released != '[]'
+      (
+        (needs.release-please.outputs.paths_released != '' &&
+         needs.release-please.outputs.paths_released != '[]') ||
+        github.event_name == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,7 +98,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        path: ${{ fromJson(needs.release-please.outputs.paths_released) }}
+        path: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.path)) || fromJson(needs.release-please.outputs.paths_released) }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
