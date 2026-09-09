@@ -167,7 +167,46 @@ one-way digest column, e.g. for passwords), \`mask(source, fn)\` (a virtual
 column computed after decryption — never stored, never sent to SQL).
 Chainable on (most of) these: \`.nullable()\`, \`.minLength()\`/\`.maxLength()\`,
 \`.pattern(re)\`, \`.beforeWrite(fn)\`/\`.afterRead(fn)\`, \`.lov([...])\` (narrows
-the TS type to that union), \`.default(v)\`, \`.comment(text)\`.
+the TS type to that union), \`.default(v)\`, \`.min()\`/\`.max()\` (numeric),
+\`.hidden()\`/\`.unfilterable()\`, \`.comment(text)\`.
+
+### Entity kinds
+
+\`Entity(name, columns, options)\` defaults to \`type: 'TABLE'\` (physical,
+writable, needs \`pk\`). \`type: 'VIEW'\` is DB-side and read-only (\`query\`:
+a stored OQL \`SELECT\`; can be joined against, optionally
+\`materialized: true\`). \`type: 'QUERY'\` is client-side, read-only, and
+terminal — it cannot be joined or built upon, and cannot declare \`fk\`.
+Both read-only kinds take \`afterRead\` only (no write hooks); \`index\`/
+\`unique\`/\`insert\`/\`update\` are TABLE-only.
+
+### Hooks
+
+Row-level, whole-row (not per-column). TABLE gets all four; returning a
+row replaces the payload, returning nothing means the hook mutated in
+place:
+
+\`\`\`ts
+Entity('tickets', {/* columns */}, {
+  pk: ['id'],
+  hooks: {
+    beforeInsert: (row) => ({ ...row, subject: row.subject.trim() }),
+    beforeUpdate: (row) => row,
+    afterRead: (row) => row,
+    // Fires before DELETE, with the caller's filter (undefined = the
+    // all-rows form) — THROW to veto. Runs for delete()/deleteByPK(),
+    // not truncate().
+    beforeDelete: (filter) => {
+      if (filter === undefined) throw new Error('refusing unfiltered delete');
+    },
+  },
+});
+\`\`\`
+
+\`insert\`/\`update\` options restrict which columns a caller may pass for
+that operation (a "request schema" — everything else becomes norm-owned
+for it); norm-maintained behavior (hash siblings, \`defaultOnUpdate\`)
+always runs regardless of the list.
 
 ### Querying
 
@@ -186,12 +225,17 @@ await db.repo('Users').find({ '@role': 'admin' }, {
   limit: 20,
   project: { '@id': true, '@displayName': true, '@Profile': { '@bio': true } },
 });
+await db.repo('Users').update({ role: 'admin' }, { '@id': id });
+await db.repo('Users').upsert({ email: 'a@b.com', role: 'admin' }, opts);
+await db.repo('Users').delete({ '@id': id }); // delete({}) = all rows
+await db.repo('Users').truncate(); // refused on a temporal or scoped entity
 \`\`\`
 
 Filters are the OQL filter language typed to your columns (\`$eq\`, \`$ne\`,
 \`$in\`, \`$like\`, \`$between\`, \`$null\`, \`$or\`/\`$and\`, nested relation refs
 like \`'@Profile.@bio'\`). A filter through an unprojected to-many relation
-becomes a correlated \`EXISTS\` — it never fans out rows.
+becomes a correlated \`EXISTS\` — it never fans out rows (not on MongoDB,
+which has no correlated-subquery form — see the dialect note below).
 
 ### Transactions
 
@@ -204,6 +248,9 @@ await db.transaction(async (tx) => {
 
 Nesting (\`tx.transaction(sp => ...)\`) opens a SAVEPOINT on SQL engines —
 only the inner block rolls back on throw; the outer transaction survives.
+A fetch-only dialect (\`neon\`/\`turso\`/\`d1\`) or MongoDB sends one request
+per statement, so \`db.transaction()\` throws \`NormUnsupportedError\`
+there — check \`configs/Norm.yaml\`'s active dialect before relying on it.
 
 ### Scoping (multi-tenant / default filters)
 
@@ -220,14 +267,42 @@ unscoped, so one handle can span a mixed registry.
 ciphertext. Add \`.hash()\` to keep it equality-searchable (e.g.
 \`Column.varchar(255).encrypt().hash()\` for email) — norm derives a
 \`<col>_hash\` sibling and rewrites \`{ '@email': ... }\` filters (and
-uniqueness/upsert conflict keys) against it automatically.
+uniqueness/upsert conflict keys) against it automatically. An entity with
+any encrypted column may only use read caching on the in-process
+\`MEMORY\` cache engine (decrypted rows on Redis/Memcached would leak
+plaintext) — \`use()\` throws at compose time otherwise.
 
 ### Read caching (off by default)
 
 \`new Norm({ cache: { engine: 'MEMORY' } })\` plus a per-entity \`cache:
 <minutes>\` option turns on caching for non-transactional \`find\`/
 \`findOne\`/\`count\`/\`getByPK\`; any write on that entity prunes its cache.
-\`{ noCache: true }\` bypasses it for one call.
+\`{ noCache: true }\` bypasses it for one call. A joined read is never
+cached (per-table pruning can't invalidate it) — model it as a \`VIEW\` to
+make it cacheable.
+
+### Events and tracing
+
+Metadata-only — never row data, plaintext, or secrets. Subscribe with
+\`_on<event>\` constructor keys or later via \`norm.on(event, fn)\`: \`call\`
+(every operation), \`cacheHit\`, \`warning\` (e.g. \`cache-skip\`,
+\`cache-error\`), \`decryptError\`, \`transactionBegin\`/\`Commit\`/\`Rollback\`,
+and the proxied engine events (\`connect\`, \`query\`, \`slowQuery\`, ...). For
+nested spans instead of flat events, configure a \`witness\` (see
+[ambient](https://jsr.io/@tundralibs/ambient)) — every repo operation and
+\`raw()\` runs through it.
+
+### Errors
+
+Every thrown error extends \`NormError\` (\`@tundralibs/norm/errors\`) and
+exposes \`.code\` and \`.norm\` (the raising instance's \`name\`) getters —
+branch on \`instanceof\`, not string-matching the message. The subclasses
+that matter day to day: \`NormQueryError\` (bad filter/projection/upsert
+before any engine call), \`NormValidationError\` (an insert/update/upsert
+payload failed the column-derived Guardian — detail on \`context.issues\`),
+\`NormHookError\` (a hook threw — \`context.model\`/\`context.hook\` identify
+it), and \`NormUnsupportedError\` (the configured engine or the entity's
+own shape forbids the call, e.g. \`update()\` on a temporal entity).
 
 ### Connection
 
@@ -236,6 +311,11 @@ The database connection is DATA, not code: edit \`configs/Norm.yaml\` (the
 active at a time) to change dialect, host or credentials. Use
 \`\${VAR}\` placeholders and a local \`.env\` for secrets — never hand-edit
 them into source control. \`db.ts\` never changes when the dialect does.
+
+Not every dialect supports everything: MongoDB has no transactions and
+no raw SQL (\`db.query()\` with OQL IR only); Neon/Turso/D1 have no
+transactions either (fetch-only, one request per statement) and migrate
+without an advisory lock.
 
 Full reference (relations, migrations, aggregates, pagination, crypto
 overrides): https://jsr.io/@tundralibs/norm.
