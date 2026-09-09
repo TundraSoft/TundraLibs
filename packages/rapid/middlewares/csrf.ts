@@ -1,0 +1,236 @@
+/**
+ * @fileoverview `csrf()` — stateless CSRF protection via a SIGNED,
+ * SESSION-BOUND double-submit cookie. Issues a signed token in a
+ * (JS-readable) cookie that the app mirrors into a request header; on
+ * state-changing methods the sent token must equal the cookie, carry a
+ * valid `@tundralibs/crypt` HMAC signature, AND be bound to the current
+ * session — else 403. No store needed. HTTP-only. `SameSite=Lax` cookies
+ * remain the first line; this is defense-in-depth for the gaps.
+ *
+ * The binding closes cookie tossing: a token carries a keyed hash of the
+ * session cookie it was issued under (anonymous = its own binding), so a
+ * token an attacker PLANTED from a writable subdomain, minted under THEIR
+ * session (or none), never verifies for a signed-in victim. The token
+ * follows the session: when the binding no longer matches (login,
+ * `regenerate()`, logout), the token is re-issued on the SAME response
+ * that rotated the session — provided `csrf()` is registered OUTSIDE
+ * `session()` (`app.use(csrf(), session())`), so the session's save
+ * phase has run when csrf's post-`next()` step reads the cookie it
+ * issued. Registered the other way round the re-issue lands one
+ * response late (the first state-changing request after a rotation is
+ * rejected once). The token valid for THIS response is published for
+ * the view bag (`view.csrfToken`), since the request cookie is absent on
+ * a first visit and stale on a rotating response.
+ *
+ * @module
+ */
+import { signHMAC } from '@tundralibs/crypt';
+import { ulid } from '@tundralibs/id';
+import { RapidError } from '../errors/mod.ts';
+import { meterAction } from '../utils/Meter.ts';
+import { unmaskToken } from '../utils/csrfMask.ts';
+import { MIDDLEWARE_SCOPE } from './scope.ts';
+import type { RapidMiddleware } from '../types/mod.ts';
+import {
+  assertCookieConfig,
+  isToken,
+  signValue,
+  verifySignedValue,
+} from '../utils/cookies.ts';
+import {
+  CSRF_TOKEN,
+  mark,
+  markOf,
+  SESSION_ISSUED,
+} from '../utils/requestMarks.ts';
+
+/** Options for {@link csrf}. The token is signed with the app `secret`. */
+export type CsrfOptions = {
+  /** Token cookie name (JS-readable so the app can echo it). @default 'csrf' */
+  cookie?: string;
+  /** Header the client echoes the token in. @default 'x-csrf-token' */
+  header?: string;
+  /** Form field checked when the header is absent. @default '_csrf' */
+  field?: string;
+  /**
+   * `SameSite` of the token cookie. `'None'` requires `secure` (browsers
+   * drop a non-Secure SameSite=None cookie). @default 'Lax'
+   */
+  sameSite?: 'Strict' | 'Lax' | 'None';
+  /** Set the cookie's `Secure` flag. @default true */
+  secure?: boolean;
+  /** Cookie path; must be absolute. @default '/' */
+  path?: string;
+  /**
+   * The session-id cookie the token is BOUND to — `session()`'s cookie
+   * name. A token verifies only for the session it was issued under
+   * (no session cookie = the anonymous binding); a session change
+   * re-issues it on the next response. Set this when `session()` was
+   * configured with a renamed cookie. @default 'sid'
+   */
+  session?: string;
+};
+
+/** Methods that never mutate — CSRF is not enforced on them. */
+const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/** Chars of the keyed session hash carried in the token (equality only). */
+const BINDING_LENGTH = 32;
+
+/**
+ * The binding: a KEYED hash of the session cookie's raw value (`''` when
+ * absent) — never the id itself, since the token cookie is JS-readable.
+ */
+const bindingOf = async (
+  sid: string | undefined,
+  secret: string,
+): Promise<string> =>
+  (await signHMAC(sid ?? '', secret)).slice(0, BINDING_LENGTH);
+
+/** Wire form `<nonce>.<binding>.<sig>`. */
+const issueToken = (binding: string, secret: string): Promise<string> =>
+  signValue(`${ulid()}.${binding}`, secret);
+
+/**
+ * The token's bound part when its signature verifies, else `undefined`
+ * (malformed → invalid, never a 500).
+ */
+const verifyToken = async (
+  token: string,
+  secret: string,
+): Promise<string | undefined> => {
+  const payload = await verifySignedValue(token, secret);
+  if (payload === undefined) return undefined;
+  const dot = payload.indexOf('.');
+  return dot === -1 ? undefined : payload.slice(dot + 1);
+};
+
+/**
+ * Stateless CSRF middleware (signed double-submit). Install after any body
+ * parser is irrelevant — it reads `ctx.payload` (a cached promise) only as a
+ * fallback when the header is absent, so header-based clients never trigger a
+ * body parse.
+ *
+ * @throws {@link RapidError} `RAPID_CONFIG` at build when `cookie`,
+ *   `session` or `header` is not a token, `field` is empty, `path` is not
+ *   absolute, `sameSite: 'None'` is paired with `secure: false`, or a
+ *   `__Host-`/`__Secure-` cookie name lacks what its prefix requires.
+ * @throws {@link RapidError} `RAPID_CONFIG` at REQUEST time (a 500 on every
+ *   HTTP request) when the app has no `secret` — the token is signed with it.
+ * @throws {@link RapidError} `RAPID_CSRF_INVALID` (403) on a missing/mismatched
+ *   /unsigned token — or one bound to another session — for a
+ *   state-changing method.
+ *
+ * @example
+ * ```ts ignore
+ * // The token is signed with the app `secret` option — set that once.
+ * app.use(csrf());
+ * // the client reads the `csrf` cookie and sends it back as `x-csrf-token`
+ * ```
+ */
+export function csrf(options: CsrfOptions = {}): RapidMiddleware {
+  const cookieName = options.cookie ?? 'csrf';
+  const headerName = options.header ?? 'x-csrf-token';
+  const fieldName = options.field ?? '_csrf';
+  const sessionCookie = options.session ?? 'sid';
+  assertCookieConfig('csrf', cookieName, options);
+  if (!isToken(sessionCookie)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `csrf session cookie '${sessionCookie}' is not a valid cookie name`,
+      details: { session: sessionCookie },
+    });
+  }
+  if (!isToken(headerName)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `csrf header '${headerName}' is not a valid header name`,
+      details: { header: headerName },
+    });
+  }
+  if (fieldName === '' || /[\r\n\0]/.test(fieldName)) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'csrf field must be a non-empty form field name',
+      details: { field: fieldName },
+    });
+  }
+
+  const middleware: RapidMiddleware = async (ctx, next) => {
+    if (ctx.type !== 'HTTP') return await next();
+
+    // Ensure the client holds a valid token for THIS session to mirror
+    // back: issue when absent, unsigned, or bound to another session
+    // (login / regenerate / logout rotate the binding — the token follows).
+    const secret = ctx.app.secret;
+    const issue = async (forBinding: string): Promise<string> => {
+      const fresh = await issueToken(forBinding, secret);
+      ctx.setCookie(cookieName, fresh, {
+        httpOnly: false, // the app's JS must read it to echo into the header
+        secure: options.secure ?? true,
+        sameSite: options.sameSite ?? 'Lax',
+        path: options.path ?? '/',
+      });
+      mark(ctx, CSRF_TOKEN, fresh);
+      return fresh;
+    };
+    const binding = await bindingOf(ctx.cookies[sessionCookie], secret);
+    let token = ctx.cookies[cookieName];
+    if (!token || (await verifyToken(token, secret)) !== binding) {
+      token = await issue(binding);
+    } else {
+      mark(ctx, CSRF_TOKEN, token);
+    }
+
+    // Enforce on state-changing methods only.
+    if (!SAFE.has(ctx.method)) {
+      let sent = ctx.headers.get(headerName) ?? undefined;
+      if (sent === undefined) {
+        const body = await ctx.payload;
+        if (body !== null && typeof body === 'object') {
+          const v = (body as Record<string, unknown>)[fieldName];
+          if (typeof v === 'string') sent = v;
+        }
+      }
+      // A form field or meta tag carries the per-response MASKED form
+      // (`view.csrfToken`); the swap runtime echoes the bare cookie.
+      // Either unmasks to the token — a malformed mask is invalid.
+      const bare = sent === undefined ? undefined : unmaskToken(sent);
+      if (
+        bare === undefined ||
+        bare !== token ||
+        (await verifyToken(bare, secret)) !== binding
+      ) {
+        ctx.meter?.middleware('csrf', 'rejected', meterAction(ctx));
+        throw new RapidError('RAPID_CSRF_INVALID', {
+          message: 'CSRF token missing or invalid',
+        });
+      }
+    }
+
+    // The session cookie this response issues (an INNER session() ran its
+    // save phase inside next()) may carry a NEW binding — login,
+    // regenerate(), logout. Re-issue the token for it on THIS response, or
+    // the browser leaves with `sid=new` + `csrf=bound(old)` and its next
+    // state-changing request is rejected once. Runs on the throw path
+    // too (logout-then-throw still rotated). A later setCookie of the
+    // same name wins at finalize (call order), so this supersedes the
+    // one issued above.
+    let thrown = false;
+    let error: unknown;
+    try {
+      await next();
+    } catch (e) {
+      thrown = true;
+      error = e;
+    }
+    const issued = markOf(ctx, SESSION_ISSUED);
+    if (issued !== undefined) {
+      const outbound = await bindingOf(
+        issued === '' ? undefined : issued,
+        secret,
+      );
+      if (outbound !== binding) await issue(outbound);
+    }
+    if (thrown) throw error;
+  };
+  return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
+}

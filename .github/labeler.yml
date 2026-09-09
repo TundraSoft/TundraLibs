@@ -43,6 +43,9 @@
 'pkg: radrouter':
   - changed-files:
       - any-glob-to-any-file: packages/radrouter/**
+'pkg: rapid':
+  - changed-files:
+      - any-glob-to-any-file: packages/rapid/**
 'pkg: restler':
   - changed-files:
       - any-glob-to-any-file: packages/restler/**

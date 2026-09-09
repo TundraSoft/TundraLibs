@@ -1,0 +1,424 @@
+/**
+ * @fileoverview parseBody — the request-body engine, tested directly
+ * (no live server): the byte cap, JSON/text/form dispatch, malformed
+ * JSON, and repeated-field normalisation.
+ * @module
+ */
+
+import * as asserts from '@std/asserts';
+import { describe, it } from '@tundralibs/compat/test';
+import {
+  makeTempDirSync,
+  pathExists,
+  readDir,
+  readTextFile,
+} from '@tundralibs/compat/file';
+import { parseBody } from './parseBody.ts';
+import { RapidError } from '../errors/mod.ts';
+
+const opts = (maxBodySize = 1_048_576) => ({
+  maxBodySize,
+  uploads: {
+    maxSize: 10_485_760,
+    allowedExtensions: [],
+    path: makeTempDirSync({ prefix: 'pb-' }),
+  },
+});
+
+const req = (body: BodyInit | null, type?: string) => {
+  // A string body auto-sets content-type: text/plain — to exercise the
+  // genuinely-headerless path, send raw bytes when no type is given.
+  const payload = type === undefined && typeof body === 'string'
+    ? new TextEncoder().encode(body)
+    : body;
+  return new Request('http://x/', {
+    method: 'POST',
+    headers: type ? { 'content-type': type } : {},
+    body: payload,
+    // deno-lint-ignore no-explicit-any
+    ...(payload instanceof ReadableStream ? { duplex: 'half' } as any : {}),
+  });
+};
+
+describe('rapid.parseBody', () => {
+  it('parses JSON', async () => {
+    const { value } = await parseBody(
+      req('{"a":1}', 'application/json'),
+      opts(),
+    );
+    asserts.assertEquals(value, { a: 1 });
+  });
+
+  it('empty JSON body → {}', async () => {
+    const { value } = await parseBody(req('', 'application/json'), opts());
+    asserts.assertEquals(value, {});
+  });
+
+  it('a non-object top-level JSON value (array/number/boolean/null) passes through, typed correctly', async () => {
+    // RapidHTTPRequestBody used to claim Record<string,unknown> | string
+    // | undefined — every one of these is legal JSON per RFC 8259 and
+    // parseBody returns each verbatim (JSON.parse's return type is
+    // `any`, so nothing caught the mismatch at the call site). Widened
+    // to match reality rather than rejecting these at parse time — no
+    // observed consumer assumed Record-shaped payload, and rejecting
+    // would be a behavior change, not a type-accuracy fix.
+    const cases: [string, unknown][] = [
+      ['[1,2,3]', [1, 2, 3]],
+      ['42', 42],
+      ['true', true],
+      ['null', null],
+    ];
+    for (const [body, expected] of cases) {
+      const { value } = await parseBody(
+        req(body, 'application/json'),
+        opts(),
+      );
+      asserts.assertEquals(value, expected);
+    }
+  });
+
+  it('malformed JSON → RAPID_VALIDATION_FAILED (client error)', async () => {
+    await asserts.assertRejects(
+      () => parseBody(req('{bad', 'application/json'), opts()),
+      RapidError,
+      'not valid JSON',
+    );
+  });
+
+  it('malformed multipart (no boundary) -> RAPID_VALIDATION_FAILED (400), never a fake 500', async () => {
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(req('not really multipart', 'multipart/form-data'), opts()),
+      RapidError,
+      'not a valid form payload',
+    );
+    asserts.assertEquals((err as RapidError).code, 'RAPID_VALIDATION_FAILED');
+  });
+
+  it('text/* stays a string', async () => {
+    const { value } = await parseBody(req('hello', 'text/plain'), opts());
+    asserts.assertEquals(value, 'hello');
+  });
+
+  it('no content-type: opportunistic JSON, else text', async () => {
+    asserts.assertEquals((await parseBody(req('{"a":2}'), opts())).value, {
+      a: 2,
+    });
+    asserts.assertEquals((await parseBody(req('nope'), opts())).value, 'nope');
+  });
+
+  it('urlencoded form parses to fields', async () => {
+    const { value } = await parseBody(
+      req('a=1&b=2', 'application/x-www-form-urlencoded'),
+      opts(),
+    );
+    asserts.assertEquals(value, { a: '1', b: '2' });
+  });
+
+  it('repeated form field normalises to an array (no loss)', async () => {
+    const { value } = await parseBody(
+      req('x=1&x=2&x=3', 'application/x-www-form-urlencoded'),
+      opts(),
+    );
+    asserts.assertEquals(value, { x: ['1', '2', '3'] });
+  });
+
+  it('byte cap enforced on a chunked body (no content-length)', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (let i = 0; i < 8; i++) c.enqueue(new Uint8Array(256 * 1024));
+        c.close();
+      },
+    });
+    await asserts.assertRejects(
+      () => parseBody(req(stream, 'text/plain'), opts(1_048_576)),
+      RapidError,
+      'Payload too large',
+    );
+  });
+
+  it('returns no files for a bodiless parse', async () => {
+    const { files } = await parseBody(req('{}', 'application/json'), opts());
+    asserts.assertEquals(files, []);
+  });
+  it('multipart file with no upload path (Workers/browser) → RAPID_UPLOADS_UNAVAILABLE, not a TypeError', async () => {
+    const form = new FormData();
+    form.append('doc', new File(['hello'], 'a.txt', { type: 'text/plain' }));
+    const noFs = {
+      maxBodySize: 1_048_576,
+      uploads: {
+        maxSize: 10_485_760,
+        allowedExtensions: ['.txt'],
+        path: undefined,
+      },
+    };
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(
+          new Request('http://x/', { method: 'POST', body: form }),
+          noFs,
+        ),
+      RapidError,
+    );
+    asserts.assertEquals(err.code, 'RAPID_UPLOADS_UNAVAILABLE');
+    asserts.assertEquals(err.status, 501);
+  });
+
+  it('a TEXT-ONLY multipart form still parses with no upload path — only files need disk', async () => {
+    const form = new FormData();
+    form.append('title', 'hi');
+    form.append('tag', 'a');
+    form.append('tag', 'b');
+    const { value, files } = await parseBody(
+      new Request('http://x/', { method: 'POST', body: form }),
+      {
+        maxBodySize: 1_048_576,
+        uploads: {
+          maxSize: 10_485_760,
+          allowedExtensions: [],
+          path: undefined,
+        },
+      },
+    );
+    asserts.assertEquals(value, { title: 'hi', tag: ['a', 'b'] });
+    asserts.assertEquals(files, []);
+  });
+
+  it('cleans up already-written files when a LATER multipart part is rejected', async () => {
+    const uploadDir = makeTempDirSync({ prefix: 'pb-leak-' });
+    const form = new FormData();
+    // First part is accepted and WRITTEN to disk; the second fails the
+    // extension gauntlet, so parseBody throws — the first file must be
+    // cleaned up, not stranded (repeatable → disk-fill DoS).
+    form.append('good', new File(['hello world'], 'good.txt'));
+    form.append('bad', new File(['x'], 'evil.exe'));
+    const cfg = {
+      maxBodySize: 1_048_576,
+      uploads: {
+        maxSize: 10_485_760,
+        allowedExtensions: ['.txt'],
+        path: uploadDir,
+      },
+    };
+    await asserts.assertRejects(
+      () =>
+        parseBody(
+          new Request('http://x/', { method: 'POST', body: form }),
+          cfg,
+        ),
+      RapidError,
+      'not allowed',
+    );
+    const left: string[] = [];
+    for await (const entry of readDir(uploadDir)) left.push(entry.name);
+    asserts.assertEquals(left, [], 'a rejected upload left an orphaned file');
+  });
+
+  it('a +json content-type is parsed as JSON', async () => {
+    const { value } = await parseBody(
+      req('{"ok":true}', 'application/vnd.api+json'),
+      opts(),
+    );
+    asserts.assertEquals(value, { ok: true });
+  });
+
+  it('an ACCEPTED file is written to disk and described by { name, path, type, size }', async () => {
+    const uploadDir = makeTempDirSync({ prefix: 'pb-ok-' });
+    const form = new FormData();
+    form.append('doc', new File(['hello world'], 'note.txt'));
+    const { value, files } = await parseBody(
+      new Request('http://x/', { method: 'POST', body: form }),
+      {
+        maxBodySize: 1_048_576,
+        uploads: {
+          maxSize: 10_485_760,
+          allowedExtensions: ['.txt'],
+          path: uploadDir,
+        },
+      },
+    );
+    asserts.assertEquals(files.length, 1);
+    const doc = (value as { doc: { name: string; path: string; size: number } })
+      .doc;
+    asserts.assertEquals(doc.name, 'note.txt');
+    asserts.assertEquals(doc.size, 11);
+    asserts.assertEquals(doc.path, files[0]);
+    // The bytes actually landed on disk under a server-minted name (not the
+    // client filename).
+    asserts.assert(await pathExists(files[0]!));
+    asserts.assert(!files[0]!.endsWith('note.txt'));
+    asserts.assertEquals(await readTextFile(files[0]!), 'hello world');
+  });
+
+  it('the fail-safe empty allow-list rejects EVERY file (RAPID_UNSUPPORTED_MEDIA)', async () => {
+    const form = new FormData();
+    form.append('doc', new File(['x'], 'a.txt'));
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(
+          new Request('http://x/', { method: 'POST', body: form }),
+          opts(),
+        ),
+      RapidError,
+    );
+    asserts.assertEquals(err.code, 'RAPID_UNSUPPORTED_MEDIA');
+  });
+
+  it('a file over the per-file maxSize → RAPID_PAYLOAD_TOO_LARGE (before the extension check)', async () => {
+    const form = new FormData();
+    form.append('doc', new File(['way too many bytes'], 'big.txt'));
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(new Request('http://x/', { method: 'POST', body: form }), {
+          maxBodySize: 1_048_576,
+          uploads: {
+            maxSize: 4,
+            allowedExtensions: ['.txt'],
+            path: makeTempDirSync({ prefix: 'pb-big-' }),
+          },
+        }),
+      RapidError,
+    );
+    asserts.assertEquals(err.code, 'RAPID_PAYLOAD_TOO_LARGE');
+  });
+
+  it('a file whose bytes contradict its extension → RAPID_UNSUPPORTED_MEDIA (magic-byte check)', async () => {
+    const form = new FormData();
+    // A `.png` carrying plain text, not the PNG signature.
+    form.append('img', new File(['not a real png'], 'fake.png'));
+    const err = await asserts.assertRejects(
+      () =>
+        parseBody(new Request('http://x/', { method: 'POST', body: form }), {
+          maxBodySize: 1_048_576,
+          uploads: {
+            maxSize: 10_485_760,
+            allowedExtensions: ['.png'],
+            path: makeTempDirSync({ prefix: 'pb-png-' }),
+          },
+        }),
+      RapidError,
+      'does not match',
+    );
+    asserts.assertEquals(err.code, 'RAPID_UNSUPPORTED_MEDIA');
+  });
+
+  it('a real PNG (valid magic bytes) with a .png allow-list is written', async () => {
+    const uploadDir = makeTempDirSync({ prefix: 'pb-realpng-' });
+    const png = new Uint8Array([
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a, // PNG signature
+      0x00,
+      0x01,
+      0x02,
+      0x03,
+    ]);
+    const form = new FormData();
+    form.append('img', new File([png], 'real.png'));
+    const { files } = await parseBody(
+      new Request('http://x/', { method: 'POST', body: form }),
+      {
+        maxBodySize: 1_048_576,
+        uploads: {
+          maxSize: 10_485_760,
+          allowedExtensions: ['.png'],
+          path: uploadDir,
+        },
+      },
+    );
+    asserts.assertEquals(files.length, 1);
+    asserts.assert(files[0]!.endsWith('.png'));
+  });
+});
+
+describe('rapid.utils.parseBody — multipart bounds (2026-09 review)', () => {
+  const PNG = new Uint8Array([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    1,
+    2,
+    3,
+    4,
+  ]);
+  const form = (files: number, extra?: string) => {
+    const fd = new FormData();
+    for (let i = 0; i < files; i++) {
+      fd.append(`f${i}`, new File([PNG], `p${i}.png`, { type: 'image/png' }));
+    }
+    if (extra !== undefined) fd.append('note', extra);
+    return new Request('http://x/', { method: 'POST', body: fd });
+  };
+
+  it('more file parts than uploads.maxFiles → RAPID_PAYLOAD_TOO_LARGE before any extra write', async () => {
+    const o = opts();
+    o.uploads = {
+      ...o.uploads,
+      allowedExtensions: ['.png'],
+      maxFiles: 2,
+    } as never;
+    const ok = await parseBody(form(2), o);
+    asserts.assertEquals(ok.files.length, 2);
+    await asserts.assertRejects(
+      () => parseBody(form(3), o),
+      RapidError,
+      'more than 2 files',
+    );
+  });
+
+  it('an app that accepts NO files keeps the ordinary body cap for multipart too', async () => {
+    const o = opts(1024); // maxBodySize 1 KB, uploads.maxSize 10 MB, allowedExtensions []
+    await asserts.assertRejects(
+      () => parseBody(form(0, 'x'.repeat(2048)), o),
+      RapidError,
+      'Payload too large',
+    );
+    const accepts = opts(1024);
+    accepts.uploads = {
+      ...accepts.uploads,
+      allowedExtensions: ['.png'],
+    } as never;
+    const parsed = await parseBody(form(0, 'x'.repeat(2048)), accepts);
+    asserts.assertEquals(
+      (parsed.value as Record<string, unknown>).note,
+      'x'.repeat(2048),
+    );
+  });
+});
+
+describe('rapid.parseBody — allowlist fail-safe', () => {
+  it('uploads.allowedExtensions undefined/null DENIES every file (never "allow all")', async () => {
+    for (const allowed of [undefined, null]) {
+      const form = new FormData();
+      form.append('doc', new File(['x'], 'evil.exe'));
+      const dir = makeTempDirSync({ prefix: 'pb-nullish-' });
+      const err = await asserts.assertRejects(
+        () =>
+          parseBody(new Request('http://x/', { method: 'POST', body: form }), {
+            maxBodySize: 1_048_576,
+            uploads: {
+              maxSize: 10_485_760,
+              allowedExtensions: allowed as unknown as string[],
+              path: dir,
+            },
+          }),
+        RapidError,
+      );
+      asserts.assertEquals(
+        err.code,
+        'RAPID_UNSUPPORTED_MEDIA',
+        String(allowed),
+      );
+    }
+  });
+});

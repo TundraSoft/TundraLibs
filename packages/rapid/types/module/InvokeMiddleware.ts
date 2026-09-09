@@ -1,0 +1,20 @@
+/**
+ * @fileoverview {@link RapidModuleInvokeMiddleware} — the onion a
+ * `@Use`-decorated method runs through when INVOKED (never when called
+ * as a plain method). Same `(ctx, next)` contract as rAPId's transport
+ * middleware; may be sync. ALWAYS `return next()` (or `await` it) —
+ * a bare `next();` statement detaches the call and the invocation
+ * finishes before the method does. A guard that DENIES must set
+ * `ctx.response` (e.g. `reply(403, …)`): returning without calling
+ * `next()` and without a response is a 204 success envelope.
+ *
+ * @module
+ */
+
+import type { InvokeContext } from '../../modules/InvokeContext.ts';
+
+/** Middleware over an {@link InvokeContext}. */
+export type RapidModuleInvokeMiddleware = (
+  ctx: InvokeContext,
+  next: () => void | Promise<void>,
+) => void | Promise<void>;

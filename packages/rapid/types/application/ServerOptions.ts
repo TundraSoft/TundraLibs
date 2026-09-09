@@ -1,0 +1,210 @@
+/**
+ * @fileoverview {@link RapidApplicationServerOptions} — web server + request-cycle
+ * configuration group.
+ *
+ * @module
+ */
+
+import type { RapidApplicationStaticConfig } from './StaticConfig.ts';
+import type { TLSOptions } from '@tundralibs/compat/common';
+import type { RapidApplicationMetricsOptions } from './MetricsOptions.ts';
+import type { RapidApplicationPagingOptions } from './PagingOptions.ts';
+import type { RapidApplicationQueryOptions } from './QueryOptions.ts';
+
+/**
+ * The web server + request-cycle configuration. Every key is optional
+ * at the type level; the rAPId constructor fills defaults for the
+ * request-cycle keys (`paging`, `query`, `versioning`, `trustProxy`,
+ * `maxBodySize`, `socketPath`, `metrics`, `enabled`), so those are
+ * always set at runtime. `static`, `api`, `tls`, `port`, `hostname`
+ * and `unixSocketPath` stay absent until you set them; a nested object
+ * you pass for `static`/`api`/`tls` replaces the whole key.
+ */
+export type RapidApplicationServerOptions = {
+  /**
+   * Whether this replica runs the HTTP listener. Deployment-shaped:
+   * an API replica says true, a worker replica says false — same
+   * binary, different config file.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * TCP port (0-65535; `0` = OS-assigned — read back from the app after
+   * start). Mutually exclusive with {@link unixSocketPath}.
+   * @default 8008 (compat webserver's default)
+   */
+  port?: number;
+  /**
+   * Bind address. Mutually exclusive with {@link unixSocketPath}.
+   * @default 'localhost'
+   */
+  hostname?: string;
+  /**
+   * Unix domain socket path — replaces TCP entirely when set.
+   */
+  unixSocketPath?: string;
+  /**
+   * Config-driven static file serving — URL prefix → directory (see
+   * {@link RapidApplicationStaticConfig}). Served framework-side at a
+   * fixed position (route miss, before the 404); no middleware to
+   * mount.
+   */
+  static?: RapidApplicationStaticConfig;
+  /**
+   * TLS for the TCP listener (PEM inline or file paths — compat's
+   * `TLSOptions`).
+   */
+  tls?: TLSOptions;
+  /**
+   * How many reverse proxies sit in front — a HOP COUNT for resolving
+   * the client address from `x-forwarded-for`. `false`/`0` (the safe
+   * default) ignores proxy headers entirely, so a client cannot spoof
+   * its address. `true`/`1` trusts one proxy and uses the address that
+   * proxy observed (the rightmost XFF entry, not the forgeable
+   * leftmost); `N` trusts N proxies. Governs `x-forwarded-for` only;
+   * `x-forwarded-host` additionally needs `api.trustForwardedHost`.
+   * @default false
+   */
+  trustProxy?: boolean | number;
+  /**
+   * Maximum request body size in bytes for non-file bodies (JSON, text,
+   * forms). Enforced on the bytes actually read — a missing or lying
+   * content-length cannot bypass it. `0` disables.
+   * @default 1048576 (1 MB)
+   */
+  maxBodySize?: number;
+  /**
+   * Metrics — OPT-IN: off by default so the request path pays nothing
+   * for bookkeeping no one reads. `true` creates `app.meter` (a
+   * metro-man registry served by the `metrics()` endpoint) with every
+   * family on, plus the listener's own counters (`app.metrics`); the
+   * object form switches families off individually — see
+   * {@link RapidApplicationMetricsOptions}.
+   * @default false
+   */
+  metrics?: boolean | RapidApplicationMetricsOptions;
+  /**
+   * Auto-register a `HEAD` route for every `GET` route that lacks its own,
+   * at boot: the synthesized `HEAD` reuses the `GET` handler + middleware
+   * and the response is sent bodiless (headers + a correct `content-length`,
+   * per HTTP semantics). An explicit `HEAD` route always wins. Off → a HEAD
+   * to a GET-only route is unmatched (404, or 405 if `methodNotAllowed`).
+   * @default true
+   */
+  autoHead?: boolean;
+  /**
+   * When a request's PATH matches a route but its METHOD doesn't, answer
+   * with `405 Method Not Allowed` + an `Allow` header (and answer a generic
+   * `OPTIONS` on that path with `204` + `Allow`) instead of `404`. Off →
+   * a wrong method is a plain `404`, which hides whether the path exists.
+   * The `Allow` list is computed from the router on the miss path only.
+   * @default false
+   */
+  methodNotAllowed?: boolean;
+  /**
+   * Whether a trailing slash on the request path is significant when
+   * routing. `true` (default): `/users/` and `/users` are the same route, so
+   * a client's stray slash never 404s. `false` (strict): the slash is
+   * significant — `/users` and `/users/` are DISTINCT routes and a request
+   * must match exactly (a `/users/` request against only `/users` → 404;
+   * the router stays a pure matcher, no redirect). Passed straight through
+   * to radrouter, which honours it on both registration and lookup. The
+   * root `/` is never altered either way.
+   * @default true
+   */
+  ignoreTrailingSlash?: boolean;
+  /**
+   * The API SURFACE — which requests this app answers as an API only.
+   * A request whose hostname is in `hosts`, or whose path lies under
+   * `prefix`, resolves to the `'api'` surface: the representer is off
+   * (templated routes serve JSON, errors are the JSON envelope, the
+   * swap header is ignored), and the api route table is SMALLER — page
+   * routes (`prefer: 'html'`), `server.static` files and the UI runtime
+   * routes respond 404 there. `prefix` is stripped BEFORE routing (and
+   * before `versioning` path mode), so `hostname.com/api/v1/users` and
+   * `api.hostname.com/v1/users` both route to `/users`; `ctx.basePath`
+   * carries the stripped prefix and `ctx.href()` re-applies it. Every
+   * other request is the `'ui'` surface — today's full behaviour.
+   * Absent: every request is `'ui'` (unless `ui.enabled: false`, which
+   * makes every request `'api'`). Hostnames are compared case-
+   * insensitively (punycode-normalised, a trailing dot ignored, the
+   * port ignored) against the URL's own host; `x-forwarded-host` is read
+   * only with {@link trustForwardedHost} AND {@link trustProxy}. The
+   * prefix match is exact-segment and case-sensitive (`/api` matches
+   * `/api` and `/api/…`, not `/apix`).
+   */
+  api?: {
+    /** Hostnames that are the API surface, e.g. `['api.example.com']`. */
+    hosts?: readonly string[];
+    /** A leading path that is the API surface, e.g. `'/api'` (no trailing slash). */
+    prefix?: string;
+    /**
+     * Resolve the hostname from `x-forwarded-host` (under the
+     * {@link trustProxy} hop count) instead of the URL. Explicit because
+     * the common proxies set `x-forwarded-for` but NOT `x-forwarded-host`
+     * by default — with only `trustProxy` on, a client could then send
+     * the header itself and pick its surface. Enable it only when your
+     * proxy sets (and overwrites) the header.
+     * @default false
+     */
+    trustForwardedHost?: boolean;
+  };
+  /**
+   * Path that accepts websocket upgrades for `app.socket()` commands
+   * (the socket shares the HTTP listener). Upgrades on other paths are
+   * rejected and fall through to HTTP routing.
+   * @default '/ws'
+   */
+  socketPath?: string;
+  /**
+   * Origins allowed to open the websocket from a browser, as serialized
+   * origins (`https://app.example`). A browser upgrade always carries
+   * `Origin`; one whose host is not this server's own host and is not
+   * listed here is refused before any command runs — otherwise any site
+   * the user visits could open the socket with the user's cookies and
+   * read their channel pushes. Non-browser clients send no `Origin` and
+   * are unaffected. Same-origin pages need no entry.
+   * @default [] (same-origin only)
+   */
+  socketOrigins?: readonly string[];
+  /**
+   * Pagination resolution (header names, default/max size) — see
+   * {@link RapidApplicationPagingOptions}. Defaults fill missing keys.
+   */
+  paging?: RapidApplicationPagingOptions;
+  /**
+   * Query-parser structural caps — see {@link RapidApplicationQueryOptions}.
+   * Defaults fill missing keys.
+   */
+  query?: RapidApplicationQueryOptions;
+  /**
+   * Inbound API-version resolution for `@GET(path, {version})`-style
+   * versioned routes — a dimension separate from `path` (radrouter's
+   * own concept). A request's version resolves: the header's value,
+   * exact match → `default` → the unversioned slot. Leaving both unset
+   * makes every route effectively unversioned, regardless of whether
+   * individual routes declared a `version`.
+   */
+  versioning?: {
+    /**
+     * Where the API version is carried:
+     * - `'header'` — a request header (`identifier` = the header name);
+     * - `'accept'` — an `Accept` media-type vendor tag (`identifier` = the
+     *   vendor, matching `application/vnd.<identifier>.<version>+…`);
+     * - `'path'` — a leading path segment (`identifier` = a regex whose
+     *   first capture group is the version; the matched prefix is stripped
+     *   before routing).
+     *
+     * @default 'header'
+     */
+    mode?: 'header' | 'accept' | 'path';
+    /**
+     * Customises the active `mode`: the header name (`header`), the vendor
+     * tag (`accept`), or a capture regex (`path`).
+     * @default 'x-api-version' (header) · '' (accept) · '^/(v[0-9]+)(?=/|$)' (path)
+     */
+    identifier?: string;
+    /** Version used when the request carries none — NOT a fallback for an unrecognized one. */
+    default?: string;
+  };
+};

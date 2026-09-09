@@ -1,0 +1,890 @@
+/**
+ * @fileoverview Tests for `app.ui()` — layout resolution (route → module
+ * → app), the app-wide `prefer`, the view projection's safe-by-
+ * construction default, the served runtime, `errorTemplate`, and the
+ * runtime source's pinned invariants (no DOM runner in CI — the string
+ * is asserted directly, the honest limit).
+ * @module
+ */
+import * as asserts from '@std/asserts';
+import { describe, it } from '@tundralibs/compat/test';
+import { Application } from '../Application.ts';
+import { GET, Module } from '../decorators/mod.ts';
+import type {
+  RapidContextResponse,
+  RapidTemplate,
+  RapidView,
+} from '../types/mod.ts';
+import { html, template } from './html.ts';
+import { UI_LIVE, UI_LIVE_ETAG } from './live.ts';
+import { UI_RUNTIME, UI_RUNTIME_ETAG } from './ui.ts';
+
+const make = () =>
+  Application.initialize({
+    name: 'ui-test',
+    server: { port: 0, hostname: '127.0.0.1' },
+    logger: { handlers: [] },
+  });
+
+const Item = template<{ name: string }>(
+  (data) => html`<p>${data.name}</p>`,
+  'Item',
+);
+const Shell = template<{ body: unknown }>(
+  (data) => html`<main>${data.body}</main>`,
+  'Shell',
+);
+const ModShell = template<{ body: unknown }>(
+  (data) => html`<section>${data.body}</section>`,
+  'ModShell',
+);
+const RouteShell = template<{ body: unknown }>(
+  (data) => html`<article>${data.body}</article>`,
+  'RouteShell',
+);
+
+describe('rapid.ui.app', () => {
+  it('layout resolution: route wins over module wins over app; a swap gets the bare fragment', async () => {
+    @Module('Pages', { layout: ModShell })
+    class Pages {
+      @GET('/route-layout', {
+        template: { render: Item, layout: RouteShell, prefer: 'html' },
+      })
+      a(): RapidContextResponse {
+        return { content: { name: 'r' } };
+      }
+      @GET('/module-layout', { template: { render: Item, prefer: 'html' } })
+      b(): RapidContextResponse {
+        return { content: { name: 'm' } };
+      }
+    }
+    const app = await make();
+    app.ui({ layout: Shell });
+    app.module(new Pages());
+    app.get(
+      '/app-layout',
+      { template: { render: Item, prefer: 'html' } },
+      () => ({ content: { name: 'a' } }),
+    );
+
+    const body = async (path: string, swap = false) =>
+      await (await app.fetch(
+        new Request(
+          `http://app${path}`,
+          swap ? { headers: { 'rapid-swap': '1' } } : {},
+        ),
+      )).text();
+
+    asserts.assertEquals(
+      await body('/route-layout'),
+      '<article><p>r</p></article>',
+    );
+    asserts.assertEquals(
+      await body('/module-layout'),
+      '<section><p>m</p></section>',
+    );
+    asserts.assertEquals(await body('/app-layout'), '<main><p>a</p></main>');
+    // A swap never wraps — the fragment is the whole body.
+    asserts.assertEquals(await body('/route-layout', true), '<p>r</p>');
+    await app.stop();
+  });
+
+  it("app-wide prefer 'html' makes plain routes pages; a route's 'json' overrides back", async () => {
+    const app = await make();
+    app.ui({ prefer: 'html' });
+    app.get('/page', { template: Item }, () => ({
+      content: { name: 'p' },
+    }));
+    app.get(
+      '/api',
+      { template: { render: Item, prefer: 'json' } },
+      () => ({ content: { name: 'x' } }),
+    );
+    asserts.assertEquals(
+      await (await app.fetch(new Request('http://app/page'))).text(),
+      '<p>p</p>',
+    );
+    asserts.assertEquals(
+      (await app.fetch(new Request('http://app/api'))).headers.get(
+        'content-type',
+      ),
+      'application/json',
+    );
+    await app.stop();
+  });
+
+  it('the view bag: auth NEVER leaks by default; the projection names what crosses; frozen', async () => {
+    const seen: RapidView[] = [];
+    const Spy = template<unknown>((_data, view) => {
+      seen.push(view);
+      return html`ok`;
+    }, 'Spy');
+
+    const app = await make();
+    app.ui({
+      view: (ctx) => ({
+        user: ctx.auth !== undefined
+          ? { id: (ctx.auth as { id: string }).id }
+          : undefined,
+      }),
+    });
+    app.use((ctx, next) => {
+      if (
+        ctx.type === 'HTTP' && ctx.headers.get('authorization') === 'Bearer tok'
+      ) ctx.setAuth({ id: 'u1', role: 'admin' });
+      return next();
+    });
+    app.get('/spy', { template: Spy }, () => ({ content: {} }));
+
+    await app.fetch(
+      new Request('http://app/spy?b=2&a=1', {
+        headers: { 'rapid-swap': '1', authorization: 'Bearer tok' },
+      }),
+    );
+    const view = seen[0]! as RapidView & {
+      user?: { id: string; role?: string };
+    };
+    asserts.assertEquals(view.user, { id: 'u1' });
+    // The projection named `id` — `role` (and the rest of ctx.auth)
+    // never crossed.
+    asserts.assertEquals(view.user?.role, undefined);
+    asserts.assertEquals(view.path, '/spy');
+    asserts.assertEquals(view.query, { b: '2', a: '1' });
+    asserts.assert(Object.isFrozen(view));
+    await app.stop();
+  });
+
+  it('serves the runtime with a strong content ETag, revalidate caching, and a 304', async () => {
+    const app = await make();
+    app.ui({});
+    const res = await app.fetch(new Request('http://app/__rapid/ui.js'));
+    asserts.assertEquals(
+      res.headers.get('content-type'),
+      'text/javascript; charset=UTF-8',
+    );
+    asserts.assertEquals(res.headers.get('etag'), UI_RUNTIME_ETAG);
+    // no-cache (NOT immutable): the path is constant, so an immutable
+    // entry would outlive a package upgrade and serve a stale runtime;
+    // revalidation is a 304 when unchanged.
+    asserts.assertEquals(res.headers.get('cache-control'), 'no-cache');
+    asserts.assertEquals(await res.text(), UI_RUNTIME);
+
+    const revalidated = await app.fetch(
+      new Request('http://app/__rapid/ui.js', {
+        headers: { 'if-none-match': UI_RUNTIME_ETAG },
+      }),
+    );
+    asserts.assertEquals(revalidated.status, 304);
+    await app.stop();
+  });
+
+  it('errorTemplate renders HTML errors only when the representation resolves HTML', async () => {
+    const Err = template<Record<string, unknown>>(
+      (data) => html`<b>${String(data.code)}</b>`,
+      'Err',
+    );
+    const app = await make();
+    app.ui({ errorTemplate: Err, prefer: 'html' });
+    app.get('/boom', { template: Item }, () => {
+      throw new Error('kaput');
+    });
+
+    // Navigation on an app preferring html → themed HTML error, status kept.
+    const page = await app.fetch(new Request('http://app/boom'));
+    asserts.assertEquals(page.status, 500);
+    asserts.assertEquals(
+      page.headers.get('content-type'),
+      'text/html; charset=UTF-8',
+    );
+    // PRODUCTION disclosure: the opaque code, never the raw message.
+    const bodyText = await page.text();
+    asserts.assertStringIncludes(bodyText, '<b>');
+    asserts.assertEquals(bodyText.includes('kaput'), false);
+
+    await app.stop();
+  });
+
+  it('HTML errors carry Vary, and a THROWING errorTemplate falls back to the JSON envelope (never a 204)', async () => {
+    const Err = template<Record<string, unknown>>(
+      (data) => html`<b>${String(data.code)}</b>`,
+      'Err',
+    );
+    const app = await make();
+    app.ui({ errorTemplate: Err, prefer: 'html' });
+    app.get('/boom', { template: Item }, () => {
+      throw new Error('kaput');
+    });
+    const page = await app.fetch(new Request('http://app/boom'));
+    // The error representation varies by the swap header like every
+    // success representation — a heuristically-cacheable 404/500 must
+    // say so.
+    asserts.assertStringIncludes(
+      (page.headers.get('vary') ?? '').toLowerCase(),
+      'rapid-swap',
+    );
+
+    const Bomb = template<Record<string, unknown>>(() => {
+      throw new Error('template exploded');
+    }, 'Bomb');
+    const app2 = await make();
+    app2.ui({ errorTemplate: Bomb, prefer: 'html' });
+    app2.get('/boom', { template: Item }, () => {
+      throw new Error('kaput');
+    });
+    const res = await app2.fetch(new Request('http://app2/boom'));
+    asserts.assertEquals(res.status, 500);
+    asserts.assertEquals(res.headers.get('content-type'), 'application/json');
+    asserts.assertEquals(
+      typeof (await res.json() as { code?: string }).code,
+      'string',
+    );
+    await app.stop();
+    await app2.stop();
+  });
+
+  it('the layout receives the route template title (string and data-derived)', async () => {
+    const Titled = template<{ body: unknown; title?: string }>(
+      (data) => html`<title>${data.title ?? 'untitled'}</title>${data.body}`,
+      'Titled',
+    );
+    const app = await make();
+    app.ui({ layout: Titled });
+    app.get(
+      '/static-title',
+      { template: { render: Item, prefer: 'html', title: 'Hello' } },
+      () => ({ content: { name: 'x' } }),
+    );
+    app.get(
+      '/data-title',
+      {
+        template: {
+          render: Item,
+          prefer: 'html',
+          title: (data) => `Post: ${(data as { name: string }).name}`,
+        },
+      },
+      () => ({ content: { name: 'Ada' } }),
+    );
+    asserts.assertStringIncludes(
+      await (await app.fetch(new Request('http://app/static-title'))).text(),
+      '<title>Hello</title>',
+    );
+    asserts.assertStringIncludes(
+      await (await app.fetch(new Request('http://app/data-title'))).text(),
+      '<title>Post: Ada</title>',
+    );
+    await app.stop();
+  });
+
+  it('ctx.routeTemplate is frozen — a handler cannot retarget the route', async () => {
+    const app = await make();
+    app.get('/frozen', { template: Item }, (ctx) => {
+      asserts.assert(Object.isFrozen(ctx.routeTemplate));
+      asserts.assertThrows(() => {
+        (ctx.routeTemplate as { prefer?: string }).prefer = 'html';
+      });
+      return { content: { name: 'ok' } };
+    });
+    const res = await app.fetch(new Request('http://app/frozen'));
+    asserts.assertEquals(res.status, 200);
+    await app.stop();
+  });
+
+  it('app.ui() after the first fetch() is RAPID_CONFIG — never a half-applied state', async () => {
+    const app = await make();
+    app.get('/x', () => ({ content: 'ok' }));
+    await app.fetch(new Request('http://app/x'));
+    const err = asserts.assertThrows(() => app.ui({}));
+    asserts.assertEquals((err as { code?: string }).code, 'RAPID_CONFIG');
+    await app.stop();
+  });
+
+  it('a non-Html template return is a loud RAPID_RESPONSE_INVALID, not a silent 204', async () => {
+    const Broken = template<unknown>(
+      () => '<p>plain string</p>' as never,
+      'Broken',
+    );
+    const app = await make();
+    app.get('/broken', { template: Broken }, () => ({ content: {} }));
+    const res = await app.fetch(
+      new Request('http://app/broken', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(res.status, 500);
+    await app.stop();
+  });
+
+  it("a reply's own vary header is MERGED with the swap names, not clobbering them", async () => {
+    const app = await make();
+    app.get(
+      '/v',
+      { template: { render: Item, prefer: 'html' } },
+      () => ({ content: { name: 'x' }, headers: { vary: 'Accept' } }),
+    );
+    const vary = (await app.fetch(new Request('http://app/v'))).headers.get(
+      'vary',
+    ) ?? '';
+    asserts.assertStringIncludes(vary, 'Accept');
+    asserts.assertStringIncludes(vary.toLowerCase(), 'rapid-swap');
+    await app.stop();
+  });
+
+  it('without errorTemplate (or off-HTML), the JSON envelope is unchanged', async () => {
+    const app = await make();
+    app.ui({});
+    app.get('/boom', { template: Item }, () => {
+      throw new Error('kaput');
+    });
+    const res = await app.fetch(new Request('http://app/boom'));
+    asserts.assertEquals(res.status, 500);
+    asserts.assertEquals(res.headers.get('content-type'), 'application/json');
+    await app.stop();
+  });
+
+  it('a second app.ui() call and a bogus layout both die with RAPID_CONFIG', async () => {
+    const app = await make();
+    app.ui({});
+    const twice = asserts.assertThrows(() => app.ui({}));
+    asserts.assertEquals((twice as { code?: string }).code, 'RAPID_CONFIG');
+
+    const app2 = await make();
+    const bogus = asserts.assertThrows(() =>
+      app2.ui({ layout: { nope: 1 } as unknown as RapidTemplate<never> })
+    );
+    asserts.assertEquals((bogus as { code?: string }).code, 'RAPID_CONFIG');
+    await app.stop();
+    await app2.stop();
+  });
+
+  it('htmx interop: swapHeader + swapUnless + redirectHeader drive the same routes', async () => {
+    const app = await make();
+    app.ui({
+      swapHeader: 'hx-request',
+      swapUnless: ['hx-boosted', 'hx-history-restore-request'],
+      redirectHeader: 'HX-Redirect',
+    });
+    app.get('/frag', { template: Item }, () => ({ content: { name: 'f' } }));
+    app.get('/go', { template: Item }, () => ({
+      content: '',
+      redirect: '/frag',
+    }));
+
+    // An htmx fragment request swaps.
+    const frag = await app.fetch(
+      new Request('http://app/frag', { headers: { 'hx-request': 'true' } }),
+    );
+    asserts.assertEquals(await frag.text(), '<p>f</p>');
+    // Vary covers the whole decision surface.
+    const vary = (frag.headers.get('vary') ?? '').toLowerCase();
+    for (
+      const name of ['hx-request', 'hx-boosted', 'hx-history-restore-request']
+    ) {
+      asserts.assertStringIncludes(vary, name);
+    }
+    // The old default no longer selects the fragment...
+    const renamed = await app.fetch(
+      new Request('http://app/frag', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(
+      renamed.headers.get('content-type'),
+      'application/json',
+    );
+    // ...and a BOOSTED navigation is NOT a swap (htmx expects the page).
+    const boosted = await app.fetch(
+      new Request('http://app/frag', {
+        headers: { 'hx-request': 'true', 'hx-boosted': 'true' },
+      }),
+    );
+    asserts.assertEquals(
+      boosted.headers.get('content-type'),
+      'application/json',
+    );
+    // The swap-side redirect rides the renamed header — htmx honours
+    // HX-Redirect natively.
+    const red = await app.fetch(
+      new Request('http://app/go', { headers: { 'hx-request': 'true' } }),
+    );
+    asserts.assertEquals(red.status, 200);
+    asserts.assertEquals(red.headers.get('hx-redirect'), '/frag');
+    await app.stop();
+  });
+
+  it('an invalid swapHeader name dies with RAPID_CONFIG', async () => {
+    const app = await make();
+    const err = asserts.assertThrows(() => app.ui({ swapHeader: 'bad name' }));
+    asserts.assertEquals((err as { code?: string }).code, 'RAPID_CONFIG');
+    await app.stop();
+  });
+
+  it('ctx.isSwap mirrors the representer decision, config included', async () => {
+    const seen: boolean[] = [];
+    const app = await make();
+    app.ui({ swapHeader: 'hx-request', swapUnless: ['hx-boosted'] });
+    app.get('/probe', (ctx) => {
+      seen.push(ctx.isSwap);
+      return { content: 'ok' };
+    });
+    await app.fetch(new Request('http://app/probe'));
+    await app.fetch(
+      new Request('http://app/probe', { headers: { 'hx-request': 'true' } }),
+    );
+    await app.fetch(
+      new Request('http://app/probe', {
+        headers: { 'hx-request': 'true', 'hx-boosted': 'true' },
+      }),
+    );
+    // The OLD default header must not count under the renamed config.
+    await app.fetch(
+      new Request('http://app/probe', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(seen, [false, true, false, false]);
+    await app.stop();
+  });
+
+  it('a throwing template surfaces as RAPID_TEMPLATE_RENDER naming the template (DEVELOPMENT)', async () => {
+    const Bomb = template<unknown>(() => {
+      throw new Error('mismatch');
+    }, 'BombView');
+    const app = await Application.initialize({
+      name: 'ui-test-dev',
+      mode: 'DEVELOPMENT',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.get('/boom', { template: Bomb }, () => ({ content: {} }));
+    const res = await app.fetch(
+      new Request('http://app/boom', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(res.status, 500);
+    const body = await res.json() as {
+      code: string;
+      details?: { template?: string };
+    };
+    asserts.assertEquals(body.code, 'RAPID_TEMPLATE_RENDER');
+    asserts.assertEquals(body.details?.template, 'BombView');
+    await app.stop();
+  });
+
+  it('no errorTemplate: DefaultErrorPage is the terminal fallback in BOTH modes — DEV shows detail, PROD ships the collapsed disclosure as HTML', async () => {
+    const dev = await Application.initialize({
+      name: 'ui-dev-overlay',
+      mode: 'DEVELOPMENT',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    dev.ui({});
+    dev.get('/boom', { template: Item }, () => {
+      throw new Error('kaput');
+    });
+    const swap = await dev.fetch(
+      new Request('http://dev/boom', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(swap.status, 500);
+    asserts.assertEquals(
+      swap.headers.get('content-type'),
+      'text/html; charset=UTF-8',
+    );
+    const devBody = await swap.text();
+    asserts.assertStringIncludes(devBody, 'rapid-error');
+    asserts.assertStringIncludes(devBody, 'kaput'); // the real message
+    asserts.assertStringIncludes(devBody, 'RAPID_UNHANDLED');
+    asserts.assertStringIncludes(devBody, '<pre'); // the debug block
+
+    const prod = await make(); // default mode: PRODUCTION
+    prod.ui({});
+    prod.get('/boom', { template: Item }, () => {
+      throw new Error('kaput');
+    });
+    const res = await prod.fetch(
+      new Request('http://prod/boom', { headers: { 'rapid-swap': '1' } }),
+    );
+    // A UI-configured app never shows a browser the raw JSON envelope —
+    // but the payload arrives PRODUCTION-collapsed, so nothing leaks.
+    asserts.assertEquals(
+      res.headers.get('content-type'),
+      'text/html; charset=UTF-8',
+    );
+    const prodBody = await res.text();
+    asserts.assertStringIncludes(prodBody, 'rapid-error');
+    asserts.assertEquals(prodBody.includes('kaput'), false);
+    await dev.stop();
+    await prod.stop();
+  });
+
+  it('app.ui({ live: true }) serves the live bridge with the same caching contract', async () => {
+    const app = await make();
+    app.ui({ live: true });
+    const res = await app.fetch(new Request('http://app/__rapid/live.js'));
+    asserts.assertEquals(
+      res.headers.get('content-type'),
+      'text/javascript; charset=UTF-8',
+    );
+    asserts.assertEquals(res.headers.get('etag'), UI_LIVE_ETAG);
+    asserts.assertEquals(res.headers.get('cache-control'), 'no-cache');
+    asserts.assertEquals(await res.text(), UI_LIVE);
+    const revalidated = await app.fetch(
+      new Request('http://app/__rapid/live.js', {
+        headers: { 'if-none-match': `W/${UI_LIVE_ETAG}, "other"` },
+      }),
+    );
+    asserts.assertEquals(revalidated.status, 304);
+    asserts.assertEquals(revalidated.headers.get('etag'), UI_LIVE_ETAG);
+    // Off by default — no route.
+    const app2 = await make();
+    app2.ui({});
+    asserts.assertEquals(
+      (await app2.fetch(new Request('http://app2/__rapid/live.js'))).status,
+      404,
+    );
+    await app.stop();
+    await app2.stop();
+  });
+
+  it('the live-bridge source keeps its pinned invariants', () => {
+    new Function(UI_LIVE);
+    // Merge-preserving global — either load order keeps both APIs.
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'window.rapid = Object.freeze(Object.assign({}, window.rapid,',
+    );
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'window.rapid = Object.freeze(Object.assign({}, window.rapid,',
+    );
+    // The rpc wire frames + the events it dispatches.
+    asserts.assertStringIncludes(UI_LIVE, "type: 'sub'");
+    asserts.assertStringIncludes(UI_LIVE, "'rapid:push'");
+    asserts.assertStringIncludes(UI_LIVE, "'rapid:live'");
+    // Capped reconnect backoff — with the timer TRACKED, so
+    // disconnect() can cancel a queued reconnect instead of letting it
+    // resurrect the socket.
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'timer = setTimeout(open, delay * (0.75 + Math.random() * 0.5))',
+    );
+    asserts.assertStringIncludes(UI_LIVE, 'Math.min(delay * 1.5, 15000)');
+    // The backoff resets only after a connection STAYED open — an
+    // accept-then-close server must not loop at the floor.
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'if (Date.now() - opened >= 5000) delay = 2000;',
+    );
+    asserts.assertStringIncludes(UI_LIVE, 'clearTimeout(timer)');
+    // open() is idempotent (never stacks a duplicate socket) and the
+    // second copy of a double-loaded script bails out.
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'if (!wanted || (ws && ws.readyState <= 1)) return;',
+    );
+    asserts.assertStringIncludes(
+      UI_LIVE,
+      'if (window.rapid && window.rapid.live) return;',
+    );
+    // The socket path default + its <body data-live-path> override.
+    asserts.assertStringIncludes(UI_LIVE, "cfg.livePath || '/ws'");
+    // A refused subscribe is surfaced, not swallowed.
+    asserts.assertStringIncludes(UI_LIVE, 'subscribe refused');
+  });
+
+  it('the runtime source keeps its pinned invariants', () => {
+    // The emitted string must PARSE — substring pins alone would pass a
+    // template-escaping regression that breaks the script's syntax.
+    new Function(UI_RUNTIME);
+    // No inline handlers — CSP `script-src 'self'` must suffice. The
+    // attribute shape (on…="…") is the hazard; a variable merely
+    // CONTAINING "on…" (controller) is not.
+    asserts.assertEquals(/\son\w+\s*=\s*["']/.test(UI_RUNTIME), false);
+    // The exact header names (as overridable defaults) the server
+    // contract reads/writes.
+    asserts.assertStringIncludes(UI_RUNTIME, "cfg.swapHeader || 'rapid-swap'");
+    asserts.assertStringIncludes(UI_RUNTIME, "[SWAP_HEADER] = '1'");
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "cfg.redirectHeader || 'rapid-redirect'",
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, "'x-csrf-token'");
+    // The same-origin redirect guard.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'dest.origin === location.origin',
+    );
+    // The same-origin PRIMARY-fetch guard: a request-derived data-action
+    // must not ship the csrf header off-origin nor swap a foreign body in.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'new URL(url, location.href).origin !== location.origin',
+    );
+    // Idempotent under a double load — no duplicate click/submit
+    // listeners (a second load would double every fetch and POST).
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'if (window.rapid && window.rapid.swap) return;',
+    );
+    // Lazy regions: [data-action][data-load] loads ONCE — on DOM ready
+    // and after the swap that inserted it — and only via GET.
+    asserts.assertStringIncludes(UI_RUNTIME, "'[data-action][data-load]'");
+    asserts.assertStringIncludes(UI_RUNTIME, 'const loaded = new WeakSet()');
+    asserts.assertStringIncludes(UI_RUNTIME, 'loadLazy(swapped, url)');
+    // A fragment carrying data-load for the action that produced it would
+    // re-fetch forever — skipped, not chained.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'sameAction(el.dataset.action, from)',
+    );
+    // A page script's preventDefault() wins over the delegated handlers.
+    asserts.assertEquals(
+      UI_RUNTIME.split('if (e.defaultPrevented) return;').length,
+      3,
+    );
+    // fetch() follows redirects: the RESPONSE origin is checked, not only
+    // the request URL.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'new URL(res.url).origin !== location.origin',
+    );
+    // An invalid data-target selector reports instead of throwing after
+    // preventDefault() left the control dead.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'target = doc.querySelector(el.dataset.target);',
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, "doc.readyState === 'loading'");
+    asserts.assertStringIncludes(UI_RUNTIME, 'data-load is GET-only');
+    // The default csrf cookie name.
+    asserts.assertStringIncludes(UI_RUNTIME, "'csrf'");
+    // View Transitions progressive enhancement — with the animation
+    // promises OBSERVED (a hidden document rejects them per swap; an
+    // unobserved ready/finished would spam unhandled rejections) —
+    // + focus restore + refresh's GET-only source memory.
+    asserts.assertStringIncludes(UI_RUNTIME, 'doc.startViewTransition');
+    asserts.assertStringIncludes(UI_RUNTIME, 'transition.ready.catch');
+    asserts.assertStringIncludes(UI_RUNTIME, 'transition.finished.catch');
+    asserts.assertStringIncludes(UI_RUNTIME, 'focusId');
+    asserts.assertStringIncludes(UI_RUNTIME, "init.method === 'GET'");
+    asserts.assertStringIncludes(UI_RUNTIME, 'refresh: (target) =>');
+    // Request hygiene: last-write-wins abort, modifier-click and
+    // inner-link carve-outs, the submitter joining multipart posts, and
+    // the never-swap-non-HTML guard.
+    asserts.assertStringIncludes(UI_RUNTIME, 'previous.abort()');
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'e.metaKey || e.ctrlKey || e.shiftKey || e.altKey',
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, "closest('a[href]')");
+    asserts.assertStringIncludes(UI_RUNTIME, 'new FormData(form, submitter)');
+    asserts.assertStringIncludes(UI_RUNTIME, "indexOf('text/html') !== 0");
+    // The inflight entry outlives the BODY read — deleted at the
+    // headers phase, a newer request would find nothing to abort while
+    // the older still streams, and stale content would land LAST.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'if (inflight.get(target) === controller) inflight.delete(target)',
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, 'controller.signal.aborted');
+    // The two-function public API, frozen — app code swaps without
+    // fake clicks.
+    asserts.assertStringIncludes(UI_RUNTIME, 'window.rapid = Object.freeze(');
+    // rapid:swapped carries the full swap identity — url, method, the
+    // EFFECTIVE swap mode, and the server-stamped title when present —
+    // so listeners (and the history module) never re-derive it.
+    asserts.assertStringIncludes(UI_RUNTIME, "swap: opts.swap || 'replace'");
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "res.headers.get('rapid-title')",
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, 'decodeURIComponent(title)');
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "emit(swapped, 'rapid:swapped', detail)",
+    );
+  });
+});
+
+describe('rapid.ui.runtime — outer swaps with several roots', () => {
+  it('collects every new root of an outer fragment so later roots get their lazy regions loaded', () => {
+    asserts.assertStringIncludes(UI_RUNTIME, 'extraRoots.push(n)');
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      'for (const root of extraRoots) loadLazy(root);',
+    );
+  });
+});
+
+describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
+  class FakeElement {
+    dataset: Record<string, string> = {};
+    innerHTML = '';
+    id = '';
+    tagName = 'DIV';
+    events: CustomEvent[] = [];
+    insertAdjacentHTML(position: string, markup: string): void {
+      this.innerHTML = position === 'beforeend'
+        ? this.innerHTML + markup
+        : markup + this.innerHTML;
+    }
+    contains(): boolean {
+      return false;
+    }
+    matches(): boolean {
+      return false;
+    }
+    querySelectorAll(): unknown[] {
+      return [];
+    }
+    closest(): null {
+      return null;
+    }
+    dispatchEvent(event: CustomEvent): boolean {
+      this.events.push(event);
+      return true;
+    }
+    focus(): void {}
+  }
+  class FakeForm extends FakeElement {}
+  type Rapid = {
+    swap(url: string, target: unknown, opts?: unknown): Promise<boolean>;
+  };
+  const boot = (fetchImpl: typeof fetch) => {
+    const document = {
+      body: { dataset: {} },
+      cookie: 'csrf=tok; other=1',
+      readyState: 'complete',
+      activeElement: null,
+      addEventListener() {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: () => null,
+      dispatchEvent: () => true,
+    };
+    const assigned: string[] = [];
+    const location = {
+      href: 'https://app.test/page',
+      origin: 'https://app.test',
+      assign: (href: string) => assigned.push(href),
+    };
+    const window: { rapid?: Rapid } = {};
+    new Function(
+      'window',
+      'document',
+      'location',
+      'fetch',
+      'Element',
+      'HTMLFormElement',
+      UI_RUNTIME,
+    )(window, document, location, fetchImpl, FakeElement, FakeForm);
+    return { rapid: window.rapid!, assigned };
+  };
+  const htmlResponse = (body: string, headers: Record<string, string> = {}) =>
+    new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=UTF-8', ...headers },
+    });
+
+  it('refuses a cross-origin URL before any fetch, and never ships the csrf header there', async () => {
+    let calls = 0;
+    const { rapid } = boot(
+      (() => {
+        calls++;
+        return Promise.resolve(htmlResponse('<p>x</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(
+      await rapid.swap('https://evil.test/x', target),
+      false,
+    );
+    asserts.assertEquals(await rapid.swap('//evil.test/x', target), false);
+    asserts.assertEquals(await rapid.swap('/ok', null), false);
+    asserts.assertEquals(calls, 0);
+  });
+
+  it('a same-origin swap sends the swap header and the csrf cookie, replaces the target, and fires a bubbling rapid:swapped', async () => {
+    let seen: RequestInit | undefined;
+    const { rapid } = boot(
+      ((_url: string, init: RequestInit) => {
+        seen = init;
+        return Promise.resolve(htmlResponse('<p>hi</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(await rapid.swap('/frag', target), true);
+    const headers = seen!.headers as Record<string, string>;
+    asserts.assertEquals(headers['rapid-swap'], '1');
+    asserts.assertEquals(headers['x-csrf-token'], 'tok');
+    asserts.assertEquals(headers['accept'], 'text/html');
+    asserts.assertEquals(target.innerHTML, '<p>hi</p>');
+    const swapped = target.events.find((e) => e.type === 'rapid:swapped')!;
+    asserts.assert(swapped !== undefined);
+    asserts.assertEquals(swapped.bubbles, true);
+    asserts.assertEquals(
+      (swapped.detail as { status: number; method: string }).status,
+      200,
+    );
+  });
+
+  it('rapid-redirect is followed same-origin only', async () => {
+    let next = 'https://evil.test/';
+    const { rapid, assigned } = boot(
+      (() =>
+        Promise.resolve(
+          htmlResponse('', { 'rapid-redirect': next }),
+        )) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(await rapid.swap('/go', target), false);
+    asserts.assertEquals(assigned, []);
+    asserts.assertEquals(target.innerHTML, '');
+    next = '/next';
+    asserts.assertEquals(await rapid.swap('/go', target), false);
+    asserts.assertEquals(assigned, ['https://app.test/next']);
+  });
+
+  it('a non-HTML or non-2xx body is never swapped in — rapid:error carries it instead', async () => {
+    const bodies = [
+      new Response('{"code":"RAPID_NOT_FOUND"}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+      new Response('<p>err</p>', {
+        status: 500,
+        headers: { 'content-type': 'text/html' },
+      }),
+    ];
+    const { rapid } = boot(
+      (() => Promise.resolve(bodies.shift()!)) as typeof fetch,
+    );
+    const target = new FakeElement();
+    asserts.assertEquals(await rapid.swap('/a', target), false);
+    asserts.assertEquals(await rapid.swap('/b', target), false);
+    asserts.assertEquals(target.innerHTML, '');
+    const errors = target.events.filter((e) => e.type === 'rapid:error');
+    asserts.assertEquals(
+      errors.map((e) => (e.detail as { status: number }).status),
+      [200, 500],
+    );
+  });
+
+  it('last write wins: a newer swap on the same target aborts the older request', async () => {
+    const signals: AbortSignal[] = [];
+    let releaseFirst!: (r: Response) => void;
+    let call = 0;
+    const { rapid } = boot(
+      ((_url: string, init: RequestInit) => {
+        signals.push(init.signal!);
+        if (call++ === 0) {
+          return new Promise<Response>((resolve) => {
+            releaseFirst = resolve;
+          });
+        }
+        return Promise.resolve(htmlResponse('<p>second</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    const first = rapid.swap('/slow', target);
+    const second = rapid.swap('/fast', target);
+    asserts.assertEquals(await second, true);
+    asserts.assertEquals(signals[0]!.aborted, true);
+    releaseFirst(htmlResponse('<p>first</p>'));
+    asserts.assertEquals(await first, false);
+    asserts.assertEquals(target.innerHTML, '<p>second</p>');
+  });
+});

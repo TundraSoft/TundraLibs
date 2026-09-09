@@ -1,0 +1,188 @@
+/**
+ * @fileoverview Signed cookies + the reply `cookies` key, all keyed off the ONE
+ * app `secret`: a signed cookie round-trips through ctx.signedCookie, a
+ * tampered value verifies to undefined, the reply key sets plain and signed
+ * cookies (HTTP) and is ignored on a JOB, and a weak/missing secret fails
+ * loudly at the right moment.
+ * @module
+ */
+import { describe, it } from '@tundralibs/compat/test';
+import * as asserts from '@std/asserts';
+import { Application } from '../Application.ts';
+import { RapidError } from '../errors/mod.ts';
+
+const SECRET = 'test-secret-0123456789-abcdefghijklmnop'; // ≥ 32 chars
+const make = (secret?: string) =>
+  Application.initialize({
+    name: 'cookies',
+    server: { port: 0, hostname: '127.0.0.1' },
+    logger: { handlers: [] },
+    ...(secret === undefined ? {} : { secret }),
+  });
+const cookieValue = (res: Response, name: string) =>
+  res.headers.getSetCookie().find((c) => c.startsWith(`${name}=`))?.split(
+    ';',
+  )[0].slice(name.length + 1);
+
+describe('signed cookies + reply cookies', () => {
+  it('a signed cookie is tamper-evident: round-trips, a forgery reads as undefined', async () => {
+    const app = await make(SECRET);
+    app.get('/set', (ctx) => {
+      ctx.setCookie('prefs', 'dark', { signed: true });
+      return { content: { ok: true } };
+    });
+    app.get('/read', async (ctx) => ({
+      content: { prefs: (await ctx.signedCookie('prefs')) ?? null },
+    }));
+    const set = await app.fetch(new Request('http://app/set'));
+    const wire = cookieValue(set, 'prefs')!;
+    asserts.assert(
+      wire.startsWith('dark.'),
+      `wire form value.sig, got ${wire}`,
+    );
+    // Genuine → verifies to the bare value.
+    const ok = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `prefs=${wire}` } }),
+    );
+    asserts.assertEquals((await ok.json()).prefs, 'dark');
+    // Value altered, signature kept → rejected (never a 500).
+    const forged = wire.replace('dark.', 'light.');
+    const bad = await app.fetch(
+      new Request('http://app/read', {
+        headers: { cookie: `prefs=${forged}` },
+      }),
+    );
+    asserts.assertEquals(bad.status, 200);
+    asserts.assertEquals((await bad.json()).prefs, null);
+  });
+
+  it('the reply `cookies` key sets plain and signed cookies with proper encoding', async () => {
+    const app = await make(SECRET);
+    app.get('/r', () => ({
+      content: { ok: true },
+      cookies: [
+        { name: 'theme', value: 'a b', options: { path: '/' } },
+        {
+          name: 'sid',
+          value: 'abc',
+          options: { signed: true, httpOnly: true },
+        },
+      ],
+    }));
+    const res = await app.fetch(new Request('http://app/r'));
+    asserts.assertEquals(cookieValue(res, 'theme'), 'a%20b'); // encoded
+    const sid = cookieValue(res, 'sid')!;
+    asserts.assert(sid.startsWith('abc.'), 'signed wire form');
+    asserts.assert(
+      res.headers.getSetCookie().some((c) =>
+        c.startsWith('sid=') && /HttpOnly/i.test(c)
+      ),
+    );
+  });
+
+  it('the reply `cookies` key is ignored on a JOB (HTTP-only, harmless on a shared method)', async () => {
+    const app = await make(SECRET);
+    app.job('j', '* * * * *', () => ({
+      content: { ok: true },
+      cookies: [{ name: 'x', value: 'y' }],
+    }));
+    const out = await app.triggerJob('j');
+    asserts.assertEquals(out.status, 200);
+  });
+
+  it('a weak secret is refused at boot (RAPID_CONFIG)', async () => {
+    await asserts.assertRejects(() => make('too-short'), RapidError, 'secret');
+  });
+
+  it('signing without any secret fails where it bites (RAPID_CONFIG, not a silent plain cookie)', async () => {
+    const app = await make(); // no secret
+    app.get('/set', (ctx) => {
+      ctx.setCookie('a', 'b', { signed: true });
+      return { content: { ok: true } };
+    });
+    const res = await app.fetch(new Request('http://app/set'));
+    asserts.assertEquals(res.status, 500);
+    asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
+  });
+
+  it('a delete AFTER a signed set of the same cookie wins — Set-Cookie preserves call order', async () => {
+    const app = await make(SECRET);
+    app.get('/revoke', (ctx) => {
+      ctx.setCookie('token', 'v1', { signed: true });
+      ctx.deleteCookie('token'); // revoke — must land LAST
+      return { content: { ok: true } };
+    });
+    const res = await app.fetch(new Request('http://app/revoke'));
+    await res.body?.cancel();
+    const tokens = res.headers.getSetCookie().filter((c) =>
+      c.startsWith('token=')
+    );
+    asserts.assertEquals(tokens.length, 2);
+    // The browser keeps the LAST header for a name — it must be the delete.
+    asserts.assertStringIncludes(tokens[1]!, 'Max-Age=0');
+  });
+
+  it('a signed setCookie from a SYNC handler lands on the response — queued, never a dropped promise', async () => {
+    const app = await make(SECRET);
+    app.get('/sync', (ctx) => {
+      // No await possible — the handler is sync. The old promise-based
+      // apply resolved after the context froze: an unhandled rejection.
+      ctx.setCookie('sid', 'abc', { signed: true });
+      return { content: { ok: true } };
+    });
+    const res = await app.fetch(new Request('http://app/sync'));
+    asserts.assertEquals(res.status, 200);
+    await res.body?.cancel();
+    const sid = cookieValue(res, 'sid');
+    asserts.assert(
+      sid !== undefined && sid.startsWith('abc.'),
+      'signed cookie set',
+    );
+  });
+});
+
+describe('reply cookie attributes', () => {
+  it('a path or domain that would smuggle attributes or a CRLF is RAPID_RESPONSE_INVALID at the call site, for setCookie and the reply key', async () => {
+    const app = await make(SECRET);
+    app.get('/set', (ctx) => {
+      const codes: string[] = [];
+      for (
+        const options of [
+          { path: '/; Secure; HttpOnly' },
+          { path: '/\r\nX-Injected: 1' },
+          { path: 'relative' },
+          { domain: 'evil.example; Secure' },
+        ]
+      ) {
+        try {
+          ctx.setCookie('a', 'b', options);
+          codes.push('none');
+        } catch (e) {
+          codes.push(e instanceof RapidError ? e.code : 'other');
+        }
+      }
+      ctx.setCookie('ok', 'v', { path: '/app', domain: '.example.com' });
+      return { content: { codes } };
+    });
+    app.get('/reply', () => ({
+      content: 'x',
+      cookies: [{ name: 'a', value: 'b', options: { path: '/; Secure' } }],
+    }));
+    try {
+      const set = await app.fetch(new Request('http://app/set'));
+      asserts.assertEquals(await set.json(), {
+        codes: Array(4).fill('RAPID_RESPONSE_INVALID'),
+      });
+      asserts.assertMatch(
+        set.headers.get('set-cookie') ?? '',
+        /^ok=v; Domain=\.example\.com; Path=\/app$/,
+      );
+      const reply = await app.fetch(new Request('http://app/reply'));
+      asserts.assertEquals(reply.status, 500);
+      asserts.assertEquals(reply.headers.get('set-cookie'), null);
+      await reply.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+});

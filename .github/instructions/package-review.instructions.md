@@ -7,7 +7,7 @@ description: 'Code-review and package-audit guidance for TundraLibs — verifica
 
 Guidance for reviewing TundraLibs code. Works for any tool: the output is a set
 of **findings**, which each tool renders its own way — inline PR comments
-(Copilot, Cursor), a chat summary, or (in audit mode) a `REVIEW.md`. Write the
+(Copilot, Cursor), a chat summary, or (in audit mode) an audit report. Write the
 finding once, in the shape below; the rendering is the tool's job.
 
 ## Two modes
@@ -19,8 +19,8 @@ finding once, in the shape below; the rendering is the tool's job.
   findings report. Only when asked for a full audit — never as a side effect of
   a change review. **Do not commit the report inside `packages/<pkg>/`** — every
   file there ships in the JSR tarball to consumers, and review notes must not.
-  Deliver it as chat/PR output, a tracking issue, or a file *outside* the
-  package (e.g. repo-root `reviews/`, which is not published). Format at the end.
+  Deliver it as chat/PR output or a tracking issue — the repo keeps no review
+  archive. Format at the end.
 
 ## The one rule: verify before you report
 
@@ -102,7 +102,7 @@ Each finding:
 - **Fix** — a minimal suggested change (a diff or a sentence)
 
 Rendered inline (Copilot/Cursor) that's the comment body; in a chat summary it's
-a list item; in an audit it's a `REVIEW.md` entry. Always open the review with
+a list item; in an audit it's a report entry. Always open the review with
 one line of what was reviewed, and note genuinely good things briefly — reviews
 that only criticize get tuned out.
 
@@ -113,9 +113,9 @@ good practices. Technical accuracy over volume.
 
 ## Audit mode: report format
 
-Only for an explicit full-package audit. Deliver as chat/PR/issue output, or a
-file **outside** the package (never `packages/<pkg>/REVIEW.md` — it would ship
-to consumers):
+Only for an explicit full-package audit. Deliver as chat/PR/issue output — never
+as a file inside the package (`packages/<pkg>/REVIEW.md` would ship to
+consumers) and not as a repo file either:
 
 ```markdown
 # <Package> Review
