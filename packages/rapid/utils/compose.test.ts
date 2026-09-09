@@ -108,7 +108,7 @@ describe('rapid.compose — abandoned next()', () => {
     const ctx = {
       requestId: 'r1',
       action: 'GET /x',
-      app: { log: { error: (...args: unknown[]) => logged.push(args) } },
+      app: { log: { warn: (...args: unknown[]) => logged.push(args) } },
     };
     const run = compose<Ctx, Ctx>([
       (_c, next) => {
@@ -120,5 +120,57 @@ describe('rapid.compose — abandoned next()', () => {
     await new Promise((r) => setTimeout(r, 0));
     asserts.assertEquals(logged.length, 1);
     asserts.assertStringIncludes(String(logged[0]), 'abandoned next()');
+  });
+
+  it("a rejection flowing through an AWAITED or RETURNED next() is the middleware's — never logged", async () => {
+    const logged: unknown[] = [];
+    const ctx = {
+      requestId: 'r2',
+      action: 'GET /x',
+      app: {
+        log: {
+          warn: (...args: unknown[]) => logged.push(args),
+          error: (...args: unknown[]) => logged.push(args),
+        },
+      },
+    };
+    const failing = () => Promise.reject(new Error('plain 4xx'));
+    for (
+      const mw of [
+        async (_c: Ctx, next: () => void | Promise<void>) => {
+          await next();
+        },
+        (_c: Ctx, next: () => void | Promise<void>) => next(),
+        async (_c: Ctx, next: () => void | Promise<void>) => {
+          try {
+            await next();
+          } catch (e) {
+            throw e; // observed and re-thrown — still owned
+          }
+        },
+      ]
+    ) {
+      await asserts.assertRejects(
+        () => compose<Ctx, Ctx>([mw])(ctx, failing) as Promise<void>,
+        Error,
+        'plain 4xx',
+      );
+    }
+    await new Promise((r) => setTimeout(r, 0));
+    asserts.assertEquals(logged, []);
+  });
+
+  it('a synchronous middleware that drops next() is still caught as abandoned', async () => {
+    const logged: unknown[] = [];
+    const ctx = {
+      requestId: 'r3',
+      action: 'GET /x',
+      app: { log: { warn: (...args: unknown[]) => logged.push(args) } },
+    };
+    await compose<Ctx, Ctx>([(_c, next) => {
+      void next();
+    }])(ctx, () => Promise.reject(new Error('late')));
+    await new Promise((r) => setTimeout(r, 0));
+    asserts.assertEquals(logged.length, 1);
   });
 });

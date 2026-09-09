@@ -85,7 +85,7 @@ server:
   enabled: true # run the HTTP listener on this replica
   port: 3000 # 0 = OS-assigned (rapid's own default is 8008)
   hostname: localhost
-  # unixSocketPath: /tmp/{{name}}.sock # replaces TCP entirely when set
+  # unixSocketPath: /tmp/{{name}}.sock # replaces TCP — also REMOVE port/hostname above (mutually exclusive)
   # tls: # see @tundralibs/compat TLSOptions — inline PEM or file paths
   trustProxy: false # false | true | <reverse-proxy hop count> — ctx.remoteAddress, rateLimit() keys, x-forwarded-host
   maxBodySize: 1048576 # bytes, non-file bodies (0 disables) — ctx.payload / ctx.rawPayload (413 past it)
@@ -119,7 +119,7 @@ server:
     maxArrayItems: 100
   versioning: # how a route version is picked (route/@Module { version })
     mode: header # header | accept | path
-    identifier: x-api-version # header name | accept vendor token | path regex (default '^/(v[0-9]+)(?=/|$)')
+    # identifier: x-api-version # per mode: header name (default x-api-version) | accept vendor token | path regex (default '^/(v[0-9]+)(?=/|$)') — leave unset for the mode's default
     # default: v1 # the version a request without one resolves to (rapid has no default)
 
 jobs:
@@ -142,7 +142,8 @@ logger: # @tundralibs/slogger options behind app.log / this.log (appName is the 
   # (default: 7 DEBUG in DEVELOPMENT, 6 INFO in PRODUCTION — this project pins 7)
   level: 7
   # handlers: # default: one ConsoleHandler — 'logfmt' in DEVELOPMENT, 'standard' in PRODUCTION
-  #   - { name: console, type: ConsoleHandler, formatter: json } # standard | logfmt | json | compact
+  #   - { name: console, type: ConsoleHandler, level: 7, formatter: json } # level 0-7; standard | logfmt | json | compact
+  # interpolateMessage: true # slogger message templating, passed through
   # sampling: { sampleRate: 1 } # slogger sampling, passed through
 
 # Tracing is opt-in — uncomment to enable (spans per invocation, trace ids on log lines).
@@ -166,21 +167,25 @@ logger: # @tundralibs/slogger options behind app.log / this.log (appName is the 
 `;
 
 const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
+import { health } from '@tundralibs/rapid/endpoints';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
 const app = await Application.initialize(configDir);
 
 app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));
+app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
 await app.start();
 app.log.info(\`{{name}} listening on \${app.address}\`);
 `;
 
 const MAIN_MODULES = `import { Application } from '@tundralibs/rapid';
+import { health } from '@tundralibs/rapid/endpoints';
 import * as modules from './modules/mod.ts';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
 const app = await Application.initialize(configDir);
+app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
 // Boot the module system — every RapidModule exported from modules/mod.ts.
 await app.modules({ modules: [modules] });
@@ -273,7 +278,7 @@ const PACKAGE_JSON = `{
     "test": "{{testCmd}}"
   },
   "dependencies": {
-    "@tundralibs/rapid": "npm:@jsr/tundralibs__rapid{{rapidSpec}}"
+    "@tundralibs/rapid": "npm:@jsr/tundralibs__rapid{{rapidSpec}}"{{extraDeps}}
   }{{devDeps}}
 }
 `;
@@ -301,7 +306,12 @@ const DOCKERFILE =
 # own s6 service runs it, so there is deliberately NO CMD / ENTRYPOINT here.
 FROM tundrasoft/{{runtime}}:{{imageTag}}
 
+WORKDIR /app
 COPY --chown=tundra:tundra . /app
+
+# Dependencies are installed into the image — the s6 service only STARTS the
+# app (no network needed at container start).
+{{installLayer}}
 
 # {{runtimeEnvDoc}}
 {{runtimeEnv}}
@@ -633,7 +643,7 @@ isolated DI container (\`await using h = harness(...)\`; \`h.invoke\`,
 tests. A test must be able to FAIL — never assert something the type-checker
 already proves.
 
-## CLI (\`deno run -A jsr:@tundralibs/rapid/cli\` / \`npx rapid\`)
+## CLI (\`deno run -A jsr:@tundralibs/rapid/cli\`; on bun/node the \`modules\` / \`upgrade\` package scripts, or \`node --import tsx node_modules/@tundralibs/rapid/cli/mod.ts\` — there is NO \`npx rapid\`)
 
 \`init [name] [--runtime deno|bun|node|workers] [--module] [--norm] [--ui]
 [--with bootstrap|pico] [--docker] [--github] [--yes]\` scaffolds a project
@@ -679,7 +689,7 @@ using it — do not guess.
 | --------------------------------------------------------- | ------------------------------------------------------ |
 | Validate input / define a schema                          | \`@tundralibs/guardian\`                                 |
 | Authentication (JWT, API keys, HMAC signing), permissions | \`@tundralibs/pact\`                                     |
-| Database models / ORM                                     | \`@tundralibs/norm\` (+ \`drivers\` for the engine)        |
+| Database models / ORM                                     | \`@tundralibs/norm\` (it builds its engine from its \`database\` config) |
 | Hand-built typed query → SQL                              | \`@tundralibs/oql\`                                      |
 | Cache (memory / Redis / Memcached)                        | \`@tundralibs/cacher\`                                   |
 | Generate ids (nanoid / ulid / sequence)                   | \`@tundralibs/id\`                                       |
@@ -726,7 +736,7 @@ using it — do not guess.
   first.
 - **Caching — \`@tundralibs/cacher\`.** Swappable backends: \`const cache =
   Cacher.create('MEMORY', 'my-cache', { defaultExpiry: 300 })\` (or \`'REDIS'\`,
-  \`'MEMCACHED'\`); \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`,
+  \`'MEMCACHED'\`; the options bag is REQUIRED, \`defaultExpiry\` in seconds); \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`,
   \`has\`, \`delete\`, \`clear\`. Same API across backends, so start in-memory and
   switch by config. rapid's \`session()\`/\`rateLimit()\`/\`idempotency()\` take
   persistence \`hooks\` (\`getSession\`/\`saveSession\`/\`deleteSession\`/
@@ -743,7 +753,8 @@ using it — do not guess.
   'GCM', keyLength: 256 })\` / \`decryptAES\` from \`@tundralibs/crypt/encrypt\`;
   \`pbkdf2Hash\`/\`pbkdf2Verify\` (passwords) from \`@tundralibs/crypt/digest\`,
   \`hkdf\` from \`@tundralibs/crypt/generators\`. Signing:
-  \`signHMAC\`/\`verifyHMAC\`, JWT sign/verify. Passwords: hash with pbkdf2,
+  \`signHMAC\`/\`verifyHMAC\` (\`@tundralibs/crypt/sign\`), \`issueJWT\`/\`verifyJWT\`
+  (\`@tundralibs/crypt/JWT\`). Passwords: hash with pbkdf2,
   never store plaintext.
 - **REST client — \`@tundralibs/restler\`.** A typed client base. Subclass it,
   set \`vendor\`, pass \`{ baseURL }\` to \`super\`, and expose methods built on
@@ -752,7 +763,7 @@ using it — do not guess.
 - **Foundation — \`@tundralibs/utils\`.** \`BaseError<Meta>\` (extend it for app
   errors — context-carrying, chainable); \`loadConfig({ path })\` →
   \`config.get<T>('a.b')\` (what rapid's \`Application.initialize('./configs')\`
-  uses); \`memoize(fn, ttlMs)\`, \`throttle(fn, ms)\`, \`once(fn)\`; \`@Singleton\`;
+  uses); \`memoize(fn, ttlSeconds)\` (SECONDS, default 30 min), \`throttle(fn, ms)\`, \`once(fn)\`; \`@Singleton\`;
   \`Options\` (the options+events base class); network helpers (\`isPublicIP\`,
   \`isInSubnet\`, \`getFreePort\`); \`envArgs\` (.env + Docker secrets).
 - **Logging — \`@tundralibs/slogger\`.** The logger behind \`app.log\`; reach
@@ -762,8 +773,9 @@ using it — do not guess.
   function); \`logger.info('msg', { ...context })\`. Inside a handler or module
   use \`app.log\` / \`this.log\` — they carry the request id for you.
 - **Router — \`@tundralibs/radrouter\`.** Already inside rapid; you normally
-  don't touch it. Its grammar is why params are \`/users/:id:\`. Constructor
-  options rapid passes through: \`caseSensitive\`, \`ignoreTrailingSlash\`.
+  don't touch it. Its grammar is why params are \`/users/:id:\`. The one
+  constructor option rapid passes through is \`ignoreTrailingSlash\`
+  (\`server.ignoreTrailingSlash\`); radrouter's \`caseSensitive\` is not exposed.
 
 ## Rules
 
@@ -811,6 +823,7 @@ const RUNTIME = {
       'TASK selects the deno task the image runs; ALLOW_* map to --allow-* flags.',
     runtimeEnv:
       'ENV TASK=start \\\n    ALLOW_NET=1 \\\n    ALLOW_READ=/app \\\n    ALLOW_ENV=1',
+    installLayer: 'RUN deno install --entrypoint main.ts',
     ciSetup:
       '      - uses: denoland/setup-deno@v2\n        with:\n          deno-version: v2.x',
     ciSteps:
@@ -824,13 +837,17 @@ const RUNTIME = {
     imageTag: '1',
     runtimeEnvDoc: 'SCRIPT selects the package.json script the image runs.',
     runtimeEnv: 'ENV SCRIPT=start',
+    installLayer: 'RUN bun install',
     devCmd: 'bun --watch main.ts',
     startCmd: 'bun main.ts',
     runTs: 'bun',
-    testCmd: 'bun test',
+    // `bun test` exits 1 with zero test files — a fresh scaffold has none.
+    testCmd: 'bun test --pass-with-no-tests',
+    extraDeps: '',
     devDeps: '',
     ciSetup: '      - uses: oven-sh/setup-bun@v2',
-    ciSteps: '      - run: bun install\n      - run: bun test',
+    ciSteps:
+      '      - run: bun install\n      - run: bun test --pass-with-no-tests',
     aiCommands:
       'bun install\nbun run dev          # run with reload\nbun test\nbun run modules      # regenerate modules/mod.ts after adding a module',
   },
@@ -840,11 +857,16 @@ const RUNTIME = {
     imageTag: '24',
     runtimeEnvDoc: 'SCRIPT selects the package.json script the image runs.',
     runtimeEnv: 'ENV SCRIPT=start',
+    // No lockfile in a fresh scaffold, so `npm ci` cannot be used here.
+    installLayer: 'RUN npm install --no-audit --no-fund',
     devCmd: 'node --import tsx --watch main.ts',
     startCmd: 'node --import tsx main.ts',
     runTs: 'node --import tsx',
     testCmd: 'node --import tsx --test',
-    devDeps: ',\n  "devDependencies": {\n    "tsx": "^4"\n  }',
+    // tsx runs the app at START time (the `start` script), so it is a
+    // runtime dependency, not a dev one.
+    extraDeps: ',\n    "tsx": "^4"',
+    devDeps: '',
     ciSetup:
       '      - uses: actions/setup-node@v4\n        with:\n          node-version: 24',
     ciSteps: '      - run: npm ci\n      - run: npm test',
@@ -858,6 +880,7 @@ const RUNTIME = {
     startCmd: 'wrangler deploy',
     runTs: 'node --import tsx',
     testCmd: 'node --import tsx --test',
+    extraDeps: '',
     devDeps:
       ',\n  "devDependencies": {\n    "tsx": "^4",\n    "wrangler": "^4"\n  }',
     ciSetup:

@@ -7,6 +7,8 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
+import { compress } from '../middlewares/mod.ts';
+import { makeTempDir, removeDir, writeFile } from '@tundralibs/compat/file';
 
 const make = (mode: 'DEVELOPMENT' | 'PRODUCTION') =>
   Application.initialize({
@@ -663,6 +665,90 @@ describe('rapid HTTPTransport — headers.* stamps', () => {
     ) {
       const err = await asserts.assertRejects(() => spin(headers), RapidError);
       asserts.assertEquals(err.code, 'RAPID_CONFIG');
+    }
+  });
+});
+
+describe("rapid.http — a disclosure envelope replaces the committed body's framing", () => {
+  it("a throw after ctx.serve() ships JSON with JSON headers, never the file's type/length", async () => {
+    const dir = await makeTempDir();
+    const file = `${dir}/big.bin`;
+    await writeFile(file, new Uint8Array(4096).fill(120));
+    const app = await make('PRODUCTION');
+    app.get('/file', async (_ctx, next) => {
+      await next();
+      throw new Error('boom');
+    }, (ctx) => ctx.serve(file));
+    try {
+      const res = await app.fetch(new Request('http://app/file'));
+      const body = await res.text();
+      asserts.assertEquals(res.status, 500);
+      asserts.assertEquals(res.headers.get('content-type'), 'application/json');
+      asserts.assertEquals(res.headers.get('content-length'), null);
+      asserts.assertEquals(res.headers.get('etag'), null);
+      asserts.assertEquals(JSON.parse(body).code, 'RAPID_UNHANDLED');
+    } finally {
+      await app.stop();
+      await removeDir(dir, { recursive: true });
+    }
+  });
+
+  it('a throw after compress() ran drops the stale content-encoding', async () => {
+    const app = await make('PRODUCTION');
+    app.use(async (_ctx, next) => {
+      await next();
+      throw new Error('boom');
+    });
+    app.use(compress({ threshold: 1 }));
+    app.get('/big', () => ({ content: { text: 'x'.repeat(2048) } }));
+    try {
+      const res = await app.fetch(
+        new Request('http://app/big', {
+          headers: { 'accept-encoding': 'gzip' },
+        }),
+      );
+      asserts.assertEquals(res.status, 500);
+      asserts.assertEquals(res.headers.get('content-encoding'), null);
+      asserts.assertEquals((await res.json()).code, 'RAPID_UNHANDLED');
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('a transform that re-sets a DIFFERENT body drops a handler-stated content-length; the same body keeps it', async () => {
+    const app = await make('PRODUCTION');
+    app.get(
+      '/swap',
+      async (ctx, next) => {
+        await next();
+        ctx.response = { content: 'short' };
+      },
+      () => ({
+        content: 'a much longer body',
+        headers: { 'content-length': '18' },
+      }),
+    );
+    app.get(
+      '/same',
+      async (ctx, next) => {
+        await next();
+        ctx.response = { ...ctx.response!, status: 202 };
+      },
+      () => ({
+        content: 'a much longer body',
+        headers: { 'content-length': '18' },
+      }),
+    );
+    try {
+      const swapped = await app.fetch(new Request('http://app/swap'));
+      asserts.assertEquals(swapped.headers.get('content-length'), null);
+      asserts.assertEquals(await swapped.text(), 'short');
+      const same = await app.fetch(new Request('http://app/same'));
+      asserts.assertEquals(same.status, 202);
+      asserts.assertEquals(same.headers.get('content-length'), '18');
+      await same.body?.cancel();
+    } finally {
+      await app.stop();
     }
   });
 });

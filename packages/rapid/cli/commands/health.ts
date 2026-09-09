@@ -9,8 +9,11 @@ export async function healthCommand(
   url: string,
   opts: { path?: string } = {},
 ): Promise<number> {
-  const target = new URL(opts.path ?? '/health', url).href;
+  // Parsed INSIDE the try: a scheme-less `localhost:3000` is a TypeError from
+  // the URL constructor, and it must print like any other probe failure.
+  let target = `${url}${opts.path ?? '/healthz'}`;
   try {
+    target = new URL(opts.path ?? '/healthz', url).href;
     const res = await fetch(target);
     // The body is remote-controlled — collapse control characters so a
     // crafted response cannot forge extra log lines.

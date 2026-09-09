@@ -562,3 +562,32 @@ describe('rapid.endpoints.docs', () => {
     await app.stop();
   });
 });
+
+describe('rapid.endpoints.docs — multi-tag operations', () => {
+  it('an operation carrying two tags is listed under both but documented once, with a cross-link under the second', async () => {
+    const app = await Application.initialize({
+      name: 'docs-tags',
+      mode: 'DEVELOPMENT',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.route(
+      'GET',
+      '/audit',
+      { openapi: { tags: ['Posts', 'Admin'] } },
+      () => ({ content: {} }),
+    );
+    docs(app, { tryIt: true });
+    try {
+      const body = (await (await app.fetch(new Request('http://app/docs')))
+        .text()).replace(/\s+/g, ' ');
+      asserts.assertEquals(body.split('id="op-get-audit"').length - 1, 1);
+      asserts.assertEquals(body.split('data-path="/audit"').length - 1, 1);
+      asserts.assertStringIncludes(body, 'documented under Posts');
+      // Both nav entries still point at the one article.
+      asserts.assertEquals(body.split('href="#op-get-audit"').length - 1, 3);
+    } finally {
+      await app.stop();
+    }
+  });
+});

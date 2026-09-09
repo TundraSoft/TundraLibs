@@ -21,6 +21,7 @@ import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { assertRedirectTarget } from '../utils/redirectTarget.ts';
 import {
+  assertCookieAttributes,
   bodyCapFor,
   type CookieOptions,
   isSwap,
@@ -161,6 +162,43 @@ class HTTPArgs {
  * `status`/`headers` response, emitting a Fetch `Response` at
  * {@link respond}.
  */
+/** Whether a reply's `headers` (object or `Headers`) names `name`, case-insensitively. */
+const hasHeader = (
+  headers: RapidContextResponse['headers'],
+  name: string,
+): boolean =>
+  headers === undefined
+    ? false
+    : headers instanceof Headers
+    ? headers.has(name)
+    : Object.keys(headers).some((k) => k.toLowerCase() === name);
+
+/**
+ * Everything a reply cookie can get wrong, checked where it is WRITTEN:
+ * the serializer's name/value legality (a `TypeError` there becomes the
+ * call-site code) plus the path/domain attribute grammar.
+ *
+ * @throws {RapidError} RAPID_RESPONSE_INVALID naming the cookie.
+ */
+const assertReplyCookie = (
+  name: string,
+  value: string,
+  options: CookieOptions,
+): void => {
+  assertCookieAttributes(name, options);
+  try {
+    serializeCookie(name, value, options);
+  } catch (error) {
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message: `cookie '${name}': ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      details: { cookie: name },
+      cause: error instanceof Error ? error : undefined,
+    });
+  }
+};
+
 export class HTTPContext<S extends RapidContextState = RapidContextState>
   extends Context<S, Response> {
   /** The transport discriminator — always `'HTTP'`. */
@@ -525,9 +563,11 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     } catch (error) {
       // A missing path is a 404; a real read failure (permissions, I/O)
       // propagates to the 500 disclosure path.
+      // `debug`, not `details`: a 4xx keeps `details` in PRODUCTION and the
+      // server's directory layout is not the client's business.
       if (error instanceof FileNotFound) {
         throw new RapidError('RAPID_NOT_FOUND', {
-          details: { path },
+          debug: { path },
           cause: error,
         });
       }
@@ -535,7 +575,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     }
     if (!isFile) {
       // A directory / special file is not servable — a 404, not a read error.
-      throw new RapidError('RAPID_NOT_FOUND', { details: { path } });
+      throw new RapidError('RAPID_NOT_FOUND', { debug: { path } });
     }
     const content = await readFileStream(path);
     const headers: Record<string, string> = {
@@ -658,7 +698,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     if (options.signed === true) {
       void this.app.secret; // the getter THROWS when unconfigured
     }
-    serializeCookie(name, value, options); // name/value legality, eagerly
+    assertReplyCookie(name, value, options); // name/value/attribute legality, eagerly
     this.__replyCookies = [
       ...(this.__replyCookies ?? []),
       { name, value, options },
@@ -756,6 +796,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       const r = response.redirect;
       assertRedirectTarget(typeof r === 'string' ? r : r.url);
     }
+    const previous = this._content;
     super.response = response;
     if (response === null) {
       this._status = 200; // cleared → back to the default
@@ -783,10 +824,24 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
         }
       }
     }
+    // A DIFFERENT body than the one a `content-length` was stated for
+    // (ctx.serve, static, a handler's own header) must not keep that
+    // length: the disclosure envelope replacing a 4 KB file would
+    // otherwise go out framed as 4 KB and desync a keep-alive client.
+    // A reply that restates the length (compress) keeps its own.
+    if (
+      previous !== null && response.content !== previous &&
+      !hasHeader(response.headers, 'content-length')
+    ) {
+      this._headers.delete('content-length');
+    }
     // The reply `cookies` key is captured, not applied: a signed cookie needs
     // an async HMAC, and this setter is sync. The transport's finalize awaits
     // `_applyReplyCookies()` before respond(). Later assignments add to it.
     if (response.cookies !== undefined && response.cookies.length > 0) {
+      for (const c of response.cookies) {
+        assertReplyCookie(c.name, c.value, c.options ?? {});
+      }
       this.__replyCookies = [
         ...(this.__replyCookies ?? []),
         ...response.cookies,

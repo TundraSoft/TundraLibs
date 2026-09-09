@@ -46,27 +46,22 @@ const isCompressible = (contentType: string): boolean =>
   );
 
 /** Serialize the current response body to bytes + its content-type. */
-const bodyOf = (
-  ctx: HTTPContext<RapidContextState>,
-): { bytes: Uint8Array; contentType: string } => {
-  const content = ctx.response!.content;
+/** The content type the body WILL be serialised with — no serialisation here. */
+const contentTypeOf = (ctx: HTTPContext<RapidContextState>): string => {
   const explicit = ctx.responseHeaders.get('content-type');
-  if (content instanceof Uint8Array) {
-    return {
-      bytes: content,
-      contentType: explicit ?? 'application/octet-stream',
-    };
-  }
-  if (typeof content === 'string') {
-    return {
-      bytes: encoder.encode(content),
-      contentType: explicit ?? 'text/plain; charset=utf-8',
-    };
-  }
-  return {
-    bytes: encoder.encode(JSON.stringify(content)),
-    contentType: explicit ?? 'application/json',
-  };
+  if (explicit !== null) return explicit;
+  const content = ctx.response!.content;
+  if (content instanceof Uint8Array) return 'application/octet-stream';
+  if (typeof content === 'string') return 'text/plain; charset=utf-8';
+  return 'application/json';
+};
+
+/** The body's bytes — called ONCE, after every gate that could skip compression. */
+const bytesOf = (ctx: HTTPContext<RapidContextState>): Uint8Array => {
+  const content = ctx.response!.content;
+  if (content instanceof Uint8Array) return content;
+  if (typeof content === 'string') return encoder.encode(content);
+  return encoder.encode(JSON.stringify(content));
 };
 
 const compressBytes = async (
@@ -138,19 +133,19 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     const streamed = isStreamBody(streamBody);
     const contentType = streamed
       ? ctx.responseHeaders.get('content-type') ?? 'application/octet-stream'
-      : bodyOf(ctx).contentType;
+      : contentTypeOf(ctx);
     if (!isCompressible(contentType)) return;
     // The representation varies by Accept-Encoding from here on, whether
     // or not THIS client gets the encoded form.
     ctx.setHeader('vary', vary);
     const encoding = pickEncoding(ctx.headers.get('accept-encoding') ?? '');
     if (encoding === null) return;
-    ctx.meter?.middleware('compress', encoding, meterAction(ctx));
 
     // A STREAM body is compressed chunk-wise through CompressionStream —
     // never buffered, so the threshold can't apply (length unknown) and any
     // content-length is dropped (the encoded size is unknowable).
     if (streamed) {
+      ctx.meter?.middleware('compress', encoding, meterAction(ctx));
       weaken();
       ctx.response = {
         content: toReadableStream(streamBody).pipeThrough(
@@ -172,8 +167,11 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       return;
     }
 
-    const { bytes } = bodyOf(ctx);
+    const bytes = bytesOf(ctx);
     if (bytes.length < threshold) return;
+    // Recorded HERE — a reply under the threshold is a decision NOT to
+    // compress, and the family documents decisions the middleware took.
+    ctx.meter?.middleware('compress', encoding, meterAction(ctx));
 
     const compressed = await compressBytes(bytes, encoding);
     weaken();

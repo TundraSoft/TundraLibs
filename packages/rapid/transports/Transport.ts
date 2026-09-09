@@ -15,6 +15,16 @@ import type {
   RapidContextState,
 } from '../types/mod.ts';
 
+/** Representation headers a disclosure envelope must not inherit from the body it replaces. */
+const REPLACED_BODY_HEADERS = [
+  'content-type',
+  'content-length',
+  'content-encoding',
+  'content-range',
+  'etag',
+  'last-modified',
+] as const;
+
 /**
  * The invariant slice of every invocation, whatever the trigger. The
  * scratch-repo audit's D5 finding is the reason this is BASE-owned:
@@ -310,6 +320,15 @@ export abstract class Transport<
                         : String(templateError),
                     },
                   );
+                }
+              }
+              // The envelope replaces whatever body was committed — its
+              // representation headers (a file's type, compress's
+              // encoding, a range, an etag) describe bytes that are gone.
+              if (ctx.type === 'HTTP') {
+                const http = ctx as unknown as HTTPContext<S>;
+                for (const name of REPLACED_BODY_HEADERS) {
+                  http.deleteHeader(name);
                 }
               }
               ctx.response = htmlError ?? { status: err.status, content };

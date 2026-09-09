@@ -295,6 +295,9 @@ export function DocsReference(
 ): Html {
   const { groups, ops } = operationsByTag(doc);
   const tagDoc = new Map((doc.tags ?? []).map((t) => [t.name, t.description]));
+  // A multi-tag operation is listed under every tag but DOCUMENTED once —
+  // the first tag gets the article (and the anchor), later tags a link.
+  const documentedUnder = new Map<string, string>();
   return html`<div class="docs-reference">
   <nav class="docs-nav" aria-label="Operations">${
     each(groups, (g) =>
@@ -321,8 +324,19 @@ export function DocsReference(
                 (d) => html`<p>${d}</p>`,
               )}${each(
                 ops.get(tag) ?? [],
-                ({ path, method, op }) =>
-                  DocsOperation(path, method, op, options),
+                ({ path, method, op }) => {
+                  const id = operationId(method, path);
+                  const first = documentedUnder.get(id);
+                  if (first !== undefined) {
+                    return html`
+                      <p
+                        class="docs-also"><span class="docs-method docs-${method}">${method
+                          .toUpperCase()}</span> <a href="#${id}"><code>${path}</code></a> — documented under ${first}</p>
+                    `;
+                  }
+                  documentedUnder.set(id, tag);
+                  return DocsOperation(path, method, op, options);
+                },
               )}</section>
           `)
       }`)

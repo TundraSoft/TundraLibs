@@ -142,6 +142,40 @@ export function assertCookieConfig(
 /** True when `value` is an RFC 9110 token (a legal header or cookie name). */
 export const isToken = (value: string): boolean => TOKEN.test(value);
 
+/** RFC 6265 path-value: any CHAR but CTLs and `;`. */
+// deno-lint-ignore no-control-regex -- the CTL range IS the rule
+const COOKIE_PATH = /^\/[^\x00-\x1f\x7f;]*$/;
+/** A host name, optionally dot-prefixed — never an attribute separator. */
+const COOKIE_DOMAIN =
+  /^\.?[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
+
+/**
+ * Per-call check of the attributes the serializer emits VERBATIM — a
+ * `path` or `domain` derived from request data must not be able to smuggle
+ * `; Secure; HttpOnly` or a CRLF into the `Set-Cookie` line. Throws the
+ * call-site code (`RAPID_RESPONSE_INVALID`), not the boot one.
+ *
+ * @throws {RapidError} RAPID_RESPONSE_INVALID naming the offending attribute.
+ */
+export function assertCookieAttributes(
+  name: string,
+  options: { path?: string; domain?: string },
+): void {
+  if (options.path !== undefined && !COOKIE_PATH.test(options.path)) {
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message:
+        `cookie '${name}' path must start with '/' and contain no ';' or control characters`,
+      details: { cookie: name, path: options.path },
+    });
+  }
+  if (options.domain !== undefined && !COOKIE_DOMAIN.test(options.domain)) {
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message: `cookie '${name}' domain must be a host name`,
+      details: { cookie: name, domain: options.domain },
+    });
+  }
+}
+
 export const serializeCookie = (
   name: string,
   value: string,

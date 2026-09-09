@@ -35,6 +35,7 @@ import type { Post } from '../types.ts';
 import {
   CreateCommentBody,
   CreatePostBody,
+  PostList,
   PostSummary,
   UpdatePostBody,
 } from '../schemas.ts';
@@ -117,7 +118,8 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
   @GET('/', {
     bind: [query(), paging()],
     description: 'List posts, filterable/sortable/paginated.',
-    response: PostSummary,
+    // The LIST envelope, not one post — DEVELOPMENT enforces this shape.
+    response: PostList,
     template: PostListView,
   })
   @GET('/ui', {

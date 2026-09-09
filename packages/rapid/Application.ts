@@ -2151,6 +2151,22 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { key: 'uploads.maxSize', value: uploads.maxSize },
       });
     }
+    // `null` is YAML's `allowedExtensions:` with no value — the empty list
+    // (the parser treats nullish as deny); anything else non-array is a typo.
+    if (
+      uploads.allowedExtensions !== undefined &&
+      uploads.allowedExtensions !== null &&
+      !Array.isArray(uploads.allowedExtensions)
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'uploads.allowedExtensions must be an array of dot-prefixed extensions (omit it, or [], to refuse every upload)',
+        details: {
+          key: 'uploads.allowedExtensions',
+          value: uploads.allowedExtensions,
+        },
+      });
+    }
     for (const ext of uploads.allowedExtensions ?? []) {
       // The parser compares `extname(name).toLowerCase()` — `png` or
       // `.PNG` could never match, so every upload would 415 with no hint.

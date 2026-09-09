@@ -395,3 +395,30 @@ describe('rapid.utils.parseBody — multipart bounds (2026-09 review)', () => {
     );
   });
 });
+
+describe('rapid.parseBody — allowlist fail-safe', () => {
+  it('uploads.allowedExtensions undefined/null DENIES every file (never "allow all")', async () => {
+    for (const allowed of [undefined, null]) {
+      const form = new FormData();
+      form.append('doc', new File(['x'], 'evil.exe'));
+      const dir = makeTempDirSync({ prefix: 'pb-nullish-' });
+      const err = await asserts.assertRejects(
+        () =>
+          parseBody(new Request('http://x/', { method: 'POST', body: form }), {
+            maxBodySize: 1_048_576,
+            uploads: {
+              maxSize: 10_485_760,
+              allowedExtensions: allowed as unknown as string[],
+              path: dir,
+            },
+          }),
+        RapidError,
+      );
+      asserts.assertEquals(
+        err.code,
+        'RAPID_UNSUPPORTED_MEDIA',
+        String(allowed),
+      );
+    }
+  });
+});

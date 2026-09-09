@@ -290,3 +290,47 @@ describe('rapid.middlewares.compress — validators', () => {
     await app.stop();
   });
 });
+
+describe('rapid.middlewares.compress — serialisation cost', () => {
+  it('serialises an object body exactly ONCE whether or not it ends up compressed', async () => {
+    const app = await Application.initialize({
+      name: 'compress-once',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    let stringified = 0;
+    const counting = (size: number) => ({
+      toJSON() {
+        stringified++;
+        return { data: 'x'.repeat(size) };
+      },
+    });
+    app.use(compress());
+    app.get('/big', () => ({ content: counting(5000) }));
+    app.get('/small', () => ({ content: counting(10) }));
+    try {
+      // Compressed: once (compress's bytes ARE the body). Not negotiated:
+      // once (only the serializer runs). Under the threshold: twice — the
+      // size check needs the bytes and the serializer runs again; that is
+      // the one remaining double, bounded by `threshold` bytes.
+      for (
+        const [path, accept, expected] of [
+          ['/big', 'gzip', 1],
+          ['/big', '', 1],
+          ['/small', 'gzip', 2],
+        ] as const
+      ) {
+        stringified = 0;
+        const res = await app.fetch(
+          new Request(`http://app${path}`, {
+            headers: accept ? { 'accept-encoding': accept } : {},
+          }),
+        );
+        await res.body?.cancel();
+        asserts.assertEquals(stringified, expected, `${path} accept=${accept}`);
+      }
+    } finally {
+      await app.stop();
+    }
+  });
+});

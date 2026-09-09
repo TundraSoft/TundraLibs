@@ -131,7 +131,9 @@ async function collectFormData(
   files: string[],
 ): Promise<Record<string, unknown>> {
   const maxFileSize = uploads.maxSize;
-  const allowedExtensions = uploads.allowedExtensions;
+  // Nullish (YAML `allowedExtensions:` with no value, or `undefined` spread
+  // over the default) is the FAIL-SAFE empty list, never "anything goes".
+  const allowedExtensions = uploads.allowedExtensions ?? [];
   const uploadPath = uploads.path;
   const maxFiles = uploads.maxFiles ?? 20;
   // NULL-PROTOTYPE accumulator — a field literally named `__proto__`
@@ -185,7 +187,7 @@ async function collectFormData(
         details: { file: value.name, size: value.size, maxFileSize },
       });
     }
-    if (allowedExtensions && !allowedExtensions.includes(extension)) {
+    if (!allowedExtensions.includes(extension)) {
       throw new RapidError('RAPID_UNSUPPORTED_MEDIA', {
         message: 'File extension not allowed',
         details: { file: value.name, extension },

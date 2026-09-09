@@ -103,6 +103,13 @@ export type PactAuthOptions = Omit<PactMiddlewareOptions, 'bearer'> & {
      */
     refreshCookie?: string;
     /**
+     * Lifetime of the refresh cookie in SECONDS — pact does not report the
+     * refresh token's expiry, so match it to the instance's
+     * `session.refresh.ttl` (pact's default is 7 days).
+     * @default 604800
+     */
+    refreshMaxAge?: number;
+    /**
      * What of the principal `login`, `refresh` and `me` return. The
      * default is deliberately minimal — grants, status and metadata are
      * yours to expose field by field.
@@ -224,6 +231,31 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     encryption: undefined,
   });
   const bearerPrefix = config.bearer.prefix;
+  // The headers of the OTHER carriers the instance accepts. pact reads
+  // BEARER first and stops at the first credential it finds, so the cookie
+  // may only stand in for the bearer header when none of these is present —
+  // otherwise a stale session cookie would silently veto a valid API key,
+  // and a live one would authenticate the browser session instead of it.
+  const otherCarriers = new Set<string>();
+  if (config.schemes.has('APIKEY')) {
+    const k = config.apiKey;
+    for (
+      const h of 'header' in k ? [k.header] : [k.keyHeader, k.secretHeader]
+    ) {
+      otherCarriers.add(h.toLowerCase());
+    }
+  }
+  if (config.schemes.has('HMAC')) {
+    otherCarriers.add(config.hmac.keyHeader.toLowerCase());
+    otherCarriers.add(config.hmac.signatureHeader.toLowerCase());
+  }
+  otherCarriers.delete(config.bearer.header);
+  const otherCarrierPresent = (headers: Headers): boolean => {
+    for (const carrier of otherCarriers) {
+      if (headers.get(carrier) !== null) return true;
+    }
+    return false;
+  };
 
   /** Header lookup with the bearer cookie standing in for a missing bearer header. */
   const headerOf =
@@ -231,6 +263,7 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       const value = headers.get(name);
       if (value !== null || cookie === undefined) return value;
       if (name.toLowerCase() !== config.bearer.header) return null;
+      if (otherCarrierPresent(headers)) return null;
       const token = parseCookies(headers.get('cookie'))[cookie];
       if (token === undefined || token === '') return null;
       return bearerPrefix === '' ? token : `${bearerPrefix} ${token}`;
@@ -390,9 +423,12 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       // 401 here would lock the user out of /login itself. It is cleared
       // and the request continues anonymous — a header credential that
       // fails stays a 401, never anonymous.
+      // Only when the COOKIE was the credential that failed — a rejected
+      // API key or HMAC signature on the same request stays a 401.
       if (
         cookie !== undefined && verdict.denial.status === 401 &&
         ctx.headers.get(config.bearer.header) === null &&
+        !otherCarrierPresent(ctx.headers) &&
         ctx.cookies[cookie] !== undefined
       ) {
         ctx.app.log.info('stale session cookie cleared', {
@@ -492,7 +528,10 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       cookies.push({
         name: session.refreshCookie,
         value: refreshToken,
-        options: { ...cookieAttrs, maxAge: MAX_COOKIE_AGE },
+        options: {
+          ...cookieAttrs,
+          maxAge: Math.min(MAX_COOKIE_AGE, session.refreshMaxAge ?? 604_800),
+        },
       });
     }
     return {
@@ -597,6 +636,11 @@ export function pactAuth<B extends PermissionBits, M extends string>(
             "refresh() needs the pact instance on session.strategy 'JWT'",
           cause: error instanceof Error ? error : undefined,
         });
+      }
+      // The presented refresh token is dead (reused, expired, revoked) —
+      // a browser must not keep replaying it for the cookie's lifetime.
+      if (session.refreshCookie !== undefined) {
+        ctx.deleteCookie(session.refreshCookie, { path: cookieAttrs.path });
       }
       throw authFailure(ctx, error);
     }

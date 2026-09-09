@@ -67,7 +67,7 @@
  * Platform endpoints (the `./endpoints` catalog + auth middleware):
  *
  * ```bash
- * curl -s  localhost:8001/healthz | jq        # readiness — pings the DB
+ * curl -s  localhost:8001/healthz | jq        # liveness with a DB ping
  * curl -s  localhost:8001/metrics             # Prometheus text (server.metrics)
  * curl -s  localhost:8001/openapi.json | jq   # the assembled OpenAPI 3.0.3 doc
  * curl -si localhost:8001/admin/summary       # 401 — needs an author

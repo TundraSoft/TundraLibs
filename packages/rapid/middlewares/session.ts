@@ -68,6 +68,12 @@ export type SessionHooks = {
 /** Options for {@link session}. The id cookie is signed with the app `secret`. */
 export type SessionOptions = {
   /**
+   * Bound on LIVE sessions in the memory default (ignored when `hooks` is
+   * given) — the oldest is evicted past it, like `rateLimit`'s `maxKeys`.
+   * @default 100000
+   */
+  maxSessions?: number;
+  /**
    * Persistence. Inject redis/cacher-backed hooks for multi-replica
    * deployments (memory is per-process).
    * @default {@link memorySessionHooks}
@@ -131,8 +137,14 @@ export type RapidSession = {
 };
 
 /** Per-process {@link SessionHooks} over an expiring map — the default. */
-export function memorySessionHooks(): SessionHooks {
-  const records = expiringMap<SessionRecord>();
+export function memorySessionHooks(
+  options: { maxSessions?: number } = {},
+): SessionHooks {
+  // Bounded like the rateLimit/idempotency defaults: an anonymous visitor
+  // whose handler writes to the session mints one record per request.
+  const records = expiringMap<SessionRecord>({
+    maxEntries: options.maxSessions ?? 100_000,
+  });
   return {
     getSession: (id) => records.get(id),
     saveSession: (id, record, ttl) => records.set(id, record, ttl),
@@ -187,7 +199,17 @@ export function getSession<S extends RapidContextState = RapidContextState>(
  * ```
  */
 export function session(options: SessionOptions = {}): RapidMiddleware {
-  const hooks = options.hooks ?? memorySessionHooks();
+  if (
+    options.maxSessions !== undefined &&
+    (!Number.isInteger(options.maxSessions) || options.maxSessions < 1)
+  ) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: 'session maxSessions must be a positive integer',
+      details: { maxSessions: options.maxSessions },
+    });
+  }
+  const hooks = options.hooks ??
+    memorySessionHooks({ maxSessions: options.maxSessions });
   const name = options.cookie ?? 'sid';
   const idleTtl = options.idleTtl ?? 1800;
   const absoluteTtl = options.absoluteTtl ?? 43_200;

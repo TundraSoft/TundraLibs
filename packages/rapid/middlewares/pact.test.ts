@@ -623,3 +623,97 @@ describe('rapid.middlewares.pactAuth()', () => {
     await app2.stop();
   });
 });
+
+describe('rapid.middlewares.pactAuth() — carriers', () => {
+  it('a bearer cookie never shadows a header credential: a valid API key wins over a stale OR live cookie', async () => {
+    const pact = await makePact();
+    const { session } = await pact.login({
+      identifier: 'ada',
+      password: PASSWORD,
+    });
+    const { key, secret } = await pact.issueApiKey({
+      userId: 'u-1',
+      grants: { Posts: 1n },
+    });
+    const { app } = await makeApp(pact, {
+      apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
+      bearer: { cookie: 'sid' },
+    });
+    try {
+      const stale = await get(app, '/whoami', {
+        'x-api-key': key,
+        'x-api-secret': secret,
+        cookie: 'sid=expired',
+      });
+      asserts.assertEquals(await stale.json(), {
+        id: key,
+        kind: 'APIKEY',
+        via: 'APIKEY',
+      });
+      const live = await get(app, '/whoami', {
+        'x-api-key': key,
+        'x-api-secret': secret,
+        cookie: `sid=${session.token}`,
+      });
+      asserts.assertEquals((await live.json()).via, 'APIKEY');
+      // A WRONG api key is still a 401 — the cookie does not rescue it.
+      const wrong = await get(app, '/whoami', {
+        'x-api-key': key,
+        'x-api-secret': 'nope',
+        cookie: `sid=${session.token}`,
+      });
+      asserts.assertEquals(wrong.status, 401);
+      await wrong.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('refresh(): a dead refresh cookie is cleared on the 401 and its lifetime follows session.refreshMaxAge', async () => {
+    const jwt = await makePact({ strategy: 'JWT', secret: 'a'.repeat(40) });
+    const { login, refresh } = pactAuth(jwt, {
+      bearer: { cookie: 'session' },
+      session: {
+        cookie: { secure: false },
+        refreshCookie: 'refresh',
+        refreshMaxAge: 3600,
+      },
+    });
+    const app = await Application.initialize({
+      name: 'pact-refresh-cookie',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.post('/login', login());
+    app.post('/refresh', refresh());
+    try {
+      const ok = await app.fetch(
+        new Request('http://app/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ identifier: 'ada', password: PASSWORD }),
+        }),
+      );
+      const refreshCookie = ok.headers.getSetCookie().find((c) =>
+        c.startsWith('refresh=')
+      ) ?? '';
+      asserts.assertMatch(refreshCookie, /Max-Age=3600/);
+      await ok.body?.cancel();
+      const dead = await app.fetch(
+        new Request('http://app/refresh', {
+          method: 'POST',
+          headers: { cookie: 'refresh=not-a-token' },
+        }),
+      );
+      asserts.assertEquals(dead.status, 401);
+      asserts.assertMatch(
+        dead.headers.getSetCookie().find((c) => c.startsWith('refresh=')) ??
+          '',
+        /refresh=;.*(Max-Age=0|Expires=)/,
+      );
+      await dead.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+});

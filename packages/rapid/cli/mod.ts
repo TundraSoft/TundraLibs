@@ -22,9 +22,10 @@ const HELP = `rapid <command>
         always writes AGENTS.md + CLAUDE.md (the project's AI guide)
   upgrade [--dir .]
         bump @tundralibs/* dependencies to their latest release
-  modules [dir] [--check]
-        (re)generate the modules barrel (dir defaults to ./modules)
-  health [url] [--path /health]
+  modules [dir] [--check] [--force]
+        (re)generate the modules barrel (dir defaults to ./modules);
+        an existing hand-written mod.ts is refused unless --force
+  health [url] [--path /healthz]
         hit a running app's health path; exit 0 on 2xx
 `;
 
@@ -40,6 +41,7 @@ export function run(args: ParsedArgs = argv()): Promise<number> {
     case 'modules':
       return modulesCommand((rest._[0] as string | undefined) ?? './modules', {
         check: rest.check === true,
+        force: rest.force === true,
       });
     case 'health':
       return healthCommand(

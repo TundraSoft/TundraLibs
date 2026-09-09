@@ -8,6 +8,7 @@
 import type { RapidContextState } from '../types/mod.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import { isThenable } from './isThenable.ts';
 
 /**
  * The callable shape `compose` runs — structural, so BOTH universal
@@ -70,19 +71,36 @@ export const compose = <
       // the chain — the handler still runs.
       if (!fn) return i < middleware.length ? dispatch(i + 1) : undefined;
       try {
-        return fn(ctx, function next() {
-          const downstream = dispatch(i + 1);
-          // A middleware that abandons next() (`void next()`, no return)
-          // leaves this promise unowned: a handler throw that lands after
-          // the middleware returned would then be a process-fatal
-          // unhandled rejection instead of a disclosed response. The side
-          // handler OWNS it (logged, never re-thrown — the response is
-          // already finalized by then); a middleware that awaits still
-          // receives the rejection through the returned promise.
+        // A middleware that abandons next() (`void next()`, no return)
+        // leaves the downstream promise unowned: a handler throw that
+        // lands after the middleware returned would then be a
+        // process-fatal unhandled rejection instead of a disclosed
+        // response. Abandonment is DETECTED — the middleware's own result
+        // settled while downstream was still pending — and only then is
+        // the side handler attached (logged, never re-thrown: the response
+        // is already finalized by then). A middleware that returns or
+        // awaits next() receives the rejection itself, so a plain 4xx/5xx
+        // flowing through it must NOT produce a log line.
+        let downstream: Promise<void> | undefined;
+        let downstreamSettled = false;
+        const out = fn(ctx, function next() {
+          downstream = dispatch(i + 1);
+          downstream.then(
+            () => {
+              downstreamSettled = true;
+            },
+            () => {
+              downstreamSettled = true;
+            },
+          );
+          return downstream;
+        });
+        const check = (): void => {
+          if (downstream === undefined || downstreamSettled) return;
           downstream.catch((error: unknown) => {
             // Structurally guarded: unit tests drive compose with bare
             // context doubles that carry no app.
-            (ctx as Partial<Context<S, unknown>>).app?.log.error(
+            (ctx as Partial<Context<S, unknown>>).app?.log.warn(
               'a handler rejected after a middleware abandoned next() — return or await next()',
               {
                 requestId: ctx.requestId,
@@ -91,8 +109,21 @@ export const compose = <
               },
             );
           });
-          return downstream;
-        });
+        };
+        if (isThenable(out)) {
+          return out.then(
+            (value) => {
+              check();
+              return value as void;
+            },
+            (error: unknown) => {
+              check();
+              throw error;
+            },
+          );
+        }
+        check();
+        return out;
       } catch (err) {
         return Promise.reject(err);
       }

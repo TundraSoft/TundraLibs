@@ -73,9 +73,25 @@ describe('rapid.HTTPContext.serve / .html', () => {
     new Headers({ 'content-disposition': cd });
   });
 
-  it('serve() on a missing path throws RAPID_NOT_FOUND (→ 404)', async () => {
-    await asserts.assertRejects(
+  it('serve() on a missing path throws RAPID_NOT_FOUND (→ 404) and keeps the filesystem path out of the client envelope', async () => {
+    const err = await asserts.assertRejects(
       () => ctx().serve(`${dir}/nope.html`),
+      RapidError,
+      'Not found',
+    );
+    asserts.assert(
+      !JSON.stringify(err.payload('PRODUCTION')).includes(dir),
+      'PRODUCTION payload must not carry the server path',
+    );
+    asserts.assertStringIncludes(
+      JSON.stringify(err.payload('DEVELOPMENT')),
+      'nope.html',
+    );
+  });
+
+  it('serve() on a directory is a 404 too', async () => {
+    await asserts.assertRejects(
+      () => ctx().serve(dir),
       RapidError,
       'Not found',
     );

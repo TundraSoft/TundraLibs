@@ -3631,3 +3631,26 @@ describe('rapid.Application boot validation (2026-09 review)', () => {
     await ok.stop();
   });
 });
+
+describe('rapid.Application — uploads.allowedExtensions shape', () => {
+  it('a non-array value is RAPID_CONFIG at initialize; null (YAML empty) boots as the empty allowlist', async () => {
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'ext',
+          server: { enabled: false },
+          logger: { handlers: [] },
+          uploads: { allowedExtensions: '.png' as unknown as string[] },
+        }),
+      RapidError,
+      'allowedExtensions must be an array',
+    );
+    const app = await Application.initialize({
+      name: 'ext-null',
+      server: { enabled: false },
+      logger: { handlers: [] },
+      uploads: { allowedExtensions: null as unknown as string[] },
+    });
+    await app.stop();
+  });
+});

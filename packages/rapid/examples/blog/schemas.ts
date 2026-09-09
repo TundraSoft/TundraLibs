@@ -43,3 +43,11 @@ export const PostSummary = Guardian.object({
   title: Guardian.string(),
   published: Guardian.boolean(),
 });
+
+/** The list envelope `GET /posts` returns — rows, the total, the paging in effect. */
+export const PostList = Guardian.object({
+  rows: Guardian.array(PostSummary),
+  total: Guardian.number(),
+  paging: Guardian.object({ page: Guardian.number(), size: Guardian.number() }),
+  level: Guardian.string().optional(),
+});

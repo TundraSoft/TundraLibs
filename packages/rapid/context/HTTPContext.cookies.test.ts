@@ -140,3 +140,49 @@ describe('signed cookies + reply cookies', () => {
     );
   });
 });
+
+describe('reply cookie attributes', () => {
+  it('a path or domain that would smuggle attributes or a CRLF is RAPID_RESPONSE_INVALID at the call site, for setCookie and the reply key', async () => {
+    const app = await make(SECRET);
+    app.get('/set', (ctx) => {
+      const codes: string[] = [];
+      for (
+        const options of [
+          { path: '/; Secure; HttpOnly' },
+          { path: '/\r\nX-Injected: 1' },
+          { path: 'relative' },
+          { domain: 'evil.example; Secure' },
+        ]
+      ) {
+        try {
+          ctx.setCookie('a', 'b', options);
+          codes.push('none');
+        } catch (e) {
+          codes.push(e instanceof RapidError ? e.code : 'other');
+        }
+      }
+      ctx.setCookie('ok', 'v', { path: '/app', domain: '.example.com' });
+      return { content: { codes } };
+    });
+    app.get('/reply', () => ({
+      content: 'x',
+      cookies: [{ name: 'a', value: 'b', options: { path: '/; Secure' } }],
+    }));
+    try {
+      const set = await app.fetch(new Request('http://app/set'));
+      asserts.assertEquals(await set.json(), {
+        codes: Array(4).fill('RAPID_RESPONSE_INVALID'),
+      });
+      asserts.assertMatch(
+        set.headers.get('set-cookie') ?? '',
+        /^ok=v; Domain=\.example\.com; Path=\/app$/,
+      );
+      const reply = await app.fetch(new Request('http://app/reply'));
+      asserts.assertEquals(reply.status, 500);
+      asserts.assertEquals(reply.headers.get('set-cookie'), null);
+      await reply.body?.cancel();
+    } finally {
+      await app.stop();
+    }
+  });
+});

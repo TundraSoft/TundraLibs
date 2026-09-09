@@ -781,6 +781,8 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     if (ctx.hasPendingCleanup) ctx.detach(ctx.cleanup());
     const headers = ctx.responseHeaders;
     headers.set('content-type', 'application/json');
+    headers.delete('content-length');
+    headers.delete('content-encoding');
     headers.set(stamps.requestId, ctx.requestId);
     if (stamps.responseTime !== false) {
       headers.set(stamps.responseTime, this.__elapsed(stamps));

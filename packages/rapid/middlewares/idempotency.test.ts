@@ -104,6 +104,21 @@ describe('rapid.middlewares.idempotency', () => {
     asserts.assertNotEquals(id1, id2);
   });
 
+  it('the same key with a DIFFERENT query string is a 422 mismatch, not a replay', async () => {
+    const first = await post('/orders?to=archive', { 'idempotency-key': 'q1' });
+    asserts.assertEquals(first.status, 201);
+    await first.body?.cancel();
+    const other = await post('/orders?to=trash', { 'idempotency-key': 'q1' });
+    asserts.assertEquals(other.status, 422);
+    asserts.assertEquals(
+      (await other.json()).code,
+      'RAPID_IDEMPOTENCY_MISMATCH',
+    );
+    const same = await post('/orders?to=archive', { 'idempotency-key': 'q1' });
+    asserts.assertEquals(same.headers.get('idempotency-replayed'), 'true');
+    await same.body?.cancel();
+  });
+
   it('a different key executes fresh; a missing key never records', async () => {
     const before = calls['orders'] ?? 0;
     await (await post('/orders', { 'idempotency-key': 'k-2' })).body?.cancel();

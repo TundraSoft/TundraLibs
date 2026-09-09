@@ -218,8 +218,11 @@ async function fingerprintOf(
   ctx: HTTPContext<RapidContextState>,
 ): Promise<string> {
   const body = (await ctx.rawPayload) ?? new Uint8Array();
+  // Path AND query: `?to=archive` vs `?to=trash` under one key is a
+  // different request (422), not a replay.
+  const url = new URL(ctx.url);
   const head = new TextEncoder().encode(
-    `${ctx.method}\n${new URL(ctx.url).pathname}\n`,
+    `${ctx.method}\n${url.pathname}${url.search}\n`,
   );
   const bytes = new Uint8Array(head.length + body.length);
   bytes.set(head);

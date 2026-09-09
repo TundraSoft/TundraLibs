@@ -113,3 +113,31 @@ describe('rapid/testing client', () => {
     await app.stop();
   });
 });
+
+describe('rapid/testing client — header precedence', () => {
+  it('an explicit Content-Type / swap header wins over the defaults regardless of case', async () => {
+    const app = await Application.initialize({
+      name: 'client-headers',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      uploads: { path: '/tmp/rapid-client-headers' },
+    });
+    app.post('/ct', (ctx) => ({
+      content: {
+        type: ctx.headers.get('content-type'),
+        swap: ctx.headers.get('rapid-swap'),
+      },
+    }));
+    try {
+      const api = client(app);
+      const r = await api.post('/ct', {
+        body: 'raw',
+        swap: true,
+        headers: { 'Content-Type': 'text/plain', 'Rapid-Swap': '0' },
+      });
+      asserts.assertEquals(r.body, { type: 'text/plain', swap: '0' });
+    } finally {
+      await app.stop();
+    }
+  });
+});

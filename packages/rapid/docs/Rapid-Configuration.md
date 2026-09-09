@@ -34,14 +34,15 @@ import { Application } from '@tundralibs/rapid';
 
 const app = await Application.initialize({
   path: './configs',
-  env: true, // `${VAR}` placeholders from .env in `path` (or a file path)
+  env: true, // `${VAR}` placeholders from .env in `path` (or a directory holding one, or a path ending in .env)
   applicationSet: 'Application', // the file whose keys are the options
 });
 ```
 
 - A string path is shorthand for `{ path, env: true }`. **In the object
-  form `env` defaults to no substitution** — pass `env: true` or a `.env`
-  path explicitly.
+  form `env` defaults to no substitution** — pass `env: true`, a directory
+  that holds a `.env`, or a file path that ENDS in `.env` (any other string is
+  treated as a directory and silently loads nothing).
 - Every `.yaml` / `.yml` / `.json` / `.toml` / `.js` file in `path` becomes a
   config set named by its **lowercased basename**; two files with the same
   basename fail the load. Keys inside a set are case-sensitive.

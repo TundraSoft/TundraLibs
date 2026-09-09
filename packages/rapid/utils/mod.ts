@@ -22,6 +22,7 @@ export { CSRF_TOKEN, mark, markOf, SESSION_ISSUED } from './requestMarks.ts';
 export { isTemplate, normalizeRouteTemplate } from './routeTemplate.ts';
 export { compose } from './compose.ts';
 export {
+  assertCookieAttributes,
   assertCookieConfig,
   type CookieOptions,
   isToken,

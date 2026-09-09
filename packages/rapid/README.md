@@ -75,8 +75,9 @@ server:
   port: 8008
   hostname: 0.0.0.0
   # ${VAR} references are interpolated from the environment / .env
-  tls:
-    key: ${TLS_KEY_PATH}
+  tls: # file paths (certFile/keyFile) or inline PEM (cert/key) — always both
+    certFile: ${TLS_CERT_FILE}
+    keyFile: ${TLS_KEY_FILE}
 shutdownTimeout: 10 # seconds
 ```
 
@@ -97,7 +98,7 @@ import { Application } from '@tundralibs/rapid';
 
 const app = await Application.initialize({
   path: './configs',
-  env: '.env.production', // true | false | a path — omit for NO substitution (the string form implies true)
+  env: './deploy/prod', // true | false | a directory holding .env, or a path ENDING in .env — omit for NO substitution (the string form implies true)
   applicationSet: 'Api', // read Api.yaml instead of Application.yaml
 });
 await app.start();
@@ -201,8 +202,9 @@ replicas: hand each factory its persistence `hooks` (pact-style, one
 purpose per hook — `session`'s `getSession`/`saveSession`/`deleteSession`,
 `rateLimit`'s atomic `increment`, `idempotency`'s set-if-absent `claim`)
 over redis/cacher the moment you scale out, and bound that store yourself
-(the bundled default is bounded only for idempotency's attacker-mintable
-keys).
+(of the bundled defaults, `rateLimit` caps distinct keys at `maxKeys` and
+`idempotency` at `maxRecords`; `session` caps live sessions at
+`maxSessions`).
 
 How the onion runs — `next()`'s contract, short-circuiting, post-processing,
 which headers survive an error, and how to write your own factory — is the
@@ -523,7 +525,7 @@ same wire contract as its express/fastify/oak/hono adapters:
 ```ts
 import { Application } from '@tundralibs/rapid';
 import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
-import type { Pact } from '@tundralibs/pact';
+import type { Pact } from '@tundralibs/pact'; // also: deno add @tundralibs/pact
 
 declare const pact: Pact<{ READ: 1n }, 'Admin'>;
 

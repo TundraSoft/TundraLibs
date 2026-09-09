@@ -213,15 +213,20 @@ export function client(app: Application): Record<
       url.searchParams.set(k, v);
     }
     const init: RequestInit = { method };
-    const headers: Record<string, string> = { ...options.headers };
-    if (options.swap === true) {
-      headers[app.uiOptions?.swapHeader ?? 'rapid-swap'] ??= '1';
+    // A `Headers` instance: case-insensitive, so an explicit `Content-Type`
+    // wins over the JSON default instead of being appended beside it.
+    const headers = new Headers(options.headers);
+    const swapHeader = app.uiOptions?.swapHeader ?? 'rapid-swap';
+    if (options.swap === true && !headers.has(swapHeader)) {
+      headers.set(swapHeader, '1');
     }
     if (options.body !== undefined) {
       init.body = JSON.stringify(options.body);
-      headers['content-type'] ??= 'application/json';
+      if (!headers.has('content-type')) {
+        headers.set('content-type', 'application/json');
+      }
     }
-    if (Object.keys(headers).length > 0) init.headers = headers;
+    init.headers = headers;
     const res = await app.fetch(new Request(url, init));
     const ct = res.headers.get('content-type') ?? '';
     const body = ct.includes('json') ? await res.json() : await res.text();

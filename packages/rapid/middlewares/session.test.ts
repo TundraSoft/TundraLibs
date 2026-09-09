@@ -5,6 +5,7 @@
  * @module
  */
 import { describe, it } from '@tundralibs/compat/test';
+import { RapidError } from '../errors/mod.ts';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { getSession, session } from './session.ts';
@@ -385,5 +386,55 @@ describe('rapid session() rolling save', () => {
     const app = await raceApp(minimal);
     asserts.assertEquals(await race(app), 2);
     await app.stop();
+  });
+});
+
+describe('rapid session() — memory bound', () => {
+  it('maxSessions evicts the oldest live session; a non-positive bound is RAPID_CONFIG', async () => {
+    asserts.assertThrows(
+      () => session({ maxSessions: 0 }),
+      RapidError,
+      'maxSessions',
+    );
+    const app = await Application.initialize({
+      name: 'sess-bound',
+      secret: 'test-secret-0123456789-abcdefghijklmnop',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    app.use(session({ secure: false, maxSessions: 2 }));
+    app.post('/hit', async (ctx) => {
+      const s = (await getSession(ctx))!;
+      s.set('hits', (s.get<number>('hits') ?? 0) + 1);
+      return { content: { hits: s.get<number>('hits') } };
+    });
+    app.get('/read', async (ctx) => ({
+      content: { hits: (await getSession(ctx))!.get<number>('hits') ?? 0 },
+    }));
+    try {
+      const sids: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const r = await app.fetch(
+          new Request('http://app/hit', { method: 'POST' }),
+        );
+        sids.push(sidFrom(r)!);
+        await r.body?.cancel();
+      }
+      // Three anonymous visitors, a bound of two: the first record is gone.
+      const evicted = await app.fetch(
+        new Request('http://app/read', {
+          headers: { cookie: `sid=${sids[0]}` },
+        }),
+      );
+      asserts.assertEquals(await evicted.json(), { hits: 0 });
+      const kept = await app.fetch(
+        new Request('http://app/read', {
+          headers: { cookie: `sid=${sids[2]}` },
+        }),
+      );
+      asserts.assertEquals(await kept.json(), { hits: 1 });
+    } finally {
+      await app.stop();
+    }
   });
 });
