@@ -26,7 +26,7 @@ export function assertRedirectTarget(url: string): void {
   if (ABSOLUTE_URL.test(url)) return;
   let host = '';
   try {
-    host = new URL(url, 'http://rapid.invalid').host;
+    host = new URL(url, 'https://rapid.invalid').host;
   } catch {
     // unparsable: falls through to the throw below
   }

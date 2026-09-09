@@ -43,7 +43,11 @@ export async function fingerprintAssets(
   root: string,
   options: { prefix?: string } = {},
 ): Promise<Record<string, string>> {
-  const prefix = (options.prefix ?? '').replace(/\/+$/, '');
+  // A manual trim, not a regex: `/\/+$/` cannot backtrack (one
+  // non-overlapping quantified group, anchored), but this is provably
+  // linear AND simpler to read.
+  let prefix = options.prefix ?? '';
+  while (prefix.endsWith('/')) prefix = prefix.slice(0, -1);
   const out: Record<string, string> = {};
   const walk = async (dir: string, rel: string): Promise<void> => {
     for await (const entry of readDir(dir)) {
