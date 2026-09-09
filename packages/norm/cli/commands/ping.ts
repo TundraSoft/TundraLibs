@@ -8,8 +8,13 @@
  * Norm.yaml actually names, not just the one it was scaffolded with.
  * @module
  */
-import '@tundralibs/norm/engines/sqlite';
-import { type DatabaseConfig, Norm } from '@tundralibs/norm';
+// Relative, not '@tundralibs/norm' — this file lives INSIDE the norm
+// package. A bare self-specifier resolves fine in dev/test (the
+// workspace's own import map maps it locally) but breaks `deno publish`'s
+// module-graph check, which cannot resolve a package through its own
+// not-yet-published JSR version.
+import '../../engines/sqlite.ts';
+import { type DatabaseConfig, Norm } from '../../mod.ts';
 import { loadConfig } from '@tundralibs/utils';
 
 /** The `ping` command. Returns the process exit code. */
