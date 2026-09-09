@@ -734,51 +734,47 @@ capabilities:
 
 ## CLI
 
-`rapid init` scaffolds a project. After the project name, the **runtime is the
-first option asked** — it's a project-wide choice, not a container detail: it decides the primary config
-file (one, never both), the dev/start/test commands, and the deploy artifact.
-
 ```bash
-deno run -A jsr:@tundralibs/rapid/cli init my-api --runtime bun --docker --github
+deno run -A jsr:@tundralibs/rapid/cli init my-api --module --norm --ui
 ```
 
-| `--runtime` | config         | deploy artifact                              |
-| ----------- | -------------- | -------------------------------------------- |
-| `deno`      | `deno.json`    | `Dockerfile` on `tundrasoft/deno` (opt-in)   |
-| `bun`       | `package.json` | `Dockerfile` on `tundrasoft/bun` (opt-in)    |
-| `node`      | `package.json` | `Dockerfile` on `tundrasoft/node` (opt-in)   |
-| `workers`   | `package.json` | `wrangler.toml` + `worker.ts` (no container) |
+| Command                                                                   | Does                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `init [name] [--module] [--norm] [--ui] [--with bootstrap\|pico] [--yes]` | Scaffold a project (interactive unless `--yes`).                                                                         |
+| `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                             |
+| `modules [dir] [--check] [--force]`                                       | (Re)generate the modules barrel (`--check` fails CI when it's stale; an existing hand-written `mod.ts` needs `--force`). |
+| `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                          |
 
-`--docker` writes a Dockerfile for the org `tundrasoft/<runtime>` images —
-Alpine + s6-overlay, running as the unprivileged `tundra` user. Those images
-start the app from an **ENV contract** (`TASK=start` on Deno, with `ALLOW_*`
-mapped to `--allow-*` flags; `SCRIPT=start` on Bun/Node), so the generated
-Dockerfile deliberately has no `CMD`/`ENTRYPOINT`. `--github` (opt-in) adds a
-`.github/workflows/ci.yml` that runs the runtime's test command (and
-fmt/lint/check too on Deno).
-`--module` / `--norm` add the module system and a `norm` model; `--ui`
+`init` has **no runtime prompt** — both `deno.json` and `package.json` are
+always written (every package in this monorepo ships both), so the scaffold
+runs on Deno, Bun, or Node unmodified; there's no Docker or CI-workflow
+generation in this pass.
+`--module` adds the module system (a sample `Greeter` module); `--ui`
 scaffolds the three-tier UI starter (core + layout + a templated page on
 `server.static`), and `--with bootstrap|pico` adds a self-hosted CSS
 framework under `public/vendor/`; `--yes` accepts every default
 non-interactively. A `.gitignore` is written; `git init` is left to you.
 
+`--norm` adds a `norm` schema (`models/Users.ts` + `models/mod.ts`) and a
+dialect-agnostic `db.ts` — the dialect itself is DATA, not code: it lives in
+`configs/Norm.yaml` (every dialect norm supports is shown there, one active
+at a time) next to `configs/Application.yaml`, loaded the same way. `db.ts`
+never changes when you switch dialects.
+
 Every scaffold also writes the project's AI guide: **one** real file,
 `AGENTS.md`, plus `CLAUDE.md` (which imports it with `@AGENTS.md`, so Claude
 Code loads the full guide) and `.github/copilot-instructions.md` — every tool
 resolves to a single source that can't drift. The guide is rendered for _this_
-project and _this_ rapid version: its runtime's commands, its module layout if
-you chose `--module`, the context API, the middleware catalog and the error
-registry (generated from the code), doc links pinned to the installed version,
-rapid's actual API (the `:id:` route grammar, the `{ content }` reply,
-`validated()`, `harness()`/`client()`), the org coding conventions fitted to an
-app, and the
+project and _this_ rapid version: its module layout if you chose `--module`,
+the context API, the middleware catalog and the error registry (generated
+from the code), doc links pinned to the installed version, rapid's actual API
+(the `:id:` route grammar, the `{ content }` reply, `validated()`,
+`harness()`/`client()`), the org coding conventions fitted to an app, and the
 verified shape of each `@tundralibs/*` package an agent may reach for
-(guardian, norm, oql, pact, cacher, id, crypt, restler, utils, slogger, …).
-
-The other commands: `upgrade` bumps every `@tundralibs/*` dependency to its
-latest release, `modules [dir]` (re)generates the modules barrel (`--check`
-fails CI when it's stale), and `health [url]` hits a running app's health path
-(exit 0 on 2xx).
+(guardian, norm, oql, pact, cacher, id, crypt, restler, utils, slogger, …). If
+you chose `--norm`, that guide also carries a **real merge** of norm's own AI
+guide (schema, hooks, querying, transactions, scoping, encryption, caching,
+events, errors) — not a shorter summary.
 
 ## Examples & docs
 

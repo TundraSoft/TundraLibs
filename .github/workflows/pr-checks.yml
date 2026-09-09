@@ -50,6 +50,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HAS_MULTI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'multi-package') }}
+          # release-please's own combined "chore: release main" PR always
+          # bundles every package with a pending release — that's the
+          # format, not an atomic cross-package change, so it's exempt
+          # rather than needing the human `multi-package` opt-out. It
+          # tags every PR it manages with `autorelease: *` (pending while
+          # open, tagged once released) — see .github/workflows/release-please.yml.
+          IS_RELEASE_PR: "${{ contains(github.event.pull_request.labels.*.name, 'autorelease: pending') || contains(github.event.pull_request.labels.*.name, 'autorelease: tagged') }}"
         run: |
           # One package per PR keeps changelogs and releases untangled
           # (release-please attributes commits by path). The
@@ -67,6 +74,8 @@ jobs:
           printf '%s\n' "$packages"
           if [ "$count" -le 1 ]; then
             echo "OK: at most one package touched."
+          elif [ "$IS_RELEASE_PR" = "true" ]; then
+            echo "OK: multiple packages, but this is release-please's own release PR (autorelease label) — bundling every pending release is the point."
           elif [ "$HAS_MULTI_LABEL" = "true" ]; then
             echo "OK: multiple packages, but 'multi-package' label is set."
           else
