@@ -139,6 +139,8 @@ change dialect / host / credentials (defaults to a local SQLite file under
 /** The delimited section merged into (or used as) CLAUDE.md / AGENTS.md. */
 export const AI_GUIDE_SECTION = `## norm
 
+### Schema
+
 Schema lives under \`models/\`: \`Entity(name, columns, options)\` (needs a
 \`pk\`) grouped by \`Schema(name, { Users, ... })\`; neither touches
 connection details — never add a dialect, host, or credential to a
@@ -158,27 +160,85 @@ const Profiles = Entity('profiles', {
 });
 \`\`\`
 
+Column builders: \`varchar(n)\`, \`integer\`, \`bigint\`, \`decimal(p, s)\`,
+\`float\`, \`double\`, \`real\`, \`boolean\`, \`json<T>()\`, \`date\`, \`time\`,
+\`datetime\`, \`timestamp\`, \`uuid\`, \`text\`, \`blob\`, \`hash('SHA-256')\` (a
+one-way digest column, e.g. for passwords), \`mask(source, fn)\` (a virtual
+column computed after decryption — never stored, never sent to SQL).
+Chainable on (most of) these: \`.nullable()\`, \`.minLength()\`/\`.maxLength()\`,
+\`.pattern(re)\`, \`.beforeWrite(fn)\`/\`.afterRead(fn)\`, \`.lov([...])\` (narrows
+the TS type to that union), \`.default(v)\`, \`.comment(text)\`.
+
+### Querying
+
 Read/write through \`db\` (exported from \`db.ts\`) via \`db.repo(entityKey)\`
-— never a raw query unless norm's typed query layer can't express it:
+— never a raw query unless norm's typed layer genuinely can't express it
+(escape hatches: \`db.query(...)\`/\`db.raw(...)\`, both skip decrypt/scope/
+validation and \`raw()\` emits a \`warning\` event every call):
 
 \`\`\`ts
 await db.repo('Users').insert({ email: 'a@b.com' });
 await db.repo('Users').findOne({ '@email': 'a@b.com' });
-await db.repo('Users').find({ '@role': 'admin' }, { limit: 10 });
 await db.repo('Users').getByPK({ id });
+await db.repo('Users').count({ '@role': 'admin' });
+await db.repo('Users').find({ '@role': 'admin' }, {
+  orderBy: { '@displayName': 'ASC' },
+  limit: 20,
+  project: { '@id': true, '@displayName': true, '@Profile': { '@bio': true } },
+});
 \`\`\`
 
-\`.encrypt()\` any column for at-rest encryption; add \`.hash()\` on top to
-keep it equality-searchable (e.g. \`Column.varchar(255).encrypt().hash()\`
-for an email column) — norm derives a \`<col>_hash\` column and rewrites
-\`{ '@email': ... }\` filters against it automatically. Full column/
-relation/query/migration reference: https://jsr.io/@tundralibs/norm.
+Filters are the OQL filter language typed to your columns (\`$eq\`, \`$ne\`,
+\`$in\`, \`$like\`, \`$between\`, \`$null\`, \`$or\`/\`$and\`, nested relation refs
+like \`'@Profile.@bio'\`). A filter through an unprojected to-many relation
+becomes a correlated \`EXISTS\` — it never fans out rows.
+
+### Transactions
+
+\`\`\`ts
+await db.transaction(async (tx) => {
+  await tx.repo('Users').insert({/* ... */});
+  await tx.repo('Audit').insert({/* ... */});
+}); // commits on resolve, rolls back on throw
+\`\`\`
+
+Nesting (\`tx.transaction(sp => ...)\`) opens a SAVEPOINT on SQL engines —
+only the inner block rolls back on throw; the outer transaction survives.
+
+### Scoping (multi-tenant / default filters)
+
+\`db.scope({ '@orgId': currentOrgId })\` returns a handle whose every read
+and write carries that equality filter automatically — \`insert\` fills it
+in when omitted, \`update\`/\`upsert\` refuse to move or touch a row outside
+the scope, \`truncate\` is refused outright (use \`delete({})\` to clear one
+scope; it carries no \`WHERE\`). An entity with no scope column is queried
+unscoped, so one handle can span a mixed registry.
+
+### At-rest encryption
+
+\`.encrypt()\` any column — it keeps its declared TS type, only storage is
+ciphertext. Add \`.hash()\` to keep it equality-searchable (e.g.
+\`Column.varchar(255).encrypt().hash()\` for email) — norm derives a
+\`<col>_hash\` sibling and rewrites \`{ '@email': ... }\` filters (and
+uniqueness/upsert conflict keys) against it automatically.
+
+### Read caching (off by default)
+
+\`new Norm({ cache: { engine: 'MEMORY' } })\` plus a per-entity \`cache:
+<minutes>\` option turns on caching for non-transactional \`find\`/
+\`findOne\`/\`count\`/\`getByPK\`; any write on that entity prunes its cache.
+\`{ noCache: true }\` bypasses it for one call.
+
+### Connection
 
 The database connection is DATA, not code: edit \`configs/Norm.yaml\` (the
 \`NORM_DB:\` block — every dialect norm supports is shown there, one
 active at a time) to change dialect, host or credentials. Use
 \`\${VAR}\` placeholders and a local \`.env\` for secrets — never hand-edit
 them into source control. \`db.ts\` never changes when the dialect does.
+
+Full reference (relations, migrations, aggregates, pagination, crypto
+overrides): https://jsr.io/@tundralibs/norm.
 `;
 
 export const DENO_JSON = `{
