@@ -1,4 +1,4 @@
-import { Cronus } from '@tundralibs/cronus';
+import { Cronus, type CronusJobInfo } from '@tundralibs/cronus';
 import { unrefTimer } from '@tundralibs/compat/runtime';
 import { JOBContext, type JobTick } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
@@ -109,7 +109,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
   }
 
   /** Scheduler observability passthrough (vitals later). */
-  public jobs() {
+  public jobs(): CronusJobInfo[] {
     return this.__cronus?.list() ?? [];
   }
 
