@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.2.0...rapid-v0.2.1) (2026-09-09)
+
+
+### Documentation
+
+* **rapid:** prioritize the CLI over jsr add in Installation ([#660](https://github.com/TundraSoft/TundraLibs/issues/660)) ([e21f722](https://github.com/TundraSoft/TundraLibs/commit/e21f722e9fb30313eba4f59c5adbf7ab1f6fd7bc))
+
 ## [0.2.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.1.0...rapid-v0.2.0) (2026-09-09)
 
 

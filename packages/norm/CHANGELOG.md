@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.7.0...norm-v1.7.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **norm:** use relative imports in cli/ping.ts, prioritize CLI in README ([#659](https://github.com/TundraSoft/TundraLibs/issues/659)) ([907c920](https://github.com/TundraSoft/TundraLibs/commit/907c920d46a63001ea4d33ea4f39c05936edec72))
+
 ## [1.7.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.6.0...norm-v1.7.0) (2026-09-09)
 
 
