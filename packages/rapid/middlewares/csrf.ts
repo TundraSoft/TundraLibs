@@ -114,6 +114,8 @@ const verifyToken = async (
  *   `session` or `header` is not a token, `field` is empty, `path` is not
  *   absolute, `sameSite: 'None'` is paired with `secure: false`, or a
  *   `__Host-`/`__Secure-` cookie name lacks what its prefix requires.
+ * @throws {@link RapidError} `RAPID_CONFIG` at REQUEST time (a 500 on every
+ *   HTTP request) when the app has no `secret` — the token is signed with it.
  * @throws {@link RapidError} `RAPID_CSRF_INVALID` (403) on a missing/mismatched
  *   /unsigned token — or one bound to another session — for a
  *   state-changing method.

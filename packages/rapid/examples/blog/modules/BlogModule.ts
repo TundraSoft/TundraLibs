@@ -7,7 +7,7 @@
  * @module
  */
 import { inject } from '@tundralibs/doctor';
-import { RapidModule, type RapidModuleEventMap } from '../../../modules/mod.ts';
+import { RapidModule, type RapidModuleEventMap } from '@tundralibs/rapid/modules';
 import { NORM } from '../di.ts';
 import { BlogSchema } from '../models/mod.ts';
 

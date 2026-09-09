@@ -23,8 +23,8 @@ import {
   htmlDocument,
   template,
   withQuery,
-} from '../../../ui/mod.ts';
-import type { RapidFormError } from '../../../types/mod.ts';
+} from '@tundralibs/rapid/ui';
+import type { RapidFormError } from '@tundralibs/rapid/types';
 import type { Activity, Lane, Task } from '../types.ts';
 import { LANES } from '../types.ts';
 

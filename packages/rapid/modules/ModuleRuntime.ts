@@ -3,7 +3,7 @@
  * the event bus, the registry of mounted modules and their methods, and
  * the invocation cycle that `invoke` and event delivery run through.
  * `initModules()` creates one; an `Application` will own one and
- * `app.modules()` delegates to it (integration step, after the POC).
+ * `app.modules()` owns one per application and delegates to it.
  *
  * PERFORMANCE NOTES (this is the hot path for in-process collaboration):
  * - middleware chains are composed ONCE at mount, per method;

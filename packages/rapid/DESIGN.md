@@ -370,7 +370,7 @@ request-scoped providers.
    name in two places).
 2. **The pact adapter** (`middlewares/pact.ts`, its own subpath so the
    middleware barrel stays pact-free): `pactAuth(pact, options) →
-   { authenticate, authorize }`, glue over pact 0.8's neutral
+   { authenticate, authorize, login, logout, refresh, me }`, glue over pact 0.8's neutral
    `createPactMiddleware` core exactly like pact's own express/hono/oak
    adapters. rapid keeps only what pact leaves to the framework: the bearer
    cookie carrier, sockets authenticating from the upgrade request, jobs

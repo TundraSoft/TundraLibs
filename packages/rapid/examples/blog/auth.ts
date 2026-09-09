@@ -19,7 +19,7 @@ import {
   type PactStoredSession,
   type PactStoredUser,
 } from '@tundralibs/pact';
-import { pactAuth } from '../../middlewares/pact.ts';
+import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
 
 const users = new Map<string, PactStoredUser>();
 const byIdentifier = new Map<string, string>();

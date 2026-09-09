@@ -41,7 +41,8 @@ export const UserList = template<Users>((data) =>
   `undefined` / `false` render as `''` (so `cond && html\`…\``works for a
   BOOLEAN`cond`).`0`and`''`render as text — branch on a value with`when()`(below), never`value && …`.
 - `raw(string)` is the ONLY unescaped path — one greppable audit point. The
-  framework never calls it internally.
+  representer never calls it; `htmlDocument` uses it on constant markup only,
+  every interpolated value is still escaped.
 - Templates are pure and synchronous — async work belongs in the handler.
   Unit-test with `render(UserList.render(data, view))`; no server needed. The
   route option cannot statically prove the handler's `content` matches the
@@ -302,9 +303,10 @@ only.
 ## The view bag
 
 Every template receives a frozen, read-only `view` as its second parameter:
-`{ requestId, runtimePath, path, query, asset, csrfToken? }` (`csrfToken`
-reads the `csrf` cookie — set `ui.csrfCookie` if you renamed it in
-`csrf()`).
+`{ requestId, runtimePath, path, query, asset, csrfToken? }` (`csrfToken` is
+the token valid for THIS response — what `csrf()` issued or confirmed on the
+way in, else the request's `csrf` cookie; set `ui.csrfCookie` if you renamed
+it in `csrf()`).
 **Nothing from `ctx.auth` is reachable by default** — the projection names
 exactly which fields cross, so identity exposure is safe by construction,
 not by discipline.
@@ -454,8 +456,9 @@ That is one extra request, by design: the region is its own route
 (it also serves JSON), caches on its own (`ETag`/`Vary` per region),
 fails on its own (`rapid:error` — the page stands), and `rapid:swapped`
 fires so history and multi-region chains apply. Each element loads
-ONCE; a response that itself carries `data-load` chains (poll-by-
-chain — deliberate). GET only. Without JavaScript the skeleton stays,
+ONCE; a response carrying `data-load` for a DIFFERENT action chains. One
+that points back at its own action is skipped with a console warning — poll
+with `rapid.refresh()` on a timer instead. GET only. Without JavaScript the skeleton stays,
 so a `<noscript>` link is the honest fallback — the same route serves
 the full page. Pages never stream (see Bytes and streams).
 
@@ -537,7 +540,7 @@ templated routes as-is; give page routes `prefer: 'html'` so boosted
 navigations and address-bar visits render pages. The bundled runtime
 follows renamed headers via `data-swap-header` / `data-redirect-header` on
 `<body>` — but if you adopt htmx you simply don't serve it. Runnable:
-[`examples/htmx/main.ts`](../examples/htmx/main.ts) drives a poll
+[`examples/htmx/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/htmx/main.ts) drives a poll
 entirely through htmx — `hx-swap-oob` multi-region responses,
 declarative polling, a boosted page proving `swapUnless`, and a reply
 `redirect` landing as `HX-Redirect`.
@@ -788,10 +791,10 @@ a page (`prefer: 'html'`) lists `text/html` only. The reference page the
 `docs()` endpoint mounts is itself a page of the app — rendered inside your
 core/layout — see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
 
-Runnable examples: [`examples/dashboard/main.ts`](../examples/dashboard/main.ts)
+Runnable examples: [`examples/dashboard/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/dashboard/main.ts)
 (a sales dashboard: period chips, both swapped-chain patterns,
-`ctx.isSwap`), [`examples/kanban/main.ts`](../examples/kanban/main.ts)
+`ctx.isSwap`), [`examples/kanban/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/kanban/main.ts)
 (all three dynamic-update patterns, live channel, View-Transition
-morphs), and [`examples/htmx/main.ts`](../examples/htmx/main.ts) (the
+morphs), and [`examples/htmx/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/htmx/main.ts) (the
 same contract driven by htmx) — run any with `deno run -A` and open the
 printed URL.

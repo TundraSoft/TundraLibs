@@ -104,7 +104,7 @@ invocation: `onlyApi(authenticate)` must never unguard a socket frame).
 
 ## How middleware runs
 
-**The shape.** A middleware is `(ctx, next) => void | Promise<void>`. It
+**The shape.** A middleware is `(ctx, next) => Promise<void>` (`RapidMiddleware`). It
 receives the full transport context (`HTTPContext`, `SOCKETContext` or
 `JOBContext`) and a `next()` that runs the rest of the chain. Call `next()`
 at most once and **return or await it** — a second call is a 500
@@ -299,6 +299,13 @@ bodies.
 (`app.use(compress(), etag())`). The other way round, the tag would hash
 compressed bytes and change with the negotiated encoding.
 
+**Compressed HTML and secrets (BREACH).** A CSRF token is one value for the
+life of the session and is rendered into every page; compressing a page that
+also reflects attacker-chosen input (a search-box echo) lets the token be
+recovered from response lengths over HTTPS. Keep `compress()` off pages that
+render `view.csrfToken` alongside reflected input, or exclude `text/html` by
+placing `compress()` behind an `onlyApi` scope.
+
 ## etag
 
 Strong content-hash `ETag` and `304 Not Modified` for `GET`/`HEAD` `200`
@@ -347,6 +354,11 @@ parse; the form-field fallback reads `ctx.payload`, which shares its bytes
 with `ctx.rawPayload`, so `idempotency()` and `pactAuth` may sit on either
 side of it.
 
+**Pitfalls.** `csrf()` needs the app `secret` at REQUEST time — installed
+without one, every HTTP request (GETs included) is a `RAPID_CONFIG` 500, not a
+boot error. See the BREACH note under `compress` before compressing pages that
+render the token.
+
 ## session
 
 Cookie-keyed, hook-backed per-client state, loaded **lazily** — a request that
@@ -354,16 +366,17 @@ never calls `getSession(ctx)` costs no store round-trip and no HMAC. HTTP only.
 Two expiries: a rolling idle TTL that slides on requests that _touch_ the
 session, and a hard absolute cap.
 
-| Option        | Type                          | Default                | Meaning                                                           |
-| ------------- | ----------------------------- | ---------------------- | ----------------------------------------------------------------- |
-| `hooks`       | `SessionHooks`                | `memorySessionHooks()` | persistence — see below                                           |
-| `cookie`      | cookie-name token             | `'sid'`                | the signed id cookie                                              |
-| `idleTtl`     | positive integer **seconds**  | `1800` (30 min)        | idle expiry; also the cookie's `Max-Age`; must be ≤ `absoluteTtl` |
-| `absoluteTtl` | positive integer **seconds**  | `43200` (12 h)         | hard lifetime cap                                                 |
-| `rolling`     | `boolean`                     | `true`                 | slide the idle window on every touch, not only on writes          |
-| `sameSite`    | `'Strict' \| 'Lax' \| 'None'` | `'Lax'`                | `'None'` requires `secure`                                        |
-| `secure`      | `boolean`                     | `true`                 |                                                                   |
-| `path`        | absolute path                 | `'/'`                  |                                                                   |
+| Option        | Type                          | Default                               | Meaning                                                           |
+| ------------- | ----------------------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| `hooks`       | `SessionHooks`                | `memorySessionHooks({ maxSessions })` | persistence — see below                                           |
+| `maxSessions` | positive integer              | `100000`                              | bound on live sessions in the memory default (oldest evicted)     |
+| `cookie`      | cookie-name token             | `'sid'`                               | the signed id cookie                                              |
+| `idleTtl`     | positive integer **seconds**  | `1800` (30 min)                       | idle expiry; also the cookie's `Max-Age`; must be ≤ `absoluteTtl` |
+| `absoluteTtl` | positive integer **seconds**  | `43200` (12 h)                        | hard lifetime cap                                                 |
+| `rolling`     | `boolean`                     | `true`                                | slide the idle window on every touch, not only on writes          |
+| `sameSite`    | `'Strict' \| 'Lax' \| 'None'` | `'Lax'`                               | `'None'` requires `secure`                                        |
+| `secure`      | `boolean`                     | `true`                                |                                                                   |
+| `path`        | absolute path                 | `'/'`                                 |                                                                   |
 
 `SessionHooks` — each may return a value or a promise; `ttl` is seconds:
 
@@ -417,20 +430,22 @@ not `ctx.state`.
 Fixed-window limiting keyed per client address (HTTP), per connection
 (sockets); jobs are exempt. Counting is one hook, atomic by contract.
 
-| Option    | Type                                                                           | Default                                                               |
-| --------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `max`     | positive integer hits per window                                               | `60`                                                                  |
-| `window`  | positive integer **seconds**                                                   | `60`                                                                  |
-| `key`     | `(ctx) => string \| null` — `null` exempts the invocation                      | address / connection id / `null` on jobs                              |
-| `hooks`   | `{ increment(key, window) }`                                                   | `memoryRateLimitHooks()`                                              |
-| `headers` | `true`, `false`, or `{ limit?, remaining?, reset?, retryAfter? }` header names | `true` — `x-ratelimit-limit` / `-remaining` / `-reset`, `retry-after` |
+| Option    | Type                                                                                                                        | Default                                                               |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `max`     | positive integer hits per window                                                                                            | `60`                                                                  |
+| `window`  | positive integer **seconds**                                                                                                | `60`                                                                  |
+| `key`     | `(ctx) => string \| null` — `null` exempts the invocation; `''` is a real key (every caller returning it shares ONE bucket) | address / connection id / `null` on jobs                              |
+| `maxKeys` | positive integer — bound on distinct keys in the memory default                                                             | `100000`                                                              |
+| `hooks`   | `{ increment(key, window) }`                                                                                                | `memoryRateLimitHooks({ maxKeys })`                                   |
+| `headers` | `true`, `false`, or `{ limit?, remaining?, reset?, retryAfter? }` header names                                              | `true` — `x-ratelimit-limit` / `-remaining` / `-reset`, `retry-after` |
 
 `increment(key, window)` must atomically bump the key's counter for the
 current window and return `{ count, resetAt }` (epoch ms), starting a window
 that resets `window` seconds from now when none is live — a redis `INCR` +
-`EXPIRE NX`. The in-memory default is atomic by being synchronous. Rename the
-headers to the IETF draft's `RateLimit-Limit` / `RateLimit-Remaining` /
-`RateLimit-Reset` through `headers`. On rejection: `429 RAPID_RATE_LIMITED`
+`EXPIRE NX`. The in-memory default is atomic by being synchronous. `headers`
+renames the four headers; note `reset` is an absolute epoch second, so it is
+not a drop-in for the IETF draft's delta-seconds `RateLimit-Reset`. On
+rejection: `429 RAPID_RATE_LIMITED`
 with `retry-after` in seconds.
 
 **Pitfalls.** Behind a proxy the default key is the proxy's address until
@@ -443,7 +458,8 @@ use a smaller `window` if that matters.
 Safe client retries: a request carrying `Idempotency-Key` executes once, a
 retry replays the first reply, a concurrent duplicate is a 409, and a key
 reused for a _different_ request is a 422 (IETF `Idempotency-Key` draft
-semantics — every attempt is fingerprinted over method, path and raw body).
+semantics — every attempt is fingerprinted over method, path + query string
+and raw body).
 HTTP only; unmatched requests pass through.
 
 | Option           | Type                                                             | Default                                  |
@@ -485,7 +501,11 @@ so a multipart retry from a browser will mismatch (422) — keep idempotent
 endpoints JSON. With `timeout()` in the chain, a deadline that fires leaves
 the key **pending** until `pendingTtl` (the work may still be running); size
 `pendingTtl` above the handler's worst case. Errors: `RAPID_IDEMPOTENCY_KEY_INVALID`
-(400), `RAPID_IDEMPOTENCY_IN_FLIGHT` (409), `RAPID_IDEMPOTENCY_MISMATCH` (422).
+(400), `RAPID_IDEMPOTENCY_IN_FLIGHT` (409), `RAPID_IDEMPOTENCY_MISMATCH` (422),
+`RAPID_PAYLOAD_TOO_LARGE` (413) when reading the body for the fingerprint
+exceeds the cap. Behind pact `encryption` the raw body is the JWE ciphertext,
+which changes on every encryption — an encrypted client's retry is a 422, not
+a replay; keep `idempotency()` off encrypted routes.
 
 ## timeout
 
@@ -515,7 +535,7 @@ described in
 
 ## Writing your own
 
-A middleware is `(ctx, next) => Promise<unknown>`; narrow by `ctx.type`
+A middleware is `(ctx, next) => Promise<void>` (`RapidMiddleware`); narrow by `ctx.type`
 (`'HTTP' | 'SOCKET' | 'JOB'`) and, on HTTP, by `ctx.surface`. Set headers
 before `next()` when they must survive an error; read the reply after
 `next()` via `ctx.response`, `ctx.status` and `ctx.responseHeaders`; replace it

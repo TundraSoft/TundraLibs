@@ -213,8 +213,16 @@ export function docs<S extends RapidContextState = RapidContextState>(
         `the '${viewer.kind}' viewer needs the JSON document URL in \`spec\``,
       );
     }
-    if (!viewer.script.integrity.startsWith('sha')) {
+    if (!/^sha(256|384|512)-/.test(viewer.script.integrity)) {
       fail('a third-party viewer script must carry an SRI `integrity` hash');
+    }
+    if (
+      viewer.style !== undefined &&
+      !/^sha(256|384|512)-/.test(viewer.style.integrity)
+    ) {
+      fail(
+        'a third-party viewer stylesheet must carry an SRI `integrity` hash',
+      );
     }
     if (options.render !== undefined) {
       fail('`render` composes the rapid viewer only');
@@ -224,6 +232,25 @@ export function docs<S extends RapidContextState = RapidContextState>(
     assertSecuritySchemes(options.securitySchemes, 'docs()');
   }
   const expose = options.expose ?? 'DEVELOPMENT';
+  const loginPath = typeof options.tryIt === 'object'
+    ? options.tryIt.login?.path
+    : undefined;
+  // The try-it script POSTs credentials here — a same-origin PATH only, as
+  // the guide promises (`//host` and absolute URLs are refused).
+  if (
+    loginPath !== undefined &&
+    (!loginPath.startsWith('/') || loginPath.startsWith('//'))
+  ) {
+    fail("tryIt.login.path must be a same-origin path starting with '/'", {
+      path: loginPath,
+    });
+  }
+  // The scripts are gated like the page: outside the exposed mode they do
+  // not exist either, so a mounted reference cannot be probed for.
+  const gated = <T>(load: () => Promise<T>): () => Promise<T> => () =>
+    expose === 'ALL' || expose === app.mode
+      ? load()
+      : Promise.reject(new RapidError('RAPID_NOT_FOUND'));
   const title = options.title ?? `${app.option('name')} API`;
   const tryIt: DocsPageData['tryIt'] = options.tryIt === undefined ||
       options.tryIt === false || viewer !== 'rapid'
@@ -320,10 +347,11 @@ export function docs<S extends RapidContextState = RapidContextState>(
   if (tryIt !== false && !has(TRYIT_PATH)) {
     app._scriptRoute(
       TRYIT_PATH,
-      () =>
+      gated(() =>
         import('./docs/tryit.ts').then((
           m,
-        ) => [m.DOCS_TRYIT, m.DOCS_TRYIT_ETAG]),
+        ) => [m.DOCS_TRYIT, m.DOCS_TRYIT_ETAG])
+      ),
     );
   }
   if (
@@ -331,10 +359,11 @@ export function docs<S extends RapidContextState = RapidContextState>(
   ) {
     app._scriptRoute(
       SWAGGER_INIT_PATH,
-      () =>
+      gated(() =>
         import('./docs/tryit.ts').then((
           m,
-        ) => [m.DOCS_SWAGGER_INIT, m.DOCS_SWAGGER_INIT_ETAG]),
+        ) => [m.DOCS_SWAGGER_INIT, m.DOCS_SWAGGER_INIT_ETAG])
+      ),
     );
   }
 }

@@ -46,11 +46,15 @@ export type RapidDecoration =
     /** Security-scheme names; `[]` = public. Overrides the module default. */
     security?: readonly string[];
     /**
-     * The response shape — documentation only (the method's actual return
-     * value is never checked against it): `buildOpenApi` emits its
-     * `toOpenAPI()` as the 200 schema.
+     * The response shape: `buildOpenApi` emits its `toOpenAPI()` as the 200
+     * schema, and when it can `parse`, DEVELOPMENT enforces it against the
+     * reply (see `RapidRouteOpenApi.response`).
      */
-    response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
+    response?: {
+      parse?: (value: unknown) => unknown;
+      toOpenAPI?: () => unknown;
+      toJSONSchema?: () => unknown;
+    };
     /** Raw `template` route option — normalized + validated at mount. */
     template?: RapidTemplate<unknown> | RapidRouteTemplate;
     /** Raw `layout` route option (the object form's `layout` wins). */

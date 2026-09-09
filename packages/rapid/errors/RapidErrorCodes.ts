@@ -1,12 +1,8 @@
 /**
  * The framework-reserved error codes. SCREAMING_SNAKE with the `RAPID_`
- * prefix — the prefix is RESERVED: an app registering a `RAPID_*` code is
- * a boot error (enforced when the app-side registry lands). Each code
- * carries its HTTP status mapping and a client-safe default message.
- *
- * App codes extend this via their own typed registry (as-const, so the
- * union of valid codes is derived) — extension mechanism lands with the
- * registration core.
+ * prefix (reserved). Each code carries its HTTP status mapping and a
+ * client-safe default message; `RapidError` accepts these codes only —
+ * an app's own failures ride `details` on the closest code.
  */
 import type { StatusCode } from '@tundralibs/compat/http';
 

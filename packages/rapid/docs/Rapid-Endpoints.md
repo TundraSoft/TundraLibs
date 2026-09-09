@@ -9,8 +9,8 @@ each answers, what it takes, and how they behave as ordinary routes.
 ## TL;DR
 
 - Nothing is auto-registered. You mount each handler where you like:
-  `app.get('/healthz', health())`. Only `docs()` mounts itself (it registers
-  a page plus a script route), so it takes the app instead.
+  `app.get('/healthz', health())`. Only `docs()` mounts itself (a page and,
+  with `tryIt` or the Swagger viewer, a script route), so it takes the app.
 - They are **ordinary routes**: they appear in OpenAPI, take route middleware
   (`app.get(path, authorize(...), metrics())`), respect surfaces and
   versioning, and go through the same error pipeline as your own handlers.
@@ -101,7 +101,7 @@ requests already in flight.
 ## `metrics()` — the scrape target
 
 Serves `app.meter` — the metro-man registry `server.metrics` creates — as
-Prometheus text (`content-type: text/plain; version=0.0.4`) or JSON.
+Prometheus text (`content-type: text/plain; version=0.0.4; charset=utf-8`) or JSON.
 
 | Option   | Default        | Values                   |
 | -------- | -------------- | ------------------------ |
@@ -127,12 +127,12 @@ expose.
 `GET` → the assembled OpenAPI 3.0.3 document, built from the registered
 routes on first request and cached per version (`?version=v2` selects one).
 
-| Option            | Default                                       | What it does                                                                                   |
-| ----------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `info`            | `title` = the app `name`, `version` = `1.0.0` | Merged over the defaults.                                                                      |
-| `servers`         | omitted                                       | `{ url, description? }[]`.                                                                     |
-| `securitySchemes` | `bearerAuth` only                             | The exact OpenAPI shapes (`http` / `apiKey` / `oauth2` / `openIdConnect`), validated at mount. |
-| `expose`          | `'DEVELOPMENT'`                               | `'PRODUCTION'` or `'ALL'`; any other mode answers a plain `RAPID_NOT_FOUND` 404.               |
+| Option            | Default                                                | What it does                                                                                   |
+| ----------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `info`            | `title` = the app `name`, `version` = `1.0.0`          | Merged over the defaults.                                                                      |
+| `servers`         | omitted                                                | `{ url, description? }[]`.                                                                     |
+| `securitySchemes` | none (`bearerAuth` is added once any route is secured) | The exact OpenAPI shapes (`http` / `apiKey` / `oauth2` / `openIdConnect`), validated at mount. |
+| `expose`          | `'DEVELOPMENT'`                                        | `'PRODUCTION'` or `'ALL'`; any other mode answers a plain `RAPID_NOT_FOUND` 404.               |
 
 The document is the subject of its own guide —
 [OpenAPI and the API reference](./Rapid-OpenAPI.md) — which covers what the

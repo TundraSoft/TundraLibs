@@ -1,5 +1,5 @@
 /**
- * @fileoverview The rАPId CLI — `rapid <command>`. Run remotely:
+ * @fileoverview The rAPId CLI — `rapid <command>`. Run remotely:
  * `deno run -A jsr:@tundralibs/rapid/cli init`. Cross-runtime via compat.
  *
  * Commands: `init` (scaffold), `upgrade` (bump @tundralibs/* versions),

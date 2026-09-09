@@ -423,7 +423,7 @@ app.get(
 ```
 
 `` html`…` `` escapes **every** interpolated value (`raw()` is the single,
-greppable opt-out); templates are pure `(data, view) => Html` functions, so
+greppable opt-out — the framework uses it on constant markup only); templates are pure `(data, view) => Html` functions, so
 they unit-test with `render(UserList.render(data, view))` and no server. The
 frozen `view` bag carries `requestId`/`path`/`query`/`csrfToken` and
 `view.asset()` (cache-busting URLs, lazily content-hashed under
@@ -460,7 +460,7 @@ are 404 there, `onlyApi()` / `onlyUi()` scope middleware per side;
 render the `0`), `ctx.isSwap`, typed view projections, and `testing`'s
 `view()` / `swap: true` round out the layer. See
 [docs/Rapid-UI.md](docs/Rapid-UI.md) for the full contract and
-[`examples/dashboard/main.ts`](examples/dashboard/main.ts) for a runnable page.
+[`examples/dashboard/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/dashboard/main.ts) for a runnable page.
 
 ## Endpoints
 
@@ -786,9 +786,9 @@ fails CI when it's stale), and `health [url]` hits a running app's health path
 A full module-based blog API (posts + nested comments over `@tundralibs/norm`,
 DI via `@tundralibs/doctor`, versioning, a cron digest job, a WebSocket module,
 and the endpoint + auth catalog) lives in
-[`examples/`](./examples/) — run it with
+[`examples/`](https://github.com/TundraSoft/TundraLibs/tree/main/packages/rapid/examples) — run it with
 `deno run -A packages/rapid/examples/blog/main.ts`. The
-[examples walkthrough](./examples/README.md) maps all four apps (blog, kanban,
+[examples walkthrough](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/README.md) maps all four apps (blog, kanban,
 dashboard, htmx) to what each one shows and where to start reading.
 
 Guides:

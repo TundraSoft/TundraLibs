@@ -19,14 +19,14 @@ import {
   payload,
   POST,
   query,
-} from '../../../decorators/mod.ts';
-import { RapidError } from '../../../errors/mod.ts';
-import { formState } from '../../../ui/mod.ts';
-import { RapidModule } from '../../../modules/mod.ts';
+} from '@tundralibs/rapid/decorators';
+import { RapidError } from '@tundralibs/rapid/errors';
+import { formState } from '@tundralibs/rapid/ui';
+import { RapidModule } from '@tundralibs/rapid/modules';
 import type {
   RapidContextQuery,
   RapidContextResponse,
-} from '../../../types/mod.ts';
+} from '@tundralibs/rapid/types';
 import { STORE } from '../store.ts';
 import type { Task } from '../types.ts';
 import {

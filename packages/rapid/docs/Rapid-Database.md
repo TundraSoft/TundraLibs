@@ -41,8 +41,10 @@ When all `max` are busy, further `acquire()`s **queue** up to
 queries keep the queue draining; a held transaction with slow work inside is
 what stalls it.
 
-Pool defaults (`EnginePoolOptions`): `min: 0`, `max: 10`,
-`idleTimeoutSeconds: 180`, `acquireTimeoutSeconds: 30` (`0` = wait forever).
+Pool defaults **when a `pool: {}` object is supplied** (`EnginePoolOptions`):
+`min: 0`, `max: 10`, `idleTimeoutSeconds: 180`, `acquireTimeoutSeconds: 30`
+(`0` = wait forever). **Omit `pool` and the engine runs ONE connection**
+(`min: 1, max: 1`) — always pass `pool` in a server.
 
 ---
 
@@ -109,9 +111,10 @@ class PostsModule extends BlogModule {
 // tx pins ONE connection for the whole callback → commit on resolve,
 // rollback on throw; a nested tx.transaction() opens a SAVEPOINT.
 await db.transaction(async (tx) => {
-  const order = await tx.repo('Orders').insert({ userId, total });
+  // insert() returns a NormResult — `.id` is the OPERATION id; the row is in `.data`.
+  const { data: [order] } = await tx.repo('Orders').insert({ userId, total });
   await tx.repo('LineItems').insert(
-    lines.map((l) => ({ ...l, orderId: order.id })),
+    lines.map((l) => ({ ...l, orderId: order!.id })),
   );
   // ⛔ NO http calls / sleeps / external I/O in here — you are holding a connection
 });
@@ -231,10 +234,14 @@ request genuinely needs one end-to-end transaction.
 request burns a pool slot per request and competes with real work. Cache it
 (`@tundralibs/cacher`) or read config-held values.
 
-**Watch the pool.** `engine.poolStats` → `{ total, active, idle, waiting }`.
-Sustained `waiting > 0` = pool too small **or** something holds too long
-(usually a fat transaction). Fix the hold first, then the size. Wire it to
-`app.metrics`.
+**Watch the pool.** On the direct-engine path `engine.poolStats` →
+`{ total, active, idle, waiting }` (Norm keeps its engine private — there,
+watch the forwarded `slowQuery` / `transactionTimeout` events). Sustained
+`waiting > 0` = pool too small **or** something holds too long (usually a fat
+transaction). Fix the hold first, then the size. Export it through your own
+instrument on `app.meter.registry` (needs `server.metrics`) or a `ready()`
+check. rAPId does not own the pool: `await norm.disconnect()` (or
+`engine.disconnect()`) after `await app.stop()` in your shutdown path.
 
 ---
 

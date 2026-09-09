@@ -5,10 +5,10 @@
  *
  * @module
  */
-import { describe, harness, it } from '../../../testing/mod.ts';
+import { describe, harness, it } from '@tundralibs/rapid/testing';
 import * as asserts from '@std/asserts';
-import { RapidError } from '../../../errors/mod.ts';
-import type { RapidContextQuery } from '../../../types/mod.ts';
+import { RapidError } from '@tundralibs/rapid/errors';
+import type { RapidContextQuery } from '@tundralibs/rapid/types';
 import { STORE, TaskStore } from '../store.ts';
 import type { BoardData, ComposerData } from './views.ts';
 import { Board } from './Board.ts';

@@ -23,14 +23,14 @@ import {
   payload,
   POST,
   query,
-} from '../../../decorators/mod.ts';
-import { RapidError } from '../../../errors/mod.ts';
-import { event } from '../../../modules/mod.ts';
+} from '@tundralibs/rapid/decorators';
+import { RapidError } from '@tundralibs/rapid/errors';
+import { event } from '@tundralibs/rapid/modules';
 import type {
   RapidContextPaging,
   RapidContextQuery,
   RapidContextResponse,
-} from '../../../types/mod.ts';
+} from '@tundralibs/rapid/types';
 import type { Post } from '../types.ts';
 import {
   CreateCommentBody,
@@ -39,7 +39,7 @@ import {
   PostSummary,
   UpdatePostBody,
 } from '../schemas.ts';
-import { validated } from '../../../mod.ts';
+import { validated } from '@tundralibs/rapid';
 import { BlogModule } from './BlogModule.ts';
 import {
   PublicChrome,

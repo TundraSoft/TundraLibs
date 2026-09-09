@@ -15,7 +15,10 @@ carrying every key below.
   `Application` set becomes the options, every other file stays readable as
   `app.config`). Both go through the same defaults and the same validation.
 - **A bad value fails the boot**, never the first request: `initialize()`
-  rejects with `RAPID_CONFIG` naming the key.
+  rejects with `RAPID_CONFIG` naming the key (the one check that needs the
+  registered middleware — `SHARE` + `markStateKeyUser` — runs at `start()` /
+  the first `fetch()`). `include` / `exclude` from `loadConfig` are
+  forwarded untouched to filter which files in `path` become sets.
 - **Durations are seconds** (`shutdownTimeout`, `logger.access.slow`,
   `server.static.*.maxAge`). **Sizes are bytes** (`server.maxBodySize`,
   `uploads.maxSize`).

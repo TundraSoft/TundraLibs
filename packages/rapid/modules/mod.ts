@@ -1,5 +1,5 @@
 /**
- * @fileoverview The module system (POC, self-contained under `modules/`):
+ * @fileoverview The module system, self-contained under `modules/`:
  * `RapidModule` base · `initModules` bootstrap · `ModuleRuntime` ·
  * `@On`/`@Use` · `event()` event declaration · `reply()` envelopes.
  *

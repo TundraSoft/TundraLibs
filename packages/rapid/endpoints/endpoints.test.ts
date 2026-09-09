@@ -591,3 +591,49 @@ describe('rapid.endpoints.docs — multi-tag operations', () => {
     }
   });
 });
+
+describe('rapid.endpoints.docs — gates and pins', () => {
+  it('outside the exposed mode the try-it script is a 404 too; login.path must be a same-origin path; a stylesheet needs SRI', async () => {
+    const app = await Application.initialize({
+      name: 'docs-gates',
+      mode: 'PRODUCTION',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    });
+    asserts.assertThrows(
+      () =>
+        docs(app, { tryIt: { login: { path: 'https://evil.example/login' } } }),
+      RapidError,
+      'same-origin path',
+    );
+    asserts.assertThrows(
+      () => docs(app, { tryIt: { login: { path: '//evil.example/login' } } }),
+      RapidError,
+      'same-origin path',
+    );
+    asserts.assertThrows(
+      () =>
+        docs(app, {
+          viewer: {
+            kind: 'swagger',
+            script: { src: 'https://x/s.js', integrity: 'sha384-abc' },
+            style: { href: 'https://x/s.css', integrity: '' },
+          },
+          spec: '/openapi.json',
+        }),
+      RapidError,
+      'stylesheet',
+    );
+    docs(app, { tryIt: true }); // expose defaults to DEVELOPMENT; app is PRODUCTION
+    try {
+      const page = await app.fetch(new Request('http://app/docs'));
+      asserts.assertEquals(page.status, 404);
+      await page.body?.cancel();
+      const script = await app.fetch(new Request('http://app/__rapid/docs.js'));
+      asserts.assertEquals(script.status, 404);
+      asserts.assertEquals((await script.json()).code, 'RAPID_NOT_FOUND');
+    } finally {
+      await app.stop();
+    }
+  });
+});

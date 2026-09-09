@@ -227,6 +227,15 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
       });
     }
   }
+  // The cookie's Max-Age is idleTtl and the serializer refuses anything past
+  // the 400-day browser cap — catch it here, not on the first request.
+  if (idleTtl > 400 * 24 * 60 * 60) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        'session idleTtl must not exceed 400 days (the cookie lifetime cap)',
+      details: { idleTtl },
+    });
+  }
   if (idleTtl > absoluteTtl) {
     throw new RapidError('RAPID_CONFIG', {
       message:

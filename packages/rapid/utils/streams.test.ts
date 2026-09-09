@@ -208,3 +208,12 @@ describe('streaming response model', () => {
     asserts.assertEquals(out.status, 500);
   });
 });
+
+describe('rapid.utils.streams — sse framing edge', () => {
+  it('an event with undefined data frames an empty data line instead of erroring the stream', () => {
+    asserts.assertEquals(
+      frameSseEvent({ event: 'ping', data: undefined }),
+      'event: ping\ndata: \n\n',
+    );
+  });
+});

@@ -7,11 +7,11 @@
  *
  * @module
  */
-import { On } from '../../../decorators/mod.ts';
+import { On } from '@tundralibs/rapid/decorators';
 import type {
   EventContext,
   RapidModuleEventPayload,
-} from '../../../modules/mod.ts';
+} from '@tundralibs/rapid/modules';
 import { BlogModule } from './BlogModule.ts';
 import type { Posts } from './Posts.ts';
 

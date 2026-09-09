@@ -98,10 +98,10 @@
  * @module
  */
 
-import { Application, RapidError } from '../../mod.ts';
-import { cors, secureHeaders } from '../../middlewares/mod.ts';
-import { docs, health, metrics, openapi } from '../../endpoints/mod.ts';
-import type { PactAuthContext } from '../../middlewares/pact.ts';
+import { Application, RapidError } from '@tundralibs/rapid';
+import { cors, secureHeaders } from '@tundralibs/rapid/middlewares';
+import { docs, health, metrics, openapi } from '@tundralibs/rapid/endpoints';
+import type { PactAuthContext } from '@tundralibs/rapid/middlewares/pact';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
 import {

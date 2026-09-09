@@ -68,8 +68,8 @@ export type RapidApplicationServerOptions = {
   trustProxy?: boolean | number;
   /**
    * Maximum request body size in bytes for non-file bodies (JSON, text,
-   * forms). Checked against content-length before buffering. `0`
-   * disables.
+   * forms). Enforced on the bytes actually read — a missing or lying
+   * content-length cannot bypass it. `0` disables.
    * @default 1048576 (1 MB)
    */
   maxBodySize?: number;

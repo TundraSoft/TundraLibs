@@ -20,8 +20,8 @@ import {
   htmlDocument,
   template,
   withQuery,
-} from '../../../ui/mod.ts';
-import type { RapidContextPaging, RapidView } from '../../../types/mod.ts';
+} from '@tundralibs/rapid/ui';
+import type { RapidContextPaging, RapidView } from '@tundralibs/rapid/types';
 import type { Comment, Post } from '../types.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {

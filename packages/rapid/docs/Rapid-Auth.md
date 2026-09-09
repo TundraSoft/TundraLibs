@@ -94,8 +94,8 @@ export const { authenticate, authorize } = pactAuth(pact, {
 
 The options are pact's own `PactMiddlewareOptions` — every carrier (header
 and scheme prefix) defaults to its standard and is overridable, plus `hmac`,
-`encryption`, `challenge` and `realm` — with two rapid additions:
-`bearer.cookie`, and `optional` defaulting to `true`. The full option and
+`encryption`, `challenge` and `realm` — with rapid's additions, `bearer.cookie`
+and `session` (below), and one changed default: `optional` is `true` here. The full option and
 wire contract lives in [`@tundralibs/pact`](https://jsr.io/@tundralibs/pact)'s
 Middleware guide; rapid's
 adapter is glue over the same neutral core as pact's express/fastify/oak/hono
@@ -136,8 +136,11 @@ the BOUND principal (`id`, `kind: 'USER' | 'APIKEY'`, `grants`,
   itself — so it is cleared (`Set-Cookie` with `Max-Age=0`) and the request
   continues anonymous (or is a `NO_CREDENTIALS` 401 under `optional: false`).
   A header credential never gets that treatment.
-- Every 401 the adapter raises includes a `WWW-Authenticate` challenge listing
+- Every 401 `authenticate` raises for a presented or missing header credential,
+  and every 401 from `authorize`, includes a `WWW-Authenticate` challenge listing
   the accepted schemes (`challenge: false` to suppress, `realm` to name one).
+  The stale-cookie 401 under `optional: false`, `me()`'s 401 and the session
+  handlers' 401s carry no challenge.
 - Socket frames authenticate from the UPGRADE request's headers/cookies with
   the header-only schemes (no HMAC, no encryption); jobs pass through (there
   is no client) — a guard on a job fails closed.
@@ -187,12 +190,12 @@ app.post('/refresh', refresh());
 app.get('/me', me());
 ```
 
-| Handler     | Does                                                                                                                                                                                                                                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `login()`   | Reads the two body fields → `pact.login()` → `200 { token, expiresAt, refreshToken?, principal }` and sets the session cookie (`Max-Age` = remaining session life, capped at 400 days). Malformed body → 400. Every pact authentication failure → one 401 `invalid credentials`; anything else is a real 500. |
-| `logout()`  | Ends the presented session (header or cookie) via `pact.logout()`, clears the session and refresh cookies, answers 204. Idempotent — an unknown or already-ended token still clears the cookie.                                                                                                               |
-| `refresh()` | JWT strategy only: `pact.refresh()` with the token from `refreshCookie` (or `refreshToken` in the body) → the same reply as `login` with rotated tokens. A reused or expired token is 401; an OPAQUE instance is a `RAPID_CONFIG` 500.                                                                        |
-| `me()`      | `{ principal, via }` for the current credential through the same projection; 401 when anonymous. Mount it after `authenticate`.                                                                                                                                                                               |
+| Handler     | Does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `login()`   | Reads the two body fields → `pact.login()` → `200 { token, expiresAt, refreshToken?, principal }` and, when `bearer.cookie` is set, the session cookie (`Max-Age` = remaining session life, capped at 400 days). `refreshToken` is in the body only when the JWT strategy issued one AND no `refreshCookie` is configured — with the cookie it travels there (`Max-Age` = `session.refreshMaxAge`, default 7 days). Malformed body → 400. Every pact authentication failure → one 401 `invalid credentials`; anything else is a real 500. |
+| `logout()`  | Ends the presented session (header or cookie) via `pact.logout()`, clears the session and refresh cookies, answers 204. Idempotent — an unknown or already-ended token still clears the cookie.                                                                                                                                                                                                                                                                                                                                           |
+| `refresh()` | JWT strategy only: `pact.refresh()` with the token from `refreshCookie` (or `refreshToken` in the body) → the same reply as `login` with rotated tokens. A reused or expired token is 401 and clears the refresh cookie; an OPAQUE instance is a `RAPID_CONFIG` 500.                                                                                                                                                                                                                                                                      |
+| `me()`      | `{ principal, via }` for the current credential through the same projection; 401 when anonymous. Mount it after `authenticate`.                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Rules worth knowing: the principal projection defaults to `{ id }` on purpose
 (grants, status and metadata are yours to expose field by field, and grants
@@ -238,5 +241,5 @@ pact owns no storage — its hooks are just queries. For the full pattern
 (sharing one pool, backing `getUser`/`getApiKey` with norm repos, caching
 `getUser` safely), see
 [Database access & connection pooling](./Rapid-Database.md); a runnable
-version lives in [`examples/blog/auth.ts`](../examples/blog/auth.ts) and
+version lives in [`examples/blog/auth.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/blog/auth.ts) and
 `examples/blog/main.ts`'s `/login` + `/admin/*` routes.

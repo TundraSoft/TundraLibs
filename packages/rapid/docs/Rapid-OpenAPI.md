@@ -14,8 +14,8 @@ generated credential box, try-it forms, and two ways to make it yours.
 - **Security schemes are yours to declare.** `openapi({ securitySchemes })`
   takes the precise OpenAPI 3.0 shapes (`http`, `apiKey`, `oauth2`,
   `openIdConnect`), validated at mount; routes reference them by name in
-  `security`. `bearerAuth` is always declared. Nothing is inferred from
-  middleware.
+  `security`. `bearerAuth` is declared for you as soon as any route is
+  secured or you pass `securitySchemes`. Nothing is inferred from middleware.
 - `docs(app, { spec: '/openapi.json' })` mounts the **reference page** at
   `/docs`: rendered server-side inside your app's `core`/`layout` (branding for
   free), no bundler, no CDN. `tryIt: true` adds the credential box (one control
@@ -63,7 +63,7 @@ app.get(
 | ----------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `info`            | `title` = the app `name`, `version` = `1.0.0` | Merged over the defaults.                                                                                     |
 | `servers`         | omitted                                       | `{ url, description? }[]` — never auto-generated (a surface or proxy decides the public origin, not the app). |
-| `securitySchemes` | none beyond `bearerAuth`                      | See the next section. Validated when `openapi()` is called.                                                   |
+| `securitySchemes` | none (`bearerAuth` once a route is secured)   | See the next section. Validated when `openapi()` is called.                                                   |
 | `expose`          | `'DEVELOPMENT'`                               | `'PRODUCTION'` or `'ALL'` to serve elsewhere; a non-matching mode answers a plain `RAPID_NOT_FOUND` 404.      |
 
 Things the assembler decides for you:
@@ -128,8 +128,9 @@ The rules the type cannot express are checked when the endpoint is created and
 fail as `RAPID_CONFIG` naming the scheme: the key must match `[A-Za-z0-9._-]+`
 (routes reference it by name), URLs must parse, a flow needs its URLs and a
 `scopes` object (`{}` when the API defines none). `bearerAuth` (HTTP bearer)
-is always present; an entry of the same name overrides it (to add
-`bearerFormat`, say).
+is added automatically whenever any route lists a non-empty `security` or you
+pass `securitySchemes` (a document with neither has no `securitySchemes`
+block); an entry of the same name overrides it (to add `bearerFormat`, say).
 
 A route names the schemes that protect it — `security: ['bearerAuth']` on a
 decorated route or in `app.route()`'s `openapi` option; `security: []` marks

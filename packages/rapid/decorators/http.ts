@@ -14,8 +14,8 @@
  * COMPILE-TIME CONTRACT at the `@` site: the method must return the
  * {@link RapidModuleReply} envelope, and its parameters must match the
  * `bind` tuple (the tuple DRIVES the parameter types — arity overflow
- * is caught; underflow and `any` escape, which is why the mount tier
- * re-checks at runtime).
+ * is caught at compile time; underflow and `any` escape it, and the mount
+ * tier passes whatever the binds produce, so keep the tuple honest).
  *
  * The same method may carry several decorations (aliases, other
  * transports): every application appends its own entry.

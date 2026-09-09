@@ -51,10 +51,10 @@
  * @module
  */
 
-import { Application } from '../../mod.ts';
+import { Application } from '@tundralibs/rapid';
 import {
   secureHeaders,
-} from '../../middlewares/mod.ts';
+} from '@tundralibs/rapid/middlewares';
 import { registerKanbanServices, TaskStore } from './store.ts';
 import * as kanban from './modules/mod.ts';
 import { BoardCore } from './modules/views.ts';

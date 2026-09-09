@@ -47,7 +47,7 @@ export class RapidError extends BaseError<RapidErrorMeta> {
     return this.context.code;
   }
 
-  /** The HTTP status the code maps to (non-HTTP transports ignore it). */
+  /** The HTTP status the code maps to — also the SOCKET/JOB outcome status. */
   public get status(): StatusCode {
     return RAPID_ERROR_CODES[this.context.code].status;
   }

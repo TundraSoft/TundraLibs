@@ -1336,6 +1336,13 @@ function docLinks(version: string | null, runtime: string): string {
   return [
     `Pinned to the installed version${local}:`,
     '',
-    ...PACKAGE_DOCS.map(([file, title]) => `- [${title}](${base}/${file})`),
+    ...PACKAGE_DOCS.map(([file, title]) =>
+      // The examples are not in the published package — link the repo.
+      `- [${title}](${
+        file.startsWith('examples/')
+          ? `https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/${file}`
+          : `${base}/${file}`
+      })`
+    ),
   ].join('\n');
 }

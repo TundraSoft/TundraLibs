@@ -231,8 +231,8 @@ export class Audit extends RapidModule {
 - **`emit(name, payload)`** resolves when every subscriber has settled.
   Await it for in-request consistency, or fire and forget — either way a
   throwing subscriber is isolated and logged, and never affects the emitter
-  or the other subscribers. Subscribers get a fresh, frozen state and no
-  auth (an event carries no authority).
+  or the other subscribers. Subscribers get correlation only (`requestId`,
+  `action`, `event`) — no state and no auth (an event carries no authority).
 - **`invoke(Target, 'method', args)`** calls another module through the
   runtime: the target's `@Use` guards run, a copy of the caller's state and
   the caller's auth flow, and the outcome is an envelope — a denied guard is

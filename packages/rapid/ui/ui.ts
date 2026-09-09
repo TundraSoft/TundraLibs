@@ -280,6 +280,14 @@ export const UI_RUNTIME: string = `(() => {
         emit(el, 'rapid:error', { status: 0, body: String(error) });
         return Promise.resolve(false);
       }
+      // A valid selector that matches nothing is the same dead control.
+      if (!target) {
+        emit(el, 'rapid:error', {
+          status: 0,
+          body: 'no element matches ' + el.dataset.target,
+        });
+        return Promise.resolve(false);
+      }
     }
     let body;
     if (form) {

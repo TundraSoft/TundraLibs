@@ -438,3 +438,18 @@ describe('rapid session() — memory bound', () => {
     }
   });
 });
+
+describe('rapid session() — idleTtl cap', () => {
+  it('an idleTtl past the 400-day cookie cap is RAPID_CONFIG at build, not a 500 on the first request', () => {
+    const err = asserts.assertThrows(
+      () =>
+        session({
+          idleTtl: 401 * 24 * 60 * 60,
+          absoluteTtl: 402 * 24 * 60 * 60,
+        }),
+      RapidError,
+      '400 days',
+    );
+    asserts.assertEquals(err.code, 'RAPID_CONFIG');
+  });
+});

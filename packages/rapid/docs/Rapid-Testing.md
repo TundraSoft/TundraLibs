@@ -71,8 +71,9 @@ path.
 Things to test through `client()`: error envelopes (`body.code`,
 `body.requestId`), the `x-request-id` / `x-response-time` stamps, cookie
 round-trips (capture `set-cookie` from one response and send it as `cookie`
-on the next), CSRF (`csrf({ secure: false })` in tests — the default
-`secure: true` cookie is dropped over plain http), the fragment / page / JSON
+on the next), CSRF (`client()` sees the `set-cookie` header either way;
+`csrf({ secure: false })` only when a real browser drives the test over
+plain http), the fragment / page / JSON
 matrix of a templated route (`swap: true` vs a plain request), and the api
 surface (`host: 'api.rapid.test'` or an `/api/...` path).
 

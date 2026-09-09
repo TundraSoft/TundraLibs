@@ -8,10 +8,10 @@
  *
  * @module
  */
-import { payload, SOCKET } from '../../../decorators/mod.ts';
-import type { RapidContextResponse } from '../../../types/mod.ts';
+import { payload, SOCKET } from '@tundralibs/rapid/decorators';
+import type { RapidContextResponse } from '@tundralibs/rapid/types';
 import { CreateCommentViaSocketBody } from '../schemas.ts';
-import { validated } from '../../../mod.ts';
+import { validated } from '@tundralibs/rapid';
 import { BlogModule } from './BlogModule.ts';
 import { Posts } from './Posts.ts';
 

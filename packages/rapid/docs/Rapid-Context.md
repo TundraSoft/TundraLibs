@@ -29,22 +29,22 @@ the [configuration reference](./Rapid-Configuration.md) covers the options.
 
 ## Shared members (every transport)
 
-| Member                       | What it is                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ctx.type`                   | `'HTTP' \| 'SOCKET' \| 'JOB'` — the discriminant for a `switch` or an `if`.                                                                                                                                  |
-| `ctx.requestId`              | The correlation id. Adopted from `headers.requestId` when safe, else minted. On every log line and every error body.                                                                                         |
-| `ctx.action`                 | The invocation identity: the route pattern, the command name or the job name. On an unmatched HTTP request it is the raw pathname — attacker-controlled; check `ctx.matched` before using it as a label.     |
-| `ctx.args`                   | `{ params, query, paging }` — see [Reading input](#reading-input).                                                                                                                                           |
-| `ctx.state`                  | The per-invocation state bag built from `app.state` per `stateMode`.                                                                                                                                         |
-| `ctx.auth` / `setAuth()`     | The authenticated identity, `undefined` until an auth middleware sets it. Write-once: a second `setAuth` throws.                                                                                             |
-| `ctx.status`                 | The interpreted outcome status (200 until set). Read this in observability code, not `response.status`.                                                                                                      |
-| `ctx.response`               | The reply slot: set, override or clear (`null`) until `respond()`.                                                                                                                                           |
-| `ctx.responded`              | Whether `respond()` has run. After it every mutation throws `RAPID_RESPONSE_INVALID`.                                                                                                                        |
-| `ctx.config`                 | `app.config` — every config set besides `Application`, keyed by lowercased file name.                                                                                                                        |
-| `ctx.publish(channel, data)` | Push to the channel's socket subscribers. Fire-and-forget; a no-op with no subscribers. Works from HTTP and jobs.                                                                                            |
-| `ctx.detach(work)`           | Register abandoned-but-running work. The job transport waits for it so cronus's overlap guard stays held; the rejection is absorbed.                                                                         |
-| `ctx.meter`                  | `app.meter` when `server.metrics` is on, else `undefined` — record your own on `meter.registry`; the families are in the [configuration reference](./Rapid-Configuration.md#servermetrics--metric-families). |
-| `ctx.app`                    | The owning `Application`.                                                                                                                                                                                    |
+| Member                       | What it is                                                                                                                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.type`                   | `'HTTP' \| 'SOCKET' \| 'JOB'` — the discriminant for a `switch` or an `if`.                                                                                                                                                           |
+| `ctx.requestId`              | The correlation id. Adopted from `headers.requestId` when safe, else minted. On every log line and every error body.                                                                                                                  |
+| `ctx.action`                 | The invocation identity: the method + route pattern (`GET /users/:id:`), the command name or the job name. On an unmatched HTTP request it is the raw pathname — attacker-controlled; check `ctx.matched` before using it as a label. |
+| `ctx.args`                   | `{ params, query, paging }` — see [Reading input](#reading-input).                                                                                                                                                                    |
+| `ctx.state`                  | The per-invocation state bag built from `app.state` per `stateMode`.                                                                                                                                                                  |
+| `ctx.auth` / `setAuth()`     | The authenticated identity, `undefined` until an auth middleware sets it. Write-once: a second `setAuth` throws.                                                                                                                      |
+| `ctx.status`                 | The interpreted outcome status (200 until set). Read this in observability code, not `response.status`.                                                                                                                               |
+| `ctx.response`               | The reply slot: set, override or clear (`null`) until `respond()`.                                                                                                                                                                    |
+| `ctx.responded`              | Whether `respond()` has run. After it every mutation throws `RAPID_RESPONSE_INVALID`.                                                                                                                                                 |
+| `ctx.config`                 | `app.config` — every loaded config set keyed by lowercased file name, the `Application` set included (read framework options through `app.option()`).                                                                                 |
+| `ctx.publish(channel, data)` | Push to the channel's socket subscribers. Fire-and-forget; a no-op with no subscribers. Works from HTTP and jobs.                                                                                                                     |
+| `ctx.detach(work)`           | Register abandoned-but-running work. The job transport waits for it so cronus's overlap guard stays held; the rejection is absorbed.                                                                                                  |
+| `ctx.meter`                  | `app.meter` when `server.metrics` is on, else `undefined` — record your own on `meter.registry`; the families are in the [configuration reference](./Rapid-Configuration.md#servermetrics--metric-families).                          |
+| `ctx.app`                    | The owning `Application`.                                                                                                                                                                                                             |
 
 ## Reading input
 
@@ -61,7 +61,7 @@ app.get('/users/:id:', (ctx) => ({
     id: ctx.args.params.id, // '42' — route params are strings
     filters: ctx.args.query.filters, // { status: { $eq: 'active' } }
     sorting: ctx.args.query.sorting, // [{ field: 'createdat', direction: 'DESC' }]
-    page: ctx.args.paging, // { page: 2, size: 20, ... } — clamped, never throws
+    page: ctx.args.paging, // { page: 2, size: 20 } — clamped, never throws
   },
 }));
 ```
@@ -222,7 +222,8 @@ body-inspecting middleware: `etag` skips them, `compress` pipes them.
   invocation — a middleware writing per-invocation values there must be
   wrapped with `markStateKeyUser()`, and the boot then refuses `SHARE`).
 - **`ctx.config`** is the loaded config: `ctx.config.get('database.pool.max')`.
-  The `Application` set is not in it (read the options with `app.option()`).
+  The `Application` set is in it too, but read framework options through
+  `app.option()` — that is the validated, defaulted view.
 
 ## Reaching services
 
@@ -237,26 +238,26 @@ body-inspecting middleware: `etag` skips them, `compress` pipes them.
 
 ## The application object
 
-| Member                                                                                                                | Purpose                                                                                                |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Application.initialize(source)`                                                                                      | The only constructor. Plain options, a directory path, or `{ path, env?, applicationSet?, ui? }`.      |
-| `app.get/post/put/patch/delete(path, [options], ...mw, handler)` · `app.route(method, …)`                             | Register HTTP routes; `options` is `{ version?, template?, layout?, openapi? }`.                       |
-| `app.socket(command, ...mw, handler)`                                                                                 | Register a websocket command on `server.socketPath`.                                                   |
-| `app.channel(name, { authorize?, onSubscribe?, onUnsubscribe? })`                                                     | Declare a pub/sub channel; `authorize` runs on every subscribe.                                        |
-| `app.publish(channel, data)`                                                                                          | Push to subscribers from outside a request.                                                            |
-| `app.job(name, schedule, handler, { args? })`                                                                         | Register a cron job (5-field schedule, validated now).                                                 |
-| `app.triggerJob(name, args?)`                                                                                         | Run a job now and return its outcome; bypasses the overlap guard and `jobs.enabled`.                   |
-| `app.use(...middleware)`                                                                                              | Universal middleware, in order.                                                                        |
-| `app.module(...instances)` · `app.modules({ modules, instances? })`                                                   | Mount decorated instances; boot the module system once (before start). `app.moduleRuntime` exposes it. |
-| `app.onError(handler)`                                                                                                | One synchronous hook that may replace an error envelope.                                               |
-| `app.start()` · `app.stop()` · `app.fetch(request, info?)`                                                            | Listen; drain and stop (`shutdownTimeout` seconds); serve one request with no listener.                |
-| `app.address` · `app.port` · `app.running`                                                                            | Listener facts after `start()`.                                                                        |
-| `app.option('server')` · `app.mode` · `app.state` · `app.config` · `app.secret`                                       | The resolved options, the state template, the other config sets, the signing key (throws when unset).  |
-| `app.log` · `app.tracer` · `app.meter` · `app.metrics` · `app.socketMetrics` · `app.jobMetrics`                       | Observability handles.                                                                                 |
-| `app.container` · `app.instanceId` · `app.cluster`                                                                    | The DI child container; the boot ULID; an optional cluster snapshot set by a control plane.            |
-| `app.routes` · `app.socketCommands` · `app.jobs` · `app.channels` · `app.middlewares`                                 | Read-only registries (what OpenAPI and tooling read).                                                  |
-| `app.uiEnabled` · `app.uiPrefer` · `app.uiOptions` · `app.apiSurface` · `app.staticMounts` · `app.assetVersion(path)` | The resolved UI and surface configuration.                                                             |
-| `Application.requestIdGenerator`                                                                                      | Process-wide id factory; set once at startup.                                                          |
+| Member                                                                                                                | Purpose                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Application.initialize(source)`                                                                                      | The only constructor. Plain options, a directory path, or `{ path, env?, applicationSet?, ui? }`.                                                                           |
+| `app.get/post/put/patch/delete(path, [options], ...mw, handler)` · `app.route(method, …)`                             | Register HTTP routes; `options` is `{ version?, template?, layout?, openapi? }`.                                                                                            |
+| `app.socket(command, ...mw, handler)`                                                                                 | Register a websocket command on `server.socketPath`.                                                                                                                        |
+| `app.channel(name, { authorize?, onSubscribe?, onUnsubscribe? })`                                                     | Declare a pub/sub channel; `authorize` runs on every subscribe.                                                                                                             |
+| `app.publish(channel, data)`                                                                                          | Push to subscribers from outside a request.                                                                                                                                 |
+| `app.job(name, schedule, handler, { args? })`                                                                         | Register a cron job (5-field schedule, validated now).                                                                                                                      |
+| `app.triggerJob(name, args?)`                                                                                         | Run a job now and return its outcome; bypasses the overlap guard and `jobs.enabled`.                                                                                        |
+| `app.use(...middleware)`                                                                                              | Universal middleware, in order.                                                                                                                                             |
+| `app.module(...instances)` · `app.modules({ modules, instances? })`                                                   | Mount decorated instances; boot the module system once (before start). `app.moduleRuntime` exposes it.                                                                      |
+| `app.onError(handler)`                                                                                                | One synchronous hook that may replace an error envelope.                                                                                                                    |
+| `app.start()` · `app.stop()` · `app.fetch(request, info?)`                                                            | Listen; drain and stop (`shutdownTimeout` seconds); serve one request with no listener.                                                                                     |
+| `app.address` · `app.port` · `app.running`                                                                            | Listener facts after `start()`.                                                                                                                                             |
+| `app.option('server')` · `app.mode` · `app.state` · `app.config` · `app.secret`                                       | The resolved options, a FRESH per-invocation state (what each `ctx.state` starts from — mutating it changes nothing), the config sets, the signing key (throws when unset). |
+| `app.log` · `app.tracer` · `app.meter` · `app.metrics` · `app.socketMetrics` · `app.jobMetrics`                       | Observability handles.                                                                                                                                                      |
+| `app.container` · `app.instanceId` · `app.cluster`                                                                    | The DI child container; the boot ULID; an optional cluster snapshot set by a control plane.                                                                                 |
+| `app.routes` · `app.socketCommands` · `app.jobs` · `app.channels` · `app.middlewares`                                 | Read-only registries (what OpenAPI and tooling read).                                                                                                                       |
+| `app.uiEnabled` · `app.uiPrefer` · `app.uiOptions` · `app.apiSurface` · `app.staticMounts` · `app.assetVersion(path)` | The resolved UI and surface configuration.                                                                                                                                  |
+| `Application.requestIdGenerator`                                                                                      | Process-wide id factory; set once at startup.                                                                                                                               |
 
 Registration closes at `start()` or the first `fetch()` for routes and
 `app.use()`; `socket()` and `job()` close at `start()`. Registering after

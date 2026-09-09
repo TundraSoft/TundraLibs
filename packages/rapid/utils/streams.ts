@@ -79,7 +79,12 @@ export const frameSseEvent = (e: SseEvent): string => {
   if (e.event !== undefined) out += `event: ${stripEol(e.event)}\n`;
   if (e.id !== undefined) out += `id: ${stripEol(e.id)}\n`;
   if (e.retry !== undefined) out += `retry: ${e.retry}\n`;
-  const data = typeof e.data === 'string' ? e.data : JSON.stringify(e.data);
+  // `JSON.stringify(undefined)` is `undefined` — an empty `data:` line is
+  // valid SSE (a heartbeat), a thrown `.split` mid-stream is a dropped
+  // connection.
+  const data = typeof e.data === 'string'
+    ? e.data
+    : (JSON.stringify(e.data) ?? '');
   for (const line of data.split(/\r\n|\r|\n/)) out += `data: ${line}\n`;
   return out + '\n';
 };
