@@ -223,6 +223,21 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertThrows(() => gp.parse(new Date('2999-01-01')));
   });
 
+  it('.guardian(): also enforces on boolean and bit (base-class column kinds)', () => {
+    const flag = Column.boolean().guardian((g) => g.true());
+    const gf = buildCellGuardian(flag.spec as unknown as ColumnSpec);
+    asserts.assertEquals(gf.parse(true), true);
+    asserts.assertThrows(() => gf.parse(false));
+
+    // BIT is physically validated as an integer (guardians.ts's BIT
+    // branch), so .guardian() resolves to NumberGuardian here too even
+    // though Column.bit() is a bare ColumnBuilder<number>.
+    const bits = Column.bit().guardian((g) => g.min(0).max(1));
+    const gb = buildCellGuardian(bits.spec as unknown as ColumnSpec);
+    asserts.assertEquals(gb.parse(1), 1);
+    asserts.assertThrows(() => gb.parse(2));
+  });
+
   it('update guardians: everything optional, defaultOnUpdate auto-fills', () => {
     const def = Entity('u', {
       id: Column.integer(),

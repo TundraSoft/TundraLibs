@@ -411,6 +411,30 @@ describe('norm.definition (builders + Entity)', () => {
     Column.decimal(10, 2).guardian((g) => g.formatCurrency());
   });
 
+  it('.guardian() also reaches boolean/json/blob/bit — the base ColumnBuilder kinds', () => {
+    const flag = Column.boolean().guardian((g) => g.true());
+    asserts.assertEquals(flag.spec.transforms?.guardian?.length, 1);
+
+    const settings = Column.json<{ tags: string[] }>().guardian((g) =>
+      g.refine((v) => Array.isArray((v as { tags: unknown }).tags), 'bad tags')
+    );
+    asserts.assertEquals(settings.spec.transforms?.guardian?.length, 1);
+
+    const payload = Column.blob().guardian((g) =>
+      g.refine((v) => (v as Uint8Array).length > 0, 'must not be empty')
+    );
+    asserts.assertEquals(payload.spec.transforms?.guardian?.length, 1);
+
+    // BIT is physically validated as an integer (guardians.ts's BIT
+    // branch) even though Column.bit() is a bare ColumnBuilder<number>
+    // — .guardian() resolves to NumberGuardian here too.
+    const flags = Column.bit().guardian((g) => g.min(0).max(1));
+    asserts.assertEquals(flags.spec.transforms?.guardian?.length, 1);
+
+    // @ts-expect-error — toNumber() returns NumberGuardian, not BooleanGuardian.
+    Column.boolean().guardian((g) => g.toNumber());
+  });
+
   it('id-generator sugar: VARCHAR/BIGINT specs defaulted per row, never Column.uuid()', () => {
     const ulidCol = Column.ulid();
     asserts.assertEquals(ulidCol.spec.type, 'VARCHAR');

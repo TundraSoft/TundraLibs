@@ -137,20 +137,20 @@ to range-check on a boolean.
 These chain on every builder kind; a few are overridden on
 [masks](#masked-columns):
 
-| Modifier                 | Effect                                                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.nullable()`            | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                                          |
-| `.default(v)`            | Insert default; see [Defaults](#defaults).                                                                                                        |
-| `.defaultOnUpdate(v)`    | Auto-touch on every update (e.g. `updatedAt`).                                                                                                    |
-| `.comment(text)`         | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                              |
-| `.hidden()`              | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                                   |
-| `.unfilterable()`        | Reject the column in `WHERE` / `ORDER BY`.                                                                                                        |
-| `.renamedFrom(oldName)`  | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.                 |
-| `.beforeWrite(fn)`       | [Transform](#transforms) before validate/encrypt/write.                                                                                           |
-| `.afterRead(fn)`         | [Transform](#transforms) on the way back out.                                                                                                     |
-| `.validate(fn, message)` | Custom [validation](#validators) predicate beyond `lov`/`pattern`/`min`/`max`. Stacks; cannot change the value.                                   |
-| `.guardian(fn)`          | Extends the generated [Guardian](#validators) directly — its built-in format validators and same-type transforms. String/Number/BigInt/Date only. |
-| `.encrypt()`             | [Encrypt at rest](#encryption-and-hashing).                                                                                                       |
+| Modifier                 | Effect                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `.nullable()`            | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                             |
+| `.default(v)`            | Insert default; see [Defaults](#defaults).                                                                                           |
+| `.defaultOnUpdate(v)`    | Auto-touch on every update (e.g. `updatedAt`).                                                                                       |
+| `.comment(text)`         | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                 |
+| `.hidden()`              | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                      |
+| `.unfilterable()`        | Reject the column in `WHERE` / `ORDER BY`.                                                                                           |
+| `.renamedFrom(oldName)`  | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.    |
+| `.beforeWrite(fn)`       | [Transform](#transforms) before validate/encrypt/write.                                                                              |
+| `.afterRead(fn)`         | [Transform](#transforms) on the way back out.                                                                                        |
+| `.validate(fn, message)` | Custom [validation](#validators) predicate beyond `lov`/`pattern`/`min`/`max`. Stacks; cannot change the value.                      |
+| `.guardian(fn)`          | Extends the generated [Guardian](#validators) directly — its built-in format validators and same-type transforms. Every column kind. |
+| `.encrypt()`             | [Encrypt at rest](#encryption-and-hashing).                                                                                          |
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -215,10 +215,15 @@ const evenQty = Column.integer().min(0)
 
 For a check `.validate()` would make you hand-roll, reach into
 [Guardian](../../guardian/README.md)'s own built-in vocabulary with
-`.guardian(fn)` instead — available on `varchar`/`char`/`text`/`clob`/
-`xml` (a `StringGuardian`), `integer`/`decimal`/… (`NumberGuardian`),
-`bigint` (`BigIntGuardian`), and `date`/`timestamp`/… (`DateGuardian`).
-It stacks like `.validate()`, and runs after the table above:
+`.guardian(fn)` instead — available on every column kind, resolving to
+whichever concrete guardian the runtime actually validates against:
+`StringGuardian` for `varchar`/`char`/`text`/`clob`/`xml`,
+`NumberGuardian`/`BigIntGuardian` for the numeric kinds (`bigint` gets
+`BigIntGuardian`, every other numeric kind including `bit` gets
+`NumberGuardian`), `DateGuardian` for `date`/`timestamp`/…,
+`BooleanGuardian` for `boolean`, and `UnknownGuardian<Shape>` for
+`json`/`blob`/`binary`/`varbinary`. It stacks like `.validate()`, and
+runs after the table above:
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -233,12 +238,12 @@ const bornBefore = Column.date().guardian((g) => g.past());
 guardian class (`StringGuardian → StringGuardian`, and so on) — not the
 generic `BaseGuardian<T>`. Some of these classes also carry methods that
 change the value's TYPE (`NumberGuardian.toBigInt()`, `DateGuardian
-.toISOString()`, `BigIntGuardian.toHex()`, …); pinning the signature
-this way means a chain ending in one of those simply fails to
-type-check, rather than silently letting a transform swap the column's
-declared type. Every validator/transform that legitimately belongs here
-is typed to return the same class, so nothing is lost — the type
-checker only blocks the genuinely unsafe methods.
+.toISOString()`, `BigIntGuardian.toHex()`, `BooleanGuardian.toNumber()`,
+…); pinning the signature this way means a chain ending in one of those
+simply fails to type-check, rather than silently letting a transform
+swap the column's declared type. Every validator/transform that
+legitimately belongs here is typed to return the same class, so nothing
+is lost — the type checker only blocks the genuinely unsafe methods.
 
 ### Defaults
 
