@@ -285,6 +285,7 @@ Column.varchar(255) // VARCHAR(255)
   .nullable() // NULL allowed
   .minLength(3).maxLength(50)
   .pattern(/^[a-z]+$/)
+  .validate((v) => !v.includes(' '), 'no spaces allowed') // custom rule
   .beforeWrite((v) => v.trim())
   .afterRead((v) => v.toUpperCase())
   .lov(['a', 'b', 'c']) // narrows the TS type to the union
@@ -303,7 +304,14 @@ Column.date();
 Column.time();
 Column.datetime();
 Column.timestamp();
-Column.uuid();
+Column.uuid(); // native DB-checked UUID — pair with a DB-side default
+Column.ulid(); // VARCHAR(26), defaulted to a fresh ULID per row
+Column.cuid(); // VARCHAR(25), defaulted to a fresh CUID per row
+Column.cuid2(); // VARCHAR(24), defaulted to a fresh CUID2 per row
+Column.nanoId(); // VARCHAR(21), defaulted to a fresh nanoID per row
+Column.objectId(); // VARCHAR(26), a shared ObjectID counter per column
+Column.sequenceId(); // BIGINT, a shared sequence counter per column
+Column.simpleId(); // BIGINT, a shared simpleID counter per column
 Column.text();
 Column.blob();
 Column.hash('SHA-256'); // one-way digest column (passwords)

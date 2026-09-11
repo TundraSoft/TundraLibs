@@ -95,7 +95,14 @@ import { Column } from '@tundralibs/norm';
 | `Column.text()`                    | `TEXT`         | `string`     | Unbounded string.                                                                                                             |
 | `Column.clob()`                    | `CLOB`         | `string`     | Character large object (`TEXT`/`LONGTEXT`/`TEXT`). String validators apply.                                                   |
 | `Column.xml()`                     | `XML`          | `string`     | Native `XML` on Postgres, `TEXT` elsewhere.                                                                                   |
-| `Column.uuid()`                    | `UUID`         | `string`     | Pair with `.default({ $$_expression: 'UUID' })`.                                                                              |
+| `Column.uuid()`                    | `UUID`         | `string`     | Native, format-checked UUID. Pair with `.default({ $$_expression: 'UUID' })` for a DB-side default.                           |
+| `Column.ulid()`                    | `VARCHAR(26)`  | `string`     | Defaulted to a fresh [ULID](https://github.com/ulid/spec) per row, via `@tundralibs/id`.                                      |
+| `Column.cuid()`                    | `VARCHAR(25)`  | `string`     | Defaulted to a fresh CUID per row, via `@tundralibs/id`.                                                                      |
+| `Column.cuid2(length?)`            | `VARCHAR(n)`   | `string`     | Defaulted to a fresh CUID2 per row (default length 24), via `@tundralibs/id`.                                                 |
+| `Column.nanoId(size?)`             | `VARCHAR(n)`   | `string`     | Defaulted to a fresh nanoID per row (default size 21), via `@tundralibs/id`.                                                  |
+| `Column.objectId()`                | `VARCHAR(26)`  | `string`     | Defaulted to `@tundralibs/id`'s `ObjectID` — one counter/machine-id generator shared by every row of this column.             |
+| `Column.sequenceId()`              | `BIGINT`       | `bigint`     | Defaulted to `@tundralibs/id`'s `sequenceID` — one shared counter per column.                                                 |
+| `Column.simpleId()`                | `BIGINT`       | `bigint`     | Defaulted to `@tundralibs/id`'s `simpleID` — one shared counter/seed per column.                                              |
 | `Column.integer()`                 | `INTEGER`      | `number`     | Numeric validators apply.                                                                                                     |
 | `Column.int()`                     | `INT`          | `number`     | Dialect synonym of `integer`.                                                                                                 |
 | `Column.tinyint()`                 | `TINYINT`      | `number`     | 1-byte int (`SMALLINT`/`INTEGER` where absent).                                                                               |
@@ -131,18 +138,19 @@ to range-check on a boolean.
 These chain on every builder kind; a few are overridden on
 [masks](#masked-columns):
 
-| Modifier                | Effect                                                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `.nullable()`           | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                          |
-| `.default(v)`           | Insert default; see [Defaults](#defaults).                                                                                        |
-| `.defaultOnUpdate(v)`   | Auto-touch on every update (e.g. `updatedAt`).                                                                                    |
-| `.comment(text)`        | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                              |
-| `.hidden()`             | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                   |
-| `.unfilterable()`       | Reject the column in `WHERE` / `ORDER BY`.                                                                                        |
-| `.renamedFrom(oldName)` | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere. |
-| `.beforeWrite(fn)`      | [Transform](#transforms) before validate/encrypt/write.                                                                           |
-| `.afterRead(fn)`        | [Transform](#transforms) on the way back out.                                                                                     |
-| `.encrypt()`            | [Encrypt at rest](#encryption-and-hashing).                                                                                       |
+| Modifier                 | Effect                                                                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `.nullable()`            | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                          |
+| `.default(v)`            | Insert default; see [Defaults](#defaults).                                                                                        |
+| `.defaultOnUpdate(v)`    | Auto-touch on every update (e.g. `updatedAt`).                                                                                    |
+| `.comment(text)`         | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                              |
+| `.hidden()`              | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                   |
+| `.unfilterable()`        | Reject the column in `WHERE` / `ORDER BY`.                                                                                        |
+| `.renamedFrom(oldName)`  | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere. |
+| `.beforeWrite(fn)`       | [Transform](#transforms) before validate/encrypt/write.                                                                           |
+| `.afterRead(fn)`         | [Transform](#transforms) on the way back out.                                                                                     |
+| `.validate(fn, message)` | Custom [validation](#validators) predicate beyond `lov`/`pattern`/`min`/`max`. Stacks; cannot change the value.                   |
+| `.encrypt()`             | [Encrypt at rest](#encryption-and-hashing).                                                                                       |
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -185,7 +193,25 @@ const clicks = Column.bigint().min(0n).default(0n);
 `.pattern()` accepts a `RegExp` or a string and is stored serializably
 as `{ source, flags }`. `.min()` and `.max()` on bigint and date
 columns canonicalize the bound to a string in the spec, and the runtime
-rehydrates it per column type.
+rehydrates it per column type — so a date bound is fixed at schema-load
+time, not re-evaluated per write.
+
+For anything the table above can't express — including a bound that
+must be evaluated per write, like "before today" — `.validate(fn,
+message)` runs a custom predicate through the generated Guardian's
+`.refine()`. It's available on every builder kind, stacks (call it more
+than once to add independent rules), and never changes the value, only
+whether it's accepted:
+
+```typescript
+import { Column } from '@tundralibs/norm';
+
+const bornBefore = Column.date()
+  .validate((v) => v < new Date(), 'must be in the past');
+
+const evenQty = Column.integer().min(0)
+  .validate((v) => v % 2 === 0, 'must be even');
+```
 
 ### Defaults
 
@@ -734,6 +760,10 @@ make a relation load eagerly on default (projection-less) reads:
 
 Explicit projections replace the eager default entirely, and write
 `RETURNING` stays flat, since it cannot join.
+
+Both flags are plain `boolean`s. Omitting either defaults to `false`
+(not eager); writing `project: false` / `reverseProject: false`
+explicitly type-checks and behaves exactly like omitting it.
 
 ### Referential actions
 
