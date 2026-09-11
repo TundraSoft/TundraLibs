@@ -65,6 +65,9 @@ export const DATE_TYPES: ReadonlySet<string> = new Set([
  */
 export function buildCellGuardian(spec: ColumnSpec): FinishedGuardian<unknown> {
   let base = buildBase(spec);
+  for (const hook of spec.transforms?.guardian ?? []) {
+    base = hook(base as never) as typeof base;
+  }
   for (const { fn, message } of spec.transforms?.validate ?? []) {
     base = base.refine(fn as never, message) as typeof base;
   }

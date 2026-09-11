@@ -384,6 +384,57 @@ describe('norm.definition (builders + Entity)', () => {
     asserts.assertEquals(rule.fn(new Date('2999-01-01') as never), false);
   });
 
+  it(".guardian() reaches Guardian's built-in validators, stacks, and pins the concrete type", () => {
+    const email = Column.varchar(255).guardian((g) => g.email());
+    asserts.assertEquals(email.spec.transforms?.guardian?.length, 1);
+
+    const age = Column.integer().guardian((g) => g.positive());
+    asserts.assertEquals(age.spec.transforms?.guardian?.length, 1);
+
+    const bornBefore = Column.date().guardian((g) => g.past());
+    asserts.assertEquals(bornBefore.spec.transforms?.guardian?.length, 1);
+
+    const bits = Column.bigint().guardian((g) => g.uint(64));
+    asserts.assertEquals(bits.spec.transforms?.guardian?.length, 1);
+
+    // Stacks: two independent rules both survive.
+    const slugish = Column.varchar(80)
+      .guardian((g) => g.slug())
+      .guardian((g) => g.maxLength(40));
+    asserts.assertEquals(slugish.spec.transforms?.guardian?.length, 2);
+
+    // @ts-expect-error — toBigInt() returns BigIntGuardian, not NumberGuardian.
+    Column.integer().guardian((g) => g.toBigInt());
+    // @ts-expect-error — toISOString() returns BaseGuardian<string>, not DateGuardian.
+    Column.date().guardian((g) => g.toISOString());
+    // @ts-expect-error — formatCurrency() returns BaseGuardian<string>, not NumberGuardian.
+    Column.decimal(10, 2).guardian((g) => g.formatCurrency());
+  });
+
+  it('.guardian() also reaches boolean/json/blob/bit — the base ColumnBuilder kinds', () => {
+    const flag = Column.boolean().guardian((g) => g.true());
+    asserts.assertEquals(flag.spec.transforms?.guardian?.length, 1);
+
+    const settings = Column.json<{ tags: string[] }>().guardian((g) =>
+      g.refine((v) => Array.isArray((v as { tags: unknown }).tags), 'bad tags')
+    );
+    asserts.assertEquals(settings.spec.transforms?.guardian?.length, 1);
+
+    const payload = Column.blob().guardian((g) =>
+      g.refine((v) => (v as Uint8Array).length > 0, 'must not be empty')
+    );
+    asserts.assertEquals(payload.spec.transforms?.guardian?.length, 1);
+
+    // BIT is physically validated as an integer (guardians.ts's BIT
+    // branch) even though Column.bit() is a bare ColumnBuilder<number>
+    // — .guardian() resolves to NumberGuardian here too.
+    const flags = Column.bit().guardian((g) => g.min(0).max(1));
+    asserts.assertEquals(flags.spec.transforms?.guardian?.length, 1);
+
+    // @ts-expect-error — toNumber() returns NumberGuardian, not BooleanGuardian.
+    Column.boolean().guardian((g) => g.toNumber());
+  });
+
   it('id-generator sugar: VARCHAR/BIGINT specs defaulted per row, never Column.uuid()', () => {
     const ulidCol = Column.ulid();
     asserts.assertEquals(ulidCol.spec.type, 'VARCHAR');

@@ -286,6 +286,7 @@ Column.varchar(255) // VARCHAR(255)
   .minLength(3).maxLength(50)
   .pattern(/^[a-z]+$/)
   .validate((v) => !v.includes(' '), 'no spaces allowed') // custom rule
+  .guardian((g) => g.slug()) // reach Guardian's own validators directly
   .beforeWrite((v) => v.trim())
   .afterRead((v) => v.toUpperCase())
   .lov(['a', 'b', 'c']) // narrows the TS type to the union
