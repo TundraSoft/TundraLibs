@@ -348,6 +348,83 @@ describe('norm.definition (builders + Entity)', () => {
     asserts.assertEquals(json.pattern, { source: '^[a-z0-9-]+$' });
   });
 
+  it('.validate() stacks custom predicates, composing with lov/pattern', () => {
+    const evenOnly = Column.integer().min(0)
+      .validate((v) => v % 2 === 0, 'must be even');
+    asserts.assertEquals(evenOnly.spec.min, 0);
+    asserts.assertEquals(evenOnly.spec.transforms?.validate?.length, 1);
+    asserts.assertEquals(
+      evenOnly.spec.transforms!.validate![0]!.message,
+      'must be even',
+    );
+    asserts.assertEquals(
+      evenOnly.spec.transforms!.validate![0]!.fn(4 as never),
+      true,
+    );
+    asserts.assertEquals(
+      evenOnly.spec.transforms!.validate![0]!.fn(5 as never),
+      false,
+    );
+
+    // Stacks: two independent rules both survive.
+    const stacked = Column.varchar(10)
+      .validate((v) => v.length > 2, 'too short')
+      .validate((v) => v !== 'banned', 'reserved word');
+    asserts.assertEquals(stacked.spec.transforms?.validate?.length, 2);
+
+    // A date-before-now check — the concrete motivating case for this
+    // escape hatch, since min()/max() on a date column bake in a fixed
+    // Date at schema-load time instead of evaluating "now" per write.
+    const past = Column.date().validate(
+      (v) => v < new Date(),
+      'must be before now',
+    );
+    const rule = past.spec.transforms!.validate![0]!;
+    asserts.assertEquals(rule.fn(new Date('2000-01-01') as never), true);
+    asserts.assertEquals(rule.fn(new Date('2999-01-01') as never), false);
+  });
+
+  it('id-generator sugar: VARCHAR/BIGINT specs defaulted per row, never Column.uuid()', () => {
+    const ulidCol = Column.ulid();
+    asserts.assertEquals(ulidCol.spec.type, 'VARCHAR');
+    asserts.assertEquals(ulidCol.spec.length, 26);
+    const ulidGen = ulidCol.spec.default!.insert as () => string;
+    const a = ulidGen();
+    const b = ulidGen();
+    asserts.assertMatch(a, /^[0-9A-HJKMNP-TV-Z]{26}$/);
+    asserts.assertNotEquals(a, b);
+
+    const cuidCol = Column.cuid();
+    asserts.assertEquals(cuidCol.spec.type, 'VARCHAR');
+    asserts.assertEquals(cuidCol.spec.length, 25);
+
+    const cuid2Col = Column.cuid2();
+    asserts.assertEquals(cuid2Col.spec.length, 24);
+    const cuid2Col16 = Column.cuid2(16);
+    asserts.assertEquals(cuid2Col16.spec.length, 16);
+
+    const nanoCol = Column.nanoId();
+    asserts.assertEquals(nanoCol.spec.length, 21);
+    const nanoCol8 = Column.nanoId(8);
+    asserts.assertEquals(nanoCol8.spec.length, 8);
+
+    const objectIdCol = Column.objectId();
+    asserts.assertEquals(objectIdCol.spec.type, 'VARCHAR');
+    const objIdGen = objectIdCol.spec.default!.insert as () => string;
+    asserts.assertNotEquals(objIdGen(), objIdGen());
+
+    // simpleId is BIGINT — a shared counter across calls to the SAME
+    // column's generated default, never a string column.
+    const simpleCol = Column.simpleId();
+    asserts.assertEquals(simpleCol.spec.type, 'BIGINT');
+    const simpleGen = simpleCol.spec.default!.insert as () => bigint;
+    asserts.assertEquals(simpleGen() < simpleGen(), true);
+
+    // Column.uuid() itself is untouched — still the native/format-
+    // validated 'UUID' logical type, no default wired in.
+    asserts.assertEquals(Column.uuid().spec, { type: 'UUID' });
+  });
+
   it('lov() narrows the TS type — no `as const` anywhere', () => {
     const status = Column.varchar(16).lov(['active', 'banned']);
     type _lov = Expect<

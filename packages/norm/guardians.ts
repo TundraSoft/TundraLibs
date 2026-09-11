@@ -64,7 +64,10 @@ export const DATE_TYPES: ReadonlySet<string> = new Set([
  * closes the chain with `.nullable()`.
  */
 export function buildCellGuardian(spec: ColumnSpec): FinishedGuardian<unknown> {
-  const base = buildBase(spec);
+  let base = buildBase(spec);
+  for (const { fn, message } of spec.transforms?.validate ?? []) {
+    base = base.refine(fn as never, message) as typeof base;
+  }
   return spec.nullable === true ? base.nullable() : base;
 }
 

@@ -113,4 +113,33 @@ describe('norm.column-types — extended SQL types round-trip (live SQLite)', ()
     await removeDir(gdir, { recursive: true });
     await removeDir(gmig, { recursive: true });
   });
+
+  it('id-generator sugar: distinct generated ids round-trip through insert + Guardian', async () => {
+    const Tagged = Entity('tagged', {
+      id: Column.ulid(),
+      seq: Column.simpleId(),
+      label: Column.varchar(20),
+    }, { pk: ['id'] });
+    const tdir = await makeTempDir({ prefix: 'norm-coltypes-id-' });
+    const db = new Norm({ database: { dialect: 'sqlite', path: tdir } })
+      .use(Schema('T', { Tagged }));
+    const tmig = await makeTempDir({ prefix: 'norm-coltypes-idm-' });
+    await new Migrator(db, { dir: tmig }).snapshot();
+    await new Migrator(db, { dir: tmig }).apply();
+
+    // Neither id nor seq is supplied — the sugar's own .default() fills
+    // them per row, through the real insert/Guardian pipeline.
+    await db.repo('Tagged').insert({ label: 'a' });
+    await db.repo('Tagged').insert({ label: 'b' });
+    const rows = await db.repo('Tagged').find();
+    asserts.assertEquals(rows.data.length, 2);
+    for (const row of rows.data) {
+      asserts.assertMatch(row.id, /^[0-9A-HJKMNP-TV-Z]{26}$/);
+    }
+    asserts.assertNotEquals(rows.data[0]!.id, rows.data[1]!.id);
+    asserts.assertNotEquals(rows.data[0]!.seq, rows.data[1]!.seq);
+
+    await removeDir(tdir, { recursive: true });
+    await removeDir(tmig, { recursive: true });
+  });
 });

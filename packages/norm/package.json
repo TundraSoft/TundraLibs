@@ -47,6 +47,7 @@
     "@tundralibs/crypt": "workspace:*",
     "@tundralibs/drivers": "workspace:*",
     "@tundralibs/guardian": "workspace:*",
+    "@tundralibs/id": "workspace:*",
     "@tundralibs/oql": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   }

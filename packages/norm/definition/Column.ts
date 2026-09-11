@@ -45,6 +45,7 @@
  * @since 1.0.0
  */
 
+import { cuid, cuid2, nanoID, ObjectID, simpleID, ulid } from '@tundralibs/id';
 import type { HashAlgorithm } from '../crypto.ts';
 
 /** Digest algorithms a `Column.hash()` column may declare — the SAME
@@ -151,6 +152,12 @@ export interface ColumnSpec<
   readonly transforms?: {
     readonly beforeWrite?: (v: never) => unknown;
     readonly afterRead?: (v: never) => unknown;
+    /** Custom validation rules beyond `lov`/`pattern`/`min`/`max` —
+     * predicates only, stacked in declaration order. */
+    readonly validate?: readonly {
+      readonly fn: (v: never) => boolean | Promise<boolean>;
+      readonly message: string;
+    }[];
   };
   /** MIGRATION HINT: the column's PREVIOUS name — consumed only by
    * the migration diff (rename instead of drop+add); inert everywhere
@@ -345,6 +352,27 @@ export class ColumnBuilder<
   public afterRead(fn: (v: NonNullable<T>) => NonNullable<T>): this {
     return this._clone({
       transforms: { ...this.spec.transforms, afterRead: fn },
+    });
+  }
+
+  /**
+   * Custom validation beyond `lov`/`pattern`/`min`/`max` — e.g. a date
+   * bound relative to `new Date()`, evaluated per write rather than
+   * baked in at schema-load time (unlike `min()`/`max()` on a date
+   * column). Predicate only — it cannot change the value, unlike
+   * `beforeWrite`/`afterRead`. Runs after norm's own validators,
+   * before `.nullable()` closes the chain. Stacks: call `.validate()`
+   * more than once to add independent rules.
+   */
+  public validate(
+    fn: (v: NonNullable<T>) => boolean | Promise<boolean>,
+    message: string,
+  ): this {
+    return this._clone({
+      transforms: {
+        ...this.spec.transforms,
+        validate: [...(this.spec.transforms?.validate ?? []), { fn, message }],
+      },
     });
   }
 
@@ -798,6 +826,42 @@ export const Column = {
     new StringColumnBuilder({ type: 'CHAR', length }),
   text: (): StringColumnBuilder => new StringColumnBuilder({ type: 'TEXT' }),
   uuid: (): StringColumnBuilder => new StringColumnBuilder({ type: 'UUID' }),
+  /** `VARCHAR(26)` defaulted to a fresh {@link ulid} per row. Plain
+   * `VARCHAR` — NOT `Column.uuid()`, whose native `UUID` type on
+   * Postgres/MariaDB rejects a non-hyphenated-hex string. */
+  ulid: (): StringColumnBuilder<string, true> =>
+    new StringColumnBuilder({ type: 'VARCHAR', length: 26 }).default(
+      () => ulid(),
+    ),
+  /** `VARCHAR(25)` defaulted to a fresh {@link cuid} per row. */
+  cuid: (): StringColumnBuilder<string, true> =>
+    new StringColumnBuilder({ type: 'VARCHAR', length: 25 }).default(
+      () => cuid(),
+    ),
+  /** `VARCHAR(length)` defaulted to a fresh {@link cuid2} per row
+   * (default length 24, matching `cuid2`'s own default). */
+  cuid2: (length: number = 24): StringColumnBuilder<string, true> =>
+    new StringColumnBuilder({ type: 'VARCHAR', length }).default(
+      () => cuid2(length),
+    ),
+  /** `VARCHAR(size)` defaulted to a fresh {@link nanoID} per row
+   * (default size 21, matching `nanoID`'s own default). */
+  nanoId: (size: number = 21): StringColumnBuilder<string, true> =>
+    new StringColumnBuilder({ type: 'VARCHAR', length: size }).default(
+      () => nanoID(size),
+    ),
+  /** `VARCHAR(26)` defaulted to {@link ObjectID}, instantiated ONCE
+   * here so every row shares the same counter/machine-id sequence. */
+  objectId: (): StringColumnBuilder<string, true> =>
+    new StringColumnBuilder({ type: 'VARCHAR', length: 26 }).default(
+      ObjectID(),
+    ),
+  /** `BIGINT` defaulted to {@link simpleID}, instantiated ONCE here so
+   * every row shares the same counter/seed. */
+  simpleId: (): NumberColumnBuilder<bigint, true> =>
+    new NumberColumnBuilder<bigint>({ type: 'BIGINT' }).default(
+      simpleID(),
+    ),
   /** `CLOB` — character large object (unbounded text). Renders as
    * `TEXT` / `LONGTEXT` / `TEXT` (pg/maria/sqlite). String validators apply. */
   clob: (): StringColumnBuilder => new StringColumnBuilder({ type: 'CLOB' }),

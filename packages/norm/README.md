@@ -285,6 +285,7 @@ Column.varchar(255) // VARCHAR(255)
   .nullable() // NULL allowed
   .minLength(3).maxLength(50)
   .pattern(/^[a-z]+$/)
+  .validate((v) => !v.includes(' '), 'no spaces allowed') // custom rule
   .beforeWrite((v) => v.trim())
   .afterRead((v) => v.toUpperCase())
   .lov(['a', 'b', 'c']) // narrows the TS type to the union
@@ -303,7 +304,13 @@ Column.date();
 Column.time();
 Column.datetime();
 Column.timestamp();
-Column.uuid();
+Column.uuid(); // native DB-checked UUID — pair with a DB-side default
+Column.ulid(); // VARCHAR(26), defaulted to a fresh ULID per row
+Column.cuid(); // VARCHAR(25), defaulted to a fresh CUID per row
+Column.cuid2(); // VARCHAR(24), defaulted to a fresh CUID2 per row
+Column.nanoId(); // VARCHAR(21), defaulted to a fresh nanoID per row
+Column.objectId(); // VARCHAR(26), a shared ObjectID counter per column
+Column.simpleId(); // BIGINT, a shared simpleID counter per column
 Column.text();
 Column.blob();
 Column.hash('SHA-256'); // one-way digest column (passwords)
@@ -612,6 +619,35 @@ without interfering: call `fn` exactly once, return its result
 unchanged, and rethrow its errors. The gap between the operation span
 and its query spans is norm's own overhead per operation (validation,
 hooks, and per-cell crypto on encrypted columns).
+
+## Testing your models
+
+Test against a real SQLite database rather than mocking norm — it is
+fast enough to be the default, and the `Migrator` applies your actual
+definitions, so a test runs against the real schema (constraints,
+defaults, and all), not a stand-in:
+
+```typescript ignore
+import '@tundralibs/norm/engines/sqlite';
+import { Migrator } from '@tundralibs/norm/migrations';
+
+const tempDir = await Deno.makeTempDir();
+const db = new Norm({
+  database: { dialect: 'sqlite', path: tempDir },
+  secret: 'test',
+}).use(Identity, Shortener);
+await new Migrator(db, { dir: tempDir }).snapshot();
+await new Migrator(db, { dir: tempDir }).apply();
+// ...run your app code against `db`, assert on the NormResult envelopes.
+```
+
+To unit-test code above the database with no engine at all, implement
+the exported `Executor` seam (`execute`, `ddl`, `transaction`,
+`capabilities`) as a mock and pass it to `compileRuntime` — norm's own
+test suite (`runtime.test.ts`, `project.test.ts`) does exactly this,
+since norm ships no ready-made mock executor of its own. See
+[Testing your app](docs/NORM-Guide.md#10-testing-your-app) for the full
+walkthrough.
 
 ## Supported databases
 

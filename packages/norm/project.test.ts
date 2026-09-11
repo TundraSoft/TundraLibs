@@ -591,4 +591,42 @@ describe('norm.project (masks + eager relations)', () => {
     );
     asserts.assertEquals('card' in migSnap.entities.Cards!.columns, true);
   });
+
+  it('project: false / reverseProject: false compile and behave exactly like omitting them', async () => {
+    const Widgets = Entity('widgets', {
+      id: Column.integer(),
+      name: Column.varchar(40),
+    }, { pk: ['id'] });
+    const Parts = Entity('parts', {
+      id: Column.integer(),
+      widgetId: Column.integer(),
+    }, {
+      pk: ['id'],
+      fk: {
+        Widget: {
+          model: 'Widgets',
+          on: { widgetId: 'id' },
+          reverseAs: 'Parts',
+          project: false, // explicit false — must NOT be a type error
+          reverseProject: false,
+        },
+      },
+    });
+    function falseFlagsRegistry() {
+      return use(Schema('FalseFlags', { Widgets, Parts }));
+    }
+    const exec = new MockExec();
+    const runtime = compileRuntime(falseFlagsRegistry(), {}, exec, () => {});
+    const db = new NormDb<ReturnType<typeof falseFlagsRegistry>>(
+      runtime,
+      exec,
+      undefined,
+    );
+
+    exec.selectQueue.push([{ id: 1, widgetId: 7 }]);
+    await db.repo('Parts').find();
+    const ir = exec.lastOf('SELECT') as unknown as { joins?: Row };
+    // Same as omitting the keys entirely — no eager join produced.
+    asserts.assertEquals(Object.keys(ir.joins ?? {}), []);
+  });
 });
