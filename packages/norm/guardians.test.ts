@@ -182,6 +182,47 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertThrows(() => ge.parse('nope'));
   });
 
+  it('.guardian(): reaches built-in format validators, composes with validate() and encrypt()', () => {
+    const email = Column.varchar(255).guardian((g) => g.email());
+    const ge = buildCellGuardian(email.spec as unknown as ColumnSpec);
+    asserts.assertEquals(ge.parse('a@b.com'), 'a@b.com');
+    asserts.assertThrows(() => ge.parse('not-an-email'));
+
+    // Composes with .validate(): both enforced independently.
+    const both = Column.varchar(255)
+      .guardian((g) => g.email())
+      .validate((v) => !v.endsWith('@spam.test'), 'blocked domain');
+    const gb = buildCellGuardian(both.spec as unknown as ColumnSpec);
+    asserts.assertEquals(gb.parse('a@b.com'), 'a@b.com');
+    asserts.assertThrows(() => gb.parse('not-an-email'));
+    asserts.assertThrows(
+      () => gb.parse('a@spam.test'),
+      Error,
+      'blocked domain',
+    );
+
+    // Encrypted column: still validates the PLAINTEXT.
+    const encrypted = Column.varchar(255).guardian((g) => g.email())
+      .encrypt();
+    const gce = buildCellGuardian(encrypted.spec as unknown as ColumnSpec);
+    asserts.assertEquals(gce.parse('a@b.com'), 'a@b.com');
+    asserts.assertThrows(() => gce.parse('nope'));
+
+    // NumberGuardian / DateGuardian built-ins, same mechanism.
+    const age = Column.integer().guardian((g) => g.positive());
+    const ga = buildCellGuardian(age.spec as unknown as ColumnSpec);
+    asserts.assertEquals(ga.parse(5), 5);
+    asserts.assertThrows(() => ga.parse(-1));
+
+    const past = Column.date().guardian((g) => g.past());
+    const gp = buildCellGuardian(past.spec as unknown as ColumnSpec);
+    asserts.assertEquals(
+      gp.parse(new Date('2000-01-01')) instanceof Date,
+      true,
+    );
+    asserts.assertThrows(() => gp.parse(new Date('2999-01-01')));
+  });
+
   it('update guardians: everything optional, defaultOnUpdate auto-fills', () => {
     const def = Entity('u', {
       id: Column.integer(),

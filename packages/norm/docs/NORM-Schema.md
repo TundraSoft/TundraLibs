@@ -137,19 +137,20 @@ to range-check on a boolean.
 These chain on every builder kind; a few are overridden on
 [masks](#masked-columns):
 
-| Modifier                 | Effect                                                                                                                            |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `.nullable()`            | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                          |
-| `.default(v)`            | Insert default; see [Defaults](#defaults).                                                                                        |
-| `.defaultOnUpdate(v)`    | Auto-touch on every update (e.g. `updatedAt`).                                                                                    |
-| `.comment(text)`         | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                              |
-| `.hidden()`              | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                   |
-| `.unfilterable()`        | Reject the column in `WHERE` / `ORDER BY`.                                                                                        |
-| `.renamedFrom(oldName)`  | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere. |
-| `.beforeWrite(fn)`       | [Transform](#transforms) before validate/encrypt/write.                                                                           |
-| `.afterRead(fn)`         | [Transform](#transforms) on the way back out.                                                                                     |
-| `.validate(fn, message)` | Custom [validation](#validators) predicate beyond `lov`/`pattern`/`min`/`max`. Stacks; cannot change the value.                   |
-| `.encrypt()`             | [Encrypt at rest](#encryption-and-hashing).                                                                                       |
+| Modifier                 | Effect                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.nullable()`            | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                                          |
+| `.default(v)`            | Insert default; see [Defaults](#defaults).                                                                                                        |
+| `.defaultOnUpdate(v)`    | Auto-touch on every update (e.g. `updatedAt`).                                                                                                    |
+| `.comment(text)`         | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                              |
+| `.hidden()`              | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                                   |
+| `.unfilterable()`        | Reject the column in `WHERE` / `ORDER BY`.                                                                                                        |
+| `.renamedFrom(oldName)`  | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.                 |
+| `.beforeWrite(fn)`       | [Transform](#transforms) before validate/encrypt/write.                                                                                           |
+| `.afterRead(fn)`         | [Transform](#transforms) on the way back out.                                                                                                     |
+| `.validate(fn, message)` | Custom [validation](#validators) predicate beyond `lov`/`pattern`/`min`/`max`. Stacks; cannot change the value.                                   |
+| `.guardian(fn)`          | Extends the generated [Guardian](#validators) directly — its built-in format validators and same-type transforms. String/Number/BigInt/Date only. |
+| `.encrypt()`             | [Encrypt at rest](#encryption-and-hashing).                                                                                                       |
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -211,6 +212,33 @@ const bornBefore = Column.date()
 const evenQty = Column.integer().min(0)
   .validate((v) => v % 2 === 0, 'must be even');
 ```
+
+For a check `.validate()` would make you hand-roll, reach into
+[Guardian](../../guardian/README.md)'s own built-in vocabulary with
+`.guardian(fn)` instead — available on `varchar`/`char`/`text`/`clob`/
+`xml` (a `StringGuardian`), `integer`/`decimal`/… (`NumberGuardian`),
+`bigint` (`BigIntGuardian`), and `date`/`timestamp`/… (`DateGuardian`).
+It stacks like `.validate()`, and runs after the table above:
+
+```typescript
+import { Column } from '@tundralibs/norm';
+
+const email = Column.varchar(255).guardian((g) => g.email());
+const slug = Column.varchar(80).guardian((g) => g.slug());
+const age = Column.integer().guardian((g) => g.positive());
+const bornBefore = Column.date().guardian((g) => g.past());
+```
+
+`fn`'s parameter AND return type are pinned to the column's own concrete
+guardian class (`StringGuardian → StringGuardian`, and so on) — not the
+generic `BaseGuardian<T>`. Some of these classes also carry methods that
+change the value's TYPE (`NumberGuardian.toBigInt()`, `DateGuardian
+.toISOString()`, `BigIntGuardian.toHex()`, …); pinning the signature
+this way means a chain ending in one of those simply fails to
+type-check, rather than silently letting a transform swap the column's
+declared type. Every validator/transform that legitimately belongs here
+is typed to return the same class, so nothing is lost — the type
+checker only blocks the genuinely unsafe methods.
 
 ### Defaults
 

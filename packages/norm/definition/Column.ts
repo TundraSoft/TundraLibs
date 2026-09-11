@@ -46,6 +46,12 @@
  */
 
 import { cuid, cuid2, nanoID, ObjectID, simpleID, ulid } from '@tundralibs/id';
+import type {
+  BigIntGuardian,
+  DateGuardian,
+  NumberGuardian,
+  StringGuardian as StringGuard,
+} from '@tundralibs/guardian';
 import type { HashAlgorithm } from '../crypto.ts';
 
 /** Digest algorithms a `Column.hash()` column may declare — the SAME
@@ -158,6 +164,10 @@ export interface ColumnSpec<
       readonly fn: (v: never) => boolean | Promise<boolean>;
       readonly message: string;
     }[];
+    /** Extends the generated Guardian directly (`.email()`, `.uuid()`,
+     * `.past()`, …) — stacked in declaration order, applied after
+     * `lov`/`pattern`/`min`/`max` and before `validate`'s predicates. */
+    readonly guardian?: readonly ((g: never) => unknown)[];
   };
   /** MIGRATION HINT: the column's PREVIOUS name — consumed only by
    * the migration diff (rename instead of drop+add); inert everywhere
@@ -461,6 +471,29 @@ export class StringColumnBuilder<
   public maxLength(n: number): this {
     return this._clone({ maxLength: n });
   }
+
+  /**
+   * Extend the generated Guardian directly — `.email()`, `.uuid()`,
+   * `.url()`, `.slug()`, `.phone()`, `.creditCard()`, and the rest of
+   * {@link StringGuard}'s built-in format validators, plus its
+   * same-type transforms (`.encodeUri()`, …). Stacks: call more than
+   * once to add independent rules. Runs after `lov`/`pattern`/
+   * `minLength`/`maxLength`, before `.validate()`'s predicates.
+   *
+   * Pinned to `StringGuard → StringGuard` on purpose: a method that
+   * changes the value's type (there are none on `StringGuardian`
+   * itself, but the pattern matters on the numeric/date builders)
+   * would fail to type-check here rather than silently swap the
+   * column's declared type.
+   */
+  public guardian(fn: (g: StringGuard) => StringGuard): this {
+    return this._clone({
+      transforms: {
+        ...this.spec.transforms,
+        guardian: [...(this.spec.transforms?.guardian ?? []), fn as never],
+      },
+    });
+  }
 }
 
 /**
@@ -615,6 +648,33 @@ export class NumberColumnBuilder<
       NumberColumnBuilder<V[number] | Extract<T, null>, Opt>
     >;
   }
+
+  /**
+   * Extend the generated Guardian directly — `.positive()`,
+   * `.prime()`, `.validPort()`, `.latitude()`/`.longitude()`, and the
+   * rest of {@link NumberGuardian}'s (or, on a `Column.bigint()`
+   * column, {@link BigIntGuardian}'s `.uint(bits)`/`.nonNegative()`)
+   * built-in checks, plus same-type transforms (`.round()`, `.clamp()`,
+   * …). Stacks: call more than once to add independent rules. Runs
+   * after `min`/`max`/`lov`, before `.validate()`'s predicates.
+   *
+   * Pinned to the SAME concrete guardian on purpose — methods like
+   * `.toBigInt()`/`.formatCurrency()`/`.toDate()` return a different
+   * guardian type and correctly fail to type-check here instead of
+   * silently swapping the column's declared type.
+   */
+  public guardian(
+    fn: (
+      g: NonNullable<T> extends bigint ? BigIntGuardian : NumberGuardian,
+    ) => NonNullable<T> extends bigint ? BigIntGuardian : NumberGuardian,
+  ): this {
+    return this._clone({
+      transforms: {
+        ...this.spec.transforms,
+        guardian: [...(this.spec.transforms?.guardian ?? []), fn as never],
+      },
+    });
+  }
 }
 
 /** Date/timestamp builder — `min()` / `max()` live here. */
@@ -651,6 +711,30 @@ export class DateColumnBuilder<
   /** Latest allowed value (inclusive; stored as an ISO string). */
   public max(v: Date): this {
     return this._clone({ max: bound(v) });
+  }
+
+  /**
+   * Extend the generated Guardian directly — `.past()`, `.future()`,
+   * `.businessHours()`, `.weekday()`, `.ageMin()`/`.ageMax()`, and the
+   * rest of {@link DateGuardian}'s built-in checks, plus its same-type
+   * transforms (`.startOf()`, `.toUTC()`, …). Unlike `.min()`/`.max()`,
+   * which bake a fixed `Date` into the spec at schema-load time, a rule
+   * like `.past()` is evaluated against `new Date()` on every write.
+   * Stacks: call more than once to add independent rules. Runs after
+   * `min`/`max`, before `.validate()`'s predicates.
+   *
+   * Pinned to `DateGuardian → DateGuardian` on purpose — methods like
+   * `.toISOString()`/`.toTimestamp()` return a different guardian type
+   * and correctly fail to type-check here instead of silently
+   * swapping the column's declared type.
+   */
+  public guardian(fn: (g: DateGuardian) => DateGuardian): this {
+    return this._clone({
+      transforms: {
+        ...this.spec.transforms,
+        guardian: [...(this.spec.transforms?.guardian ?? []), fn as never],
+      },
+    });
   }
 }
 
