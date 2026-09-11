@@ -117,7 +117,7 @@ describe('norm.column-types — extended SQL types round-trip (live SQLite)', ()
   it('id-generator sugar: distinct generated ids round-trip through insert + Guardian', async () => {
     const Tagged = Entity('tagged', {
       id: Column.ulid(),
-      seq: Column.sequenceId(),
+      seq: Column.simpleId(),
       label: Column.varchar(20),
     }, { pk: ['id'] });
     const tdir = await makeTempDir({ prefix: 'norm-coltypes-id-' });

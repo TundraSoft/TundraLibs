@@ -101,7 +101,6 @@ import { Column } from '@tundralibs/norm';
 | `Column.cuid2(length?)`            | `VARCHAR(n)`   | `string`     | Defaulted to a fresh CUID2 per row (default length 24), via `@tundralibs/id`.                                                 |
 | `Column.nanoId(size?)`             | `VARCHAR(n)`   | `string`     | Defaulted to a fresh nanoID per row (default size 21), via `@tundralibs/id`.                                                  |
 | `Column.objectId()`                | `VARCHAR(26)`  | `string`     | Defaulted to `@tundralibs/id`'s `ObjectID` — one counter/machine-id generator shared by every row of this column.             |
-| `Column.sequenceId()`              | `BIGINT`       | `bigint`     | Defaulted to `@tundralibs/id`'s `sequenceID` — one shared counter per column.                                                 |
 | `Column.simpleId()`                | `BIGINT`       | `bigint`     | Defaulted to `@tundralibs/id`'s `simpleID` — one shared counter/seed per column.                                              |
 | `Column.integer()`                 | `INTEGER`      | `number`     | Numeric validators apply.                                                                                                     |
 | `Column.int()`                     | `INT`          | `number`     | Dialect synonym of `integer`.                                                                                                 |

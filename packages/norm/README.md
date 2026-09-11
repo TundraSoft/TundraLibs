@@ -310,7 +310,6 @@ Column.cuid(); // VARCHAR(25), defaulted to a fresh CUID per row
 Column.cuid2(); // VARCHAR(24), defaulted to a fresh CUID2 per row
 Column.nanoId(); // VARCHAR(21), defaulted to a fresh nanoID per row
 Column.objectId(); // VARCHAR(26), a shared ObjectID counter per column
-Column.sequenceId(); // BIGINT, a shared sequence counter per column
 Column.simpleId(); // BIGINT, a shared simpleID counter per column
 Column.text();
 Column.blob();

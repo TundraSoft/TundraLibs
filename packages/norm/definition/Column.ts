@@ -45,15 +45,7 @@
  * @since 1.0.0
  */
 
-import {
-  cuid,
-  cuid2,
-  nanoID,
-  ObjectID,
-  sequenceID,
-  simpleID,
-  ulid,
-} from '@tundralibs/id';
+import { cuid, cuid2, nanoID, ObjectID, simpleID, ulid } from '@tundralibs/id';
 import type { HashAlgorithm } from '../crypto.ts';
 
 /** Digest algorithms a `Column.hash()` column may declare — the SAME
@@ -863,12 +855,6 @@ export const Column = {
   objectId: (): StringColumnBuilder<string, true> =>
     new StringColumnBuilder({ type: 'VARCHAR', length: 26 }).default(
       ObjectID(),
-    ),
-  /** `BIGINT` defaulted to {@link sequenceID}, instantiated ONCE here
-   * so every row shares the same counter. */
-  sequenceId: (): NumberColumnBuilder<bigint, true> =>
-    new NumberColumnBuilder<bigint>({ type: 'BIGINT' }).default(
-      sequenceID(),
     ),
   /** `BIGINT` defaulted to {@link simpleID}, instantiated ONCE here so
    * every row shares the same counter/seed. */

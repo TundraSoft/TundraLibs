@@ -413,15 +413,12 @@ describe('norm.definition (builders + Entity)', () => {
     const objIdGen = objectIdCol.spec.default!.insert as () => string;
     asserts.assertNotEquals(objIdGen(), objIdGen());
 
-    // sequenceId/simpleId are BIGINT — a shared counter across calls to
-    // the SAME column's generated default, never a string column.
-    const seqCol = Column.sequenceId();
-    asserts.assertEquals(seqCol.spec.type, 'BIGINT');
-    const seqGen = seqCol.spec.default!.insert as () => bigint;
-    asserts.assertEquals(seqGen() < seqGen(), true);
-
+    // simpleId is BIGINT — a shared counter across calls to the SAME
+    // column's generated default, never a string column.
     const simpleCol = Column.simpleId();
     asserts.assertEquals(simpleCol.spec.type, 'BIGINT');
+    const simpleGen = simpleCol.spec.default!.insert as () => bigint;
+    asserts.assertEquals(simpleGen() < simpleGen(), true);
 
     // Column.uuid() itself is untouched — still the native/format-
     // validated 'UUID' logical type, no default wired in.
