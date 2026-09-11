@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.7.1...norm-v1.8.0) (2026-09-11)
+
+
+### Features
+
+* **norm:** id-generator sugar, boolean fk project flags, custom validate() ([#662](https://github.com/TundraSoft/TundraLibs/issues/662)) ([0bfa875](https://github.com/TundraSoft/TundraLibs/commit/0bfa875d50a5837c63d312a329d075a51f771f98))
+
 ## [1.7.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.7.0...norm-v1.7.1) (2026-09-09)
 
 
