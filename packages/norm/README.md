@@ -621,6 +621,35 @@ unchanged, and rethrow its errors. The gap between the operation span
 and its query spans is norm's own overhead per operation (validation,
 hooks, and per-cell crypto on encrypted columns).
 
+## Testing your models
+
+Test against a real SQLite database rather than mocking norm — it is
+fast enough to be the default, and the `Migrator` applies your actual
+definitions, so a test runs against the real schema (constraints,
+defaults, and all), not a stand-in:
+
+```typescript ignore
+import '@tundralibs/norm/engines/sqlite';
+import { Migrator } from '@tundralibs/norm/migrations';
+
+const tempDir = await Deno.makeTempDir();
+const db = new Norm({
+  database: { dialect: 'sqlite', path: tempDir },
+  secret: 'test',
+}).use(Identity, Shortener);
+await new Migrator(db, { dir: tempDir }).snapshot();
+await new Migrator(db, { dir: tempDir }).apply();
+// ...run your app code against `db`, assert on the NormResult envelopes.
+```
+
+To unit-test code above the database with no engine at all, implement
+the exported `Executor` seam (`execute`, `ddl`, `transaction`,
+`capabilities`) as a mock and pass it to `compileRuntime` — norm's own
+test suite (`runtime.test.ts`, `project.test.ts`) does exactly this,
+since norm ships no ready-made mock executor of its own. See
+[Testing your app](docs/NORM-Guide.md#10-testing-your-app) for the full
+walkthrough.
+
 ## Supported databases
 
 | Feature                       | PostgreSQL | Neon | MariaDB/MySQL | SQLite | Turso | D1  | MongoDB |
