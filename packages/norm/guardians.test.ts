@@ -154,6 +154,34 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertEquals(paths.includes('phantom'), true);
   });
 
+  it('.validate(): custom predicates run after lov/pattern, stack, and compose with encrypt()', () => {
+    const evenLov = Column.integer().lov([2, 3, 4, 5])
+      .validate((v) => v % 2 === 0, 'must be even');
+    const g = buildCellGuardian(evenLov.spec as unknown as ColumnSpec);
+    asserts.assertEquals(g.parse(2), 2);
+    asserts.assertThrows(() => g.parse(3), Error, 'must be even'); // passes lov, fails validate
+    asserts.assertThrows(() => g.parse(9)); // fails lov first
+
+    // Stacked rules: both enforced independently.
+    const stacked = Column.varchar(10)
+      .validate((v) => v.length > 2, 'too short')
+      .validate((v) => v !== 'ban', 'reserved word');
+    const gs = buildCellGuardian(stacked.spec as unknown as ColumnSpec);
+    asserts.assertEquals(gs.parse('ok!'), 'ok!');
+    asserts.assertThrows(() => gs.parse('no'), Error, 'too short');
+    asserts.assertThrows(() => gs.parse('ban'), Error, 'reserved word');
+
+    // Encrypted column: the guardian still validates the PLAINTEXT
+    // (buildCellGuardian dispatches on the logical type, not `encrypt`).
+    const encrypted = Column.varchar(20).validate(
+      (v) => v.includes('@'),
+      'must look like an email',
+    ).encrypt();
+    const ge = buildCellGuardian(encrypted.spec as unknown as ColumnSpec);
+    asserts.assertEquals(ge.parse('a@b.com'), 'a@b.com');
+    asserts.assertThrows(() => ge.parse('nope'));
+  });
+
   it('update guardians: everything optional, defaultOnUpdate auto-fills', () => {
     const def = Entity('u', {
       id: Column.integer(),

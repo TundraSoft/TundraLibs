@@ -25,26 +25,11 @@
  * @since 1.0.0
  */
 
-/** Crockford base32 alphabet (ULID). */
-const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+import { ulid } from '@tundralibs/id';
 
-/**
- * Compact ULID: 48-bit timestamp + 80 bits of randomness, 26 chars,
- * lexicographically sortable by creation time. No monotonic counter —
- * these ids correlate logs, they don't order same-millisecond events.
- */
-export function ulid(now: number = Date.now()): string {
-  let ts = '';
-  let t = now;
-  for (let i = 0; i < 10; i++) {
-    ts = B32[t % 32] + ts;
-    t = Math.floor(t / 32);
-  }
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  let rand = '';
-  for (let i = 0; i < 16; i++) rand += B32[bytes[i]! & 31];
-  return ts + rand;
-}
+/** Operation-id generator — a plain (non-monotonic) ULID per call; these
+ * ids correlate logs, they don't order same-millisecond events. */
+export { ulid };
 
 /**
  * The consistent operation envelope. Instantiate the generic for

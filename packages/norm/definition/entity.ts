@@ -105,17 +105,19 @@ export type ForeignKeyDef<
    * less) reads: rows gain the alias as `object | null` — the
    * target's LOCAL default row, depth-1 (no transitive eager).
    * Explicit projections replace the default entirely; write
-   * RETURNING stays flat (RETURNING cannot join).
+   * RETURNING stays flat (RETURNING cannot join). Defaults to `false`
+   * (not eager) when omitted; `false` is equivalent to omitting it.
    */
-  readonly project?: true;
+  readonly project?: boolean;
   /**
    * EAGER-fetch the derived REVERSE relation on the TARGET's default
    * reads. hasOne reverses only (explicit `reverseCardinality:
    * 'hasOne'` or derived FK-columns-equal-pk) — eager to-many lists
    * on every innocent read would be a footgun, so hasMany is
-   * rejected.
+   * rejected. Defaults to `false` (not eager) when omitted; `false`
+   * is equivalent to omitting it.
    */
-  readonly reverseProject?: true;
+  readonly reverseProject?: boolean;
   /** ON DELETE referential action for the physical FK constraint.
    * Omit = the database default (RESTRICT). TABLE fks only. */
   readonly onDelete?: ForeignKeyAction;
@@ -500,8 +502,8 @@ export type EmittedForeignKey = {
   readonly on: Readonly<Record<string, string>>;
   readonly reverseAs?: string;
   readonly reverseCardinality?: 'hasOne' | 'hasMany';
-  readonly project?: true;
-  readonly reverseProject?: true;
+  readonly project?: boolean;
+  readonly reverseProject?: boolean;
   readonly onDelete?: ForeignKeyAction;
   readonly onUpdate?: ForeignKeyAction;
 };
@@ -520,11 +522,12 @@ type EmittedForeignKeysOf<F> = {
         { readonly reverseCardinality: infer RC extends 'hasOne' | 'hasMany' }
         ? { readonly reverseCardinality: RC }
         : { readonly reverseCardinality?: 'hasOne' | 'hasMany' })
-      & (F[A] extends { readonly project: true } ? { readonly project: true }
-        : { readonly project?: true })
-      & (F[A] extends { readonly reverseProject: true }
-        ? { readonly reverseProject: true }
-        : { readonly reverseProject?: true })
+      & (F[A] extends { readonly project: infer P extends boolean }
+        ? { readonly project: P }
+        : { readonly project?: boolean })
+      & (F[A] extends { readonly reverseProject: infer RP extends boolean }
+        ? { readonly reverseProject: RP }
+        : { readonly reverseProject?: boolean })
       & (F[A] extends { readonly onDelete: infer OD extends ForeignKeyAction }
         ? { readonly onDelete: OD }
         : { readonly onDelete?: ForeignKeyAction })
