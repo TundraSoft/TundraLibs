@@ -5,11 +5,13 @@
  */
 
 import { Column, Entity } from '../../../mod.ts';
+import { Guardian } from '@tundralibs/guardian';
 
 export const Posts = Entity('posts', {
   id: Column.integer(),
   authorId: Column.uuid(),
-  title: Column.varchar(200).minLength(3).beforeWrite((v) => v.trim()),
+  title: Column.varchar(200).guard(Guardian.string().minLength(3))
+    .beforeWrite((v) => v.trim()),
   body: Column.text().nullable(),
   draft: Column.boolean().default(true),
 }, {

@@ -19,7 +19,7 @@ compose.
 - [Column builders](#column-builders)
   - [Factories](#factories)
   - [Common modifiers](#common-modifiers)
-  - [Validators](#validators)
+  - [Validation and transforms](#validation-and-transforms)
   - [Defaults](#defaults)
   - [Transforms](#transforms)
   - [Encryption and hashing](#encryption-and-hashing)
@@ -137,20 +137,19 @@ to range-check on a boolean.
 These chain on every builder kind; a few are overridden on
 [masks](#masked-columns):
 
-| Modifier                 | Effect                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `.nullable()`            | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                             |
-| `.default(v)`            | Insert default; see [Defaults](#defaults).                                                                                           |
-| `.defaultOnUpdate(v)`    | Auto-touch on every update (e.g. `updatedAt`).                                                                                       |
-| `.comment(text)`         | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                 |
-| `.hidden()`              | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                      |
-| `.unfilterable()`        | Reject the column in `WHERE` / `ORDER BY`.                                                                                           |
-| `.renamedFrom(oldName)`  | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.    |
-| `.beforeWrite(fn)`       | [Transform](#transforms) before validate/encrypt/write.                                                                              |
-| `.afterRead(fn)`         | [Transform](#transforms) on the way back out.                                                                                        |
-| `.validate(fn, message)` | Custom [validation](#validators) predicate beyond `lov`/`pattern`/`min`/`max`. Stacks; cannot change the value.                      |
-| `.guardian(fn)`          | Extends the generated [Guardian](#validators) directly — its built-in format validators and same-type transforms. Every column kind. |
-| `.encrypt()`             | [Encrypt at rest](#encryption-and-hashing).                                                                                          |
+| Modifier                | Effect                                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.nullable()`           | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                                      |
+| `.default(v)`           | Insert default; see [Defaults](#defaults).                                                                                                    |
+| `.defaultOnUpdate(v)`   | Auto-touch on every update (e.g. `updatedAt`).                                                                                                |
+| `.comment(text)`        | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                          |
+| `.hidden()`             | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                               |
+| `.unfilterable()`       | Reject the column in `WHERE` / `ORDER BY`.                                                                                                    |
+| `.renamedFrom(oldName)` | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.             |
+| `.beforeWrite(fn)`      | [Transform](#transforms) before validate/encrypt/write.                                                                                       |
+| `.afterRead(fn)`        | [Transform](#transforms) on the way back out.                                                                                                 |
+| `.guard(g)`             | [Value validation + transforms](#validation-and-transforms) — an already-built Guardian, pinned to the column's own concrete class. One-shot. |
+| `.encrypt()`            | [Encrypt at rest](#encryption-and-hashing).                                                                                                   |
 
 ```typescript
 import { Column } from '@tundralibs/norm';
@@ -160,90 +159,93 @@ import { Column } from '@tundralibs/norm';
 const passwordHash = Column.varchar(64).hidden().unfilterable();
 ```
 
-### Validators
+### Validation and transforms
 
-Validators emit plain constraint data on the spec and are enforced by
-the generated [Guardian](../../guardian/README.md) before any SQL runs.
-Which validators exist depends on the builder kind:
+A column's value-level rules — validators AND transforms, in whatever
+order you write them — live in ONE already-built
+[Guardian](../../guardian/README.md), handed to `.guard(g)`:
 
-| Builder kind | Factories                                                                                       | Validators                                                   |
-| ------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| String       | `varchar` `char` `text` `clob` `uuid` `xml`                                                     | `.minLength(n)` `.maxLength(n)` `.pattern(re)` `.lov([...])` |
-| Number       | `integer` `int` `tinyint` `smallint` `bigint` `decimal` `numeric` `float` `double` `real` `bit` | `.min(v)` `.max(v)` `.lov([...])`                            |
-| Date         | `date` `time` `datetime` `timestamp` `timestamptz`                                              | `.min(date)` `.max(date)`                                    |
+```typescript
+import { Column } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
-`.lov([...])` does double duty: it constrains the value to the given
-literals and narrows the TS type to their union, with no `as const`
-needed.
+const email = Column.varchar(255)
+  .guard(Guardian.string().trim().toLowerCase().email());
+
+const age = Column.integer().guard(Guardian.number().min(0));
+
+const bornBefore = Column.date().guard(Guardian.date().past());
+
+const clicks = Column.bigint().guard(Guardian.bigint().min(0n)).default(0n);
+```
+
+`.guard(g)` is **one-shot** — call it once with everything composed
+(`Guardian.string().trim().pattern(...).minLength(...)`); a second call
+throws rather than silently replacing or stacking. `g`'s type is pinned
+to the column's OWN concrete guardian class — `StringGuardian` for
+`varchar`/`char`/`text`/`clob`/`uuid`/`xml`, `NumberGuardian`/
+`BigIntGuardian` for the numeric kinds (`bigint` gets `BigIntGuardian`,
+every other numeric kind including `bit` gets `NumberGuardian`),
+`DateGuardian` for `date`/`timestamp`/…, `BooleanGuardian` for
+`boolean`, and `UnknownGuardian<Shape>` for `json`/`blob`/`binary`/
+`varbinary` — never the generic `BaseGuardian<T>`. Some of these classes
+also carry methods that change the value's TYPE (`NumberGuardian
+.toBigInt()`, `DateGuardian.toISOString()`, `BigIntGuardian.toHex()`,
+`BooleanGuardian.toNumber()`, …); pinning the parameter this way means a
+chain ending in one of those simply fails to type-check, rather than
+silently letting a transform swap the column's declared type.
+
+Nullability and defaults stay **column-only** — `.nullable()` /
+`.default()`, never on the guard. A guard that's already `.nullable()`/
+`.optional()`'d is rejected at construction ("declare nullable()/
+default() on the column, not on the guard"), and so is an
+async-refined guard (norm validates synchronously).
+
+`.guard()` must precede `.encrypt()` — it runs against the PLAINTEXT:
+
+```typescript
+import { Column } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
+
+const password = Column.varchar(255)
+  .guard(Guardian.string().minLength(12))
+  .encrypt().hash();
+```
+
+Physical constraints stay independent of `.guard()` and always apply:
+the declared `VARCHAR(n)` width is enforced regardless of what the
+guard says (checked AFTER any transform, so `.trim()` shrinking a value
+below the cap is judged on the trimmed result), and `integer`/`int`/
+`tinyint`/`smallint`/`bit` always reject non-whole numbers.
+
+For a literal-value restriction that also narrows the TS type — the
+`.lov()` replacement — use `Column.enum(...)` instead of `.guard()`:
 
 ```typescript
 import { Column } from '@tundralibs/norm';
 
-const role = Column.varchar(12)
-  .lov(['admin', 'editor', 'viewer']) // TS type is now 'admin' | 'editor' | 'viewer'
-  .default('viewer');
-
-const slug = Column.varchar(32)
-  .pattern(/^[a-z0-9-]+$/)
-  .beforeWrite((v) => v.trim().toLowerCase());
-
-const clicks = Column.bigint().min(0n).default(0n);
+const status = Column.enum(['active', 'banned']); // VARCHAR(6), TS: 'active' | 'banned'
+const priority = Column.enum([1, 2, 3]); // INTEGER, TS: 1 | 2 | 3
+const bits = Column.enum([1n, 2n]); // BIGINT, TS: 1n | 2n
 ```
 
-`.pattern()` accepts a `RegExp` or a string and is stored serializably
-as `{ source, flags }`. `.min()` and `.max()` on bigint and date
-columns canonicalize the bound to a string in the spec, and the runtime
-rehydrates it per column type — so a date bound is fixed at schema-load
-time, not re-evaluated per write.
-
-For anything the table above can't express — including a bound that
-must be evaluated per write, like "before today" — `.validate(fn,
-message)` runs a custom predicate through the generated Guardian's
-`.refine()`. It's available on every builder kind, stacks (call it more
-than once to add independent rules), and never changes the value, only
-whether it's accepted:
+Width/kind is derived from the values (VARCHAR sized to the longest
+string, or INTEGER/BIGINT); mixed-type value lists are rejected.
+`.guard()` is unavailable on a `Column.enum(...)` column — the values
+already generated its `EnumGuardian`, which `.guard()`'s type pinning
+can't accept (an `EnumGuardian` isn't a `StringGuardian`/`NumberGuardian`
+— same class-mismatch reasoning as `Column.json(schema)` below). For a
+literal-value restriction that ISN'T TS-narrowed — e.g. case-insensitive
+matching — use `.guard()`'s own `StringGuardian.isIn()` instead, with a
+normalizing transform before it:
 
 ```typescript
 import { Column } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
-const bornBefore = Column.date()
-  .validate((v) => v < new Date(), 'must be in the past');
-
-const evenQty = Column.integer().min(0)
-  .validate((v) => v % 2 === 0, 'must be even');
+const status = Column.varchar(6)
+  .guard(Guardian.string().toLowerCase().isIn(['active', 'banned']));
 ```
-
-For a check `.validate()` would make you hand-roll, reach into
-[Guardian](../../guardian/README.md)'s own built-in vocabulary with
-`.guardian(fn)` instead — available on every column kind, resolving to
-whichever concrete guardian the runtime actually validates against:
-`StringGuardian` for `varchar`/`char`/`text`/`clob`/`xml`,
-`NumberGuardian`/`BigIntGuardian` for the numeric kinds (`bigint` gets
-`BigIntGuardian`, every other numeric kind including `bit` gets
-`NumberGuardian`), `DateGuardian` for `date`/`timestamp`/…,
-`BooleanGuardian` for `boolean`, and `UnknownGuardian<Shape>` for
-`json`/`blob`/`binary`/`varbinary`. It stacks like `.validate()`, and
-runs after the table above:
-
-```typescript
-import { Column } from '@tundralibs/norm';
-
-const email = Column.varchar(255).guardian((g) => g.email());
-const slug = Column.varchar(80).guardian((g) => g.slug());
-const age = Column.integer().guardian((g) => g.positive());
-const bornBefore = Column.date().guardian((g) => g.past());
-```
-
-`fn`'s parameter AND return type are pinned to the column's own concrete
-guardian class (`StringGuardian → StringGuardian`, and so on) — not the
-generic `BaseGuardian<T>`. Some of these classes also carry methods that
-change the value's TYPE (`NumberGuardian.toBigInt()`, `DateGuardian
-.toISOString()`, `BigIntGuardian.toHex()`, `BooleanGuardian.toNumber()`,
-…); pinning the signature this way means a chain ending in one of those
-simply fails to type-check, rather than silently letting a transform
-swap the column's declared type. Every validator/transform that
-legitimately belongs here is typed to return the same class, so nothing
-is lost — the type checker only blocks the genuinely unsafe methods.
 
 ### JSON schemas
 
@@ -283,8 +285,8 @@ import { Guardian } from '@tundralibs/guardian';
 const Preferences = Guardian.object({ theme: Guardian.string() }).strict();
 ```
 
-`.guardian(fn)` is unavailable on a schema-provided JSON column (it throws):
-the base `ColumnBuilder.guardian()`'s type doesn't match this column's real
+`.guard()` is unavailable on a schema-provided JSON column (it throws):
+the base `ColumnBuilder.guard()`'s type doesn't match this column's real
 runtime guardian (the schema instance itself), so norm keeps this a hard,
 documented error rather than a silently wrong type.
 
@@ -324,14 +326,18 @@ JS value.
 `.beforeWrite(fn)` normalizes a value before it is validated,
 encrypted, and written; `.afterRead(fn)` transforms it as it comes back
 from a read. Both are runtime-only callbacks and are stripped from the
-JSON and snapshot export.
+JSON and snapshot export. Write-side normalization is usually better
+expressed inside `.guard()`'s own Guardian (`.trim().toLowerCase()` runs
+in the exact order you wrote it, alongside validation) — `.beforeWrite()`
+stays available for a norm-native hook, and is the only option on the
+FILTER side for a hashed column's equality lookups.
 
 ```typescript
 import { Column } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 const email = Column.varchar(255)
-  .pattern(/^\S+@\S+\.\S+$/)
-  .beforeWrite((v) => v.trim().toLowerCase()); // case-insensitive at rest
+  .guard(Guardian.string().trim().toLowerCase().pattern(/^\S+@\S+\.\S+$/));
 
 const country = Column.char(2).beforeWrite((v) => v.toUpperCase());
 
@@ -393,10 +399,10 @@ const pin = Column.hash('SHA-256').nullable();
 ```
 
 `algorithm` is one of `'SHA-256'` (default, `VARCHAR(64)`), `'SHA-384'`
-(`VARCHAR(96)`), or `'SHA-512'` (`VARCHAR(128)`). String validators
-(`pattern`, `minLength`, `maxLength`) chain here and constrain the
-plaintext, which is where a password policy goes. `encrypt()` is a
-hard error, since a digest is already one-way.
+(`VARCHAR(96)`), or `'SHA-512'` (`VARCHAR(128)`). `.guard()` (inherited,
+pinned to `StringGuardian`) chains here and constrains the plaintext,
+which is where a password policy goes. `encrypt()` is a hard error,
+since a digest is already one-way.
 
 > A digest column is the inverse of `.encrypt().hash()`: a digest is
 > write-and-forget, whereas an encrypted and hashed column is fully
@@ -412,10 +418,12 @@ two modes:
 
 ```typescript
 import { Column, Entity, Norm, pbkdf2Verify, Schema } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
-  secret: Column.password('PBKDF2').minLength(12), // salted, verify-based
+  // salted, verify-based
+  secret: Column.password('PBKDF2').guard(Guardian.string().minLength(12)),
 }, { pk: ['id'] });
 
 declare const userId: string;
@@ -496,20 +504,21 @@ lists several columns. `fk` aliases drive joins and reverse relations;
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 export const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
-  email: Column.varchar(255).pattern(/^\S+@\S+\.\S+$/)
-    .beforeWrite((v) => v.trim().toLowerCase())
+  email: Column.varchar(255)
+    .guard(Guardian.string().trim().toLowerCase().pattern(/^\S+@\S+\.\S+$/))
     .encrypt().hash()
     .comment('Sign-in identifier; encrypted at rest, unique via sibling'),
   apiKey: Column.varchar(256).encrypt(),
   apiKeyHint: Column.mask('apiKey', (v) => `…${v.slice(-4)}`),
-  role: Column.varchar(12).lov(['admin', 'editor', 'viewer']).default('viewer'),
-  displayName: Column.varchar(120).minLength(2),
+  role: Column.enum(['admin', 'editor', 'viewer']).default('viewer'),
+  displayName: Column.varchar(120).guard(Guardian.string().minLength(2)),
   passwordHash: Column.varchar(64).hidden().unfilterable(),
   pin: Column.hash('SHA-256').nullable(),
-  loginCount: Column.integer().min(0).default(0),
+  loginCount: Column.integer().guard(Guardian.number().min(0)).default(0),
   createdAt: Column.timestamp().default(() => new Date()),
   updatedAt: Column.timestamp().default(() => new Date())
     .defaultOnUpdate(() => new Date()),
@@ -722,7 +731,7 @@ export const Accounts = Entity('accounts', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
   email: Column.varchar(255).encrypt().hash(),
   displayName: Column.varchar(120),
-  role: Column.varchar(12).lov(['admin', 'user']).default('user'),
+  role: Column.enum(['admin', 'user']).default('user'),
   updatedAt: Column.timestamp().defaultOnUpdate(() => new Date()),
 }, {
   pk: ['id'],

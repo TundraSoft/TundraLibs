@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import * as asserts from '@std/asserts';
 import '@tundralibs/norm/engines/sqlite';
+import { Guardian } from '@tundralibs/guardian';
 import { Column, Entity, Norm, Schema } from './mod.ts';
 import { Migrator } from './migrations/mod.ts';
 
@@ -91,8 +92,8 @@ describe('norm.column-types — extended SQL types round-trip (live SQLite)', ()
     // smallint validates as an integer; clob as a string.
     const Guarded = Entity('guarded', {
       id: Column.int(),
-      count: Column.smallint().min(0).max(10),
-      label: Column.clob().minLength(3),
+      count: Column.smallint().guard(Guardian.number().min(0).max(10)),
+      label: Column.clob().guard(Guardian.string().minLength(3)),
     }, { pk: ['id'] });
     const gdir = await makeTempDir({ prefix: 'norm-coltypes-g-' });
     const db = new Norm({ database: { dialect: 'sqlite', path: gdir } })

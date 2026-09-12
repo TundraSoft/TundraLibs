@@ -11,6 +11,7 @@
  * @module
  */
 import { Column, Entity, Schema } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 /** norm's temporal/audit open-end marker — a version whose `EffectiveTo`
  * equals this is the CURRENT one. Matches the default in both
@@ -69,10 +70,10 @@ export const Customers = Entity('customers', {
 export const Subscriptions = Entity('subscriptions', {
   Id: Column.uuid().default({ $$_expression: 'UUID' }),
   CustomerId: Column.uuid(),
-  Plan: Column.varchar(20).lov(['starter', 'growth', 'scale']),
-  Seats: Column.integer().min(1),
-  PricePerSeat: Column.integer().min(0),
-  MonthlyAmount: Column.integer().min(0).default(0),
+  Plan: Column.enum(['starter', 'growth', 'scale']),
+  Seats: Column.integer().guard(Guardian.number().min(1)),
+  PricePerSeat: Column.integer().guard(Guardian.number().min(0)),
+  MonthlyAmount: Column.integer().guard(Guardian.number().min(0)).default(0),
 }, {
   pk: ['Id'],
   temporal: { key: ['CustomerId'] },
@@ -163,8 +164,8 @@ export const InvoicesV1 = Entity('invoices', {
   Id: Column.uuid().default({ $$_expression: 'UUID' }),
   CustomerId: Column.uuid(),
   Plan: Column.varchar(20),
-  Amount: Column.integer().min(0),
-  Status: Column.varchar(10).lov(['open', 'paid', 'void']).default('open'),
+  Amount: Column.integer().guard(Guardian.number().min(0)),
+  Status: Column.enum(['open', 'paid', 'void']).default('open'),
   IssuedAt: Column.timestamp().default(() => new Date()),
 }, {
   pk: ['Id'],
@@ -197,9 +198,9 @@ export const InvoicesV2 = Entity('invoices', {
   Id: Column.uuid().default({ $$_expression: 'UUID' }),
   CustomerId: Column.uuid(),
   Plan: Column.varchar(20),
-  Amount: Column.integer().min(0),
+  Amount: Column.integer().guard(Guardian.number().min(0)),
   Currency: Column.varchar(3).nullable().default('USD'),
-  Status: Column.varchar(10).lov(['open', 'paid', 'void']).default('open'),
+  Status: Column.enum(['open', 'paid', 'void']).default('open'),
   IssuedAt: Column.timestamp().default(() => new Date()),
 }, {
   pk: ['Id'],

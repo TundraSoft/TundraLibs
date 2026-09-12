@@ -4,9 +4,11 @@
  * ```ts ignore
  * const Users = Entity('users', {
  *   id: Column.uuid().default({ $$_expression: 'UUID' }),
- *   email: Column.varchar(255).pattern(/^\S+@\S+$/).encrypt().hash(),
- *   status: Column.varchar(16).lov(['active', 'banned']), // 'active' | 'banned'
- *   age: Column.integer().min(0).nullable(),
+ *   email: Column.varchar(255)
+ *     .guard(Guardian.string().pattern(/^\S+@\S+$/))
+ *     .encrypt().hash(),
+ *   status: Column.enum(['active', 'banned']), // 'active' | 'banned'
+ *   age: Column.integer().guard(Guardian.number().min(0)).nullable(),
  * }, { pk: ['id'] });
  *
  * export const Blog = Schema('Blog', { Users });
@@ -28,6 +30,7 @@ export {
   type DigestAlgorithm,
   DigestColumnBuilder,
   EncryptedColumnBuilder,
+  EnumColumnBuilder,
   type ExpressionDefault,
   HashedColumnBuilder,
   JsonColumnBuilder,

@@ -118,13 +118,24 @@ describe('norm.definition (builders + Entity)', () => {
       Column.password('SHA-512').spec,
       Column.hash('SHA-512').spec,
     );
-    // Extended numerics keep the validator chain (integer branch).
-    asserts.assertEquals(Column.smallint().min(0).max(9).spec.max, 9);
-    // clob/xml keep string validators.
-    asserts.assertEquals(Column.clob().maxLength(1000).spec.maxLength, 1000);
+    // Extended numerics keep .guard() (integer branch).
+    asserts.assertEquals(
+      Column.smallint().guard(Guardian.number().min(0).max(9)).spec.guard
+        ?.metaData?.maximum,
+      9,
+    );
+    // clob/xml keep .guard().
+    asserts.assertEquals(
+      Column.clob().guard(Guardian.string().maxLength(1000)).spec.guard
+        ?.metaData?.maxLength,
+      1000,
+    );
 
-    // Numeric/date kinds keep their validator + crypto chains.
-    asserts.assertEquals(Column.float().min(0).encrypt().spec.encrypt, true);
+    // Numeric/date kinds keep .guard() + crypto chains.
+    asserts.assertEquals(
+      Column.float().guard(Guardian.number().min(0)).encrypt().spec.encrypt,
+      true,
+    );
     asserts.assertEquals(
       Column.datetime().encrypt().nullable().spec.nullable,
       true,
@@ -314,127 +325,137 @@ describe('norm.definition (builders + Entity)', () => {
     asserts.assertEquals(fn('  MiXeD@X.com '), 'mixed@x.com');
   });
 
-  // ── Validators (plain constraint data + type narrowing) ──────────
+  // ── guard() (one Guardian, pinned to the concrete class) ──────────
 
-  it('validators emit plain constraint data', () => {
-    const status = Column.varchar(16).lov(['active', 'banned']);
-    asserts.assertEquals(status.spec.lov, ['active', 'banned']);
+  it('guard() sets spec.guard to the exact instance, composed however the caller ordered it', () => {
+    const built = Guardian.string().trim().pattern(/^[a-z0-9-]+$/)
+      .minLength(3).maxLength(80);
+    const slug = Column.varchar(80).guard(built);
+    asserts.assertEquals(slug.spec.guard, built);
 
-    const slug = Column.varchar(80).pattern(/^[a-z0-9-]+$/).minLength(3)
-      .maxLength(80);
-    asserts.assertEquals(slug.spec.pattern, { source: '^[a-z0-9-]+$' });
-    asserts.assertEquals(slug.spec.minLength, 3);
-    asserts.assertEquals(slug.spec.maxLength, 80);
+    // Bigint/date guards are just Guardian instances too — no separate
+    // spec-level canonicalization needed (the guardian owns its own state).
+    const big = Column.bigint().guard(Guardian.bigint().min(0n));
+    asserts.assertEquals(big.spec.guard?.metaData?.minimum, 0);
 
-    const ci = Column.varchar(10).pattern(/^ab+$/i);
-    asserts.assertEquals(ci.spec.pattern, { source: '^ab+$', flags: 'i' });
-    const fromString = Column.varchar(10).pattern('^x$');
-    asserts.assertEquals(fromString.spec.pattern, { source: '^x$' });
-
-    const qty = Column.integer().min(0).max(100);
-    asserts.assertEquals(qty.spec.min, 0);
-    asserts.assertEquals(qty.spec.max, 100);
-
-    // Bigint bounds/lov are stored as strings (JSON-safe).
-    const big = Column.bigint().min(0n).lov([1n, 2n]);
-    asserts.assertEquals(big.spec.min, '0');
-    asserts.assertEquals(big.spec.lov, ['1', '2']);
-
-    // Date bounds canonicalize to ISO strings (timezone-stable,
-    // diff-stable across the JSON roundtrip).
-    const day = Column.date().min(new Date('2020-01-01'));
-    asserts.assertEquals(day.spec.min, '2020-01-01T00:00:00.000Z');
-
-    // Everything above survives a JSON roundtrip.
-    const json = JSON.parse(JSON.stringify(slug.spec));
-    asserts.assertEquals(json.pattern, { source: '^[a-z0-9-]+$' });
+    const day = Column.date().guard(
+      Guardian.date().min(new Date('2020-01-01')),
+    );
+    asserts.assertEquals(day.spec.guard instanceof Object, true);
   });
 
-  it('.validate() stacks custom predicates, composing with lov/pattern', () => {
-    const evenOnly = Column.integer().min(0)
-      .validate((v) => v % 2 === 0, 'must be even');
-    asserts.assertEquals(evenOnly.spec.min, 0);
-    asserts.assertEquals(evenOnly.spec.transforms?.validate?.length, 1);
-    asserts.assertEquals(
-      evenOnly.spec.transforms!.validate![0]!.message,
-      'must be even',
+  it('guard() reaches built-in format validators, pins the concrete type, is one-shot', () => {
+    const email = Column.varchar(255).guard(Guardian.string().email());
+    asserts.assertEquals(email.spec.guard?.metaData?.format, 'email');
+
+    const age = Column.integer().guard(Guardian.number().positive());
+    asserts.assertEquals(age.spec.guard?.metaData?.exclusiveMinimum, true);
+
+    const bornBefore = Column.date().guard(Guardian.date().past());
+    asserts.assertEquals(bornBefore.spec.guard !== undefined, true);
+
+    const bits = Column.bigint().guard(Guardian.bigint().min(0n));
+    asserts.assertEquals(bits.spec.guard?.metaData?.minimum, 0);
+
+    // One-shot: a second call throws rather than silently replacing
+    // or stacking.
+    asserts.assertThrows(
+      () => email.guard(Guardian.string().url()),
+      Error,
+      'already set',
     );
-    asserts.assertEquals(
-      evenOnly.spec.transforms!.validate![0]!.fn(4 as never),
-      true,
-    );
-    asserts.assertEquals(
-      evenOnly.spec.transforms!.validate![0]!.fn(5 as never),
-      false,
-    );
-
-    // Stacks: two independent rules both survive.
-    const stacked = Column.varchar(10)
-      .validate((v) => v.length > 2, 'too short')
-      .validate((v) => v !== 'banned', 'reserved word');
-    asserts.assertEquals(stacked.spec.transforms?.validate?.length, 2);
-
-    // A date-before-now check — the concrete motivating case for this
-    // escape hatch, since min()/max() on a date column bake in a fixed
-    // Date at schema-load time instead of evaluating "now" per write.
-    const past = Column.date().validate(
-      (v) => v < new Date(),
-      'must be before now',
-    );
-    const rule = past.spec.transforms!.validate![0]!;
-    asserts.assertEquals(rule.fn(new Date('2000-01-01') as never), true);
-    asserts.assertEquals(rule.fn(new Date('2999-01-01') as never), false);
-  });
-
-  it(".guardian() reaches Guardian's built-in validators, stacks, and pins the concrete type", () => {
-    const email = Column.varchar(255).guardian((g) => g.email());
-    asserts.assertEquals(email.spec.transforms?.guardian?.length, 1);
-
-    const age = Column.integer().guardian((g) => g.positive());
-    asserts.assertEquals(age.spec.transforms?.guardian?.length, 1);
-
-    const bornBefore = Column.date().guardian((g) => g.past());
-    asserts.assertEquals(bornBefore.spec.transforms?.guardian?.length, 1);
-
-    const bits = Column.bigint().guardian((g) => g.uint(64));
-    asserts.assertEquals(bits.spec.transforms?.guardian?.length, 1);
-
-    // Stacks: two independent rules both survive.
-    const slugish = Column.varchar(80)
-      .guardian((g) => g.slug())
-      .guardian((g) => g.maxLength(40));
-    asserts.assertEquals(slugish.spec.transforms?.guardian?.length, 2);
 
     // @ts-expect-error — toBigInt() returns BigIntGuardian, not NumberGuardian.
-    Column.integer().guardian((g) => g.toBigInt());
+    Column.integer().guard(Guardian.number().toBigInt());
     // @ts-expect-error — toISOString() returns BaseGuardian<string>, not DateGuardian.
-    Column.date().guardian((g) => g.toISOString());
+    Column.date().guard(Guardian.date().toISOString());
     // @ts-expect-error — formatCurrency() returns BaseGuardian<string>, not NumberGuardian.
-    Column.decimal(10, 2).guardian((g) => g.formatCurrency());
+    Column.decimal(10, 2).guard(Guardian.number().formatCurrency());
   });
 
-  it('.guardian() also reaches boolean/json/blob/bit — the base ColumnBuilder kinds', () => {
-    const flag = Column.boolean().guardian((g) => g.true());
-    asserts.assertEquals(flag.spec.transforms?.guardian?.length, 1);
+  it('guard() also reaches boolean/json/blob/bit — the base ColumnBuilder kinds', () => {
+    const flag = Column.boolean().guard(Guardian.boolean().true());
+    asserts.assertEquals(flag.spec.guard !== undefined, true);
 
-    const settings = Column.json<{ tags: string[] }>().guardian((g) =>
-      g.refine((v) => Array.isArray((v as { tags: unknown }).tags), 'bad tags')
+    const settings = Column.json<{ tags: string[] }>().guard(
+      Guardian.unknown<{ tags: string[] }>().refine(
+        (v) => Array.isArray((v as { tags: unknown }).tags),
+        'bad tags',
+      ),
     );
-    asserts.assertEquals(settings.spec.transforms?.guardian?.length, 1);
+    asserts.assertEquals(settings.spec.guard !== undefined, true);
 
-    const payload = Column.blob().guardian((g) =>
-      g.refine((v) => (v as Uint8Array).length > 0, 'must not be empty')
+    const payload = Column.blob().guard(
+      Guardian.unknown<Uint8Array>().refine(
+        (v) => (v as Uint8Array).length > 0,
+        'must not be empty',
+      ),
     );
-    asserts.assertEquals(payload.spec.transforms?.guardian?.length, 1);
+    asserts.assertEquals(payload.spec.guard !== undefined, true);
 
     // BIT is physically validated as an integer (guardians.ts's BIT
     // branch) even though Column.bit() is a bare ColumnBuilder<number>
-    // — .guardian() resolves to NumberGuardian here too.
-    const flags = Column.bit().guardian((g) => g.min(0).max(1));
-    asserts.assertEquals(flags.spec.transforms?.guardian?.length, 1);
+    // — .guard() resolves to NumberGuardian here too.
+    const flags = Column.bit().guard(Guardian.number().min(0).max(1));
+    asserts.assertEquals(flags.spec.guard !== undefined, true);
 
     // @ts-expect-error — toNumber() returns NumberGuardian, not BooleanGuardian.
-    Column.boolean().guardian((g) => g.toNumber());
+    Column.boolean().guard(Guardian.boolean().toNumber());
+  });
+
+  it('guard() throws for async/nullable/optional guards; nullable/default stay column-only', () => {
+    asserts.assertThrows(
+      () => Column.varchar(10).guard(Guardian.string().nullable() as never),
+      Error,
+      'declare nullable()/default()',
+    );
+    asserts.assertThrows(
+      () => Column.varchar(10).guard(Guardian.string().optional('x') as never),
+      Error,
+      'declare nullable()/default()',
+    );
+    asserts.assertThrows(
+      () =>
+        Column.varchar(10).guard(
+          Guardian.string().refine(async (v) => v.length > 0, 'x') as never,
+        ),
+      Error,
+      'synchronously',
+    );
+  });
+
+  it('Column.enum(): narrows the TS type and derives the physical kind/width', () => {
+    const status = Column.enum(['active', 'banned']);
+    type _status = Expect<
+      Equal<NonNullable<(typeof status)['spec']['$type']>, 'active' | 'banned'>
+    >;
+    asserts.assertEquals(status.spec.type, 'VARCHAR');
+    asserts.assertEquals(status.spec.length, 6); // 'active'/'banned'
+
+    const ints = Column.enum([1, 2, 3]);
+    type _ints = Expect<
+      Equal<NonNullable<(typeof ints)['spec']['$type']>, 1 | 2 | 3>
+    >;
+    asserts.assertEquals(ints.spec.type, 'INTEGER');
+
+    const bigs = Column.enum([1n, 2n]);
+    asserts.assertEquals(bigs.spec.type, 'BIGINT');
+
+    // Mixed types: rejected — a column has one physical kind.
+    asserts.assertThrows(
+      () => Column.enum(['a', 1] as unknown as string[]),
+      Error,
+      'all-string, all-number, or all-bigint',
+    );
+
+    // .guard() is unavailable — the EnumGuardian is already generated
+    // from the values, and ConcreteGuardianOf<T> would resolve to the
+    // wrong class (StringGuard, not EnumGuardian) for it anyway.
+    asserts.assertThrows(
+      () => status.guard(),
+      Error,
+      'Guardian is generated from the values',
+    );
   });
 
   it('Column.json(schema) infers Shape from a Guardian.object() and validates per-key', () => {
@@ -458,12 +479,12 @@ describe('norm.definition (builders + Entity)', () => {
     asserts.assertEquals(bare instanceof JsonColumnBuilder, false);
     asserts.assertEquals(bare.spec.jsonSchema, undefined);
 
-    // .guardian() is unavailable on a schema-provided JSON column — the
+    // .guard() is unavailable on a schema-provided JSON column — the
     // schema itself is already the configurable ObjectGuardian; base
-    // ColumnBuilder.guardian()'s type (UnknownGuardian<T>) would not
+    // ColumnBuilder.guard()'s type (UnknownGuardian<T>) would not
     // match the REAL runtime guardian (the schema instance).
     asserts.assertThrows(
-      () => prefs.guardian(),
+      () => prefs.guard(),
       Error,
       "Column.json(schema)'s Guardian is already yours to configure",
     );
@@ -523,45 +544,41 @@ describe('norm.definition (builders + Entity)', () => {
     asserts.assertEquals(Column.uuid().spec, { type: 'UUID' });
   });
 
-  it('lov() narrows the TS type — no `as const` anywhere', () => {
-    const status = Column.varchar(16).lov(['active', 'banned']);
-    type _lov = Expect<
+  it('Column.enum() narrows the TS type — no `as const` anywhere', () => {
+    const status = Column.enum(['active', 'banned']);
+    type _enum = Expect<
       Equal<
         NonNullable<(typeof status)['spec']['$type']>,
         'active' | 'banned'
       >
     >;
 
-    // Both chain orders preserve null.
-    const afterNullable = Column.varchar(16).nullable().lov(['a', 'b']);
-    const beforeNullable = Column.varchar(16).lov(['a', 'b']).nullable();
-    type _n1 = Expect<
+    // .nullable() chains after, preserving the narrowed union + null.
+    const nullableStatus = Column.enum(['a', 'b']).nullable();
+    type _n = Expect<
       Equal<
-        (typeof afterNullable)['spec']['$type'],
-        'a' | 'b' | null | undefined
-      >
-    >;
-    type _n2 = Expect<
-      Equal<
-        (typeof beforeNullable)['spec']['$type'],
+        (typeof nullableStatus)['spec']['$type'],
         'a' | 'b' | null | undefined
       >
     >;
 
-    // Numeric lov narrows too (bigint literals).
-    const bits = Column.bigint().lov([1n, 2n]);
+    // Numeric enum narrows too (bigint literals).
+    const bits = Column.enum([1n, 2n]);
     type _bits = Expect<
       Equal<NonNullable<(typeof bits)['spec']['$type']>, 1n | 2n>
     >;
 
     // default() is checked against the narrowed union.
-    const ok = Column.varchar(16).lov(['a', 'b']).default('a');
+    const ok = Column.enum(['a', 'b']).default('a');
     void ok;
-    // @ts-expect-error — 'x' is not in the lov union.
-    const bad = Column.varchar(16).lov(['a', 'b']).default('x');
+    // @ts-expect-error — 'x' is not in the enum union.
+    const bad = Column.enum(['a', 'b']).default('x');
     void bad;
 
-    asserts.assertEquals(status.spec.lov?.length, 2);
+    asserts.assertEquals(
+      (status.spec.guard?.toOpenAPI().enum as unknown[] | undefined)?.length,
+      2,
+    );
   });
 
   it('chains preserve the builder kind (no decay to base)', () => {
@@ -586,10 +603,11 @@ describe('norm.definition (builders + Entity)', () => {
       Equal<RowOf<typeof Vault>['sec_hash'], string | null>
     >;
 
-    // Validators before encrypt() — the plaintext constraint chain.
-    const email = Column.varchar(255).pattern(/@/).minLength(3).encrypt()
-      .hash();
-    asserts.assertEquals(email.spec.pattern, { source: '@' });
+    // guard() before encrypt() — the plaintext constraint chain.
+    const email = Column.varchar(255)
+      .guard(Guardian.string().pattern(/@/).minLength(3))
+      .encrypt().hash();
+    asserts.assertEquals(email.spec.guard?.metaData?.pattern, '@');
     asserts.assertEquals(email.spec.encrypt, true);
     asserts.assertEquals(email.spec.hash, true);
   });
@@ -624,27 +642,6 @@ describe('norm.definition (builders + Entity)', () => {
       JSON.parse(JSON.stringify(Big)).columns.n.default,
       { insert: '1', update: '2' },
     );
-  });
-
-  it('lov() rejects an earlier literal default outside the union', () => {
-    asserts.assertThrows(
-      () => Column.varchar(16).default('x').lov(['a', 'b']),
-      Error,
-      'insert default "x" is not',
-    );
-    asserts.assertThrows(
-      () => Column.varchar(16).defaultOnUpdate('zzz').lov(['on', 'off']),
-      Error,
-      'update default',
-    );
-    asserts.assertThrows(
-      () => Column.bigint().default(9n).lov([1n, 2n]),
-      Error,
-      'in [1, 2]',
-    );
-    // Function/expression defaults cannot be checked — they pass.
-    const ok = Column.varchar(16).default({ $$_expression: 'X' }).lov(['a']);
-    asserts.assertEquals(ok.spec.lov, ['a']);
   });
 
   it('fk on-mapping guards: empty and undefined-valued entries rejected', () => {

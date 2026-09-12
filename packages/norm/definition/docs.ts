@@ -63,6 +63,29 @@ function defaultOf(v: unknown): string {
   return JSON.stringify(v);
 }
 
+/** Render a `.guard()`'s (or `Column.enum()`'s) constraints via its
+ * `toOpenAPI()` output — the only structured view Guardian exposes for
+ * an opaque, already-built instance. */
+function guardConstraints(spec: ColumnSpec): string[] {
+  if (spec.guard === undefined) return [];
+  const schema = spec.guard.toOpenAPI();
+  const parts: string[] = [];
+  if (Array.isArray(schema.enum)) parts.push(`enum(${schema.enum.join('|')})`);
+  if (typeof schema.pattern === 'string') {
+    parts.push(`pattern(/${schema.pattern}/)`);
+  }
+  if (typeof schema.minLength === 'number') {
+    parts.push(`minLength(${schema.minLength})`);
+  }
+  if (typeof schema.maxLength === 'number') {
+    parts.push(`maxLength(${schema.maxLength})`);
+  }
+  if (typeof schema.minimum === 'number') parts.push(`min(${schema.minimum})`);
+  if (typeof schema.maximum === 'number') parts.push(`max(${schema.maximum})`);
+  if (typeof schema.format === 'string') parts.push(`format(${schema.format})`);
+  return parts;
+}
+
 /** Constraint summary for docs: validators + storage flags. */
 function constraintsOf(spec: ColumnSpec): string {
   const parts: string[] = [];
@@ -72,12 +95,7 @@ function constraintsOf(spec: ColumnSpec): string {
   if (spec.project === false) parts.push('hidden');
   if (spec.filterable === false) parts.push('unfilterable');
   if (spec.disableInsert && spec.disableUpdate) parts.push('norm-owned');
-  if (spec.lov) parts.push(`lov(${spec.lov.join('|')})`);
-  if (spec.pattern) parts.push(`pattern(/${spec.pattern.source}/)`);
-  if (spec.min !== undefined) parts.push(`min(${String(spec.min)})`);
-  if (spec.max !== undefined) parts.push(`max(${String(spec.max)})`);
-  if (spec.minLength !== undefined) parts.push(`minLength(${spec.minLength})`);
-  if (spec.maxLength !== undefined) parts.push(`maxLength(${spec.maxLength})`);
+  parts.push(...guardConstraints(spec));
   return parts.join(', ');
 }
 
