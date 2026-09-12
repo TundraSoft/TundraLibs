@@ -88,44 +88,44 @@ import { Column } from '@tundralibs/norm';
 
 ### Factories
 
-| Factory                            | SQL type       | TS value     | Notes                                                                                                                         |
-| ---------------------------------- | -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `Column.varchar(length)`           | `VARCHAR(n)`   | `string`     | String validators apply.                                                                                                      |
-| `Column.char(length)`              | `CHAR(n)`      | `string`     | Fixed-width string.                                                                                                           |
-| `Column.text()`                    | `TEXT`         | `string`     | Unbounded string.                                                                                                             |
-| `Column.clob()`                    | `CLOB`         | `string`     | Character large object (`TEXT`/`LONGTEXT`/`TEXT`). String validators apply.                                                   |
-| `Column.xml()`                     | `XML`          | `string`     | Native `XML` on Postgres, `TEXT` elsewhere.                                                                                   |
-| `Column.uuid()`                    | `UUID`         | `string`     | Native, format-checked UUID. Pair with `.default({ $$_expression: 'UUID' })` for a DB-side default.                           |
-| `Column.ulid()`                    | `VARCHAR(26)`  | `string`     | Defaulted to a fresh [ULID](https://github.com/ulid/spec) per row, via `@tundralibs/id`.                                      |
-| `Column.cuid()`                    | `VARCHAR(25)`  | `string`     | Defaulted to a fresh CUID per row, via `@tundralibs/id`.                                                                      |
-| `Column.cuid2(length?)`            | `VARCHAR(n)`   | `string`     | Defaulted to a fresh CUID2 per row (default length 24), via `@tundralibs/id`.                                                 |
-| `Column.nanoId(size?)`             | `VARCHAR(n)`   | `string`     | Defaulted to a fresh nanoID per row (default size 21), via `@tundralibs/id`.                                                  |
-| `Column.objectId()`                | `VARCHAR(26)`  | `string`     | Defaulted to `@tundralibs/id`'s `ObjectID` — one counter/machine-id generator shared by every row of this column.             |
-| `Column.simpleId()`                | `BIGINT`       | `bigint`     | Defaulted to `@tundralibs/id`'s `simpleID` — one shared counter/seed per column.                                              |
-| `Column.integer()`                 | `INTEGER`      | `number`     | Numeric validators apply.                                                                                                     |
-| `Column.int()`                     | `INT`          | `number`     | Dialect synonym of `integer`.                                                                                                 |
-| `Column.tinyint()`                 | `TINYINT`      | `number`     | 1-byte int (`SMALLINT`/`INTEGER` where absent).                                                                               |
-| `Column.smallint()`                | `SMALLINT`     | `number`     | 2-byte int.                                                                                                                   |
-| `Column.bigint()`                  | `BIGINT`       | `bigint`     | Values ride as `bigint` (`0n`).                                                                                               |
-| `Column.decimal(precision, scale)` | `DECIMAL(p,s)` | `number`     | Fixed-point.                                                                                                                  |
-| `Column.numeric(precision, scale)` | `NUMERIC(p,s)` | `number`     | Exact fixed-point; synonym of `decimal`.                                                                                      |
-| `Column.float()`                   | `FLOAT`        | `number`     |                                                                                                                               |
-| `Column.double()`                  | `DOUBLE`       | `number`     |                                                                                                                               |
-| `Column.real()`                    | `REAL`         | `number`     |                                                                                                                               |
-| `Column.bit()`                     | `BIT`          | `number`     | Bit value (`BIT`/`BIT`/`INTEGER`).                                                                                            |
-| `Column.boolean()`                 | `BOOLEAN`      | `boolean`    | No numeric/string validators.                                                                                                 |
-| `Column.date()`                    | `DATE`         | `Date`       | Date validators apply.                                                                                                        |
-| `Column.time()`                    | `TIME`         | `Date`       | Only the clock part is significant.                                                                                           |
-| `Column.datetime()`                | `DATETIME`     | `Date`       | For engines that distinguish it from `TIMESTAMP` (MariaDB).                                                                   |
-| `Column.timestamp()`               | `TIMESTAMP`    | `Date`       | Wall-clock, no zone.                                                                                                          |
-| `Column.timestamptz()`             | `TIMESTAMPTZ`  | `Date`       | Timestamp with time zone: `TIMESTAMPTZ` on Postgres, tz-aware `TIMESTAMP` on MariaDB, ISO-with-offset `TEXT` on SQLite.       |
-| `Column.json<Shape>()`             | `JSONB`        | `Shape`      | Typed object. Renders as `JSONB` on Postgres (never bare `JSON`), native `JSON` on MariaDB, `TEXT` on SQLite.                 |
-| `Column.blob()`                    | `BLOB`         | `Uint8Array` | Raw bytes. The crypto codec is text-canonical, so binary cannot be encrypted; encrypt an encoded text form instead.           |
-| `Column.binary(length)`            | `BINARY(n)`    | `Uint8Array` | Fixed-length raw bytes (`BYTEA`/`BINARY`/`BLOB`). Like `blob`, not encryptable.                                               |
-| `Column.varbinary(length)`         | `VARBINARY(n)` | `Uint8Array` | Variable-length raw bytes. Like `blob`, not encryptable.                                                                      |
-| `Column.hash(algorithm?)`          | `VARCHAR`      | `string`     | One-way [digest column](#digest-columns). Default `'SHA-256'`.                                                                |
-| `Column.password(algorithm?)`      | `VARCHAR`      | `string`     | Auth digest: `SHA-*` (deterministic, filterable) or `'PBKDF2'` (salted, verify-based). See [Digest columns](#digest-columns). |
-| `Column.mask(source, fn)`          | _(virtual)_    | `string`     | Computed-on-read [mask](#masked-columns); never stored.                                                                       |
+| Factory                                        | SQL type       | TS value     | Notes                                                                                                                                                                                                                                               |
+| ---------------------------------------------- | -------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Column.varchar(length)`                       | `VARCHAR(n)`   | `string`     | String validators apply.                                                                                                                                                                                                                            |
+| `Column.char(length)`                          | `CHAR(n)`      | `string`     | Fixed-width string.                                                                                                                                                                                                                                 |
+| `Column.text()`                                | `TEXT`         | `string`     | Unbounded string.                                                                                                                                                                                                                                   |
+| `Column.clob()`                                | `CLOB`         | `string`     | Character large object (`TEXT`/`LONGTEXT`/`TEXT`). String validators apply.                                                                                                                                                                         |
+| `Column.xml()`                                 | `XML`          | `string`     | Native `XML` on Postgres, `TEXT` elsewhere.                                                                                                                                                                                                         |
+| `Column.uuid()`                                | `UUID`         | `string`     | Native, format-checked UUID. Pair with `.default({ $$_expression: 'UUID' })` for a DB-side default.                                                                                                                                                 |
+| `Column.ulid()`                                | `VARCHAR(26)`  | `string`     | Defaulted to a fresh [ULID](https://github.com/ulid/spec) per row, via `@tundralibs/id`.                                                                                                                                                            |
+| `Column.cuid()`                                | `VARCHAR(25)`  | `string`     | Defaulted to a fresh CUID per row, via `@tundralibs/id`.                                                                                                                                                                                            |
+| `Column.cuid2(length?)`                        | `VARCHAR(n)`   | `string`     | Defaulted to a fresh CUID2 per row (default length 24), via `@tundralibs/id`.                                                                                                                                                                       |
+| `Column.nanoId(size?)`                         | `VARCHAR(n)`   | `string`     | Defaulted to a fresh nanoID per row (default size 21), via `@tundralibs/id`.                                                                                                                                                                        |
+| `Column.objectId()`                            | `VARCHAR(26)`  | `string`     | Defaulted to `@tundralibs/id`'s `ObjectID` — one counter/machine-id generator shared by every row of this column.                                                                                                                                   |
+| `Column.simpleId()`                            | `BIGINT`       | `bigint`     | Defaulted to `@tundralibs/id`'s `simpleID` — one shared counter/seed per column.                                                                                                                                                                    |
+| `Column.integer()`                             | `INTEGER`      | `number`     | Numeric validators apply.                                                                                                                                                                                                                           |
+| `Column.int()`                                 | `INT`          | `number`     | Dialect synonym of `integer`.                                                                                                                                                                                                                       |
+| `Column.tinyint()`                             | `TINYINT`      | `number`     | 1-byte int (`SMALLINT`/`INTEGER` where absent).                                                                                                                                                                                                     |
+| `Column.smallint()`                            | `SMALLINT`     | `number`     | 2-byte int.                                                                                                                                                                                                                                         |
+| `Column.bigint()`                              | `BIGINT`       | `bigint`     | Values ride as `bigint` (`0n`).                                                                                                                                                                                                                     |
+| `Column.decimal(precision, scale)`             | `DECIMAL(p,s)` | `number`     | Fixed-point.                                                                                                                                                                                                                                        |
+| `Column.numeric(precision, scale)`             | `NUMERIC(p,s)` | `number`     | Exact fixed-point; synonym of `decimal`.                                                                                                                                                                                                            |
+| `Column.float()`                               | `FLOAT`        | `number`     |                                                                                                                                                                                                                                                     |
+| `Column.double()`                              | `DOUBLE`       | `number`     |                                                                                                                                                                                                                                                     |
+| `Column.real()`                                | `REAL`         | `number`     |                                                                                                                                                                                                                                                     |
+| `Column.bit()`                                 | `BIT`          | `number`     | Bit value (`BIT`/`BIT`/`INTEGER`).                                                                                                                                                                                                                  |
+| `Column.boolean()`                             | `BOOLEAN`      | `boolean`    | No numeric/string validators.                                                                                                                                                                                                                       |
+| `Column.date()`                                | `DATE`         | `Date`       | Date validators apply.                                                                                                                                                                                                                              |
+| `Column.time()`                                | `TIME`         | `Date`       | Only the clock part is significant.                                                                                                                                                                                                                 |
+| `Column.datetime()`                            | `DATETIME`     | `Date`       | For engines that distinguish it from `TIMESTAMP` (MariaDB).                                                                                                                                                                                         |
+| `Column.timestamp()`                           | `TIMESTAMP`    | `Date`       | Wall-clock, no zone.                                                                                                                                                                                                                                |
+| `Column.timestamptz()`                         | `TIMESTAMPTZ`  | `Date`       | Timestamp with time zone: `TIMESTAMPTZ` on Postgres, tz-aware `TIMESTAMP` on MariaDB, ISO-with-offset `TEXT` on SQLite.                                                                                                                             |
+| `Column.json<Shape>()` / `Column.json(schema)` | `JSONB`        | `Shape`      | Typed object. Renders as `JSONB` on Postgres (never bare `JSON`), native `JSON` on MariaDB, `TEXT` on SQLite. Given a `Guardian.object({...})` `schema`, `Shape` is INFERRED and every key is validated at write time — see [below](#json-schemas). |
+| `Column.blob()`                                | `BLOB`         | `Uint8Array` | Raw bytes. The crypto codec is text-canonical, so binary cannot be encrypted; encrypt an encoded text form instead.                                                                                                                                 |
+| `Column.binary(length)`                        | `BINARY(n)`    | `Uint8Array` | Fixed-length raw bytes (`BYTEA`/`BINARY`/`BLOB`). Like `blob`, not encryptable.                                                                                                                                                                     |
+| `Column.varbinary(length)`                     | `VARBINARY(n)` | `Uint8Array` | Variable-length raw bytes. Like `blob`, not encryptable.                                                                                                                                                                                            |
+| `Column.hash(algorithm?)`                      | `VARCHAR`      | `string`     | One-way [digest column](#digest-columns). Default `'SHA-256'`.                                                                                                                                                                                      |
+| `Column.password(algorithm?)`                  | `VARCHAR`      | `string`     | Auth digest: `SHA-*` (deterministic, filterable) or `'PBKDF2'` (salted, verify-based). See [Digest columns](#digest-columns).                                                                                                                       |
+| `Column.mask(source, fn)`                      | _(virtual)_    | `string`     | Computed-on-read [mask](#masked-columns); never stored.                                                                                                                                                                                             |
 
 `json`, `boolean`, `blob`, `binary`, `varbinary`, and `bit` are the
 base builder: they carry the [common modifiers](#common-modifiers) and
@@ -244,6 +244,49 @@ simply fails to type-check, rather than silently letting a transform
 swap the column's declared type. Every validator/transform that
 legitimately belongs here is typed to return the same class, so nothing
 is lost — the type checker only blocks the genuinely unsafe methods.
+
+### JSON schemas
+
+`Column.json<Shape>()` on its own validates nothing about the value beyond
+"is a non-array object" — `Shape` is a pure TS phantom. Pass a
+[`Guardian.object({...})`](../../guardian/README.md) schema instead and
+`Shape` is INFERRED from it, with every key validated per write using the
+schema's own rules:
+
+```typescript
+import { Column, Entity } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
+
+const Preferences = Guardian.object({
+  theme: Guardian.enum(['light', 'dark'] as const),
+  notifications: Guardian.boolean(),
+});
+
+const Users = Entity('users', {
+  id: Column.uuid(),
+  preferences: Column.json(Preferences), // Shape inferred, no hand-kept <Shape>
+}, { pk: ['id'] });
+```
+
+A malformed `preferences` payload now fails with the schema's own per-key
+error (e.g. `theme` not in `'light' | 'dark'`), not the generic "must be a
+non-array object". `Column.json<Shape>()` (no argument) is unchanged and
+remains additive alongside this overload.
+
+Because the schema is already a fully configurable `ObjectGuardian`
+— `.strict()` / `.passthrough()` / `.catchall()` / `.refine()` all apply —
+configure it directly, before passing it to `Column.json()`:
+
+```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+const Preferences = Guardian.object({ theme: Guardian.string() }).strict();
+```
+
+`.guardian(fn)` is unavailable on a schema-provided JSON column (it throws):
+the base `ColumnBuilder.guardian()`'s type doesn't match this column's real
+runtime guardian (the schema instance itself), so norm keeps this a hard,
+documented error rather than a silently wrong type.
 
 ### Defaults
 

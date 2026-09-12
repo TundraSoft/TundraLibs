@@ -138,6 +138,10 @@ function buildBase(spec: ColumnSpec) {
   }
 
   if (type === 'JSON' || type === 'JSONB') {
+    // Column.json(schema) — the schema IS the real per-key validator;
+    // no forced .strict()/.strip(), the caller's own guardian already
+    // chose that.
+    if (spec.jsonSchema !== undefined) return spec.jsonSchema;
     return Guardian.unknown().refine(
       (v) => v !== null && typeof v === 'object' && !Array.isArray(v),
       'must be a non-array object',

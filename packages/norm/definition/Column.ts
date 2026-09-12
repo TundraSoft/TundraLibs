@@ -51,6 +51,7 @@ import type {
   BooleanGuardian,
   DateGuardian,
   NumberGuardian,
+  ObjectGuardian,
   StringGuardian as StringGuard,
   UnknownGuardian,
 } from '@tundralibs/guardian';
@@ -193,6 +194,12 @@ export interface ColumnSpec<
     readonly source: string;
     readonly fn: (v: never) => string;
   };
+  /** Real per-key JSON validation, set only by `Column.json(schema)`'s
+   * schema-accepting overload — the one place `Shape` and its runtime
+   * validation are the SAME source of truth, rather than the bare
+   * `Column.json<Shape>()` phantom. Not serializable — excluded from
+   * snapshot/docs exactly like `masked`/`transforms`. */
+  readonly jsonSchema?: ObjectGuardian<Record<string, unknown>>;
   /** @internal Phantom — TS value type. Never set at runtime. */
   readonly $type?: T;
   /** @internal Phantom — insert payload may omit this column. */
@@ -846,6 +853,57 @@ export class MaskColumnBuilder<
   }
 }
 
+/**
+ * JSON/JSONB builder produced when `Column.json(schema)` is given a
+ * `Guardian.object({...})` — the one column kind whose declared TS
+ * `Shape` and runtime validation are the SAME source of truth, instead
+ * of the bare `Column.json<Shape>()` phantom (see {@linkcode Column.json}).
+ */
+export class JsonColumnBuilder<
+  T extends Record<string, unknown> | null = Record<string, unknown>,
+  Opt extends boolean = false,
+> extends ColumnBuilder<T, Opt> {
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the schema-backed
+   * surface chainable. */
+  public override nullable(): _KeepHidden<
+    this,
+    JsonColumnBuilder<T | null, true>
+  > {
+    return new JsonColumnBuilder<T | null, true>(
+      this._with<T | null, true>({ nullable: true }),
+    ) as _KeepHidden<this, JsonColumnBuilder<T | null, true>>;
+  }
+
+  /** As {@linkcode ColumnBuilder.default}, keeping the schema-backed surface. */
+  public override default(
+    v: DefaultInput<NonNullable<T>>,
+  ): _KeepHidden<this, JsonColumnBuilder<T, true>> {
+    return new JsonColumnBuilder<T, true>(this._with<T, true>({
+      default: { ...this.spec.default, insert: storeDefault(v) },
+    })) as _KeepHidden<this, JsonColumnBuilder<T, true>>;
+  }
+
+  /**
+   * Unavailable here — unlike every other column kind, a JSON schema
+   * is already a full, directly configurable {@link ObjectGuardian}
+   * BEFORE it reaches `Column.json(schema)`: call `.strict()` /
+   * `.passthrough()` / `.catchall()` / `.refine()` on the schema
+   * itself (`Guardian.object({...}).strict()`), not through
+   * `.guardian()` here. The base `ColumnBuilder.guardian()`'s type
+   * (`UnknownGuardian<T>`) would not match this column's REAL runtime
+   * guardian (the schema instance itself) — kept a hard error rather
+   * than a silently wrong type.
+   * @throws {@link Error} Always.
+   */
+  public override guardian(): never {
+    throw new Error(
+      "Column.json(schema)'s Guardian is already yours to configure — " +
+        'chain .strict()/.passthrough()/.catchall()/.refine() on the ' +
+        'schema itself before passing it to Column.json(), not here.',
+    );
+  }
+}
+
 /** Physical name of the synthesized digest sibling of an
  * `.encrypt().hash()` column — THE single spelling of the rule. */
 export function hashSiblingOf(column: string): string {
@@ -859,6 +917,25 @@ export function hashSiblingOf(column: string): string {
  * source claims them. */
 export function hashSourceOf(sibling: string): string | null {
   return sibling.endsWith('_hash') ? sibling.slice(0, -'_hash'.length) : null;
+}
+
+/** `Column.json<Shape>()` — phantom-only, no schema given. */
+function columnJson<Shape extends Record<string, unknown>>(): ColumnBuilder<
+  Shape
+>;
+/** `Column.json(Guardian.object({...}))` — `Shape` INFERRED from the
+ * schema's own output type, which becomes the column's real runtime
+ * validator. */
+function columnJson<
+  TIn extends Record<string, unknown>,
+  TOut extends Record<string, unknown> = TIn,
+>(schema: ObjectGuardian<TIn, TOut>): JsonColumnBuilder<TOut>;
+function columnJson(
+  schema?: ObjectGuardian<Record<string, unknown>, Record<string, unknown>>,
+): unknown {
+  return schema !== undefined
+    ? new JsonColumnBuilder({ type: 'JSONB', jsonSchema: schema })
+    : new ColumnBuilder({ type: 'JSONB' });
 }
 
 /**
@@ -968,11 +1045,18 @@ export const Column = {
    * {@linkcode Column.timestamp} whenever the instant matters. */
   timestamptz: (): DateColumnBuilder =>
     new DateColumnBuilder({ type: 'TIMESTAMPTZ' }),
-  /** Typed JSON column: `Column.json<{ tags: string[] }>()`. Renders as
-   * **`JSONB`** on Postgres (binary, indexable — bare `JSON` is never
-   * emitted), native `JSON` on MariaDB/MySQL, and `TEXT` on SQLite. */
-  json: <Shape extends Record<string, unknown>>(): ColumnBuilder<Shape> =>
-    new ColumnBuilder<Shape>({ type: 'JSONB' }),
+  /**
+   * Typed JSON column. Renders as **`JSONB`** on Postgres (binary,
+   * indexable — bare `JSON` is never emitted), native `JSON` on
+   * MariaDB/MySQL, and `TEXT` on SQLite.
+   *
+   * `Column.json<{ tags: string[] }>()` — `Shape` is a phantom; the
+   * runtime only checks "non-array object". `Column.json(Guardian
+   * .object({...}))` — `Shape` is INFERRED from the schema, which
+   * becomes the column's real runtime validator (per-key, not just
+   * "is an object"). See [Validators](../docs/NORM-Schema.md#validators).
+   */
+  json: columnJson,
   /** Raw bytes (`BLOB`). Values ride as `Uint8Array`. Binary columns
    * cannot `encrypt()` — the crypto codec is text-canonical; encrypt
    * the encoded text form instead if you need that. */
