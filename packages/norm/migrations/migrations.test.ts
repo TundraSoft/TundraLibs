@@ -309,6 +309,42 @@ describe('norm.migrations (real SQLite end to end)', () => {
     );
   });
 
+  it('a FK added LATER to an existing table (ALTER, not CREATE) is also skipped + warned', () => {
+    const ts = '2026-01-01T00:00:00.000Z';
+    const Bots = Entity('job', { id: Column.integer() }, {
+      pk: ['id'],
+      dbSchema: 'Bots',
+    });
+    const withoutFk = Entity('account', {
+      id: Column.integer(),
+      jobId: Column.integer(),
+    }, { pk: ['id'], dbSchema: 'UserGroup' });
+    const withFk = Entity('account', {
+      id: Column.integer(),
+      jobId: Column.integer(),
+    }, {
+      pk: ['id'],
+      dbSchema: 'UserGroup',
+      fk: { Job: { model: 'Bots', on: { jobId: 'id' } } },
+    });
+
+    const before = buildSnapshot({ Bots, Account: withoutFk }, ts);
+    const after = buildSnapshot({ Bots, Account: withFk }, ts);
+    const diff = diffSnapshots(before, after, {
+      dialect: 'sqlite',
+      inPlaceAlter: true,
+    });
+    const alter = diff.actions.find(
+      (a) => !isRebuild(a) && a.type === 'ALTER_TABLE' && a.table === 'account',
+    );
+    asserts.assertEquals(
+      (alter as { addForeignKeys?: unknown })?.addForeignKeys,
+      undefined,
+    );
+    asserts.assertEquals(diff.warnings.length, 1);
+    asserts.assertStringIncludes(diff.warnings[0]!, "Entity('Account').fk.Job");
+  });
+
   it('materialized views flow snapshot → CREATE/DROP actions', () => {
     const ts = '2026-01-01T00:00:00.000Z';
     const mkView = (materialized: boolean) =>
