@@ -30,6 +30,7 @@ export {
   EncryptedColumnBuilder,
   type ExpressionDefault,
   HashedColumnBuilder,
+  JsonColumnBuilder,
   MaskColumnBuilder,
   NumberColumnBuilder,
   StringColumnBuilder,

@@ -6,6 +6,7 @@
 
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
+import { Guardian, GuardianError } from '@tundralibs/guardian';
 import { Column, Entity } from './mod.ts';
 import {
   buildCellGuardian,
@@ -90,6 +91,44 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
       buildCellGuardian(weird).parse('anything'),
       'anything',
     );
+  });
+
+  it('json: no schema falls back to the generic non-array-object check', () => {
+    const bare = Column.json<{ tags: string[] }>().spec;
+    const g = buildCellGuardian(bare);
+    asserts.assertEquals(g.parse({ tags: ['a'] }), { tags: ['a'] });
+    asserts.assertThrows(() => g.parse('nope'), GuardianError);
+    asserts.assertThrows(() => g.parse(['not', 'an', 'object']), GuardianError);
+  });
+
+  it("json: Column.json(schema) validates per-key with the schema's own guardian", () => {
+    const Preferences = Guardian.object({
+      theme: Guardian.enum(['light', 'dark'] as const),
+      notifications: Guardian.boolean(),
+    });
+    const spec = Column.json(Preferences).spec;
+    const g = buildCellGuardian(spec);
+
+    asserts.assertEquals(
+      g.parse({ theme: 'dark', notifications: true }),
+      { theme: 'dark', notifications: true },
+    );
+
+    // Rejected with the SCHEMA's own per-key message, not the generic
+    // "must be a non-array object" fallback.
+    let issue: GuardianError | undefined;
+    try {
+      g.parse({ theme: 'blue', notifications: true });
+    } catch (e) {
+      if (e instanceof GuardianError) issue = e;
+    }
+    asserts.assertEquals(issue !== undefined, true);
+    const messages = Array.from(issue!.leafErrors())
+      .map((l) => l.error.message).join(' ');
+    asserts.assertEquals(messages.includes('non-array object'), false);
+
+    // Missing a required key is also a per-key schema error.
+    asserts.assertThrows(() => g.parse({ theme: 'dark' }), GuardianError);
   });
 
   it('rehydrateDefault: bigint-as-string, ISO date, function passthrough, others verbatim', () => {

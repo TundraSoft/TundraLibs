@@ -10,12 +10,14 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { assertDefinition } from '../asserts/mod.ts';
+import { Guardian } from '@tundralibs/guardian';
 import {
   Column,
   Entity,
   type EntityViewOptions,
   HashedColumnBuilder,
   type InsertOf,
+  JsonColumnBuilder,
   type PrimaryKeyOf,
   type RowOf,
   type UpdateOf,
@@ -433,6 +435,51 @@ describe('norm.definition (builders + Entity)', () => {
 
     // @ts-expect-error — toNumber() returns NumberGuardian, not BooleanGuardian.
     Column.boolean().guardian((g) => g.toNumber());
+  });
+
+  it('Column.json(schema) infers Shape from a Guardian.object() and validates per-key', () => {
+    const Preferences = Guardian.object({
+      theme: Guardian.enum(['light', 'dark'] as const),
+      notifications: Guardian.boolean(),
+    });
+    const prefs = Column.json(Preferences);
+    // Shape is INFERRED off the schema's own output type — no <Shape> hand-kept.
+    type Shape = NonNullable<(typeof prefs)['spec']['$type']>;
+    type _keys = Expect<Equal<keyof Shape, 'theme' | 'notifications'>>;
+    type _theme = Expect<Equal<Shape['theme'], 'light' | 'dark'>>;
+    type _notifications = Expect<Equal<Shape['notifications'], boolean>>;
+    asserts.assertEquals(prefs.spec.type, 'JSONB');
+    asserts.assertEquals(prefs.spec.jsonSchema, Preferences);
+    asserts.assertEquals(prefs instanceof JsonColumnBuilder, true);
+
+    // Column.json<Shape>() (no arg) is untouched — bare ColumnBuilder,
+    // no jsonSchema on the spec.
+    const bare = Column.json<{ tags: string[] }>();
+    asserts.assertEquals(bare instanceof JsonColumnBuilder, false);
+    asserts.assertEquals(bare.spec.jsonSchema, undefined);
+
+    // .guardian() is unavailable on a schema-provided JSON column — the
+    // schema itself is already the configurable ObjectGuardian; base
+    // ColumnBuilder.guardian()'s type (UnknownGuardian<T>) would not
+    // match the REAL runtime guardian (the schema instance).
+    asserts.assertThrows(
+      () => prefs.guardian(),
+      Error,
+      "Column.json(schema)'s Guardian is already yours to configure",
+    );
+  });
+
+  it('JsonColumnBuilder preserves its class through .nullable()/.default() chains', () => {
+    const Preferences = Guardian.object({ theme: Guardian.string() });
+    const prefs = Column.json(Preferences).nullable();
+    asserts.assertEquals(prefs instanceof JsonColumnBuilder, true);
+    asserts.assertEquals(prefs.spec.nullable, true);
+    asserts.assertEquals(prefs.spec.jsonSchema, Preferences);
+
+    const withDefault = Column.json(Preferences).default({ theme: 'dark' });
+    asserts.assertEquals(withDefault instanceof JsonColumnBuilder, true);
+    asserts.assertEquals(withDefault.spec.default?.insert, { theme: 'dark' });
+    asserts.assertEquals(withDefault.spec.jsonSchema, Preferences);
   });
 
   it('id-generator sugar: VARCHAR/BIGINT specs defaulted per row, never Column.uuid()', () => {

@@ -132,6 +132,7 @@ export {
   type ForeignKeyDef,
   HashedColumnBuilder,
   type InsertOf,
+  JsonColumnBuilder,
   MaskColumnBuilder,
   NumberColumnBuilder,
   type PrimaryKeyOf,
