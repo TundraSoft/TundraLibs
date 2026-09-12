@@ -197,8 +197,17 @@ plan can never go stale while waiting on a concurrent run.
 
 ```typescript ignore
 const r = await mig.apply();
-// { applied: [2, 3], durationMs: 41 }
+// { applied: [2, 3], durationMs: 41, warnings: [] }
 ```
+
+`warnings` is always populated (a real apply, not only `dryRun`) — the
+same apply-time hazards `plan()`'s `PlannedStep.warnings` surfaces (see
+above), plus anything only known once DDL actually runs (e.g. a table
+`REBUILD_TABLE` needed on SQLite). One concrete case: a FK crossing a
+`dbSchema` boundary on SQLite, or any FK on MongoDB — neither dialect
+can physically enforce it, so the constraint is skipped (best-effort,
+never thrown) and named here; the relation itself still works for
+joins/eager projection. See [Referential actions](NORM-Schema.md#referential-actions).
 
 `apply()` refuses, before running anything, when:
 
@@ -280,7 +289,7 @@ recording anything; drift is still checked:
 
 ```typescript ignore
 const dry = await mig.apply({ dryRun: true });
-// { applied: [], durationMs: 2, plannedQueries: [ …PlannedStep… ] }
+// { applied: [], durationMs: 2, warnings: [], plannedQueries: [ …PlannedStep… ] }
 console.log(dry.plannedQueries![0].blockedDrops);
 ```
 
@@ -764,6 +773,7 @@ apply(opts?: {
 }): Promise<{
   applied: ReadonlyArray<number>;
   durationMs: number;
+  warnings: ReadonlyArray<string>; // always populated, not just dryRun
   plannedQueries?: ReadonlyArray<PlannedStep>; // dryRun only
 }>;
 

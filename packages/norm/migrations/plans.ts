@@ -111,7 +111,7 @@ export function renderPlan(
       }
       continue;
     }
-    const plan = rebuildDdlPlan(action);
+    const plan = rebuildDdlPlan(action, dialect);
     lines.push(
       `-- REBUILD '${action.entityKey}' (${
         action.transform ? 'crypto transform' : 'structural'

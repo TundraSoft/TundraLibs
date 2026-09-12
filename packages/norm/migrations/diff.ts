@@ -47,7 +47,53 @@ export type DiffOptions = {
    * place (executor capabilities). When false, such changes emit a
    * REBUILD_TABLE instead of ALTER pieces. Default true. */
   readonly inPlaceAlter?: boolean;
+  /** Target dialect — used ONLY to skip a FK's PHYSICAL constraint
+   * when this dialect cannot honor it (never to change anything else;
+   * `diffSnapshots` otherwise stays dialect-agnostic by design). Omit
+   * to skip no FK (matches historical behavior). See
+   * {@linkcode fkPhysicalSkipReason}. */
+  readonly dialect?: 'sqlite' | 'postgres' | 'maria' | 'mongo';
 };
+
+/**
+ * Why a FK's PHYSICAL constraint can't be honored on `dialect`, or
+ * `undefined` if it can — the FK itself (joins, eager projection,
+ * reverse relations) is never affected, only the physical DDL
+ * constraint. Best-effort degrade, never throw, per OQL's compat-layer
+ * philosophy (`packages/oql/docs/Compatibility.md`):
+ *
+ * - MongoDB has no physical FK enforcement at all — every FK is
+ *   skipped.
+ * - SQLite emulates `dbSchema` via `ATTACH DATABASE` (a separate
+ *   file), and cannot enforce a FK constraint across attached
+ *   databases — only a FK crossing a `dbSchema` boundary is skipped.
+ */
+function fkPhysicalSkipReason(
+  sourceDbSchema: string | undefined,
+  fk: SnapForeignKey,
+  dialect: DiffOptions['dialect'],
+): string | undefined {
+  if (dialect === 'mongo') {
+    return 'MongoDB has no physical foreign-key enforcement';
+  }
+  if (dialect === 'sqlite' && sourceDbSchema !== fk.references.schema) {
+    return 'SQLite cannot enforce foreign keys across ATTACHed databases ' +
+      `('${sourceDbSchema ?? '(default)'}' → '${
+        fk.references.schema ?? '(default)'
+      }')`;
+  }
+  return undefined;
+}
+
+/** One skipped-FK warning, in the shared wording every call site uses. */
+function fkSkipWarning(
+  entityKey: string,
+  alias: string,
+  reason: string,
+): string {
+  return `Entity('${entityKey}').fk.${alias}: physical constraint skipped — ` +
+    `${reason}. The relation still works for joins/eager projection.`;
+}
 
 /** Physical identity of an entity ("schema.name" | "name"). */
 function physId(e: SnapEntity): string {
@@ -304,16 +350,23 @@ type OqlFkConstraint = NonNullable<
 export function createTableAction(
   e: SnapEntity,
   excludeFkAliases?: ReadonlySet<string>,
-): DdlQuery {
+  dialect?: DiffOptions['dialect'],
+): { action: DdlQuery; warnings: string[] } {
   const columns: Record<string, OqlColumnDef> = {};
   for (const [name, c] of Object.entries(e.columns)) {
     columns[name] = columnDef(c);
   }
   const foreignKeys: Record<string, OqlFkConstraint> = {};
+  const warnings: string[] = [];
   for (const [alias, fk] of Object.entries(e.foreignKeys ?? {})) {
     // Deferred FKs (cycle-breakers, non-PK-unique targets) are emitted as a
     // post-create ALTER instead of inline — see `diffSnapshots` pass 3.
     if (excludeFkAliases?.has(alias)) continue;
+    const skipReason = fkPhysicalSkipReason(e.dbSchema, fk, dialect);
+    if (skipReason !== undefined) {
+      warnings.push(fkSkipWarning(e.name, alias, skipReason));
+      continue;
+    }
     foreignKeys[fkName(e.name, alias)] = {
       columns: [...fk.columns],
       references: {
@@ -331,7 +384,7 @@ export function createTableAction(
         : {}),
     };
   }
-  return {
+  const action: DdlQuery = {
     type: 'CREATE_TABLE',
     table: e.name,
     ...(e.dbSchema !== undefined ? { schema: e.dbSchema } : {}),
@@ -342,6 +395,7 @@ export function createTableAction(
     ...(Object.keys(foreignKeys).length > 0 ? { foreignKeys } : {}),
     ifNotExists: true,
   };
+  return { action, warnings };
 }
 
 function createViewAction(e: SnapEntity): DdlQuery {
@@ -366,6 +420,7 @@ export function diffSnapshots(
 ): DiffResult {
   const allowDrop = opts.allowDrop === true;
   const inPlaceAlter = opts.inPlaceAlter !== false;
+  const dialect = opts.dialect;
   const actions: MigrationAction[] = [];
   const blockedDrops: string[] = [];
   const warnings: string[] = [];
@@ -490,6 +545,12 @@ export function diffSnapshots(
     for (const [alias, fk] of Object.entries(preFks)) {
       const now = curFks[alias];
       if (now === undefined || !sameFk(now, fk)) {
+        // Never emit a DROP for a constraint that was never physically
+        // created in the first place (it was dialect-skip-worthy back
+        // when it existed).
+        if (fkPhysicalSkipReason(pre.dbSchema, fk, dialect) !== undefined) {
+          continue;
+        }
         dropForeignKeys.push(fkName(pre.name, alias));
       }
     }
@@ -613,6 +674,10 @@ export function diffSnapshots(
     const deferred = new Set<string>();
     const addForeignKeys: Record<string, OqlFkConstraint> = {};
     for (const [alias, fk] of Object.entries(e.foreignKeys ?? {})) {
+      // Dialect-skip-worthy FKs are dropped entirely here — `createTableAction`
+      // (below) independently re-derives and warns about the same skip, so
+      // never defer/re-ADD one via ALTER instead.
+      if (fkPhysicalSkipReason(e.dbSchema, fk, dialect) !== undefined) continue;
       const refPhys = fk.references.schema === undefined
         ? fk.references.table
         : `${fk.references.schema}.${fk.references.table}`;
@@ -646,7 +711,9 @@ export function diffSnapshots(
         };
       }
     }
-    actions.push(createTableAction(e, deferred));
+    const created = createTableAction(e, deferred, dialect);
+    actions.push(created.action);
+    warnings.push(...created.warnings);
     actions.push(...indexActions(e));
     if (Object.keys(addForeignKeys).length > 0) {
       deferredFkActions.push({
@@ -709,6 +776,11 @@ export function diffSnapshots(
     for (const [alias, fk] of Object.entries(curFks)) {
       const old = preFks[alias];
       if (old === undefined || !sameFk(old, fk)) {
+        const skipReason = fkPhysicalSkipReason(cur.dbSchema, fk, dialect);
+        if (skipReason !== undefined) {
+          warnings.push(fkSkipWarning(currKey, alias, skipReason));
+          continue;
+        }
         addForeignKeys[fkName(cur.name, alias)] = {
           columns: [...fk.columns],
           references: { ...fk.references, columns: [...fk.references.columns] },

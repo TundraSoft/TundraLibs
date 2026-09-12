@@ -193,6 +193,122 @@ describe('norm.migrations (real SQLite end to end)', () => {
     }
   });
 
+  it('a FK crossing dbSchema is skipped (not thrown) on SQLite, kept on Postgres/Maria', () => {
+    const ts = '2026-01-01T00:00:00.000Z';
+    const Bots = Entity('job', { id: Column.integer() }, {
+      pk: ['id'],
+      dbSchema: 'Bots',
+    });
+    const Account = Entity('account', {
+      id: Column.integer(),
+      jobId: Column.integer(),
+    }, {
+      pk: ['id'],
+      dbSchema: 'UserGroup',
+      fk: { Job: { model: 'Bots', on: { jobId: 'id' } } },
+    });
+    const snap = buildSnapshot({ Bots, Account }, ts);
+
+    // SQLite: constraint skipped, warned — never a broken REFERENCES clause.
+    const sqliteDiff = diffSnapshots(null, snap, { dialect: 'sqlite' });
+    const sqliteCreate = sqliteDiff.actions.find(
+      (a) =>
+        !isRebuild(a) && a.type === 'CREATE_TABLE' && a.table === 'account',
+    );
+    asserts.assertEquals(
+      (sqliteCreate as { foreignKeys?: unknown })?.foreignKeys,
+      undefined,
+    );
+    asserts.assertEquals(sqliteDiff.warnings.length, 1);
+    asserts.assertStringIncludes(
+      sqliteDiff.warnings[0]!,
+      "Entity('account').fk.Job",
+    );
+    asserts.assertStringIncludes(sqliteDiff.warnings[0]!, 'ATTACHed databases');
+    // Never a raw SQL parse error: the plan actually renders.
+    const plan = renderPlan(1, 'sqlite', sqliteDiff.actions);
+    const create = plan.statements.find((s) => s.includes('account'))!;
+    asserts.assertEquals(create.includes('REFERENCES'), false);
+
+    // Postgres/Maria: real cross-schema FK support — constraint kept, no warning.
+    for (const dialect of ['postgres', 'maria'] as const) {
+      const diff = diffSnapshots(null, snap, { dialect });
+      const created = diff.actions.find(
+        (a) =>
+          !isRebuild(a) && a.type === 'CREATE_TABLE' && a.table === 'account',
+      );
+      asserts.assertExists(
+        (created as { foreignKeys?: unknown })?.foreignKeys,
+      );
+      asserts.assertEquals(diff.warnings.length, 0);
+    }
+
+    // Omitting `dialect` entirely (historical default) skips nothing.
+    const noDialectDiff = diffSnapshots(null, snap);
+    asserts.assertEquals(noDialectDiff.warnings.length, 0);
+  });
+
+  it('MongoDB: every FK is skipped, not just cross-dbSchema ones', () => {
+    const ts = '2026-01-01T00:00:00.000Z';
+    const Users = Entity('users', { id: Column.integer() }, { pk: ['id'] });
+    const Posts = Entity('posts', {
+      id: Column.integer(),
+      userId: Column.integer(),
+    }, {
+      pk: ['id'],
+      fk: { Author: { model: 'Users', on: { userId: 'id' } } },
+    });
+    const snap = buildSnapshot({ Users, Posts }, ts);
+    const diff = diffSnapshots(null, snap, { dialect: 'mongo' });
+    const created = diff.actions.find(
+      (a) => !isRebuild(a) && a.type === 'CREATE_TABLE' && a.table === 'posts',
+    );
+    asserts.assertEquals(
+      (created as { foreignKeys?: unknown })?.foreignKeys,
+      undefined,
+    );
+    asserts.assertEquals(diff.warnings.length, 1);
+    asserts.assertStringIncludes(
+      diff.warnings[0]!,
+      "Entity('posts').fk.Author",
+    );
+    asserts.assertStringIncludes(diff.warnings[0]!, 'no physical foreign-key');
+  });
+
+  it('a FK that was skip-worthy in the OLD snapshot is never targeted by dropForeignKeys', () => {
+    const ts = '2026-01-01T00:00:00.000Z';
+    const Bots = Entity('job', { id: Column.integer() }, {
+      pk: ['id'],
+      dbSchema: 'Bots',
+    });
+    const withFk = Entity('account', {
+      id: Column.integer(),
+      jobId: Column.integer(),
+    }, {
+      pk: ['id'],
+      dbSchema: 'UserGroup',
+      fk: { Job: { model: 'Bots', on: { jobId: 'id' } } },
+    });
+    const withoutFk = Entity('account', {
+      id: Column.integer(),
+      jobId: Column.integer(),
+    }, { pk: ['id'], dbSchema: 'UserGroup' });
+
+    const before = buildSnapshot({ Bots, Account: withFk }, ts);
+    const after = buildSnapshot({ Bots, Account: withoutFk }, ts);
+    const diff = diffSnapshots(before, after, {
+      dialect: 'sqlite',
+      inPlaceAlter: true,
+    });
+    const alter = diff.actions.find(
+      (a) => !isRebuild(a) && a.type === 'ALTER_TABLE' && a.table === 'account',
+    );
+    asserts.assertEquals(
+      (alter as { dropForeignKeys?: unknown })?.dropForeignKeys,
+      undefined,
+    );
+  });
+
   it('materialized views flow snapshot → CREATE/DROP actions', () => {
     const ts = '2026-01-01T00:00:00.000Z';
     const mkView = (materialized: boolean) =>
