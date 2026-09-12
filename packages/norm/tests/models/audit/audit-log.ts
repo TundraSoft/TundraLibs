@@ -11,7 +11,7 @@ import { Column, Entity } from '../../../mod.ts';
 export const AuditLog = Entity('audit_log', {
   id: Column.integer(),
   actorId: Column.uuid(),
-  action: Column.varchar(40).lov(['create', 'update', 'delete']),
+  action: Column.enum(['create', 'update', 'delete']),
   subject: Column.varchar(120),
 }, {
   pk: ['id'],

@@ -231,14 +231,15 @@ the import to add. The registry behind this is documented in
 // the other six dialects don't (see "Choosing an entry point" below).
 import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 // 1. Define entities with the Column builders.
 const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
-  email: Column.varchar(255).beforeWrite((v) => v.toLowerCase())
+  email: Column.varchar(255).guard(Guardian.string().toLowerCase())
     .encrypt().hash(), // ciphertext at rest, still filterable by plaintext
-  displayName: Column.varchar(120).minLength(2),
-  role: Column.varchar(12).lov(['admin', 'editor', 'viewer']).default('viewer'),
+  displayName: Column.varchar(120).guard(Guardian.string().minLength(2)),
+  role: Column.enum(['admin', 'editor', 'viewer']).default('viewer'),
 }, {
   pk: ['id'],
   unique: { email: ['email_hash'] }, // unique on the digest sibling
@@ -275,23 +276,30 @@ on the `call` event, so logs correlate one to one.
 ## Defining a schema
 
 `Column.*` builders are immutable and chainable. Invalid combinations do
-not type-check: `hash()` exists only after `encrypt()`, and validators
-disappear after `encrypt()`.
+not type-check: `hash()` exists only after `encrypt()`, and `.guard()`
+disappears after `encrypt()`.
 
 ```typescript
 import { Column } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 Column.varchar(255) // VARCHAR(255)
   .nullable() // NULL allowed
-  .minLength(3).maxLength(50)
-  .pattern(/^[a-z]+$/)
-  .validate((v) => !v.includes(' '), 'no spaces allowed') // custom rule
-  .guardian((g) => g.slug()) // reach Guardian's own validators directly
+  .guard(
+    Guardian.string() // one Guardian: transforms + validators, your order
+      .trim()
+      .minLength(3).maxLength(50)
+      .pattern(/^[a-z]+$/)
+      .refine((v) => !v.includes(' '), 'no spaces allowed')
+      .slug(), // reach Guardian's own vocabulary directly
+  )
   .beforeWrite((v) => v.trim())
   .afterRead((v) => v.toUpperCase())
-  .lov(['a', 'b', 'c']) // narrows the TS type to the union
   .default('a')
   .comment('A column');
+
+// A literal-value restriction that also narrows the TS type:
+Column.enum(['a', 'b', 'c']); // TS: 'a' | 'b' | 'c'
 
 Column.integer();
 Column.bigint();

@@ -165,10 +165,12 @@ Column builders: \`varchar(n)\`, \`integer\`, \`bigint\`, \`decimal(p, s)\`,
 \`datetime\`, \`timestamp\`, \`uuid\`, \`text\`, \`blob\`, \`hash('SHA-256')\` (a
 one-way digest column, e.g. for passwords), \`mask(source, fn)\` (a virtual
 column computed after decryption — never stored, never sent to SQL).
-Chainable on (most of) these: \`.nullable()\`, \`.minLength()\`/\`.maxLength()\`,
-\`.pattern(re)\`, \`.beforeWrite(fn)\`/\`.afterRead(fn)\`, \`.lov([...])\` (narrows
-the TS type to that union), \`.default(v)\`, \`.min()\`/\`.max()\` (numeric),
-\`.hidden()\`/\`.unfilterable()\`, \`.comment(text)\`.
+Chainable on (most of) these: \`.nullable()\`, \`.guard(g)\` (an already-built
+\`@tundralibs/guardian\` instance — validators AND transforms, in your own
+order; pinned to the column's own concrete guardian class), \`.beforeWrite(fn)\`/
+\`.afterRead(fn)\`, \`.default(v)\`, \`.hidden()\`/\`.unfilterable()\`,
+\`.comment(text)\`. \`Column.enum([...])\` is its own factory (not chained) —
+narrows the TS type to the literal union, no \`as const\` needed.
 
 ### Entity kinds
 

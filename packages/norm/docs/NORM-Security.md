@@ -200,11 +200,12 @@ work against a column whose ciphertext is unusable for comparison.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
-  email: Column.varchar(255).pattern(/^\S+@\S+\.\S+$/)
-    .beforeWrite((v) => v.trim().toLowerCase())
+  email: Column.varchar(255)
+    .guard(Guardian.string().trim().toLowerCase().pattern(/^\S+@\S+\.\S+$/))
     .encrypt().hash(), // → ciphertext `email` + digest `email_hash`
   apiKey: Column.varchar(256).encrypt(), // encrypted, NOT hashed → not filterable
 }, {
@@ -336,10 +337,11 @@ algorithm:
 
 ```typescript ignore
 import { Column, Entity, pbkdf2Verify } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 const Users = Entity('users', {
   id: Column.uuid(),
-  password: Column.password('PBKDF2').minLength(8),
+  password: Column.password('PBKDF2').guard(Guardian.string().minLength(8)),
 }, { pk: ['id'] });
 
 // db.repo('Users').insert({ id, password: 'hunter2boat' }) stores

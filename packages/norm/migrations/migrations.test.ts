@@ -17,6 +17,7 @@ import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import type { EngineQueryResult } from '@tundralibs/drivers';
 import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '../mod.ts';
+import { Guardian } from '@tundralibs/guardian';
 import { registerEngine, resolveEngineFactory } from '../engines/mod.ts';
 import { NormMigrationError } from '../errors/mod.ts';
 import { snapshot as logicalSnapshot } from '../definition/mod.ts';
@@ -75,7 +76,7 @@ const UsersV1 = Entity('users', {
   id: Column.integer(),
   email: Column.varchar(255).beforeWrite((v) => v.toLowerCase())
     .encrypt().hash(),
-  password: Column.hash('SHA-256').minLength(8),
+  password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
   // Nullable: rollbacks RE-ADD dropped columns, and no dialect can
   // add a NOT NULL column to a populated table without a DDL default
   // (which norm never emits — defaults are system-generated).
@@ -91,7 +92,7 @@ const UsersV2 = Entity('users', {
   id: Column.integer(),
   email: Column.varchar(255).beforeWrite((v) => v.toLowerCase())
     .encrypt().hash(),
-  password: Column.hash('SHA-256').minLength(8),
+  password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
   fullName: Column.varchar(120).nullable().renamedFrom('displayName'),
   bio: Column.text().nullable(),
 }, {
@@ -104,7 +105,7 @@ const UsersV2 = Entity('users', {
 const UsersV3 = Entity('users', {
   id: Column.bigint(), // INTEGER → BIGINT: in-place alter
   email: Column.varchar(255).encrypt().hash(),
-  password: Column.hash('SHA-256').minLength(8),
+  password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
   fullName: Column.varchar(120).nullable(),
   bio: Column.text().nullable(),
 }, {
@@ -548,7 +549,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const Dropped = Entity('users', {
       id: Column.integer(),
       email: Column.varchar(255).encrypt().hash(),
-      password: Column.hash('SHA-256').minLength(8),
+      password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
       handle: Column.varchar(120).nullable(), // fullName gone, NO hint
       bio: Column.text().nullable(),
     }, {
@@ -716,7 +717,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const PlainEmail = Entity('users', {
       id: Column.integer(),
       email: Column.varchar(255), // encrypt+hash REMOVED
-      password: Column.hash('SHA-256').minLength(8),
+      password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
       fullName: Column.varchar(120).nullable(),
       bio: Column.text().nullable(),
     }, {
@@ -888,7 +889,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const PlainEmail = Entity('users', {
       id: Column.integer(),
       email: Column.varchar(255), // encrypt+hash REMOVED → transforming rebuild
-      password: Column.hash('SHA-256').minLength(8),
+      password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
       fullName: Column.varchar(120).nullable(),
       bio: Column.text().nullable(),
     }, {
@@ -1174,7 +1175,7 @@ describe('norm.migrations (error branches)', () => {
       const PlainEmail = Entity('users', {
         id: Column.integer(),
         email: Column.varchar(255), // encrypt+hash dropped
-        password: Column.hash('SHA-256').minLength(8),
+        password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
         displayName: Column.varchar(120).nullable(),
       }, { pk: ['id'], index: { byName: ['displayName'] } });
       const normPlain = normOn(engine); // no secret

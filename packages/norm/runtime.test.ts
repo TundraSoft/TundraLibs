@@ -38,6 +38,7 @@ import {
 import '@tundralibs/norm/engines/sqlite';
 import { registerEngine, resolveEngineFactory } from './engines/mod.ts';
 import { defaultHash } from './crypto.ts';
+import { Guardian } from '@tundralibs/guardian';
 
 type Row = Record<string, unknown>;
 type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends
@@ -190,13 +191,13 @@ const Users = Entity('users', {
   email: Column.varchar(255)
     .beforeWrite((v) => v.trim().toLowerCase())
     .encrypt().hash(),
-  status: Column.varchar(16).lov(['active', 'banned', 'pending'])
-    .default('pending'),
-  age: Column.integer().min(13).nullable(),
+  status: Column.enum(['active', 'banned', 'pending']).default('pending'),
+  age: Column.integer().guard(Guardian.number().min(13)).nullable(),
   updatedAt: Column.timestamp().default(() => new Date('2026-01-01'))
     .defaultOnUpdate(() => new Date('2026-02-02')),
   passwordHash: Column.varchar(64).hidden().unfilterable(),
-  displayName: Column.varchar(120).minLength(2).afterRead((v) => v.trim()),
+  displayName: Column.varchar(120).guard(Guardian.string().minLength(2))
+    .afterRead((v) => v.trim()),
 }, {
   pk: ['id'],
   update: ['status', 'age', 'passwordHash', 'displayName'],

@@ -199,7 +199,7 @@ try {
 
   // ─── 8. Transaction rollback ────────────────────────────────────────
   // The second insert below is deliberately invalid (Status isn't one of
-  // the declared `.lov([...])` values) — `as never` bypasses the
+  // Column.enum([...])'s declared values) — `as never` bypasses the
   // compile-time check that would otherwise catch this, to force the
   // RUNTIME Guardian rejection `transaction()` needs to prove atomicity.
   const beforeAttempt =
