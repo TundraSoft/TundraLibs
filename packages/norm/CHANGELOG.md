@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.8.0...norm-v1.9.0) (2026-09-12)
+
+
+### Features
+
+* **norm:** .guardian() — reach Guardian's built-in validators/transforms ([#664](https://github.com/TundraSoft/TundraLibs/issues/664)) ([e21504f](https://github.com/TundraSoft/TundraLibs/commit/e21504f2644a090b57d3c8a0ab21d98f4b98c1fd))
+* **norm:** Column.json(Guardian.object({...})) — real per-key JSON validation ([#667](https://github.com/TundraSoft/TundraLibs/issues/667)) ([4d62ffe](https://github.com/TundraSoft/TundraLibs/commit/4d62ffe842588075005987f208cad4674aef38cc))
+
+
+### Bug Fixes
+
+* **norm:** degrade FK physical constraints gracefully on SQLite/Mongo ([#666](https://github.com/TundraSoft/TundraLibs/issues/666)) ([f750e97](https://github.com/TundraSoft/TundraLibs/commit/f750e97044b6c7aa254a1ef2c33966a26da9654b))
+
 ## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.7.1...norm-v1.8.0) (2026-09-11)
 
 
