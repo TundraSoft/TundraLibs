@@ -67,12 +67,19 @@ export type RebuildPlan = {
   readonly structuralCopy: Query<'INSERT_FROM_QUERY'> | null;
   /** Drop the aside table (runs AFTER row-count verification). */
   readonly postCopy: DdlQuery[];
+  /** FK constraints skipped because `dialect` can't physically honor
+   * them (see `diff.ts`'s `fkPhysicalSkipReason`) — the rebuilt table
+   * still gets them logically (joins/eager projection unaffected). */
+  readonly warnings: readonly string[];
 };
 
 /** Expand a rebuild into its ordered DDL: rename the old table aside,
  * create the new shape, copy, then drop the aside. The single spelling
  * shared by the executor loop and the stored plan artifact. */
-export function rebuildDdlPlan(r: RebuildTable): RebuildPlan {
+export function rebuildDdlPlan(
+  r: RebuildTable,
+  dialect?: 'sqlite' | 'postgres' | 'maria' | 'mongo',
+): RebuildPlan {
   const aside = `${r.to.name}__pre_migrate`;
   const schema = r.from.dbSchema !== undefined
     ? { schema: r.from.dbSchema }
@@ -100,7 +107,8 @@ export function rebuildDdlPlan(r: RebuildTable): RebuildPlan {
     ...schema,
     renameTo: aside,
   });
-  preCopy.push(createTableAction(r.to));
+  const created = createTableAction(r.to, undefined, dialect);
+  preCopy.push(created.action);
   preCopy.push(...indexActions(r.to));
 
   let structuralCopy: Query<'INSERT_FROM_QUERY'> | null = null;
@@ -127,5 +135,11 @@ export function rebuildDdlPlan(r: RebuildTable): RebuildPlan {
     table: aside,
     ...schema,
   }];
-  return { aside, preCopy, structuralCopy, postCopy };
+  return {
+    aside,
+    preCopy,
+    structuralCopy,
+    postCopy,
+    warnings: created.warnings,
+  };
 }

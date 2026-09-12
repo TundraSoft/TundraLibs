@@ -152,6 +152,11 @@ export type ApplyOptions = {
 export type ApplyResult = {
   applied: ReadonlyArray<number>;
   durationMs: number;
+  /** Migration-time hazards/degradations worth reading — e.g. a FK's
+   * physical constraint skipped for the target dialect (see
+   * `diff.ts`'s `fkPhysicalSkipReason`). Always populated, real applies
+   * included, not just `dryRun`. */
+  warnings: ReadonlyArray<string>;
   /** Present only for dryRun. */
   plannedQueries?: ReadonlyArray<PlannedStep>;
 };
@@ -354,6 +359,7 @@ export class Migrator {
       const diff = diffSnapshots(prev, curr, {
         allowDrop: opts.allowDrop,
         inPlaceAlter: caps.alterColumns && caps.alterConstraints,
+        dialect: caps.dialect,
       });
       steps.push({
         version,
@@ -396,10 +402,12 @@ export class Migrator {
     if (opts.dryRun === true) {
       const status = await this.status();
       if (!status.hashOk) this.__throwDrift(status.dbVersion);
+      const steps = await this.plan({ allowDrop: opts.allowDrop });
       return {
         applied: [],
         durationMs: Date.now() - started,
-        plannedQueries: await this.plan({ allowDrop: opts.allowDrop }),
+        warnings: steps.flatMap((s) => s.warnings),
+        plannedQueries: steps,
       };
     }
 
@@ -410,6 +418,7 @@ export class Migrator {
     await lock.acquire(opts.lockTimeoutMs);
     this.__activeLock = lock;
     const applied: number[] = [];
+    const warnings: string[] = [];
     try {
       // The advisory lock wraps the critical section INSIDE the try: it
       // throws LOCK_TIMEOUT when another host is mid-deploy, and a throw
@@ -441,7 +450,8 @@ export class Migrator {
         // empty, yielding the same result as the old empty-plan return.
         for (const step of steps) {
           await this.__verifyPlanArtifact(step.version, step.queries);
-          await this.__applyStep(step, opts.appliedBy);
+          warnings.push(...step.warnings);
+          await this.__applyStep(step, opts.appliedBy, warnings);
           applied.push(step.version);
           // Keep the file lock fresh so a long multi-version apply is
           // never mistaken for an abandoned one.
@@ -452,7 +462,7 @@ export class Migrator {
       this.__activeLock = undefined;
       await lock.release();
     }
-    return { applied, durationMs: Date.now() - started };
+    return { applied, durationMs: Date.now() - started, warnings };
   }
 
   /**
@@ -466,6 +476,7 @@ export class Migrator {
   private async __applyStep(
     step: PlannedStep,
     appliedBy: string | undefined,
+    warnings: string[],
   ): Promise<void> {
     const ex = this.__runtime.executor;
     const stepStart = Date.now();
@@ -496,7 +507,7 @@ export class Migrator {
       }
       await ex.transaction(async (session) => {
         for (const q of inTx) {
-          if (isRebuild(q)) await this.__rebuild(q, session.id);
+          if (isRebuild(q)) await this.__rebuild(q, session.id, warnings);
           else await ex.ddl(q, session.id);
         }
         await record(session.id);
@@ -511,7 +522,7 @@ export class Migrator {
     let done = await this.__readProgress(step.version, planHash);
     for (let i = done; i < step.queries.length; i++) {
       const q = step.queries[i]!;
-      if (isRebuild(q)) await this.__rebuild(q);
+      if (isRebuild(q)) await this.__rebuild(q, undefined, warnings);
       else await ex.ddl(q);
       await this.__writeProgress(step.version, planHash, i + 1, done > 0);
       // Re-stamp the file lock per action: on advisory-lock-less engines
@@ -584,6 +595,7 @@ export class Migrator {
           const diff = diffSnapshots(from, to, {
             allowDrop: true,
             inPlaceAlter: caps.alterColumns && caps.alterConstraints,
+            dialect: caps.dialect,
           });
           await this.__revertStep(v, diff.actions);
           reverted.push(v);
@@ -710,12 +722,22 @@ export class Migrator {
    * and the next apply fails the rename loudly; the per-action
    * checkpoint cannot help mid-rebuild, so that case stays manual.
    * @param txId - Transaction to run inside, on engines with
-   *   transactional DDL (the whole rebuild then rolls back as one). */
-  private async __rebuild(r: RebuildTable, txId?: string): Promise<void> {
+   *   transactional DDL (the whole rebuild then rolls back as one).
+   * @param warnings - Accumulator for FK-physical-constraint-skipped
+   *   messages (see `diff.ts`'s `fkPhysicalSkipReason`) — pushed onto
+   *   whatever the caller ultimately surfaces (e.g. `apply()`'s
+   *   `ApplyResult.warnings`). Omit to discard (e.g. during rollback,
+   *   where a skipped constraint is simply not re-dropped). */
+  private async __rebuild(
+    r: RebuildTable,
+    txId?: string,
+    warnings?: string[],
+  ): Promise<void> {
     const ex = this.__runtime.executor;
     // ONE shared plan builder feeds this loop AND the stored plan
     // artifacts — see rebuildDdlPlan.
-    const plan = rebuildDdlPlan(r);
+    const plan = rebuildDdlPlan(r, ex.capabilities.dialect);
+    warnings?.push(...plan.warnings);
     const aside = plan.aside;
     for (const q of plan.preCopy) await ex.ddl(q, txId);
 
@@ -911,6 +933,7 @@ export class Migrator {
       const diff = diffSnapshots(prev, curr, {
         allowDrop: true,
         inPlaceAlter: dialect !== 'sqlite',
+        dialect,
       });
       const rendered = renderPlan(version, dialect, diff.actions);
       const file = `${this.__dir}/${planFilename(version, dialect)}`;

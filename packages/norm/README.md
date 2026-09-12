@@ -656,6 +656,7 @@ walkthrough.
 | ----------------------------- | ---------- | ---- | ------------- | ------ | ----- | --- | ------- |
 | CRUD, filters, projections    | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
 | Relations (join / `$lookup`)  | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
+| FK constraint enforcement     | ✅         | ✅   | ✅            | ⚠️⁷    | ⚠️⁷   | ⚠️⁷ | ❌⁷     |
 | At-rest encryption + digests  | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
 | Aggregates (GROUP BY)         | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
 | Migrations                    | ✅         | ⚠️⁵  | ✅            | ✅     | ⚠️⁵   | ⚠️⁵ | ⚠️¹     |
@@ -671,7 +672,12 @@ Turso, and D1 migrate without the advisory lock and without transactional
 DDL, so a version that fails halfway resumes from its checkpoint, as on
 MariaDB. ⁶ A fetch dialect sends one request per statement, so
 `db.transaction()` throws `NormUnsupportedError` and temporal and audit
-writes are best-effort.
+writes are best-effort. ⁷ SQLite (and Turso/D1, which speak its SQL) emulate
+`dbSchema` as separate `ATTACH DATABASE`d files and cannot enforce a FK
+across that boundary; MongoDB has no FK constraint concept at all. Both
+degrade best-effort — the constraint is skipped and named in
+`Migrator.apply()`'s `warnings`, never thrown — while the relation itself
+still works for joins/eager projection. See [Referential actions](docs/NORM-Schema.md#referential-actions).
 
 Neon speaks PostgreSQL's SQL and Turso and D1 speak SQLite's, each
 through its base dialect's translator, and `executor.capabilities`

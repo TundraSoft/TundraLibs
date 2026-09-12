@@ -805,6 +805,23 @@ constraint. Omitting them uses the database default (`RESTRICT`). They
 are TABLE-only: a VIEW's `fk` is a logical join with no physical
 constraint to act on, so an action there is rejected at construction.
 
+**Two dialects can't physically enforce a FK at all, and degrade
+best-effort rather than throw** — the relation itself (joins, eager
+projection, reverse relations) is unaffected either way, only the
+physical constraint (and therefore `onDelete`/`onUpdate`) is skipped:
+
+- **SQLite** emulates `dbSchema` via `ATTACH DATABASE` (a separate
+  file per schema) and cannot enforce a FK constraint across attached
+  databases — only a FK whose `dbSchema` differs from its target's is
+  skipped; same-schema FKs are unaffected.
+- **MongoDB** has no FK constraint concept at all — every FK's
+  physical enforcement is skipped, unconditionally.
+
+Both cases surface a message in `Migrator.plan()`'s
+`PlannedStep.warnings` and `Migrator.apply()`'s `ApplyResult.warnings`
+(populated on a real apply, not only `dryRun`) — read it to see exactly
+which FK was affected and why. See [Migrations](NORM-Migrations.md).
+
 ### Many-to-many through a view
 
 The logical `fk` on a VIEW is what makes a view projectable from its

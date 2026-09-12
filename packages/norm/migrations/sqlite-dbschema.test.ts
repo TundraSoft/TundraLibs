@@ -41,7 +41,17 @@ describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () 
     const Account = Entity('Account', {
       Id: Column.integer(),
       Email: Column.varchar(255),
-    }, { pk: ['Id'], dbSchema: 'UserGroup' });
+      JobId: Column.integer().nullable(),
+    }, {
+      pk: ['Id'],
+      dbSchema: 'UserGroup',
+      // Crosses a dbSchema boundary — SQLite can't enforce this
+      // (cross-ATTACHed-database FK constraints aren't supported), so
+      // the physical constraint is skipped (best-effort, never
+      // thrown) — the relation still works for joins/eager
+      // projection, and apply() must succeed and warn about it.
+      fk: { Job: { model: 'Job', on: { JobId: 'Id' } } },
+    });
     const Job = Entity('Job', {
       Id: Column.integer(),
       Label: Column.varchar(120),
@@ -55,10 +65,17 @@ describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () 
     const plan = await readTextFile(`${migDir}/0001.sqlite.sql`);
     asserts.assertMatch(plan, /ATTACH DATABASE .* AS "UserGroup"/);
     asserts.assertMatch(plan, /ATTACH DATABASE .* AS "Bots"/);
+    // The cross-schema FK's constraint never reaches the plan (would be
+    // a SQL parse error on real SQLite) — the relation itself does.
+    asserts.assertEquals(plan.includes('REFERENCES'), false);
 
-    // Apply end-to-end: ATTACH runs, then the qualified CREATE TABLEs.
+    // Apply end-to-end: ATTACH runs, then the qualified CREATE TABLEs —
+    // no thrown error, and the skip is surfaced as a warning.
     const r = await mig.apply();
     asserts.assertEquals(r.applied, [1]);
+    asserts.assertEquals(r.warnings.length, 1);
+    asserts.assertStringIncludes(r.warnings[0]!, "Entity('Account').fk.Job");
+    asserts.assertStringIncludes(r.warnings[0]!, 'ATTACHed databases');
 
     // The dbSchema-qualified tables serve real traffic.
     const acc = await db.repo('Account').insert({ Id: 1, Email: 'a@b.c' });
