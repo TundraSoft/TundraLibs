@@ -1,12 +1,12 @@
 /**
- * SQLite + `dbSchema` end-to-end — the MarketMaker field report's F4.
+ * SQLite + `dbSchema` end-to-end.
  *
- * SQLite emulates schemas by ATTACHing one `<schema>.db` file per
- * `dbSchema` (translator `_buildCreateSchema` + the drivers engine's path
- * resolution). The report's failure was that no `CREATE_SCHEMA` action was
- * emitted to trigger the ATTACH — fixed by the F2 change (this branch's
- * base). This test proves the loop now closes: ATTACH is planned before the
- * qualified tables, apply succeeds, and the tables serve traffic.
+ * SQLite has no native schema object. `dbSchema` is folded into each
+ * table's physical name as a `<dbSchema>_<name>` prefix (never a
+ * separate ATTACHed file), so a FK crossing a `dbSchema` boundary lives
+ * in the same physical database as everything else and is physically
+ * enforced — no skip, no warning, unlike the old ATTACH-per-schema
+ * emulation this replaces.
  */
 
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
@@ -18,7 +18,7 @@ import { Migrator } from './mod.ts';
 
 const SECRET = 'sqlite-dbschema-secret-abcdef0123456789';
 
-describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () => {
+describe('norm.migrations — SQLite dbSchema is a physical name prefix', () => {
   let norm: Norm;
   let dbDir = '';
   let migDir = '';
@@ -37,7 +37,7 @@ describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () 
     await removeDir(migDir, { recursive: true }).catch(() => {});
   });
 
-  it('ATTACHes each dbSchema, applies its qualified tables, and serves traffic', async () => {
+  it('prefixes physical table names, enforces the cross-schema FK, and serves traffic', async () => {
     const Account = Entity('Account', {
       Id: Column.integer(),
       Email: Column.varchar(255),
@@ -45,11 +45,8 @@ describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () 
     }, {
       pk: ['Id'],
       dbSchema: 'UserGroup',
-      // Crosses a dbSchema boundary — SQLite can't enforce this
-      // (cross-ATTACHed-database FK constraints aren't supported), so
-      // the physical constraint is skipped (best-effort, never
-      // thrown) — the relation still works for joins/eager
-      // projection, and apply() must succeed and warn about it.
+      // Crosses a dbSchema boundary — physically enforced now that
+      // both tables live in the same file under prefixed names.
       fk: { Job: { model: 'Job', on: { JobId: 'Id' } } },
     });
     const Job = Entity('Job', {
@@ -61,26 +58,36 @@ describe('norm.migrations — SQLite dbSchema via ATTACH (field report F4)', () 
     const mig = new Migrator(db, { dir: migDir, renderSql: true });
 
     await mig.snapshot();
-    // The SQLite plan must ATTACH each dbSchema before its qualified tables.
     const plan = await readTextFile(`${migDir}/0001.sqlite.sql`);
-    asserts.assertMatch(plan, /ATTACH DATABASE .* AS "UserGroup"/);
-    asserts.assertMatch(plan, /ATTACH DATABASE .* AS "Bots"/);
-    // The cross-schema FK's constraint never reaches the plan (would be
-    // a SQL parse error on real SQLite) — the relation itself does.
-    asserts.assertEquals(plan.includes('REFERENCES'), false);
+    // No schema object is ever provisioned — no ATTACH, no CREATE SCHEMA.
+    asserts.assertEquals(plan.includes('ATTACH'), false);
+    asserts.assertEquals(plan.includes('CREATE SCHEMA'), false);
+    // Physical names are prefixed …
+    asserts.assertMatch(plan, /CREATE TABLE IF NOT EXISTS "UserGroup_Account"/);
+    asserts.assertMatch(plan, /CREATE TABLE IF NOT EXISTS "Bots_Job"/);
+    // … and the cross-schema FK is a real, physical REFERENCES clause.
+    asserts.assertMatch(plan, /REFERENCES "Bots_Job"/);
 
-    // Apply end-to-end: ATTACH runs, then the qualified CREATE TABLEs —
-    // no thrown error, and the skip is surfaced as a warning.
+    // Apply end-to-end: no skip, no warning.
     const r = await mig.apply();
     asserts.assertEquals(r.applied, [1]);
-    asserts.assertEquals(r.warnings.length, 1);
-    asserts.assertStringIncludes(r.warnings[0]!, "Entity('Account').fk.Job");
-    asserts.assertStringIncludes(r.warnings[0]!, 'ATTACHed databases');
+    asserts.assertEquals(r.warnings.length, 0);
 
-    // The dbSchema-qualified tables serve real traffic.
-    const acc = await db.repo('Account').insert({ Id: 1, Email: 'a@b.c' });
-    asserts.assertEquals(acc.data[0]!.Email, 'a@b.c');
+    // The entity-level API is unaffected by the physical rename — norm
+    // resolves `dbSchema` to the prefixed table under the hood.
     const job = await db.repo('Job').insert({ Id: 7, Label: 'nightly' });
     asserts.assertEquals(job.data[0]!.Label, 'nightly');
+    const acc = await db.repo('Account').insert({
+      Id: 1,
+      Email: 'a@b.c',
+      JobId: 7,
+    });
+    asserts.assertEquals(acc.data[0]!.Email, 'a@b.c');
+
+    // The FK is physically enforced: a JobId with no matching Job row
+    // is rejected, not silently accepted.
+    await asserts.assertRejects(() =>
+      db.repo('Account').insert({ Id: 2, Email: 'x@y.z', JobId: 999 })
+    );
   });
 });

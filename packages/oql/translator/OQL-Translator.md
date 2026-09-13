@@ -217,7 +217,8 @@ const { sql, params } = translator.select(query);
 - JSON path comparisons (`@col.@key` filter keys → `json_extract()`,
   SQLite 3.38+)
 - Limited DDL operations
-- Schema support emulated via `ATTACH DATABASE`
+- No schema object (`CREATE_SCHEMA` / `DROP_SCHEMA` throw); `schema` on
+  every other query is folded into the name as a `<schema>_<name>` prefix
 
 ## NoSQL Translators
 
@@ -704,10 +705,12 @@ try {
 ```
 
 Note that many operations are **emulated** rather than rejected — e.g.
-`CREATE_SCHEMA` on SQLite does not throw; it emits an `ATTACH DATABASE`
-statement (`ATTACH DATABASE 'test.db' AS "test"`), and `TRUNCATE` on SQLite
-emits `DELETE FROM`. See the Compatibility Matrix for which features throw
-versus degrade gracefully.
+`TRUNCATE` on SQLite emits `DELETE FROM`, and a `schema` on a SQLite
+CREATE_TABLE/SELECT/etc. is folded into the identifier as a
+`<schema>_<name>` prefix rather than dot-qualified. `CREATE_SCHEMA` /
+`DROP_SCHEMA` on SQLite specifically DO throw — there is no schema
+object to create or drop. See the Compatibility Matrix for which
+features throw versus degrade gracefully.
 
 ## Performance
 

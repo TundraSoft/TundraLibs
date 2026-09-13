@@ -60,27 +60,19 @@ export type DiffOptions = {
  * `undefined` if it can — the FK itself (joins, eager projection,
  * reverse relations) is never affected, only the physical DDL
  * constraint. Best-effort degrade, never throw, per OQL's compat-layer
- * philosophy (`packages/oql/docs/Compatibility.md`):
+ * philosophy (`packages/oql/docs/Compatibility.md`): MongoDB has no
+ * physical FK enforcement at all, so every FK is skipped there.
  *
- * - MongoDB has no physical FK enforcement at all — every FK is
- *   skipped.
- * - SQLite emulates `dbSchema` via `ATTACH DATABASE` (a separate
- *   file), and cannot enforce a FK constraint across attached
- *   databases — only a FK crossing a `dbSchema` boundary is skipped.
+ * SQLite is NOT a special case: `dbSchema` is folded into the physical
+ * table name as a prefix (never a separate file), so a FK crossing a
+ * `dbSchema` boundary lives in the same physical database as every
+ * other table and is enforced like any other constraint.
  */
 function fkPhysicalSkipReason(
-  sourceDbSchema: string | undefined,
-  fk: SnapForeignKey,
   dialect: DiffOptions['dialect'],
 ): string | undefined {
   if (dialect === 'mongo') {
     return 'MongoDB has no physical foreign-key enforcement';
-  }
-  if (dialect === 'sqlite' && sourceDbSchema !== fk.references.schema) {
-    return 'SQLite cannot enforce foreign keys across ATTACHed databases ' +
-      `('${sourceDbSchema ?? '(default)'}' → '${
-        fk.references.schema ?? '(default)'
-      }')`;
   }
   return undefined;
 }
@@ -362,7 +354,7 @@ export function createTableAction(
     // Deferred FKs (cycle-breakers, non-PK-unique targets) are emitted as a
     // post-create ALTER instead of inline — see `diffSnapshots` pass 3.
     if (excludeFkAliases?.has(alias)) continue;
-    const skipReason = fkPhysicalSkipReason(e.dbSchema, fk, dialect);
+    const skipReason = fkPhysicalSkipReason(dialect);
     if (skipReason !== undefined) {
       warnings.push(fkSkipWarning(e.name, alias, skipReason));
       continue;
@@ -548,7 +540,7 @@ export function diffSnapshots(
         // Never emit a DROP for a constraint that was never physically
         // created in the first place (it was dialect-skip-worthy back
         // when it existed).
-        if (fkPhysicalSkipReason(pre.dbSchema, fk, dialect) !== undefined) {
+        if (fkPhysicalSkipReason(dialect) !== undefined) {
           continue;
         }
         dropForeignKeys.push(fkName(pre.name, alias));
@@ -655,8 +647,13 @@ export function diffSnapshots(
     const s = curr.entities[k]!.dbSchema;
     if (s !== undefined && !prevSchemas.has(s)) newSchemas.add(s);
   }
-  for (const schema of [...newSchemas].sort()) {
-    actions.push({ type: 'CREATE_SCHEMA', schema });
+  // SQLite has no schema object to provision — `dbSchema` is folded into
+  // each table's physical name as a prefix instead, so a CREATE_SCHEMA
+  // action would have nothing to create and the translator refuses it.
+  if (dialect !== 'sqlite') {
+    for (const schema of [...newSchemas].sort()) {
+      actions.push({ type: 'CREATE_SCHEMA', schema });
+    }
   }
 
   const newTables = newKeys.filter((k) => curr.entities[k]!.kind === 'TABLE');
@@ -677,7 +674,7 @@ export function diffSnapshots(
       // Dialect-skip-worthy FKs are dropped entirely here — `createTableAction`
       // (below) independently re-derives and warns about the same skip, so
       // never defer/re-ADD one via ALTER instead.
-      if (fkPhysicalSkipReason(e.dbSchema, fk, dialect) !== undefined) continue;
+      if (fkPhysicalSkipReason(dialect) !== undefined) continue;
       const refPhys = fk.references.schema === undefined
         ? fk.references.table
         : `${fk.references.schema}.${fk.references.table}`;
@@ -776,7 +773,7 @@ export function diffSnapshots(
     for (const [alias, fk] of Object.entries(curFks)) {
       const old = preFks[alias];
       if (old === undefined || !sameFk(old, fk)) {
-        const skipReason = fkPhysicalSkipReason(cur.dbSchema, fk, dialect);
+        const skipReason = fkPhysicalSkipReason(dialect);
         if (skipReason !== undefined) {
           warnings.push(fkSkipWarning(currKey, alias, skipReason));
           continue;

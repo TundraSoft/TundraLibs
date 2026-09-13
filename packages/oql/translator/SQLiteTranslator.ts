@@ -3,9 +3,12 @@
  * `ON CONFLICT DO UPDATE`, JSON1, RETURNING).
  *
  * Compatibility notes (full breakdown in `packages/oql/docs/Compatibility.md`):
- * - Schemas: emulated by the engine layer via `ATTACH DATABASE` per schema.
- *   The translator emits `ATTACH/DETACH DATABASE` for `CREATE_SCHEMA` /
- *   `DROP_SCHEMA`; the engine resolves the on-disk path.
+ * - Schemas: SQLite has no schema object at all, so `CREATE_SCHEMA` /
+ *   `DROP_SCHEMA` are refused (`DialectUnsupportedError`). The OQL
+ *   `schema` a query carries is instead folded into the physical
+ *   identifier as a `<schema>_<name>` prefix — see `_qualifiedTable`
+ *   below — so every table, view, and index lives in the one physical
+ *   file, with cross-"schema" foreign keys enforced like any other.
  * - Materialized views: not supported. CREATE_VIEW with `materialized: true`
  *   silently falls back to a regular view; REFRESH_MATERIALIZED_VIEW emits
  *   a no-op `SELECT 1`.
@@ -102,16 +105,17 @@ export class SQLiteTranslator extends AbstractTranslator {
   };
 
   /**
-   * Only `materializedView` is off. `schema` and `truncate` read as
-   * supported because they are emulated, not native — the flags gate the
-   * public entry points, so turning them off would make the calls throw.
+   * `schema` is genuinely off — SQLite has no schema object to create or
+   * drop, so `CREATE_SCHEMA` / `DROP_SCHEMA` throw
+   * `DialectUnsupportedError` (see `_buildCreateSchema` /
+   * `_buildDropSchema`). This does NOT stop a query from carrying a
+   * `schema` field elsewhere (CREATE_TABLE, SELECT, …) — `schema` there
+   * is folded into the physical name as a prefix by `_qualifiedTable`,
+   * unconditionally on every dialect. `truncate` reads as supported
+   * because it's emulated, not native — see `_buildTruncate`.
    */
   protected override readonly _support: DialectSupport = {
-    // CREATE_SCHEMA / DROP_SCHEMA are emulated via ATTACH DATABASE — see
-    // `_buildCreateSchema` / `_buildDropSchema`. The companion engine
-    // (drivers/engines/sqlite) translates the relative `<schema>.db`
-    // path to an absolute one and cleans up files on DETACH.
-    schema: true,
+    schema: false,
     materializedView: false, // emulated as regular view (see _buildCreateView)
     truncate: true, // emulated as `DELETE FROM` (see _buildTruncate)
     rightJoin: true,
@@ -339,31 +343,40 @@ export class SQLiteTranslator extends AbstractTranslator {
   // ---------------------------------------------------------------------------
 
   /**
-   * SQLite has no native schemas; the OQL `schema` concept is emulated
-   * with one `.db` file per schema, ATTACH-ed under that name. We emit
-   * `ATTACH DATABASE 'foo.db' AS "foo"` — the path is relative; the
-   * companion engine resolves it to absolute against its schema
-   * directory, and SQLite's ATTACH itself creates the file if missing.
+   * Unreachable in practice — `_support.schema` is `false`, so the public
+   * {@link AbstractTranslator.createSchema} throws first. Kept only to
+   * satisfy the abstract contract; throws directly as a defense-in-depth
+   * backstop.
    *
-   * The schema name is interpolated into a single-quoted path literal, so
-   * we double every single quote in it — a name containing `'` cannot
-   * break out of the literal. The `AS` alias is already identifier-quoted
-   * via {@link AbstractTranslator._quoteIdentifier}, so it needs no extra
-   * handling here.
+   * @throws {@link DialectUnsupportedError} always.
    */
-  protected override _buildCreateSchema(q: Query<'CREATE_SCHEMA'>): string {
-    const path = `${q.schema}.db`.replaceAll("'", "''");
-    return `ATTACH DATABASE '${path}' AS ${this._quoteIdentifier(q.schema)}`;
+  protected override _buildCreateSchema(_q: Query<'CREATE_SCHEMA'>): string {
+    throw new DialectUnsupportedError(this.Dialect, 'CREATE_SCHEMA');
+  }
+
+  /** Counterpart to {@link _buildCreateSchema} — see its JSDoc. */
+  protected override _buildDropSchema(_q: Query<'DROP_SCHEMA'>): string {
+    throw new DialectUnsupportedError(this.Dialect, 'DROP_SCHEMA');
   }
 
   /**
-   * Detach the schema's database. The engine deletes the underlying
-   * `<schema>.db` file after the DETACH succeeds; `cascade` is irrelevant
-   * since each schema is a standalone file (deleting it discards all its
-   * tables together).
+   * SQLite has no schema object, so a query's `schema` is folded into the
+   * physical identifier as a `<schema>_<name>` prefix instead of a
+   * `schema.name` dot-qualification — every table/view/index this
+   * translator names lives in the one physical file. Applies uniformly
+   * to table/view names (via {@link AbstractTranslator._qualifiedTable})
+   * and to index names (`_buildCreateIndex` / `_buildDropIndex` below,
+   * which SQLite scopes globally rather than per-table).
+   *
+   * Caveat shared with any prefix scheme: a schema/name pair is not
+   * bijective with the resulting identifier — schema `'a'` + name `'b_c'`
+   * and schema `'a_b'` + name `'c'` both produce `a_b_c`. Callers that
+   * pick schema and table names independently and then rely on both
+   * existing side-by-side in the same physical file should avoid
+   * underscores at the schema/name boundary.
    */
-  protected override _buildDropSchema(q: Query<'DROP_SCHEMA'>): string {
-    return `DETACH DATABASE ${this._quoteIdentifier(q.schema)}`;
+  protected override _qualifiedTable(table: string, schema?: string): string {
+    return this._quoteIdentifier(schema ? `${schema}_${table}` : table);
   }
 
   /**
@@ -412,9 +425,12 @@ export class SQLiteTranslator extends AbstractTranslator {
       }
     }
     if (q.renameTo) {
+      // Stay within the same schema prefix — OQL has no "move to a
+      // different schema" op, and unprefixing on rename would silently
+      // strand the table outside its logical schema.
       stmts.push(
         `ALTER TABLE ${tableSql} RENAME TO ${
-          this._quoteIdentifier(q.renameTo)
+          this._qualifiedTable(q.renameTo, q.schema)
         }`,
       );
     }
@@ -443,13 +459,19 @@ export class SQLiteTranslator extends AbstractTranslator {
   /**
    * SQLite has partial indexes, so `q.where` becomes a `WHERE` clause on
    * the index. `q.method` has no SQLite equivalent and is ignored.
+   *
+   * Index names share one flat, database-wide namespace on SQLite (not
+   * a per-table one), so — like the table itself — `q.index` is
+   * schema-prefixed via {@link _qualifiedTable}: two logical schemas
+   * each naming an index `idx_email` would otherwise collide once both
+   * live in the same physical file.
    */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
     params: Parameters,
   ): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
-    const indexSql = this._quoteIdentifier(q.index);
+    const indexSql = this._qualifiedTable(q.index, q.schema);
     const ifNotExists = q.ifNotExists ? 'IF NOT EXISTS ' : '';
     const unique = q.unique ? 'UNIQUE ' : '';
     const cols = q.columns
@@ -468,10 +490,10 @@ export class SQLiteTranslator extends AbstractTranslator {
   protected override _buildDropIndex(q: Query<'DROP_INDEX'>): string {
     // `q.table` is part of the OQL contract for API uniformity but
     // SQLite identifies indexes by name alone — accepted, ignored.
+    // `q.schema` still narrows WHICH index, since names are prefixed at
+    // creation (see _buildCreateIndex).
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
-    const name = q.schema
-      ? this._quoteQualified(q.schema, q.index)
-      : this._quoteIdentifier(q.index);
+    const name = this._qualifiedTable(q.index, q.schema);
     return `DROP INDEX ${ifExists}${name}`;
   }
 

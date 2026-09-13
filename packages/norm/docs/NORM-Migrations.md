@@ -27,6 +27,7 @@ drift detection, a table-rebuild engine, and drop guards.
 - [The rebuild engine](#the-rebuild-engine)
 - [Foreign key referential actions](#foreign-key-referential-actions)
 - [Dialect notes](#dialect-notes)
+  - [SQLite `dbSchema` is a physical name prefix](#sqlite-dbschema-is-a-physical-name-prefix)
 - [API reference](#api-reference)
 - [Related documentation](#related-documentation)
 
@@ -256,10 +257,11 @@ migration there buys nothing. norm therefore exposes a separate
 **On Postgres and SQLite** the version's DDL and its `_norm_migrations`
 row commit as one transaction. Statement _k_ failing rolls back
 statements 1 to _k_−1 with it, the version is never recorded, and the
-database is byte-identical to where it started. `CREATE SCHEMA` is the
-one exception: it runs before the transaction, because SQLite emulates
-schemas with `ATTACH DATABASE`, which cannot run inside one. It is
-idempotent on both dialects, so a retry is unaffected.
+database is byte-identical to where it started. `CREATE_SCHEMA` — which
+never appears in a SQLite plan at all; see
+[SQLite `dbSchema`](#sqlite-dbschema-is-a-physical-name-prefix) — is the
+one exception on Postgres: it runs before the transaction, idempotent
+(`IF NOT EXISTS`), so a retry is unaffected.
 
 **On MariaDB, MongoDB, and the fetch-only dialects** atomicity is
 impossible, so the retry is made safe instead. After each action lands,
@@ -721,21 +723,36 @@ SQL surface, so no reviewable `.sql` is rendered and the artifact check
 is skipped. ⁵ MongoDB is schemaless, so the Migrator does not own its
 schema. Create indexes directly against the collection; do not run the
 Migrator against a Mongo engine. ⁶ An entity's `dbSchema` names a real
-namespace the Migrator provisions before any table placed in it:
-`CREATE SCHEMA` on PostgreSQL, `CREATE DATABASE` on MariaDB/MySQL
-(where a schema is a database), and, SQLite having no schemas,
-`ATTACH DATABASE '<schema>.db' AS "<schema>"`, one file per schema
-resolved relative to the engine's directory. ⁷ MariaDB/MySQL implicitly
-COMMIT on every DDL statement and Mongo has no transaction surface, so
-a version's plan cannot be atomic there; `apply()` checkpoints per
-action and resumes on retry instead. See
-[What happens when a statement fails halfway](#what-happens-when-a-statement-fails-halfway).
+namespace the Migrator provisions before any table placed in it on
+PostgreSQL (`CREATE SCHEMA`) and MariaDB/MySQL (`CREATE DATABASE`,
+where a schema is a database); SQLite has no such namespace to
+provision — see [SQLite `dbSchema`](#sqlite-dbschema-is-a-physical-name-prefix)
+below. ⁷ MariaDB/MySQL implicitly COMMIT on every DDL statement and
+Mongo has no transaction surface, so a version's plan cannot be atomic
+there; `apply()` checkpoints per action and resumes on retry instead.
+See [What happens when a statement fails halfway](#what-happens-when-a-statement-fails-halfway).
 
 The fetch-only dialects follow their base column: Neon behaves as
 PostgreSQL for in-place ALTER, the rebuild engine, and plan artifacts,
-and Turso and D1 behave as SQLite. All three lack the advisory lock and
-transactional DDL, so they take the checkpoint-resume path⁷. `dbSchema`
-on the fetch-only dialects is unverified.
+and Turso and D1 behave as SQLite, `dbSchema` included — the same
+translator, with no engine-specific file handling to differ. All three
+lack the advisory lock and transactional DDL, so they take the
+checkpoint-resume path⁷.
+
+### SQLite `dbSchema` is a physical name prefix
+
+SQLite (and Turso/D1, which speak its SQL) has no schema object at
+all: `CREATE_SCHEMA` / `DROP_SCHEMA` never appear in a SQLite plan,
+because there is nothing to provision. Instead, an entity's `dbSchema`
+is folded into its physical table (and index) name as a
+`<dbSchema>_<name>` prefix — `Entity('Account', {...}, { dbSchema:
+'UserGroup' })` becomes the physical table `UserGroup_Account` — so
+every "schema" lives in the same physical file as everything else. A FK
+crossing a `dbSchema` boundary is therefore an ordinary, physically
+enforced constraint on SQLite, not something the Migrator has to skip
+(contrast [Referential actions](NORM-Schema.md#referential-actions),
+where MongoDB — the one dialect that really can't enforce a FK — still
+does).
 
 ## API reference
 

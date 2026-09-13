@@ -1051,9 +1051,9 @@ export abstract class SQLConnectionEngine<
   }
 
   /**
-   * Run a `CREATE_SCHEMA` Query. SQLite emulates via per-schema `.db`
-   * files + `ATTACH DATABASE`; on SQLite the statement cannot run inside
-   * a caller-supplied transaction.
+   * Run a `CREATE_SCHEMA` Query. SQLite has no schema object — its
+   * translator throws `DialectUnsupportedError` before this ever reaches
+   * the engine.
    */
   public async createSchema(
     q: Query<'CREATE_SCHEMA'>,
@@ -1102,11 +1102,11 @@ export abstract class SQLConnectionEngine<
    * one.
    *
    * If any statement in the list returns `false` from
-   * {@link _canRunInTransaction} (e.g. SQLite `ATTACH`/`DETACH`), the
-   * auto-tx wrapper is skipped and statements run sequentially on
-   * pool-acquired clients. We refuse outright when an `outerTxId` is
-   * supplied — running these statements inside a user-supplied tx would
-   * fail at the driver layer with a less obvious error.
+   * {@link _canRunInTransaction} (e.g. SQLite `VACUUM`), the auto-tx
+   * wrapper is skipped and statements run sequentially on pool-acquired
+   * clients. We refuse outright when an `outerTxId` is supplied —
+   * running these statements inside a user-supplied tx would fail at
+   * the driver layer with a less obvious error.
    *
    * The auto-tx wrapper is likewise skipped on engines with
    * `Capabilities.transactions === false` (the one-shot HTTP edge engines —
@@ -1133,7 +1133,7 @@ export abstract class SQLConnectionEngine<
         throw new EngineError('UNSUPPORTED_OPERATION', {
           instanceId: this.instanceId,
           operation: hasNonTxSafe
-            ? 'Multi-statement DDL containing ATTACH/DETACH (or similar) ' +
+            ? 'Multi-statement DDL containing VACUUM (or similar) ' +
               'cannot run inside a caller-supplied transaction'
             : 'Multi-statement DDL cannot run inside a caller-supplied ' +
               'transaction on an engine without transaction support',
@@ -1168,7 +1168,7 @@ export abstract class SQLConnectionEngine<
    * Whether `sql` can legally run inside a transaction on this dialect.
    * Default `true` — Postgres, MariaDB, and most engines accept any DDL
    * inside a tx. Override on dialects with carve-outs (notably SQLite,
-   * which forbids `ATTACH`/`DETACH`/`VACUUM` inside a tx).
+   * which forbids `VACUUM` inside a tx).
    *
    * Used by {@link __runMany} to decide whether the auto-tx wrapper is
    * safe; also called by single-statement OQL methods that route

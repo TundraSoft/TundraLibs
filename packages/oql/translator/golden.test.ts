@@ -1471,7 +1471,7 @@ const CASES: Case[] = [
       sqlite: {
         sql: 'SELECT __base__."id" AS "id", "p"."plan" AS "plan" ' +
           'FROM "users" AS __base__ LEFT JOIN "profiles" AS "p" ON "p"."userId" = __base__."id" ' +
-          'WHERE NOT EXISTS (SELECT 1 FROM "audit"."bans" AS "__exists__" WHERE "__exists__"."userId" = __base__."id")',
+          'WHERE NOT EXISTS (SELECT 1 FROM "audit_bans" AS "__exists__" WHERE "__exists__"."userId" = __base__."id")',
         params: {},
       },
       postgres: {
@@ -2175,6 +2175,75 @@ const CASES: Case[] = [
     },
   },
   {
+    // The headline behavior of the SQLite prefix scheme: `schema` folds
+    // into the physical name (table AND the FK's REFERENCES target), so
+    // a FK crossing a `schema` boundary is a same-file, physically
+    // enforceable reference — not something that has to be skipped the
+    // way it did under the old ATTACH-per-schema emulation.
+    name:
+      'CREATE_TABLE: FK across schema is a same-file, prefixed reference on SQLite',
+    method: 'createTable',
+    query: {
+      type: 'CREATE_TABLE',
+      table: 'orders',
+      schema: 'sales',
+      columns: {
+        id: { type: 'INTEGER', nullable: false },
+        customerId: { type: 'INTEGER', nullable: false },
+      },
+      primaryKey: ['id'],
+      foreignKeys: {
+        customer: {
+          columns: ['customerId'],
+          references: { table: 'customers', schema: 'crm', columns: ['id'] },
+          onDelete: 'CASCADE',
+        },
+      },
+    } satisfies Query<'CREATE_TABLE'>,
+    expected: {
+      sqlite: [{
+        sql:
+          'CREATE TABLE "sales_orders" ("id" INTEGER NOT NULL, "customerId" INTEGER NOT NULL, PRIMARY KEY ("id"), CONSTRAINT "customer" FOREIGN KEY ("customerId") REFERENCES "crm_customers" ("id") ON DELETE CASCADE)',
+      }],
+      postgres: [{
+        sql:
+          'CREATE TABLE "sales"."orders" ("id" INTEGER NOT NULL, "customerId" INTEGER NOT NULL, PRIMARY KEY ("id"), CONSTRAINT "customer" FOREIGN KEY ("customerId") REFERENCES "crm"."customers" ("id") ON DELETE CASCADE)',
+      }],
+      maria: [{
+        sql:
+          'CREATE TABLE `sales`.`orders` (`id` INT NOT NULL, `customerId` INT NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `customer` FOREIGN KEY (`customerId`) REFERENCES `crm`.`customers` (`id`) ON DELETE CASCADE)',
+      }],
+    },
+  },
+  {
+    // Two logical schemas naming an index the same would collide once
+    // both live in the one physical SQLite file — the index name is
+    // prefixed exactly like the table is.
+    name:
+      'CREATE_INDEX / DROP_INDEX with schema prefixes the index name on SQLite',
+    method: 'createIndex',
+    query: {
+      type: 'CREATE_INDEX',
+      table: 'users',
+      schema: 'tenant_a',
+      index: 'idx_email',
+      columns: ['@email'],
+      unique: true,
+    } satisfies Query<'CREATE_INDEX'>,
+    expected: {
+      sqlite: {
+        sql:
+          'CREATE UNIQUE INDEX "tenant_a_idx_email" ON "tenant_a_users" ("email")',
+      },
+      postgres: {
+        sql: 'CREATE UNIQUE INDEX "idx_email" ON "tenant_a"."users" ("email")',
+      },
+      maria: {
+        sql: 'CREATE UNIQUE INDEX `idx_email` ON `tenant_a`.`users` (`email`)',
+      },
+    },
+  },
+  {
     name: 'ALTER_TABLE: add + drop + rename emits multiple statements',
     method: 'alterTable',
     query: {
@@ -2355,32 +2424,31 @@ const CASES: Case[] = [
     },
   },
   {
-    name: 'CREATE_SCHEMA — sqlite emulates via ATTACH DATABASE',
+    name: 'CREATE_SCHEMA — sqlite has no schema object (throws)',
     method: 'createSchema',
     query: {
       type: 'CREATE_SCHEMA',
       schema: 'analytics',
     } satisfies Query<'CREATE_SCHEMA'>,
+    // SQLite folds `schema` into every identifier as a prefix instead —
+    // there's no separate container to create.
+    throws: ['sqlite'],
     expected: {
       postgres: { sql: 'CREATE SCHEMA IF NOT EXISTS "analytics"' },
       maria: { sql: 'CREATE DATABASE IF NOT EXISTS `analytics`' },
-      // SQLite emits ATTACH DATABASE; the engine resolves the relative
-      // filename to an absolute path under its schema directory.
-      sqlite: { sql: `ATTACH DATABASE 'analytics.db' AS "analytics"` },
     },
   },
   {
-    name: 'DROP_SCHEMA — sqlite emulates via DETACH DATABASE',
+    name: 'DROP_SCHEMA — sqlite has no schema object (throws)',
     method: 'dropSchema',
     query: {
       type: 'DROP_SCHEMA',
       schema: 'analytics',
     } satisfies Query<'DROP_SCHEMA'>,
+    throws: ['sqlite'],
     expected: {
       postgres: { sql: 'DROP SCHEMA IF EXISTS "analytics"' },
       maria: { sql: 'DROP DATABASE IF EXISTS `analytics`' },
-      // SQLite DETACH; the engine then unlinks the schema's `.db` file.
-      sqlite: { sql: 'DETACH DATABASE "analytics"' },
     },
   },
 
@@ -2516,7 +2584,9 @@ const CASES: Case[] = [
       renameTo: 't2',
     } satisfies Query<'ALTER_TABLE'>,
     expected: {
-      sqlite: [{ sql: 'ALTER TABLE "s1"."t1" RENAME TO "t2"' }],
+      // SQLite has no schema to keep the object "in" — the rename stays
+      // under the same prefix on both sides instead.
+      sqlite: [{ sql: 'ALTER TABLE "s1_t1" RENAME TO "s1_t2"' }],
       postgres: [{ sql: 'ALTER TABLE "s1"."t1" RENAME TO "t2"' }],
       maria: [{ sql: 'ALTER TABLE `s1`.`t1` RENAME TO `s1`.`t2`' }],
     },

@@ -194,7 +194,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     }
   });
 
-  it('a FK crossing dbSchema is skipped (not thrown) on SQLite, kept on Postgres/Maria', () => {
+  it('a FK crossing dbSchema is kept (not skipped) on every SQL dialect, including SQLite', () => {
     const ts = '2026-01-01T00:00:00.000Z';
     const Bots = Entity('job', { id: Column.integer() }, {
       pk: ['id'],
@@ -210,29 +210,11 @@ describe('norm.migrations (real SQLite end to end)', () => {
     });
     const snap = buildSnapshot({ Bots, Account }, ts);
 
-    // SQLite: constraint skipped, warned — never a broken REFERENCES clause.
-    const sqliteDiff = diffSnapshots(null, snap, { dialect: 'sqlite' });
-    const sqliteCreate = sqliteDiff.actions.find(
-      (a) =>
-        !isRebuild(a) && a.type === 'CREATE_TABLE' && a.table === 'account',
-    );
-    asserts.assertEquals(
-      (sqliteCreate as { foreignKeys?: unknown })?.foreignKeys,
-      undefined,
-    );
-    asserts.assertEquals(sqliteDiff.warnings.length, 1);
-    asserts.assertStringIncludes(
-      sqliteDiff.warnings[0]!,
-      "Entity('account').fk.Job",
-    );
-    asserts.assertStringIncludes(sqliteDiff.warnings[0]!, 'ATTACHed databases');
-    // Never a raw SQL parse error: the plan actually renders.
-    const plan = renderPlan(1, 'sqlite', sqliteDiff.actions);
-    const create = plan.statements.find((s) => s.includes('account'))!;
-    asserts.assertEquals(create.includes('REFERENCES'), false);
-
-    // Postgres/Maria: real cross-schema FK support — constraint kept, no warning.
-    for (const dialect of ['postgres', 'maria'] as const) {
+    // SQLite folds `dbSchema` into the physical table name as a prefix
+    // (never a separate ATTACHed file), so the cross-schema FK lives in
+    // the same physical database as everything else and is kept, exactly
+    // like Postgres/MariaDB.
+    for (const dialect of ['sqlite', 'postgres', 'maria'] as const) {
       const diff = diffSnapshots(null, snap, { dialect });
       const created = diff.actions.find(
         (a) =>
@@ -243,6 +225,13 @@ describe('norm.migrations (real SQLite end to end)', () => {
       );
       asserts.assertEquals(diff.warnings.length, 0);
     }
+
+    // The rendered SQLite plan REFERENCES the prefixed physical name —
+    // `Bots_job`, not a dot-qualified `"Bots"."job"` ATTACH reference.
+    const sqliteDiff = diffSnapshots(null, snap, { dialect: 'sqlite' });
+    const plan = renderPlan(1, 'sqlite', sqliteDiff.actions);
+    const create = plan.statements.find((s) => s.includes('account'))!;
+    asserts.assertStringIncludes(create, 'REFERENCES "Bots_job"');
 
     // Omitting `dialect` entirely (historical default) skips nothing.
     const noDialectDiff = diffSnapshots(null, snap);
@@ -276,7 +265,7 @@ describe('norm.migrations (real SQLite end to end)', () => {
     asserts.assertStringIncludes(diff.warnings[0]!, 'no physical foreign-key');
   });
 
-  it('a FK that was skip-worthy in the OLD snapshot is never targeted by dropForeignKeys', () => {
+  it('a FK crossing dbSchema is dropped via ALTER on SQLite too, like any other FK', () => {
     const ts = '2026-01-01T00:00:00.000Z';
     const Bots = Entity('job', { id: Column.integer() }, {
       pk: ['id'],
@@ -305,12 +294,12 @@ describe('norm.migrations (real SQLite end to end)', () => {
       (a) => !isRebuild(a) && a.type === 'ALTER_TABLE' && a.table === 'account',
     );
     asserts.assertEquals(
-      (alter as { dropForeignKeys?: unknown })?.dropForeignKeys,
-      undefined,
+      (alter as { dropForeignKeys?: string[] })?.dropForeignKeys,
+      ['fk_account_Job'],
     );
   });
 
-  it('a FK added LATER to an existing table (ALTER, not CREATE) is also skipped + warned', () => {
+  it('a FK added LATER to an existing table (ALTER, not CREATE) crossing dbSchema is added on SQLite too', () => {
     const ts = '2026-01-01T00:00:00.000Z';
     const Bots = Entity('job', { id: Column.integer() }, {
       pk: ['id'],
@@ -338,12 +327,10 @@ describe('norm.migrations (real SQLite end to end)', () => {
     const alter = diff.actions.find(
       (a) => !isRebuild(a) && a.type === 'ALTER_TABLE' && a.table === 'account',
     );
-    asserts.assertEquals(
+    asserts.assertExists(
       (alter as { addForeignKeys?: unknown })?.addForeignKeys,
-      undefined,
     );
-    asserts.assertEquals(diff.warnings.length, 1);
-    asserts.assertStringIncludes(diff.warnings[0]!, "Entity('Account').fk.Job");
+    asserts.assertEquals(diff.warnings.length, 0);
   });
 
   it('materialized views flow snapshot → CREATE/DROP actions', () => {

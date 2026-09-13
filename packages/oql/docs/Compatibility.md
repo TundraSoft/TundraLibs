@@ -24,12 +24,12 @@ something else would mislead callers.
 
 ### Schemas
 
-| Dialect  | Behaviour                                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------------------------- |
-| Postgres | Native (`CREATE SCHEMA` / `DROP SCHEMA`).                                                                     |
-| MariaDB  | Mapped to databases (`CREATE DATABASE` / `DROP DATABASE`).                                                    |
-| SQLite   | Emulated by the engine via per-schema `.db` files + `ATTACH`.                                                 |
-| MongoDB  | `CREATE_SCHEMA` **throws** (Mongo creates DBs implicitly on first write); `DROP_SCHEMA` emits `dropDatabase`. |
+| Dialect  | Behaviour                                                                                                                                                                                                                                                                                                                    |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Postgres | Native (`CREATE SCHEMA` / `DROP SCHEMA`).                                                                                                                                                                                                                                                                                    |
+| MariaDB  | Mapped to databases (`CREATE DATABASE` / `DROP DATABASE`).                                                                                                                                                                                                                                                                   |
+| SQLite   | No schema object — `CREATE_SCHEMA` / `DROP_SCHEMA` **throw**. `schema` on any other query (CREATE_TABLE, SELECT, CREATE_INDEX, …) is instead folded into the physical identifier as a `<schema>_<name>` prefix, so every "schema" lives in the same physical file and cross-schema foreign keys are enforced like any other. |
+| MongoDB  | `CREATE_SCHEMA` **throws** (Mongo creates DBs implicitly on first write); `DROP_SCHEMA` emits `dropDatabase`.                                                                                                                                                                                                                |
 
 ### Materialized views
 
