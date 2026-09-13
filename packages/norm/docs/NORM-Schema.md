@@ -364,9 +364,9 @@ const birthday = Column.timestamp().encrypt().nullable();
 
 Two consequences follow:
 
-1. Validators must chain before `encrypt()`. They constrain the
+1. `.guard()` must chain before `encrypt()`. It constrains the
    plaintext, so `encrypt()` narrows the builder to a surface where
-   they no longer exist.
+   it no longer exists.
 2. Encrypted columns are not filterable, because random-IV ciphertext
    never matches an equality predicate. To filter or enforce uniqueness
    by plaintext, add `.hash()`:
@@ -481,7 +481,7 @@ are compile errors and a few are guarded runtime throws:
 | Attempt                                                     | Result                                                        |
 | ----------------------------------------------------------- | ------------------------------------------------------------- |
 | `.hash()` before `.encrypt()`                               | Compile error: `hash()` exists only on the encrypted builder. |
-| A validator after `.encrypt()`                              | Compile error: validators live on the plaintext builders.     |
+| `.guard()` after `.encrypt()`                               | Compile error: `.guard()` lives on the plaintext builders.    |
 | `.encrypt().encrypt()`                                      | Runtime throw: already encrypted.                             |
 | `Column.hash(algo).encrypt()`                               | Runtime throw: digests are one-way.                           |
 | `.default()` / `.beforeWrite()` / `.encrypt()` on a `mask`  | Runtime throw: masks are computed presentation.               |
