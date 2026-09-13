@@ -136,10 +136,24 @@ change dialect / host / credentials (defaults to a local SQLite file under
 - Bun: \`bun test\`
 `;
 
-/** The delimited section merged into (or used as) CLAUDE.md / AGENTS.md. */
-export const AI_GUIDE_SECTION = `## norm
+/**
+ * The short pointer merged into `CLAUDE.md` / `AGENTS.md` — the CONTENT
+ * lives in the dedicated `norm.agent.md` file (see {@link AI_GUIDE_SECTION}),
+ * so a user's own notes elsewhere in those files survive every `upgrade`.
+ * Reused as-is by rapid's CLI when scaffolding a `--norm` project, so the
+ * link text is identical regardless of which tool wrote it.
+ */
+export const AI_GUIDE_LINK =
+  `See [norm.agent.md](./norm.agent.md) for norm's AI guide — Column
+builders, Entity/Schema, migrations, querying, transactions, scoping,
+at-rest encryption, read caching, events, errors, connections.`;
 
-### Schema
+/** The full guide — written wholesale to \`norm.agent.md\` by \`norm init\`/
+ * \`upgrade\` (and by rapid's \`--norm\` scaffold, imported rather than
+ * copied). Regenerated in full every time; never hand-edit this file. */
+export const AI_GUIDE_SECTION = `# norm
+
+## Schema
 
 Schema lives under \`models/\`: \`Entity(name, columns, options)\` (needs a
 \`pk\`) grouped by \`Schema(name, { Users, ... })\`; neither touches
@@ -170,7 +184,7 @@ Chainable on (most of) these: \`.nullable()\`, \`.minLength()\`/\`.maxLength()\`
 the TS type to that union), \`.default(v)\`, \`.min()\`/\`.max()\` (numeric),
 \`.hidden()\`/\`.unfilterable()\`, \`.comment(text)\`.
 
-### Entity kinds
+## Entity kinds
 
 \`Entity(name, columns, options)\` defaults to \`type: 'TABLE'\` (physical,
 writable, needs \`pk\`). \`type: 'VIEW'\` is DB-side and read-only (\`query\`:
@@ -180,7 +194,7 @@ terminal — it cannot be joined or built upon, and cannot declare \`fk\`.
 Both read-only kinds take \`afterRead\` only (no write hooks); \`index\`/
 \`unique\`/\`insert\`/\`update\` are TABLE-only.
 
-### Hooks
+## Hooks
 
 Row-level, whole-row (not per-column). TABLE gets all four; returning a
 row replaces the payload, returning nothing means the hook mutated in
@@ -208,7 +222,7 @@ that operation (a "request schema" — everything else becomes norm-owned
 for it); norm-maintained behavior (hash siblings, \`defaultOnUpdate\`)
 always runs regardless of the list.
 
-### Querying
+## Querying
 
 Read/write through \`db\` (exported from \`db.ts\`) via \`db.repo(entityKey)\`
 — never a raw query unless norm's typed layer genuinely can't express it
@@ -237,7 +251,7 @@ like \`'@Profile.@bio'\`). A filter through an unprojected to-many relation
 becomes a correlated \`EXISTS\` — it never fans out rows (not on MongoDB,
 which has no correlated-subquery form — see the dialect note below).
 
-### Transactions
+## Transactions
 
 \`\`\`ts
 await db.transaction(async (tx) => {
@@ -252,7 +266,7 @@ A fetch-only dialect (\`neon\`/\`turso\`/\`d1\`) or MongoDB sends one request
 per statement, so \`db.transaction()\` throws \`NormUnsupportedError\`
 there — check \`configs/Norm.yaml\`'s active dialect before relying on it.
 
-### Scoping (multi-tenant / default filters)
+## Scoping (multi-tenant / default filters)
 
 \`db.scope({ '@orgId': currentOrgId })\` returns a handle whose every read
 and write carries that equality filter automatically — \`insert\` fills it
@@ -261,7 +275,7 @@ the scope, \`truncate\` is refused outright (use \`delete({})\` to clear one
 scope; it carries no \`WHERE\`). An entity with no scope column is queried
 unscoped, so one handle can span a mixed registry.
 
-### At-rest encryption
+## At-rest encryption
 
 \`.encrypt()\` any column — it keeps its declared TS type, only storage is
 ciphertext. Add \`.hash()\` to keep it equality-searchable (e.g.
@@ -272,7 +286,7 @@ any encrypted column may only use read caching on the in-process
 \`MEMORY\` cache engine (decrypted rows on Redis/Memcached would leak
 plaintext) — \`use()\` throws at compose time otherwise.
 
-### Read caching (off by default)
+## Read caching (off by default)
 
 \`new Norm({ cache: { engine: 'MEMORY' } })\` plus a per-entity \`cache:
 <minutes>\` option turns on caching for non-transactional \`find\`/
@@ -281,7 +295,7 @@ plaintext) — \`use()\` throws at compose time otherwise.
 cached (per-table pruning can't invalidate it) — model it as a \`VIEW\` to
 make it cacheable.
 
-### Events and tracing
+## Events and tracing
 
 Metadata-only — never row data, plaintext, or secrets. Subscribe with
 \`_on<event>\` constructor keys or later via \`norm.on(event, fn)\`: \`call\`
@@ -292,7 +306,7 @@ nested spans instead of flat events, configure a \`witness\` (see
 [ambient](https://jsr.io/@tundralibs/ambient)) — every repo operation and
 \`raw()\` runs through it.
 
-### Errors
+## Errors
 
 Every thrown error extends \`NormError\` (\`@tundralibs/norm/errors\`) and
 exposes \`.code\` and \`.norm\` (the raising instance's \`name\`) getters —
@@ -304,7 +318,7 @@ payload failed the column-derived Guardian — detail on \`context.issues\`),
 it), and \`NormUnsupportedError\` (the configured engine or the entity's
 own shape forbids the call, e.g. \`update()\` on a temporal entity).
 
-### Connection
+## Connection
 
 The database connection is DATA, not code: edit \`configs/Norm.yaml\` (the
 \`NORM_DB:\` block — every dialect norm supports is shown there, one

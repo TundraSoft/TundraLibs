@@ -23,9 +23,8 @@ import { prompt } from '@tundralibs/compat/cli';
 import type { ParsedArgs } from '@tundralibs/compat/cli';
 import { latestVersion } from '../latestVersion.ts';
 import { ensureManifest } from '../manifest.ts';
-import { ensureSection } from '../markdown.ts';
+import { ensureAgentDocs } from '../agentDocs.ts';
 import {
-  AI_GUIDE_SECTION,
   DB,
   DENO_JSON,
   GITIGNORE,
@@ -137,8 +136,7 @@ export async function initCommand(
     tasks: { test: 'node --import tsx --test' },
   });
 
-  await ensureSection(`${base}/CLAUDE.md`, AI_GUIDE_SECTION);
-  await ensureSection(`${base}/AGENTS.md`, AI_GUIDE_SECTION);
+  await ensureAgentDocs(base);
 
   console.log(
     `\n✓ norm ready in ${base === '.' ? 'the current directory' : base}`,
