@@ -23,6 +23,7 @@ async function bump(
   file: string,
   re: RegExp,
   cache: Map<string, string | null>,
+  resolveVersion: (pkg: string) => Promise<string | null>,
 ): Promise<string[]> {
   if (!(await pathExists(file))) return [];
   const before = await readTextFile(file);
@@ -31,7 +32,7 @@ async function bump(
   let after = before;
   for (const m of matches) {
     const pkg = m[2]!;
-    if (!cache.has(pkg)) cache.set(pkg, await latestVersion(pkg));
+    if (!cache.has(pkg)) cache.set(pkg, await resolveVersion(pkg));
     const latest = cache.get(pkg);
     if (latest && latest !== m[3]) {
       after = after.replace(m[0], `${m[1]}${latest}`);
@@ -42,12 +43,22 @@ async function bump(
   return changed;
 }
 
-/** The `upgrade` command. Returns the process exit code. */
-export async function upgradeCommand(dir = '.'): Promise<number> {
+/**
+ * The `upgrade` command. Returns the process exit code.
+ *
+ * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
+ * the suite never depends on network I/O (also works around a Node 22
+ * `node:test` runner bug where a real `fetch()` followed by more file
+ * I/O in the same test file corrupts the test-reporter IPC channel).
+ */
+export async function upgradeCommand(
+  dir = '.',
+  resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
+): Promise<number> {
   const cache = new Map<string, string | null>();
   const changes = [
-    ...await bump(`${dir}/deno.json`, DENO_DEP, cache),
-    ...await bump(`${dir}/package.json`, NPM_DEP, cache),
+    ...await bump(`${dir}/deno.json`, DENO_DEP, cache, resolveVersion),
+    ...await bump(`${dir}/package.json`, NPM_DEP, cache, resolveVersion),
   ];
   if (changes.length === 0) {
     console.log('✓ already up to date');

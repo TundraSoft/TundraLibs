@@ -71,10 +71,18 @@ const resolveProjectName = async (
     DEFAULT_NAME;
 };
 
-/** The `init` command. Returns the process exit code. */
+/**
+ * The `init` command. Returns the process exit code.
+ *
+ * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
+ * the suite never depends on network I/O (also works around a Node 22
+ * `node:test` runner bug where a real `fetch()` followed by more file
+ * I/O in the same test file corrupts the test-reporter IPC channel).
+ */
 export async function initCommand(
   args: ParsedArgs,
   base = '.',
+  resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
 ): Promise<number> {
   const yes = args.yes === true;
   const name = await resolveProjectName(base, yes);
@@ -100,8 +108,8 @@ export async function initCommand(
   await writeIfMissing(`${base}/README.md`, render(README, { name }));
 
   const [normVersion, utilsVersion] = await Promise.all([
-    latestVersion('norm'),
-    latestVersion('utils'),
+    resolveVersion('norm'),
+    resolveVersion('utils'),
   ]);
   const normSpec = normVersion === null ? '' : `@^${normVersion}`;
   const utilsSpec = utilsVersion === null ? '' : `@^${utilsVersion}`;
