@@ -12,6 +12,11 @@
 
 /** The choices `rapid init` gathers. */
 import { RAPID_ERROR_CODES } from '../errors/mod.ts';
+// norm's own AI guide content, imported rather than hand-copied, so a
+// rapid+norm app's norm.agent.md can never drift from a standalone norm
+// project's guide (unlike latestVersion.ts, this is CONTENT, not a CLI
+// tool — the two CLIs otherwise stay independent).
+import { AI_GUIDE_LINK, AI_GUIDE_SECTION } from '@tundralibs/norm/cli';
 
 export type ScaffoldAnswers = {
   name: string;
@@ -302,198 +307,6 @@ import { Users } from './Users.ts';
 export const AppSchema = Schema('App', { Users });
 `;
 
-/**
- * The `{{aiNorm}}` section (init --norm) — a real merge of norm's own AI
- * guide (`packages/norm/cli/templates.ts`'s `AI_GUIDE_SECTION`), duplicated
- * rather than imported (same reasoning as `latestVersion.ts`), so a
- * rapid+norm app's AGENTS.md carries the same depth a standalone norm
- * project's guide does — not a shorter summary.
- */
-const NORM_AI_SECTION = `
-## Database (norm)
-
-### Schema
-
-Schema lives under \`models/\`: \`Entity(name, columns, options)\` (needs a
-\`pk\`) grouped by \`Schema(name, { Users, ... })\`; neither touches
-connection details — never add a dialect, host, or credential to a
-\`models/*.ts\` file.
-
-\`\`\`ts
-import { Column, Entity } from '@tundralibs/norm';
-
-const Profiles = Entity('profiles', {
-  userId: Column.uuid(),
-  bio: Column.text().nullable(),
-}, {
-  pk: ['userId'],
-  // Relations are FKs referencing the target's REGISTRY KEY (its key in
-  // Schema(...)), never a table name.
-  fk: { User: { model: 'Users', on: { userId: 'id' }, reverseAs: 'Profile' } },
-});
-\`\`\`
-
-Column builders: \`varchar(n)\`, \`integer\`, \`bigint\`, \`decimal(p, s)\`,
-\`float\`, \`double\`, \`real\`, \`boolean\`, \`json<T>()\`, \`date\`, \`time\`,
-\`datetime\`, \`timestamp\`, \`uuid\`, \`text\`, \`blob\`, \`hash('SHA-256')\` (a
-one-way digest column, e.g. for passwords), \`mask(source, fn)\` (a virtual
-column computed after decryption — never stored, never sent to SQL).
-Chainable on (most of) these: \`.nullable()\`, \`.minLength()\`/\`.maxLength()\`,
-\`.pattern(re)\`, \`.beforeWrite(fn)\`/\`.afterRead(fn)\`, \`.lov([...])\` (narrows
-the TS type to that union), \`.default(v)\`, \`.min()\`/\`.max()\` (numeric),
-\`.hidden()\`/\`.unfilterable()\`, \`.comment(text)\`.
-
-### Entity kinds
-
-\`Entity(name, columns, options)\` defaults to \`type: 'TABLE'\` (physical,
-writable, needs \`pk\`). \`type: 'VIEW'\` is DB-side and read-only (\`query\`:
-a stored OQL \`SELECT\`; can be joined against, optionally
-\`materialized: true\`). \`type: 'QUERY'\` is client-side, read-only, and
-terminal — it cannot be joined or built upon, and cannot declare \`fk\`.
-Both read-only kinds take \`afterRead\` only (no write hooks); \`index\`/
-\`unique\`/\`insert\`/\`update\` are TABLE-only.
-
-### Hooks
-
-Row-level, whole-row (not per-column). TABLE gets all four; returning a
-row replaces the payload, returning nothing means the hook mutated in
-place:
-
-\`\`\`ts
-Entity('tickets', {/* columns */}, {
-  pk: ['id'],
-  hooks: {
-    beforeInsert: (row) => ({ ...row, subject: row.subject.trim() }),
-    beforeUpdate: (row) => row,
-    afterRead: (row) => row,
-    // Fires before DELETE, with the caller's filter (undefined = the
-    // all-rows form) — THROW to veto. Runs for delete()/deleteByPK(),
-    // not truncate().
-    beforeDelete: (filter) => {
-      if (filter === undefined) throw new Error('refusing unfiltered delete');
-    },
-  },
-});
-\`\`\`
-
-\`insert\`/\`update\` options restrict which columns a caller may pass for
-that operation (a "request schema" — everything else becomes norm-owned
-for it); norm-maintained behavior (hash siblings, \`defaultOnUpdate\`)
-always runs regardless of the list.
-
-### Querying
-
-Read/write through \`db\` (exported from \`db.ts\`) via \`db.repo(entityKey)\`
-— never a raw query unless norm's typed layer genuinely can't express it
-(escape hatches: \`db.query(...)\`/\`db.raw(...)\`, both skip decrypt/scope/
-validation and \`raw()\` emits a \`warning\` event every call):
-
-\`\`\`ts
-await db.repo('Users').insert({ email: 'a@b.com' });
-await db.repo('Users').findOne({ '@email': 'a@b.com' });
-await db.repo('Users').getByPK({ id });
-await db.repo('Users').count({ '@role': 'admin' });
-await db.repo('Users').find({ '@role': 'admin' }, {
-  orderBy: { '@displayName': 'ASC' },
-  limit: 20,
-  project: { '@id': true, '@displayName': true, '@Profile': { '@bio': true } },
-});
-await db.repo('Users').update({ role: 'admin' }, { '@id': id });
-await db.repo('Users').upsert({ email: 'a@b.com', role: 'admin' }, opts);
-await db.repo('Users').delete({ '@id': id }); // delete({}) = all rows
-await db.repo('Users').truncate(); // refused on a temporal or scoped entity
-\`\`\`
-
-Filters are the OQL filter language typed to your columns (\`$eq\`, \`$ne\`,
-\`$in\`, \`$like\`, \`$between\`, \`$null\`, \`$or\`/\`$and\`, nested relation refs
-like \`'@Profile.@bio'\`). A filter through an unprojected to-many relation
-becomes a correlated \`EXISTS\` — it never fans out rows (not on MongoDB,
-which has no correlated-subquery form — see the dialect note below).
-
-### Transactions
-
-\`\`\`ts
-await db.transaction(async (tx) => {
-  await tx.repo('Users').insert({/* ... */});
-  await tx.repo('Audit').insert({/* ... */});
-}); // commits on resolve, rolls back on throw
-\`\`\`
-
-Nesting (\`tx.transaction(sp => ...)\`) opens a SAVEPOINT on SQL engines —
-only the inner block rolls back on throw; the outer transaction survives.
-A fetch-only dialect (\`neon\`/\`turso\`/\`d1\`) or MongoDB sends one request
-per statement, so \`db.transaction()\` throws \`NormUnsupportedError\`
-there — check \`configs/Norm.yaml\`'s active dialect before relying on it.
-
-### Scoping (multi-tenant / default filters)
-
-\`db.scope({ '@orgId': currentOrgId })\` returns a handle whose every read
-and write carries that equality filter automatically — \`insert\` fills it
-in when omitted, \`update\`/\`upsert\` refuse to move or touch a row outside
-the scope, \`truncate\` is refused outright (use \`delete({})\` to clear one
-scope; it carries no \`WHERE\`). An entity with no scope column is queried
-unscoped, so one handle can span a mixed registry.
-
-### At-rest encryption
-
-\`.encrypt()\` any column — it keeps its declared TS type, only storage is
-ciphertext. Add \`.hash()\` to keep it equality-searchable (e.g.
-\`Column.varchar(255).encrypt().hash()\` for email) — norm derives a
-\`<col>_hash\` sibling and rewrites \`{ '@email': ... }\` filters (and
-uniqueness/upsert conflict keys) against it automatically. An entity with
-any encrypted column may only use read caching on the in-process
-\`MEMORY\` cache engine (decrypted rows on Redis/Memcached would leak
-plaintext) — \`use()\` throws at compose time otherwise.
-
-### Read caching (off by default)
-
-\`new Norm({ cache: { engine: 'MEMORY' } })\` plus a per-entity \`cache:
-<minutes>\` option turns on caching for non-transactional \`find\`/
-\`findOne\`/\`count\`/\`getByPK\`; any write on that entity prunes its cache.
-\`{ noCache: true }\` bypasses it for one call. A joined read is never
-cached (per-table pruning can't invalidate it) — model it as a \`VIEW\` to
-make it cacheable.
-
-### Events and tracing
-
-Metadata-only — never row data, plaintext, or secrets. Subscribe with
-\`_on<event>\` constructor keys or later via \`norm.on(event, fn)\`: \`call\`
-(every operation), \`cacheHit\`, \`warning\` (e.g. \`cache-skip\`,
-\`cache-error\`), \`decryptError\`, \`transactionBegin\`/\`Commit\`/\`Rollback\`,
-and the proxied engine events (\`connect\`, \`query\`, \`slowQuery\`, ...). For
-nested spans instead of flat events, configure a \`witness\` (see
-[ambient](https://jsr.io/@tundralibs/ambient)) — every repo operation and
-\`raw()\` runs through it.
-
-### Errors
-
-Every thrown error extends \`NormError\` (\`@tundralibs/norm/errors\`) and
-exposes \`.code\` and \`.norm\` (the raising instance's \`name\`) getters —
-branch on \`instanceof\`, not string-matching the message. The subclasses
-that matter day to day: \`NormQueryError\` (bad filter/projection/upsert
-before any engine call), \`NormValidationError\` (an insert/update/upsert
-payload failed the column-derived Guardian — detail on \`context.issues\`),
-\`NormHookError\` (a hook threw — \`context.model\`/\`context.hook\` identify
-it), and \`NormUnsupportedError\` (the configured engine or the entity's
-own shape forbids the call, e.g. \`update()\` on a temporal entity).
-
-### Connection
-
-The database connection is DATA, not code: edit \`configs/Norm.yaml\` (the
-\`NORM_DB:\` block — every dialect norm supports is shown there, one
-active at a time) to change dialect, host or credentials. Use
-\`\${VAR}\` placeholders and a local \`.env\` for secrets — never hand-edit
-them into source control. \`db.ts\` never changes when the dialect does.
-
-Not every dialect supports everything: MongoDB has no transactions and
-no raw SQL (\`db.query()\` with OQL IR only); Neon/Turso/D1 have no
-transactions either (fetch-only, one request per statement) and migrate
-without an advisory lock.
-
-Full reference (relations, migrations, aggregates, pagination, crypto
-overrides): https://jsr.io/@tundralibs/norm.
-`;
-
 // No runtime prompt — both manifests are always written (every package in
 // this monorepo ships both), so nothing here branches on runtime.
 // {{normDenoImports}}/{{normPackageDeps}}/{{checkTargets}} are '' unless
@@ -559,23 +372,11 @@ A [rAPId](https://jsr.io/@tundralibs/rapid) application.
 - \`upgrade\` — bump \`@tundralibs/*\` to the latest release
 `;
 
-const AGENTS_MD = `# {{name}} — agent guide
+const RAPID_AGENT_MD = `# rapid — AI guide
 
-A [rAPId](https://jsr.io/@tundralibs/rapid) application — cross-runtime,
-runs on Deno, Node or Bun unmodified.
-This file is the always-on baseline for any AI working in this repo. It is read
-by Claude Code (via \`CLAUDE.md\`), Cursor and Codex (via \`AGENTS.md\`), and GitHub
-Copilot (via \`.github/copilot-instructions.md\`) — all three resolve here. It
-was generated by \`rapid init\` for rapid {{rapidVersionLabel}}; the package
-docs it links are the same version, so prefer them over memory.
-
-## Commands
-
-\`\`\`bash
-{{aiCommands}}
-\`\`\`
-
-Run the relevant ones before you consider a change done.
+The full reference for \`@tundralibs/rapid\` — generated by \`rapid init\`/
+\`upgrade\`. Regenerated in full every time; never hand-edit this file.
+Project-specific notes go in \`AGENTS.md\` instead.
 
 ## Package layout (subpaths)
 
@@ -643,7 +444,7 @@ helpers) and \`@tundralibs/rapid/cli\`.
 - **Identity:** \`ctx.auth\` is \`undefined\` until an auth middleware calls
   \`ctx.setAuth(identity)\` (write-once). The pact adapter fills it; anything
   else (a JWT you verify yourself) does the same.
-{{aiModules}}{{aiNorm}}
+
 ## The context (\`ctx\`)
 
 Every handler and middleware receives the transport's context. Shared members:
@@ -705,64 +506,6 @@ Register in this order: \`secureHeaders()\`, \`cors()\`, \`timeout(s)\`,
 response-time header and access log are core config (\`headers\`,
 \`logger.access\`), not middleware.
 
-## Decorators, binders and modules
-
-From \`@tundralibs/rapid/decorators\` (also re-exported from the root unless
-noted): \`@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)\`, \`@SOCKET(command,
-options?)\`, \`@JOB(name, schedule, options?)\`, \`@Module(name?, options?)\`,
-\`@On(...events)\`, \`@Use(...invokeMiddleware)\`. Decorators are metadata-only —
-they never wrap the method, so a class unit-tests with \`new\`. Route options:
-\`bind\`, \`version\`, \`summary\`, \`description\`, \`tags\`, \`operationId\`,
-\`security\`, \`response\` (a schema; ENFORCED in DEVELOPMENT), \`template\`,
-\`layout\`, \`middleware\` (route-scoped chain, HTTP-typed; \`@SOCKET\` takes a
-socket-typed one). \`@Module(name, { middleware })\` prepends a universal
-chain to every route and command in the class — app \`use()\` → module →
-route → handler; jobs take app-level middleware only. \`security\` documents,
-\`middleware\` enforces — declare both. Binders (\`bind: [...]\`, in parameter order): \`param(name,
-validate?)\`, \`payload(schemaOrValidate?)\` (a schema OBJECT also documents the
-body), \`query(validate?)\`, \`paging()\`, \`header(name)\`, \`cookie(name)\`,
-\`auth(validate?)\`, \`session()\` (decorators subpath only — the root exports
-the \`session()\` middleware), \`connection()\` (socket only), \`config('set.key')\`.
-Without a validator \`param\` is \`string\` and \`payload\` is \`unknown\`.
-
-Modules: \`class Posts extends RapidModule<typeof EVENTS> { name = 'Posts';
-namespace = 'blog'; protected readonly events = EVENTS; … }\` with
-\`const EVENTS = { PostCreated: event<{ id: string }>() }\`. Members: \`this.log\`
-(scoped), \`this.config\`, \`this.emit('PostCreated', payload)\`,
-\`this.invoke(Target, 'method', args)\` (runs the target's \`@Use\` guards; a
-denial is a 403 envelope, not a throw), optional \`init()\` / \`dispose()\`
-hooks. Methods return the \`{ content }\` shape or \`reply(status, content)\`.
-\`app.modules({ modules: [namespaces], instances? })\` boots the module system
-ONCE (before start), mounts every decorated instance, and exposes
-\`app.moduleRuntime\`. \`@Module\` options: \`prefix\` (HTTP paths), \`namespace\`
-(socket commands \`ns.command\`, jobs \`ns.name\`), \`version\`, \`description\`,
-\`tags\`, \`security\`, \`layout\`. \`@On('ns:Module:Event')\` handlers get
-\`(payload, EventContext)\`; \`@Use\` guards module-to-module \`invoke()\` ONLY.
-
-## Authentication
-
-\`import { pactAuth } from '@tundralibs/rapid/middlewares/pact'\`;
-\`const { authenticate, authorize, login, logout, refresh, me } = pactAuth(pact,
-options)\`. \`authenticate\`
-fills \`ctx.auth\` with a \`PactAuthContext\` (\`principal\`, \`via\`) from Bearer
-(header or \`bearer.cookie\`), Basic, ApiKey or HMAC carriers; absent →
-anonymous (\`optional: false\` → 401); present-but-invalid → 401, never
-anonymous. \`authorize('Module', 'PERMISSION')\` is typed by the pact instance
-and checked against its catalog when called. Options are pact's own
-middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
-signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
-authenticate from the upgrade request's headers/cookies. A stale bearer
-COOKIE is cleared and treated as anonymous (a browser keeps sending it; a 401
-would lock the user out of /login). The session handlers wrap the instance:
-\`app.post('/login', login())\` → \`{ token, expiresAt, refreshToken?, principal }\`
-plus the \`bearer.cookie\`; \`logout()\` → 204 and the cookie cleared;
-\`refresh()\` rotates a JWT session (body \`refreshToken\` or
-\`session.refreshCookie\`); \`me()\` → \`{ principal, via }\` or 401. Options
-under \`session\`: \`fields\`, \`cookie\` attributes, \`refreshCookie\`,
-\`principal\` projection (default \`{ id }\`). Every failure is ONE 401.
-Bring-your-own auth: a middleware
-that verifies its credential and calls \`ctx.setAuth(...)\`.
-
 ## Errors
 
 Registry (\`RAPID_ERROR_CODES\`): code → status → PRODUCTION message. In
@@ -789,26 +532,6 @@ may replace the envelope (sync, one per app).
   requests, error codes, jobs, sockets, middleware decisions, bodies, ui —
   \`server.metrics: { ui: false }\` turns one off; register app metrics on
   \`app.meter.registry\`.
-
-## UI layer (\`@tundralibs/rapid/ui\`)
-
-A route may name an HTML template — \`app.get('/x', { template: MyView },
-handler)\` — while the handler keeps returning JSON-shaped data. A request
-carrying the swap header (\`rapid-swap\`) gets the fragment; otherwise the
-route's \`prefer\` (\`'json'\` default, \`'html'\` for pages) picks JSON or the
-layout-wrapped page — \`Accept\` is never consulted; the api surface
-(\`server.api\`) never renders HTML. \`html\` escapes every interpolation
-(\`raw()\` is the only opt-out); \`template(fn, name)\` builds a view; the frozen
-\`view\` bag exposes \`requestId\`, \`path\`, \`query\`, \`asset()\`, \`csrfToken\` and
-nothing from \`ctx.auth\` unless the app's \`view\` projection names it. The
-factory's \`ui\` option (\`core\`, \`layout\`, \`errorTemplates\`, \`view\`, \`assets\`)
-is code; the YAML \`ui:\` block (\`enabled\`, \`prefer\`, \`live\`, \`history\`,
-header/cookie names) is data. The runtime script (\`/__rapid/ui.js\`) handles
-\`data-action\` / \`data-target\` / \`data-swap\` / \`data-load\` elements and
-\`rapid.swap()\` / \`rapid.refresh()\`, same-origin only, echoing the CSRF
-cookie; \`/__rapid/live.js\` (channels over \`/ws\`) and \`/__rapid/history.js\`
-(push-state) are opt-in. Static assets: \`server.static\` (fingerprinted
-\`?v=\` URLs via \`view.asset()\`).{{aiUi}}
 
 ## Endpoints (\`@tundralibs/rapid/endpoints\`)
 
@@ -990,23 +713,239 @@ using it — do not guess.
 - Docs and config examples must be true — a wrong example is a bug.
 `;
 
-const CLAUDE_MD = `# {{name}}
+const RAPID_MODULES_AGENT_MD = `# rapid — modules & decorators
 
-@AGENTS.md
+Generated by \`rapid init --module\`/\`upgrade\`. Regenerated in full every time; never hand-edit this file.
+
+# Decorators, binders and modules
+
+From \`@tundralibs/rapid/decorators\` (also re-exported from the root unless
+noted): \`@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)\`, \`@SOCKET(command,
+options?)\`, \`@JOB(name, schedule, options?)\`, \`@Module(name?, options?)\`,
+\`@On(...events)\`, \`@Use(...invokeMiddleware)\`. Decorators are metadata-only —
+they never wrap the method, so a class unit-tests with \`new\`. Route options:
+\`bind\`, \`version\`, \`summary\`, \`description\`, \`tags\`, \`operationId\`,
+\`security\`, \`response\` (a schema; ENFORCED in DEVELOPMENT), \`template\`,
+\`layout\`, \`middleware\` (route-scoped chain, HTTP-typed; \`@SOCKET\` takes a
+socket-typed one). \`@Module(name, { middleware })\` prepends a universal
+chain to every route and command in the class — app \`use()\` → module →
+route → handler; jobs take app-level middleware only. \`security\` documents,
+\`middleware\` enforces — declare both. Binders (\`bind: [...]\`, in parameter order): \`param(name,
+validate?)\`, \`payload(schemaOrValidate?)\` (a schema OBJECT also documents the
+body), \`query(validate?)\`, \`paging()\`, \`header(name)\`, \`cookie(name)\`,
+\`auth(validate?)\`, \`session()\` (decorators subpath only — the root exports
+the \`session()\` middleware), \`connection()\` (socket only), \`config('set.key')\`.
+Without a validator \`param\` is \`string\` and \`payload\` is \`unknown\`.
+
+Modules: \`class Posts extends RapidModule<typeof EVENTS> { name = 'Posts';
+namespace = 'blog'; protected readonly events = EVENTS; … }\` with
+\`const EVENTS = { PostCreated: event<{ id: string }>() }\`. Members: \`this.log\`
+(scoped), \`this.config\`, \`this.emit('PostCreated', payload)\`,
+\`this.invoke(Target, 'method', args)\` (runs the target's \`@Use\` guards; a
+denial is a 403 envelope, not a throw), optional \`init()\` / \`dispose()\`
+hooks. Methods return the \`{ content }\` shape or \`reply(status, content)\`.
+\`app.modules({ modules: [namespaces], instances? })\` boots the module system
+ONCE (before start), mounts every decorated instance, and exposes
+\`app.moduleRuntime\`. \`@Module\` options: \`prefix\` (HTTP paths), \`namespace\`
+(socket commands \`ns.command\`, jobs \`ns.name\`), \`version\`, \`description\`,
+\`tags\`, \`security\`, \`layout\`. \`@On('ns:Module:Event')\` handlers get
+\`(payload, EventContext)\`; \`@Use\` guards module-to-module \`invoke()\` ONLY.
+`;
+
+const RAPID_UI_AGENT_MD = `# rapid — UI layer
+
+Generated by \`rapid init --ui\`/\`upgrade\`. Regenerated in full every time; never hand-edit this file.
+
+# UI layer (\`@tundralibs/rapid/ui\`)
+
+A route may name an HTML template — \`app.get('/x', { template: MyView },
+handler)\` — while the handler keeps returning JSON-shaped data. A request
+carrying the swap header (\`rapid-swap\`) gets the fragment; otherwise the
+route's \`prefer\` (\`'json'\` default, \`'html'\` for pages) picks JSON or the
+layout-wrapped page — \`Accept\` is never consulted; the api surface
+(\`server.api\`) never renders HTML. \`html\` escapes every interpolation
+(\`raw()\` is the only opt-out); \`template(fn, name)\` builds a view; the frozen
+\`view\` bag exposes \`requestId\`, \`path\`, \`query\`, \`asset()\`, \`csrfToken\` and
+nothing from \`ctx.auth\` unless the app's \`view\` projection names it. The
+factory's \`ui\` option (\`core\`, \`layout\`, \`errorTemplates\`, \`view\`, \`assets\`)
+is code; the YAML \`ui:\` block (\`enabled\`, \`prefer\`, \`live\`, \`history\`,
+header/cookie names) is data. The runtime script (\`/__rapid/ui.js\`) handles
+\`data-action\` / \`data-target\` / \`data-swap\` / \`data-load\` elements and
+\`rapid.swap()\` / \`rapid.refresh()\`, same-origin only, echoing the CSRF
+cookie; \`/__rapid/live.js\` (channels over \`/ws\`) and \`/__rapid/history.js\`
+(push-state) are opt-in. Static assets: \`server.static\` (fingerprinted
+\`?v=\` URLs via \`view.asset()\`).{{aiUi}}
+`;
+
+const RAPID_PACT_AGENT_MD = `# rapid — authentication (pact)
+
+Generated by \`rapid init\`/\`upgrade\`. Regenerated in full every time; never hand-edit this file.
+
+# Authentication
+
+\`import { pactAuth } from '@tundralibs/rapid/middlewares/pact'\`;
+\`const { authenticate, authorize, login, logout, refresh, me } = pactAuth(pact,
+options)\`. \`authenticate\`
+fills \`ctx.auth\` with a \`PactAuthContext\` (\`principal\`, \`via\`) from Bearer
+(header or \`bearer.cookie\`), Basic, ApiKey or HMAC carriers; absent →
+anonymous (\`optional: false\` → 401); present-but-invalid → 401, never
+anonymous. \`authorize('Module', 'PERMISSION')\` is typed by the pact instance
+and checked against its catalog when called. Options are pact's own
+middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
+signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
+authenticate from the upgrade request's headers/cookies. A stale bearer
+COOKIE is cleared and treated as anonymous (a browser keeps sending it; a 401
+would lock the user out of /login). The session handlers wrap the instance:
+\`app.post('/login', login())\` → \`{ token, expiresAt, refreshToken?, principal }\`
+plus the \`bearer.cookie\`; \`logout()\` → 204 and the cookie cleared;
+\`refresh()\` rotates a JWT session (body \`refreshToken\` or
+\`session.refreshCookie\`); \`me()\` → \`{ principal, via }\` or 401. Options
+under \`session\`: \`fields\`, \`cookie\` attributes, \`refreshCookie\`,
+\`principal\` projection (default \`{ id }\`). Every failure is ONE 401.
+Bring-your-own auth: a middleware
+that verifies its credential and calls \`ctx.setAuth(...)\`.
+`;
+
+/**
+ * The \`## Reference\` block AGENTS.md carries between \`<!-- rapid:start -->\`
+ * markers — built by both {@link scaffold} (a fresh project) and \`upgrade\`
+ * (refreshing an existing one), so the two never drift. Only lists the
+ * \`.agent.md\` files this project actually has.
+ */
+function referenceSection(
+  opts: { module: boolean; ui: boolean; aiNorm: string },
+): string {
+  const lines = [
+    '## Reference',
+    '',
+    "See [rapid.agent.md](./rapid.agent.md) for rapid's full AI guide — " +
+    'package layout, app architecture, context, sockets/channels/jobs, ' +
+    'middleware catalog, errors, observability, endpoints, testing, CLI, ' +
+    'coding conventions, which-TundraLibs-package-for-which-job, rules.',
+  ];
+  if (opts.module) {
+    lines.push(
+      'See [rapid-modules.agent.md](./rapid-modules.agent.md) for ' +
+        'decorators, binders and the module system.',
+    );
+  }
+  if (opts.ui) {
+    lines.push(
+      'See [rapid-ui.agent.md](./rapid-ui.agent.md) for the UI layer ' +
+        '(templates, layouts, swaps, forms).',
+    );
+  }
+  lines.push(
+    'See [rapid-pact.agent.md](./rapid-pact.agent.md) for the auth ' +
+      'adapter (pact bearer/basic/apikey/hmac, sessions, authorize).',
+  );
+  if (opts.aiNorm !== '') lines.push(opts.aiNorm);
+  return lines.join('\n');
+}
+
+/**
+ * The rapid-authored \`.agent.md\` files + the \`## Reference\` body for the
+ * marker section in AGENTS.md/CLAUDE.md/the copilot file. Shared by
+ * {@link scaffold} (a fresh project) and \`upgrade\` (refreshing an existing
+ * one, detecting \`opts\` from what's already on disk) so the two can never
+ * drift apart.
+ */
+export function agentDocs(
+  rapidVersion: string | null,
+  opts: { module: boolean; ui: boolean; norm: boolean },
+): { files: Record<string, string>; reference: string } {
+  const vars: Record<string, string> = {
+    rapidVersionLabel: rapidVersion ?? 'latest',
+    aiCommands: AI_COMMANDS,
+    aiErrors: errorTable(),
+    aiMiddleware: middlewareTable(),
+    aiDocs: docLinks(rapidVersion),
+    aiUi: opts.ui
+      ? `
+
+This project was scaffolded with \`--ui\`: \`views/core.ts\` is the document
+shell (\`CoreShell\`), \`views/layout.ts\` the page frame (\`PageShape\`),
+\`views/components.ts\` the shared pieces; \`public/\` is mounted under
+\`server.static\` with fingerprinting on; \`configs/Application.yaml\`'s
+\`ui:\` block sets \`prefer: html\`.`
+      : '',
+  };
+  const put = (tpl: string) => render(tpl, vars);
+  const files: Record<string, string> = {
+    'rapid.agent.md': put(RAPID_AGENT_MD),
+    'rapid-pact.agent.md': RAPID_PACT_AGENT_MD,
+  };
+  if (opts.module) files['rapid-modules.agent.md'] = RAPID_MODULES_AGENT_MD;
+  if (opts.ui) files['rapid-ui.agent.md'] = put(RAPID_UI_AGENT_MD);
+  // Imported, not copied — a rapid+norm app's norm.agent.md is byte-for-byte
+  // what a standalone `norm init` would write.
+  if (opts.norm) files['norm.agent.md'] = AI_GUIDE_SECTION;
+  const reference = referenceSection({
+    module: opts.module,
+    ui: opts.ui,
+    aiNorm: opts.norm ? AI_GUIDE_LINK : '',
+  });
+  return { files, reference };
+}
+
+const AGENTS_MD = `# {{name}} — agent guide
+
+A [rAPId](https://jsr.io/@tundralibs/rapid) application — cross-runtime,
+runs on Deno, Node or Bun unmodified.
+This file is the always-on baseline for any AI working in this repo. It is read
+by Claude Code (via \`CLAUDE.md\`), Cursor and Codex (via \`AGENTS.md\`), and GitHub
+Copilot (via \`.github/copilot-instructions.md\`) — all three resolve here. It
+was generated by \`rapid init\` for rapid {{rapidVersionLabel}}; the package
+docs it links are the same version, so prefer them over memory.
+
+## Commands
+
+\`\`\`bash
+{{aiCommands}}
+\`\`\`
+
+Run the relevant ones before you consider a change done.
+{{aiModules}}
+<!-- rapid:start -->
+
+{{aiReference}}
+
+<!-- rapid:end -->
+`;
+
+// The MARKED body of CLAUDE.md/the copilot file — exported so `upgrade` can
+// refresh just this block via `ensureSection`, leaving the title (and
+// anything a user added outside it) alone.
+export const CLAUDE_BODY = `@AGENTS.md
 
 The line above imports [\`AGENTS.md\`](./AGENTS.md) — the single project guide
 (commands, how rapid is used here, the middleware/error catalogs, testing,
 the rules). Edit that file, never this one: every tool (Claude Code, Cursor,
-Codex, Copilot) resolves to the same source.
+Codex, Copilot) resolves to the same source.`;
+
+export const COPILOT_BODY =
+  `The project guide for any AI working in this codebase lives in
+[\`/AGENTS.md\`](../AGENTS.md) — commands, how the app is built, testing, and
+the rules. Read it first. Do not duplicate content here: this file is a
+pointer so every tool (Copilot, Claude Code, Cursor, Codex) resolves to the
+same single source.`;
+
+const CLAUDE_MD = `# {{name}}
+
+<!-- rapid:start -->
+
+${CLAUDE_BODY}
+
+<!-- rapid:end -->
 `;
 
 const COPILOT_MD = `# GitHub Copilot instructions
 
-The project guide for any AI working in this codebase lives in
-[\`/AGENTS.md\`](../AGENTS.md) — commands, how the app is built, testing, and
-the rules. Read it first. Do not duplicate content here: this file is a
-pointer so every tool (Copilot, Claude Code, Cursor, Codex) resolves to the
-same single source.
+<!-- rapid:start -->
+
+${COPILOT_BODY}
+
+<!-- rapid:end -->
 `;
 
 // ── assembly ────────────────────────────────────────────────────────────
@@ -1194,7 +1133,7 @@ function normScaffoldVars(
     }",\n    "@tundralibs/utils": "npm:@jsr/tundralibs__utils${
       spec(normVersions?.utils)
     }"`,
-    aiNorm: NORM_AI_SECTION,
+    aiNorm: AI_GUIDE_LINK,
   };
 }
 
@@ -1333,18 +1272,12 @@ export function scaffold(
       : '',
   };
   vars.rapidVersionLabel = rapidVersion ?? 'latest';
-  vars.aiErrors = errorTable();
-  vars.aiMiddleware = middlewareTable();
-  vars.aiDocs = docLinks(rapidVersion);
-  vars.aiUi = answers.ui === true
-    ? `
-
-This project was scaffolded with \`--ui\`: \`views/core.ts\` is the document
-shell (\`CoreShell\`), \`views/layout.ts\` the page frame (\`PageShape\`),
-\`views/components.ts\` the shared pieces; \`public/\` is mounted under
-\`server.static\` with fingerprinting on; \`configs/Application.yaml\`'s
-\`ui:\` block sets \`prefer: html\`.`
-    : '';
+  const { files: agentFiles, reference } = agentDocs(rapidVersion, {
+    module: answers.module,
+    ui: answers.ui === true,
+    norm: answers.norm,
+  });
+  vars.aiReference = reference;
   const put = (tpl: string) => render(tpl, vars);
   const files: Record<string, string> = {
     '.gitignore': GITIGNORE,
@@ -1371,6 +1304,7 @@ shell (\`CoreShell\`), \`views/layout.ts\` the page frame (\`PageShape\`),
     files['db.ts'] = DB;
     files['configs/Norm.yaml'] = NORM_YAML;
   }
+  Object.assign(files, agentFiles);
   // ONE source (AGENTS.md) + two pointers — always written, mirroring how
   // the tools resolve them; CLAUDE.md imports the guide with `@AGENTS.md`.
   files['AGENTS.md'] = render(put(AGENTS_MD), vars); // 2nd pass: {{name}} inside aiModules

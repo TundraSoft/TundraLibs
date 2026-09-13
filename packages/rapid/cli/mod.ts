@@ -19,10 +19,15 @@ const HELP = `rapid <command>
 
   init [name] [--module] [--norm] [--ui] [--with bootstrap|pico] [--yes]
         scaffold a new project (interactive unless --yes); both deno.json
-        and package.json are always written (no runtime prompt);
-        always writes AGENTS.md + CLAUDE.md (the project's AI guide)
+        and package.json are always written (no runtime prompt); always
+        writes AGENTS.md + CLAUDE.md (pointers) and rapid.agent.md +
+        rapid-pact.agent.md (the AI guide), plus rapid-modules.agent.md /
+        rapid-ui.agent.md / norm.agent.md when those layers are included
   upgrade [--dir .]
-        bump @tundralibs/* dependencies to their latest release
+        bump @tundralibs/* dependencies to their latest release, and
+        refresh the generated .agent.md guide(s) + the AGENTS.md/CLAUDE.md/
+        copilot pointer sections (only what rapid itself generated —
+        everything else is left alone)
   modules [dir] [--check] [--force]
         (re)generate the modules barrel (dir defaults to ./modules);
         an existing hand-written mod.ts is refused unless --force
