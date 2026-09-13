@@ -52,11 +52,6 @@ export async function upgradeCommand(dir = '.'): Promise<number> {
     ...await bump(`${dir}/deno.json`, DENO_DEP, cache),
     ...await bump(`${dir}/package.json`, NPM_DEP, cache),
   ];
-  if (changes.length === 0) {
-    console.log('✓ already up to date');
-  } else {
-    for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
-  }
 
   // No answers object here — detect which optional layers this project has
   // from what init already wrote for them.
@@ -80,5 +75,17 @@ export async function upgradeCommand(dir = '.'): Promise<number> {
     `${dir}/.github/copilot-instructions.md`,
     COPILOT_BODY,
   );
+
+  // Logged only after every async write above completes — a console.log()
+  // immediately preceding a new async file-write call, repeated across
+  // calls in the same process, has been observed to trigger a Node 22
+  // `node:test` runner bug that corrupts the test-reporter IPC channel
+  // ("Unable to deserialize cloned data due to invalid or unsupported
+  // version"); Node 24, Deno, and Bun are unaffected.
+  if (changes.length === 0) {
+    console.log('✓ already up to date');
+  } else {
+    for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
+  }
   return 0;
 }
