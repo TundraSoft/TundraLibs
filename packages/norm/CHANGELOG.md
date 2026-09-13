@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.0...norm-v1.9.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **oql,drivers,norm:** SQLite dbSchema is a physical name prefix, not ATTACH ([#675](https://github.com/TundraSoft/TundraLibs/issues/675)) ([45438af](https://github.com/TundraSoft/TundraLibs/commit/45438afb1aefced3a21c7425296027f9797d54dd))
+
 ## [1.9.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.8.0...norm-v1.9.0) (2026-09-13)
 
 
