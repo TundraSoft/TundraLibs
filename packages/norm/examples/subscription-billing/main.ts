@@ -257,6 +257,48 @@ try {
     newInvoiceCurrency: newInvoice.data[0]!.Currency, // 'USD' — the app-level default
     migrationHistory: (await mig2.history()).map((h) => h.version),
   });
+
+  // ─── 10. guardians: validate a payload before it touches norm ──────
+  // db.repo(key).guardians exposes the SAME insert()/update() Guardians
+  // the repo validates every payload against — reach for them to check
+  // a payload (an API request body, say) before it reaches norm at all,
+  // with zero risk of drifting from what the repo itself enforces.
+  const customerGuardians = db2.repo('Customers').guardians;
+
+  // (a) A required column missing (Name) is caught before it ever
+  // reaches SQL.
+  const [missingNameErr] = customerGuardians.insert.safeParse({
+    OrganizationId: ORG_ACME,
+    Email: 'missing-name@acme.test',
+  });
+
+  // (b) Email_hash is norm-owned — the digest sibling `.encrypt().hash()`
+  // synthesizes — so it's absent from the shape entirely (disableInsert).
+  // .strict() rejects setting it directly as an unknown key, not a
+  // silent no-op.
+  const [hashSiblingErr] = customerGuardians.insert.safeParse({
+    OrganizationId: ORG_ACME,
+    Name: 'Direct Sibling Write',
+    Email: 'sibling@acme.test',
+    Email_hash: 'deadbeef',
+  });
+
+  // (c) update()'s Guardian makes every column OPTIONAL (a partial
+  // payload is the point of a PATCH-style update) but still enforces
+  // each present column's own rules — scenario 8 proved this same
+  // rejection via a transaction rollback; here it never gets that far.
+  const [badStatusErr] = db2.repo('Invoices').guardians.update.safeParse({
+    Status: 'archived', // not one of Column.enum(['open', 'paid', 'void'])
+  });
+
+  say('10. guardians: validate a payload before it touches norm', {
+    missingNameRejected: missingNameErr !== null,
+    missingNameMessage: missingNameErr?.message,
+    hashSiblingRejected: hashSiblingErr !== null,
+    hashSiblingMessage: hashSiblingErr?.message,
+    badStatusRejected: badStatusErr !== null,
+    badStatusMessage: badStatusErr?.message,
+  });
 } finally {
   await norm.disconnect();
   await removeDir(migDir, { recursive: true });

@@ -32,6 +32,7 @@ import type {
   ColumnSpec,
   DefaultRowOf,
   EmittedForeignKey,
+  InsertOf,
   PrimaryKeyOf,
   ProjectedRowOf,
   ProjectionInput,
@@ -49,6 +50,7 @@ import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
+import type { ObjectGuardian } from '@tundralibs/guardian';
 import {
   canonicalizePlain,
   type HashAlgorithm,
@@ -2231,6 +2233,63 @@ export class Repo<
     };
     // deno-lint-ignore no-explicit-any
     return out as any;
+  }
+
+  /**
+   * The entity's insert/update Guardians — the same generated,
+   * write-scope-respecting validators {@link insert}/{@link update} run
+   * every payload through. Reach for these to validate a payload (an
+   * API request body, say) BEFORE it reaches the database: one source
+   * of truth, no risk of drifting from what the repo itself enforces.
+   *
+   * Both are `.strict()` — an unknown or out-of-scope key (one
+   * `disableInsert`/`disableUpdate`'d by the entity's `insert`/`update`
+   * pick-list, e.g. a hash sibling or a column outside a write scope)
+   * is a loud error, never a silent drop. `insert` requires every
+   * non-nullable, non-defaulted column; `update` makes every column
+   * optional — a partial payload is the point of a PATCH-style update.
+   *
+   * Neither one runs encryption, hashing, masks, hooks, or DB-side
+   * expression defaults — those are norm's write pipeline, not the
+   * Guardian layer. Parsing here does not write anything; still call
+   * {@link insert}/{@link update} to actually persist the row.
+   *
+   * @example
+   * ```typescript ignore
+   * // Validate an incoming API body against the same rules insert() uses,
+   * // before it ever reaches norm — e.g. inside an HTTP handler.
+   * const { insert } = db.repo('Users').guardians;
+   * const [err, value] = insert.safeParse(requestBody);
+   * if (err) return res.status(400).json({ message: err.message });
+   * await db.repo('Users').insert(value);
+   * ```
+   *
+   * @example
+   * ```typescript ignore
+   * // update's shape is a partial — every column optional, no default
+   * // filling other than defaultOnUpdate columns.
+   * const { update } = db.repo('Users').guardians;
+   * update.parse({ displayName: 'New name' }); // fine — a partial patch
+   * update.parse({ nope: 1 }); // throws — unknown key, .strict()
+   * ```
+   *
+   * @example
+   * ```typescript ignore
+   * // The parsed value already carries insert()'s declared JS defaults —
+   * // useful to preview what a row would look like without writing it.
+   * const { insert } = db.repo('Users').guardians;
+   * insert.parse({ email: 'a@b.c' }).createdAt; // filled by the column default
+   * ```
+   */
+  public get guardians(): {
+    readonly insert: ObjectGuardian<InsertOf<D>>;
+    readonly update: ObjectGuardian<UpdateOf<D>>;
+  } {
+    const g = this._compiled.guardians!;
+    return g as unknown as {
+      readonly insert: ObjectGuardian<InsertOf<D>>;
+      readonly update: ObjectGuardian<UpdateOf<D>>;
+    };
   }
 
   /**

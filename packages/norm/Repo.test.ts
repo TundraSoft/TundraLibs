@@ -265,6 +265,40 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     asserts.assertEquals(db.repo('QGood').definition.name, 'q_good');
   });
 
+  it('guardians getter exposes the compiled insert/update Guardians, honoring write-scope pick-lists', () => {
+    const { db } = makeDb();
+
+    // No pick-list declared (Renamed): insert requires every column;
+    // update makes everything optional, but both stay .strict() about
+    // an unknown key.
+    const plain = db.repo('Renamed').guardians;
+    asserts.assertEquals(
+      plain.insert.parse({ id: 1, label: 'x' }),
+      { id: 1, label: 'x' },
+    );
+    asserts.assertThrows(() => plain.insert.parse({ id: 1 })); // label required
+    asserts.assertEquals(plain.update.parse({ label: 'y' }), { label: 'y' });
+    asserts.assertEquals(plain.update.parse({}), {});
+    asserts.assertThrows(() => plain.update.parse({ nope: 1 }));
+
+    // Docs declares `insert: ['id', 'title']` — tenantId is disableInsert,
+    // so it's absent from the insert shape entirely and .strict() rejects
+    // it as an unknown key. No `update` pick-list was declared, so
+    // tenantId IS writable there.
+    const docs = db.repo('Docs').guardians;
+    asserts.assertEquals(
+      docs.insert.parse({ id: 1, title: 'hi' }),
+      { id: 1, title: 'hi' },
+    );
+    asserts.assertThrows(() =>
+      docs.insert.parse({ id: 1, title: 'hi', tenantId: 'acme' })
+    );
+    asserts.assertEquals(
+      docs.update.parse({ tenantId: 'acme' }),
+      { tenantId: 'acme' },
+    );
+  });
+
   it('projection validation: every malformed shape errors with its own message', async () => {
     const { db } = makeDb();
     const items = db.repo('Items');

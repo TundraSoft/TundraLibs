@@ -20,6 +20,7 @@ compose.
   - [Factories](#factories)
   - [Common modifiers](#common-modifiers)
   - [Validation and transforms](#validation-and-transforms)
+  - [Whole-row Guardians (insert/update)](#whole-row-guardians-insertupdate)
   - [Defaults](#defaults)
   - [Transforms](#transforms)
   - [Encryption and hashing](#encryption-and-hashing)
@@ -246,6 +247,36 @@ import { Guardian } from '@tundralibs/guardian';
 const status = Column.varchar(6)
   .guard(Guardian.string().toLowerCase().isIn(['active', 'banned']));
 ```
+
+### Whole-row Guardians (insert/update)
+
+`db.repo(key).guardians` exposes the two Guardians the repo itself
+validates every payload against — the same objects, not a rebuilt
+copy, so they can never drift from what `insert()`/`update()` actually
+enforce. Useful for validating a payload (an API request body, say)
+before it reaches norm at all:
+
+```typescript ignore
+// Inside an HTTP handler, before the payload ever reaches norm:
+const { insert } = db.repo('Users').guardians;
+const [err, value] = insert.safeParse(requestBody);
+if (err) return badRequest(err.message);
+await db.repo('Users').insert(value);
+```
+
+Both are `.strict()`: an unknown key — including one `disableInsert`/
+`disableUpdate`'d by the entity's own `insert`/`update` pick-list (a
+hash sibling, say, or a column outside a write scope) — is a loud
+error, not a silent drop. `insert`'s shape mirrors `InsertOf<D>`
+(every non-nullable, non-defaulted column required); `update`'s
+mirrors `UpdateOf<D>` (every column optional — a partial payload is
+the point of a PATCH-style update).
+
+Neither one runs encryption, hashing, masks, hooks, or DB-side
+expression defaults — those are norm's write pipeline, not the
+Guardian layer, so parsing here never writes anything. It validates
+shape and the rules you gave each column's `.guard()`; the write
+itself still goes through `insert()`/`update()`.
 
 ### JSON schemas
 

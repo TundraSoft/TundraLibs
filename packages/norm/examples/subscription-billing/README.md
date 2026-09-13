@@ -14,7 +14,7 @@ node --import tsx packages/norm/examples/subscription-billing/main.ts
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schema.ts` | `Customers` (`.encrypt().hash()`, `.mask()`, a tenant-scoping column), `Subscriptions` (`temporal`), `Invoices` (`audit`, v1 + v2), a VIEW, and a QUERY on top of it        |
 | `seed.ts`   | two tenant organizations and their customers, fixed UUIDs so `main.ts` doesn't have to thread insert results everywhere                                                     |
-| `main.ts`   | nine numbered scenarios, run top to bottom: Migrator create, CRUD, `@AsOf`, the audit trail, the VIEW/QUERY, `db.scope()`, two `transaction()` calls, and Migrator v1 → v2 |
+| `main.ts`   | ten numbered scenarios, run top to bottom: Migrator create, CRUD, `@AsOf`, the audit trail, the VIEW/QUERY, `db.scope()`, two `transaction()` calls, Migrator v1 → v2, and `guardians` |
 
 norm constructs and owns the SQLite engine itself from the `database`
 config. `import '@tundralibs/norm/engines/sqlite'` registers the
@@ -55,6 +55,9 @@ to run; ordering does not):
 
 ▶ 9. Migrator v1 → v2: invoices.Currency added
 { "snapshot": { "version": 2, "written": true }, "applied": [2], "preExistingInvoiceCurrency": null, "newInvoiceCurrency": "USD", ... }
+
+▶ 10. guardians: validate a payload before it touches norm
+{ "missingNameRejected": true, "hashSiblingMessage": "Unknown property 'Email_hash' is not allowed in strict mode", "badStatusRejected": true, ... }
 ```
 
 ## What to take for your own project
@@ -67,3 +70,4 @@ to run; ordering does not):
 | `db.scope()`: multi-tenant `OrganizationId`                | [../../docs/NORM-Scoping.md](../../docs/NORM-Scoping.md)        |
 | `.encrypt().hash()`, `.mask()`, columns/entities generally | [../../docs/NORM-Schema.md](../../docs/NORM-Schema.md)          |
 | `db.transaction()`                                         | [../../README.md](../../README.md#transactions--escape-hatches) |
+| `db.repo(key).guardians`: validate before you write         | [../../docs/NORM-Schema.md#whole-row-guardians-insertupdate](../../docs/NORM-Schema.md#whole-row-guardians-insertupdate) |
