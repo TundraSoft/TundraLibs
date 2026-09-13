@@ -1,17 +1,7 @@
 /**
  * @fileoverview Tests for {@link pingCommand} — the connectivity smoke
- * test against `configs/Norm.yaml`.
- *
- * This file is deliberately kept small and standalone: its one real
- * `norm.connect()`/`disconnect()` (via `node:sqlite` under Node) has been
- * observed to trigger a Node 22 `node:test` runner bug when a LOT of
- * further file I/O follows in the same test file — the test reporter's
- * IPC channel to the parent process ends up corrupted ("Unable to
- * deserialize cloned data due to invalid or unsupported version"),
- * failing the whole file. Deno and Bun are unaffected. Keeping this
- * suite in its own small file (Node's test runner isolates per file)
- * avoids the accumulated volume that triggers it, rather than chasing
- * the upstream bug.
+ * test against `configs/Norm.yaml`, including one real
+ * `norm.connect()`/`disconnect()` against sqlite.
  * @module
  */
 import * as asserts from '@std/asserts';

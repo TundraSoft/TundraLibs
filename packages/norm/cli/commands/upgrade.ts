@@ -47,9 +47,7 @@ async function bump(
  * The `upgrade` command. Returns the process exit code.
  *
  * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
- * the suite never depends on network I/O (also works around a Node 22
- * `node:test` runner bug where a real `fetch()` followed by more file
- * I/O in the same test file corrupts the test-reporter IPC channel).
+ * the suite never depends on network I/O.
  */
 export async function upgradeCommand(
   dir = '.',
@@ -60,11 +58,19 @@ export async function upgradeCommand(
     ...await bump(`${dir}/deno.json`, DENO_DEP, cache, resolveVersion),
     ...await bump(`${dir}/package.json`, NPM_DEP, cache, resolveVersion),
   ];
+  // ensureAgentDocs() runs BEFORE the summary is logged — not just after —
+  // because a console.log() immediately preceding a new async file-write
+  // call, repeated across calls in the same process, triggers a Node 22
+  // `node:test` runner bug that corrupts the test-reporter IPC channel
+  // ("Unable to deserialize cloned data due to invalid or unsupported
+  // version"). Confirmed by direct bisection: swapping the order alone
+  // takes the failure rate from ~majority of runs to zero across dozens
+  // of trials. Node 24, Deno, and Bun are unaffected either way.
+  await ensureAgentDocs(dir);
   if (changes.length === 0) {
     console.log('✓ already up to date');
   } else {
     for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
   }
-  await ensureAgentDocs(dir);
   return 0;
 }

@@ -75,9 +75,7 @@ const resolveProjectName = async (
  * The `init` command. Returns the process exit code.
  *
  * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
- * the suite never depends on network I/O (also works around a Node 22
- * `node:test` runner bug where a real `fetch()` followed by more file
- * I/O in the same test file corrupts the test-reporter IPC channel).
+ * the suite never depends on network I/O.
  */
 export async function initCommand(
   args: ParsedArgs,
@@ -96,11 +94,15 @@ export async function initCommand(
 
   await makeDir(`${base}/configs`, { recursive: true });
   const normYamlPath = `${base}/configs/Norm.yaml`;
+  // Logged later, alongside the other end-of-run status lines — never
+  // immediately before further async I/O (see the note on the final
+  // console.log block below).
+  let normYamlStatus: string;
   if (await pathExists(normYamlPath)) {
-    console.log(`  ~ configs/Norm.yaml (already exists — left untouched)`);
+    normYamlStatus = '  ~ configs/Norm.yaml (already exists — left untouched)';
   } else {
     await writeTextFile(normYamlPath, NORM_YAML);
-    console.log(`  + configs/Norm.yaml`);
+    normYamlStatus = '  + configs/Norm.yaml';
   }
 
   const wroteDb = await writeIfMissing(`${base}/db.ts`, DB);
@@ -146,6 +148,13 @@ export async function initCommand(
 
   await ensureAgentDocs(base);
 
+  // All logged here, after every async write in this run — a console.log()
+  // immediately preceding a new async file-write call, repeated across
+  // calls in the same process, has been observed to trigger a Node 22
+  // `node:test` runner bug that corrupts the test-reporter IPC channel
+  // ("Unable to deserialize cloned data due to invalid or unsupported
+  // version"); Node 24, Deno, and Bun are unaffected.
+  console.log(normYamlStatus);
   console.log(
     `\n✓ norm ready in ${base === '.' ? 'the current directory' : base}`,
   );
