@@ -28,7 +28,7 @@ type Expect<T extends true> = T;
 const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
   email: Column.varchar(255).encrypt().hash(),
-  status: Column.varchar(16).lov(['active', 'banned']).default('active'),
+  status: Column.enum(['active', 'banned']).default('active'),
 }, { pk: ['id'], comment: 'Registered accounts' });
 
 // FKs reference ENTITY KEYS — no imports, resolved at use() time.
@@ -353,7 +353,7 @@ describe('norm.schema (Schema + use + docs)', () => {
   it('toMarkdown: kinds, comments, constraints, keys, hooks', () => {
     const Hooked = Entity('hooked', {
       id: Column.integer().comment('surrogate key'),
-      status: Column.varchar(16).lov(['on', 'off']),
+      status: Column.enum(['on', 'off']),
       touched: Column.timestamp().defaultOnUpdate(() => new Date()),
     }, {
       pk: ['id'],
@@ -367,7 +367,7 @@ describe('norm.schema (Schema + use + docs)', () => {
     asserts.assertStringIncludes(md, '> Registered accounts\n\n|');
     asserts.assertStringIncludes(md, 'encrypted+hash');
     // Pipes inside cells are escaped so the table never splits.
-    asserts.assertStringIncludes(md, 'lov(active\\|banned)');
+    asserts.assertStringIncludes(md, 'enum(active\\|banned)');
     asserts.assertStringIncludes(md, 'norm-owned'); // the hash sibling
     asserts.assertStringIncludes(md, '- **Primary key:** id');
     asserts.assertStringIncludes(
@@ -442,10 +442,11 @@ describe('norm.schema (Schema + use + docs)', () => {
     // Defaults are SYSTEM-generated (Guardian .optional()), never
     // DDL — the expression default on id does not appear.
     asserts.assertEquals(users.columns.id, { type: 'UUID' });
-    // lov is a Guardian concern, not a CHECK constraint.
+    // The enum guardian is a Guardian concern, not a CHECK constraint —
+    // only the physical width Column.enum() derived survives the snapshot.
     asserts.assertEquals(users.columns.status, {
       type: 'VARCHAR',
-      length: 16,
+      length: 6, // 'active'/'banned'
     });
     // Storage-shaping flags DO appear.
     asserts.assertEquals(users.columns.email, {

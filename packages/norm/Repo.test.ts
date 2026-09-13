@@ -8,6 +8,7 @@
 
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
+import { Guardian } from '@tundralibs/guardian';
 import type { EngineQueryResult } from '@tundralibs/drivers';
 import {
   Column,
@@ -666,7 +667,7 @@ describe('norm.Repo (edge paths over mock executor)', () => {
   it('digest columns: write digests in place, plaintext filters rewrite, policy validates plaintext', async () => {
     const Creds = Entity('creds', {
       id: Column.integer(),
-      password: Column.hash('SHA-256').minLength(8)
+      password: Column.hash('SHA-256').guard(Guardian.string().minLength(8))
         .beforeWrite((v) => v.trim()),
       recovery: Column.hash('SHA-512').nullable(),
     }, { pk: ['id'] });

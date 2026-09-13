@@ -70,16 +70,17 @@ invalid combinations do not type-check.
 
 ```typescript
 import { Column, Entity } from '@tundralibs/norm';
+import { Guardian } from '@tundralibs/guardian';
 
 export const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
   // Encrypted at rest, still filterable by plaintext via the digest sibling:
-  email: Column.varchar(255).beforeWrite((v) => v.trim().toLowerCase())
+  email: Column.varchar(255).guard(Guardian.string().trim().toLowerCase())
     .encrypt().hash(),
   // Store only a one-way digest — never the plaintext:
-  password: Column.hash('SHA-256').minLength(8),
-  displayName: Column.varchar(120).minLength(2),
-  role: Column.varchar(12).lov(['admin', 'editor', 'viewer']).default('viewer'),
+  password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
+  displayName: Column.varchar(120).guard(Guardian.string().minLength(2)),
+  role: Column.enum(['admin', 'editor', 'viewer']).default('viewer'),
   // A virtual, computed-on-read column — never stored:
   apiKeyHint: Column.mask('apiKey', (v: string) => '…' + v.slice(-4)),
   apiKey: Column.varchar(64).hidden(), // excluded from default reads

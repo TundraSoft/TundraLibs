@@ -1,29 +1,29 @@
 /**
  * Users — accounts. Expression-default UUID pk, encrypted+hashed
  * email (uniqueness lives on the digest sibling, case-insensitive via
- * beforeWrite), encrypted-only apiKey, lov role, hidden+unfilterable
+ * beforeWrite), encrypted-only apiKey, enum role, hidden+unfilterable
  * passwordHash, update pick-list, row hook, auto-touch updatedAt.
  *
  * @module
  */
 
 import { Column, Entity } from '../../../mod.ts';
+import { Guardian } from '@tundralibs/guardian';
 
 export const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
-  email: Column.varchar(255).pattern(/^\S+@\S+\.\S+$/)
+  email: Column.varchar(255).guard(Guardian.string().pattern(/^\S+@\S+\.\S+$/))
     .beforeWrite((v) => v.trim().toLowerCase())
     .encrypt().hash()
     .comment('Sign-in identifier; encrypted at rest, unique via sibling'),
   apiKey: Column.varchar(256).encrypt(), // readable, never lookupable
   apiKeyHint: Column.mask('apiKey', (v) => `…${v.slice(-4)}`),
-  role: Column.varchar(12).lov(['admin', 'editor', 'viewer'])
-    .default('viewer'),
-  displayName: Column.varchar(120).minLength(2)
+  role: Column.enum(['admin', 'editor', 'viewer']).default('viewer'),
+  displayName: Column.varchar(120).guard(Guardian.string().minLength(2))
     .afterRead((v) => v.trim()),
   passwordHash: Column.varchar(64).hidden().unfilterable(),
   pin: Column.hash('SHA-256').nullable(), // one-way digest, plaintext lookups
-  loginCount: Column.integer().min(0).default(0),
+  loginCount: Column.integer().guard(Guardian.number().min(0)).default(0),
   createdAt: Column.timestamp().default(() => new Date()),
   updatedAt: Column.timestamp().default(() => new Date())
     .defaultOnUpdate(() => new Date()),

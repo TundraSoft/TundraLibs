@@ -1,7 +1,8 @@
 /**
- * Generated-Guardian unit tests: per-type cell guardians (validators
- * mapped from specs), default rehydration, write-guardian composition
- * and batch-error paths — direct, no repo pipeline.
+ * Generated-Guardian unit tests: per-type cell guardians (`.guard()`
+ * mapped from specs, physical width/integer-ness layered on top),
+ * default rehydration, write-guardian composition and batch-error
+ * paths — direct, no repo pipeline.
  */
 
 import { describe, it } from '@tundralibs/compat/test';
@@ -19,61 +20,70 @@ import { NormValidationError } from './errors/mod.ts';
 
 /** Emit specs through the public definition layer. */
 const Specs = Entity('specs', {
-  vc: Column.varchar(5).minLength(2),
-  txt: Column.text().maxLength(4),
-  patterned: Column.text().pattern(/^[a-z]+$/),
-  slov: Column.varchar(8).lov(['on', 'off']),
-  int: Column.integer().min(1).max(10),
-  ilov: Column.integer().lov([1, 2, 3]),
-  dec: Column.decimal(6, 2).min(0.5).max(9.5),
-  dlov: Column.decimal(4, 1).lov([1.5, 2.5]),
-  big: Column.bigint().min(10n).max(100n),
-  blov: Column.bigint().lov([1n, 2n]),
-  when: Column.timestamp()
-    .min(new Date('2020-01-01T00:00:00Z'))
-    .max(new Date('2030-01-01T00:00:00Z')),
+  vc: Column.varchar(5).guard(Guardian.string().minLength(2)),
+  txt: Column.text().guard(Guardian.string().maxLength(4)),
+  patterned: Column.text().guard(Guardian.string().pattern(/^[a-z]+$/)),
+  senum: Column.enum(['on', 'off']),
+  int: Column.integer().guard(Guardian.number().min(1).max(10)),
+  ienum: Column.enum([1, 2, 3]),
+  dec: Column.decimal(6, 2).guard(Guardian.number().min(0.5).max(9.5)),
+  // Decimal columns have no Column.enum() equivalent (it only derives
+  // VARCHAR/INTEGER/BIGINT) — .isIn() gives the same literal-set
+  // restriction without TS narrowing.
+  disIn: Column.decimal(4, 1).guard(Guardian.number().isIn([1.5, 2.5])),
+  big: Column.bigint().guard(Guardian.bigint().min(10n).max(100n)),
+  benum: Column.enum([1n, 2n]),
+  when: Column.timestamp().guard(
+    Guardian.date()
+      .min(new Date('2020-01-01T00:00:00Z'))
+      .max(new Date('2030-01-01T00:00:00Z')),
+  ),
   flag: Column.boolean(),
 }, { pk: ['vc'] }).columns;
 
 describe('norm.guardians (cell guardians + validateRows)', () => {
-  it('string: length caps, minLength, pattern, lov', () => {
+  it('string: physical length cap always applies, guard() adds the rest', () => {
     asserts.assertEquals(buildCellGuardian(Specs.vc).parse('abc'), 'abc');
-    asserts.assertThrows(() => buildCellGuardian(Specs.vc).parse('a')); // minLength
+    asserts.assertThrows(() => buildCellGuardian(Specs.vc).parse('a')); // guard() minLength
+    // Physical VARCHAR(5) cap enforced regardless of the guard.
     asserts.assertThrows(() => buildCellGuardian(Specs.vc).parse('toolong'));
     asserts.assertEquals(buildCellGuardian(Specs.txt).parse('abcd'), 'abcd');
-    asserts.assertThrows(() => buildCellGuardian(Specs.txt).parse('abcde')); // maxLength
+    asserts.assertThrows(() => buildCellGuardian(Specs.txt).parse('abcde')); // guard() maxLength
     asserts.assertEquals(
       buildCellGuardian(Specs.patterned).parse('abc'),
       'abc',
     );
     asserts.assertThrows(() => buildCellGuardian(Specs.patterned).parse('AB'));
-    asserts.assertEquals(buildCellGuardian(Specs.slov).parse('on'), 'on');
-    asserts.assertThrows(() => buildCellGuardian(Specs.slov).parse('maybe'));
   });
 
-  it('integer + decimal: range and lov', () => {
+  it('Column.enum(): string/integer/bigint variants, narrows and validates', () => {
+    asserts.assertEquals(buildCellGuardian(Specs.senum).parse('on'), 'on');
+    asserts.assertThrows(() => buildCellGuardian(Specs.senum).parse('maybe'));
+    asserts.assertEquals(buildCellGuardian(Specs.ienum).parse(2), 2);
+    asserts.assertThrows(() => buildCellGuardian(Specs.ienum).parse(9));
+    asserts.assertEquals(buildCellGuardian(Specs.benum).parse(1n), 1n);
+    asserts.assertThrows(() => buildCellGuardian(Specs.benum).parse(3n));
+  });
+
+  it('integer + decimal: guard() range, physical integer-ness always applies', () => {
     asserts.assertEquals(buildCellGuardian(Specs.int).parse(5), 5);
     asserts.assertThrows(() => buildCellGuardian(Specs.int).parse(0));
     asserts.assertThrows(() => buildCellGuardian(Specs.int).parse(11));
-    asserts.assertThrows(() => buildCellGuardian(Specs.int).parse(1.5)); // integer()
-    asserts.assertEquals(buildCellGuardian(Specs.ilov).parse(2), 2);
-    asserts.assertThrows(() => buildCellGuardian(Specs.ilov).parse(9));
+    asserts.assertThrows(() => buildCellGuardian(Specs.int).parse(1.5)); // physical integer() check
     asserts.assertEquals(buildCellGuardian(Specs.dec).parse(1.25), 1.25);
     asserts.assertThrows(() => buildCellGuardian(Specs.dec).parse(0.1));
     asserts.assertThrows(() => buildCellGuardian(Specs.dec).parse(9.9));
-    asserts.assertEquals(buildCellGuardian(Specs.dlov).parse(2.5), 2.5);
-    asserts.assertThrows(() => buildCellGuardian(Specs.dlov).parse(3.5));
+    asserts.assertEquals(buildCellGuardian(Specs.disIn).parse(2.5), 2.5);
+    asserts.assertThrows(() => buildCellGuardian(Specs.disIn).parse(3.5));
   });
 
-  it('bigint: range and lov (bounds stored as strings, rehydrated)', () => {
+  it('bigint: guard() range (bounds live inside the guardian, not the spec)', () => {
     asserts.assertEquals(buildCellGuardian(Specs.big).parse(50n), 50n);
     asserts.assertThrows(() => buildCellGuardian(Specs.big).parse(5n));
     asserts.assertThrows(() => buildCellGuardian(Specs.big).parse(500n));
-    asserts.assertEquals(buildCellGuardian(Specs.blov).parse(1n), 1n);
-    asserts.assertThrows(() => buildCellGuardian(Specs.blov).parse(3n));
   });
 
-  it('date: min/max bounds (stored as ISO strings)', () => {
+  it('date: guard() min/max bounds', () => {
     const g = buildCellGuardian(Specs.when);
     const ok = new Date('2025-06-01T00:00:00Z');
     asserts.assertEquals(g.parse(ok), ok);
@@ -145,7 +155,7 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
   it('validateRows: batch failures prefix the row index; parsed rows carry defaults', () => {
     const def = Entity('rows', {
       id: Column.integer(),
-      status: Column.varchar(8).lov(['a', 'b']).default('a'),
+      status: Column.enum(['a', 'b']).default('a'),
     }, { pk: ['id'] });
     const { insert } = buildWriteGuardians(
       def.columns as unknown as Record<string, ColumnSpec>,
@@ -193,18 +203,19 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertEquals(paths.includes('phantom'), true);
   });
 
-  it('.validate(): custom predicates run after lov/pattern, stack, and compose with encrypt()', () => {
-    const evenLov = Column.integer().lov([2, 3, 4, 5])
-      .validate((v) => v % 2 === 0, 'must be even');
-    const g = buildCellGuardian(evenLov.spec as unknown as ColumnSpec);
-    asserts.assertEquals(g.parse(2), 2);
-    asserts.assertThrows(() => g.parse(3), Error, 'must be even'); // passes lov, fails validate
-    asserts.assertThrows(() => g.parse(9)); // fails lov first
+  it("guard(): ordering is the caller's — transforms run before validators run before the physical cap", () => {
+    // trim() shrinks the value BEFORE the physical VARCHAR(5) cap is
+    // checked, so a padded-but-short value survives.
+    const trimmed = Column.varchar(5).guard(Guardian.string().trim());
+    const gt = buildCellGuardian(trimmed.spec as unknown as ColumnSpec);
+    asserts.assertEquals(gt.parse('  abc '), 'abc');
+    asserts.assertThrows(() => gt.parse('  toolong  ')); // still too long after trim
 
-    // Stacked rules: both enforced independently.
-    const stacked = Column.varchar(10)
-      .validate((v) => v.length > 2, 'too short')
-      .validate((v) => v !== 'ban', 'reserved word');
+    // Stacked rules inside ONE guardian, both enforced independently.
+    const stacked = Column.varchar(10).guard(
+      Guardian.string().refine((v) => v.length > 2, 'too short')
+        .refine((v) => v !== 'ban', 'reserved word'),
+    );
     const gs = buildCellGuardian(stacked.spec as unknown as ColumnSpec);
     asserts.assertEquals(gs.parse('ok!'), 'ok!');
     asserts.assertThrows(() => gs.parse('no'), Error, 'too short');
@@ -212,25 +223,30 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
 
     // Encrypted column: the guardian still validates the PLAINTEXT
     // (buildCellGuardian dispatches on the logical type, not `encrypt`).
-    const encrypted = Column.varchar(20).validate(
-      (v) => v.includes('@'),
-      'must look like an email',
+    const encrypted = Column.varchar(20).guard(
+      Guardian.string().refine(
+        (v) => v.includes('@'),
+        'must look like an email',
+      ),
     ).encrypt();
     const ge = buildCellGuardian(encrypted.spec as unknown as ColumnSpec);
     asserts.assertEquals(ge.parse('a@b.com'), 'a@b.com');
     asserts.assertThrows(() => ge.parse('nope'));
   });
 
-  it('.guardian(): reaches built-in format validators, composes with validate() and encrypt()', () => {
-    const email = Column.varchar(255).guardian((g) => g.email());
+  it('guard(): reaches built-in format validators, composes with encrypt()', () => {
+    const email = Column.varchar(255).guard(Guardian.string().email());
     const ge = buildCellGuardian(email.spec as unknown as ColumnSpec);
     asserts.assertEquals(ge.parse('a@b.com'), 'a@b.com');
     asserts.assertThrows(() => ge.parse('not-an-email'));
 
-    // Composes with .validate(): both enforced independently.
-    const both = Column.varchar(255)
-      .guardian((g) => g.email())
-      .validate((v) => !v.endsWith('@spam.test'), 'blocked domain');
+    // Multiple rules composed into ONE guardian, both enforced.
+    const both = Column.varchar(255).guard(
+      Guardian.string().email().refine(
+        (v) => !v.endsWith('@spam.test'),
+        'blocked domain',
+      ),
+    );
     const gb = buildCellGuardian(both.spec as unknown as ColumnSpec);
     asserts.assertEquals(gb.parse('a@b.com'), 'a@b.com');
     asserts.assertThrows(() => gb.parse('not-an-email'));
@@ -241,19 +257,19 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     );
 
     // Encrypted column: still validates the PLAINTEXT.
-    const encrypted = Column.varchar(255).guardian((g) => g.email())
+    const encrypted = Column.varchar(255).guard(Guardian.string().email())
       .encrypt();
     const gce = buildCellGuardian(encrypted.spec as unknown as ColumnSpec);
     asserts.assertEquals(gce.parse('a@b.com'), 'a@b.com');
     asserts.assertThrows(() => gce.parse('nope'));
 
     // NumberGuardian / DateGuardian built-ins, same mechanism.
-    const age = Column.integer().guardian((g) => g.positive());
+    const age = Column.integer().guard(Guardian.number().positive());
     const ga = buildCellGuardian(age.spec as unknown as ColumnSpec);
     asserts.assertEquals(ga.parse(5), 5);
     asserts.assertThrows(() => ga.parse(-1));
 
-    const past = Column.date().guardian((g) => g.past());
+    const past = Column.date().guard(Guardian.date().past());
     const gp = buildCellGuardian(past.spec as unknown as ColumnSpec);
     asserts.assertEquals(
       gp.parse(new Date('2000-01-01')) instanceof Date,
@@ -262,19 +278,48 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertThrows(() => gp.parse(new Date('2999-01-01')));
   });
 
-  it('.guardian(): also enforces on boolean and bit (base-class column kinds)', () => {
-    const flag = Column.boolean().guardian((g) => g.true());
+  it('guard(): also enforces on boolean and bit (base-class column kinds)', () => {
+    const flag = Column.boolean().guard(Guardian.boolean().true());
     const gf = buildCellGuardian(flag.spec as unknown as ColumnSpec);
     asserts.assertEquals(gf.parse(true), true);
     asserts.assertThrows(() => gf.parse(false));
 
     // BIT is physically validated as an integer (guardians.ts's BIT
-    // branch), so .guardian() resolves to NumberGuardian here too even
+    // branch), so .guard() resolves to NumberGuardian here too even
     // though Column.bit() is a bare ColumnBuilder<number>.
-    const bits = Column.bit().guardian((g) => g.min(0).max(1));
+    const bits = Column.bit().guard(Guardian.number().min(0).max(1));
     const gb = buildCellGuardian(bits.spec as unknown as ColumnSpec);
     asserts.assertEquals(gb.parse(1), 1);
     asserts.assertThrows(() => gb.parse(2));
+  });
+
+  it('guard(): one-shot, rejects async/nullable/optional guards', () => {
+    asserts.assertThrows(
+      () =>
+        Column.varchar(10).guard(Guardian.string().trim()).guard(
+          Guardian.string().email(),
+        ),
+      Error,
+      'already set',
+    );
+    asserts.assertThrows(
+      () => Column.varchar(10).guard(Guardian.string().nullable() as never),
+      Error,
+      'declare nullable()/default()',
+    );
+    asserts.assertThrows(
+      () => Column.varchar(10).guard(Guardian.string().optional('x') as never),
+      Error,
+      'declare nullable()/default()',
+    );
+    asserts.assertThrows(
+      () =>
+        Column.varchar(10).guard(
+          Guardian.string().refine(async (v) => v.length > 0, 'x') as never,
+        ),
+      Error,
+      'synchronously',
+    );
   });
 
   it('update guardians: everything optional, defaultOnUpdate auto-fills', () => {

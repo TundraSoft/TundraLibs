@@ -126,6 +126,7 @@ export {
   type EntitySnapshot,
   type EntityTableOptions,
   type EntityViewOptions,
+  EnumColumnBuilder,
   type ExpressionDefault,
   type FilterOf,
   type FilterShapeOf,

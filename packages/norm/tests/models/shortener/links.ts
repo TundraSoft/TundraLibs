@@ -7,15 +7,16 @@
  */
 
 import { Column, Entity } from '../../../mod.ts';
+import { Guardian } from '@tundralibs/guardian';
 
 export const Links = Entity('links', {
   id: Column.integer(),
-  slug: Column.varchar(32).pattern(/^[a-z0-9-]+$/)
+  slug: Column.varchar(32).guard(Guardian.string().pattern(/^[a-z0-9-]+$/))
     .beforeWrite((v) => v.trim().toLowerCase()),
-  targetUrl: Column.text().minLength(10),
+  targetUrl: Column.text().guard(Guardian.string().minLength(10)),
   ownerId: Column.uuid(),
   createdById: Column.uuid(),
-  clicks: Column.bigint().min(0n).default(0n),
+  clicks: Column.bigint().guard(Guardian.bigint().min(0n)).default(0n),
   isActive: Column.boolean().default(true),
   meta: Column.json<{ tags: string[]; campaign?: string }>().nullable(),
   expiresAt: Column.timestamp().nullable(),

@@ -12,10 +12,11 @@
  * pitfalls).
  *
  * Correct-by-construction beats validation-after-the-fact: `hash()`
- * (the lookup sibling) exists only on encrypted builders, `min()`/
- * `max()` only on numeric/date ones, and digest columns
- * (`Column.hash('SHA-256')`) expose no `encrypt()` — the invalid
- * combinations of the old literal API simply don't type-check here.
+ * (the lookup sibling) exists only on encrypted builders, `.guard()`
+ * is pinned to the column's own concrete Guardian class (a string
+ * column can't be guarded by a `NumberGuardian`), and digest columns
+ * (`Column.hash('SHA-256')`) expose no `encrypt()` — invalid
+ * combinations simply don't type-check here.
  *
  * `encrypt()` exists on EVERY value kind — string, number, bigint,
  * date, boolean, json. The logical TS type is unchanged (a
@@ -25,28 +26,36 @@
  * column to TEXT.
  *
  * Chain-order rule: `encrypt()` narrows the surface to the encrypted
- * builder, so VALIDATORS (`pattern` / `lov` / `min` / `max` /
- * `minLength` / `maxLength`) must come BEFORE `encrypt()` — they run
- * against the plaintext. Everything else (`nullable` / `default` /
- * `comment` / `hidden` / `beforeWrite` / …) preserves the builder
- * kind — and the `.hidden()` brand — and chains anywhere.
+ * builder, so `.guard()` must come BEFORE `encrypt()` — it runs against
+ * the plaintext. Everything else (`nullable` / `default` / `comment` /
+ * `hidden` / `beforeWrite` / …) preserves the builder kind — and the
+ * `.hidden()` brand — and chains anywhere.
  *
- * Validators emit plain constraint DATA (`lov`, `pattern`, `min`, …)
- * on the spec; enforcement happens in the generated Guardians. `lov()`
- * additionally NARROWS the TS value type to the literal union — no
+ * `.guard(g)` takes an ALREADY-BUILT Guardian and makes it the column's
+ * real runtime validator — transforms and validators run in whatever
+ * order the caller composed them, once, as one expression:
+ *
+ * ```ts
+ * const email = Column.varchar(255)
+ *   .guard(Guardian.string().trim().toLowerCase().email());
+ * ```
+ *
+ * `Column.enum(values)` is the narrowing counterpart (`.lov()`'s
+ * replacement) — it infers the TS union from the values themselves, no
  * `as const` needed:
  *
  * ```ts
- * const status = Column.varchar(16).lov(['active', 'banned']);
+ * const status = Column.enum(['active', 'banned']);
  * // TS type: 'active' | 'banned'
- * // spec:    { type: 'VARCHAR', length: 16, lov: ['active', 'banned'] }
  * ```
  *
  * @since 1.0.0
  */
 
 import { cuid, cuid2, nanoID, ObjectID, simpleID, ulid } from '@tundralibs/id';
+import { Guardian } from '@tundralibs/guardian';
 import type {
+  BaseGuardian,
   BigIntGuardian,
   BooleanGuardian,
   DateGuardian,
@@ -89,7 +98,7 @@ export type DefaultInput<T> = T | (() => T) | ExpressionDefault;
 
 /** Resolves a column's TS value type to the concrete Guardian class the
  * runtime actually dispatches to (mirrors `guardians.ts`'s `buildBase`
- * dispatch table) — the type `.guardian()` pins its callback to. */
+ * dispatch table) — the type `.guard()` pins its parameter to. */
 type ConcreteGuardianOf<T> = T extends boolean ? BooleanGuardian
   : T extends bigint ? BigIntGuardian
   : T extends number ? NumberGuardian
@@ -101,9 +110,9 @@ type ConcreteGuardianOf<T> = T extends boolean ? BooleanGuardian
 /**
  * The plain data a builder emits — one column of a table/view
  * definition. Serializable except for the transform/default callbacks
- * (the snapshot layer strips those, as before). Validator constraints
- * (`lov`, `pattern`, `min`/`max`, `minLength`/`maxLength`) are plain
- * data — they survive the JSON export and feed docs/UML generation.
+ * and `guard` (the snapshot layer strips those, as before) — the
+ * value-level rules live inside `guard`'s own Guardian instance, not
+ * on the spec.
  *
  * `$type` is a phantom: never assigned at runtime, it carries the
  * column's TS value type (including `| null` when nullable) for the
@@ -147,19 +156,6 @@ export interface ColumnSpec<
   readonly disableUpdate?: true;
   /** Documentation + DDL comment (`COMMENT ON COLUMN …`). */
   readonly comment?: string;
-  /** List of values — the allowed literal set (bigints stored as strings). */
-  readonly lov?: readonly (string | number)[];
-  /** Regex constraint, stored serializably (source + flags). */
-  readonly pattern?: { readonly source: string; readonly flags?: string };
-  /** Range floor — number, or bigint/Date canonicalized to a string. */
-  readonly min?: number | string;
-  /** Range ceiling — number, or bigint/Date canonicalized to a string. */
-  readonly max?: number | string;
-  /** Shortest allowed string. On a digest column this constrains the
-   * PLAINTEXT, not the stored hash. */
-  readonly minLength?: number;
-  /** Longest allowed string — a validator, independent of `length`. */
-  readonly maxLength?: number;
   /** Canonicalized defaults per slot: `insert` fires when the payload
    * omits the column, `update` on every update. Bigints and Dates are
    * stored as strings; generators and DB expressions pass through. */
@@ -172,16 +168,6 @@ export interface ColumnSpec<
   readonly transforms?: {
     readonly beforeWrite?: (v: never) => unknown;
     readonly afterRead?: (v: never) => unknown;
-    /** Custom validation rules beyond `lov`/`pattern`/`min`/`max` —
-     * predicates only, stacked in declaration order. */
-    readonly validate?: readonly {
-      readonly fn: (v: never) => boolean | Promise<boolean>;
-      readonly message: string;
-    }[];
-    /** Extends the generated Guardian directly (`.email()`, `.uuid()`,
-     * `.past()`, …) — stacked in declaration order, applied after
-     * `lov`/`pattern`/`min`/`max` and before `validate`'s predicates. */
-    readonly guardian?: readonly ((g: never) => unknown)[];
   };
   /** MIGRATION HINT: the column's PREVIOUS name — consumed only by
    * the migration diff (rename instead of drop+add); inert everywhere
@@ -200,6 +186,11 @@ export interface ColumnSpec<
    * `Column.json<Shape>()` phantom. Not serializable — excluded from
    * snapshot/docs exactly like `masked`/`transforms`. */
   readonly jsonSchema?: ObjectGuardian<Record<string, unknown>>;
+  /** The column's real runtime validator, set by `.guard(g)` — an
+   * already-built Guardian, transforms and validators composed in
+   * whatever order the caller chose. Not serializable — excluded from
+   * snapshot/docs exactly like `masked`/`jsonSchema`. */
+  readonly guard?: BaseGuardian<unknown>;
   /** @internal Phantom — TS value type. Never set at runtime. */
   readonly $type?: T;
   /** @internal Phantom — insert payload may omit this column. */
@@ -222,14 +213,6 @@ type _HiddenBrand = { readonly spec: { readonly project: false } };
  */
 type _KeepHidden<Self, B> = Self extends _HiddenBrand ? B & _HiddenBrand : B;
 
-/** Serialize a range bound: bigints and Dates canonicalize to strings
- * (JSON-safe, timezone-stable — the runtime rehydrates per column type). */
-function bound(v: number | bigint | Date): number | string {
-  if (typeof v === 'bigint') return v.toString();
-  if (v instanceof Date) return v.toISOString();
-  return v;
-}
-
 /** Is `v` an OQL expression marker (DB-evaluated default)? The ONE
  * canonical predicate — guardians / asserts / docs all import THIS
  * instead of re-declaring it. */
@@ -244,28 +227,6 @@ function storeDefault(v: unknown): unknown {
   if (typeof v === 'bigint') return v.toString();
   if (v instanceof Date) return v.toISOString();
   return v;
-}
-
-/** Guard for lov(): a previously-declared LITERAL default must be a
- * member of the value list (functions/expressions cannot be checked). */
-function assertDefaultsInLov(
-  spec: ColumnSpec,
-  values: readonly (string | number | bigint)[],
-): void {
-  const canonical = values.map((v) => typeof v === 'bigint' ? v.toString() : v);
-  for (const slot of ['insert', 'update'] as const) {
-    const d = spec.default?.[slot];
-    if (d === undefined || typeof d === 'function' || isExpressionValue(d)) {
-      continue;
-    }
-    if (!canonical.includes(d as string | number)) {
-      throw new Error(
-        `lov(): the declared ${slot} default ${JSON.stringify(d)} is not ` +
-          `in [${canonical.join(', ')}] — call default() after lov(), or ` +
-          `include the value.`,
-      );
-    }
-  }
 }
 
 /**
@@ -386,57 +347,64 @@ export class ColumnBuilder<
   }
 
   /**
-   * Custom validation beyond `lov`/`pattern`/`min`/`max` — e.g. a date
-   * bound relative to `new Date()`, evaluated per write rather than
-   * baked in at schema-load time (unlike `min()`/`max()` on a date
-   * column). Predicate only — it cannot change the value, unlike
-   * `beforeWrite`/`afterRead`. Runs after norm's own validators,
-   * before `.nullable()` closes the chain. Stacks: call `.validate()`
-   * more than once to add independent rules.
-   */
-  public validate(
-    fn: (v: NonNullable<T>) => boolean | Promise<boolean>,
-    message: string,
-  ): this {
-    return this._clone({
-      transforms: {
-        ...this.spec.transforms,
-        validate: [...(this.spec.transforms?.validate ?? []), { fn, message }],
-      },
-    });
-  }
-
-  /**
-   * Extend the generated Guardian directly — `.email()`, `.uuid()`,
-   * `.positive()`, `.past()`, `.true()`, and the rest of the column's
-   * OWN concrete guardian class's built-in validators, plus its
-   * same-type transforms (`.round()`, `.startOf()`, `.negate()`, …).
-   * Stacks: call more than once to add independent rules. Runs after
-   * `lov`/`pattern`/`min`/`max`, before `.validate()`'s predicates.
+   * Make an already-built Guardian the column's real runtime validator
+   * — transforms (`.trim()`, `.toLowerCase()`, …) and validators
+   * (`.minLength()`, `.pattern()`, `.email()`, …) run in whatever order
+   * YOU composed them, once, as one expression:
    *
-   * `fn`'s parameter AND return type are pinned to `T`'s OWN concrete
-   * guardian class (`StringGuardian` for a string column,
-   * `NumberGuardian`/`BigIntGuardian` for number/bigint, `DateGuardian`
-   * for a date, `BooleanGuardian` for a boolean, `UnknownGuardian<T>`
-   * otherwise) — never the generic `BaseGuardian<T>`. Some of these
-   * classes also carry methods that change the value's TYPE
-   * (`NumberGuardian.toBigInt()`, `DateGuardian.toISOString()`,
-   * `BigIntGuardian.toHex()`, `BooleanGuardian.toNumber()`, …); pinning
-   * the signature this way means a chain ending in one of those simply
-   * fails to type-check, rather than silently swapping the column's
-   * declared type.
+   * ```ts
+   * Column.varchar(255).guard(Guardian.string().trim().toLowerCase().email());
+   * ```
+   *
+   * `g`'s type is pinned to `T`'s OWN concrete guardian class
+   * (`StringGuardian` for a string column, `NumberGuardian`/
+   * `BigIntGuardian` for number/bigint, `DateGuardian` for a date,
+   * `BooleanGuardian` for a boolean, `UnknownGuardian<T>` otherwise) —
+   * never the generic `BaseGuardian<T>`. Some of these classes also
+   * carry methods that change the value's TYPE (`NumberGuardian
+   * .toBigInt()`, `DateGuardian.toISOString()`, `BigIntGuardian
+   * .toHex()`, `BooleanGuardian.toNumber()`, …); pinning the signature
+   * this way means a chain ending in one of those simply fails to
+   * type-check, rather than silently swapping the column's declared
+   * type.
+   *
+   * One-shot: call it once with everything composed — calling it twice
+   * throws. Nullability/defaults stay column-only — a guard that
+   * already declared `.nullable()`/`.optional()` is rejected; declare
+   * those with `.nullable()`/`.default()` here instead. Async guardians
+   * are rejected too — norm validates synchronously.
+   *
+   * @throws {@link Error} If called twice, if `g` is already nullable/
+   *   optional, or if `g` has an async validation step.
    */
-  public guardian(
-    fn: (
-      g: ConcreteGuardianOf<NonNullable<T>>,
-    ) => ConcreteGuardianOf<NonNullable<T>>,
-  ): this {
-    return this._clone({
-      transforms: {
-        ...this.spec.transforms,
-        guardian: [...(this.spec.transforms?.guardian ?? []), fn as never],
-      },
-    });
+  public guard(g: ConcreteGuardianOf<NonNullable<T>>): this {
+    if (this.spec.guard !== undefined) {
+      throw new Error(
+        'guard(): already set — compose everything into one Guardian ' +
+          'before calling guard() once.',
+      );
+    }
+    const meta = (g as {
+      metaData?: {
+        isAsync?: boolean;
+        isNullable?: boolean;
+        isOptional?: boolean;
+      };
+    })
+      .metaData;
+    if (meta?.isAsync === true) {
+      throw new Error(
+        'guard(): norm validates synchronously — an async refine()/' +
+          'process() step is not supported.',
+      );
+    }
+    if (meta?.isNullable === true || meta?.isOptional === true) {
+      throw new Error(
+        'guard(): declare nullable()/default() on the column, not on ' +
+          'the guard.',
+      );
+    }
+    return this._clone({ guard: g as never });
   }
 
   /**
@@ -457,15 +425,17 @@ export class ColumnBuilder<
 }
 
 /**
- * String-kind builder — string validators live here (and must precede
- * `encrypt()`: they constrain the PLAINTEXT).
+ * String-kind builder — keeps `T extends string` through the chain, so
+ * `.guard()` (inherited from {@linkcode ColumnBuilder}) stays pinned to
+ * `StringGuardian` and must precede `encrypt()` (it constrains the
+ * PLAINTEXT).
  */
 export class StringColumnBuilder<
   T extends string | null = string,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
   /** As {@linkcode ColumnBuilder.nullable}, keeping the string surface
-   * so the validators stay chainable. */
+   * so `.guard()` stays pinned to `StringGuardian`. */
   public override nullable(): _KeepHidden<
     this,
     StringColumnBuilder<T | null, true>
@@ -482,47 +452,6 @@ export class StringColumnBuilder<
     return new StringColumnBuilder<T, true>(this._with<T, true>({
       default: { ...this.spec.default, insert: storeDefault(v) },
     })) as _KeepHidden<this, StringColumnBuilder<T, true>>;
-  }
-
-  /**
-   * List of values — restricts to the given literals AND narrows the
-   * TS type to their union (`.lov(['a', 'b'])` → `'a' | 'b'`). No
-   * `as const` required.
-   */
-  public lov<const V extends readonly NonNullable<T>[]>(
-    values: V,
-  ): _KeepHidden<
-    this,
-    StringColumnBuilder<V[number] | Extract<T, null>, Opt>
-  > {
-    assertDefaultsInLov(this.spec, values);
-    return new StringColumnBuilder<V[number] | Extract<T, null>, Opt>(
-      this._with<V[number] | Extract<T, null>, Opt>({ lov: [...values] }),
-    ) as _KeepHidden<
-      this,
-      StringColumnBuilder<V[number] | Extract<T, null>, Opt>
-    >;
-  }
-
-  /** Regex constraint (stored as source + flags — serializable). */
-  public pattern(re: RegExp | string): this {
-    const source = typeof re === 'string' ? re : re.source;
-    const flags = typeof re === 'string' || re.flags === ''
-      ? undefined
-      : re.flags;
-    return this._clone({
-      pattern: flags === undefined ? { source } : { source, flags },
-    });
-  }
-
-  /** Minimum string length. */
-  public minLength(n: number): this {
-    return this._clone({ minLength: n });
-  }
-
-  /** Maximum string length. */
-  public maxLength(n: number): this {
-    return this._clone({ maxLength: n });
   }
 }
 
@@ -623,13 +552,14 @@ export class HashedColumnBuilder<
   }
 }
 
-/** Numeric builder — `min()` / `max()` / `lov()` live here. */
+/** Numeric builder — keeps `T extends number | bigint` through the
+ * chain, so `.guard()` (inherited) stays pinned to `NumberGuardian`/
+ * `BigIntGuardian`. */
 export class NumberColumnBuilder<
   T extends number | bigint | null = number,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
-  /** As {@linkcode ColumnBuilder.nullable}, keeping `min` / `max` /
-   * `lov` chainable. */
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the numeric surface. */
   public override nullable(): _KeepHidden<
     this,
     NumberColumnBuilder<T | null, true>
@@ -647,46 +577,15 @@ export class NumberColumnBuilder<
       default: { ...this.spec.default, insert: storeDefault(v) },
     })) as _KeepHidden<this, NumberColumnBuilder<T, true>>;
   }
-
-  /** Minimum value (inclusive). Bigints stored as strings in the spec. */
-  public min(v: NonNullable<T> | number): this {
-    return this._clone({ min: bound(v) });
-  }
-
-  /** Maximum value (inclusive). Bigints stored as strings in the spec. */
-  public max(v: NonNullable<T> | number): this {
-    return this._clone({ max: bound(v) });
-  }
-
-  /**
-   * List of values — restricts to the given literals AND narrows the
-   * TS type to their union. Bigints stored as strings in the spec.
-   */
-  public lov<const V extends readonly NonNullable<T>[]>(
-    values: V,
-  ): _KeepHidden<
-    this,
-    NumberColumnBuilder<V[number] | Extract<T, null>, Opt>
-  > {
-    assertDefaultsInLov(this.spec, values);
-    return new NumberColumnBuilder<V[number] | Extract<T, null>, Opt>(
-      this._with<V[number] | Extract<T, null>, Opt>({
-        lov: values.map((v) => (typeof v === 'bigint' ? v.toString() : v)),
-      }),
-    ) as _KeepHidden<
-      this,
-      NumberColumnBuilder<V[number] | Extract<T, null>, Opt>
-    >;
-  }
 }
 
-/** Date/timestamp builder — `min()` / `max()` live here. */
+/** Date/timestamp builder — keeps `T extends Date` through the chain,
+ * so `.guard()` (inherited) stays pinned to `DateGuardian`. */
 export class DateColumnBuilder<
   T extends Date | null = Date,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
-  /** As {@linkcode ColumnBuilder.nullable}, keeping `min` / `max`
-   * chainable. */
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the date surface. */
   public override nullable(): _KeepHidden<
     this,
     DateColumnBuilder<T | null, true>
@@ -705,16 +604,6 @@ export class DateColumnBuilder<
       default: { ...this.spec.default, insert: storeDefault(v) },
     })) as _KeepHidden<this, DateColumnBuilder<T, true>>;
   }
-
-  /** Earliest allowed value (inclusive; stored as an ISO string). */
-  public min(v: Date): this {
-    return this._clone({ min: bound(v) });
-  }
-
-  /** Latest allowed value (inclusive; stored as an ISO string). */
-  public max(v: Date): this {
-    return this._clone({ max: bound(v) });
-  }
 }
 
 /**
@@ -725,7 +614,7 @@ export class DateColumnBuilder<
  * derived from the algorithm). Reads return the digest — there is
  * nothing to decrypt, so `encrypt()` is a hard error here.
  *
- * Validators (`pattern` / `minLength` / `maxLength`) constrain the
+ * `.guard()` (inherited, pinned to `StringGuardian`) constrains the
  * PLAINTEXT (password policy), not the digest.
  */
 export class DigestColumnBuilder<
@@ -733,7 +622,7 @@ export class DigestColumnBuilder<
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
   /** As {@linkcode ColumnBuilder.nullable}, keeping the digest surface
-   * (and its plaintext validators) chainable. */
+   * (and `.guard()`'s `StringGuardian` pinning) chainable. */
   public override nullable(): _KeepHidden<
     this,
     DigestColumnBuilder<T | null, true>
@@ -751,27 +640,6 @@ export class DigestColumnBuilder<
     return new DigestColumnBuilder<T, true>(this._with<T, true>({
       default: { ...this.spec.default, insert: storeDefault(v) },
     })) as _KeepHidden<this, DigestColumnBuilder<T, true>>;
-  }
-
-  /** Plaintext regex constraint (e.g. password policy). */
-  public pattern(re: RegExp | string): this {
-    const source = typeof re === 'string' ? re : re.source;
-    const flags = typeof re === 'string' || re.flags === ''
-      ? undefined
-      : re.flags;
-    return this._clone({
-      pattern: flags === undefined ? { source } : { source, flags },
-    });
-  }
-
-  /** Minimum PLAINTEXT length (validated before digesting). */
-  public minLength(n: number): this {
-    return this._clone({ minLength: n });
-  }
-
-  /** Maximum PLAINTEXT length (validated before digesting). */
-  public maxLength(n: number): this {
-    return this._clone({ maxLength: n });
   }
 
   /** A digest is already one-way — encrypting it is a bug. */
@@ -888,18 +756,69 @@ export class JsonColumnBuilder<
    * is already a full, directly configurable {@link ObjectGuardian}
    * BEFORE it reaches `Column.json(schema)`: call `.strict()` /
    * `.passthrough()` / `.catchall()` / `.refine()` on the schema
-   * itself (`Guardian.object({...}).strict()`), not through
-   * `.guardian()` here. The base `ColumnBuilder.guardian()`'s type
-   * (`UnknownGuardian<T>`) would not match this column's REAL runtime
-   * guardian (the schema instance itself) — kept a hard error rather
-   * than a silently wrong type.
+   * itself (`Guardian.object({...}).strict()`), not through `.guard()`
+   * here. The base `ColumnBuilder.guard()`'s type (`UnknownGuardian<T>`)
+   * would not match this column's REAL runtime guardian (the schema
+   * instance itself) — kept a hard error rather than a silently wrong
+   * type.
    * @throws {@link Error} Always.
    */
-  public override guardian(): never {
+  public override guard(): never {
     throw new Error(
       "Column.json(schema)'s Guardian is already yours to configure — " +
         'chain .strict()/.passthrough()/.catchall()/.refine() on the ' +
         'schema itself before passing it to Column.json(), not here.',
+    );
+  }
+}
+
+/**
+ * Builder produced by `Column.enum(values)` — the narrowing counterpart
+ * of the removed `.lov()`: `values` becomes both the column's runtime
+ * validator (a `Guardian.enum(values)`) and its narrowed TS type, no
+ * `as const` needed.
+ */
+export class EnumColumnBuilder<
+  T extends string | number | bigint | null = string,
+  Opt extends boolean = false,
+> extends ColumnBuilder<T, Opt> {
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the narrowed surface. */
+  public override nullable(): _KeepHidden<
+    this,
+    EnumColumnBuilder<T | null, true>
+  > {
+    return new EnumColumnBuilder<T | null, true>(
+      this._with<T | null, true>({ nullable: true }),
+    ) as _KeepHidden<this, EnumColumnBuilder<T | null, true>>;
+  }
+
+  /** As {@linkcode ColumnBuilder.default}, keeping the narrowed surface. */
+  public override default(
+    v: DefaultInput<NonNullable<T>>,
+  ): _KeepHidden<this, EnumColumnBuilder<T, true>> {
+    return new EnumColumnBuilder<T, true>(this._with<T, true>({
+      default: { ...this.spec.default, insert: storeDefault(v) },
+    })) as _KeepHidden<this, EnumColumnBuilder<T, true>>;
+  }
+
+  /**
+   * Unavailable — the column's real runtime guardian is already the
+   * `Guardian.enum(values)` built for you from what you passed to
+   * `Column.enum()`; `ConcreteGuardianOf<T>` would resolve to
+   * `StringGuard`/`NumberGuardian`/`BigIntGuardian`, which does not
+   * match it. For custom `EnumGuardian` behaviour (`.caseInsensitive()`,
+   * `.exclude()`, …), drop to `Column.varchar(n).guard(Guardian
+   * .enum([...]).caseInsensitive())` instead — validated, just not
+   * TS-narrowed.
+   * @throws {@link Error} Always.
+   */
+  public override guard(): never {
+    throw new Error(
+      "Column.enum(values)'s Guardian is generated from the values you " +
+        'passed — there is nothing to add via guard() here. For ' +
+        'EnumGuardian methods like .caseInsensitive(), use ' +
+        'Column.varchar(n).guard(Guardian.enum([...]).caseInsensitive()) ' +
+        'instead (validated, not TS-narrowed).',
     );
   }
 }
@@ -938,6 +857,46 @@ function columnJson(
     : new ColumnBuilder({ type: 'JSONB' });
 }
 
+/** `Column.enum(['active', 'banned'])` — VARCHAR, width = longest value. */
+function columnEnum<const V extends readonly string[]>(
+  values: V,
+): EnumColumnBuilder<V[number]>;
+/** `Column.enum([1, 2, 3])` — INTEGER. */
+function columnEnum<const V extends readonly number[]>(
+  values: V,
+): EnumColumnBuilder<V[number]>;
+/** `Column.enum([1n, 2n])` — BIGINT. */
+function columnEnum<const V extends readonly bigint[]>(
+  values: V,
+): EnumColumnBuilder<V[number]>;
+function columnEnum(
+  values: readonly (string | number | bigint)[],
+): EnumColumnBuilder<never> {
+  if (values.every((v) => typeof v === 'string')) {
+    const length = Math.max(...values.map((v) => (v as string).length));
+    return new EnumColumnBuilder({
+      type: 'VARCHAR',
+      length,
+      guard: Guardian.enum(values) as never,
+    });
+  }
+  if (values.every((v) => typeof v === 'number')) {
+    return new EnumColumnBuilder({
+      type: 'INTEGER',
+      guard: Guardian.enum(values) as never,
+    });
+  }
+  if (values.every((v) => typeof v === 'bigint')) {
+    return new EnumColumnBuilder({
+      type: 'BIGINT',
+      guard: Guardian.enum(values) as never,
+    });
+  }
+  throw new Error(
+    'Column.enum(): values must be all-string, all-number, or all-bigint.',
+  );
+}
+
 /**
  * Column factories — the entry point for every column. Each returns
  * an immutable, chainable builder (`Column.varchar(255).nullable()
@@ -947,8 +906,10 @@ function columnJson(
  * ```typescript
  * const columns = {
  *   id: Column.uuid().default({ $$_expression: 'UUID' }),
- *   email: Column.varchar(255).encrypt().hash(),
- *   role: Column.varchar(12).lov(['admin', 'user']).default('user'),
+ *   email: Column.varchar(255)
+ *     .guard(Guardian.string().trim().toLowerCase().email())
+ *     .encrypt().hash(),
+ *   role: Column.enum(['admin', 'user']).default('user'),
  * };
  * ```
  */
@@ -1057,6 +1018,14 @@ export const Column = {
    * "is an object"). See [Validators](../docs/NORM-Schema.md#validators).
    */
   json: columnJson,
+  /**
+   * Restricts to the given literals AND narrows the TS type to their
+   * union — no `as const` needed. `Column.enum(['active', 'banned'])`
+   * → `VARCHAR`, width = the longest value; `Column.enum([1, 2, 3])` →
+   * `INTEGER`; `Column.enum([1n, 2n])` → `BIGINT`. `.guard()` is
+   * unavailable here — see {@linkcode EnumColumnBuilder}.
+   */
+  enum: columnEnum,
   /** Raw bytes (`BLOB`). Values ride as `Uint8Array`. Binary columns
    * cannot `encrypt()` — the crypto codec is text-canonical; encrypt
    * the encoded text form instead if you need that. */
@@ -1115,8 +1084,9 @@ export const Column = {
    *   {@linkcode pbkdf2Verify}(candidate, row.field). Override the KDF via
    *   the instance's `crypto.pbkdf2Hash`.
    *
-   * Chain string validators either way to enforce a password policy on
-   * the plaintext, e.g. `Column.password('PBKDF2').minLength(12)`.
+   * Chain `.guard()` either way to enforce a password policy on the
+   * plaintext, e.g. `Column.password('PBKDF2')
+   * .guard(Guardian.string().minLength(12))`.
    */
   password: (algorithm: DigestAlgorithm = 'SHA-256'): DigestColumnBuilder =>
     new DigestColumnBuilder({

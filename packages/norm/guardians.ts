@@ -5,11 +5,12 @@
  * compile into insert/update `ObjectGuardian`s exactly once (at
  * `use()`-time compile); repos validate payloads against them.
  *
- * - Cell rules derive from the spec's validator data (`lov`,
- *   `pattern`, `min`/`max`, `minLength`/`maxLength`, `length`,
- *   `nullable`) — the canonical stored forms rehydrate here
- *   (bigint-as-string → BigInt, ISO string → Date, pattern source →
- *   RegExp).
+ * - The cell's real validator is `spec.guard` — an already-built
+ *   Guardian from `.guard(g)` — falling back to the bare primitive
+ *   guardian for the column's kind when absent. Physical guards norm
+ *   itself owns (declared VARCHAR width, INTEGER integer-ness) still
+ *   layer on top either way, since those protect a constraint the
+ *   FACTORY declared independently of whatever `.guard()` says.
  * - DEFAULTS are applied BY the generated Guardian via
  *   `.optional(default)` — norm generates them at write time; they
  *   are never DDL. Function defaults are called per parse; literals
@@ -24,10 +25,16 @@
  */
 
 import {
+  type BigIntGuardian,
+  type BooleanGuardian,
+  type DateGuardian,
+  EnumGuardian,
   type FinishedGuardian,
   Guardian,
   GuardianError,
+  type NumberGuardian,
   type ObjectGuardian,
+  type StringGuardian,
 } from '@tundralibs/guardian';
 import type { ColumnSpec } from './definition/mod.ts';
 import { isExpressionValue } from './definition/Column.ts';
@@ -59,38 +66,37 @@ export const DATE_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Build the guardian for one column CELL from its spec. Validators
- * rehydrate from their canonical serialized forms; `nullable: true`
- * closes the chain with `.nullable()`.
+ * Build the guardian for one column CELL from its spec: `spec.guard`
+ * when the column declared one (`.guard(g)`), wrapped in norm's own
+ * physical guards (declared width, integer-ness); the bare primitive
+ * guardian for the kind otherwise. `nullable: true` closes the chain
+ * with `.nullable()`.
  */
 export function buildCellGuardian(spec: ColumnSpec): FinishedGuardian<unknown> {
-  let base = buildBase(spec);
-  for (const hook of spec.transforms?.guardian ?? []) {
-    base = hook(base as never) as typeof base;
-  }
-  for (const { fn, message } of spec.transforms?.validate ?? []) {
-    base = base.refine(fn as never, message) as typeof base;
-  }
+  const base = buildBase(spec);
   return spec.nullable === true ? base.nullable() : base;
 }
 
 function buildBase(spec: ColumnSpec) {
+  // Column.enum(values) already computed the right physical width from
+  // the values themselves — an EnumGuardian is never the concrete class
+  // (StringGuardian/NumberGuardian/…) the per-kind branches below
+  // assume, so it short-circuits BEFORE any of them cast and call a
+  // method the class doesn't have.
+  if (spec.guard instanceof EnumGuardian) return spec.guard;
+
   const type = spec.type;
 
   if (STRING_TYPES.has(type)) {
-    let g = Guardian.string();
+    let g = (spec.guard as StringGuardian | undefined) ?? Guardian.string();
     // Digest columns: `length` is the DIGEST's storage size, not a
-    // plaintext cap — only explicit minLength/maxLength constrain the
-    // caller-supplied plaintext.
+    // plaintext cap — a `.guard()` constrains the caller-supplied
+    // plaintext instead. Otherwise the declared VARCHAR width is
+    // enforced regardless of what `.guard()` says, so a looser guard
+    // can never let a value through the physical column can't hold.
     if (typeof spec.length === 'number' && spec.hashed === undefined) {
       g = g.maxLength(spec.length);
     }
-    if (typeof spec.minLength === 'number') g = g.minLength(spec.minLength);
-    if (typeof spec.maxLength === 'number') g = g.maxLength(spec.maxLength);
-    if (spec.pattern !== undefined) {
-      g = g.pattern(new RegExp(spec.pattern.source, spec.pattern.flags));
-    }
-    if (spec.lov !== undefined) g = g.isIn(spec.lov as string[]);
     return g;
   }
 
@@ -98,43 +104,27 @@ function buildBase(spec: ColumnSpec) {
     type === 'INTEGER' || type === 'INT' || type === 'TINYINT' ||
     type === 'SMALLINT' || type === 'BIT'
   ) {
-    let g = Guardian.number().integer();
-    if (typeof spec.min === 'number') g = g.min(spec.min);
-    if (typeof spec.max === 'number') g = g.max(spec.max);
-    if (spec.lov !== undefined) g = g.isIn(spec.lov as number[]);
-    return g;
+    return ((spec.guard as NumberGuardian | undefined) ?? Guardian.number())
+      .integer();
   }
 
   if (
     type === 'DECIMAL' || type === 'NUMERIC' || type === 'FLOAT' ||
     type === 'DOUBLE' || type === 'REAL'
   ) {
-    let g = Guardian.number();
-    if (typeof spec.min === 'number') g = g.min(spec.min);
-    if (typeof spec.max === 'number') g = g.max(spec.max);
-    if (spec.lov !== undefined) g = g.isIn(spec.lov as number[]);
-    return g;
+    return (spec.guard as NumberGuardian | undefined) ?? Guardian.number();
   }
 
   if (type === 'BIGINT') {
-    let g = Guardian.bigint();
-    if (spec.min !== undefined) g = g.min(BigInt(spec.min));
-    if (spec.max !== undefined) g = g.max(BigInt(spec.max));
-    if (spec.lov !== undefined) {
-      g = g.isIn(spec.lov.map((v) => BigInt(v)));
-    }
-    return g;
+    return (spec.guard as BigIntGuardian | undefined) ?? Guardian.bigint();
   }
 
   if (DATE_TYPES.has(type)) {
-    let g = Guardian.date();
-    if (spec.min !== undefined) g = g.min(new Date(spec.min));
-    if (spec.max !== undefined) g = g.max(new Date(spec.max));
-    return g;
+    return (spec.guard as DateGuardian | undefined) ?? Guardian.date();
   }
 
   if (type === 'BOOLEAN') {
-    return Guardian.boolean();
+    return (spec.guard as BooleanGuardian | undefined) ?? Guardian.boolean();
   }
 
   if (type === 'JSON' || type === 'JSONB') {
@@ -142,6 +132,7 @@ function buildBase(spec: ColumnSpec) {
     // no forced .strict()/.strip(), the caller's own guardian already
     // chose that.
     if (spec.jsonSchema !== undefined) return spec.jsonSchema;
+    if (spec.guard !== undefined) return spec.guard;
     return Guardian.unknown().refine(
       (v) => v !== null && typeof v === 'object' && !Array.isArray(v),
       'must be a non-array object',
@@ -149,6 +140,7 @@ function buildBase(spec: ColumnSpec) {
   }
 
   if (type === 'BLOB' || type === 'BINARY' || type === 'VARBINARY') {
+    if (spec.guard !== undefined) return spec.guard;
     return Guardian.unknown().refine(
       (v) => v instanceof Uint8Array,
       'must be a Uint8Array',
@@ -157,7 +149,7 @@ function buildBase(spec: ColumnSpec) {
 
   // Unrecognised — the definition layer only emits the types above,
   // but be defensive for hand-built specs.
-  return Guardian.unknown();
+  return spec.guard ?? Guardian.unknown();
 }
 
 /**

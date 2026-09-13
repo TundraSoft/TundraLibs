@@ -8,6 +8,7 @@
 
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
+import { Guardian } from '@tundralibs/guardian';
 import {
   Column,
   DigestColumnBuilder,
@@ -35,10 +36,11 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     asserts.assertEquals(Column.hash('SHA-512').spec.length, 128);
 
     // Plaintext policy chains and the builder kind survives.
-    const pwd = Column.hash('SHA-256').minLength(8)
-      .pattern(/[0-9]/).beforeWrite((v) => v.trim());
+    const pwd = Column.hash('SHA-256')
+      .guard(Guardian.string().minLength(8).pattern(/[0-9]/))
+      .beforeWrite((v) => v.trim());
     asserts.assertEquals(pwd instanceof DigestColumnBuilder, true);
-    asserts.assertEquals(pwd.spec.minLength, 8);
+    asserts.assertEquals(pwd.spec.guard?.metaData?.minLength, 8);
     asserts.assertEquals(pwd.spec.hashed, 'SHA-256');
     asserts.assertEquals(pwd.nullable().spec.nullable, true);
     asserts.assertEquals(
@@ -49,7 +51,7 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     // The caller-facing TS type is plaintext string.
     const D = Entity('creds', {
       id: Column.integer(),
-      password: Column.hash('SHA-256').minLength(8),
+      password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
     }, { pk: ['id'] });
     type _pin = Expect<
       Equal<InsertOf<typeof D>['password'], string>
@@ -73,8 +75,10 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     const E = Entity('vault', {
       id: Column.integer(),
       bornAt: Column.timestamp()
-        .min(new Date('1900-01-01T00:00:00Z')).encrypt(),
-      wealth: Column.bigint().min(0n).encrypt().hash(),
+        .guard(Guardian.date().min(new Date('1900-01-01T00:00:00Z')))
+        .encrypt(),
+      wealth: Column.bigint().guard(Guardian.bigint().min(0n)).encrypt()
+        .hash(),
       score: Column.integer().encrypt(),
       flags: Column.json<{ vip: boolean }>().encrypt(),
       active: Column.boolean().encrypt(),
@@ -93,9 +97,14 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     type _dt = Expect<Equal<InsertOf<typeof E>['bornAt'], Date>>;
     type _big = Expect<Equal<InsertOf<typeof E>['wealth'], bigint>>;
 
-    // Validators are NOT on the encrypted surface (plaintext-first).
+    // The kind-specific DateColumnBuilder surface is gone post-encrypt
+    // (encrypt() always returns the base EncryptedColumnBuilder) — but
+    // guard() (inherited from ColumnBuilder) stays available and still
+    // pins to DateGuardian, since encrypt() never changes the LOGICAL
+    // type, only the physical storage.
     const enc = Column.timestamp().encrypt();
     asserts.assertEquals('min' in enc, false);
+    asserts.assertEquals(typeof enc.guard, 'function');
   });
 
   it('encrypted builders: nullable() and default() keep the encrypt kind', () => {
@@ -122,7 +131,8 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
       // Sibling of the encrypted case above: the declared default is the
       // PLAINTEXT — digesting happens on the way to the database.
       pin: Column.hash('SHA-256').default('changeme'),
-      pw: Column.password('SHA-512').maxLength(72).default('letmein'),
+      pw: Column.password('SHA-512').guard(Guardian.string().maxLength(72))
+        .default('letmein'),
     }, { pk: ['id'] }).columns;
 
     asserts.assertEquals(spec.pin.hashed, 'SHA-256');
@@ -133,20 +143,20 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     asserts.assertEquals(spec.pin.length, 64);
     asserts.assertEquals((spec.pin.default?.insert as string).length, 8);
 
-    // maxLength() constrains the PLAINTEXT, so it coexists with the
-    // digest's own storage length rather than overriding it.
+    // guard()'s maxLength constrains the PLAINTEXT, so it coexists with
+    // the digest's own storage length rather than overriding it.
     asserts.assertEquals(spec.pw.hashed, 'SHA-512');
     asserts.assertEquals(spec.pw.length, 128);
-    asserts.assertEquals(spec.pw.maxLength, 72);
+    asserts.assertEquals(spec.pw.guard?.metaData?.maxLength, 72);
     asserts.assertEquals(spec.pw.default?.insert, 'letmein');
 
-    // The digest kind survives default(), so plaintext validators stay
-    // chainable after it (they constrain the password policy).
+    // The digest kind survives default(), so guard() stays chainable
+    // after it (it constrains the password policy).
     const chained = Column.hash('SHA-256').default('changeme')
-      .minLength(8).maxLength(64);
+      .guard(Guardian.string().minLength(8).maxLength(64));
     asserts.assertEquals(chained instanceof DigestColumnBuilder, true);
-    asserts.assertEquals(chained.spec.minLength, 8);
-    asserts.assertEquals(chained.spec.maxLength, 64);
+    asserts.assertEquals(chained.spec.guard?.metaData?.minLength, 8);
+    asserts.assertEquals(chained.spec.guard?.metaData?.maxLength, 64);
     asserts.assertEquals(chained.spec.default?.insert, 'changeme');
 
     // default() returns a NEW builder — the source is left untouched.
@@ -169,9 +179,11 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
       code: Column.char(2),
       price: Column.decimal(8, 2),
       ok: Column.boolean(),
-      day: Column.date()
-        .min(new Date('2020-01-01T00:00:00Z'))
-        .max(new Date('2029-12-31T00:00:00Z')),
+      day: Column.date().guard(
+        Guardian.date()
+          .min(new Date('2020-01-01T00:00:00Z'))
+          .max(new Date('2029-12-31T00:00:00Z')),
+      ),
     }, { pk: ['id'] }).columns;
     asserts.assertEquals(spec.code.type, 'CHAR');
     asserts.assertEquals(spec.code.length, 2);
@@ -180,8 +192,7 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     asserts.assertEquals(spec.price.scale, 2);
     asserts.assertEquals(spec.ok.type, 'BOOLEAN');
     asserts.assertEquals(spec.day.type, 'DATE');
-    asserts.assertEquals(typeof spec.day.min, 'string'); // ISO at rest
-    asserts.assertEquals(typeof spec.day.max, 'string');
+    asserts.assertEquals(spec.day.guard !== undefined, true);
   });
 
   it('Entity/Schema argument validation: empty names, zero columns', () => {
@@ -351,12 +362,14 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
   it('toMarkdown: decimal type, defaults, constraint summary, indexes, QUERY source', () => {
     const Rich = Entity('rich', {
       id: Column.integer(),
-      price: Column.decimal(8, 2).min(0.5).max(99.5),
+      price: Column.decimal(8, 2).guard(Guardian.number().min(0.5).max(99.5)),
       email: Column.varchar(255).encrypt().hash(),
       token: Column.varchar(255).encrypt(),
       ghost: Column.varchar(10).hidden().unfilterable(),
-      status: Column.varchar(8).lov(['a', 'b']).default('a'),
-      slug: Column.varchar(20).pattern(/^[a-z]+$/).minLength(2).maxLength(20),
+      status: Column.enum(['a', 'b']).default('a'),
+      slug: Column.varchar(20).guard(
+        Guardian.string().pattern(/^[a-z]+$/).minLength(2).maxLength(20),
+      ),
       made: Column.timestamp().default(() => new Date()),
       uid: Column.uuid().default({ $$_expression: 'UUID' }),
     }, {
@@ -378,7 +391,7 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     asserts.assertStringIncludes(md, 'encrypted');
     asserts.assertStringIncludes(md, 'hidden');
     asserts.assertStringIncludes(md, 'unfilterable');
-    asserts.assertStringIncludes(md, 'lov(a\\|b)'); // pipe escaped for GFM
+    asserts.assertStringIncludes(md, 'enum(a\\|b)'); // pipe escaped for GFM
     asserts.assertStringIncludes(md, 'pattern(/^[a-z]+$/)');
     asserts.assertStringIncludes(md, 'min(0.5)');
     asserts.assertStringIncludes(md, 'max(99.5)');
