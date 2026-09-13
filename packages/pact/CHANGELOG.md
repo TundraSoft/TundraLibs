@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.8.0...pact-v0.9.0) (2026-09-13)
+
+
+### Features
+
+* **pact:** runtime OAuth provider registration for multi-tenant IdPs ([#674](https://github.com/TundraSoft/TundraLibs/issues/674)) ([45313bf](https://github.com/TundraSoft/TundraLibs/commit/45313bfc771b05fe5ae10dfc85a582d54b484a35))
+
 ## [0.8.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.7.0...pact-v0.8.0) (2026-09-08)
 
 
