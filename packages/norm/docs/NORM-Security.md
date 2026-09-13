@@ -56,9 +56,8 @@ upsert keys need a deterministic digest rather than the ciphertext
 itself.
 
 The whole surface is correct by construction. `.hash()` exists only
-after `.encrypt()`; validators (`pattern`, `lov`, `min`, `max`,
-`minLength`, `maxLength`) must chain before `.encrypt()` because they
-constrain the plaintext; and `Column.hash(algo)` exposes no
+after `.encrypt()`; `.guard()` must chain before `.encrypt()` because it
+constrains the plaintext; and `Column.hash(algo)` exposes no
 `.encrypt()`. Invalid combinations do not type-check.
 
 This page expands the
@@ -315,8 +314,8 @@ Note the difference from an encrypt-sibling: `.encrypt().hash()`
 rewrites the filter key to `@email_hash`, while a `Column.hash(algo)`
 digest rewrites only the value and keeps the `@pin` key, because the
 column itself already stores the digest. Both are transparent to the
-caller. Validators (`pattern`, `minLength`, `maxLength`) on a digest
-column constrain the plaintext, your password policy, not the digest.
+caller. A `.guard()` on a digest column constrains the plaintext — your
+password policy — not the digest.
 
 ## Password columns — `Column.password()`
 
