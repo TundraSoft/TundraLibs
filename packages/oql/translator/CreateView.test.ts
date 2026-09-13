@@ -13,6 +13,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 
 import type { Query } from '../types/mod.ts';
+import { DialectUnsupportedError } from '../errors/mod.ts';
 import { MariaTranslator } from './MariaTranslator.ts';
 import { MongoTranslator } from './MongoTranslator.ts';
 import { PostgresTranslator } from './PostgresTranslator.ts';
@@ -189,26 +190,16 @@ describe('oql.translator.dropView — materialized targets', () => {
   });
 });
 
-describe('oql.translator.createSchema — SQLite ATTACH path', () => {
-  it('escapes single quotes in the ATTACH DATABASE path literal', () => {
-    // The public `createSchema` rejects names with a quote at the assert
-    // layer; we target the DDL builder directly to prove the emitted path
-    // literal is safe even if a quoted name ever reaches it. The schema is
-    // interpolated into a single-quoted `<name>.db` path, so a `'` in the
-    // name must be doubled or it would break out of the literal.
+describe('oql.translator.createSchema — SQLite has no schema object', () => {
+  it('createSchema and dropSchema both throw DialectUnsupportedError', () => {
     const t = new SQLiteTranslator();
-    // deno-lint-ignore no-explicit-any
-    const q: any = { type: 'CREATE_SCHEMA', schema: "x'; ATTACH DATABASE" };
-    // _buildCreateSchema is protected — reach it the same way the rest of
-    // these translator tests bypass the type surface.
-    // deno-lint-ignore no-explicit-any
-    const sql = (t as any)._buildCreateSchema(q) as string;
-    // Single quote doubled inside the path literal; alias stays "-quoted.
-    asserts.assertStringIncludes(
-      sql,
-      "ATTACH DATABASE 'x''; ATTACH DATABASE.db'",
+    asserts.assertThrows(
+      () => t.createSchema({ type: 'CREATE_SCHEMA', schema: 'analytics' }),
+      DialectUnsupportedError,
     );
-    // The raw, unescaped break-out sequence must NOT appear.
-    asserts.assertEquals(sql.includes("'x'; "), false);
+    asserts.assertThrows(
+      () => t.dropSchema({ type: 'DROP_SCHEMA', schema: 'analytics' }),
+      DialectUnsupportedError,
+    );
   });
 });

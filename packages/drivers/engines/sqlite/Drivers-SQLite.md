@@ -72,32 +72,24 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 `path` selects one of two modes:
 
 - **Memory mode** (`path: ':memory:'`) — a single in-process database.
-  Schemas are not supported.
-- **Directory mode** (`path: '<dir>'`) — `path` is treated as a
+- **Directory mode** (`path: '<dir>'`) — `path` is treated as a parent
   directory. The engine creates `<dir>/<name-lowercased>/` and stores
-  `main.db` there. Each OQL "schema" becomes a sibling `<name>.db` file
-  in that directory, `ATTACH`ed under the schema name. `CREATE_SCHEMA`
-  spawns the file (via SQLite's ATTACH-creates-if-missing semantics);
-  `DROP_SCHEMA` detaches it and the engine then unlinks the file. On
-  connect, every existing `.db` file in the directory is auto-attached,
-  so persisted schemas are reachable without re-issuing `CREATE_SCHEMA`.
+  `main.db` there, so multiple named engines can share one parent
+  directory without colliding on filenames.
+
+SQLite has no schema object in either mode: `CREATE_SCHEMA` /
+`DROP_SCHEMA` are unsupported and throw `DialectUnsupportedError` before
+reaching this engine. An OQL `schema` on any other query (CREATE_TABLE,
+SELECT, CREATE_INDEX, …) is instead folded into the physical identifier
+as a `<schema>_<name>` prefix by the translator, so every "schema" lives
+in the same `main.db` — including foreign keys that cross a `schema`
+boundary, which are enforced like any other.
 
 ## API
 
 `SQLiteEngine` extends [`SQLEngine`](../../docs/Drivers-SQLEngine.md) and
 inherits its full OQL surface (`execute`, transactions, schema
-lifecycle, etc.). SQLite-specific additions:
-
-### `schemaDir`
-
-```typescript ignore
-get schemaDir(): string | null
-```
-
-Resolved schema directory (`<path>/<name-lowercased>/`) in directory
-mode, or `null` in memory mode. Populated on the first connection (first
-`execute` / resource creation). Useful for tests and tooling that need
-to inspect or clean up the on-disk `.db` files.
+lifecycle, etc.).
 
 ## Value encoding
 

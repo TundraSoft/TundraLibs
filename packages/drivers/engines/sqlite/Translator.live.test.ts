@@ -1,7 +1,6 @@
 /**
  * Live integration tests: OQL surface on {@link SQLiteEngine} executed
- * against a real SQLite instance, exercising the directory-mode +
- * file-per-schema design.
+ * against a real SQLite instance, including the schema-as-prefix scheme.
  *
  * Each run uses a unique temp directory, so the suite is safe to run
  * repeatedly and leaves no state behind.
@@ -11,13 +10,9 @@
 
 import * as asserts from '@std/asserts';
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
-import {
-  FileNotFound,
-  makeTempDir,
-  removeDir,
-  stat,
-} from '@tundralibs/compat/file';
+import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import type { Query } from '@tundralibs/oql/types';
+import { DialectUnsupportedError } from '@tundralibs/oql/translator';
 import { SQLiteEngine } from './Engine.ts';
 
 const tempDir = await makeTempDir({ prefix: 'oql_sqlite_live_' });
@@ -162,34 +157,18 @@ function suite() {
     asserts.assertEquals(result.count >= 1, true);
   });
 
-  it('CREATE_SCHEMA creates and ATTACHes a new .db file', async () => {
-    await engine.createSchema({ type: 'CREATE_SCHEMA', schema: schemaName });
-    const filePath = `${engine.schemaDir}/${schemaName}.db`;
-    const info = await stat(filePath);
-    asserts.assertEquals(info.isFile, true);
+  it('CREATE_SCHEMA / DROP_SCHEMA throw — SQLite has no schema object', async () => {
+    await asserts.assertRejects(
+      () => engine.createSchema({ type: 'CREATE_SCHEMA', schema: 'x' }),
+      DialectUnsupportedError,
+    );
+    await asserts.assertRejects(
+      () => engine.dropSchema({ type: 'DROP_SCHEMA', schema: 'x' }),
+      DialectUnsupportedError,
+    );
   });
 
-  it('CREATE_SCHEMA refuses a caller-supplied transaction (ATTACH-in-tx)', async () => {
-    // SQLite forbids ATTACH inside a transaction. The engine should
-    // reject the request loudly with a friendly error, rather than
-    // letting SQLite raise its less-obvious one.
-    const txId = await engine.beginTransaction();
-    try {
-      await asserts.assertRejects(
-        () =>
-          engine.createSchema(
-            { type: 'CREATE_SCHEMA', schema: 'never_created' },
-            txId,
-          ),
-        Error,
-        'cannot run inside a caller-supplied transaction',
-      );
-    } finally {
-      await engine.rollbackTransaction(txId);
-    }
-  });
-
-  it('CREATE_TABLE in the new schema works via qualified name', async () => {
+  it('CREATE_TABLE with a schema works via the prefixed physical name — no CREATE_SCHEMA needed', async () => {
     await engine.createTable({
       type: 'CREATE_TABLE',
       table: 'orders',
@@ -217,20 +196,58 @@ function suite() {
     });
     asserts.assertEquals(sel.count, 1);
     asserts.assertEquals(sel.data[0]!.amount, 42);
-  });
 
-  it('DROP_SCHEMA detaches and unlinks the file', async () => {
-    await engine.dropSchema({ type: 'DROP_SCHEMA', schema: schemaName });
-    const filePath = `${engine.schemaDir}/${schemaName}.db`;
-    await asserts.assertRejects(() => stat(filePath), FileNotFound);
-  });
-
-  it('schema persists across reconnect (auto-attach on connect)', async () => {
-    const persistedSchema = `persisted_${Date.now()}`;
-    await engine.createSchema({
-      type: 'CREATE_SCHEMA',
-      schema: persistedSchema,
+    // The physical table is `<schema>_<table>` in the SAME main.db —
+    // reachable unqualified, proving there's no separate attached file.
+    const unqualified = await engine.select<{ id: number }>({
+      type: 'SELECT',
+      table: `${schemaName}_orders`,
+      columns: ['id'],
+      projection: { '@id': true },
     });
+    asserts.assertEquals(unqualified.count, 1);
+  });
+
+  it('a FK crossing two schemas is physically enforced (same file, no ATTACH needed)', async () => {
+    await engine.createTable({
+      type: 'CREATE_TABLE',
+      table: 'customers',
+      schema: 'crm',
+      columns: { id: { type: 'INTEGER', nullable: false } },
+      primaryKey: ['id'],
+    });
+    await engine.createTable({
+      type: 'CREATE_TABLE',
+      table: 'invoices',
+      schema: 'billing',
+      columns: {
+        id: { type: 'INTEGER', nullable: false },
+        customerId: { type: 'INTEGER', nullable: false },
+      },
+      primaryKey: ['id'],
+      foreignKeys: {
+        customer: {
+          columns: ['customerId'],
+          references: { table: 'customers', schema: 'crm', columns: ['id'] },
+        },
+      },
+    });
+
+    // No matching `crm_customers` row for id 999 — the constraint must
+    // reject the insert, not silently accept an orphaned reference.
+    await asserts.assertRejects(() =>
+      engine.insert({
+        type: 'INSERT',
+        table: 'invoices',
+        schema: 'billing',
+        columns: ['id', 'customerId'],
+        data: { id: 1, customerId: 999 },
+      })
+    );
+  });
+
+  it('schema-prefixed tables persist across reconnect', async () => {
+    const persistedSchema = `persisted_${Date.now()}`;
     await engine.createTable({
       type: 'CREATE_TABLE',
       table: 'kv',
@@ -260,10 +277,6 @@ function suite() {
       projection: { '@k': true, '@v': true },
     });
     asserts.assertEquals(sel.data[0]!.v, 'world');
-    await fresh.dropSchema({
-      type: 'DROP_SCHEMA',
-      schema: persistedSchema,
-    });
     await fresh.disconnect();
     engine = new SQLiteEngine(engineName, { path: tempDir });
     await engine.connect();

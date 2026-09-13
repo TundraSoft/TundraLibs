@@ -776,8 +776,10 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * `[schema.]table` rendering. SQLite has no schema concept (uses
-   * ATTACH); subclasses can override if they want different semantics.
+   * `[schema.]table` rendering. SQLite has no schema concept at all —
+   * see {@link SQLiteTranslator}, which overrides this to fold `schema`
+   * into the table name as a prefix instead. Other subclasses can
+   * override too if they want different semantics.
    */
   protected _qualifiedTable(table: string, schema?: string): string {
     return schema
@@ -1961,9 +1963,10 @@ export abstract class AbstractTranslator {
       onUpdate?: string;
     };
     const cols = fkObj.columns.map((c) => this._quoteIdentifier(c)).join(', ');
-    const refTable = fkObj.references.schema
-      ? this._quoteQualified(fkObj.references.schema, fkObj.references.table)
-      : this._quoteIdentifier(fkObj.references.table);
+    const refTable = this._qualifiedTable(
+      fkObj.references.table,
+      fkObj.references.schema,
+    );
     const refCols = fkObj.references.columns
       .map((c) => this._quoteIdentifier(c))
       .join(', ');

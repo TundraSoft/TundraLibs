@@ -495,11 +495,10 @@ export class Migrator {
     await this.__ensureHistory();
 
     if (ex.capabilities.transactionalDdl) {
-      // CREATE_SCHEMA is deliberately left outside: SQLite emulates
-      // schemas with ATTACH DATABASE, which the driver refuses inside a
-      // caller-supplied transaction. It is idempotent on Postgres
-      // (IF NOT EXISTS) and connection-scoped on SQLite, so re-running
-      // it on a retry is safe.
+      // CREATE_SCHEMA is deliberately left outside the transaction. It
+      // never appears in a SQLite plan (no schema object to create —
+      // see `diffSnapshots`), and on Postgres/MariaDB it's idempotent
+      // (IF NOT EXISTS), so re-running it on a retry is safe.
       const inTx: MigrationAction[] = [];
       for (const q of step.queries) {
         if (!isRebuild(q) && q.type === 'CREATE_SCHEMA') await ex.ddl(q);

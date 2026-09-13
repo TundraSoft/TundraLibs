@@ -180,13 +180,12 @@ share an outer transaction.
 | `dropView(q, transactionId?)`                | `Promise<EngineQueryResult>`   | Run a `DROP_VIEW`.                                                                                                                                                                                                                       |
 | `alterView(q, transactionId?)`               | `Promise<EngineQueryResult[]>` | Multi-statement on dialects that lack `ALTER VIEW`.                                                                                                                                                                                      |
 | `refreshMaterializedView(q, transactionId?)` | `Promise<EngineQueryResult>`   | Run a `REFRESH_MATERIALIZED_VIEW`. On dialects without materialized views, emits the no-op `SELECT 1`.                                                                                                                                   |
-| `createSchema(q, transactionId?)`            | `Promise<EngineQueryResult>`   | Run a `CREATE_SCHEMA`. SQLite emulates via per-schema `.db` files + `ATTACH DATABASE`; on dialects where the statement cannot run in a transaction, see Throws.                                                                          |
-| `dropSchema(q, transactionId?)`              | `Promise<EngineQueryResult>`   | Run a `DROP_SCHEMA`. Same transaction restriction as `createSchema` — see Throws.                                                                                                                                                        |
+| `createSchema(q, transactionId?)`            | `Promise<EngineQueryResult>`   | Run a `CREATE_SCHEMA`. SQLite has no schema object — the translator throws `DialectUnsupportedError` before this reaches the engine.                                                                                                     |
+| `dropSchema(q, transactionId?)`              | `Promise<EngineQueryResult>`   | Run a `DROP_SCHEMA`. Same SQLite restriction as `createSchema`.                                                                                                                                                                          |
 
 **Throws:** `createSchema` / `dropSchema` throw
 `EngineError('UNSUPPORTED_OPERATION')` if a `transactionId` is supplied but the
-dialect cannot run the statement inside a caller-supplied transaction (e.g.
-SQLite `ATTACH DATABASE`).
+dialect cannot run the statement inside a caller-supplied transaction.
 
 ## Transactions
 

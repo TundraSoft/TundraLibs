@@ -5,12 +5,17 @@
  * binding via the adapter in `./adapter.ts`.
  *
  * Two modes:
- * - `path: ':memory:'` — single in-process memory database, no schemas.
+ * - `path: ':memory:'` — single in-process memory database.
  * - `path: '<dir>'` — directory mode. The engine creates a `<dir>/<name>/`
- *   subdirectory and stores `main.db` there. Each OQL "schema" becomes
- *   a sibling `<name>.db` file, ATTACHed under that name. CREATE_SCHEMA
- *   spawns the file via SQLite's own ATTACH-creates-if-missing semantics;
- *   DROP_SCHEMA detaches and the engine then unlinks the file.
+ *   subdirectory and stores `main.db` there, so multiple named engines
+ *   can share one parent directory without filename collisions.
+ *
+ * SQLite has no schema object of its own: the translator (see
+ * `@tundralibs/oql/translator`'s `SQLiteTranslator`) folds an OQL
+ * `schema` into every physical identifier as a `<schema>_<name>` prefix
+ * instead, so every "schema" lives in `main.db` right alongside every
+ * other table — `CREATE_SCHEMA` / `DROP_SCHEMA` are unsupported and
+ * throw before reaching this engine.
  *
  * Pool: SQLite handles a single writer at a time, but readers can be
  * concurrent in WAL mode. For simplicity, this driver uses one shared
@@ -26,17 +31,17 @@
  * ```typescript
  * import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
  *
- * // Directory mode: schemas supported.
+ * // Directory mode: keeps multiple named engines' files apart.
  * const db = new SQLiteEngine('app', { path: './data' });
- * // → ./data/app/main.db, plus ./data/app/<schema>.db per CREATE_SCHEMA.
+ * // → ./data/app/main.db
  *
- * // Memory mode: no schemas.
+ * // Memory mode.
  * const mem = new SQLiteEngine('cache', { path: ':memory:' });
  * ```
  */
 
 import { join, resolve as resolvePath } from '@tundralibs/compat/path';
-import { makeDir, readDir, remove } from '@tundralibs/compat/file';
+import { makeDir } from '@tundralibs/compat/file';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { SQLiteTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from '../../SQLEngine.ts';
@@ -104,8 +109,7 @@ const SQLITE_DEFAULTS: Partial<SQLiteEngineOptions> = {
  * empty database — so `Capabilities.pooledConnections` is `false` even though
  * this extends the pooled {@link SQLEngine}. That pin is a hard invariant, not
  * a soft default: any `pool.min`/`pool.max` a caller passes is forced back to
- * `1` in the constructor. In directory mode each schema is
- * a separate `.db` file `ATTACH`ed under its filename.
+ * `1` in the constructor.
  */
 export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   /** Always `'SQLITE'`. */
@@ -125,26 +129,14 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     parameterReplacement: { prefix: ':', suffix: '' },
   };
 
-  /** Emits SQLite-dialect SQL, including the file-per-schema emulation. */
+  /** Emits SQLite-dialect SQL, including the schema-as-prefix scheme. */
   protected readonly _translator: SQLiteTranslator = new SQLiteTranslator();
 
-  /**
-   * SQLite forbids `ATTACH`, `DETACH`, and `VACUUM` inside a transaction.
-   * The schema-emulation translator emits `ATTACH`/`DETACH` for
-   * CREATE_SCHEMA / DROP_SCHEMA, so we route those around the auto-tx
-   * wrapper and refuse a caller-supplied `transactionId` outright.
-   */
+  /** SQLite forbids `VACUUM` inside a transaction. */
   protected override _canRunInTransaction(sql: string): boolean {
     const head = sql.trimStart().slice(0, 16).toUpperCase();
-    return !head.startsWith('ATTACH ') && !head.startsWith('DETACH ') &&
-      !head.startsWith('VACUUM');
+    return !head.startsWith('VACUUM');
   }
-
-  /**
-   * Resolved schema directory (`<path>/<name>/`). `null` in `':memory:'`
-   * mode. Set on first `_createResource()` call.
-   */
-  private __schemaDir: string | null = null;
 
   /**
    * Per-connection prepared-statement cache. Keyed by `SqliteDb` (the
@@ -185,20 +177,12 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     this._requireOptions(['path']);
   }
 
-  /**
-   * Resolved schema directory in directory mode, or `null` in memory mode.
-   * Useful for tests and tooling that need to inspect or clean up files.
-   */
-  public get schemaDir(): string | null {
-    return this.__schemaDir;
-  }
-
   //#region BaseEngine hooks
 
   /**
    * Open a SQLite handle. Thin indirection over the adapter's
    * `openDatabase` so subclasses (and tests) can intercept handle
-   * creation — the close-on-ATTACH-failure path is exercised through it.
+   * creation.
    */
   protected _openDatabase(
     path: string,
@@ -209,10 +193,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
 
   /**
    * Opens the handle. In directory mode this also creates `<path>/<name>/`
-   * (unless `create: false`) and `ATTACH`es every sibling `.db` file under its
-   * filename, so persisted schemas are queryable without a prior
-   * `CREATE_SCHEMA`. A failing `ATTACH` closes the new handle before
-   * rethrowing rather than leaking it.
+   * (unless `create: false`) before opening `main.db` inside it.
    */
   protected async _createResource(): Promise<SqliteDb> {
     const path = this._getOption('path')!;
@@ -230,45 +211,11 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     if (this._getOption('create') !== false) {
       await makeDir(dir, { recursive: true });
     }
-    this.__schemaDir = dir;
     const mainDb = join(dir, 'main.db');
-    const db = await this._openDatabase(mainDb, {
+    return await this._openDatabase(mainDb, {
       readonly: this._getOption('readonly'),
       create: this._getOption('create'),
     });
-
-    // Auto-attach every other `.db` file in the directory under its
-    // filename (sans extension). Lets queries reference any persisted
-    // schema without first issuing CREATE_SCHEMA. If any ATTACH throws,
-    // close the freshly opened handle before rethrowing — otherwise the
-    // failed `_createResource` leaks an open db (and its file handle),
-    // since `_acquire` never adds it to `_active` and can't release it.
-    try {
-      for await (const entry of readDir(dir)) {
-        if (!entry.isFile || !entry.name.endsWith('.db')) continue;
-        if (entry.name === 'main.db') continue;
-        const schemaName = entry.name.slice(0, -'.db'.length);
-        const filePath = join(dir, entry.name);
-        // SQLite supports parameter binding for the file path but NOT for
-        // the alias (it's an identifier, not a literal). Bind the path
-        // and double-escape any `"` in the alias to keep the identifier
-        // quoting closed.
-        const stmt = db.prepare(
-          `ATTACH DATABASE ? AS "${schemaName.replaceAll('"', '""')}"`,
-        );
-        stmt.run([filePath]);
-        stmt.finalize?.();
-      }
-    } catch (e) {
-      try {
-        db.close();
-      } catch {
-        // handle may already be unusable — the original error is what matters
-      }
-      throw e;
-    }
-
-    return db;
   }
 
   /** Finalizes every cached prepared statement, then closes the handle. */
@@ -293,70 +240,12 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
 
   //#region SQLEngine hooks
 
-  /**
-   * Override standardization to:
-   * - Resolve relative `<schema>.db` paths in `ATTACH DATABASE 'foo.db'`
-   *   statements to absolute paths under {@link schemaDir}. The OQL
-   *   translator emits the relative form because it doesn't know the
-   *   engine's directory.
-   */
-  protected override _standardizeQuery(query: EngineQuery): EngineQuery {
-    const standardized = super._standardizeQuery(query);
-    if (
-      this.__schemaDir && /^\s*ATTACH\s+DATABASE\s+'/i.test(standardized.sql)
-    ) {
-      // Cheap rewrite: replace the first single-quoted string in the
-      // statement with its absolute form when it's a bare filename. We
-      // intentionally don't try to handle every edge case — only the
-      // OQL-translator-generated form `ATTACH DATABASE '<name>.db' AS ...`.
-      const newSql = standardized.sql.replace(
-        /ATTACH\s+DATABASE\s+'([^']+)'/i,
-        (_match, file: string) => {
-          if (file.includes('/') || file.includes('\\')) {
-            // Already absolute or otherwise qualified — leave it alone.
-            return _match;
-          }
-          return `ATTACH DATABASE '${join(this.__schemaDir!, file)}'`;
-        },
-      );
-      return { ...standardized, sql: newSql };
-    }
-    return standardized;
-  }
-
-  /**
-   * Runs the statement through the prepared-statement cache, then completes
-   * `DROP_SCHEMA` by unlinking the detached schema's `.db` file — a `DETACH`
-   * alone would leave the file behind. The unlink is best-effort.
-   */
+  /** Runs the statement through the prepared-statement cache. */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: SqliteDb,
   ): Promise<{ data: R[]; count: number }> {
-    const result = await this.__runQuery<R>(query, client);
-
-    // Schema-lifecycle bookkeeping: when the user just DETACHed a
-    // schema, unlink the underlying file so DROP_SCHEMA is a complete
-    // round-trip. Cheap substring gate first so the regex doesn't run on
-    // every query — the translator emits uppercase `DETACH DATABASE`.
-    if (this.__schemaDir && query.sql.includes('DETACH')) {
-      const detachMatch =
-        /^\s*DETACH\s+DATABASE\s+(?:"([^"]+)"|`([^`]+)`|([A-Za-z_]\w*))/i
-          .exec(query.sql);
-      if (detachMatch) {
-        const schemaName = detachMatch[1] ?? detachMatch[2] ?? detachMatch[3];
-        if (schemaName && schemaName.toLowerCase() !== 'main') {
-          try {
-            await remove(join(this.__schemaDir, `${schemaName}.db`));
-          } catch {
-            // Best effort — file might not exist if the schema was
-            // attached from outside the directory.
-          }
-        }
-      }
-    }
-
-    return result;
+    return await this.__runQuery<R>(query, client);
   }
 
   private __runQuery<R extends Record<string, unknown>>(

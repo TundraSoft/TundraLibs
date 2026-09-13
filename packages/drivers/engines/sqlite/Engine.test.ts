@@ -1,13 +1,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import {
-  makeDir,
-  makeTempDir,
-  removeDir,
-  writeTextFile,
-} from '@tundralibs/compat/file';
+import { makeTempDir, removeDir, stat } from '@tundralibs/compat/file';
 import { SQLiteEngine } from './Engine.ts';
-import type { SqliteDb } from './adapter.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EnginePoolOptions, EngineQuery } from '../../types/mod.ts';
 
@@ -1115,50 +1109,83 @@ describe({
 });
 
 // ---------------------------------------------------------------------------
-// Directory-mode resource cleanup: a per-file ATTACH failure must not leak
-// the freshly opened main.db handle.
+// Directory mode: `<path>/<name>/main.db`, shared safely by multiple named
+// engines under one parent directory, and persisted across reconnect.
 // ---------------------------------------------------------------------------
 describe({
-  name: 'drivers.SQLiteEngine.attach-leak',
+  name: 'drivers.SQLiteEngine.directory-mode',
   ignore: !sqliteAvailable,
   sanitizeResources: false,
   sanitizeOps: false,
   fn: () => {
-    it('closes the opened handle when a per-file ATTACH throws', async () => {
-      // Subclass that counts close() calls on the handle it opens.
-      class SpyEngine extends SQLiteEngine {
-        public mainDbCloses = 0;
-        protected override async _openDatabase(
-          path: string,
-          options: { readonly?: boolean; create?: boolean },
-        ): Promise<SqliteDb> {
-          const db = await super._openDatabase(path, options);
-          if (path.endsWith('main.db')) {
-            const realClose = db.close.bind(db);
-            db.close = () => {
-              this.mainDbCloses++;
-              realClose();
-            };
-          }
-          return db;
-        }
+    it('creates <path>/<name lowercased>/main.db and persists across reconnect', async () => {
+      const root = await makeTempDir({ prefix: 'drivers-sqlite-dirmode-' });
+      try {
+        const engine = new SQLiteEngine('Spy', { path: root });
+        await engine.connect();
+        const info = await stat(`${root}/spy/main.db`);
+        asserts.assertEquals(info.isFile, true);
+
+        await engine.createTable({
+          type: 'CREATE_TABLE',
+          table: 'kv',
+          columns: { k: { type: 'VARCHAR', length: 64, nullable: false } },
+          primaryKey: ['k'],
+        });
+        await engine.insert({
+          type: 'INSERT',
+          table: 'kv',
+          columns: ['k'],
+          data: { k: 'hello' },
+        });
+        await engine.disconnect();
+
+        // A fresh engine instance pointed at the same root sees the row.
+        const reopened = new SQLiteEngine('Spy', { path: root });
+        await reopened.connect();
+        const sel = await reopened.select<{ k: string }>({
+          type: 'SELECT',
+          table: 'kv',
+          columns: ['k'],
+          projection: { '@k': true },
+        });
+        asserts.assertEquals(sel.data[0]!.k, 'hello');
+        await reopened.disconnect();
+      } finally {
+        await removeDir(root, { recursive: true }).catch(() => {});
       }
+    });
 
-      const root = await makeTempDir({ prefix: 'drivers-sqlite-attach-' });
-      const dir = `${root}/spy`;
-      await makeDir(dir, { recursive: true });
-      // Plant a corrupt `.db` file so the auto-ATTACH loop throws.
-      await writeTextFile(`${dir}/broken.db`, 'not a sqlite database');
-
-      const engine = new SpyEngine('spy', { path: root });
-      await asserts.assertRejects(() => engine.connect(), EngineError);
-
-      // The main.db handle opened before the failed ATTACH must be closed,
-      // not leaked.
-      asserts.assertEquals(engine.mainDbCloses, 1);
-
-      await engine.disconnect();
-      await removeDir(root, { recursive: true }).catch(() => {});
+    it('two named engines under one parent directory get separate files', async () => {
+      const root = await makeTempDir({ prefix: 'drivers-sqlite-dirmode-' });
+      try {
+        const a = new SQLiteEngine('app', { path: root });
+        const b = new SQLiteEngine('cache', { path: root });
+        await a.connect();
+        await b.connect();
+        await a.createTable({
+          type: 'CREATE_TABLE',
+          table: 't',
+          columns: { id: { type: 'INTEGER', nullable: false } },
+          primaryKey: ['id'],
+        });
+        // `t` was only created on `a` — `b` must not see it, proving the
+        // two engines opened distinct physical files.
+        await asserts.assertRejects(
+          () =>
+            b.select({
+              type: 'SELECT',
+              table: 't',
+              columns: ['id'],
+              projection: { '@id': true },
+            }),
+          EngineError,
+        );
+        await a.disconnect();
+        await b.disconnect();
+      } finally {
+        await removeDir(root, { recursive: true }).catch(() => {});
+      }
     });
   },
 });
