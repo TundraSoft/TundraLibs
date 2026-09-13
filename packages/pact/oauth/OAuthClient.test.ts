@@ -247,3 +247,83 @@ describe('provider config validation', () => {
     }
   });
 });
+
+describe('runtime OAuth provider mutation', () => {
+  // A dedicated instance, isolated from the module-level `pact` the
+  // flow tests above share — these tests mutate provider config, and
+  // must never leak that into a test that runs later in this file.
+  function freshPact() {
+    return Pact.create({
+      bits: { READ: 1n },
+      modulePermissions: { Post: ['READ'] },
+      hooks: { getUser: () => null },
+      options: {
+        oauth: {
+          google: {
+            kind: 'GOOGLE',
+            clientId: 'cid',
+            redirectUri: 'https://app.example.dev/cb',
+          },
+        },
+      },
+    });
+  }
+
+  it('oauthProviders lists exactly what the constructor configured', () => {
+    const pact = freshPact();
+    asserts.assertEquals(pact.oauthProviders, ['google']);
+  });
+
+  it('updateOAuth adds a new provider, validated the same way as construction', () => {
+    const pact = freshPact();
+    pact.updateOAuth('github', {
+      kind: 'GITHUB',
+      clientId: 'gh',
+      redirectUri: 'https://app.example.dev/gh',
+    });
+    asserts.assertEquals([...pact.oauthProviders].sort(), ['github', 'google']);
+  });
+
+  it('updateOAuth on an existing name replaces it, not duplicates it', () => {
+    const pact = freshPact();
+    pact.updateOAuth('google', {
+      kind: 'GOOGLE',
+      clientId: 'a-different-client-id',
+      redirectUri: 'https://app.example.dev/cb2',
+    });
+    asserts.assertEquals(pact.oauthProviders, ['google']);
+  });
+
+  it('a bad updateOAuth config throws INVALID_OPTION and never registers', () => {
+    const pact = freshPact();
+    const error = asserts.assertThrows(
+      () =>
+        pact.updateOAuth('bad', {
+          kind: 'GOOGLE',
+          clientId: '',
+          redirectUri: 'not-a-url',
+          // deno-lint-ignore no-explicit-any
+        } as any),
+      PactError,
+    );
+    asserts.assertStrictEquals(error.code, 'INVALID_OPTION');
+    asserts.assertEquals(pact.oauthProviders, ['google']);
+  });
+
+  it('removeOAuth removes a provider and reports whether it existed', () => {
+    const pact = freshPact();
+    asserts.assertStrictEquals(pact.removeOAuth('google'), true);
+    asserts.assertEquals(pact.oauthProviders, []);
+    asserts.assertStrictEquals(pact.removeOAuth('google'), false);
+  });
+
+  it('a removed provider fails UNKNOWN_PROVIDER exactly like one never configured', async () => {
+    const pact = freshPact();
+    pact.removeOAuth('google');
+    const error = await asserts.assertRejects(
+      () => pact.oauthRedirect('google'),
+      PactError,
+    );
+    asserts.assertStrictEquals(error.code, 'UNKNOWN_PROVIDER');
+  });
+});

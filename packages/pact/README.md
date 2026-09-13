@@ -42,17 +42,18 @@ or better-auth. All cryptography is delegated to
 
 ## Documentation
 
-| Topic                                       | Description                                                                |
-| ------------------------------------------- | -------------------------------------------------------------------------- |
-| [Hooks](docs/Pact-Hooks.md)                 | The storage seam — stored shapes, every hook, what each feature needs      |
-| [Storage](docs/Pact-Storage.md)             | A suggested table structure covering every pact capability                 |
-| [Sessions](docs/Pact-Sessions.md)           | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode          |
-| [OAuth](docs/Pact-OAuth.md)                 | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy      |
-| [Caching](docs/Pact-Caching.md)             | Opt-in caches, the instance name, TTLs, invalidation                       |
-| [Security](docs/Pact-Security.md)           | The error contract, enumeration resistance, bound principals, threat notes |
-| [Middleware](middleware/Pact-Middleware.md) | express / fastify / oak / hono adapters and the neutral core               |
-| [Passkeys](docs/Pact-Passkeys.md)           | WebAuthn registration and login, usernameless sign-in, clone detection     |
-| [Roadmap](docs/Pact-Roadmap.md)             | Known limitations and planned work                                         |
+| Topic                                               | Description                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Hooks](docs/Pact-Hooks.md)                         | The storage seam — stored shapes, every hook, what each feature needs                            |
+| [Storage](docs/Pact-Storage.md)                     | A suggested table structure covering every pact capability                                       |
+| [Sessions](docs/Pact-Sessions.md)                   | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode                                |
+| [OAuth](docs/Pact-OAuth.md)                         | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy                            |
+| [Multi-tenant OAuth](docs/Pact-MultiTenantOAuth.md) | Per-tenant IdPs registered at runtime: `updateOAuth`/`removeOAuth`, propagation across instances |
+| [Caching](docs/Pact-Caching.md)                     | Opt-in caches, the instance name, TTLs, invalidation                                             |
+| [Security](docs/Pact-Security.md)                   | The error contract, enumeration resistance, bound principals, threat notes                       |
+| [Middleware](middleware/Pact-Middleware.md)         | express / fastify / oak / hono adapters and the neutral core                                     |
+| [Passkeys](docs/Pact-Passkeys.md)                   | WebAuthn registration and login, usernameless sign-in, clone detection                           |
+| [Roadmap](docs/Pact-Roadmap.md)                     | Known limitations and planned work                                                               |
 
 ## Installation
 
