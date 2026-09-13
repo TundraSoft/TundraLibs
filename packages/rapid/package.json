@@ -33,6 +33,7 @@
     "@tundralibs/doctor": "workspace:*",
     "@tundralibs/id": "workspace:*",
     "@tundralibs/metro-man": "workspace:*",
+    "@tundralibs/norm": "workspace:*",
     "@tundralibs/pact": "workspace:*",
     "@tundralibs/radrouter": "workspace:*",
     "@tundralibs/rpc": "workspace:*",
@@ -41,7 +42,6 @@
     "@tundralibs/utils": "workspace:*"
   },
   "devDependencies": {
-    "@tundralibs/guardian": "workspace:*",
-    "@tundralibs/norm": "workspace:*"
+    "@tundralibs/guardian": "workspace:*"
   }
 }

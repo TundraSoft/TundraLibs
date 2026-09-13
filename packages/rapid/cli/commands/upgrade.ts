@@ -1,7 +1,11 @@
 /**
  * @fileoverview `rapid upgrade [--dir .]` — bump every `@tundralibs/*`
- * dependency in `deno.json` and `package.json` to its latest JSR version.
- * Version-only; scaffolding migration is a later concern.
+ * dependency in `deno.json` and `package.json` to its latest JSR version,
+ * and refresh the generated `.agent.md` files + the `AGENTS.md`/`CLAUDE.md`/
+ * copilot pointer sections (only what rapid itself generates — a project's
+ * own notes elsewhere in those files are never touched). `upgrade` has no
+ * `ScaffoldAnswers` (that's `init`-only), so which optional guides to
+ * refresh is detected from what's already on disk.
  * @module
  */
 import {
@@ -10,6 +14,8 @@ import {
   writeTextFile,
 } from '@tundralibs/compat/file';
 import { latestVersion } from '../latestVersion.ts';
+import { ensureSection } from '../markdown.ts';
+import { agentDocs, CLAUDE_BODY, COPILOT_BODY } from '../templates.ts';
 
 // Matches a @tundralibs/<pkg> version in either manifest's dep strings:
 //   "jsr:@tundralibs/rapid@^1.2.3"  or  "npm:@jsr/tundralibs__rapid@^1.2.3"
@@ -51,5 +57,28 @@ export async function upgradeCommand(dir = '.'): Promise<number> {
   } else {
     for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
   }
+
+  // No answers object here — detect which optional layers this project has
+  // from what init already wrote for them.
+  const [hasModules, hasUi, hasNorm, rapidVersion] = await Promise.all([
+    pathExists(`${dir}/modules/mod.ts`),
+    pathExists(`${dir}/views/mod.ts`),
+    pathExists(`${dir}/configs/Norm.yaml`),
+    latestVersion('rapid'),
+  ]);
+  const { files, reference } = agentDocs(rapidVersion, {
+    module: hasModules,
+    ui: hasUi,
+    norm: hasNorm,
+  });
+  for (const [rel, content] of Object.entries(files)) {
+    await writeTextFile(`${dir}/${rel}`, content);
+  }
+  await ensureSection(`${dir}/AGENTS.md`, reference);
+  await ensureSection(`${dir}/CLAUDE.md`, CLAUDE_BODY);
+  await ensureSection(
+    `${dir}/.github/copilot-instructions.md`,
+    COPILOT_BODY,
+  );
   return 0;
 }

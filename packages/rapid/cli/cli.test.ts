@@ -229,78 +229,111 @@ describe('rapid.cli init scaffold', () => {
     }
   });
 
-  it('scaffold() always emits ONE AGENTS.md source + two pointers, module- and norm-aware', () => {
+  it('scaffold() always emits AGENTS.md + rapid.agent.md/rapid-pact.agent.md + two pointers, module/ui/norm-aware', () => {
     const f = scaffold(
-      { name: 'aiapp', module: true, norm: true },
+      { name: 'aiapp', module: true, norm: true, ui: true },
       '1.0.0',
       { norm: null, utils: null },
     );
     for (
-      const p of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']
+      const p of [
+        'AGENTS.md',
+        'CLAUDE.md',
+        '.github/copilot-instructions.md',
+        'rapid.agent.md',
+        'rapid-modules.agent.md',
+        'rapid-ui.agent.md',
+        'rapid-pact.agent.md',
+        'norm.agent.md',
+      ]
     ) {
       asserts.assert(p in f, `missing ${p}`);
     }
     const agents = f['AGENTS.md']!;
-    // Single source: the pointers name AGENTS.md and carry no duplicated guidance.
+    const guide = f['rapid.agent.md']!;
+    // Single source per concern: the pointers name the .agent.md files and
+    // carry no duplicated guidance themselves.
     asserts.assertStringIncludes(f['CLAUDE.md']!, 'AGENTS.md');
     asserts.assertStringIncludes(
       f['.github/copilot-instructions.md']!,
       '/AGENTS.md',
-    );
-    asserts.assert(
-      !f['CLAUDE.md']!.includes('colon-wrapped'),
-      'pointer must not duplicate the guide',
     );
     // Claude Code loads the guide itself through the import line.
     asserts.assertStringIncludes(f['CLAUDE.md']!, '\n@AGENTS.md\n');
     asserts.assertStringIncludes(agents, '# aiapp');
     asserts.assertStringIncludes(agents, '## Modules');
     asserts.assertStringIncludes(agents, 'modules/Greeter.ts');
-    // --norm merges norm's OWN ai guide in, not a shorter summary — same
-    // depth (relations, transactions, scoping) a standalone norm project's
-    // guide gets, not just Entity/Schema basics.
-    asserts.assertStringIncludes(agents, '## Database (norm)');
-    asserts.assertStringIncludes(agents, 'db.scope(');
-    asserts.assertStringIncludes(agents, 'db.transaction(');
-    asserts.assertStringIncludes(agents, 'REGISTRY KEY');
-    // No runtime prompt — every scaffold's guide shows all three ways to run.
+    // AGENTS.md points at every applicable guide instead of embedding them.
+    asserts.assertStringIncludes(agents, '[rapid.agent.md](./rapid.agent.md)');
+    asserts.assertStringIncludes(
+      agents,
+      '[rapid-modules.agent.md](./rapid-modules.agent.md)',
+    );
+    asserts.assertStringIncludes(
+      agents,
+      '[rapid-ui.agent.md](./rapid-ui.agent.md)',
+    );
+    asserts.assertStringIncludes(
+      agents,
+      '[rapid-pact.agent.md](./rapid-pact.agent.md)',
+    );
+    asserts.assertStringIncludes(agents, '[norm.agent.md](./norm.agent.md)');
+    asserts.assert(
+      !agents.includes('## Database (norm)'),
+      'norm reference content lives in norm.agent.md, not AGENTS.md',
+    );
+    // --norm imports norm's OWN ai guide, not a shorter summary — same depth
+    // (relations, transactions, scoping) a standalone norm project gets.
+    const norm = f['norm.agent.md']!;
+    asserts.assertStringIncludes(norm, 'db.scope(');
+    asserts.assertStringIncludes(norm, 'db.transaction(');
+    asserts.assertStringIncludes(norm, 'REGISTRY KEY');
+    // No runtime prompt — AGENTS.md's Commands section shows all three ways to run.
     asserts.assertStringIncludes(agents, 'Deno:');
     asserts.assertStringIncludes(agents, 'Node:');
     asserts.assertStringIncludes(agents, 'Bun:');
     // And rapid's real API facts, not generic advice.
-    asserts.assertStringIncludes(agents, '/users/:id:');
-    asserts.assertStringIncludes(agents, 'Application.initialize');
-    asserts.assertStringIncludes(agents, 'validated()');
+    asserts.assertStringIncludes(guide, '/users/:id:');
+    asserts.assertStringIncludes(guide, 'Application.initialize');
+    asserts.assertStringIncludes(guide, 'validated()');
     // Package lookup is NEED-first (the names aren't self-describing): a table
     // row maps the job to the full specifier, and each shape leads with the job.
     asserts.assertMatch(
-      agents,
+      guide,
       /\| Validate input[^|]*\| `@tundralibs\/guardian`/,
     );
-    asserts.assertMatch(agents, /\| Authentication[^|]*\| `@tundralibs\/pact`/);
+    asserts.assertMatch(guide, /\| Authentication[^|]*\| `@tundralibs\/pact`/);
     asserts.assertStringIncludes(
-      agents,
+      guide,
       '**Validation — `@tundralibs/guardian`.**',
     );
     asserts.assert(
-      !agents.includes('- **guardian** —'),
+      !guide.includes('- **guardian** —'),
       'shapes must lead with the job, not the bare package name',
     );
 
-    // No module system → no Modules section; no --norm → no Database section.
+    // No module system / no --ui / no --norm → no matching guide file or link.
     const plain = scaffold({ name: 'p', module: false, norm: false }, '1.0.0');
     asserts.assert(!plain['AGENTS.md']!.includes('## Modules'));
-    asserts.assert(!plain['AGENTS.md']!.includes('## Database (norm)'));
+    asserts.assert(!('rapid-modules.agent.md' in plain));
+    asserts.assert(!('rapid-ui.agent.md' in plain));
+    asserts.assert(!('norm.agent.md' in plain));
+    asserts.assert(
+      !plain['AGENTS.md']!.includes('rapid-modules.agent.md'),
+    );
+    asserts.assert(!plain['AGENTS.md']!.includes('norm.agent.md'));
+    // rapid-pact.agent.md is unconditional — no flag gates the auth adapter.
+    asserts.assert('rapid-pact.agent.md' in plain);
     // Doc links are pinned to the scaffolded version; offline (null) falls
     // back to the package page rather than inventing a version.
     asserts.assertStringIncludes(
-      plain['AGENTS.md']!,
+      plain['rapid.agent.md']!,
       'https://jsr.io/@tundralibs/rapid/1.0.0/docs/Rapid-Errors.md',
     );
     const offline = scaffold(
       { name: 'o', module: false, norm: false },
       null,
-    )['AGENTS.md']!;
+    )['rapid.agent.md']!;
     asserts.assertStringIncludes(
       offline,
       'https://jsr.io/@tundralibs/rapid/README.md',
@@ -308,13 +341,19 @@ describe('rapid.cli init scaffold', () => {
     asserts.assertStringIncludes(offline, 'node_modules/@tundralibs/rapid/');
   });
 
-  it('AGENTS.md drift guard: the guide names every public surface the package exports', async () => {
-    const agents = scaffold(
+  it('rapid.agent.md + rapid-modules/-ui/-pact.agent.md drift guard: the guides name every public surface the package exports', async () => {
+    const f = scaffold(
       { name: 'guide', module: true, norm: false, ui: true },
       '9.9.9',
-    )['AGENTS.md']!;
+    );
+    const combined = [
+      'rapid.agent.md',
+      'rapid-modules.agent.md',
+      'rapid-ui.agent.md',
+      'rapid-pact.agent.md',
+    ].map((k) => f[k]!).join('\n');
     const missing = (what: string, names: readonly string[]) =>
-      names.filter((n) => !agents.includes(n)).map((n) => `${what}: ${n}`);
+      names.filter((n) => !combined.includes(n)).map((n) => `${what}: ${n}`);
     const functions = (barrel: Record<string, unknown>) =>
       Object.keys(barrel).filter((k) => typeof barrel[k] === 'function');
     const pkg = new URL('../', import.meta.url).pathname;
@@ -371,7 +410,7 @@ describe('rapid.cli init scaffold', () => {
     asserts.assertEquals(
       gaps,
       [],
-      'update AGENTS_MD / MIDDLEWARE_CATALOG / PACKAGE_DOCS in cli/templates.ts',
+      'update RAPID_AGENT_MD/RAPID_*_AGENT_MD / MIDDLEWARE_CATALOG / PACKAGE_DOCS in cli/templates.ts',
     );
   });
 
