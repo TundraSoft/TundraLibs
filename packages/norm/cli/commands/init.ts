@@ -71,10 +71,16 @@ const resolveProjectName = async (
     DEFAULT_NAME;
 };
 
-/** The `init` command. Returns the process exit code. */
+/**
+ * The `init` command. Returns the process exit code.
+ *
+ * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
+ * the suite never depends on network I/O.
+ */
 export async function initCommand(
   args: ParsedArgs,
   base = '.',
+  resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
 ): Promise<number> {
   const yes = args.yes === true;
   const name = await resolveProjectName(base, yes);
@@ -88,11 +94,15 @@ export async function initCommand(
 
   await makeDir(`${base}/configs`, { recursive: true });
   const normYamlPath = `${base}/configs/Norm.yaml`;
+  // Logged later, alongside the other end-of-run status lines — never
+  // immediately before further async I/O (see the note on the final
+  // console.log block below).
+  let normYamlStatus: string;
   if (await pathExists(normYamlPath)) {
-    console.log(`  ~ configs/Norm.yaml (already exists — left untouched)`);
+    normYamlStatus = '  ~ configs/Norm.yaml (already exists — left untouched)';
   } else {
     await writeTextFile(normYamlPath, NORM_YAML);
-    console.log(`  + configs/Norm.yaml`);
+    normYamlStatus = '  + configs/Norm.yaml';
   }
 
   const wroteDb = await writeIfMissing(`${base}/db.ts`, DB);
@@ -100,8 +110,8 @@ export async function initCommand(
   await writeIfMissing(`${base}/README.md`, render(README, { name }));
 
   const [normVersion, utilsVersion] = await Promise.all([
-    latestVersion('norm'),
-    latestVersion('utils'),
+    resolveVersion('norm'),
+    resolveVersion('utils'),
   ]);
   const normSpec = normVersion === null ? '' : `@^${normVersion}`;
   const utilsSpec = utilsVersion === null ? '' : `@^${utilsVersion}`;
@@ -138,6 +148,13 @@ export async function initCommand(
 
   await ensureAgentDocs(base);
 
+  // All logged here, after every async write in this run — a console.log()
+  // immediately preceding a new async file-write call, repeated across
+  // calls in the same process, has been observed to trigger a Node 22
+  // `node:test` runner bug that corrupts the test-reporter IPC channel
+  // ("Unable to deserialize cloned data due to invalid or unsupported
+  // version"); Node 24, Deno, and Bun are unaffected.
+  console.log(normYamlStatus);
   console.log(
     `\n✓ norm ready in ${base === '.' ? 'the current directory' : base}`,
   );

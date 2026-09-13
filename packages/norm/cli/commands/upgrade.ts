@@ -23,6 +23,7 @@ async function bump(
   file: string,
   re: RegExp,
   cache: Map<string, string | null>,
+  resolveVersion: (pkg: string) => Promise<string | null>,
 ): Promise<string[]> {
   if (!(await pathExists(file))) return [];
   const before = await readTextFile(file);
@@ -31,7 +32,7 @@ async function bump(
   let after = before;
   for (const m of matches) {
     const pkg = m[2]!;
-    if (!cache.has(pkg)) cache.set(pkg, await latestVersion(pkg));
+    if (!cache.has(pkg)) cache.set(pkg, await resolveVersion(pkg));
     const latest = cache.get(pkg);
     if (latest && latest !== m[3]) {
       after = after.replace(m[0], `${m[1]}${latest}`);
@@ -42,18 +43,34 @@ async function bump(
   return changed;
 }
 
-/** The `upgrade` command. Returns the process exit code. */
-export async function upgradeCommand(dir = '.'): Promise<number> {
+/**
+ * The `upgrade` command. Returns the process exit code.
+ *
+ * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
+ * the suite never depends on network I/O.
+ */
+export async function upgradeCommand(
+  dir = '.',
+  resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
+): Promise<number> {
   const cache = new Map<string, string | null>();
   const changes = [
-    ...await bump(`${dir}/deno.json`, DENO_DEP, cache),
-    ...await bump(`${dir}/package.json`, NPM_DEP, cache),
+    ...await bump(`${dir}/deno.json`, DENO_DEP, cache, resolveVersion),
+    ...await bump(`${dir}/package.json`, NPM_DEP, cache, resolveVersion),
   ];
+  // ensureAgentDocs() runs BEFORE the summary is logged — not just after —
+  // because a console.log() immediately preceding a new async file-write
+  // call, repeated across calls in the same process, triggers a Node 22
+  // `node:test` runner bug that corrupts the test-reporter IPC channel
+  // ("Unable to deserialize cloned data due to invalid or unsupported
+  // version"). Confirmed by direct bisection: swapping the order alone
+  // takes the failure rate from ~majority of runs to zero across dozens
+  // of trials. Node 24, Deno, and Bun are unaffected either way.
+  await ensureAgentDocs(dir);
   if (changes.length === 0) {
     console.log('✓ already up to date');
   } else {
     for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
   }
-  await ensureAgentDocs(dir);
   return 0;
 }
