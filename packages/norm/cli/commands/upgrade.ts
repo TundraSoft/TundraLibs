@@ -1,7 +1,9 @@
 /**
  * @fileoverview `norm upgrade [--dir .]` — bump every `@tundralibs/*`
- * dependency in `deno.json` and `package.json` to its latest JSR version.
- * Version-only; scaffolding migration is a later concern.
+ * dependency in `deno.json` and `package.json` to its latest JSR version,
+ * and refresh `norm.agent.md` + the `AGENTS.md`/`CLAUDE.md` pointer to it
+ * (only the section norm itself generates — a project's own notes
+ * elsewhere in those files are never touched).
  * @module
  */
 import {
@@ -10,6 +12,7 @@ import {
   writeTextFile,
 } from '@tundralibs/compat/file';
 import { latestVersion } from '../latestVersion.ts';
+import { ensureAgentDocs } from '../agentDocs.ts';
 
 // Matches a @tundralibs/<pkg> version in either manifest's dep strings:
 //   "jsr:@tundralibs/norm@^1.2.3"  or  "npm:@jsr/tundralibs__norm@^1.2.3"
@@ -51,5 +54,6 @@ export async function upgradeCommand(dir = '.'): Promise<number> {
   } else {
     for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
   }
+  await ensureAgentDocs(dir);
   return 0;
 }

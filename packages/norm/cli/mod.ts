@@ -14,6 +14,11 @@ import { initCommand } from './commands/init.ts';
 import { pingCommand } from './commands/ping.ts';
 import { upgradeCommand } from './commands/upgrade.ts';
 
+// Re-exported so other CLIs (rapid's `--norm` scaffold) can use norm's own
+// AI guide content directly instead of hand-copying it — one source of
+// truth, never two prose blocks drifting apart.
+export { AI_GUIDE_LINK, AI_GUIDE_SECTION } from './templates.ts';
+
 const HELP = `norm <command>
 
   init [--yes]
@@ -22,7 +27,9 @@ const HELP = `norm <command>
         lives in configs/Norm.yaml (data, never code), and both deno.json
         and package.json are written/merged unconditionally
   upgrade [--dir .]
-        bump @tundralibs/* dependencies to their latest release
+        bump @tundralibs/* dependencies to their latest release, and
+        refresh norm.agent.md + the AGENTS.md/CLAUDE.md pointer to it (only
+        the section norm generated — everything else is left alone)
   ping [dir]
         open the connection described by configs/Norm.yaml and report
         success/failure; exit 0/1 — a connectivity smoke test, not a query

@@ -138,11 +138,11 @@ deno run -A jsr:@tundralibs/norm/cli init
 
 ## CLI
 
-| Command             | Does                                                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `init [--yes]`      | Scaffold a schema project in the current directory, or add norm to one that already exists.                                          |
-| `upgrade [--dir .]` | Bump `@tundralibs/norm`/`@tundralibs/utils` (and any other `@tundralibs/*` dep) to the latest release.                               |
-| `ping [dir]`        | Open the connection described by `configs/Norm.yaml` and report success/failure (exit 0/1) — a connectivity smoke test, not a query. |
+| Command             | Does                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init [--yes]`      | Scaffold a schema project in the current directory, or add norm to one that already exists.                                                                               |
+| `upgrade [--dir .]` | Bump `@tundralibs/norm`/`@tundralibs/utils` (and any other `@tundralibs/*` dep) to the latest release, and refresh `norm.agent.md` + its `AGENTS.md`/`CLAUDE.md` pointer. |
+| `ping [dir]`        | Open the connection described by `configs/Norm.yaml` and report success/failure (exit 0/1) — a connectivity smoke test, not a query.                                      |
 
 `init` has no dialect or runtime prompt: `Entity`/`Schema` never touch a
 dialect, so it lives as DATA in `configs/Norm.yaml` (every dialect norm
@@ -155,11 +155,15 @@ existing project to add a `models/` schema layer (and `configs/Norm.yaml` +
 Existing files are always merged into or left alone, never clobbered —
 re-running `init` is safe.
 
-`init` also writes (or merges into) `CLAUDE.md`/`AGENTS.md`: entity kinds
-(TABLE/VIEW/QUERY), hooks, the full repo method set (`insert`/`find`/
-`update`/`upsert`/`delete`/`truncate`), transaction/cache dialect caveats,
-the events/witness observability surface, and the `NormError` hierarchy —
-the same guide this README documents, not a shorter summary.
+`init` also writes `norm.agent.md`: entity kinds (TABLE/VIEW/QUERY), hooks,
+the full repo method set (`insert`/`find`/`update`/`upsert`/`delete`/
+`truncate`), transaction/cache dialect caveats, the events/witness
+observability surface, and the `NormError` hierarchy — the same guide this
+README documents, not a shorter summary. `CLAUDE.md`/`AGENTS.md` get (or
+merge in) only a short pointer to it, so anything you write elsewhere in
+those two files survives every future `upgrade`. `upgrade` refreshes
+`norm.agent.md` in full and re-syncs that pointer — never anything outside
+the delimited section it owns.
 
 ## Choosing an entry point
 

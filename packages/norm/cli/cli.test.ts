@@ -145,6 +145,26 @@ describe('norm.cli markdown merge', () => {
       );
     });
   });
+
+  it('replaces the block in place when the body changes, leaving surrounding content alone', async () => {
+    await withTempDir(async (dir) => {
+      const path = `${dir}/AGENTS.md`;
+      await writeTextFile(path, '# My project\n\nHand-written notes.\n');
+      await ensureSection(path, 'old norm guide');
+
+      const status = await ensureSection(path, 'new norm guide');
+      asserts.assertEquals(status, 'updated');
+      const content = await readTextFile(path);
+      asserts.assertStringIncludes(content, 'Hand-written notes.');
+      asserts.assertStringIncludes(content, 'new norm guide');
+      asserts.assertEquals(content.includes('old norm guide'), false);
+      // Still exactly one delimited block.
+      asserts.assertEquals(
+        content.split('<!-- norm:start -->').length - 1,
+        1,
+      );
+    });
+  });
 });
 
 describe('norm.cli init', () => {
@@ -182,14 +202,22 @@ describe('norm.cli init', () => {
         'node --import tsx --test',
       );
 
-      asserts.assertStringIncludes(
-        await readTextFile(`${dir}/CLAUDE.md`),
-        '<!-- norm:start -->',
-      );
-      asserts.assertStringIncludes(
-        await readTextFile(`${dir}/AGENTS.md`),
-        '<!-- norm:start -->',
-      );
+      // AGENTS.md/CLAUDE.md carry only the short pointer — the full guide
+      // lives in its own file, so a user's later edits to these two never
+      // get clobbered by a future `upgrade`.
+      const claude = await readTextFile(`${dir}/CLAUDE.md`);
+      asserts.assertStringIncludes(claude, '<!-- norm:start -->');
+      asserts.assertStringIncludes(claude, 'norm.agent.md');
+      asserts.assertEquals(claude.includes('## Schema'), false);
+
+      const agents = await readTextFile(`${dir}/AGENTS.md`);
+      asserts.assertStringIncludes(agents, '<!-- norm:start -->');
+      asserts.assertStringIncludes(agents, 'norm.agent.md');
+      asserts.assertEquals(agents.includes('## Schema'), false);
+
+      const guide = await readTextFile(`${dir}/norm.agent.md`);
+      asserts.assertStringIncludes(guide, '# norm');
+      asserts.assertStringIncludes(guide, '## Schema');
     });
   });
 
@@ -254,10 +282,15 @@ describe('norm.cli init', () => {
     await withTempDir(async (dir) => {
       await initCommand({ _: [], yes: true }, dir);
       const before = await readTextFile(`${dir}/CLAUDE.md`);
+      const guideBefore = await readTextFile(`${dir}/norm.agent.md`);
 
       await initCommand({ _: [], yes: true }, dir);
 
       asserts.assertEquals(await readTextFile(`${dir}/CLAUDE.md`), before);
+      asserts.assertEquals(
+        await readTextFile(`${dir}/norm.agent.md`),
+        guideBefore,
+      );
     });
   });
 });
@@ -298,6 +331,58 @@ describe('norm.cli upgrade', () => {
   it('reports success with nothing to change when neither manifest exists', async () => {
     await withTempDir(async (dir) => {
       asserts.assertEquals(await upgradeCommand(dir), 0);
+    });
+  });
+
+  it('writes norm.agent.md and the AGENTS.md/CLAUDE.md pointer on a project that never had them', async () => {
+    await withTempDir(async (dir) => {
+      asserts.assertEquals(await upgradeCommand(dir), 0);
+      asserts.assertStringIncludes(
+        await readTextFile(`${dir}/norm.agent.md`),
+        '# norm',
+      );
+      asserts.assertStringIncludes(
+        await readTextFile(`${dir}/AGENTS.md`),
+        'norm.agent.md',
+      );
+    });
+  });
+
+  it('migrates a project scaffolded before this feature: the old embedded guide is replaced with the link, and the rest of AGENTS.md survives', async () => {
+    await withTempDir(async (dir) => {
+      // The OLD shape: the full guide sat directly between the markers.
+      await writeTextFile(
+        `${dir}/AGENTS.md`,
+        '# My project\n\nOur own house rules go here.\n\n' +
+          '<!-- norm:start -->\n\n## norm\n\n### Schema\n\nold stale guide text\n\n<!-- norm:end -->\n',
+      );
+
+      asserts.assertEquals(await upgradeCommand(dir), 0);
+
+      const agents = await readTextFile(`${dir}/AGENTS.md`);
+      asserts.assertStringIncludes(agents, 'Our own house rules go here.');
+      asserts.assertStringIncludes(agents, 'norm.agent.md');
+      asserts.assertEquals(agents.includes('old stale guide text'), false);
+      asserts.assert(await pathExists(`${dir}/norm.agent.md`));
+    });
+  });
+
+  it('running upgrade twice in a row is idempotent (unchanged, not appended)', async () => {
+    await withTempDir(async (dir) => {
+      await upgradeCommand(dir);
+      const guideBefore = await readTextFile(`${dir}/norm.agent.md`);
+      const agentsBefore = await readTextFile(`${dir}/AGENTS.md`);
+
+      await upgradeCommand(dir);
+
+      asserts.assertEquals(
+        await readTextFile(`${dir}/norm.agent.md`),
+        guideBefore,
+      );
+      asserts.assertEquals(
+        await readTextFile(`${dir}/AGENTS.md`),
+        agentsBefore,
+      );
     });
   });
 });

@@ -2,7 +2,9 @@
  * @fileoverview Merge norm's guide into an existing `CLAUDE.md`/`AGENTS.md`
  * (many projects already have one — including this monorepo's own root),
  * or write a fresh one when neither exists. A delimited block makes the
- * merge idempotent: rerunning `init` never appends a second copy.
+ * merge idempotent AND refreshable: rerunning `init` never appends a
+ * second copy, and `upgrade` can replace stale generated content in place
+ * without touching anything a user wrote outside the block.
  * @module
  */
 import {
@@ -22,16 +24,22 @@ const END = '<!-- norm:end -->';
  */
 const wrap = (body: string): string => `${START}\n\n${body.trim()}\n\n${END}\n`;
 
+/** Matches the ENTIRE delimited block (markers included), across lines. */
+const BLOCK = new RegExp(String.raw`${START}[\s\S]*?${END}\n?`);
+
 /**
- * Write `path` with `body` (wrapped) if it doesn't exist yet; otherwise
- * append the wrapped section unless it's already present.
+ * Write `path` with `body` (wrapped) if it doesn't exist yet; if the
+ * delimited block is already there, REPLACE it with the current `body`
+ * (a no-op when unchanged) so `upgrade` can keep it fresh; otherwise
+ * append a fresh wrapped section. Content outside the block is never
+ * touched, in every branch.
  *
- * @returns `'created'`, `'appended'`, or `'unchanged'` (block already there).
+ * @returns `'created'`, `'updated'`, `'appended'`, or `'unchanged'`.
  */
 export async function ensureSection(
   path: string,
   body: string,
-): Promise<'created' | 'appended' | 'unchanged'> {
+): Promise<'created' | 'updated' | 'appended' | 'unchanged'> {
   const section = wrap(body);
   if (!(await pathExists(path))) {
     await writeTextFile(path, section);
@@ -39,7 +47,12 @@ export async function ensureSection(
   }
 
   const existing = await readTextFile(path);
-  if (existing.includes(START)) return 'unchanged';
+  const match = BLOCK.exec(existing);
+  if (match !== null) {
+    if (match[0] === section) return 'unchanged';
+    await writeTextFile(path, existing.replace(BLOCK, section));
+    return 'updated';
+  }
 
   const sep = existing.endsWith('\n\n')
     ? ''
