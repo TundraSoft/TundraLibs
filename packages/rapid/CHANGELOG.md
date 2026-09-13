@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.2.1...rapid-v0.3.0) (2026-09-13)
+
+
+### Features
+
+* **rapid:** rapid.agent.md split (modules/ui/pact), import norm's guide ([#670](https://github.com/TundraSoft/TundraLibs/issues/670)) ([ab66a39](https://github.com/TundraSoft/TundraLibs/commit/ab66a39b14626157011bc764920cfbecc092975e))
+
 ## [0.2.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.2.0...rapid-v0.2.1) (2026-09-09)
 
 

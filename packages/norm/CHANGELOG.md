@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.9.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.8.0...norm-v1.9.0) (2026-09-13)
+
+
+### Features
+
+* **norm:** .guardian() — reach Guardian's built-in validators/transforms ([#664](https://github.com/TundraSoft/TundraLibs/issues/664)) ([e21504f](https://github.com/TundraSoft/TundraLibs/commit/e21504f2644a090b57d3c8a0ab21d98f4b98c1fd))
+* **norm:** Column.json(Guardian.object({...})) — real per-key JSON validation ([#667](https://github.com/TundraSoft/TundraLibs/issues/667)) ([4d62ffe](https://github.com/TundraSoft/TundraLibs/commit/4d62ffe842588075005987f208cad4674aef38cc))
+* **norm:** expose db.repo(key).guardians; three new real-world examples ([#673](https://github.com/TundraSoft/TundraLibs/issues/673)) ([99ae494](https://github.com/TundraSoft/TundraLibs/commit/99ae494b4a14163ae188eef4e325ad3a8e7234d6))
+* **norm:** guard() replaces the native validators — one Guardian, caller-ordered ([#668](https://github.com/TundraSoft/TundraLibs/issues/668)) ([9bf7c9d](https://github.com/TundraSoft/TundraLibs/commit/9bf7c9dedd4b4ac55e6bf2d2b68821303aa70ea2))
+* **norm:** norm.agent.md, kept fresh by upgrade ([#669](https://github.com/TundraSoft/TundraLibs/issues/669)) ([16c720f](https://github.com/TundraSoft/TundraLibs/commit/16c720f8e17f234ed1bf69d39b3fe0bea120af32))
+
+
+### Bug Fixes
+
+* **norm:** degrade FK physical constraints gracefully on SQLite/Mongo ([#666](https://github.com/TundraSoft/TundraLibs/issues/666)) ([f750e97](https://github.com/TundraSoft/TundraLibs/commit/f750e97044b6c7aa254a1ef2c33966a26da9654b))
+* **norm:** remove live network deps from cli tests, split cli.test.ts ([#672](https://github.com/TundraSoft/TundraLibs/issues/672)) ([674c86f](https://github.com/TundraSoft/TundraLibs/commit/674c86fa4b225f401d6bf357c8d1148361eea3ea))
+
+
+### Documentation
+
+* **norm:** fix stale per-method validator prose left by [#668](https://github.com/TundraSoft/TundraLibs/issues/668) ([#671](https://github.com/TundraSoft/TundraLibs/issues/671)) ([f1ae1dc](https://github.com/TundraSoft/TundraLibs/commit/f1ae1dc129f67841e2de08b52197a80bca0893c0))
+
 ## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.7.1...norm-v1.8.0) (2026-09-11)
 
 
