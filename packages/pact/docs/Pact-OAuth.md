@@ -50,6 +50,12 @@ const pact = Pact.create({
 });
 ```
 
+Every provider instance above is fixed at construction — the right shape
+for a set of global providers known ahead of time. For provider instances
+that need to be registered, edited, or removed while the app is already
+running (one per tenant, say), see
+[Multi-tenant OAuth](Pact-MultiTenantOAuth.md).
+
 ## Presets
 
 | Kind        | Notes                                                          |

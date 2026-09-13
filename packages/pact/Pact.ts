@@ -28,6 +28,7 @@ import type {
   PactJweEncryption,
   PactLoginResult,
   PactOAuthProfile,
+  PactOAuthProviderConfig,
   PactOAuthRedirect,
   PactOptions,
   PactPasskeyAssertionResponse,
@@ -121,8 +122,12 @@ export class Pact<B extends PermissionBits, M extends string>
   protected readonly _hooks: Readonly<PactHooks<M>>;
 
   // One client per configured oauth instance, built eagerly so config
-  // errors surface at construction rather than first login.
-  private readonly __oauth: ReadonlyMap<string, OAuthClient>;
+  // errors surface at construction rather than first login. Mutable —
+  // see updateOAuth()/removeOAuth() below — so a provider registered
+  // after boot (a tenant's own enterprise IdP, say) gets the same
+  // fail-fast validation as one declared in the constructor's `oauth`
+  // option, just at a later moment.
+  private readonly __oauth: Map<string, OAuthClient>;
 
   // Per-type cacher instances, created eagerly (so config errors surface
   // at construction) for exactly the types the user gave a positive TTL
@@ -723,6 +728,58 @@ export class Pact<B extends PermissionBits, M extends string>
     const session = await this.__mintSession(user.id);
     this._emit('login', principal, provider);
     return { principal, session, profile };
+  }
+
+  /**
+   * Names of every currently-registered OAuth provider instance —
+   * whatever the constructor's `oauth` option declared, plus anything
+   * added since via {@link updateOAuth}, minus anything removed via
+   * {@link removeOAuth}. Read this to diff pact's own live state
+   * against your own source of truth (a database table of per-tenant
+   * identity providers, say) instead of keeping a second, separately
+   * maintained list that can drift from it — see
+   * docs/Pact-MultiTenantOAuth.md.
+   */
+  public get oauthProviders(): readonly string[] {
+    return [...this.__oauth.keys()];
+  }
+
+  /**
+   * Register or replace one OAuth provider instance after
+   * construction — the same validation path the constructor's `oauth`
+   * option runs, so a bad config still fails immediately rather than
+   * at that provider's first login. Calling this again with an
+   * existing `name` REPLACES it (a tenant editing their IdP settings,
+   * say); `OAuthClient` instances are immutable, so a request already
+   * mid-flow against the OLD client is unaffected — it completes
+   * against the client it started with.
+   *
+   * Only mutates THIS instance. A horizontally-scaled deployment needs
+   * its own way for every OTHER instance to learn of the change (a
+   * periodic reconciliation loop reading the same source of truth is
+   * the usual shape) — see docs/Pact-MultiTenantOAuth.md.
+   *
+   * @throws {PactError} `INVALID_OPTION` on an unknown `kind` or a
+   *   missing/non-https `OIDC` issuer — same as the constructor.
+   */
+  public updateOAuth(name: string, config: PactOAuthProviderConfig): void {
+    const client = new OAuthClient(name, config, (reason) => {
+      this._emit('idTokenUnverified', name, reason);
+    });
+    this.__oauth.set(name, client);
+  }
+
+  /**
+   * Remove one OAuth provider instance. A subsequent {@link
+   * oauthRedirect} / {@link oauthLogin} against `name` fails
+   * `UNKNOWN_PROVIDER`, the same as a name that was never configured.
+   * Only mutates THIS instance — see {@link updateOAuth} for the
+   * multi-process caveat.
+   *
+   * @returns Whether `name` was registered before this call.
+   */
+  public removeOAuth(name: string): boolean {
+    return this.__oauth.delete(name);
   }
 
   /**
