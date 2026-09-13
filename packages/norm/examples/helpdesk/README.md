@@ -57,7 +57,7 @@ ordering does not):
 { "snapshot": { "version": 1, "written": true }, "applied": [1] }
 
 ▶ 2. Agents: salted PBKDF2 credential, verified by re-hashing
-{ "storedHashLooksSalted": true, "rightPasswordVerifies": true, "wrongPasswordFails": true }
+{ "agentsSeeded": 2, "loginChecksPassed": true }
 
 ▶ 3. Batch insert: one row per priority, DueAt from the SLA hook
 { "dueDates": [{"priority":"urgent","hoursFromNow":2}, {"priority":"low","hoursFromNow":72}, {"priority":"normal","hoursFromNow":24}] }

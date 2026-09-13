@@ -59,19 +59,21 @@ try {
   }
   const [priya, sam] = agents;
   const loggedIn = await db.repo('Agents').findOne({ '@Email': priya!.Email });
-  const rightPassword = await pbkdf2Verify(
-    AGENTS[0].password,
-    loggedIn.data!.PasswordHash,
-  );
-  const wrongPassword = await pbkdf2Verify(
-    'not-the-password',
-    loggedIn.data!.PasswordHash,
-  );
+  // Proved via assertions (throw on failure), not logged: printing
+  // anything derived from a password or its hash — even a boolean —
+  // is a clear-text-logging footgun a real login flow must not repeat.
+  if (loggedIn.data!.PasswordHash === AGENTS[0].password) {
+    throw new Error('expected the stored hash to differ from the plaintext');
+  }
+  if (!(await pbkdf2Verify(AGENTS[0].password, loggedIn.data!.PasswordHash))) {
+    throw new Error('expected the right password to verify');
+  }
+  if (await pbkdf2Verify('not-the-password', loggedIn.data!.PasswordHash)) {
+    throw new Error('expected the wrong password to fail verification');
+  }
   say('2. Agents: salted PBKDF2 credential, verified by re-hashing', {
-    storedHashLooksSalted: loggedIn.data!.PasswordHash !==
-      AGENTS[0].password,
-    rightPasswordVerifies: rightPassword,
-    wrongPasswordFails: !wrongPassword,
+    agentsSeeded: agents.length,
+    loginChecksPassed: true, // see the asserts above — nothing password-derived is ever logged
   });
 
   // ─── 3. Batch insert + a hook-computed SLA clock ───────────────────
