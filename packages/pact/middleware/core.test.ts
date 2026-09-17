@@ -226,10 +226,14 @@ describe('createPactMiddleware — HMAC', () => {
   it('rejects a missing, malformed, or stale timestamp before reading the body or verifying', async () => {
     const core = createPactMiddleware(pact, { hmac: { maxSkew: 60 } });
     const now = Math.floor(Date.now() / 1000);
+    // The skew check re-reads Date.now() itself (shared.ts's isFresh), so a
+    // timestamp only 1s past the threshold can flip fresh/stale under real
+    // CI delay between computing `now` here and the middleware's own clock
+    // read. 30s of margin on both sides of the 60s threshold absorbs that.
     for (
       const input of [
-        { timestamp: now - 61 },
-        { timestamp: now + 61 },
+        { timestamp: now - 90 },
+        { timestamp: now + 90 },
         { headers: { 'x-timestamp': 'yesterday' } },
         { headers: { 'x-timestamp': '' } },
       ]
@@ -244,7 +248,7 @@ describe('createPactMiddleware — HMAC', () => {
       asserts.assertEquals(verdict.denial.body, { error: 'STALE_TIMESTAMP' });
     }
     const fresh = await core.authenticate(
-      await signed({ timestamp: now - 59 }),
+      await signed({ timestamp: now - 30 }),
     );
     asserts.assert(fresh.ok);
   });
