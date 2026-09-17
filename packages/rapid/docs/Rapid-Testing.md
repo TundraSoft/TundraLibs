@@ -24,7 +24,7 @@ and how to keep a suite green on Deno, Bun and Node at once.
 ```ts
 import { Application } from '@tundralibs/rapid';
 import { client, describe, it } from '@tundralibs/rapid/testing';
-import * as asserts from '@std/asserts';
+import * as asserts from '@std/assert';
 
 describe('users', () => {
   it('answers on /ping', async () => {
@@ -83,7 +83,7 @@ surface (`host: 'api.rapid.test'` or an `/api/...` path).
 import { RapidModule } from '@tundralibs/rapid/modules';
 import { harness } from '@tundralibs/rapid/testing';
 import { inject, label } from '@tundralibs/doctor';
-import * as asserts from '@std/asserts';
+import * as asserts from '@std/assert';
 
 const Clock = label<{ now(): string }>('Clock');
 
@@ -128,7 +128,7 @@ await h.dispose();
 ```ts
 import { html, render, template } from '@tundralibs/rapid/ui';
 import { view } from '@tundralibs/rapid/testing';
-import * as asserts from '@std/asserts';
+import * as asserts from '@std/assert';
 
 const Hello = template<{ name: string }>((d, v) =>
   html`<p data-path="${v.path}">Hi ${d.name}</p>`

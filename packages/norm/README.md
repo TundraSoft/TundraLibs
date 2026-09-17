@@ -294,7 +294,7 @@ Column.varchar(255) // VARCHAR(255)
       .trim()
       .minLength(3).maxLength(50)
       .pattern(/^[a-z]+$/)
-      .refine((v) => !v.includes(' '), 'no spaces allowed')
+      .refine((v: string) => !v.includes(' '), 'no spaces allowed')
       .slug(), // reach Guardian's own vocabulary directly
   )
   .beforeWrite((v) => v.trim())
