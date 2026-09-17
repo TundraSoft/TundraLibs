@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.2](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.1...norm-v1.9.2) (2026-09-17)
+
+
+### Documentation
+
+* **norm,rapid:** fix weekly-health consumer-install doc-check failures ([#679](https://github.com/TundraSoft/TundraLibs/issues/679)) ([d3562ae](https://github.com/TundraSoft/TundraLibs/commit/d3562ae467bd5b93b81e7414d9193bcb9cf015a2))
+
 ## [1.9.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.0...norm-v1.9.1) (2026-09-13)
 
 

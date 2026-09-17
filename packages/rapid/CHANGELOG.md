@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.3.0...rapid-v0.3.1) (2026-09-17)
+
+
+### Documentation
+
+* **norm,rapid:** fix weekly-health consumer-install doc-check failures ([#679](https://github.com/TundraSoft/TundraLibs/issues/679)) ([d3562ae](https://github.com/TundraSoft/TundraLibs/commit/d3562ae467bd5b93b81e7414d9193bcb9cf015a2))
+
 ## [0.3.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.2.1...rapid-v0.3.0) (2026-09-13)
 
 
