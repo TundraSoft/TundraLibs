@@ -59,13 +59,16 @@ const SKIP: Record<string, string> = {};
  * imports is a genuine defect — a reader who installed only this package
  * cannot resolve it — and the check will fail, which is the point.
  *
- * A bare name means the sibling `@tundralibs/<name>`. An entry containing ':'
- * is passed through verbatim, for third-party packages an example genuinely
- * demonstrates (e.g. 'npm:ws').
+ * A bare name means the sibling `@tundralibs/<name>`. An entry starting with
+ * `@` is a fully-scoped JSR package passed through verbatim (e.g.
+ * `'@std/asserts'`, for a third-party JSR dependency an example genuinely
+ * demonstrates). An entry containing ':' is passed through verbatim too, for
+ * an npm package (e.g. `'npm:ws'`).
  */
 const DOC_PEERS: Record<string, string[]> = {
-  // norm's BYO-engine path deliberately takes a driver instance.
-  norm: ['drivers'],
+  // norm's BYO-engine path deliberately takes a driver instance; `.guard()`
+  // examples build a Guardian directly.
+  norm: ['drivers', 'guardian'],
   // Observability recipes: ambient/slogger/tracer document each other's wiring.
   ambient: ['slogger', 'tracer'],
   // slogger's RFC 5424 formatter takes `SyslogFacilities` from utils.
@@ -80,12 +83,17 @@ const DOC_PEERS: Record<string, string[]> = {
   drivers: ['oql', 'utils'],
   // Validation and token recipes.
   id: ['guardian'],
-  pact: ['crypt'],
+  // Pact-Middleware's client-signing recipe base64-encodes a digest.
+  pact: ['crypt', '@std/encoding'],
   // getFreePort's test-fixture examples import the compat test harness.
   utils: ['compat'],
   // compat's webserver docs show the raw `ws` npm client as an alternative;
   // `ws` ships no types, so a reader following that snippet also needs @types/ws.
   compat: ['npm:ws', 'npm:@types/ws'],
+  // The pact/id/doctor recipes demonstrate those packages directly; every
+  // one already tells the reader to `deno add` it. The testing harness's
+  // own assertions use @std/assert.
+  rapid: ['pact', 'doctor', 'id', '@std/assert'],
 };
 
 type Failure = { pkg: string; detail: string };
@@ -129,11 +137,16 @@ for (const pkg of packages) {
     await run(['npm', 'init', '-y'], dir);
 
     const peers = DOC_PEERS[pkg] ?? [];
-    // Sibling packages install via `jsr add`; third-party deps (entries with a
-    // ':' such as 'npm:ws') via `npm install`, because `jsr add` rejects npm
+    // Sibling packages (and fully-scoped third-party JSR peers, e.g.
+    // '@std/asserts') install via `jsr add`; npm peers (entries with a ':'
+    // such as 'npm:ws') via `npm install`, because `jsr add` rejects npm
     // specifiers — and does so with exit code 0, so its output must be checked.
-    const jsrSpecs = [pkg, ...peers.filter((p) => !p.includes(':'))]
-      .map((p) => `@tundralibs/${p}`);
+    const jsrSpecs = [
+      `@tundralibs/${pkg}`,
+      ...peers
+        .filter((p) => !p.includes(':'))
+        .map((p) => (p.startsWith('@') ? p : `@tundralibs/${p}`)),
+    ];
     const npmSpecs = peers
       .filter((p) => p.startsWith('npm:'))
       .map((p) => p.slice(4));
