@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.3.1...rapid-v0.4.0) (2026-09-18)
+
+
+### Features
+
+* **rapid:** upload progress, in-flight state and double-submit guard in the UI runtime ([#682](https://github.com/TundraSoft/TundraLibs/issues/682)) ([383980c](https://github.com/TundraSoft/TundraLibs/commit/383980c8efcedf62033e87ee57fd89c34e5e10b6))
+
 ## [0.3.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.3.0...rapid-v0.3.1) (2026-09-17)
 
 
