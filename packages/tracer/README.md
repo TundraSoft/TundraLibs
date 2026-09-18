@@ -2,7 +2,7 @@
 
 Distributed tracing that shows where a request actually spent its time —
 across functions, and across services. Completes the observability triad with
-[Slogger](../slogger/README.md) (logs) and [MetroMan](../metro-man/README.md)
+[Slogger](https://github.com/TundraSoft/TundraLibs/wiki/Slogger) (logs) and [MetroMan](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan)
 (metrics).
 
 [![JSR](https://jsr.io/badges/@tundralibs/tracer)](https://jsr.io/@tundralibs/tracer)
@@ -36,7 +36,7 @@ checkout ───────────────────────�
 
 Each box is a **span**. Spans nest **automatically** — a span opened inside
 another becomes its child at any call depth and across every `await` — because
-the active span lives in an [ambient](../ambient/README.md) async context
+the active span lives in an [ambient](https://github.com/TundraSoft/TundraLibs/wiki/Ambient) async context
 instead of being threaded through function signatures. W3C `traceparent`
 propagation carries the trace across process boundaries.
 
@@ -224,7 +224,7 @@ async function tracing(ctx: Ctx, next: () => Promise<void>) {
 }
 ```
 
-See [Recipes](docs/Tracer-Recipes.md) for ready-made adapters — Hono, Express,
+See [Recipes](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Recipes) for ready-made adapters — Hono, Express,
 Fastify, Koa, NestJS, Oak, h3, SvelteKit, Next.js, Lambda and Workers.
 
 ### 6. Ship spans to a collector (OTLP)
@@ -306,19 +306,19 @@ new Tracer({ serviceName: 'orders', idGenerator: myGenerator });
 
 ## Documentation
 
-- [Concepts](docs/Tracer-Concepts.md) - Spans, the lifecycle, and why nesting is
+- [Concepts](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Concepts) - Spans, the lifecycle, and why nesting is
   automatic
-- [Propagation](docs/Tracer-Propagation.md) - W3C Trace Context across service
+- [Propagation](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Propagation) - W3C Trace Context across service
   boundaries
-- [Sampling](docs/Tracer-Sampling.md) - Head-based sampling and why children
+- [Sampling](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Sampling) - Head-based sampling and why children
   never re-sample
-- [Exporters](docs/Tracer-Exporters.md) - The exporter contract, batching, and
+- [Exporters](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Exporters) - The exporter contract, batching, and
   writing your own
-- [OTLP](docs/Tracer-OTLP.md) - Shipping to a real backend, and the encodings
+- [OTLP](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-OTLP) - Shipping to a real backend, and the encodings
   that decide whether spans arrive
-- [Recipes](docs/Tracer-Recipes.md) - Framework adapters for 12 runtimes and
+- [Recipes](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Recipes) - Framework adapters for 12 runtimes and
   frameworks
-- [Roadmap](ROADMAP.md) - What is deliberately not built yet
+- [Roadmap](https://github.com/TundraSoft/TundraLibs/blob/main/packages/tracer/ROADMAP.md) - What is deliberately not built yet
 
 ## License
 

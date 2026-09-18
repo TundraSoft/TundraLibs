@@ -18,33 +18,33 @@ OQL provides a comprehensive type system for defining database queries that can 
 
 - **Type-safe, database-agnostic query building** — one `Query` object
   compiles to Postgres, MariaDB, SQLite, or MongoDB; full TypeScript
-  inference and autocomplete. See [Type System](types/OQL-Types.md).
+  inference and autocomplete. See [Type System](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types).
 - **Cross-runtime** — Deno, Bun, Node.js, Cloudflare Workers, and
   browsers; no I/O, no runtime-specific globals (see
   [Runtime support](#runtime-support) below).
 - **Comprehensive filter system** — comparison/string/array/null
   operators gated per column type, correlated `$exists`/`$nexists`
   subqueries, and JSON-path filtering into JSON/JSONB columns. See
-  [Filter Types](types/OQL-Types.md#filter-types).
+  [Filter Types](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types#filter-types).
 - **JOIN, JSON, and aggregation support** — multi-table joins, JSON
   column filtering, and `SUM`/`COUNT`/`STRING_AGG`/`JSON_ROW`-style
-  aggregates. See [Aggregate Types](types/OQL-Types.md#aggregate-types).
+  aggregates. See [Aggregate Types](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types#aggregate-types).
 - **Runtime validation as a defense-in-depth layer** — every query
   shape and cross-property scoping rule TypeScript can't express is
-  checked before translation. See [Validators](asserts/OQL-Asserts.md).
+  checked before translation. See [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts).
 - **4-dialect translation** — SQL (PostgreSQL, MariaDB, SQLite) and
   NoSQL (MongoDB), with a documented
-  [compatibility matrix](docs/Compatibility.md) for where behavior
+  [compatibility matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility) for where behavior
   diverges per dialect.
 
 ## Modules
 
-| Module                                     | Description                                         | Documentation                        |
-| ------------------------------------------ | --------------------------------------------------- | ------------------------------------ |
-| [Types](types/OQL-Types.md)                | Query type definitions and interfaces               | [Docs](types/OQL-Types.md)           |
-| [Asserts](asserts/OQL-Asserts.md)          | Runtime query validators                            | [Docs](asserts/OQL-Asserts.md)       |
-| [Translator](translator/OQL-Translator.md) | SQL/NoSQL query translators                         | [Docs](translator/OQL-Translator.md) |
-| [Errors](errors/OQL-Errors.md)             | Error types (`OqlError`, `DialectUnsupportedError`) | [Docs](errors/OQL-Errors.md)         |
+| Module                                                                     | Description                                         | Documentation                                                        |
+| -------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------- |
+| [Types](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types)           | Query type definitions and interfaces               | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types)      |
+| [Asserts](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts)       | Runtime query validators                            | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts)    |
+| [Translator](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Translator) | SQL/NoSQL query translators                         | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Translator) |
+| [Errors](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Errors)         | Error types (`OqlError`, `DialectUnsupportedError`) | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Errors)     |
 
 ## Installation
 
@@ -134,8 +134,8 @@ const { sql, params } = translator.select(query);
 OQL supports all standard database operations:
 
 Every DML/DDL branch is documented with its full field shape in
-[Type System](types/OQL-Types.md#query-types), and every runtime
-constraint it enforces in [Validators](asserts/OQL-Asserts.md). The
+[Type System](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types#query-types), and every runtime
+constraint it enforces in [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts). The
 notes below are only the footguns worth knowing before you reach for
 one.
 
@@ -153,7 +153,7 @@ one.
 - **DELETE** - Delete records
 - **UPSERT** - Insert or update (conflict resolution). `updateOnConflict`
   must be disjoint from `conflictKeys` and every entry must exist as a
-  key in `data` — see [Validators](asserts/OQL-Asserts.md#upsert-query).
+  key in `data` — see [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#upsert-query).
 - **COUNT** - Count records with optional filtering and
   `COUNT(DISTINCT col)`. No `having` — a COUNT has no GROUP BY to filter
   against; use `SELECT` with `aggregates` + `having` instead.
@@ -167,7 +167,7 @@ one.
 - **ALTER_TABLE** - Modify table structure. `alterColumns` entries must
   set `nullable` explicitly (a boolean) — dialects disagree on the
   default for an omitted one. See
-  [Validators](asserts/OQL-Asserts.md#alter-table).
+  [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#alter-table).
 - **TRUNCATE** - Clear table data
 - **CREATE_INDEX** - Create indexes
 - **DROP_INDEX** - Drop indexes
@@ -284,7 +284,7 @@ unknown. Use `$null: true` / `$null: false` instead. The shorthand
 (`'@active': true`), an array (`'@active': [true, false]`, implicit
 `$in`), or `null` (implicit `$null: true`). The `{ $eq: … }`-style
 operator-object syntax does not type-check on a boolean column at all;
-see [Operators](types/OQL-Types.md#operators) for the worked example and
+see [Operators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types#operators) for the worked example and
 why.
 
 ### Correlated EXISTS Filters
@@ -323,7 +323,7 @@ subquery table locally (literals only); expression objects are
 rejected in `on`. Emits native `EXISTS (SELECT 1 …)` on
 Postgres/MariaDB/SQLite; **MongoDB throws** `DialectUnsupportedError`
 (no correlated-subquery form). See
-[Compatibility Matrix](docs/Compatibility.md).
+[Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility).
 
 ### JOIN Support
 
@@ -376,7 +376,7 @@ const query: Query<'SELECT', User, {
 > `$lookup` on Mongo — `RIGHT` is not reversed and `FULL` does not
 > throw, they both silently behave like `LEFT`. This is a translator
 > gap, not documented degradation. See the
-> [JOINs section of the Compatibility Matrix](docs/Compatibility.md#joins)
+> [JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins)
 > before relying on join `type` on a Mongo-backed query.
 
 ### JSON Column Filtering
@@ -438,7 +438,7 @@ comparisons (`$gt`, `$lt`, `$between`, …) are rejected because extraction
 yields dialect-dependent value types. A join alias with the same name as
 a column always wins the dotted syntax, and only identifier-shaped JSON
 keys are expressible. See the
-[translator guide](translator/OQL-Translator.md#json-path-filtering) for
+[translator guide](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Translator#json-path-filtering) for
 the emitted SQL, precedence rules, and the full v1 limitation list.
 
 At the type level, path keys appear in the typed filter surface only when
@@ -531,7 +531,7 @@ const query: Query<'SELECT', Product> = {
 
 - **MongoDB** - Translates to MongoDB aggregation pipeline and CRUD operations
 
-**Note:** While OQL aims for cross-database compatibility, some features have dialect-specific behavior. See [Compatibility Matrix](docs/Compatibility.md) for detailed information on feature support, graceful degradation, and dialect-specific differences.
+**Note:** While OQL aims for cross-database compatibility, some features have dialect-specific behavior. See [Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility) for detailed information on feature support, graceful degradation, and dialect-specific differences.
 
 ## Security
 
@@ -569,7 +569,7 @@ If you need at-rest hashing or encryption that works on every dialect,
 do it **client-side before the call**. Do not rely on `HASH` / `ENCRYPT`
 unless you've pinned the dialect to Postgres or MariaDB. See the
 "HASH / ENCRYPT / DECRYPT gotcha" section in
-[docs/Compatibility.md](docs/Compatibility.md) for the per-dialect
+[docs/OQL-Compatibility.md](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility) for the per-dialect
 behaviour table.
 
 ### View bodies inline literals
@@ -605,12 +605,12 @@ system can't express on its own, for example:
   against runaway recursion.
 - Every DDL validator rejects an unrecognized property as a typo-catcher.
 
-See [Validators](asserts/OQL-Asserts.md) for the full per-query-type
+See [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts) for the full per-query-type
 constraint list — including the one gap worth knowing up front:
 operator-to-column-type gating (`$like` only on strings, `$gt` only on
 numeric/date) is a **TypeScript-only** guarantee. `assertQuery` does
 **not** re-check it at runtime — see the note under
-[Operators](asserts/OQL-Asserts.md#operators).
+[Operators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#operators).
 
 ```typescript
 import type { Query } from '@tundralibs/oql';
@@ -786,16 +786,16 @@ assertQuery(query);
 On MongoDB this compiles to an aggregation over the **source** collection
 ending in `$merge` (append) rather than `$out` (which would replace the
 whole target collection) — see the "INSERT … SELECT" section of the
-[Compatibility Matrix](docs/Compatibility.md) for the full per-dialect
+[Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility) for the full per-dialect
 breakdown.
 
 ## Documentation
 
-- [Type System](types/OQL-Types.md) - Complete type definitions
-- [Validators](asserts/OQL-Asserts.md) - Runtime validation
-- [Translators](translator/OQL-Translator.md) - SQL/NoSQL translation
-- [Errors](errors/OQL-Errors.md) - Error classes and stable error codes
-- [Compatibility](docs/Compatibility.md) - Database compatibility matrix
+- [Type System](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Types) - Complete type definitions
+- [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts) - Runtime validation
+- [Translators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Translator) - SQL/NoSQL translation
+- [Errors](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Errors) - Error classes and stable error codes
+- [Compatibility](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility) - Database compatibility matrix
 
 ## Performance
 

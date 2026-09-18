@@ -273,7 +273,7 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
 > unmatched local document still comes through with an empty array for
 > the join alias. `RIGHT` is **not** emulated by reversing collections
 > and `FULL` does **not** throw — both silently behave like `LEFT`. See
-> the [Compatibility Matrix](../docs/Compatibility.md#joins) for the
+> the [Compatibility Matrix](../docs/OQL-Compatibility.md#joins) for the
 > full breakdown before relying on join `type` on Mongo.
 
 **Pipeline-ordering guarantees:**
@@ -728,7 +728,7 @@ OQL translators aim for cross-database compatibility, but some features have dia
 
 For comprehensive dialect differences, feature support matrices, and edge cases, see:
 
-📖 **[Database Compatibility Matrix](../docs/Compatibility.md)**
+📖 **[Database Compatibility Matrix](../docs/OQL-Compatibility.md)**
 
 This reference covers:
 
@@ -743,7 +743,7 @@ This reference covers:
 
 - [Type System](../types/OQL-Types.md) - Query type definitions
 - [Validators](../asserts/OQL-Asserts.md) - Runtime validation
-- [Compatibility](../docs/Compatibility.md) - Feature compatibility matrix
+- [Compatibility](../docs/OQL-Compatibility.md) - Feature compatibility matrix
 
 ---
 

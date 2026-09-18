@@ -61,7 +61,7 @@ sets a `vendor` identifier and exposes domain methods (e.g. `getUser`,
 - emits lifecycle events (`call`, `authFailure`, `rateLimit`, …);
 - maps failures onto typed errors.
 
-Requests run over [`@tundralibs/compat`](../compat/README.md)'s runtime-aware
+Requests run over [`@tundralibs/compat`](https://github.com/TundraSoft/TundraLibs/wiki/compat)'s runtime-aware
 `fetch`, so the same client works on Deno, Bun, Node, Workers, and in the
 browser — including, on Deno and Bun, its Unix socket and TLS client-auth
 extensions.
@@ -531,7 +531,7 @@ an error context: sensitive header values, `url` query-string values and
 userinfo, and the `payload` (omitted entirely) never leak into a log. The
 request actually sent over the wire is unaffected.
 
-> See [Restler-Security](docs/Restler-Security.md) for the full redaction
+> See [Restler-Security](https://github.com/TundraSoft/TundraLibs/wiki/Restler-Security) for the full redaction
 > contract — exactly what is and isn't covered, how a transport failure's
 > `cause` chain is scrubbed, and how to extend the sensitive-header set for a
 > vendor-specific credential header via `_isSensitiveHeader`.
@@ -620,7 +620,7 @@ const api = new GitHubAPI(token, {
 const res = await api.getUser('octocat'); // traced + propagated, nothing new here
 ```
 
-**`witness`** — the suite's [Witness convention](../norm/README.md#tracing-witness)
+**`witness`** — the suite's [Witness convention](https://github.com/TundraSoft/TundraLibs/wiki/NORM#tracing-witness)
 (shared shape with norm): every request runs through the hook with a
 span-style name (`restler.github GET`) and low-cardinality attributes
 (vendor, method, raw path — never the resolved URL or query string, which
@@ -644,14 +644,14 @@ headerProvider: () => ({
 
 **Correlated logs.** Event listeners fire inside the calling request's async
 context, so a logger wired with a `contextProvider`
-([ambient](../ambient/README.md) request bag, trace identity via
+([ambient](https://github.com/TundraSoft/TundraLibs/wiki/Ambient) request bag, trace identity via
 `tracer.logContext`) stamps correlation ids on every line a listener emits —
 no argument threading. See
-[Slogger-Correlation](../slogger/docs/Slogger-Correlation.md).
+[Slogger-Correlation](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Correlation).
 
 For the raw-`fetch` shape these hooks replace — or clients not built on
 RESTler — see
-[Outbound: propagating the trace](../tracer/docs/Tracer-Recipes.md#outbound-propagating-the-trace).
+[Outbound: propagating the trace](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Recipes#outbound-propagating-the-trace).
 
 ## Vendor Response Handling
 
@@ -828,7 +828,7 @@ throws, or a [response schema](#responseschema) rejects the response.
 | `RESTlerError`                   | Base class for all of the above.                                                                                                                       |
 
 > Every error's `context.request` is credential-redacted the same way as the
-> `call` event's copy (see [Restler-Security](docs/Restler-Security.md)) — but
+> `call` event's copy (see [Restler-Security](https://github.com/TundraSoft/TundraLibs/wiki/Restler-Security)) — but
 > `RESTlerTimeoutError.message` is currently a literal, un-interpolated string
 > (it reads `Request timed out after ${request.timeout}s` verbatim, with the
 > placeholder text and not the actual number). Match on `instanceof`, not on
@@ -946,9 +946,9 @@ validates and stores options; `defaults` are applied where `options` omit them.
 
 ## Documentation
 
-- [Security](docs/Restler-Security.md) - The credential-redaction contract:
+- [Security](https://github.com/TundraSoft/TundraLibs/wiki/Restler-Security) - The credential-redaction contract:
   what's covered, what isn't, and extending it for a vendor-specific header
-- [Examples](examples/) - A runnable, end-to-end vendor client (auth +
+- [Examples](https://github.com/TundraSoft/TundraLibs/tree/main/packages/restler/examples) - A runnable, end-to-end vendor client (auth +
   response handling + events + error mapping)
 
 ## License

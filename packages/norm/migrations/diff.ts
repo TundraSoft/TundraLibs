@@ -60,7 +60,7 @@ export type DiffOptions = {
  * `undefined` if it can — the FK itself (joins, eager projection,
  * reverse relations) is never affected, only the physical DDL
  * constraint. Best-effort degrade, never throw, per OQL's compat-layer
- * philosophy (`packages/oql/docs/Compatibility.md`): MongoDB has no
+ * philosophy (`packages/oql/docs/OQL-Compatibility.md`): MongoDB has no
  * physical FK enforcement at all, so every FK is skipped there.
  *
  * SQLite is NOT a special case: `dbSchema` is folded into the physical

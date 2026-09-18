@@ -69,42 +69,59 @@ packages/{package}/
 
 ## Link Format
 
-Links MUST be relative and will be processed by the wiki-sync workflow.
+Two contracts, because the same markdown renders in three places. Run
+`deno task docs:links` to check and `deno task docs:links:fix` to apply;
+CI enforces it on every PR.
 
-### Correct Link Format
+**A package `README.md` links ABSOLUTELY.** JSR renders this file and
+rewrites its relative links to `github.com/<repo>/blob/HEAD/<target>`
+resolved against the REPOSITORY root — which in this monorepo drops the
+`packages/<pkg>/` prefix, so every relative link 404s for consumers. Point
+at the wiki when the target is wiki-synced, at a GitHub `blob`/`tree` URL
+when it is not (a `ROADMAP.md`, a source file, an `examples/` directory).
 
 ```markdown
-<!-- From the package README.md to Compat-Server.md -->
+<!-- Wiki-synced sub-doc -->
 
-[Server](server/Compat-Server.md)
+[Server](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Server)
 
-<!-- From Compat-Server.md to Compat-Server-WebSocket.md -->
+<!-- Another package's main doc -->
+
+[Compat](https://github.com/TundraSoft/TundraLibs/wiki/compat)
+
+<!-- Not wiki-synced: internal notes, source, examples -->
+
+[Roadmap](https://github.com/TundraSoft/TundraLibs/blob/main/packages/oql/ROADMAP.md)
+```
+
+**Every other markdown links RELATIVELY** — sub-docs, example READMEs, the
+root README. These are read in the repo, and `wiki-sync.ts` rewrites them
+when it publishes the wiki, so a correct in-repo link is automatically a
+correct wiki link.
+
+```markdown
+<!-- From Compat-Server.md to a sibling topic -->
 
 [WebSocket](docs/Compat-Server-WebSocket.md)
 
-<!-- From Compat-Server-WebSocket.md back to Compat-Server.md -->
-
-[← Back to Server](../Compat-Server.md)
-
-<!-- From Compat-Server.md back to the package main doc -->
+<!-- Back up to the package main doc -->
 
 [← Back to Compat](../README.md)
-
-<!-- Cross-package link to another package's main doc -->
-
-[Compat](../compat/README.md)
 ```
 
 ### Rules
 
-1. **Use relative paths** - `../README.md` not absolute paths
-2. **Include .md extension** - `Compat-Server.md` not `Compat-Server`
-3. **No URL schemes** - Not `file://` or `https://`
-4. **Anchors are OK** - `Compat-Server.md#websocket`
-5. **Links resolve in-repo** - The wiki-sync script resolves each link
-   relative to the file containing it, so a correct GitHub link is
-   automatically a correct wiki link. Links to non-wiki repo files are
-   rewritten to GitHub blob URLs; links to missing files fail the sync.
+1. **Include the `.md` extension** on relative links - `Compat-Server.md`,
+   not `Compat-Server`. Wiki URLs carry no extension.
+2. **Anchors are fine** in both forms - `…/wiki/Compat-Server#websocket`,
+   `Compat-Server.md#websocket`.
+3. **Never link to a wiki page that is not synced.** A page exists only if
+   the source file's name starts with the package's wiki name
+   (case-insensitively) — see the naming convention above. The checker
+   fails on a wiki link naming a page `wiki-sync.ts` will not emit.
+4. **Dead links fail** the check and the sync, in both directions.
+5. **A relative link that resolves is left alone** - the fixer does not
+   normalise spelling, so `./docs/X.md` and `docs/X.md` both pass.
 
 ## Document Structure
 

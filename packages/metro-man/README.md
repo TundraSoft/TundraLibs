@@ -28,15 +28,15 @@ so it runs unchanged on Workers and in the browser; wiring the
 
 ## Modules
 
-| Module      | Description                                              | Documentation                                    |
-| ----------- | -------------------------------------------------------- | ------------------------------------------------ |
-| `MetroMan`  | Registry — create, store, and bulk-collect metrics       | This page                                        |
-| `Counter`   | Monotonic counter (values only increase)                 | [MetroMan-Counter](docs/MetroMan-Counter.md)     |
-| `Gauge`     | Up/down value (set, inc, dec)                            | [MetroMan-Gauge](docs/MetroMan-Gauge.md)         |
-| `Histogram` | Bucketed distribution                                    | [MetroMan-Histogram](docs/MetroMan-Histogram.md) |
-| `Summary`   | Quantile-based distribution over a sliding window        | [MetroMan-Summary](docs/MetroMan-Summary.md)     |
-| `./errors`  | `MetroManError` plus `InvalidMetricOptionsError` etc.    | [MetroMan-Errors](docs/MetroMan-Errors.md)       |
-| `./types`   | `MetricOptions`, `MetricOutput`, per-metric option types | —                                                |
+| Module      | Description                                              | Documentation                                                                          |
+| ----------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `MetroMan`  | Registry — create, store, and bulk-collect metrics       | This page                                                                              |
+| `Counter`   | Monotonic counter (values only increase)                 | [MetroMan-Counter](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Counter)     |
+| `Gauge`     | Up/down value (set, inc, dec)                            | [MetroMan-Gauge](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Gauge)         |
+| `Histogram` | Bucketed distribution                                    | [MetroMan-Histogram](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Histogram) |
+| `Summary`   | Quantile-based distribution over a sliding window        | [MetroMan-Summary](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Summary)     |
+| `./errors`  | `MetroManError` plus `InvalidMetricOptionsError` etc.    | [MetroMan-Errors](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Errors)       |
+| `./types`   | `MetricOptions`, `MetricOutput`, per-metric option types | —                                                                                      |
 
 ## Installation
 
@@ -197,20 +197,20 @@ Construct an empty registry.
 
 ### `counter(options) → Counter`
 
-Create a [Counter](docs/MetroMan-Counter.md) and register it under
+Create a [Counter](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Counter) and register it under
 `options.name`.
 
 ### `gauge(options) → Gauge`
 
-Create a [Gauge](docs/MetroMan-Gauge.md) and register it.
+Create a [Gauge](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Gauge) and register it.
 
 ### `histogram(options) → Histogram`
 
-Create a [Histogram](docs/MetroMan-Histogram.md) and register it.
+Create a [Histogram](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Histogram) and register it.
 
 ### `summary(options) → Summary`
 
-Create a [Summary](docs/MetroMan-Summary.md) and register it.
+Create a [Summary](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Summary) and register it.
 
 ### `register(...instances) → void`
 
@@ -304,16 +304,16 @@ scrapers reject.
 
 ## Related Documentation
 
-- [Counter](docs/MetroMan-Counter.md) — monotonic counter
-- [Gauge](docs/MetroMan-Gauge.md) — up/down value
-- [Histogram](docs/MetroMan-Histogram.md) — bucketed distribution
-- [Summary](docs/MetroMan-Summary.md) — quantile distribution with sliding window
-- [Errors](docs/MetroMan-Errors.md) — error classes and matching strategies
-- [`@tundralibs/slogger`](../slogger/README.md) /
-  [`@tundralibs/tracer`](../tracer/README.md) — the sibling observability
+- [Counter](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Counter) — monotonic counter
+- [Gauge](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Gauge) — up/down value
+- [Histogram](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Histogram) — bucketed distribution
+- [Summary](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Summary) — quantile distribution with sliding window
+- [Errors](https://github.com/TundraSoft/TundraLibs/wiki/MetroMan-Errors) — error classes and matching strategies
+- [`@tundralibs/slogger`](https://github.com/TundraSoft/TundraLibs/wiki/Slogger) /
+  [`@tundralibs/tracer`](https://github.com/TundraSoft/TundraLibs/wiki/Tracer) — the sibling observability
   pillars (logs / traces); event-emitting packages feed all three from the
   same seam — see drivers'
-  [Observability](../drivers/README.md#observability) section for the shape
+  [Observability](https://github.com/TundraSoft/TundraLibs/wiki/drivers#observability) section for the shape
 
 ## License
 

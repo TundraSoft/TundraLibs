@@ -37,26 +37,26 @@ Cloudflare Workers connects `PostgresEngine`, `RedisEngine` and
 connects on Workers, but by a different path: it wraps the third-party
 `mariadb` driver directly (not `compat/net`), so it needs Wrangler's
 `nodejs_compat` flag to shim `node:net` underneath it. See the
-[compatibility matrix](docs/Drivers-Compatibility.md) for how every engine
+[compatibility matrix](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Compatibility) for how every engine
 compares on transport, edge-safety, and capabilities.
 
 ## Modules
 
-| Module                                                | Description                                                                                       | Documentation                                  |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| [BaseEngine](docs/Drivers-BaseEngine.md)              | Abstract base — connection lifecycle, inline pool, SSL, events                                    | [Docs](docs/Drivers-BaseEngine.md)             |
-| [SQLEngine](docs/Drivers-SQLEngine.md)                | Abstract SQL/document base — transactions, query execution, named-param rewriting                 | [Docs](docs/Drivers-SQLEngine.md)              |
-| [Error Handling](docs/Drivers-Errors.md)              | Standardized error codes and handling patterns for all engines                                    | [Docs](docs/Drivers-Errors.md)                 |
-| [Memcached](engines/memcached/Drivers-Memcached.md)   | Memcached driver (text protocol over TCP)                                                         | [Docs](engines/memcached/Drivers-Memcached.md) |
-| [Redis](engines/redis/Drivers-Redis.md)               | Redis driver (RESP3, from scratch)                                                                | [Docs](engines/redis/Drivers-Redis.md)         |
-| [Postgres](engines/postgres/Drivers-Postgres.md)      | Postgres driver (wire protocol from scratch, SCRAM-SHA-256). **Status: 1.0.0-rc.**                | [Docs](engines/postgres/Drivers-Postgres.md)   |
-| [MariaDB](engines/maria/Drivers-Maria.md)             | MariaDB / MySQL driver (wraps `npm:mariadb`)                                                      | [Docs](engines/maria/Drivers-Maria.md)         |
-| [SQLite](engines/sqlite/Drivers-SQLite.md)            | SQLite driver (runtime-branched: `bun:sqlite` / `jsr:@db/sqlite` / `node:sqlite`)                 | [Docs](engines/sqlite/Drivers-SQLite.md)       |
-| [MongoDB](engines/mongo/Drivers-Mongo.md)             | MongoDB driver (wraps `npm:mongodb`)                                                              | [Docs](engines/mongo/Drivers-Mongo.md)         |
-| [Neon (HTTP)](engines/neon/Drivers-Neon.md)           | Postgres-over-HTTP edge driver — fetch-only, no sockets. **Edge/serverless-safe.**                | [Docs](engines/neon/Drivers-Neon.md)           |
-| [Turso (HTTP)](engines/turso/Drivers-Turso.md)        | SQLite-over-HTTP edge driver — fetch-only, no native binding. **Edge/serverless-safe.**           | [Docs](engines/turso/Drivers-Turso.md)         |
-| [Cloudflare D1 (HTTP)](engines/d1/Drivers-D1.md)      | SQLite-over-HTTP (D1 REST) edge driver — fetch-only, no native binding. **Edge/serverless-safe.** | [Docs](engines/d1/Drivers-D1.md)               |
-| [Compatibility matrix](docs/Drivers-Compatibility.md) | Every engine's kind, dialect, transport, edge-safety, and declared capabilities                   | [Docs](docs/Drivers-Compatibility.md)          |
+| Module                                                                                      | Description                                                                                       | Documentation                                                               |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [BaseEngine](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-BaseEngine)              | Abstract base — connection lifecycle, inline pool, SSL, events                                    | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-BaseEngine)    |
+| [SQLEngine](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-SQLEngine)                | Abstract SQL/document base — transactions, query execution, named-param rewriting                 | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-SQLEngine)     |
+| [Error Handling](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Errors)              | Standardized error codes and handling patterns for all engines                                    | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Errors)        |
+| [Memcached](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Memcached)                | Memcached driver (text protocol over TCP)                                                         | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Memcached)     |
+| [Redis](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Redis)                        | Redis driver (RESP3, from scratch)                                                                | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Redis)         |
+| [Postgres](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Postgres)                  | Postgres driver (wire protocol from scratch, SCRAM-SHA-256). **Status: 1.0.0-rc.**                | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Postgres)      |
+| [MariaDB](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Maria)                      | MariaDB / MySQL driver (wraps `npm:mariadb`)                                                      | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Maria)         |
+| [SQLite](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-SQLite)                      | SQLite driver (runtime-branched: `bun:sqlite` / `jsr:@db/sqlite` / `node:sqlite`)                 | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-SQLite)        |
+| [MongoDB](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Mongo)                      | MongoDB driver (wraps `npm:mongodb`)                                                              | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Mongo)         |
+| [Neon (HTTP)](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Neon)                   | Postgres-over-HTTP edge driver — fetch-only, no sockets. **Edge/serverless-safe.**                | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Neon)          |
+| [Turso (HTTP)](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Turso)                 | SQLite-over-HTTP edge driver — fetch-only, no native binding. **Edge/serverless-safe.**           | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Turso)         |
+| [Cloudflare D1 (HTTP)](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-D1)            | SQLite-over-HTTP (D1 REST) edge driver — fetch-only, no native binding. **Edge/serverless-safe.** | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-D1)            |
+| [Compatibility matrix](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Compatibility) | Every engine's kind, dialect, transport, edge-safety, and declared capabilities                   | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Compatibility) |
 
 ## Installation
 
@@ -234,7 +234,7 @@ engine.on('query', (_id, result) => {
 For distributed tracing, `@tundralibs/tracer` documents a ready-made recipe
 that turns these events into correctly-parented `CLIENT` spans — one handler,
 zero coupling in either direction: see
-[Tracing drivers without wrapping every call](../tracer/docs/Tracer-Recipes.md#tracing-drivers-without-wrapping-every-call).
+[Tracing drivers without wrapping every call](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Recipes#tracing-drivers-without-wrapping-every-call).
 
 > `EngineQueryResult.query` contains the **statement**. Forwarding it to a log
 > or trace backend can leak user data — sanitise first, or leave it off.
@@ -341,7 +341,7 @@ This enables consistent error handling across different database systems.
 `QUERY_EXECUTION_FAILED`, `MISSING_PARAMETERS`, `TRANSACTION_NOT_FOUND`,
 `TRANSACTION_OPERATION_ERROR`, `OPERATION_FAILED`, `UNSUPPORTED_OPERATION`.
 
-See [Error Handling](docs/Drivers-Errors.md) for complete documentation of all error codes, handling patterns, and examples.
+See [Error Handling](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Errors) for complete documentation of all error codes, handling patterns, and examples.
 
 ## License
 

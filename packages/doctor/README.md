@@ -210,7 +210,7 @@ whichever scope its first resolution happens to carry, and that
 scope's instance stays captive in the singleton for its whole
 lifetime. SCOPED resolutions themselves always require a scope —
 asking for a SCOPED vial without one throws
-[`ScopeRequiredError`](errors/Doctor-Errors.md#scoperequirederror).
+[`ScopeRequiredError`](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Errors#scoperequirederror).
 
 ## Scopes and the ambient operation scope
 
@@ -261,7 +261,7 @@ to warm). Returns the number of singletons dispensed.
 
 See it catch a real missing dependency, then pass once the
 dependency registers, in the
-[order-service example](examples/order-service/) (`wiring.ts`).
+[order-service example](https://github.com/TundraSoft/TundraLibs/tree/main/packages/doctor/examples/order-service) (`wiring.ts`).
 
 ## Vials with constructor arguments
 
@@ -357,7 +357,7 @@ Two caveats, both by design:
   when you are done — the scope a `Doctor.resolve(Handler, scope)`
   operation carries, not an ambient per-request context.
 
-Full API in [stock](docs/Doctor-Stock.md).
+Full API in [stock](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Stock).
 
 ## Multi-container: `createContainer` + `setContainerProvider`
 
@@ -386,26 +386,26 @@ console.log(new Greeter().name); // 'global-value' — a bare `new` never sees a
 Full API, the async-host bridge (`setContainerProvider`), and the
 constraints above (`@Vial` always registers to the global; a bare `new`
 never sees a child; `resolve()`'s factory lookup never reads through to the
-parent) in [containers](docs/Doctor-Container.md).
+parent) in [containers](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Container).
 
 ## Modules
 
-| Module                                     | Description                                                  | Documentation                                |
-| ------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------- |
-| `Doctor`                                   | Process-wide injector (register, dispense, resolve, checkup) | This page                                    |
-| `inject`                                   | Resolve by label, by class, or — untyped — by name           | [Doctor-Inject](docs/Doctor-Inject.md)       |
-| `stock`                                    | Typed labels for ready-made values and labelled factories    | [Doctor-Stock](docs/Doctor-Stock.md)         |
-| `@Vial`                                    | Class decorator — registers the class                        | [Doctor-Vial](docs/Doctor-Vial.md)           |
-| `createContainer` / `setContainerProvider` | Child containers + async-host bridging                       | [Doctor-Container](docs/Doctor-Container.md) |
-| `./decorators`                             | `Vial` decorator (same export as root, narrower import)      | [Doctor-Vial](docs/Doctor-Vial.md)           |
-| `./errors`                                 | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](errors/Doctor-Errors.md)     |
-| `./types`                                  | `Vial`, `VialModes`, `VialOptions`, `Label`, `StockOptions`  | —                                            |
-| `./examples`                               | The runnable order-service example                           | [examples/](examples/order-service/)         |
+| Module                                     | Description                                                  | Documentation                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `Doctor`                                   | Process-wide injector (register, dispense, resolve, checkup) | This page                                                                                              |
+| `inject`                                   | Resolve by label, by class, or — untyped — by name           | [Doctor-Inject](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Inject)                           |
+| `stock`                                    | Typed labels for ready-made values and labelled factories    | [Doctor-Stock](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Stock)                             |
+| `@Vial`                                    | Class decorator — registers the class                        | [Doctor-Vial](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Vial)                               |
+| `createContainer` / `setContainerProvider` | Child containers + async-host bridging                       | [Doctor-Container](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Container)                     |
+| `./decorators`                             | `Vial` decorator (same export as root, narrower import)      | [Doctor-Vial](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Vial)                               |
+| `./errors`                                 | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Errors)                           |
+| `./types`                                  | `Vial`, `VialModes`, `VialOptions`, `Label`, `StockOptions`  | —                                                                                                      |
+| `./examples`                               | The runnable order-service example                           | [examples/](https://github.com/TundraSoft/TundraLibs/tree/main/packages/doctor/examples/order-service) |
 
 ## Example
 
 One runnable, multi-file app under
-[`packages/doctor/examples/order-service/`](examples/order-service/) covers
+[`packages/doctor/examples/order-service/`](https://github.com/TundraSoft/TundraLibs/tree/main/packages/doctor/examples/order-service) covers
 every idea on this page: typed labels stocked at boot, a factory-prescribed
 vial, SINGLETON / SCOPED / TRANSIENT lifecycles, the ambient operation
 scope via `Doctor.resolve(Handler, scope)` + `discharge`, a lazy getter
@@ -420,12 +420,12 @@ node --import tsx packages/doctor/examples/order-service/main.ts
 
 ## Related Documentation
 
-- [inject](docs/Doctor-Inject.md) — resolve by label, by class, or untyped by name
-- [stock](docs/Doctor-Stock.md) — typed labels for ready-made values and labelled factories
-- [@Vial](docs/Doctor-Vial.md) — registration decorator
-- [containers](docs/Doctor-Container.md) — child containers + async-host bridging
-- [Errors](errors/Doctor-Errors.md) — error classes and matching strategies
-- [order-service example](examples/order-service/) — every idea above in one runnable app
+- [inject](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Inject) — resolve by label, by class, or untyped by name
+- [stock](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Stock) — typed labels for ready-made values and labelled factories
+- [@Vial](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Vial) — registration decorator
+- [containers](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Container) — child containers + async-host bridging
+- [Errors](https://github.com/TundraSoft/TundraLibs/wiki/Doctor-Errors) — error classes and matching strategies
+- [order-service example](https://github.com/TundraSoft/TundraLibs/tree/main/packages/doctor/examples/order-service) — every idea above in one runnable app
 
 ## License
 

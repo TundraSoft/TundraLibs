@@ -2,7 +2,7 @@
  * SQLite OQL translator. Targets SQLite 3.39+ (FULL JOIN, native
  * `ON CONFLICT DO UPDATE`, JSON1, RETURNING).
  *
- * Compatibility notes (full breakdown in `packages/oql/docs/Compatibility.md`):
+ * Compatibility notes (full breakdown in `packages/oql/docs/OQL-Compatibility.md`):
  * - Schemas: SQLite has no schema object at all, so `CREATE_SCHEMA` /
  *   `DROP_SCHEMA` are refused (`DialectUnsupportedError`). The OQL
  *   `schema` a query carries is instead folded into the physical

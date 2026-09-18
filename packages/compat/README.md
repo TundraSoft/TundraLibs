@@ -14,22 +14,22 @@ The `@tundralibs/compat` package provides unified APIs that work consistently ac
 
 ## Modules
 
-| Module                                           | Description                                                        | Documentation                              |
-| ------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------ |
-| [WebServer](webserver/Compat-WebServer.md)       | HTTP/HTTPS + WebSocket server (all 3 runtimes)                     | [Full Docs](webserver/Compat-WebServer.md) |
-| [WebSocketServer](websocket/Compat-WebSocket.md) | Middleware-aware WebSocket primitive (codec, broadcast, lifecycle) | [Docs](websocket/Compat-WebSocket.md)      |
-| [Common](docs/Compat-Common.md)                  | TLS types, error classes                                           | [Docs](docs/Compat-Common.md)              |
-| [Runtime](docs/Compat-Runtime.md)                | Runtime detection, OS/arch, env, signals, memory                   | [Docs](docs/Compat-Runtime.md)             |
-| [CLI](docs/Compat-Cli.md)                        | Args/argv, terminal, prompt, progress, spinner                     | [Docs](docs/Compat-Cli.md)                 |
-| [File](docs/Compat-File.md)                      | File system operations                                             | [Docs](docs/Compat-File.md)                |
-| [Watch](docs/Compat-Watch.md)                    | Cross-runtime filesystem watching                                  | [Docs](docs/Compat-Watch.md)               |
-| [Net](docs/Compat-Net.md)                        | Networking utilities                                               | [Docs](docs/Compat-Net.md)                 |
-| [Path](docs/Compat-Path.md)                      | Path utilities                                                     | [Docs](docs/Compat-Path.md)                |
-| [Permissions](docs/Compat-Permissions.md)        | Permission checking                                                | [Docs](docs/Compat-Permissions.md)         |
-| [Test](docs/Compat-Test.md)                      | Testing utilities                                                  | [Docs](docs/Compat-Test.md)                |
-| [Bench](docs/Compat-Bench.md)                    | Cross-runtime micro-benchmark harness                              | [Docs](docs/Compat-Bench.md)               |
-| [Fetch](docs/Compat-Fetch.md)                    | HTTP client utilities                                              | [Docs](docs/Compat-Fetch.md)               |
-| [Http](docs/Compat-Http.md)                      | Methods/status/text, negotiation, ranges, cookies, content-type    | [Docs](docs/Compat-Http.md)                |
+| Module                                                                            | Description                                                        | Documentation                                                               |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| [WebServer](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebServer)       | HTTP/HTTPS + WebSocket server (all 3 runtimes)                     | [Full Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebServer) |
+| [WebSocketServer](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebSocket) | Middleware-aware WebSocket primitive (codec, broadcast, lifecycle) | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebSocket)      |
+| [Common](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Common)             | TLS types, error classes                                           | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Common)         |
+| [Runtime](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Runtime)           | Runtime detection, OS/arch, env, signals, memory                   | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Runtime)        |
+| [CLI](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Cli)                   | Args/argv, terminal, prompt, progress, spinner                     | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Cli)            |
+| [File](https://github.com/TundraSoft/TundraLibs/wiki/Compat-File)                 | File system operations                                             | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-File)           |
+| [Watch](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Watch)               | Cross-runtime filesystem watching                                  | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Watch)          |
+| [Net](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Net)                   | Networking utilities                                               | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Net)            |
+| [Path](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Path)                 | Path utilities                                                     | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Path)           |
+| [Permissions](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Permissions)   | Permission checking                                                | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Permissions)    |
+| [Test](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Test)                 | Testing utilities                                                  | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Test)           |
+| [Bench](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Bench)               | Cross-runtime micro-benchmark harness                              | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Bench)          |
+| [Fetch](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Fetch)               | HTTP client utilities                                              | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Fetch)          |
+| [Http](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Http)                 | Methods/status/text, negotiation, ranges, cookies, content-type    | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Http)           |
 
 ## Browser / Cloudflare Workers support
 
@@ -246,7 +246,7 @@ Full-featured HTTP/HTTPS server with WebSocket support.
 import { WebServer } from '@tundralibs/compat/webserver';
 ```
 
-**[→ Full WebServer Documentation](webserver/Compat-WebServer.md)**
+**[→ Full WebServer Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebServer)**
 
 ### Common
 
@@ -264,7 +264,7 @@ import {
 } from '@tundralibs/compat';
 ```
 
-**[→ Common Documentation](docs/Compat-Common.md)**
+**[→ Common Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Common)**
 
 ### Runtime
 
@@ -290,7 +290,7 @@ import {
 } from '@tundralibs/compat/runtime';
 ```
 
-**[→ Runtime Documentation](docs/Compat-Runtime.md)**
+**[→ Runtime Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Runtime)**
 
 ### CLI
 
@@ -310,7 +310,7 @@ import {
 } from '@tundralibs/compat/cli';
 ```
 
-**[→ CLI Documentation](docs/Compat-Cli.md)**
+**[→ CLI Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Cli)**
 
 ### File
 
@@ -338,7 +338,7 @@ import {
 } from '@tundralibs/compat/file';
 ```
 
-**[→ File Documentation](docs/Compat-File.md)**
+**[→ File Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-File)**
 
 ### Watch
 
@@ -356,7 +356,7 @@ for await (const ev of w) {
 }
 ```
 
-**[→ Watch Documentation](docs/Compat-Watch.md)**
+**[→ Watch Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Watch)**
 
 ### WebSocketServer
 
@@ -400,7 +400,7 @@ wss.onMessage((ctx) => ctx.ws.send(`echo: ${ctx.message}`));
 await wss.listen({ port: 8080 });
 ```
 
-**[→ WebSocketServer Documentation](websocket/Compat-WebSocket.md)**
+**[→ WebSocketServer Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebSocket)**
 
 ### Net
 
@@ -431,7 +431,7 @@ const tlsConn = await upgradeTls(conn, {
 const host = hostname();
 ```
 
-**[→ Net Documentation](docs/Compat-Net.md)**
+**[→ Net Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Net)**
 
 ### Path
 
@@ -446,7 +446,7 @@ path.basename('/foo/bar/baz'); // 'baz'
 path.extname('file.txt'); // '.txt'
 ```
 
-**[→ Path Documentation](docs/Compat-Path.md)**
+**[→ Path Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Path)**
 
 ### Permissions
 
@@ -462,7 +462,7 @@ const canRead = await hasPermission({ name: 'read', path: './data' });
 const canWrite = hasPermissionSync({ name: 'write', path: './output' });
 ```
 
-**[→ Permissions Documentation](docs/Compat-Permissions.md)**
+**[→ Permissions Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Permissions)**
 
 ### Test
 
@@ -475,7 +475,7 @@ those, which would break every Cloudflare Workers build.
 import { afterEach, beforeEach, describe, it } from '@tundralibs/compat/test';
 ```
 
-**[→ Test Documentation](docs/Compat-Test.md)**
+**[→ Test Documentation](https://github.com/TundraSoft/TundraLibs/wiki/Compat-Test)**
 
 ## Error Handling
 
@@ -506,7 +506,7 @@ try {
 
 ## Contributing
 
-See the main [TundraLibs Contributing Guide](../../CONTRIBUTING.md).
+See the main [TundraLibs Contributing Guide](https://github.com/TundraSoft/TundraLibs/blob/main/CONTRIBUTING.md).
 
 ## License
 

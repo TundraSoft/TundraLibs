@@ -100,14 +100,14 @@ if (match) {
 
 ## Documentation
 
-| Topic                                                      | Description                                                              |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [Patterns](docs/RadRouter-Patterns.md)                     | Variable, suffix-literal, and greedy patterns; matching priority         |
-| [Routing](docs/RadRouter-Routing.md)                       | Versioned endpoints, case sensitivity, slash handling                    |
-| [API](docs/RadRouter-API.md)                               | Full reference: constructor, registration, lookup, maintenance, errors   |
-| [Wire-up](docs/RadRouter-WireUp.md)                        | Integration with `compat/webserver`, Express, Oak                        |
-| [Performance](docs/RadRouter-Performance.md)               | Benchmarks: per-shape, case-mode, router shootout                        |
-| [Tracing](../tracer/docs/Tracer-Recipes.md#radrouter--rpc) | Ready-made `@tundralibs/tracer` middleware for RadRouter's generic chain |
+| Topic                                                                                  | Description                                                              |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Patterns](https://github.com/TundraSoft/TundraLibs/wiki/RadRouter-Patterns)           | Variable, suffix-literal, and greedy patterns; matching priority         |
+| [Routing](https://github.com/TundraSoft/TundraLibs/wiki/RadRouter-Routing)             | Versioned endpoints, case sensitivity, slash handling                    |
+| [API](https://github.com/TundraSoft/TundraLibs/wiki/RadRouter-API)                     | Full reference: constructor, registration, lookup, maintenance, errors   |
+| [Wire-up](https://github.com/TundraSoft/TundraLibs/wiki/RadRouter-WireUp)              | Integration with `compat/webserver`, Express, Oak                        |
+| [Performance](https://github.com/TundraSoft/TundraLibs/wiki/RadRouter-Performance)     | Benchmarks: per-shape, case-mode, router shootout                        |
+| [Tracing](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Recipes#radrouter--rpc) | Ready-made `@tundralibs/tracer` middleware for RadRouter's generic chain |
 
 ## When to use this
 
