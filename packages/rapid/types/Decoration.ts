@@ -25,8 +25,12 @@ export type RapidDecoration =
     kind: 'HTTP';
     /** The HTTP verb. */
     method: HTTPMethod;
-    /** radrouter-native path (`/users/:id:`). */
-    path: string;
+    /**
+     * radrouter-native paths (`/users/:id:`), NORMALISED to an array —
+     * the decorators accept a single string too. Each is mounted, and
+     * each is multiplied by the owning `@Module`'s prefixes.
+     */
+    paths: readonly string[];
     binds: readonly RapidBinder[];
     /** The decorated method's name (diagnostics). */
     methodName: string;

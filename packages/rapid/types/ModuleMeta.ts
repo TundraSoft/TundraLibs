@@ -40,8 +40,13 @@ export type RapidModuleMeta = {
    * instead). Radrouter normalizes the join (`/api` + `/users` or
    * `/api/` + `/users` both become `/api/users`), so any leading/
    * trailing slash combination is safe.
+   *
+   * NORMALISED to an array by `@Module`, which accepts a single string
+   * too. Several prefixes mount the class's whole route table once per
+   * prefix — the tenant-optional shape (`['', '/:orgCode:']`) in one
+   * declaration. Absent means a single empty prefix.
    */
-  prefix?: string;
+  prefixes?: readonly string[];
   /**
    * Default `version` for every `@GET`/`@POST`/… in the class that
    * doesn't declare its own — an explicit per-method `version` always

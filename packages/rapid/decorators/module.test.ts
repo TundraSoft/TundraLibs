@@ -9,6 +9,7 @@ import type { RapidContextResponse } from '../types/mod.ts';
 import { param } from './binders.ts';
 import { GET } from './http.ts';
 import { Module } from './module.ts';
+import { RapidError } from '../errors/mod.ts';
 import { moduleMetaOf } from './registry.ts';
 
 describe('rapid.decorators.module', () => {
@@ -22,10 +23,51 @@ describe('rapid.decorators.module', () => {
     }
     asserts.assertEquals(moduleMetaOf(Users), {
       name: 'Users',
-      prefix: '/users',
+      prefixes: ['/users'],
     });
     // Metadata-only: construction and method dispatch are plain JS.
     asserts.assertEquals(new Users().find('7'), { content: { id: '7' } });
+  });
+
+  it('a prefix ARRAY is recorded as given; a single string normalises to one entry', () => {
+    @Module('Users', { prefix: ['', '/:orgCode:'] })
+    class Users {}
+    asserts.assertEquals(moduleMetaOf(Users), {
+      name: 'Users',
+      prefixes: ['', '/:orgCode:'],
+    });
+  });
+
+  it('a malformed, empty, or repeated prefix entry fails at DECORATION time', () => {
+    asserts.assertThrows(
+      () => {
+        // A bare segment would join into '/usersusers' at mount.
+        @Module('Bad', { prefix: ['/ok', 'users'] })
+        class Bad {}
+        return Bad;
+      },
+      RapidError,
+      "must be empty or start with '/'",
+    );
+    asserts.assertThrows(
+      () => {
+        // Mounts nothing at all — silent, so it is refused.
+        @Module('Empty', { prefix: [] })
+        class Empty {}
+        return Empty;
+      },
+      RapidError,
+      'cannot be an empty array',
+    );
+    asserts.assertThrows(
+      () => {
+        @Module('Dup', { prefix: ['/a', '/a'] })
+        class Dup {}
+        return Dup;
+      },
+      RapidError,
+      'must be unique',
+    );
   });
 
   it('records namespace and version alongside name/prefix', () => {
@@ -34,7 +76,7 @@ describe('rapid.decorators.module', () => {
     asserts.assertEquals(moduleMetaOf(Users), {
       name: 'Users',
       namespace: 'users',
-      prefix: '/users',
+      prefixes: ['/users'],
       version: 'v1',
     });
   });
@@ -48,7 +90,7 @@ describe('rapid.decorators.module', () => {
     class Named {}
     asserts.assertEquals(moduleMetaOf(Named), {
       name: 'Users',
-      prefix: '',
+      prefixes: [''],
       description: 'People',
       tags: ['Users', 'Directory'],
       security: ['bearerAuth'],
@@ -57,7 +99,7 @@ describe('rapid.decorators.module', () => {
     @Module({ description: 'Roles', tags: [] })
     class OptionsOnly {}
     asserts.assertEquals(moduleMetaOf(OptionsOnly), {
-      prefix: '',
+      prefixes: [''],
       description: 'Roles',
       tags: [],
     });
@@ -66,7 +108,7 @@ describe('rapid.decorators.module', () => {
   it('no options -> empty-string prefix, no namespace/version', () => {
     @Module('Bare')
     class Bare {}
-    asserts.assertEquals(moduleMetaOf(Bare), { name: 'Bare', prefix: '' });
+    asserts.assertEquals(moduleMetaOf(Bare), { name: 'Bare', prefixes: [''] });
   });
 
   it('an empty name is rejected NOW, not at mount', () => {

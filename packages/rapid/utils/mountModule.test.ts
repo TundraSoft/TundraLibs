@@ -24,6 +24,70 @@ import {
 const EVENTS = {};
 
 describe('rapid.utils.mountModule', () => {
+  it('prefixes × paths: one declaration mounts the whole cross product, and every operationId stays unique', async () => {
+    @Module('Users', { prefix: ['', '/:orgCode:'] })
+    class Users {
+      @GET('/users')
+      list(): RapidContextResponse {
+        return { content: { scope: 'list' } };
+      }
+      @GET(['/users/:id:', '/u/:id:'], { bind: [param('id')] })
+      one(id: string): RapidContextResponse {
+        return { content: { id } };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-multi',
+      server: { port: 0 },
+    });
+    app.module(new Users());
+
+    asserts.assertEquals(
+      app.routes.map((r) => `${r.method} ${r.path}`).sort(),
+      [
+        'GET /:orgCode:/u/:id:',
+        'GET /:orgCode:/users',
+        'GET /:orgCode:/users/:id:',
+        'GET /u/:id:',
+        'GET /users',
+        'GET /users/:id:',
+      ],
+    );
+
+    // OpenAPI requires operationId to be unique across the document; one
+    // method serving six paths must not repeat one id six times.
+    const ids = app.routes.map((r) => r.openapi?.operationId);
+    asserts.assertEquals(ids.filter((id) => id === undefined).length, 0);
+    asserts.assertEquals(new Set(ids).size, ids.length);
+    asserts.assert(
+      ids.includes('Users_list_orgCode_users'),
+      `expected a path-derived id, got ${JSON.stringify(ids)}`,
+    );
+
+    // Both shapes actually serve, with the tenant param present only on
+    // the prefixed one.
+    const plain = await app.fetch(new Request('http://x/users/7'));
+    asserts.assertEquals(await plain.json(), { id: '7' });
+    const scoped = await app.fetch(new Request('http://x/acme/u/7'));
+    asserts.assertEquals(await scoped.json(), { id: '7' });
+  });
+
+  it('a SINGLE-path route keeps its plain operationId — disambiguation applies only when a method serves several', async () => {
+    @Module('Solo', { prefix: '/solo' })
+    class Solo {
+      @GET('/one')
+      one(): RapidContextResponse {
+        return { content: {} };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-solo',
+      server: { port: 0 },
+    });
+    app.module(new Solo());
+    asserts.assertEquals(app.routes[0]?.openapi?.operationId, 'Solo_one');
+  });
+
   it('this.invoke() from a route method inherits the request identity — an auth-aware @Use guard sees ctx.auth', async () => {
     let seen: { auth?: Record<string, unknown>; requestId: string } | undefined;
     const observe: RapidModuleInvokeMiddleware = (ctx, next) => {

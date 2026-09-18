@@ -297,7 +297,10 @@ app.module(new Users());
 ```
 
 `@Module` adds an HTTP `prefix` (paths only), a `namespace` (joined onto the flat
-`@SOCKET`/`@JOB` names), and a default route `version`. Argument binders
+`@SOCKET`/`@JOB` names), and a default route `version`. `prefix` and a route's
+path both accept a LIST, and the two multiply — `@Module('Users', { prefix: ['',
+'/:orgCode:'] })` serves every route in the class both tenant-scoped and
+unscoped from one declaration. Argument binders
 (`param`, `query`, `payload`, `paging`, `header`, `cookie`, `auth`, `session`,
 `connection`, `config`) type the method signature via the decorator's `bind`
 tuple (all from `@tundralibs/rapid/decorators`; the root re-exports them too,

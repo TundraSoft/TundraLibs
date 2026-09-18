@@ -30,6 +30,7 @@ import type {
   RapidModuleReply,
   RapidRouteOptions,
 } from '../types/mod.ts';
+import { RapidError } from '../errors/mod.ts';
 import {
   assertMethodContext,
   assertMiddlewareList,
@@ -142,17 +143,47 @@ type RouteDecorator<This, A extends readonly unknown[]> = (
  * the parameter types as documented. Options WITHOUT `bind` (summary,
  * tags, security, …) keep the no-parameter pin.
  */
+type RoutePath = string | readonly string[];
+
 type RouteFactory = {
-  <This>(path: string): RouteDecorator<This, []>;
+  <This>(path: RoutePath): RouteDecorator<This, []>;
   <This, A extends readonly unknown[]>(
-    path: string,
+    path: RoutePath,
     options: RouteDecoratorOptions<A> & { bind: RapidBinds<A> },
   ): RouteDecorator<This, A>;
   <This>(
-    path: string,
+    path: RoutePath,
     options: Omit<RouteDecoratorOptions<[]>, 'bind'>,
   ): RouteDecorator<This, []>;
 };
+
+/**
+ * One path, or several, normalised to an array. Several paths mount the
+ * SAME method at each — an alias set in one decoration, rather than the
+ * decorator stacked N times.
+ *
+ * @throws {RapidError} RAPID_CONFIG on an empty array (the route would
+ *   never mount, silently) or a duplicate entry.
+ */
+function normalisePaths(method: string, path: RoutePath): readonly string[] {
+  const list = typeof path === 'string' ? [path] : [...path];
+  if (list.length === 0) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `@${method}: path cannot be an empty array — the route would never mount`,
+      details: { decorator: method },
+    });
+  }
+  if (new Set(list).size !== list.length) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `@${method}: path entries must be unique — got '${
+        list.join(', ')
+      }'`,
+      details: { decorator: method, path: list.join(', ') },
+    });
+  }
+  return list;
+}
 
 /**
  * Shared builder — one implementation for the five verbs.
@@ -162,16 +193,20 @@ type RouteFactory = {
  */
 function route<This, A extends readonly unknown[]>(
   method: HTTPMethod,
-  path: string,
+  path: RoutePath,
   options: RouteDecoratorOptions<A>,
 ): RouteDecorator<This, A> {
+  // Normalised (and validated) at decoration time, like the middleware
+  // list below — an empty array fails at import, not as a route that
+  // silently never appears.
+  const paths = normalisePaths(method, path);
   return (_target, context): void => {
     assertMethodContext(context, method);
     assertMiddlewareList(`@${method}`, options.middleware);
     recordDecoration(context, {
       kind: 'HTTP',
       method,
-      path,
+      paths,
       binds: options.bind ?? [],
       methodName: String(context.name),
       ...(options.version !== undefined ? { version: options.version } : {}),
@@ -217,7 +252,7 @@ function route<This, A extends readonly unknown[]>(
  *   decorator compilation, or on a non-method/static/private target.
  */
 export const GET: RouteFactory = (
-  path: string,
+  path: RoutePath,
   options: RouteDecoratorOptions<readonly unknown[]> = {},
   // deno-lint-ignore no-explicit-any
 ): any => route('GET', path, options);
@@ -230,7 +265,7 @@ export const GET: RouteFactory = (
  *   decorator compilation, or on a non-method/static/private target.
  */
 export const POST: RouteFactory = (
-  path: string,
+  path: RoutePath,
   options: RouteDecoratorOptions<readonly unknown[]> = {},
   // deno-lint-ignore no-explicit-any
 ): any => route('POST', path, options);
@@ -243,7 +278,7 @@ export const POST: RouteFactory = (
  *   decorator compilation, or on a non-method/static/private target.
  */
 export const PUT: RouteFactory = (
-  path: string,
+  path: RoutePath,
   options: RouteDecoratorOptions<readonly unknown[]> = {},
   // deno-lint-ignore no-explicit-any
 ): any => route('PUT', path, options);
@@ -256,7 +291,7 @@ export const PUT: RouteFactory = (
  *   decorator compilation, or on a non-method/static/private target.
  */
 export const PATCH: RouteFactory = (
-  path: string,
+  path: RoutePath,
   options: RouteDecoratorOptions<readonly unknown[]> = {},
   // deno-lint-ignore no-explicit-any
 ): any => route('PATCH', path, options);
@@ -269,7 +304,7 @@ export const PATCH: RouteFactory = (
  *   decorator compilation, or on a non-method/static/private target.
  */
 export const DELETE: RouteFactory = (
-  path: string,
+  path: RoutePath,
   options: RouteDecoratorOptions<readonly unknown[]> = {},
   // deno-lint-ignore no-explicit-any
 ): any => route('DELETE', path, options);

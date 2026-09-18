@@ -189,11 +189,17 @@ describe('rapid.decorators.registry', () => {
   it('module metadata: SET (not append) per constructor; undecorated reads undefined', () => {
     class Ctor {}
     asserts.assertEquals(moduleMetaOf(Ctor), undefined);
-    recordModule(Ctor, { name: 'Ctor', prefix: '/a' });
-    asserts.assertEquals(moduleMetaOf(Ctor), { name: 'Ctor', prefix: '/a' });
+    recordModule(Ctor, { name: 'Ctor', prefixes: ['/a'] });
+    asserts.assertEquals(moduleMetaOf(Ctor), {
+      name: 'Ctor',
+      prefixes: ['/a'],
+    });
     // A second record on the SAME constructor overwrites, never appends:
-    recordModule(Ctor, { name: 'Ctor', prefix: '/b' });
-    asserts.assertEquals(moduleMetaOf(Ctor), { name: 'Ctor', prefix: '/b' });
+    recordModule(Ctor, { name: 'Ctor', prefixes: ['/b'] });
+    asserts.assertEquals(moduleMetaOf(Ctor), {
+      name: 'Ctor',
+      prefixes: ['/b'],
+    });
     // A DIFFERENT constructor is a different key:
     class Other {}
     asserts.assertEquals(moduleMetaOf(Other), undefined);

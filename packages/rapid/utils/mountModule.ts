@@ -284,17 +284,33 @@ function buildInvoker<S extends RapidContextState>(
   };
 }
 
+/**
+ * A path reduced to an operationId-safe suffix: parameters unwrapped,
+ * every other run of non-alphanumerics collapsed to `_`. `/users` →
+ * `users`, `/:orgCode:/users` → `orgCode_users`, `/` → `root`. Derived
+ * from the path rather than a counter so the id is stable when the list
+ * is reordered.
+ */
+function pathSlug(path: string): string {
+  const slug = path
+    .replace(/:([^:/]+):/g, '$1')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return slug === '' ? 'root' : slug;
+}
+
 /** Register one decoration's closure onto `target`, dispatched by kind. */
 function registerDecoration<S extends RapidContextState>(
   target: ModuleMountTarget<S>,
   decoration: RapidDecoration,
   fn: BoundMethod,
   instance: object,
-  prefix: string,
+  prefixes: readonly string[],
   namespace: string | undefined,
   moduleVersion: string | undefined,
   label: string,
   doc: ModuleDoc,
+  disambiguate: boolean,
 ): void {
   assertBindableOnKind(decoration, label);
   switch (decoration.kind) {
@@ -308,7 +324,7 @@ function registerDecoration<S extends RapidContextState>(
       // resolve route → module → derived default.
       const tags = [...new Set([...doc.tags, ...(decoration.tags ?? [])])];
       const security = decoration.security ?? doc.security;
-      const operationId = decoration.operationId ??
+      const baseOperationId = decoration.operationId ??
         (doc.name !== undefined
           ? `${doc.name}_${decoration.methodName}`
           : decoration.methodName);
@@ -319,9 +335,15 @@ function registerDecoration<S extends RapidContextState>(
           ? { description: doc.description }
           : {}),
       };
-      const openapi: RapidRouteOpenApi = {
+      const openapiFor = (fullPath: string): RapidRouteOpenApi => ({
         binds: decoration.binds,
-        operationId,
+        // One method serving several paths would repeat one operationId,
+        // which OpenAPI requires to be unique across the document (and
+        // which breaks every SDK generator). Suffix by PATH — stable and
+        // order-independent, unlike an index.
+        operationId: disambiguate
+          ? `${baseOperationId}_${pathSlug(fullPath)}`
+          : baseOperationId,
         ...(decoration.summary !== undefined
           ? { summary: decoration.summary }
           : {}),
@@ -334,34 +356,43 @@ function registerDecoration<S extends RapidContextState>(
         ...(decoration.response !== undefined
           ? { response: decoration.response }
           : {}),
-      };
-      target.route(
-        decoration.method,
-        prefix + decoration.path,
-        {
-          ...(version !== undefined ? { version } : {}),
-          openapi,
-          // Raw forms pass through; Application.route normalizes and
-          // fail-fast-validates them (RAPID_CONFIG on a wrong import).
-          ...(decoration.template !== undefined
-            ? { template: decoration.template }
-            : {}),
-          // The module-wide layout default applies only to TEMPLATED
-          // routes (a layout without a template is a loud config error at
-          // route()); an explicit per-route layout still surfaces so the
-          // same error fires for `@GET(path, { layout })` with no template.
-          ...(decoration.layout !== undefined ||
-              (decoration.template !== undefined && doc.layout !== undefined)
-            ? { layout: decoration.layout ?? doc.layout }
-            : {}),
-          // Module chain first, then the route's own — the same order a
-          // plain route lists them; a universal middleware narrows to HTTP
-          // here by contravariance.
-        },
-        ...doc.middleware,
-        ...(decoration.middleware ?? []),
-        invoker,
-      );
+      });
+      // Every prefix × every path: one declaration, the whole cross
+      // product. The invoker is built once and carries no path state.
+      for (const prefix of prefixes) {
+        for (const path of decoration.paths) {
+          const fullPath = prefix + path;
+          target.route(
+            decoration.method,
+            fullPath,
+            {
+              ...(version !== undefined ? { version } : {}),
+              openapi: openapiFor(fullPath),
+              // Raw forms pass through; Application.route normalizes and
+              // fail-fast-validates them (RAPID_CONFIG on a wrong import).
+              ...(decoration.template !== undefined
+                ? { template: decoration.template }
+                : {}),
+              // The module-wide layout default applies only to TEMPLATED
+              // routes (a layout without a template is a loud config error
+              // at route()); an explicit per-route layout still surfaces so
+              // the same error fires for `@GET(path, { layout })` with no
+              // template.
+              ...(decoration.layout !== undefined ||
+                  (decoration.template !== undefined &&
+                    doc.layout !== undefined)
+                ? { layout: decoration.layout ?? doc.layout }
+                : {}),
+              // Module chain first, then the route's own — the same order a
+              // plain route lists them; a universal middleware narrows to
+              // HTTP here by contravariance.
+            },
+            ...doc.middleware,
+            ...(decoration.middleware ?? []),
+            invoker,
+          );
+        }
+      }
       break;
     }
     case 'SOCKET':
@@ -449,7 +480,7 @@ export function mountModule<S extends RapidContextState>(
       details: { class: ctorName, meta },
     });
   }
-  const prefix = meta?.prefix ?? '';
+  const prefixes = meta?.prefixes ?? [''];
   const namespace = isModule
     ? (instance as RapidModule).namespace
     : meta?.namespace;
@@ -541,17 +572,27 @@ export function mountModule<S extends RapidContextState>(
       }
 
       const label = `${ctorName}.${String(name)}`;
+      // How many ROUTES this one method ends up serving, across every
+      // decoration on it (aliases included) — more than one means their
+      // operationIds must be disambiguated, or the OpenAPI document
+      // repeats an id it requires to be unique.
+      const httpRoutes = decorations.reduce(
+        (total, d) =>
+          d.kind === 'HTTP' ? total + prefixes.length * d.paths.length : total,
+        0,
+      );
       for (const decoration of decorations) {
         registerDecoration(
           target,
           decoration,
           resolved as BoundMethod,
           instance,
-          prefix,
+          prefixes,
           namespace,
           moduleVersion,
           label,
           doc,
+          httpRoutes > 1,
         );
         mounted++;
       }
