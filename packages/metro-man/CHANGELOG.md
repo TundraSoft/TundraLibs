@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.8](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.7...metro-man-v1.0.8) (2026-09-18)
+
+
+### Documentation
+
+* point package READMEs at the wiki and fix the wiki sync dropping 68 pages ([#685](https://github.com/TundraSoft/TundraLibs/issues/685)) ([97810ec](https://github.com/TundraSoft/TundraLibs/commit/97810eced5073e3fc8da0f2b8be602f480966862))
+
 ## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.6...metro-man-v1.0.7) (2026-08-25)
 
 
