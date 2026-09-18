@@ -235,7 +235,7 @@ Shipped middleware factories (all exported from the root and from
 `csrf`, `session`, `rateLimit`, `idempotency`, and `timeout`;
 `pactAuth` lives on its own subpath, `@tundralibs/rapid/middlewares/pact`.
 Every option, default, unit and pitfall is in the
-[middleware catalog](./docs/Rapid-Middleware.md). Static file serving is CONFIG, not a
+[middleware catalog](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Middleware). Static file serving is CONFIG, not a
 middleware — `server.static` maps URL prefixes to directories, served
 framework-side on route miss (routes always win; `secureHeaders`/`cors`/
 logging always apply; traversal/symlink-guarded, weak-ETag 304s, byte
@@ -259,7 +259,7 @@ over redis/cacher the moment you scale out, and bound that store yourself
 
 How the onion runs — `next()`'s contract, short-circuiting, post-processing,
 which headers survive an error, and how to write your own factory — is the
-first section of the [middleware catalog](./docs/Rapid-Middleware.md).
+first section of the [middleware catalog](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Middleware).
 Scope helpers turn a transport-specific middleware into a universal one:
 `onlyHTTP` / `onlySOCKET` / `onlyJOB` run it only on that transport (a no-op
 elsewhere), while `guardHTTP` / `guardSOCKET` / `guardJOB` run it there and
@@ -478,7 +478,7 @@ greppable opt-out — the framework uses it on constant markup only); templates 
 they unit-test with `render(UserList.render(data, view))` and no server. The
 frozen `view` bag carries `requestId`/`path`/`query`/`csrfToken` and
 `view.asset()` (cache-busting URLs, lazily content-hashed under
-`server.static`'s fingerprinted mounts — see [Rapid-UI](docs/Rapid-UI.md))
+`server.static`'s fingerprinted mounts — see [Rapid-UI](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-UI))
 — **nothing from `ctx.auth`** unless the `ui.view` projection names the
 fields that may cross. Pages compose from THREE tiers: an irreplaceable
 app `core` (the document — head/css/scripts; `title` + `meta` are its
@@ -510,7 +510,7 @@ are 404 there, `onlyApi()` / `onlyUi()` scope middleware per side;
 (value-truthiness branches and lists with an empty state — `0 && …` would
 render the `0`), `ctx.isSwap`, typed view projections, and `testing`'s
 `view()` / `swap: true` round out the layer. See
-[docs/Rapid-UI.md](docs/Rapid-UI.md) for the full contract and
+[docs/Rapid-UI.md](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-UI) for the full contract and
 [`examples/dashboard/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/dashboard/main.ts) for a runnable page.
 
 ## Endpoints
@@ -550,13 +550,13 @@ docs(app, { spec: '/openapi.json', tryIt: true }); // GET /docs
   the API reference page, rendered server-side from rapid's own templates
   inside your core/layout (no CDN), with a credential box generated from the
   declared schemes and a try-it form per operation; or a pinned Scalar /
-  Redoc / Swagger UI shell. See [OpenAPI and the API reference](docs/Rapid-OpenAPI.md).
+  Redoc / Swagger UI shell. See [OpenAPI and the API reference](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-OpenAPI).
 
 Session endpoints (`login`, `logout`, `refresh`, `me`) come from the pact
 adapter's factory, not from here, so they share one cookie name with
-`authenticate` — see [Authentication & authorization](docs/Rapid-Auth.md).
+`authenticate` — see [Authentication & authorization](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Auth).
 Every handler's replies, options and probe guidance are in the
-[endpoints guide](docs/Rapid-Endpoints.md).
+[endpoints guide](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Endpoints).
 
 ## Auth
 
@@ -597,7 +597,7 @@ app.get(
 ```
 
 Any other identity system is a ten-line middleware over the same bag — see
-[Authentication & authorization](docs/Rapid-Auth.md).
+[Authentication & authorization](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Auth).
 
 ## Cookies, sessions & CSRF
 
@@ -796,31 +796,31 @@ dashboard, htmx) to what each one shows and where to start reading.
 
 Guides:
 
-- [The context and the application object](./docs/Rapid-Context.md) — what
+- [The context and the application object](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Context) — what
   `ctx` carries on each transport, reading input, shaping output, reaching
   services, and every `app.*` member.
-- [Modules](./docs/Rapid-Modules.md) — decorators, binders, the
+- [Modules](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Modules) — decorators, binders, the
   `RapidModule` tier, events, `invoke`, lifecycle, and booting with
   `app.modules()`.
-- [Testing](./docs/Rapid-Testing.md) — `client()`, `harness()`, `view()`,
+- [Testing](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Testing) — `client()`, `harness()`, `view()`,
   running on Deno, Bun and Node, and what each kind of test should cover.
-- [Configuration reference](./docs/Rapid-Configuration.md) — every
+- [Configuration reference](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Configuration) — every
   `Application.yaml` key: type, default, unit, what validates it at boot, and
   which part of the framework reads it.
-- [Middleware catalog](./docs/Rapid-Middleware.md) — registration order and
+- [Middleware catalog](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Middleware) — registration order and
   every shipped middleware's options, hooks and pitfalls.
-- [Errors](./docs/Rapid-Errors.md) — how a throw becomes a response, what
+- [Errors](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Errors) — how a throw becomes a response, what
   PRODUCTION discloses, and every `RAPID_*` code.
-- [Database access & connection pooling](./docs/Rapid-Database.md) — sharing one
+- [Database access & connection pooling](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Database) — sharing one
   pool across modules and middleware (with or without Norm), and staying safe
   under concurrency and pool limits.
-- [Authentication & authorization](./docs/Rapid-Auth.md) — the generic
+- [Authentication & authorization](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Auth) — the generic
   `ctx.auth` seam for bring-your-own auth, and the opt-in `@tundralibs/pact`
   adapter (five credential schemes, permission checks, response signing).
-- [Endpoints](./docs/Rapid-Endpoints.md) — `health()`, `ready()`,
+- [Endpoints](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Endpoints) — `health()`, `ready()`,
   `metrics()`, `openapi()`, `docs()`: what each answers, its options, and
   wiring the platform's probes and scrape target.
-- [OpenAPI and the API reference](./docs/Rapid-OpenAPI.md) — where the
+- [OpenAPI and the API reference](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-OpenAPI) — where the
   document comes from, declaring security schemes, the `docs()` page with its
   credential box and try-it forms, and the two ways to customize it.
 

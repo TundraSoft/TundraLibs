@@ -554,7 +554,7 @@ templated routes as-is; give page routes `prefer: 'html'` so boosted
 navigations and address-bar visits render pages. The bundled runtime
 follows renamed headers via `data-swap-header` / `data-redirect-header` on
 `<body>` — but if you adopt htmx you simply don't serve it. Runnable:
-[`examples/htmx/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/htmx/main.ts) drives a poll
+[`examples/htmx/main.ts`](../examples/htmx/main.ts) drives a poll
 entirely through htmx — `hx-swap-oob` multi-region responses,
 declarative polling, a boosted page proving `swapUnless`, and a reply
 `redirect` landing as `HX-Redirect`.
@@ -830,10 +830,10 @@ a page (`prefer: 'html'`) lists `text/html` only. The reference page the
 `docs()` endpoint mounts is itself a page of the app — rendered inside your
 core/layout — see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
 
-Runnable examples: [`examples/dashboard/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/dashboard/main.ts)
+Runnable examples: [`examples/dashboard/main.ts`](../examples/dashboard/main.ts)
 (a sales dashboard: period chips, both swapped-chain patterns,
-`ctx.isSwap`), [`examples/kanban/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/kanban/main.ts)
+`ctx.isSwap`), [`examples/kanban/main.ts`](../examples/kanban/main.ts)
 (all three dynamic-update patterns, live channel, View-Transition
-morphs), and [`examples/htmx/main.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/htmx/main.ts) (the
+morphs), and [`examples/htmx/main.ts`](../examples/htmx/main.ts) (the
 same contract driven by htmx) — run any with `deno run -A` and open the
 printed URL.

@@ -19,16 +19,7 @@
  */
 
 import * as path from 'node:path';
-
-/**
- * Package directory → wiki page name, from the workspace metadata file
- * maintained by `workspace.ts` (the wiki name cannot be derived
- * mechanically: id → ID, oql → OQL, metro-man → MetroMan). READMEs of
- * unmapped packages fail the run, so the map cannot silently go stale.
- */
-const PACKAGES: Record<string, string> = (JSON.parse(
-  Deno.readTextFileSync('.github/workspace-meta.json'),
-) as { packages: Record<string, string> }).packages;
+import { PACKAGES, unmappedPackages, wikiPages } from './doc-pages.ts';
 
 type Args = { out: string; repo: string | undefined; ref: string };
 
@@ -47,18 +38,6 @@ const parseArgs = (): Args => {
   return args;
 };
 
-/** Recursively list every file under `dir` (repo-relative paths). */
-const walk = (dir: string): string[] => {
-  const out: string[] = [];
-  for (const entry of Deno.readDirSync(dir)) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
-    const p = path.join(dir, entry.name);
-    if (entry.isDirectory) out.push(...walk(p));
-    else out.push(p);
-  }
-  return out;
-};
-
 const main = () => {
   const { out, repo, ref } = parseArgs();
   const warnings: string[] = [];
@@ -67,38 +46,11 @@ const main = () => {
   // ---------------------------------------------------------------------
   // Collect the files to sync: source path -> wiki page name.
   // ---------------------------------------------------------------------
-  const pages = new Map<string, string>();
-  if (Deno.statSync('README.md').isFile) pages.set('README.md', 'Home.md');
-
-  for (const entry of Deno.readDirSync('packages')) {
-    if (!entry.isDirectory) continue;
-    const dir = entry.name;
-    const wikiName = PACKAGES[dir];
-    const readme = path.join('packages', dir, 'README.md');
-    let hasReadme = false;
-    try {
-      hasReadme = Deno.statSync(readme).isFile;
-    } catch {
-      hasReadme = false;
-    }
-    if (!wikiName) {
-      if (hasReadme) {
-        errors.push(
-          `${readme}: package '${dir}' has no wiki-name mapping — add it to PACKAGES in .github/scripts/wiki-sync.ts`,
-        );
-      }
-      continue;
-    }
-    if (hasReadme) pages.set(readme, `${wikiName}.md`);
-
-    // Sub-docs anywhere under the package: {WikiName}-{Topic}.md
-    const prefix = `${wikiName}-`;
-    for (const file of walk(path.join('packages', dir))) {
-      const base = path.basename(file);
-      if (base.startsWith(prefix) && base.endsWith('.md')) {
-        pages.set(file, base);
-      }
-    }
+  const pages = wikiPages();
+  for (const dir of unmappedPackages()) {
+    errors.push(
+      `packages/${dir}/README.md: package '${dir}' has no wiki-name mapping — add it to .github/workspace-meta.json and run \`deno task workspace:sync\``,
+    );
   }
 
   // Reverse index: normalized source path -> wiki page name.
@@ -169,8 +121,11 @@ const main = () => {
   for (const name of wikiNames) {
     if (!pageNames.has(`${name}.md`)) continue;
     sidebar.push(`- [[${name}]]`);
+    // Case-insensitive, exactly like the page map: the file-name prefix is
+    // capitalised by convention while some wiki names are not.
+    const prefix = `${name.toLowerCase()}-`;
     const subs = [...pageNames]
-      .filter((p) => p.startsWith(`${name}-`) && p.endsWith('.md'))
+      .filter((p) => p.toLowerCase().startsWith(prefix) && p.endsWith('.md'))
       .sort((a, b) => a.localeCompare(b));
     for (const sub of subs) {
       const stem = sub.slice(0, -3);

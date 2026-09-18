@@ -149,7 +149,7 @@ for its own grammar gaps, for example:
 written for a human and usually names the workaround inline. The full
 per-dialect picture, including the cases OQL degrades silently instead of
 throwing, is in the
-[compatibility matrix](../docs/Compatibility.md).
+[compatibility matrix](../docs/OQL-Compatibility.md).
 
 **Note:** MongoDB also reuses this code for one non-capability failure — an
 `UPSERT` row missing a concrete value for a conflict key. That is bad data,
@@ -475,7 +475,7 @@ JSON.stringify(err); // log-friendly structured payload (via toJSON)
   most of these conditions first, throwing `TypeError`.
 - [Translator](../translator/OQL-Translator.md) — the layer every code on
   this page is thrown from.
-- [Compatibility](../docs/Compatibility.md) — per-dialect feature support;
+- [Compatibility](../docs/OQL-Compatibility.md) — per-dialect feature support;
   the reference for `DIALECT_UNSUPPORTED`.
 
 ---

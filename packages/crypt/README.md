@@ -16,16 +16,16 @@ The Crypt package provides battle-tested cryptographic operations using the nati
 
 ## Modules
 
-| Module                                       | Description                                                  | Documentation                          |
-| -------------------------------------------- | ------------------------------------------------------------ | -------------------------------------- |
-| [Digest](digest/Crypt-Digest.md)             | Hashing (SHA-1/256/384/512) + PBKDF2 password storage        | [Docs](digest/Crypt-Digest.md)         |
-| [Encrypt](encrypt/Crypt-Encrypt.md)          | AES/RSA encryption                                           | [Docs](encrypt/Crypt-Encrypt.md)       |
-| [Sign](sign/Crypt-Sign.md)                   | HMAC, RSA, ECDSA and Ed25519 digital signatures              | [Docs](sign/Crypt-Sign.md)             |
-| [Generators](generators/Crypt-Generators.md) | Key pairs, key derivation (PBKDF2, HKDF), secrets, BIP39     | [Docs](generators/Crypt-Generators.md) |
-| [JWT](JWT/Crypt-JWT.md)                      | JSON Web Token creation and verification (HS/RS/PS/ES/EdDSA) | [Docs](JWT/Crypt-JWT.md)               |
-| [JWT Errors](JWT/errors/Crypt-JWT-Errors.md) | `JWTError` and its 12 stable error codes                     | [Docs](JWT/errors/Crypt-JWT-Errors.md) |
-| [OTP](OTP/Crypt-OTP.md)                      | Time-based and HMAC-based one-time passwords                 | [Docs](OTP/Crypt-OTP.md)               |
-| [CBOR](cbor/Crypt-CBOR.md)                   | Minimal CBOR decoder + COSE-key → JWK (WebAuthn)             | [Docs](cbor/Crypt-CBOR.md)             |
+| Module                                                                       | Description                                                  | Documentation                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [Digest](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Digest)         | Hashing (SHA-1/256/384/512) + PBKDF2 password storage        | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Digest)     |
+| [Encrypt](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Encrypt)       | AES/RSA encryption                                           | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Encrypt)    |
+| [Sign](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Sign)             | HMAC, RSA, ECDSA and Ed25519 digital signatures              | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Sign)       |
+| [Generators](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Generators) | Key pairs, key derivation (PBKDF2, HKDF), secrets, BIP39     | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-Generators) |
+| [JWT](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-JWT)               | JSON Web Token creation and verification (HS/RS/PS/ES/EdDSA) | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-JWT)        |
+| [JWT Errors](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-JWT-Errors) | `JWTError` and its 12 stable error codes                     | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-JWT-Errors) |
+| [OTP](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-OTP)               | Time-based and HMAC-based one-time passwords                 | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-OTP)        |
+| [CBOR](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-CBOR)             | Minimal CBOR decoder + COSE-key → JWK (WebAuthn)             | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Crypt-CBOR)       |
 
 ## Installation
 

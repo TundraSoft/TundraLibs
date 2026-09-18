@@ -28,7 +28,7 @@ methods and getters; `Once` is method-only — decorating a getter with
 case. `Singleton` is also available as its own subpath import
 (`@tundralibs/utils/Singleton`) for consumers who only need it.
 
-See [`examples/connection-pool/`](examples/connection-pool/) for a
+See [`examples/connection-pool/`](https://github.com/TundraSoft/TundraLibs/tree/main/packages/utils/examples/connection-pool) for a
 small runnable app that composes `Options`, `Events`, `BaseError`, and
 `Singleton` — the four core pieces — into one class.
 
@@ -67,27 +67,27 @@ npx jsr add @tundralibs/utils
 
 ## Utilities
 
-| Utility                                            | Description                                                           | Documentation                          |
-| -------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- |
-| [BaseError](docs/Utils-BaseError.md)               | Enhanced error class with context, chaining, and code snippets        | [Docs](docs/Utils-BaseError.md)        |
-| [Config](docs/Utils-Config.md)                     | Multi-format configuration loader with environment variable support   | [Docs](docs/Utils-Config.md)           |
-| [envArgs](docs/Utils-EnvArgs.md)                   | Environment variable and .env file loader with Docker secrets support | [Docs](docs/Utils-EnvArgs.md)          |
-| [Events](docs/Utils-Events.md)                     | Type-safe event system with async support                             | [Docs](docs/Utils-Events.md)           |
-| [getFreePort](docs/Utils-GetFreePort.md)           | Find available TCP ports with configurable range and exclusions       | [Docs](docs/Utils-GetFreePort.md)      |
-| [ipUtils](docs/Utils-IpUtils.md)                   | IPv4/IPv6 validation, conversion, and range checking utilities        | [Docs](docs/Utils-IpUtils.md)          |
-| [isInSubnet](docs/Utils-IsInSubnet.md)             | Check if IP address is within a CIDR subnet range                     | [Docs](docs/Utils-IsInSubnet.md)       |
-| [isPublicIP](docs/Utils-IsPublicIP.md)             | Detect if IP address is publicly routable                             | [Docs](docs/Utils-IsPublicIP.md)       |
-| [isSubnet](docs/Utils-IsSubnet.md)                 | Validate CIDR subnet notation format                                  | [Docs](docs/Utils-IsSubnet.md)         |
-| [memoize](docs/Utils-Memoize.md)                   | Function and method memoization with TTL and async support            | [Docs](docs/Utils-Memoize.md)          |
-| [once](docs/Utils-Once.md)                         | Function execution control for single-call enforcement                | [Docs](docs/Utils-Once.md)             |
-| [Options](docs/Utils-Options.md)                   | Abstract base class for options and event handling                    | [Docs](docs/Utils-Options.md)          |
-| [privateObject](docs/Utils-PrivateObject.md)       | Private data encapsulation utility                                    | [Docs](docs/Utils-PrivateObject.md)    |
-| [Singleton](docs/Utils-Singleton.md)               | Singleton pattern decorator                                           | [Docs](docs/Utils-Singleton.md)        |
-| [syslog](docs/Utils-Syslog.md)                     | RFC 3164 and RFC 5424 syslog parser and generator                     | [Docs](docs/Utils-Syslog.md)           |
-| [templatize](docs/Utils-Templatize.md)             | Type-safe template string parser                                      | [Docs](docs/Utils-Templatize.md)       |
-| [throttle](docs/Utils-Throttle.md)                 | Function throttling for rate-limiting execution                       | [Docs](docs/Utils-Throttle.md)         |
-| [Types](types/Types.md)                            | Advanced TypeScript utility types for type manipulation               | [Docs](types/Types.md)                 |
-| [variableReplacer](docs/Utils-VariableReplacer.md) | Template placeholder replacement with dot notation support            | [Docs](docs/Utils-VariableReplacer.md) |
+| Utility                                                                                  | Description                                                           | Documentation                                                                |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [BaseError](https://github.com/TundraSoft/TundraLibs/wiki/Utils-BaseError)               | Enhanced error class with context, chaining, and code snippets        | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-BaseError)        |
+| [Config](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Config)                     | Multi-format configuration loader with environment variable support   | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Config)           |
+| [envArgs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-EnvArgs)                   | Environment variable and .env file loader with Docker secrets support | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-EnvArgs)          |
+| [Events](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Events)                     | Type-safe event system with async support                             | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Events)           |
+| [getFreePort](https://github.com/TundraSoft/TundraLibs/wiki/Utils-GetFreePort)           | Find available TCP ports with configurable range and exclusions       | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-GetFreePort)      |
+| [ipUtils](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IpUtils)                   | IPv4/IPv6 validation, conversion, and range checking utilities        | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IpUtils)          |
+| [isInSubnet](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IsInSubnet)             | Check if IP address is within a CIDR subnet range                     | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IsInSubnet)       |
+| [isPublicIP](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IsPublicIP)             | Detect if IP address is publicly routable                             | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IsPublicIP)       |
+| [isSubnet](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IsSubnet)                 | Validate CIDR subnet notation format                                  | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-IsSubnet)         |
+| [memoize](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Memoize)                   | Function and method memoization with TTL and async support            | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Memoize)          |
+| [once](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Once)                         | Function execution control for single-call enforcement                | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Once)             |
+| [Options](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Options)                   | Abstract base class for options and event handling                    | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Options)          |
+| [privateObject](https://github.com/TundraSoft/TundraLibs/wiki/Utils-PrivateObject)       | Private data encapsulation utility                                    | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-PrivateObject)    |
+| [Singleton](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Singleton)               | Singleton pattern decorator                                           | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Singleton)        |
+| [syslog](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Syslog)                     | RFC 3164 and RFC 5424 syslog parser and generator                     | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Syslog)           |
+| [templatize](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Templatize)             | Type-safe template string parser                                      | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Templatize)       |
+| [throttle](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Throttle)                 | Function throttling for rate-limiting execution                       | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Throttle)         |
+| [Types](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Types)                       | Advanced TypeScript utility types for type manipulation               | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-Types)            |
+| [variableReplacer](https://github.com/TundraSoft/TundraLibs/wiki/Utils-VariableReplacer) | Template placeholder replacement with dot notation support            | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Utils-VariableReplacer) |
 
 ## Quick Examples
 

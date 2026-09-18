@@ -35,21 +35,21 @@ runs fine and a Redis/Memcached engine fails only if you actually try to
 
 ## Modules
 
-| Module             | Description                                                           | Documentation                               |
-| ------------------ | --------------------------------------------------------------------- | ------------------------------------------- |
-| `Cacher` (default) | Singleton manager for engine registration and cache instance creation | This page                                   |
-| `AbstractEngine`   | Base class for custom cache engine implementations                    | [Custom Engine](#custom-engine)             |
-| `./engines`        | Built-in engines: Memory, Redis, Memcached                            | [Cacher-Engines](engines/Cacher-Engines.md) |
-| `./errors`         | `CacherError` and `CacherEngineError` error classes                   | [Cacher-Errors](errors/Cacher-Errors.md)    |
-| `./types`          | `CacherOptions`, `CacheValue`, `CacheValueOptions`                    | —                                           |
+| Module             | Description                                                           | Documentation                                                                  |
+| ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Cacher` (default) | Singleton manager for engine registration and cache instance creation | This page                                                                      |
+| `AbstractEngine`   | Base class for custom cache engine implementations                    | [Custom Engine](#custom-engine)                                                |
+| `./engines`        | Built-in engines: Memory, Redis, Memcached                            | [Cacher-Engines](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Engines) |
+| `./errors`         | `CacherError` and `CacherEngineError` error classes                   | [Cacher-Errors](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Errors)   |
+| `./types`          | `CacherOptions`, `CacheValue`, `CacheValueOptions`                    | —                                                                              |
 
 ## Documentation
 
-- [Engines Overview](engines/Cacher-Engines.md) — All built-in cache engines and their common API
-- [Memory Engine](engines/memory/Cacher-Memory.md) — In-process cache, no dependencies
-- [Redis Engine](engines/redis/Cacher-Redis.md) — Redis-backed cache with TLS support
-- [Memcached Engine](engines/memcached/Cacher-Memcached.md) — Memcached-backed cache with TLS support
-- [Errors](errors/Cacher-Errors.md) — Error classes and error code reference
+- [Engines Overview](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Engines) — All built-in cache engines and their common API
+- [Memory Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Memory) — In-process cache, no dependencies
+- [Redis Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Redis) — Redis-backed cache with TLS support
+- [Memcached Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Memcached) — Memcached-backed cache with TLS support
+- [Errors](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Errors) — Error classes and error code reference
 
 ## Installation
 
@@ -339,7 +339,7 @@ empties data; the instance itself stays connected and registered.
 
 On **Memory** and **Redis** the entries are deleted outright. **Redis**'s
 `clear()` runs `KEYS ${name}:*` followed by one bulk `DEL` — see
-[Cacher-Redis.md](engines/redis/Cacher-Redis.md#notes) for why that is fine
+[Cacher-Redis.md](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Redis#notes) for why that is fine
 for development but not for a namespace with a large number of keys on a
 busy production server. **Memcached**
 has no key enumeration, so the engine keys every entry with a per-namespace

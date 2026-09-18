@@ -43,13 +43,13 @@ imports `@tundralibs/utils` (base error and event classes) and
 
 ## Modules
 
-| Module     | Description                                             | Documentation                                            |
-| ---------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| `Cronus`   | The scheduler — jobs, ticker, events, run-now           | This page                                                |
-| Schedules  | Cron expression syntax and matching semantics           | [Cronus-Schedule-Syntax](docs/Cronus-Schedule-Syntax.md) |
-| Jobs       | Job lifecycle, overlap prevention, events               | [Cronus-Jobs](docs/Cronus-Jobs.md)                       |
-| `./errors` | `CronusError` plus `InvalidScheduleError` etc.          | [Cronus-Errors](errors/Cronus-Errors.md)                 |
-| `./types`  | `CronusJobInfo`, `CronusRunContext`, `ParsedSchedule` … | —                                                        |
+| Module     | Description                                             | Documentation                                                                                  |
+| ---------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `Cronus`   | The scheduler — jobs, ticker, events, run-now           | This page                                                                                      |
+| Schedules  | Cron expression syntax and matching semantics           | [Cronus-Schedule-Syntax](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Schedule-Syntax) |
+| Jobs       | Job lifecycle, overlap prevention, events               | [Cronus-Jobs](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Jobs)                       |
+| `./errors` | `CronusError` plus `InvalidScheduleError` etc.          | [Cronus-Errors](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Errors)                   |
+| `./types`  | `CronusJobInfo`, `CronusRunContext`, `ParsedSchedule` … | —                                                                                              |
 
 ## Installation
 
@@ -123,11 +123,11 @@ const cron = new Cronus({ unref: true });
 
 ## Related Documentation
 
-- [Cronus-Schedule-Syntax](docs/Cronus-Schedule-Syntax.md) - Cron
+- [Cronus-Schedule-Syntax](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Schedule-Syntax) - Cron
   expression fields, names, steps, and POSIX matching semantics
-- [Cronus-Jobs](docs/Cronus-Jobs.md) - Job lifecycle, overlap
+- [Cronus-Jobs](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Jobs) - Job lifecycle, overlap
   prevention, run-once/run-now, and the event surface
-- [Cronus-Errors](errors/Cronus-Errors.md) - The typed error hierarchy
+- [Cronus-Errors](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Errors) - The typed error hierarchy
 
 ## License
 

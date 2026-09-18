@@ -58,7 +58,7 @@ to run external processes for everything else. Pino is meaningfully
 faster on the JSON-only hot path — pick the model that matches your
 deployment.
 
-See [docs/Slogger-Performance.md](docs/Slogger-Performance.md) for the
+See [docs/Slogger-Performance.md](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Performance) for the
 honest per-call cost breakdown.
 
 ## Browser / Worker compatibility
@@ -87,10 +87,10 @@ handlers your target actually supports.
 
 ## Modules
 
-| Module                                         | Description                                 | Documentation                            |
-| ---------------------------------------------- | ------------------------------------------- | ---------------------------------------- |
-| [Formatters](formatters/Slogger-Formatters.md) | JSON, string, and masking formatters        | [Docs](formatters/Slogger-Formatters.md) |
-| [Handlers](handlers/Slogger-Handlers.md)       | Console, File, HTTP, and Blackhole handlers | [Docs](handlers/Slogger-Handlers.md)     |
+| Module                                                                         | Description                                 | Documentation                                                            |
+| ------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------ |
+| [Formatters](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Formatters) | JSON, string, and masking formatters        | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Formatters) |
+| [Handlers](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Handlers)     | Console, File, HTTP, and Blackhole handlers | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Handlers)   |
 
 ## Installation
 
@@ -326,7 +326,7 @@ rather than passing a fresh arrow to each `createSlogger` call.
 For trace ids, `tracer` (>= 0.4) ships the bound adapter for this seam —
 `contextProvider: tracer.logContext` — emitting the canonical keys
 `otelLogFormatter` hoists into first-class OTel fields. The full correlation
-story is in [Slogger-Correlation](docs/Slogger-Correlation.md).
+story is in [Slogger-Correlation](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Correlation).
 
 ## Core API
 
@@ -445,16 +445,16 @@ the collected failures as a single `SloggerFinalizeError`.
 
 ## Documentation
 
-- [Formatters](formatters/Slogger-Formatters.md) - All available formatters
-- [Handlers](handlers/Slogger-Handlers.md) - All available handlers
-- [Configuration](docs/Slogger-Configuration.md) - Detailed configuration guide
-- [Performance](docs/Slogger-Performance.md) - Performance optimization guide
-- [Security](docs/Slogger-Security.md) - Security and data masking
-- [Examples](docs/Slogger-Examples.md) - Common usage patterns
-- [Migration](docs/Slogger-Migration.md) - Migration from other loggers
-- [Recipes](docs/Slogger-Recipes.md) - Custom handlers to build per-vendor
+- [Formatters](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Formatters) - All available formatters
+- [Handlers](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Handlers) - All available handlers
+- [Configuration](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Configuration) - Detailed configuration guide
+- [Performance](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Performance) - Performance optimization guide
+- [Security](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Security) - Security and data masking
+- [Examples](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Examples) - Common usage patterns
+- [Migration](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Migration) - Migration from other loggers
+- [Recipes](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Recipes) - Custom handlers to build per-vendor
   (webhooks, queues, DB sinks)
-- [Correlation](docs/Slogger-Correlation.md) - Logs that know their request and
+- [Correlation](https://github.com/TundraSoft/TundraLibs/wiki/Slogger-Correlation) - Logs that know their request and
   their trace: contextProvider + ambient + tracer + the OTel formatter
 
 ## License

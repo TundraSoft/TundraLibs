@@ -26,7 +26,10 @@
     "workspace:add": "deno run --allow-read --allow-write .github/scripts/workspace.ts add",
     "workspace:remove": "deno run --allow-read --allow-write .github/scripts/workspace.ts remove",
     "workspace:sync": "deno run --allow-read --allow-write .github/scripts/workspace.ts sync",
-    "workspace:sync:check": "deno run --allow-read .github/scripts/workspace.ts sync --check"
+    "workspace:sync:check": "deno run --allow-read .github/scripts/workspace.ts sync --check",
+    "docs:links": "deno run --allow-read --allow-env .github/scripts/doc-links.ts",
+    "docs:links:fix": "deno run --allow-read --allow-env --allow-write .github/scripts/doc-links.ts --fix",
+    "docs:wiki:check": "deno run --allow-read --allow-write --allow-env .github/scripts/wiki-sync.ts --out=/tmp/wiki-check"
   },
   "unstable": [
     "net"

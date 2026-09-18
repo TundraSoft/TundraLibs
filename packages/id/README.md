@@ -21,23 +21,23 @@ The ID package provides high-performance ID generators optimized for different s
 - ✅ **Collision resistant** - Cryptographically secure random generation
 - ✅ **URL-safe** - All IDs work in URLs without encoding
 - ✅ **Sortable options** - Timestamp-based ordering with ULID and SequenceID
-- ✅ **MongoDB-inspired** - ObjectID uses a MongoDB-style layout (not the canonical 24-char hex — see [ObjectID docs](docs/ID-ObjectID.md))
+- ✅ **MongoDB-inspired** - ObjectID uses a MongoDB-style layout (not the canonical 24-char hex — see [ObjectID docs](https://github.com/TundraSoft/TundraLibs/wiki/ID-ObjectID))
 - ✅ **Dependency-light** - only the `@tundralibs/compat` and `@tundralibs/utils` workspace siblings, no third-party runtime deps
 - ✅ **Runtime agnostic** - Works on Deno, Bun, Node.js, Cloudflare Workers, and browsers
 
 ## Documentation
 
-| Topic                                     | Description                                     |
-| ----------------------------------------- | ----------------------------------------------- |
-| [NanoID](docs/ID-NanoID.md)               | Compact, URL-safe IDs with custom alphabets     |
-| [ObjectID](docs/ID-ObjectID.md)           | MongoDB-inspired mixed-radix identifiers        |
-| [ULID](docs/ID-ULID.md)                   | Sortable, timestamp-based universally unique    |
-| [CUID](docs/ID-CUID.md)                   | Process-sortable 25-char `c`-prefixed IDs       |
-| [CUID2](docs/ID-CUID2.md)                 | Cryptographically secure, privacy-preserving    |
-| [SequenceID](docs/ID-SequenceID.md)       | Sequential IDs with timestamp and counter       |
-| [SimpleID](docs/ID-SimpleID.md)           | Date-sequential, human-readable IDs             |
-| [Comparison Guide](docs/ID-Comparison.md) | Feature comparison and use case recommendations |
-| [Performance](docs/ID-Performance.md)     | Benchmarks and optimization tips                |
+| Topic                                                                           | Description                                     |
+| ------------------------------------------------------------------------------- | ----------------------------------------------- |
+| [NanoID](https://github.com/TundraSoft/TundraLibs/wiki/ID-NanoID)               | Compact, URL-safe IDs with custom alphabets     |
+| [ObjectID](https://github.com/TundraSoft/TundraLibs/wiki/ID-ObjectID)           | MongoDB-inspired mixed-radix identifiers        |
+| [ULID](https://github.com/TundraSoft/TundraLibs/wiki/ID-ULID)                   | Sortable, timestamp-based universally unique    |
+| [CUID](https://github.com/TundraSoft/TundraLibs/wiki/ID-CUID)                   | Process-sortable 25-char `c`-prefixed IDs       |
+| [CUID2](https://github.com/TundraSoft/TundraLibs/wiki/ID-CUID2)                 | Cryptographically secure, privacy-preserving    |
+| [SequenceID](https://github.com/TundraSoft/TundraLibs/wiki/ID-SequenceID)       | Sequential IDs with timestamp and counter       |
+| [SimpleID](https://github.com/TundraSoft/TundraLibs/wiki/ID-SimpleID)           | Date-sequential, human-readable IDs             |
+| [Comparison Guide](https://github.com/TundraSoft/TundraLibs/wiki/ID-Comparison) | Feature comparison and use case recommendations |
+| [Performance](https://github.com/TundraSoft/TundraLibs/wiki/ID-Performance)     | Benchmarks and optimization tips                |
 
 ## Installation
 
@@ -183,7 +183,7 @@ const orderId = orderGen();
 - **Sequential ordering**: SequenceID (ordered with counter)
 - **Date-sequential counters**: SimpleID (predictable, human-readable)
 
-See the [Comparison Guide](docs/ID-Comparison.md) for detailed recommendations.
+See the [Comparison Guide](https://github.com/TundraSoft/TundraLibs/wiki/ID-Comparison) for detailed recommendations.
 
 ## License
 
@@ -191,4 +191,4 @@ MIT
 
 ---
 
-[← Back to TundraLibs](../../README.md)
+[← Back to TundraLibs](https://github.com/TundraSoft/TundraLibs/wiki/Home)

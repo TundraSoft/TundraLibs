@@ -4,7 +4,7 @@
  * a near-superset for the OQL surface but doesn't have RETURNING — the
  * engine layer compensates.
  *
- * Compatibility notes (full breakdown in `packages/oql/docs/Compatibility.md`):
+ * Compatibility notes (full breakdown in `packages/oql/docs/OQL-Compatibility.md`):
  * - Schemas in MariaDB are databases; CREATE_SCHEMA emits `CREATE DATABASE`.
  * - No materialized views. CREATE_VIEW with `materialized: true` silently
  *   falls back to a regular view; REFRESH_MATERIALIZED_VIEW emits the

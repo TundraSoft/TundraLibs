@@ -241,5 +241,5 @@ pact owns no storage — its hooks are just queries. For the full pattern
 (sharing one pool, backing `getUser`/`getApiKey` with norm repos, caching
 `getUser` safely), see
 [Database access & connection pooling](./Rapid-Database.md); a runnable
-version lives in [`examples/blog/auth.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/rapid/examples/blog/auth.ts) and
+version lives in [`examples/blog/auth.ts`](../examples/blog/auth.ts) and
 `examples/blog/main.ts`'s `/login` + `/admin/*` routes.

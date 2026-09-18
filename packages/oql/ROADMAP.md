@@ -81,7 +81,7 @@ built for.
 | CTEs               | Full                          | Full                       | Full                                      | None                       |
 | Window functions   | Planned                       | Planned                    | Planned                                   | None                       |
 
-See [docs/Compatibility.md](./docs/Compatibility.md) for precise
+See [docs/OQL-Compatibility.md](./docs/OQL-Compatibility.md) for precise
 per-dialect behaviour.
 
 ## Security notes

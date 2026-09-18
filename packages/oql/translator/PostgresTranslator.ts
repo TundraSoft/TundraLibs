@@ -2,7 +2,7 @@
  * PostgreSQL OQL translator. Targets Postgres 12+ (generated columns,
  * native JSONB operators).
  *
- * Compatibility notes (full breakdown in `packages/oql/docs/Compatibility.md`):
+ * Compatibility notes (full breakdown in `packages/oql/docs/OQL-Compatibility.md`):
  * - Native: schemas, TRUNCATE, RIGHT/FULL JOIN, materialized views with
  *   `REFRESH MATERIALIZED VIEW [CONCURRENTLY]`, partial indexes,
  *   crypto via pgcrypto (`gen_random_uuid()`, `digest()`, `pgp_sym_encrypt`).

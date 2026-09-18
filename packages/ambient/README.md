@@ -40,7 +40,7 @@ reads it — at any depth, across every `await`, isolated between concurrent
 requests. It is built on `AsyncLocalStorage` (uniform across Deno, Bun and Node)
 — `slogger` reads request context straight from it for log correlation, and
 `tracer` builds its own isolated span store on the same primitive (not the
-shared bag; see [Ambient-Integration](docs/Ambient-Integration.md#tracer-who-owns-what)).
+shared bag; see [Ambient-Integration](https://github.com/TundraSoft/TundraLibs/wiki/Ambient-Integration#tracer-who-owns-what)).
 
 ## Installation
 
@@ -168,11 +168,11 @@ survives `await`."
 
 ## Documentation
 
-- [Concepts](docs/Ambient-Concepts.md) - AsyncLocalStorage, scopes, the mutable
+- [Concepts](https://github.com/TundraSoft/TundraLibs/wiki/Ambient-Concepts) - AsyncLocalStorage, scopes, the mutable
   bag, and your own stores via `createContext`
-- [Integration](docs/Ambient-Integration.md) - Wiring slogger, tracer, and
+- [Integration](https://github.com/TundraSoft/TundraLibs/wiki/Ambient-Integration) - Wiring slogger, tracer, and
   request boundaries without coupling them
-- [Roadmap](ROADMAP.md) - Decisions and deferred items
+- [Roadmap](https://github.com/TundraSoft/TundraLibs/blob/main/packages/ambient/ROADMAP.md) - Decisions and deferred items
 
 ## License
 

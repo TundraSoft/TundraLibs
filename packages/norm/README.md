@@ -1,7 +1,7 @@
 # NORM
 
-A typed, cross-runtime ORM built on [OQL](../oql/README.md) and
-[@tundralibs/drivers](../drivers/README.md). One schema declaration
+A typed, cross-runtime ORM built on [OQL](https://github.com/TundraSoft/TundraLibs/wiki/OQL) and
+[@tundralibs/drivers](https://github.com/TundraSoft/TundraLibs/wiki/drivers). One schema declaration
 drives your types, validation, migrations, and at-rest column
 encryption, across PostgreSQL, MariaDB/MySQL, SQLite, and MongoDB, and,
 on edge runtimes, Neon, Turso, and Cloudflare D1 over HTTP.
@@ -19,28 +19,28 @@ its guide.
 
 - **At-rest encryption.** `.encrypt()` any column, then filter and
   enforce uniqueness on the ciphertext through a digest sibling. See
-  [Security](docs/NORM-Security.md).
+  [Security](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Security).
 - **Audit trail.** A generated, read-only replica mirrors every insert,
   update, and delete, with no change to the source table. See
-  [Audit tables](docs/NORM-Audit.md).
+  [Audit tables](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Audit).
 - **Temporal tables.** Every version of a row stays in place, with
   point-in-time (`@AsOf`) reads and scheduled changes. See
-  [Temporal tables](docs/NORM-Temporal.md).
+  [Temporal tables](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Temporal).
 - **Multi-tenant scoping.** One call wraps every read and write of a
   handle in an always-on equality filter, enforced on cross-tenant
-  writes as well. See [Scoping](docs/NORM-Scoping.md).
+  writes as well. See [Scoping](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Scoping).
 - **Read-query caching.** Opt-in per-entity TTLs with per-table
   invalidation on write, over any `@tundralibs/cacher` backend. See
-  [Read caching](docs/NORM-Caching.md).
+  [Read caching](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Caching).
 - **Zero-codegen types.** `RowOf`, `InsertOf`, `UpdateOf`, and typed
   filters and projections are read straight off the entity declaration.
   There are no generated files and no build step. See
-  [Schema definition](docs/NORM-Schema.md).
+  [Schema definition](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Schema).
 - **Cross-runtime.** Deno, Bun, Node.js, and Cloudflare Workers from one
   codebase, with the fetch-only dialects running in the browser as well.
   See [Browser / Worker compatibility](#browser--worker-compatibility).
 
-The [subscription-billing example](examples/subscription-billing/) shows
+The [subscription-billing example](https://github.com/TundraSoft/TundraLibs/tree/main/packages/norm/examples/subscription-billing) shows
 several of these working together in one runnable app.
 
 ## Overview
@@ -50,7 +50,7 @@ norm derives:
 
 - **Types.** `RowOf`, `InsertOf`, `UpdateOf`, and typed projections and
   filters, with no codegen step.
-- **Validation.** A generated [Guardian](../guardian/README.md) runs
+- **Validation.** A generated [Guardian](https://github.com/TundraSoft/TundraLibs/wiki/Guardian) runs
   before any SQL, so bad input is a typed error rather than a database
   error.
 - **Migrations.** Snapshot-based, with a table-rebuild engine, drift
@@ -98,16 +98,16 @@ barrel forces no unbundlable dependency on you other than `sqlite`.
 
 ## Modules
 
-| Module                          | Import                               | Description                                                                                                      |
-| ------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Root                            | `@tundralibs/norm`                   | `Norm`, `NormDb`, repos, `Column`, `Entity`, `Schema`, `use`, plus six of the seven dialects (all but `sqlite`). |
-| [Core](core.ts)                 | `@tundralibs/norm/core`              | The same surface with no dialect registered. The explicit edge/serverless entry point.                           |
-| [Definition](definition/mod.ts) | `@tundralibs/norm/definition`        | Builders, entity/schema types, doc + snapshot emitters.                                                          |
-| [Migrations](migrations/mod.ts) | `@tundralibs/norm/migrations`        | The `Migrator`: snapshot / plan / apply / rollback.                                                              |
-| [Asserts](asserts/mod.ts)       | `@tundralibs/norm/asserts`           | Validate hand-built definitions with the same rules `Entity()` uses.                                             |
-| [Engines](engines/mod.ts)       | `@tundralibs/norm/engines`           | `registerEngine` / `resolveEngineFactory`, the dialect registry.                                                 |
-| Engine (one per dialect)        | `@tundralibs/norm/engines/<dialect>` | Side-effect module registering one dialect: `postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`, `d1`.       |
-| [CLI](cli/mod.ts)               | `@tundralibs/norm/cli`               | `norm init`/`upgrade`/`ping` — see [CLI](#cli) below.                                                            |
+| Module                                                                                           | Import                               | Description                                                                                                      |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Root                                                                                             | `@tundralibs/norm`                   | `Norm`, `NormDb`, repos, `Column`, `Entity`, `Schema`, `use`, plus six of the seven dialects (all but `sqlite`). |
+| [Core](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/core.ts)                 | `@tundralibs/norm/core`              | The same surface with no dialect registered. The explicit edge/serverless entry point.                           |
+| [Definition](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/definition/mod.ts) | `@tundralibs/norm/definition`        | Builders, entity/schema types, doc + snapshot emitters.                                                          |
+| [Migrations](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/migrations/mod.ts) | `@tundralibs/norm/migrations`        | The `Migrator`: snapshot / plan / apply / rollback.                                                              |
+| [Asserts](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/asserts/mod.ts)       | `@tundralibs/norm/asserts`           | Validate hand-built definitions with the same rules `Entity()` uses.                                             |
+| [Engines](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/engines/mod.ts)       | `@tundralibs/norm/engines`           | `registerEngine` / `resolveEngineFactory`, the dialect registry.                                                 |
+| Engine (one per dialect)                                                                         | `@tundralibs/norm/engines/<dialect>` | Side-effect module registering one dialect: `postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`, `d1`.       |
+| [CLI](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/cli/mod.ts)               | `@tundralibs/norm/cli`               | `norm init`/`upgrade`/`ping` — see [CLI](#cli) below.                                                            |
 
 ## Installation
 
@@ -226,7 +226,7 @@ are real connections and carry no such limit. `mongo` is unverified on
 Workers, and `sqlite` cannot run there at all. A dialect whose module was
 never imported throws `ENGINE_NOT_REGISTERED` at construction and names
 the import to add. The registry behind this is documented in
-[`engines/registry.ts`](engines/registry.ts).
+[`engines/registry.ts`](https://github.com/TundraSoft/TundraLibs/blob/main/packages/norm/engines/registry.ts).
 
 ## Quick Start
 
@@ -357,7 +357,7 @@ const Profiles = Entity('profiles', {
 number of schemas into one typed database handle and resolves foreign
 keys across schema boundaries.
 
-See [Schema definition](docs/NORM-Schema.md) for the full builder
+See [Schema definition](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Schema) for the full builder
 reference, relations, hooks, and validators.
 
 ## Querying
@@ -388,7 +388,7 @@ relation refs such as `'@Profile.@bio'`. Filtering through a to-many
 relation that is not projected is lifted into a correlated `EXISTS`
 subquery, so it never fans out.
 
-See [Querying](docs/NORM-Querying.md) for filters, typed projections,
+See [Querying](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Querying) for filters, typed projections,
 relations, aggregates, and pagination.
 
 ## At-rest encryption
@@ -417,7 +417,7 @@ password digest that must never be readable. `Column.mask(source, fn)` is
 a virtual column computed after decryption. It is never stored and never
 sent to SQL.
 
-See [Security](docs/NORM-Security.md) for encryption, digest columns,
+See [Security](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Security) for encryption, digest columns,
 masks, and the crypto override hooks.
 
 ## Migrations
@@ -445,7 +445,7 @@ crypto marker flips. Drops are gated behind `allowDrop` and surfaced as
 reviewed `.sql` artifact, and takes a server-side advisory lock so two
 CI runners cannot migrate at once.
 
-See [Migrations](docs/NORM-Migrations.md) for the full workflow, rename
+See [Migrations](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Migrations) for the full workflow, rename
 hints, the rebuild engine, and stored plans.
 
 ## Scoping (multi-tenant / default filters)
@@ -470,7 +470,7 @@ handle because it carries no `WHERE`; use `delete({})` to clear one
 scope. An entity without the scope column is queried unscoped, so one
 handle can span a mixed registry. The applied scope rides
 `result.scoped`. Scopes are equality-only. See
-[Scoping](docs/NORM-Scoping.md).
+[Scoping](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Scoping).
 
 ## Transactions & escape hatches
 
@@ -602,7 +602,7 @@ Events give flat observability: a `call` record per operation and a
 the parent of the queries it caused, configure a `witness`. Every repo
 operation and `raw()` runs through it, so a tracer's active span is open
 while the driver events fire, and their spans parent to it through
-[ambient](../ambient/README.md).
+[ambient](https://github.com/TundraSoft/TundraLibs/wiki/Ambient).
 
 ```typescript ignore
 const norm = new Norm({
@@ -659,7 +659,7 @@ the exported `Executor` seam (`execute`, `ddl`, `transaction`,
 `capabilities`) as a mock and pass it to `compileRuntime` — norm's own
 test suite (`runtime.test.ts`, `project.test.ts`) does exactly this,
 since norm ships no ready-made mock executor of its own. See
-[Testing your app](docs/NORM-Guide.md#10-testing-your-app) for the full
+[Testing your app](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Guide#10-testing-your-app) for the full
 walkthrough.
 
 ## Supported databases
@@ -687,7 +687,7 @@ MariaDB. ⁶ A fetch dialect sends one request per statement, so
 writes are best-effort. ⁷ MongoDB has no FK constraint concept at all — the constraint is
 skipped and named in `Migrator.apply()`'s `warnings`, never thrown —
 while the relation itself still works for joins/eager projection. See
-[Referential actions](docs/NORM-Schema.md#referential-actions).
+[Referential actions](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Schema#referential-actions).
 
 Neon speaks PostgreSQL's SQL and Turso and D1 speak SQLite's, each
 through its base dialect's translator, and `executor.capabilities`
@@ -697,21 +697,21 @@ where each dialect runs.
 
 ## Guides
 
-- [How-To Guide](docs/NORM-Guide.md): build a real app end to end.
-- [Schema definition](docs/NORM-Schema.md): columns, entities,
+- [How-To Guide](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Guide): build a real app end to end.
+- [Schema definition](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Schema): columns, entities,
   relations, hooks, validators.
-- [Querying](docs/NORM-Querying.md): filters, projections, relations,
+- [Querying](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Querying): filters, projections, relations,
   aggregates, pagination.
-- [Read caching](docs/NORM-Caching.md): per-entity TTLs, per-table
+- [Read caching](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Caching): per-entity TTLs, per-table
   invalidation, engines, and backend-failure behavior.
-- [Temporal tables](docs/NORM-Temporal.md): effective-dated version
+- [Temporal tables](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Temporal): effective-dated version
   history, `@AsOf` point-in-time reads, scheduling.
-- [Audit tables](docs/NORM-Audit.md): a generated, versioned replica
+- [Audit tables](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Audit): a generated, versioned replica
   that mirrors every write, with no change to the source table.
-- [Security](docs/NORM-Security.md): encryption, digests, masks.
-- [Migrations](docs/NORM-Migrations.md): the `Migrator` workflow.
-- [Scoping](docs/NORM-Scoping.md): tenant scoping and default filters.
-- [Errors](docs/NORM-Errors.md): the error classes and every stable
+- [Security](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Security): encryption, digests, masks.
+- [Migrations](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Migrations): the `Migrator` workflow.
+- [Scoping](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Scoping): tenant scoping and default filters.
+- [Errors](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Errors): the error classes and every stable
   `NormErrorCode`.
 
 ## License

@@ -36,6 +36,29 @@ jobs:
             exit 1
           fi
 
+  doc-links:
+    name: Documentation links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Check link contract
+        # A package README is what JSR renders, and JSR resolves its
+        # relative links against the REPO root — so they must be absolute
+        # or they 404 for every consumer. Everything else stays relative.
+        run: deno task docs:links
+
+      - name: Dry-run the wiki sync
+        # The wiki is published on push to main; without this, a dead link
+        # or an unmapped package only fails AFTER the merge.
+        run: deno task docs:wiki:check
+
   package-guard:
     name: Single-package guard
     runs-on: ubuntu-latest
