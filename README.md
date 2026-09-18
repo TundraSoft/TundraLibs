@@ -9,8 +9,9 @@ also run on **Cloudflare Workers** and in the **browser** (see
 They cover databases (an ORM, a query language, and connection drivers
 for PostgreSQL, MariaDB, SQLite, MongoDB, Redis, and Memcached), schema
 validation, structured logging, distributed tracing, Prometheus metrics,
-authentication, caching, dependency injection, HTTP routing,
-cryptography, and ID generation — each independent and dependency-light.
+authentication, caching, dependency injection, HTTP routing, an
+application framework that binds them together, cryptography, and ID
+generation — each independent and dependency-light.
 
 [![Deno 2.0+](https://img.shields.io/badge/Deno-2.0+-000000?logo=deno)](#runtime-support)
 [![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)](#runtime-support)
@@ -57,25 +58,26 @@ the [wiki](https://github.com/TundraSoft/TundraLibs/wiki).
 Coming from another ecosystem? Here's the TundraLibs equivalent of tools
 you may already know — every one is cross-runtime (Deno, Bun, Node).
 
-| If you want…                                                       | Reach for               |
-| ------------------------------------------------------------------ | ----------------------- |
-| A **Zod / Yup / Joi** alternative (schema validation)              | `@tundralibs/guardian`  |
-| A **Prisma / Drizzle / TypeORM** alternative (ORM)                 | `@tundralibs/norm`      |
-| A **Knex**-style query builder (SQL + MongoDB)                     | `@tundralibs/oql`       |
-| Unified **pg / mysql2 / ioredis / mongodb** connection drivers     | `@tundralibs/drivers`   |
-| An **InversifyJS / tsyringe** alternative (dependency injection)   | `@tundralibs/doctor`    |
-| A **Winston / Pino** alternative (structured logging)              | `@tundralibs/slogger`   |
-| An **OpenTelemetry**-style tracing SDK                             | `@tundralibs/tracer`    |
-| A **prom-client** alternative (Prometheus metrics)                 | `@tundralibs/metro-man` |
-| A **node-cron / croner** alternative (cron scheduler)              | `@tundralibs/cronus`    |
-| **nanoid / uuid / cuid / ulid / ObjectID** in one library          | `@tundralibs/id`        |
-| A **Keyv / node-cache** alternative (Memory/Redis/Memcached)       | `@tundralibs/cacher`    |
-| A **jose / bcrypt / node:crypto** toolkit (JWT, OTP, AES, hashing) | `@tundralibs/crypt`     |
-| A **Passport / Lucia / Auth.js** alternative (auth)                | `@tundralibs/pact`      |
-| An **Axios / Ky**-style base for building typed API SDKs           | `@tundralibs/restler`   |
-| A **socket.io**-style typed RPC + pub/sub over WebSocket           | `@tundralibs/rpc`       |
-| A **find-my-way**-style radix-tree HTTP router                     | `@tundralibs/radrouter` |
-| An **AsyncLocalStorage / cls-hooked** request context              | `@tundralibs/ambient`   |
+| If you want…                                                         | Reach for               |
+| -------------------------------------------------------------------- | ----------------------- |
+| A **Zod / Yup / Joi** alternative (schema validation)                | `@tundralibs/guardian`  |
+| A **Prisma / Drizzle / TypeORM** alternative (ORM)                   | `@tundralibs/norm`      |
+| A **Knex**-style query builder (SQL + MongoDB)                       | `@tundralibs/oql`       |
+| Unified **pg / mysql2 / ioredis / mongodb** connection drivers       | `@tundralibs/drivers`   |
+| An **InversifyJS / tsyringe** alternative (dependency injection)     | `@tundralibs/doctor`    |
+| A **Winston / Pino** alternative (structured logging)                | `@tundralibs/slogger`   |
+| An **OpenTelemetry**-style tracing SDK                               | `@tundralibs/tracer`    |
+| A **prom-client** alternative (Prometheus metrics)                   | `@tundralibs/metro-man` |
+| A **node-cron / croner** alternative (cron scheduler)                | `@tundralibs/cronus`    |
+| **nanoid / uuid / cuid / ulid / ObjectID** in one library            | `@tundralibs/id`        |
+| A **Keyv / node-cache** alternative (Memory/Redis/Memcached)         | `@tundralibs/cacher`    |
+| A **jose / bcrypt / node:crypto** toolkit (JWT, OTP, AES, hashing)   | `@tundralibs/crypt`     |
+| A **Passport / Lucia / Auth.js** alternative (auth)                  | `@tundralibs/pact`      |
+| An **Axios / Ky**-style base for building typed API SDKs             | `@tundralibs/restler`   |
+| A **socket.io**-style typed RPC + pub/sub over WebSocket             | `@tundralibs/rpc`       |
+| A **find-my-way**-style radix-tree HTTP router                       | `@tundralibs/radrouter` |
+| An **Express / Fastify / Hono / NestJS** alternative (app framework) | `@tundralibs/rapid`     |
+| An **AsyncLocalStorage / cls-hooked** request context                | `@tundralibs/ambient`   |
 
 ## Runtime support
 
@@ -103,6 +105,7 @@ and in Chrome via Vite, not by inspecting imports.
 | [oql](packages/oql/README.md)             |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | [pact](packages/pact/README.md)           |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | [radrouter](packages/radrouter/README.md) |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| [rapid](packages/rapid/README.md)         |  ✅  | ✅  |  ✅  |   ⚠️    |   ❌    | **Workers:** serve through `app.fetch(request)` instead of `app.start()` — HTTP routes, middleware and the UI layer work; there is no listening socket, filesystem or scheduler, so socket commands error if registered, jobs are not scheduled (fire them from a Cron Trigger with `app.triggerJob(name)`), file uploads are rejected with a typed 501, and the live bridge cannot connect. **Browser:** the target rapid serves pages _to_, not one it runs in — no server socket, so nothing to mount.                                                                                                                                                                                       |
 | [restler](packages/restler/README.md)     |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | [rpc](packages/rpc/README.md)             |  ✅  | ✅  |  ✅  |   ⚠️    |   ⚠️    | `Client` works everywhere. **Workers:** `Server` serves connections via `handleUpgrade(request)` from a `fetch` handler — commands, middleware and channels all work; cross-connection `publish()` fan-out does not (each connection is pinned to its own request's I/O context — the drop now surfaces via `onSendError` instead of vanishing silently), and real fan-out needs a Durable Object this package doesn't provide. `listen()`/`handlers()` still need a host runtime. **Browser:** `Server` cannot run at all — `Client` is what a browser uses. `./conformance` is test-only and never bundles.                                                                                   |
 | [slogger](packages/slogger/README.md)     |  ✅  | ✅  |  ✅  |   ⚠️    |   ⚠️    | Console, Memory and HTTP handlers work everywhere. **Workers:** `TCPHandler` and `SyslogHandler`'s TCP transport connect via `compat/net`'s `cloudflare:sockets` — no `nodejs_compat` flag needed. `FileHandler` also works — reads/writes land in workerd's `/tmp` — but a record is gone by the very next request, not merely when the isolate eventually recycles; the handler detects this at open and warns once per instance. `SyslogHandler`'s UDP transport doesn't work (Workers has no UDP), and neither does its UNIX transport (`compat/net` disallows UNIX sockets on Workers). **Browser:** no filesystem or raw socket — File, TCP and Syslog all throw.                         |
