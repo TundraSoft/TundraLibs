@@ -9,6 +9,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import type { RapidContextResponse } from '../types/mod.ts';
 import { param } from './binders.ts';
 import { DELETE, GET, POST } from './http.ts';
+import { RapidError } from '../errors/mod.ts';
 import { decorationsOf } from './registry.ts';
 import { JOB } from './job.ts';
 import { SOCKET } from './socket.ts';
@@ -26,7 +27,7 @@ describe('rapid.decorators.http', () => {
     asserts.assertEquals(entries[0], {
       kind: 'HTTP',
       method: 'GET',
-      path: '/users/:id:',
+      paths: ['/users/:id:'],
       binds: [{ source: 'param', name: 'id', validate: undefined }],
       methodName: 'find',
     });
@@ -53,7 +54,7 @@ describe('rapid.decorators.http', () => {
     asserts.assertEquals(entry, {
       kind: 'HTTP',
       method: 'GET',
-      path: '/docs',
+      paths: ['/docs'],
       binds: [],
       methodName: 'get',
       summary: 'Short',
@@ -63,6 +64,49 @@ describe('rapid.decorators.http', () => {
       security: [],
       response,
     });
+  });
+
+  it('a path ARRAY records every path in ONE decoration; empty and repeated are decoration-time errors', () => {
+    class Users {
+      @GET(['/users', '/:orgCode:/users'])
+      list(): RapidContextResponse {
+        return { content: { ok: true } };
+      }
+    }
+    const [entry] = decorationsOf(Users, 'list')!;
+    asserts.assertEquals((entry as { paths: readonly string[] }).paths, [
+      '/users',
+      '/:orgCode:/users',
+    ]);
+    // ONE decoration, not two — the alias set lives inside it.
+    asserts.assertEquals(decorationsOf(Users, 'list')!.length, 1);
+
+    asserts.assertThrows(
+      () => {
+        class Empty {
+          @GET([])
+          list(): RapidContextResponse {
+            return { content: {} };
+          }
+        }
+        return Empty;
+      },
+      RapidError,
+      'cannot be an empty array',
+    );
+    asserts.assertThrows(
+      () => {
+        class Dup {
+          @GET(['/a', '/a'])
+          list(): RapidContextResponse {
+            return { content: {} };
+          }
+        }
+        return Dup;
+      },
+      RapidError,
+      'must be unique',
+    );
   });
 
   it('aliases (same factory twice) and multi-transport stacks all record', () => {

@@ -290,6 +290,35 @@ standalone context it takes.
 - `@Module({ prefix: '/users' })` joins onto HTTP paths only; slashes are
   normalised. A prefix may carry params (`/tenants/:tid:`) that any method
   binds with `param('tid')`.
+- **Several prefixes** mount the class's whole route table once per entry.
+  The tenant-optional shape is one declaration, not a second class and not a
+  repeated decorator:
+
+  ```ts ignore
+  @Module('Users', { prefix: ['', '/:orgCode:'] })
+  class Users {
+    @GET('/users')
+    list() {/* … */}
+  }
+  // GET /users  and  GET /:orgCode:/users
+  ```
+
+  A route path takes a list on the same terms, and the two multiply — two
+  prefixes and two paths mount four routes:
+
+  ```ts ignore
+  @GET(['/users/:id:', '/u/:id:'], { bind: [param('id')] })
+  one(id: string) { /* … */ }
+  ```
+
+  The handler is shared, so read the tenant defensively: on the unprefixed
+  path `params.orgCode` is simply absent. An empty list, a repeated entry,
+  or a prefix not starting with `/` fails at decoration time.
+- Multi-path methods get **path-derived operation ids** in the OpenAPI
+  document (`Users_list_users`, `Users_list_orgCode_users`), because the
+  spec requires operation ids to be unique. A method serving ONE route keeps
+  the plain `Module_method` id. The suffix comes from the path rather than a
+  counter, so reordering the list never renames an operation.
 - `namespace` (the `RapidModule` field, or `@Module({ namespace })` on a
   plain class) dots onto socket command and job names: `blog.posts.get`.
 - `@Module({ version })` is the default version for the class's routes;

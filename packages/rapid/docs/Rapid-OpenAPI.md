@@ -43,6 +43,17 @@ from the declarations"). Every operation references one shared `RapidError`
 component for its `400`/`401`/`403`/`404`/`500` responses, so the error
 envelope is documented once.
 
+**`operationId` when one method serves several paths.** A list of prefixes
+or a list of paths mounts one method at more than one route, and the spec
+requires `operationId` to be unique across the document. Those operations
+are suffixed with a slug of their path — `Users_list_users`,
+`Users_list_orgCode_users` — while a method serving a single route keeps
+the plain `Module_method` form. The suffix is derived from the path rather
+than a counter, so reordering the list never renames an operation and a
+generated SDK stays stable. An explicit `operationId` is suffixed the same
+way; it is the base, not the final id. See
+[Modules](./Rapid-Modules.md), "Prefixes, namespaces, versions".
+
 ```ts
 import { Application } from '@tundralibs/rapid';
 import { openapi } from '@tundralibs/rapid/endpoints';

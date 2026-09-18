@@ -23,6 +23,56 @@ import {
   recordModule,
 } from './registry.ts';
 
+/**
+ * One prefix, or several, normalised to an array. Each must be empty or
+ * start with `/` — checked HERE, at decoration time, so a bad prefix
+ * fails at import rather than as a confusing joined-path error at mount.
+ *
+ * @throws {RapidError} RAPID_CONFIG on a malformed prefix, or on an empty
+ *   array — which would mount no routes at all, silently.
+ */
+function normalisePrefixes(
+  name: string | undefined,
+  prefix: string | readonly string[] | undefined,
+): readonly string[] {
+  if (prefix === undefined) return [''];
+  const list = typeof prefix === 'string' ? [prefix] : [...prefix];
+  if (list.length === 0) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        '@Module prefix cannot be an empty array — it would mount no routes; ' +
+        "omit it, or pass '' for no prefix",
+      details: { name },
+    });
+  }
+  for (const entry of list) {
+    if (typeof entry !== 'string') {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `@Module prefix entries must be strings — got '${typeof entry}'`,
+        details: { name, prefix: String(entry) },
+      });
+    }
+    if (entry !== '' && !entry.startsWith('/')) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `@Module prefix must be empty or start with '/' — got '${entry}'`,
+        details: { name, prefix: entry },
+      });
+    }
+  }
+  const unique = new Set(list);
+  if (unique.size !== list.length) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        '@Module prefix entries must be unique — a repeat would mount every ' +
+        'route on the same path twice',
+      details: { name, prefix: list.join(', ') },
+    });
+  }
+  return list;
+}
+
 /** Options for {@link Module}. */
 export type ModuleDecoratorOptions = {
   /**
@@ -34,14 +84,19 @@ export type ModuleDecoratorOptions = {
   namespace?: string;
   /**
    * Joined onto every HTTP path declared in the class — socket
-   * commands and job names use {@link namespace} instead. Must be
+   * commands and job names use {@link namespace} instead. Each must be
    * empty or start with `/`; validated NOW (decoration time), same as
    * `@JOB`'s schedule — a bad prefix fails at import, the loudest
    * possible moment, rather than as a confusing joined-path error
    * later at `app.module()`.
+   *
+   * An ARRAY mounts the class's whole route table once per prefix —
+   * `['', '/:orgCode:']` serves every route both tenant-scoped and
+   * unscoped from one declaration. An empty array is a loud error: it
+   * would mount nothing. See {@link RapidModuleMeta.prefixes}.
    * @default ''
    */
-  prefix?: string;
+  prefix?: string | readonly string[];
   /**
    * Default `version` for every `@GET`/`@POST`/… in the class that
    * doesn't declare its own — an explicit per-method `version` always
@@ -142,17 +197,10 @@ export function Module(
     });
   }
   assertMiddlewareList('@Module', opts.middleware);
-  const prefix = opts.prefix ?? '';
-  if (prefix !== '' && !prefix.startsWith('/')) {
-    throw new RapidError('RAPID_CONFIG', {
-      message:
-        `@Module prefix must be empty or start with '/' — got '${prefix}'`,
-      details: { name, prefix },
-    });
-  }
+  const prefixes = normalisePrefixes(name, opts.prefix);
   const meta: RapidModuleMeta = {
     ...(name !== undefined ? { name } : {}),
-    prefix,
+    prefixes,
     ...(opts.namespace !== undefined ? { namespace: opts.namespace } : {}),
     ...(opts.version !== undefined ? { version: opts.version } : {}),
     ...(opts.description !== undefined
