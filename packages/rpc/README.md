@@ -20,7 +20,7 @@ re-exports `Server` and `Client` from the same barrel with no separate
 
 ## Overview
 
-Built on top of [`@tundralibs/compat/websocket`](../compat/websocket/Compat-WebSocket.md)'s
+Built on top of [`@tundralibs/compat/websocket`](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebSocket)'s
 `WebSocketServer` primitive — this package adds:
 
 - **Command router** — typed map of `cmd` → handler with optional
@@ -66,15 +66,15 @@ cannot resolve — keep it in test files only.
 
 ## Modules
 
-| Module           | Description                                                                            | Documentation                                              |
-| ---------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `Server`         | Command router + channels + middleware                                                 | This page                                                  |
-| Wire protocol    | JSON envelope frames, `decodeFrame` / `encodeFrame`                                    | [docs/Rpc-Protocol](docs/Rpc-Protocol.md)                  |
-| Middleware       | Koa-style middleware patterns and recipes                                              | [docs/Rpc-Middleware](docs/Rpc-Middleware.md)              |
-| Pub/Sub adapters | Adapter contract, capability flags, in-memory + Redis sketch, conformance test harness | [docs/Rpc-PubSub](docs/Rpc-PubSub.md)                      |
-| Extending        | Subclass overrides — pattern subscribe, frame inspection                               | [docs/Rpc-Extending](docs/Rpc-Extending.md)                |
-| `./pubsub`       | `PubSubAdapter` base + `MemoryPubSubAdapter`                                           | [docs/Rpc-PubSub](docs/Rpc-PubSub.md)                      |
-| `./conformance`  | `runAdapterConformance` — adapter contract test harness (test files only)              | [docs/Rpc-PubSub](docs/Rpc-PubSub.md#testing-your-adapter) |
+| Module           | Description                                                                            | Documentation                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Server`         | Command router + channels + middleware                                                 | This page                                                                                        |
+| Wire protocol    | JSON envelope frames, `decodeFrame` / `encodeFrame`                                    | [docs/Rpc-Protocol](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Protocol)                  |
+| Middleware       | Koa-style middleware patterns and recipes                                              | [docs/Rpc-Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Middleware)              |
+| Pub/Sub adapters | Adapter contract, capability flags, in-memory + Redis sketch, conformance test harness | [docs/Rpc-PubSub](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-PubSub)                      |
+| Extending        | Subclass overrides — pattern subscribe, frame inspection                               | [docs/Rpc-Extending](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Extending)                |
+| `./pubsub`       | `PubSubAdapter` base + `MemoryPubSubAdapter`                                           | [docs/Rpc-PubSub](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-PubSub)                      |
+| `./conformance`  | `runAdapterConformance` — adapter contract test harness (test files only)              | [docs/Rpc-PubSub](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-PubSub#testing-your-adapter) |
 
 ## Installation
 
@@ -155,7 +155,7 @@ JSON envelopes, one frame per WebSocket text message.
 The `id` field correlates request / response. Server-initiated `msg`
 frames omit it; `error` frames carry it when it can be recovered from
 the offending inbound frame. Full reference:
-[Rpc-Protocol](docs/Rpc-Protocol.md).
+[Rpc-Protocol](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Protocol).
 
 ## Quick start
 
@@ -973,7 +973,7 @@ const server = new Server({
 });
 ```
 
-Full adapter contract and capability flags: [Rpc-PubSub](docs/Rpc-PubSub.md).
+Full adapter contract and capability flags: [Rpc-PubSub](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-PubSub).
 
 ## Error codes
 
@@ -1116,18 +1116,18 @@ never a raw `TypeError`.
 
 ## Related Documentation
 
-- [Wire Protocol Reference](docs/Rpc-Protocol.md) — frame
+- [Wire Protocol Reference](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Protocol) — frame
   shapes, field validation, and codec error modes
-- [Middleware Patterns](docs/Rpc-Middleware.md) — auth,
+- [Middleware Patterns](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Middleware) — auth,
   rate-limiting, timing, error-routing, heartbeat recipes
-- [Pub/Sub Adapters](docs/Rpc-PubSub.md) — adapter contract,
+- [Pub/Sub Adapters](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-PubSub) — adapter contract,
   capability flags, in-memory implementation, Redis sketch,
   conformance test harness
-- [Extending](docs/Rpc-Extending.md) — the override surface,
+- [Extending](https://github.com/TundraSoft/TundraLibs/wiki/Rpc-Extending) — the override surface,
   pattern subscribe via subclass, custom frame inspection
-- [Tracing middleware](../tracer/docs/Tracer-Recipes.md#radrouter--rpc) —
+- [Tracing middleware](https://github.com/TundraSoft/TundraLibs/wiki/Tracer-Recipes#radrouter--rpc) —
   ready-made `@tundralibs/tracer` middleware for RPC's generic chain
   (a span per message, parented from inbound `traceparent`)
-- [Examples](examples/) — runnable demos
-- [`@tundralibs/compat/websocket`](../compat/websocket/Compat-WebSocket.md) —
+- [Examples](https://github.com/TundraSoft/TundraLibs/tree/main/packages/rpc/examples) — runnable demos
+- [`@tundralibs/compat/websocket`](https://github.com/TundraSoft/TundraLibs/wiki/Compat-WebSocket) —
   the underlying middleware-aware WebSocket primitive this package is built on

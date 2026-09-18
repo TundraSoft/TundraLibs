@@ -15,7 +15,7 @@
  * The driver layer dispatches on `sql` and uses `params` directly with
  * the underlying mongo client.
  *
- * Compatibility notes (full breakdown in `packages/oql/docs/Compatibility.md`):
+ * Compatibility notes (full breakdown in `packages/oql/docs/OQL-Compatibility.md`):
  * - Schemas: `CREATE_SCHEMA` throws (Mongo databases are created on first
  *   write). `DROP_SCHEMA` emits `dropDatabase`.
  * - TRUNCATE: emulated as `delete` with an empty filter.

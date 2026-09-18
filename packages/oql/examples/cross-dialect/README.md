@@ -35,7 +35,7 @@ SQL syntax and parameter style, or Mongo's pipeline/action shape):
 | Filter operators, `$exists`/`$nexists`, JOIN, JSON path filtering                                                                                                                 | [README → Comprehensive Filter System](../../README.md#comprehensive-filter-system)      |
 | Every DML/DDL query type's full field list and runtime constraints                                                                                                                | [OQL-Types.md](../../types/OQL-Types.md), [OQL-Asserts.md](../../asserts/OQL-Asserts.md) |
 | Per-dialect SQL/pipeline emission, `INSERT_FROM_QUERY`'s `$merge` vs `$out` choice on Mongo                                                                                       | [OQL-Translator.md](../../translator/OQL-Translator.md)                                  |
-| Where behavior genuinely diverges per dialect (this example shows several: UPSERT syntax, `DECIMAL`/`NUMERIC`/`TEXT` type mapping, `NOW()`/`CURRENT_TIMESTAMP`/`datetime('now')`) | [Compatibility Matrix](../../docs/Compatibility.md)                                      |
+| Where behavior genuinely diverges per dialect (this example shows several: UPSERT syntax, `DECIMAL`/`NUMERIC`/`TEXT` type mapping, `NOW()`/`CURRENT_TIMESTAMP`/`datetime('now')`) | [Compatibility Matrix](../../docs/OQL-Compatibility.md)                                      |
 
 No database connection, no test file — OQL only builds and translates query
 objects, it never executes them, so there's nothing to connect to. Per the

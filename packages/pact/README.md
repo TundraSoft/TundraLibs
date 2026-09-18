@@ -14,8 +14,8 @@ Identity, credentials, and sessions live behind a flat set of **optional
 storage hooks** — plain functions, no adapter, no base class, no schema
 ownership — a lighter, bring-your-own-storage alternative to Passport, Lucia,
 or better-auth. All cryptography is delegated to
-[`@tundralibs/crypt`](../crypt/README.md); OAuth HTTP runs on
-[`@tundralibs/restler`](../restler/README.md).
+[`@tundralibs/crypt`](https://github.com/TundraSoft/TundraLibs/wiki/crypt); OAuth HTTP runs on
+[`@tundralibs/restler`](https://github.com/TundraSoft/TundraLibs/wiki/RESTler).
 
 [![JSR](https://jsr.io/badges/@tundralibs/pact)](https://jsr.io/@tundralibs/pact)
 [![JSR Score](https://jsr.io/badges/@tundralibs/pact/score)](https://jsr.io/@tundralibs/pact)
@@ -30,30 +30,30 @@ or better-auth. All cryptography is delegated to
 - **Transport belongs to your framework.** pact never parses headers or
   cookies, performs redirects, or owns routes. The framework extracts values
   and passes them in; pact checks and validates. The shipped
-  [middleware adapters](middleware/Pact-Middleware.md) do the extraction for
+  [middleware adapters](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware) do the extraction for
   the common frameworks.
 - **Storage belongs to your app.** Users, sessions, and API keys live in your
   database under your schema. pact reaches them through
-  [flat optional hooks](docs/Pact-Hooks.md) — implement only what the features
-  you enable need. A [suggested table structure](docs/Pact-Storage.md) covers
+  [flat optional hooks](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Hooks) — implement only what the features
+  you enable need. A [suggested table structure](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Storage) covers
   every capability if you'd rather not design the schema yourself.
 - **Crypto belongs to crypt.** Password hashing (salted PBKDF2), JWTs, HMAC,
   TOTP, sha-256 — pact orchestrates, crypt computes.
 
 ## Documentation
 
-| Topic                                               | Description                                                                                      |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [Hooks](docs/Pact-Hooks.md)                         | The storage seam — stored shapes, every hook, what each feature needs                            |
-| [Storage](docs/Pact-Storage.md)                     | A suggested table structure covering every pact capability                                       |
-| [Sessions](docs/Pact-Sessions.md)                   | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode                                |
-| [OAuth](docs/Pact-OAuth.md)                         | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy                            |
-| [Multi-tenant OAuth](docs/Pact-MultiTenantOAuth.md) | Per-tenant IdPs registered at runtime: `updateOAuth`/`removeOAuth`, propagation across instances |
-| [Caching](docs/Pact-Caching.md)                     | Opt-in caches, the instance name, TTLs, invalidation                                             |
-| [Security](docs/Pact-Security.md)                   | The error contract, enumeration resistance, bound principals, threat notes                       |
-| [Middleware](middleware/Pact-Middleware.md)         | express / fastify / oak / hono adapters and the neutral core                                     |
-| [Passkeys](docs/Pact-Passkeys.md)                   | WebAuthn registration and login, usernameless sign-in, clone detection                           |
-| [Roadmap](docs/Pact-Roadmap.md)                     | Known limitations and planned work                                                               |
+| Topic                                                                                     | Description                                                                                      |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Hooks](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Hooks)                         | The storage seam — stored shapes, every hook, what each feature needs                            |
+| [Storage](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Storage)                     | A suggested table structure covering every pact capability                                       |
+| [Sessions](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Sessions)                   | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode                                |
+| [OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-OAuth)                         | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy                            |
+| [Multi-tenant OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-MultiTenantOAuth) | Per-tenant IdPs registered at runtime: `updateOAuth`/`removeOAuth`, propagation across instances |
+| [Caching](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Caching)                     | Opt-in caches, the instance name, TTLs, invalidation                                             |
+| [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security)                   | The error contract, enumeration resistance, bound principals, threat notes                       |
+| [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware)               | express / fastify / oak / hono adapters and the neutral core                                     |
+| [Passkeys](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Passkeys)                   | WebAuthn registration and login, usernameless sign-in, clone detection                           |
+| [Roadmap](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Roadmap)                     | Known limitations and planned work                                                               |
 
 ## Installation
 
@@ -147,7 +147,7 @@ console.log(canPublish);
 Failure semantics are part of the contract: authentication failures throw
 typed `PactError`s with stable codes (map `PACT_AUTH_FAILURE_CODES` to 401),
 authorization answers are booleans, and `assert` throws `PERMISSION_DENIED`.
-See [Security](docs/Pact-Security.md).
+See [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security).
 
 ## Middleware
 
@@ -178,7 +178,7 @@ the standard and is configurable; the HMAC scheme verifies a templated,
 timestamped request signature and signs the response back; API-key callers
 can exchange JWE-encrypted payloads. The neutral core
 (`createPactMiddleware`) makes an adapter for any other stack a few lines.
-See [Middleware](middleware/Pact-Middleware.md).
+See [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware).
 
 ## Highlights
 
@@ -192,7 +192,7 @@ See [Middleware](middleware/Pact-Middleware.md).
   principal whose `hasPermission`/`assert` evaluate in memory, re-resolving
   only when stale or after a revocation call. Hand-built objects have no
   working methods, and the capability does not survive serialization. See
-  [Security](docs/Pact-Security.md).
+  [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security).
 - **A login seam you can compose** — `verifyCredentials` proves identity
   (and reports MFA enrollment), `createSession` mints by id; `login` is the
   two glued together. MFA-gated logins, magic links, and impersonation are
@@ -201,7 +201,7 @@ See [Middleware](middleware/Pact-Middleware.md).
   revocable) or `JWT` with a rotating refresh family: every refresh bumps a
   generation, a `grace` window absorbs concurrent refreshes, and replaying a
   stale token revokes the whole family and fires `refreshReused`. See
-  [Sessions](docs/Pact-Sessions.md).
+  [Sessions](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Sessions).
 - **Bitmask authorization** — module × permission over unbounded BigInt
   masks. Definition typos throw at construction; per-request junk fails
   closed. Grants serialize through a prototype-pollution-safe codec.
@@ -209,15 +209,15 @@ See [Middleware](middleware/Pact-Middleware.md).
   PKCE verifier, nonce) and `oauthLogin()` feeding the standard session
   pipeline. Seven presets plus generic OIDC discovery; inbound `id_token`s
   are JWKS-verified with the algorithm pinned to the key. See
-  [OAuth](docs/Pact-OAuth.md).
+  [OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-OAuth).
 - **Opt-in caching with a named namespace** — no config means every check
   hits your hooks; per-type TTLs opt in, and the instance `name` keys the
   cache namespace so two apps on one Redis can never read each other's
-  grants. See [Caching](docs/Pact-Caching.md).
+  grants. See [Caching](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Caching).
 - **Passkeys** — WebAuthn registration and login (identifier-first or
   usernameless), verified server-side with attestation policy 'none' and
   counter-based clone detection; the minted session is an ordinary
-  bearer. See [Passkeys](docs/Pact-Passkeys.md).
+  bearer. See [Passkeys](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Passkeys).
 - **TOTP as plain secondary verification** — `generateMFASecret()` /
   `generateMFAAuthURL()` for enrollment, `verifyMFA()` to check; the app
   decides when to demand the second step.
@@ -256,14 +256,14 @@ README and per-runtime run commands:
 ## What pact deliberately does not do
 
 Header/cookie parsing, redirects, routes, CSRF, and every other transport
-concern (the framework's — though the [middleware](middleware/Pact-Middleware.md)
+concern (the framework's — though the [middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware)
 covers the common cases); user/session storage (yours, via hooks — no schema,
 no adapters, no migrations); account-management flows (email verification,
 password-reset delivery); per-instance authorization ("edit this post" is app
 logic); group/role membership resolution (compose effective grants in your
 `getUser`).
 
-See the [Roadmap](docs/Pact-Roadmap.md) for known limitations and planned
+See the [Roadmap](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Roadmap) for known limitations and planned
 work.
 
 ## License

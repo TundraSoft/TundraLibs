@@ -20,14 +20,14 @@ Guardian builds validation pipelines as composable transform functions. You desc
 
 ## Documentation
 
-| Topic                                                | Description                                                 |
-| ---------------------------------------------------- | ----------------------------------------------------------- |
-| [Validators](docs/Guardian-Validators.md)            | Per-type guardians: string, number, boolean, date, etc.     |
-| [Schemas](docs/Guardian-Schemas.md)                  | Composition: objects, arrays, tuples, records, unions       |
-| [Refinements](docs/Guardian-Refinements.md)          | `.refine()`, `.superRefine()`, `.process()`, `.transform()` |
-| [Errors](docs/Guardian-Errors.md)                    | `GuardianError`, paths, causes, multi-field reporting       |
-| [Documentation Emit](docs/Guardian-Documentation.md) | `.toOpenAPI()` · `.toJSONSchema()` · `.toMarkdown()`        |
-| [Examples](docs/Guardian-Examples.md)                | Request validation, form parsing, config loading, more      |
+| Topic                                                                                      | Description                                                 |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| [Validators](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Validators)            | Per-type guardians: string, number, boolean, date, etc.     |
+| [Schemas](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Schemas)                  | Composition: objects, arrays, tuples, records, unions       |
+| [Refinements](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Refinements)          | `.refine()`, `.superRefine()`, `.process()`, `.transform()` |
+| [Errors](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Errors)                    | `GuardianError`, paths, causes, multi-field reporting       |
+| [Documentation Emit](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Documentation) | `.toOpenAPI()` · `.toJSONSchema()` · `.toMarkdown()`        |
+| [Examples](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Examples)                | Request validation, form parsing, config loading, more      |
 
 ## Installation
 
@@ -118,7 +118,7 @@ QuerySchema.parse({ page: '3', limit: '20', q: 'guardian' });
 // → { page: 3, limit: 20, q: 'guardian' }
 ```
 
-See [Validators](docs/Guardian-Validators.md#coercion-rules) for the full coercion rules per type.
+See [Validators](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Validators#coercion-rules) for the full coercion rules per type.
 
 Validating a vendor _response_ instead of parsing input? `Guardian.number()` / `Guardian.boolean()` expose `.strict()` to opt out of coercion — the input must already be the declared JS type, or it throws:
 
@@ -190,7 +190,7 @@ const Trimmed = Guardian.preprocess(
 const Url = Guardian.instanceof(URL);
 ```
 
-See [Schemas](docs/Guardian-Schemas.md) for the full set, including `instanceof`, `preprocess`, `never`, and `catchall` on objects.
+See [Schemas](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Schemas) for the full set, including `instanceof`, `preprocess`, `never`, and `catchall` on objects.
 
 ### Nominal brands
 
@@ -229,7 +229,7 @@ UserSchema.toMarkdown(); // Markdown documentation for the schema
 
 **Refinements run at declaration position.** `schema.refine(check, 'msg').transform(reshape)` runs `check` _before_ `transform`. `.refine()` short-circuits on first failure; `.superRefine([...])` accumulates failures across the array so multi-field validation reports every problem.
 
-**Errors carry absolute paths.** Every `GuardianError` has a structured `path: ReadonlyArray<string|number>` that names the failure site from the root. Use `err.leafErrors()` to iterate every concrete-field failure with its absolute path — see [Errors](docs/Guardian-Errors.md).
+**Errors carry absolute paths.** Every `GuardianError` has a structured `path: ReadonlyArray<string|number>` that names the failure site from the root. Use `err.leafErrors()` to iterate every concrete-field failure with its absolute path — see [Errors](https://github.com/TundraSoft/TundraLibs/wiki/Guardian-Errors).
 
 **Validation, documentation, and codegen share one source.** A Guardian schema is also an OpenAPI fragment, a JSON Schema document, and a Markdown reference. The shape is the schema; the schema is the docs.
 

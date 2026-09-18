@@ -256,7 +256,7 @@ const valid = isUpsert(query);
   surfaces per-dialect at translation/execution instead: on MongoDB a
   data row missing a _conflict key_ value throws
   `DialectUnsupportedError`, see
-  [Compatibility Matrix](../docs/Compatibility.md#upsert-semantics); on
+  [Compatibility Matrix](../docs/OQL-Compatibility.md#upsert-semantics); on
   the SQL dialects a missing non-conflict column just takes its
   DEFAULT/NULL).
 

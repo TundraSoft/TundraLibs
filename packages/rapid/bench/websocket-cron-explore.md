@@ -8,7 +8,7 @@ actual source, not just the docs/tests.
 
 - Not a separate transport file — mounted inside `HTTPTransport`
   (`__buildSocket`,
-  [HTTPTransport.ts:112](../packages/rapid/transports/HTTPTransport.ts)), same
+  [HTTPTransport.ts:112](../transports/HTTPTransport.ts)), same
   port/TLS as HTTP. rAPId is a thin wrapper: one `rpc.command(name, handler)`
   registration per `@SOCKET`/`app.socket()` entry, `rpc.handlers()` becomes the
   `WebServer`'s `websocket` option.
