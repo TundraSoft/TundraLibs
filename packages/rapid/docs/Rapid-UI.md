@@ -393,6 +393,10 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   301/302 — and that server-side `Location` is the handler's value verbatim:
   the same-origin guarantee is a SWAP-side property, so a handler building a
   redirect from request input (`?next=`) must validate it itself.
+- **In flight:** the target carries `aria-busy="true"` from the moment
+  its request leaves until the outcome lands (swap or error) — style the
+  pending state off `[aria-busy]`, no script needed — and `rapid:request`
+  fires on it with `{ url, method }`.
 - **Events:** `rapid:swapped` after a successful swap — detail
   `{ status, url, method, swap, title? }`, the full swap identity, so
   listeners (and the history module) never re-derive it (re-init widgets
@@ -402,13 +406,22 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   envelope) is never swapped into the page. A **2xx** non-HTML response
   (a 204 to a POST) also lands as `rapid:error` — by design, since there
   is nothing to swap; check `detail.status` when that is a success for
-  you.
-- **Request hygiene, built in:** per-target LAST-WRITE-WINS — a newer
-  swap aborts the in-flight one, so racing clicks can't land out of
-  order; modifier-clicks (ctrl/cmd/shift/alt) are left to the browser; a
+  you. `rapid:progress` on the target while a file upload streams out —
+  detail `{ url, loaded, total }` (`total` is `0` when the browser can't
+  compute it). It tracks bytes LEAVING the browser, so it reaches 100%
+  before the server has parsed the body and answered — keep the pending
+  state until `rapid:swapped` / `rapid:error`.
+- **Request hygiene, built in:** ONE request per target — a newer swap
+  aborts an in-flight GET (last write wins, so racing clicks can't land
+  out of order), while an in-flight non-GET is never aborted (the side
+  effect is already on the wire) and the newer request is DROPPED
+  (`swap()` resolves `false`) until it settles — no double-submit from
+  two fast clicks, and the reply (a validation error) always lands;
+  modifier-clicks (ctrl/cmd/shift/alt) are left to the browser; a
   real `<a href>` INSIDE a `data-action` container keeps its native
   navigation; a form holding a file input posts real `multipart/form-data`
-  (the upload gauntlet applies) and the submit button's own name/value is
+  over `XMLHttpRequest` (the upload gauntlet applies; `rapid:progress`
+  reports the upload) and the submit button's own name/value is
   included; keyboard FOCUS survives a swap (an id-carrying focused
   element inside the target is re-focused on its replacement).
 - **View Transitions:** when the browser supports
@@ -718,6 +731,31 @@ secrets (they land in the address bar and browser history).
 
   Anything dynamic (title, nav, scripts) enters via composition around
   it — never as expressions in the file.
+- **Accessible swaps** — three rules, no new mechanism. (1) The runtime
+  sets `aria-busy="true"` on the target for the life of its request, so
+  assistive tech holds announcements until the swap lands; style the
+  pending state off `[aria-busy]` rather than adding a spinner script.
+  (2) Put `aria-live="polite"` on regions that change WITHOUT a user
+  action — a `data-load` region, a chained multi-region refresh, a
+  `rapid:push`-driven list — and leave it off the region the user just
+  acted on, where focus restore already conveys the result. For
+  `data-swap="outer"` the attribute must be in the fragment's root
+  markup, since the target element itself is replaced. (3) Move focus
+  only when the swap brought something the user must deal with. A
+  failed form POST is the case: a submit button with an `id` keeps
+  focus across the swap, so nothing is announced unless you focus the
+  error summary — give it `tabindex="-1"` and:
+
+  ```js ignore
+  document.addEventListener('rapid:swapped', (e) => {
+    if (e.detail.method === 'GET') return;
+    const summary = e.target.querySelector('[role="alert"]');
+    if (summary) summary.focus();
+  });
+  ```
+
+  Back/forward with the history module re-fetches the region and moves
+  focus nowhere — page-level focus on navigation is the app's call.
 - **Template unit tests** — `import { view } from '@tundralibs/rapid/testing'`
   for the frozen bag (`render(UserList.render(data, view()))`), and
   `client(app).get('/x', { swap: true })` to drive the fragment/page/JSON

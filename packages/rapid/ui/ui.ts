@@ -35,13 +35,16 @@ import { djb2 } from '../utils/hash.ts';
  * `x-csrf-token` (names overridable via `data-csrf-cookie` /
  * `data-csrf-header` on `<body>`; a renamed `ui.swapHeader` /
  * `ui.redirectHeader` is followed via `data-swap-header` /
- * `data-redirect-header` likewise). Emits `rapid:swapped` after a
+ * `data-redirect-header` likewise). The target carries `aria-busy="true"`
+ * while its request is in flight. Emits `rapid:request` (`{ url,
+ * method }`) as a request leaves, `rapid:swapped` after a
  * successful swap — detail `{ status, url, method, swap, title? }`, the
  * full swap identity (`title` decoded from the server's `rapid-title`
  * header when present) so listeners and the history module never
- * re-derive it — and `rapid:error` (with `{ status, body }`) when the
- * response is not swappable HTML; honours `rapid-redirect` to relative /
- * same-origin URLs only.
+ * re-derive it — `rapid:error` (with `{ status, body }`) when the
+ * response is not swappable HTML, and `rapid:progress` (`{ url, loaded,
+ * total }`) while a file upload streams out; honours `rapid-redirect` to
+ * relative / same-origin URLs only.
  *
  * Programmatic: `window.rapid.swap(url, target, { method?, swap?,
  * body? })` — `target` a selector or Element; resolves `true` when the
@@ -102,9 +105,43 @@ export const UI_RUNTIME: string = `(() => {
   const emit = (target, name, detail) =>
     target.dispatchEvent(new CustomEvent(name, { bubbles: true, detail }));
 
-  // Last-write-wins per TARGET: a newer request aborts the older one at
-  // ANY stage — fetch, body streaming, or pre-swap — so two rapid
-  // clicks can never land out of order.
+  // A FormData body (a file upload) goes over XMLHttpRequest — the one
+  // browser API that reports UPLOAD progress — surfaced as rapid:progress
+  // on the target. Everything else uses fetch(). Both resolve the shape
+  // the swap path reads: ok / status / url / headers.get() / text().
+  const send = (url, init, target) => {
+    if (!(init.body instanceof FormData)) return fetch(url, init);
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(init.method, url);
+      for (const name in init.headers) {
+        xhr.setRequestHeader(name, init.headers[name]);
+      }
+      xhr.upload.onprogress = (e) =>
+        emit(target, 'rapid:progress', {
+          url,
+          loaded: e.loaded,
+          total: e.lengthComputable ? e.total : 0,
+        });
+      init.signal.addEventListener('abort', () => xhr.abort());
+      xhr.onabort = () => reject(new DOMException('aborted', 'AbortError'));
+      xhr.onerror = () => reject(new TypeError('network error'));
+      xhr.onload = () =>
+        resolve({
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+          url: xhr.responseURL,
+          headers: { get: (name) => xhr.getResponseHeader(name) },
+          text: () => Promise.resolve(xhr.responseText),
+        });
+      xhr.send(init.body);
+    });
+  };
+
+  // One request per TARGET: a newer GET aborts an in-flight GET at ANY
+  // stage — fetch, body streaming, or pre-swap — so two rapid clicks
+  // never land out of order; while a non-GET is in flight the newer
+  // request is dropped (see request()). Value: { controller, method }.
   const inflight = new WeakMap();
   // Each swapped node's GET source — what rapid.refresh() re-fetches.
   const sources = new WeakMap();
@@ -122,16 +159,40 @@ export const UI_RUNTIME: string = `(() => {
     } catch {
       return false;
     }
+    const method = (opts.method || 'get').toUpperCase();
     const previous = inflight.get(target);
-    if (previous) previous.abort();
+    if (previous) {
+      // A GET in flight is superseded — the newer fragment wins. A non-GET
+      // in flight is a side effect already on the wire: aborting would not
+      // unsend it, and its reply (a validation error) must land — so the
+      // NEWER request is dropped instead. No double-submit from two fast
+      // clicks.
+      if (previous.method !== 'GET') return false;
+      previous.controller.abort();
+    }
     const controller = new AbortController();
-    inflight.set(target, controller);
+    const entry = { controller, method };
+    inflight.set(target, entry);
+    target.setAttribute('aria-busy', 'true');
+    // Settled by whichever outcome comes first — swap, error, or the
+    // finally — and BEFORE that outcome's event: a listener re-swapping
+    // this target must never find it "still in flight" and be dropped.
+    const settle = () => {
+      if (inflight.get(target) !== entry) return;
+      inflight.delete(target);
+      target.removeAttribute('aria-busy');
+    };
+    const fail = (node, detail) => {
+      settle();
+      emit(node, 'rapid:error', detail);
+    };
+    emit(target, 'rapid:request', { url, method });
     const headers = { 'accept': 'text/html' };
     headers[SWAP_HEADER] = '1';
     const token = cookie(CSRF_COOKIE);
     if (token) headers[CSRF_HEADER] = token;
     const init = {
-      method: (opts.method || 'get').toUpperCase(),
+      method,
       headers,
       signal: controller.signal,
     };
@@ -146,16 +207,16 @@ export const UI_RUNTIME: string = `(() => {
     try {
       let res;
       try {
-        res = await fetch(url, init);
+        res = await send(url, init, target);
       } catch (error) {
         if (error && error.name === 'AbortError') return false;
-        emit(target, 'rapid:error', { status: 0, body: String(error) });
+        fail(target, { status: 0, body: String(error) });
         return false;
       }
-      // fetch() follows redirects: a same-origin request can land on a
-      // foreign host. Never swap what THAT host answered.
+      // fetch() and XHR follow redirects: a same-origin request can land
+      // on a foreign host. Never swap what THAT host answered.
       if (res.url && new URL(res.url).origin !== location.origin) {
-        emit(target, 'rapid:error', { status: res.status, body: '' });
+        fail(target, { status: res.status, body: '' });
         return false;
       }
       const redirect = res.headers.get(REDIRECT_HEADER);
@@ -175,7 +236,7 @@ export const UI_RUNTIME: string = `(() => {
       } catch (error) {
         // An abort AFTER headers rejects here — the newer request wins.
         if (error && error.name === 'AbortError') return false;
-        emit(target, 'rapid:error', {
+        fail(target, {
           status: res.status,
           body: String(error),
         });
@@ -184,7 +245,7 @@ export const UI_RUNTIME: string = `(() => {
       const type = res.headers.get('content-type') || '';
       if (!res.ok || type.indexOf('text/html') !== 0) {
         // Never swap a non-HTML body (a JSON error envelope) into the page.
-        emit(target, 'rapid:error', { status: res.status, body });
+        fail(target, { status: res.status, body });
         return false;
       }
       if (controller.signal.aborted) return false;
@@ -216,7 +277,7 @@ export const UI_RUNTIME: string = `(() => {
       } catch (error) {
         // apply() itself threw (a Trusted Types CSP, a detached outer
         // target) — the DOM is unchanged; report like any failed swap.
-        emit(target, 'rapid:error', {
+        fail(target, {
           status: res.status,
           body: String(error),
         });
@@ -230,7 +291,7 @@ export const UI_RUNTIME: string = `(() => {
       // re-fetch it without the caller knowing the URL — GET swaps only
       // (re-issuing a POST would repeat its side effects), and never
       // append/prepend (a "refresh" would re-append the fragment).
-      if (init.method === 'GET') {
+      if (method === 'GET') {
         if (opts.swap !== 'append' && opts.swap !== 'prepend') {
           sources.set(swapped, { url, swap: opts.swap });
         }
@@ -248,7 +309,7 @@ export const UI_RUNTIME: string = `(() => {
       const detail = {
         status: res.status,
         url,
-        method: init.method,
+        method,
         swap: opts.swap || 'replace',
       };
       const title = res.headers.get('rapid-title');
@@ -256,16 +317,17 @@ export const UI_RUNTIME: string = `(() => {
         try { detail.title = decodeURIComponent(title); }
         catch { detail.title = title; }
       }
+      settle();
       emit(swapped, 'rapid:swapped', detail);
       loadLazy(swapped, url); // lazy regions the fragment brought with it
       for (const root of extraRoots) loadLazy(root);
       extraRoots = [];
       return true;
     } finally {
-      // Cleared only NOW: an entry deleted at the headers phase would
-      // let a newer request find nothing to abort while this one still
-      // streams — and land its stale body LAST.
-      if (inflight.get(target) === controller) inflight.delete(target);
+      // Never earlier than the outcome: an entry deleted at the headers
+      // phase would let a newer request find nothing to abort while this
+      // one still streams — and land its stale body LAST.
+      settle();
     }
   };
 

@@ -59,10 +59,6 @@ updated **2026-09-09**.
   change per render in DEVELOPMENT; a proper file watcher (instant
   invalidation + a future live-reload nudge) rides the dev-console
   work.
-- **Upload progress** — fetch-based submits can't report progress
-  cross-runtime; out of scope for the bundled runtime (app JS/XHR).
-- **A11y recipe** — `aria-live` on swap regions + focus guidance off
-  `rapid:swapped` (docs, not mechanism).
 
 ### Response caching (PINNED 2026-09-08 — after the first rapid release)
 
