@@ -245,11 +245,20 @@ function route<This, A extends readonly unknown[]>(
  *   health(): RapidContextResponse {
  *     return { content: 'ok' };
  *   }
+ *
+ *   // A LIST mounts the same method at each path, and multiplies with
+ *   // the owning @Module's prefixes. Their operationIds are suffixed
+ *   // with a slug of the path, since OpenAPI requires unique ids.
+ *   @GET(['/users', '/people'])
+ *   list(): RapidContextResponse {
+ *     return { content: [] };
+ *   }
  * }
  * ```
  *
  * @throws {RapidError} RAPID_CONFIG at decoration time under legacy
- *   decorator compilation, or on a non-method/static/private target.
+ *   decorator compilation, on a non-method/static/private target, or on
+ *   an empty / duplicated path list.
  */
 export const GET: RouteFactory = (
   path: RoutePath,
