@@ -641,6 +641,28 @@ describe('rapid.ui.app', () => {
       UI_RUNTIME,
       'new URL(res.url).origin !== location.origin',
     );
+    // File uploads ride XMLHttpRequest — the one browser API with upload
+    // progress — surfaced as rapid:progress; everything else stays
+    // fetch(), and the superseding request's abort reaches the XHR.
+    asserts.assertStringIncludes(UI_RUNTIME, 'init.body instanceof FormData');
+    asserts.assertStringIncludes(UI_RUNTIME, "'rapid:progress'");
+    asserts.assertStringIncludes(UI_RUNTIME, 'xhr.upload.onprogress');
+    // In-flight signal: aria-busy on the target + rapid:request; a non-GET
+    // in flight drops the newer request (no double-submit), a GET is
+    // superseded.
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "setAttribute('aria-busy', 'true')",
+    );
+    asserts.assertStringIncludes(UI_RUNTIME, "'rapid:request'");
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "if (previous.method !== 'GET') return false;",
+    );
+    asserts.assertStringIncludes(
+      UI_RUNTIME,
+      "addEventListener('abort', () => xhr.abort())",
+    );
     // An invalid data-target selector reports instead of throwing after
     // preventDefault() left the control dead.
     asserts.assertStringIncludes(
@@ -659,12 +681,12 @@ describe('rapid.ui.app', () => {
     asserts.assertStringIncludes(UI_RUNTIME, 'transition.ready.catch');
     asserts.assertStringIncludes(UI_RUNTIME, 'transition.finished.catch');
     asserts.assertStringIncludes(UI_RUNTIME, 'focusId');
-    asserts.assertStringIncludes(UI_RUNTIME, "init.method === 'GET'");
+    asserts.assertStringIncludes(UI_RUNTIME, "if (method === 'GET') {");
     asserts.assertStringIncludes(UI_RUNTIME, 'refresh: (target) =>');
     // Request hygiene: last-write-wins abort, modifier-click and
     // inner-link carve-outs, the submitter joining multipart posts, and
     // the never-swap-non-HTML guard.
-    asserts.assertStringIncludes(UI_RUNTIME, 'previous.abort()');
+    asserts.assertStringIncludes(UI_RUNTIME, 'previous.controller.abort()');
     asserts.assertStringIncludes(
       UI_RUNTIME,
       'e.metaKey || e.ctrlKey || e.shiftKey || e.altKey',
@@ -672,12 +694,12 @@ describe('rapid.ui.app', () => {
     asserts.assertStringIncludes(UI_RUNTIME, "closest('a[href]')");
     asserts.assertStringIncludes(UI_RUNTIME, 'new FormData(form, submitter)');
     asserts.assertStringIncludes(UI_RUNTIME, "indexOf('text/html') !== 0");
-    // The inflight entry outlives the BODY read — deleted at the
-    // headers phase, a newer request would find nothing to abort while
-    // the older still streams, and stale content would land LAST.
+    // The inflight entry outlives the BODY read and is settled by its
+    // OWN request only — a superseded request must never clear the
+    // newer one's entry (or its aria-busy).
     asserts.assertStringIncludes(
       UI_RUNTIME,
-      'if (inflight.get(target) === controller) inflight.delete(target)',
+      'if (inflight.get(target) !== entry) return;',
     );
     asserts.assertStringIncludes(UI_RUNTIME, 'controller.signal.aborted');
     // The two-function public API, frozen — app code swaps without
@@ -716,6 +738,13 @@ describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
     id = '';
     tagName = 'DIV';
     events: CustomEvent[] = [];
+    attributes: Record<string, string> = {};
+    setAttribute(name: string, value: string): void {
+      this.attributes[name] = value;
+    }
+    removeAttribute(name: string): void {
+      delete this.attributes[name];
+    }
     insertAdjacentHTML(position: string, markup: string): void {
       this.innerHTML = position === 'beforeend'
         ? this.innerHTML + markup
@@ -743,7 +772,7 @@ describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
   type Rapid = {
     swap(url: string, target: unknown, opts?: unknown): Promise<boolean>;
   };
-  const boot = (fetchImpl: typeof fetch) => {
+  const boot = (fetchImpl: typeof fetch, xhrImpl?: unknown) => {
     const document = {
       body: { dataset: {} },
       cookie: 'csrf=tok; other=1',
@@ -769,8 +798,9 @@ describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
       'fetch',
       'Element',
       'HTMLFormElement',
+      'XMLHttpRequest',
       UI_RUNTIME,
-    )(window, document, location, fetchImpl, FakeElement, FakeForm);
+    )(window, document, location, fetchImpl, FakeElement, FakeForm, xhrImpl);
     return { rapid: window.rapid!, assigned };
   };
   const htmlResponse = (body: string, headers: Record<string, string> = {}) =>
@@ -886,5 +916,191 @@ describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
     releaseFirst(htmlResponse('<p>first</p>'));
     asserts.assertEquals(await first, false);
     asserts.assertEquals(target.innerHTML, '<p>second</p>');
+  });
+
+  it('rapid:request fires as the request leaves; aria-busy covers the request and is gone BEFORE rapid:swapped / rapid:error', async () => {
+    let busyDuringFetch: string | undefined;
+    let ok = true;
+    const target = new FakeElement();
+    const { rapid } = boot(
+      (() => {
+        busyDuringFetch = target.attributes['aria-busy'];
+        return Promise.resolve(
+          ok ? htmlResponse('<p>x</p>') : new Response('{}', {
+            status: 500,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      }) as typeof fetch,
+    );
+    // Snapshot the busy state at each event, in order.
+    const seen: [string, string | undefined][] = [];
+    target.dispatchEvent = (e: CustomEvent) => {
+      seen.push([e.type, target.attributes['aria-busy']]);
+      return true;
+    };
+    asserts.assertEquals(await rapid.swap('/frag', target), true);
+    asserts.assertEquals(busyDuringFetch, 'true');
+    asserts.assertEquals(seen, [
+      ['rapid:request', 'true'],
+      ['rapid:swapped', undefined],
+    ]);
+    ok = false;
+    seen.length = 0;
+    asserts.assertEquals(await rapid.swap('/frag', target), false);
+    asserts.assertEquals(seen, [
+      ['rapid:request', 'true'],
+      ['rapid:error', undefined],
+    ]);
+  });
+
+  it('a non-GET in flight is never aborted or doubled: the newer request on that target is dropped until it settles', async () => {
+    const calls: string[] = [];
+    let releasePost!: (r: Response) => void;
+    const { rapid } = boot(
+      ((_url: string, init: RequestInit) => {
+        calls.push(init.method!);
+        if (init.method === 'POST') {
+          return new Promise<Response>((resolve) => {
+            releasePost = resolve;
+          });
+        }
+        return Promise.resolve(htmlResponse('<p>get</p>'));
+      }) as typeof fetch,
+    );
+    const target = new FakeElement();
+    const post = rapid.swap('/save', target, { method: 'post', body: 'a=1' });
+    // A second click and a GET refresh both bounce; nothing else goes out.
+    asserts.assertEquals(
+      await rapid.swap('/save', target, { method: 'post', body: 'a=1' }),
+      false,
+    );
+    asserts.assertEquals(await rapid.swap('/frag', target), false);
+    asserts.assertEquals(calls, ['POST']);
+    releasePost(htmlResponse('<p>saved</p>'));
+    asserts.assertEquals(await post, true);
+    asserts.assertEquals(target.innerHTML, '<p>saved</p>');
+    // Settled: the target is free again.
+    asserts.assertEquals(await rapid.swap('/frag', target), true);
+    asserts.assertEquals(calls, ['POST', 'GET']);
+  });
+
+  it('a rapid:swapped listener re-swapping the SAME target after a POST is not dropped', async () => {
+    const { rapid } = boot(
+      ((_url: string, init: RequestInit) =>
+        Promise.resolve(
+          htmlResponse(
+            init.method === 'POST' ? '<p>saved</p>' : '<p>fresh</p>',
+          ),
+        )) as typeof fetch,
+    );
+    const target = new FakeElement();
+    let chained: Promise<boolean> | undefined;
+    target.dispatchEvent = (e: CustomEvent) => {
+      if (e.type === 'rapid:swapped' && !chained) {
+        chained = rapid.swap('/frag', target);
+      }
+      return true;
+    };
+    asserts.assertEquals(
+      await rapid.swap('/save', target, { method: 'post', body: 'a=1' }),
+      true,
+    );
+    asserts.assertEquals(await chained!, true);
+    asserts.assertEquals(target.innerHTML, '<p>fresh</p>');
+  });
+
+  it('a FormData body rides XMLHttpRequest: same headers, rapid:progress on the target, swap on load, abort on supersede', async () => {
+    class FakeXHR {
+      static instances: FakeXHR[] = [];
+      method = '';
+      headers: Record<string, string> = {};
+      body: unknown;
+      aborted = false;
+      status = 200;
+      responseURL = 'https://app.test/upload';
+      responseText = '<p>up</p>';
+      upload: { onprogress: ((e: unknown) => void) | null } = {
+        onprogress: null,
+      };
+      onload: (() => void) | null = null;
+      onabort: (() => void) | null = null;
+      constructor() {
+        FakeXHR.instances.push(this);
+      }
+      open(method: string): void {
+        this.method = method;
+      }
+      setRequestHeader(name: string, value: string): void {
+        this.headers[name] = value;
+      }
+      getResponseHeader(name: string): string | null {
+        return name === 'content-type' ? 'text/html' : null;
+      }
+      abort(): void {
+        this.aborted = true;
+        this.onabort!();
+      }
+      send(body: unknown): void {
+        this.body = body;
+      }
+    }
+    let fetches = 0;
+    const { rapid } = boot(
+      (() => {
+        fetches++;
+        return Promise.resolve(htmlResponse('<p>fetched</p>'));
+      }) as typeof fetch,
+      FakeXHR,
+    );
+    const form = new FormData();
+    form.append('f', new Blob(['x']), 'x.txt');
+    const target = new FakeElement();
+    const done = rapid.swap('/upload', target, { method: 'post', body: form });
+    const xhr = FakeXHR.instances[0]!;
+    asserts.assertEquals(xhr.method, 'POST');
+    asserts.assertEquals(xhr.body, form);
+    asserts.assertEquals(xhr.headers['rapid-swap'], '1');
+    asserts.assertEquals(xhr.headers['x-csrf-token'], 'tok');
+    // The browser sets the multipart boundary — never a hand-set type.
+    asserts.assertEquals('content-type' in xhr.headers, false);
+    xhr.upload.onprogress!({ lengthComputable: true, loaded: 5, total: 10 });
+    xhr.upload.onprogress!({ lengthComputable: false, loaded: 7, total: 0 });
+    const progress = target.events.filter((e) => e.type === 'rapid:progress');
+    asserts.assertEquals(
+      progress.map((e) => e.detail),
+      [
+        { url: '/upload', loaded: 5, total: 10 },
+        { url: '/upload', loaded: 7, total: 0 },
+      ],
+    );
+    asserts.assertEquals(progress[0]!.bubbles, true);
+    xhr.onload!();
+    asserts.assertEquals(await done, true);
+    asserts.assertEquals(target.innerHTML, '<p>up</p>');
+    asserts.assertEquals(fetches, 0);
+
+    // A second submit while the upload is in flight is dropped, not
+    // doubled; the upload itself is never aborted.
+    const upload = rapid.swap('/upload', target, {
+      method: 'post',
+      body: form,
+    });
+    asserts.assertEquals(
+      await rapid.swap('/upload', target, { method: 'post', body: form }),
+      false,
+    );
+    asserts.assertEquals(FakeXHR.instances.length, 2);
+    asserts.assertEquals(FakeXHR.instances[1]!.aborted, false);
+    // A superseded GET-XHR (a FormData body on a GET is unusual but legal)
+    // aborts through the same signal.
+    FakeXHR.instances[1]!.onload!();
+    asserts.assertEquals(await upload, true);
+    const stale = rapid.swap('/q', target, { method: 'get', body: form });
+    const newer = rapid.swap('/q', target, { method: 'get', body: form });
+    asserts.assertEquals(FakeXHR.instances[2]!.aborted, true);
+    asserts.assertEquals(await stale, false);
+    FakeXHR.instances[3]!.onload!();
+    asserts.assertEquals(await newer, true);
   });
 });
