@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.4.0...rapid-v0.5.0) (2026-09-18)
+
+
+### Features
+
+* **rapid:** accept a list of paths on @Module prefix and the route decorators ([#687](https://github.com/TundraSoft/TundraLibs/issues/687)) ([cf24977](https://github.com/TundraSoft/TundraLibs/commit/cf24977f027d171c1bdddfd11c6b8e46f59c6184))
+
+
+### Documentation
+
+* point package READMEs at the wiki and fix the wiki sync dropping 68 pages ([#685](https://github.com/TundraSoft/TundraLibs/issues/685)) ([97810ec](https://github.com/TundraSoft/TundraLibs/commit/97810eced5073e3fc8da0f2b8be602f480966862))
+
 ## [0.4.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.3.1...rapid-v0.4.0) (2026-09-18)
 
 

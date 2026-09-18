@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.3](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.2...compat-v2.7.3) (2026-09-18)
+
+
+### Documentation
+
+* point package READMEs at the wiki and fix the wiki sync dropping 68 pages ([#685](https://github.com/TundraSoft/TundraLibs/issues/685)) ([97810ec](https://github.com/TundraSoft/TundraLibs/commit/97810eced5073e3fc8da0f2b8be602f480966862))
+
 ## [2.7.2](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.1...compat-v2.7.2) (2026-09-06)
 
 
