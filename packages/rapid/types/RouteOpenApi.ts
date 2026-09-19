@@ -52,4 +52,26 @@ export type RapidRouteOpenApi = {
     toOpenAPI?: () => unknown;
     toJSONSchema?: () => unknown;
   };
+  /**
+   * This route answers with a COLLECTION — it declares the body's
+   * shape, nothing more. Two things follow, both documentation:
+   *
+   * - With no {@link response}, the documented body is an array of
+   *   object rather than the bare-object default, which would be a
+   *   lie for a list route.
+   * - The operation documents the `server.paging` request parameters
+   *   and the three response headers, so a client can discover how to
+   *   ask for a page and where the total comes back.
+   *
+   * A declared {@link response} is always used VERBATIM — declare the
+   * array yourself. Nothing is wrapped for you, so the schema that is
+   * documented is exactly the one DEVELOPMENT validates the reply
+   * against.
+   *
+   * INDEPENDENT of the runtime `paging` reply key, which is what
+   * actually sets the headers. An envelope route simply leaves this
+   * unset, declares its own object schema, and still gets headers from
+   * the key.
+   */
+  paging?: boolean;
 };

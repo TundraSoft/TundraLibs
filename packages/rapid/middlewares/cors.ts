@@ -51,11 +51,14 @@ export type CorsOptions = {
    * sends none.
    *
    * A cross-origin browser client can read only the CORS-safelisted
-   * response headers otherwise. Name the `server.paging` headers here
-   * (`x-page-number`, `x-page-size`, `x-total-rows` by default) if such
-   * a client needs to read a paged reply's window — left out, `fetch`
-   * sees them as absent rather than erroring.
-   * @default none
+   * response headers otherwise, so a paged reply's window would be
+   * invisible to it.
+   *
+   * UNSET exposes the app's three `server.paging` header names, so
+   * paging works for a browser SPA out of the box. An explicit list is
+   * used VERBATIM — `[]` exposes nothing — so naming your own headers
+   * never silently carries the paging ones along.
+   * @default the configured `server.paging` header names
    */
   exposedHeaders?: readonly string[];
   /**
@@ -186,13 +189,32 @@ function resolveOrigin(
  *   non-negative integer, `methods` is empty, or a `methods` /
  *   `allowedHeaders` / `exposedHeaders` entry is not an HTTP token.
  */
+/**
+ * The app's three configured `server.paging` header names, comma-joined
+ * — what a paged reply actually sets, so the exposed list matches the
+ * wire even when the names are customised.
+ */
+const pagingHeaderNames = (http: HTTPContext): string => {
+  const paging = http.app.option('server')?.paging ?? {};
+  return [
+    paging.pageHeader ?? 'x-page-number',
+    paging.sizeHeader ?? 'x-page-size',
+    paging.totalHeader ?? 'x-total-rows',
+  ].join(', ');
+};
+
 export function cors(options: CorsOptions = {}): RapidMiddleware {
   validate(options);
   const originConfig = options.origin ?? '*';
   const credentials = options.credentials ?? false;
   const methods = (options.methods ?? DEFAULT_METHODS).join(', ');
   const allowedHeaders = options.allowedHeaders?.join(', ');
+  // UNSET means "the paging headers", resolved per app at request time
+  // (the app is not known when the middleware is built). An explicit
+  // list — `[]` included — is used verbatim, so nothing is ever appended
+  // behind an app's back.
   const exposedHeaders = options.exposedHeaders?.join(', ');
+  const defaultExposed = options.exposedHeaders === undefined;
 
   const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP') return await next();
@@ -240,10 +262,15 @@ export function cors(options: CorsOptions = {}): RapidMiddleware {
       return;
     }
 
-    if (
-      allowed !== null && exposedHeaders !== undefined && exposedHeaders !== ''
-    ) {
-      http.setHeader('access-control-expose-headers', exposedHeaders);
+    if (allowed !== null) {
+      // Without this a cross-origin browser client reads a paged reply's
+      // window as absent — `fetch` hides every non-safelisted response
+      // header — so the paging feature would silently do nothing in the
+      // exact deployment that needs CORS at all.
+      const exposed = defaultExposed ? pagingHeaderNames(http) : exposedHeaders;
+      if (exposed !== undefined && exposed !== '') {
+        http.setHeader('access-control-expose-headers', exposed);
+      }
     }
     await next();
   };

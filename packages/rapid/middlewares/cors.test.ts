@@ -258,6 +258,43 @@ describe('rapid.middlewares.cors', () => {
     }
   });
 
+  it('UNSET exposedHeaders exposes the paging headers, so a browser SPA can read a paged window; an explicit list is verbatim', async () => {
+    // Default: the three server.paging names, or the feature is
+    // invisible to exactly the clients that need CORS.
+    const plain = await spin({ origin: ['https://ok.example'] });
+    try {
+      const r = await fetch(`${plain.base}/r`, {
+        headers: { origin: 'https://ok.example' },
+      });
+      await r.text();
+      asserts.assertEquals(
+        r.headers.get('access-control-expose-headers'),
+        'x-page-number, x-page-size, x-total-rows',
+      );
+    } finally {
+      await plain.app.stop();
+    }
+
+    // An EXPLICIT empty list still exposes nothing — the default never
+    // appends behind an app's back.
+    const none = await spin({
+      origin: ['https://ok.example'],
+      exposedHeaders: [],
+    });
+    try {
+      const r = await fetch(`${none.base}/r`, {
+        headers: { origin: 'https://ok.example' },
+      });
+      await r.text();
+      asserts.assertEquals(
+        r.headers.get('access-control-expose-headers'),
+        null,
+      );
+    } finally {
+      await none.app.stop();
+    }
+  });
+
   it('exposedHeaders → access-control-expose-headers on the actual response', async () => {
     const { app, base } = await spin({
       origin: ['https://ok.example'],

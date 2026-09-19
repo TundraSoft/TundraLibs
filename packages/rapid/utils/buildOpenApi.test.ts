@@ -21,6 +21,106 @@ type Paths = Record<
 >;
 
 describe('rapid.utils.buildOpenApi', () => {
+  it('the collection marker: array fallback, paging headers, and the request params — and a DECLARED response is verbatim, never wrapped', () => {
+    const declared = {
+      toOpenAPI: () => ({ type: 'array', items: { type: 'string' } }),
+    };
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'GET',
+          path: '/paged',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: { paging: true },
+        },
+        { method: 'GET', path: '/plain', middlewares: [], handler: () => ({}) },
+        {
+          method: 'GET',
+          path: '/declared',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: { paging: true, response: declared },
+        },
+      ] as never,
+      {},
+    );
+    const paths = doc.paths as Paths;
+    const ok = (p: string) =>
+      // deno-lint-ignore no-explicit-any
+      (paths[p] as any).get.responses['200'];
+
+    // Undeclared + marker → the only honest guess is a collection.
+    asserts.assertEquals(
+      ok('/paged').content['application/json'].schema,
+      { type: 'array', items: { type: 'object' } },
+    );
+    // Undeclared, no marker → unchanged.
+    asserts.assertEquals(
+      ok('/plain').content['application/json'].schema,
+      { type: 'object' },
+    );
+    // DECLARED wins verbatim — nothing is wrapped around it, so the
+    // documented schema is the one DEV validates the reply against.
+    asserts.assertEquals(
+      ok('/declared').content['application/json'].schema,
+      { type: 'array', items: { type: 'string' } },
+    );
+
+    // Headers only where the route says it answers with a collection.
+    asserts.assert('x-total-rows' in ok('/paged').headers);
+    asserts.assertEquals(ok('/plain').headers, undefined);
+
+    // And the inbound half: how to ASK for a page.
+    // deno-lint-ignore no-explicit-any
+    const params = (paths['/paged'] as any).get.parameters as {
+      name: string;
+      in: string;
+    }[];
+    const named = params.map((p) => `${p.in}:${p.name}`);
+    asserts.assertEquals(named.includes('query:page'), true);
+    asserts.assertEquals(named.includes('query:limit'), true);
+    asserts.assertEquals(named.includes('header:x-page-number'), true);
+    // An unmarked route gains no paging parameters at all (the builder
+    // omits `parameters` entirely when there are none).
+    // deno-lint-ignore no-explicit-any
+    const plainParams = ((paths['/plain'] as any).get.parameters ?? []) as {
+      name: string;
+    }[];
+    asserts.assertEquals(
+      plainParams.some((p) => p.name === 'page' || p.name === 'limit'),
+      false,
+    );
+  });
+
+  it('the documented header and parameter names follow the app config', () => {
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'GET',
+          path: '/p',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: { paging: true },
+        },
+      ] as never,
+      {
+        pagingHeaders: {
+          pageHeader: 'x-pg',
+          sizeHeader: 'x-sz',
+          totalHeader: 'x-tot',
+        },
+      },
+    );
+    // deno-lint-ignore no-explicit-any
+    const get = (doc.paths as any)['/p'].get;
+    asserts.assert('x-tot' in get.responses['200'].headers);
+    asserts.assertEquals(
+      (get.parameters as { name: string }[]).some((p) => p.name === 'x-pg'),
+      true,
+    );
+  });
+
   it('version filter: only the requested version (+ unversioned) survives', () => {
     const doc = buildOpenApi(
       [

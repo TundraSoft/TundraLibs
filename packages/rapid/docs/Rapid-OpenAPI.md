@@ -43,15 +43,29 @@ from the declarations"). Every operation references one shared `RapidError`
 component for its `400`/`401`/`403`/`404`/`500` responses, so the error
 envelope is documented once.
 
-**Paging headers are documented on every `200`.** A reply that sets the
-`paging` key answers with the collection as the body and its window in
-the three configured `server.paging` headers, so the `200` response
-carries a `headers` section naming them with the app's own configured
-names. They are documented on every success response because whether a
-given handler paginates is a runtime fact: an absent header is the
-documented "not a paged result" case, and `total` is absent again when
-the handler did not count. Without this a generated client would have no
-way to learn that a result-set total exists at all.
+**Collections declare themselves.** `@GET(path, { paging: true })` says
+the route answers with a collection. It is a documentation marker and
+changes no behaviour:
+
+- With no `response`, the documented body becomes an array of object
+  instead of the bare-object default — which would be a lie for a list
+  route, as it has been for any route returning a non-object.
+- The `200` gains a `headers` section for the three configured
+  `server.paging` names, so a generated client can learn a total exists.
+- The operation documents how to ASK for a page: the `page` / `limit`
+  query parameters and the two request headers. Without them a client
+  can read the total but cannot discover how to leave page one.
+
+**A declared `response` is used VERBATIM — nothing is wrapped.** Declare
+the array yourself. The documented schema is then exactly the one
+DEVELOPMENT validates the reply against, and an envelope route simply
+leaves the marker unset and declares its own object.
+
+The marker is independent of the runtime `paging` reply key, which is
+what actually sets the headers. A marked route whose reply never sets
+the key warns in DEVELOPMENT — the document promises headers that will
+not arrive — but does not throw, since the marker describes the body's
+shape rather than guaranteeing a window.
 
 **`operationId` when one method serves several paths.** A list of prefixes
 or a list of paths mounts one method at more than one route, and the spec
