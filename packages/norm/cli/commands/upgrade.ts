@@ -77,7 +77,7 @@ export async function upgradeCommand(
   if (changes.length === 0) {
     log('✓ already up to date');
   } else {
-    for (const c of [...new Set(changes)]) log(`↑ ${c}`);
+    for (const c of new Set(changes)) log(`↑ ${c}`);
   }
   return 0;
 }
