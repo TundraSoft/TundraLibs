@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.4](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.3...norm-v1.9.4) (2026-09-19)
+
+
+### Bug Fixes
+
+* **norm:** silence the upgrade command in tests, removing a Node 22 test-runner trigger ([#694](https://github.com/TundraSoft/TundraLibs/issues/694)) ([185723c](https://github.com/TundraSoft/TundraLibs/commit/185723c24cb887d24dff2253b06d3559a7b7e507))
+
 ## [1.9.3](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.2...norm-v1.9.3) (2026-09-18)
 
 
