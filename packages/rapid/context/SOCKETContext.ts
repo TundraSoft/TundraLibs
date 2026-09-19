@@ -176,7 +176,18 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
   }
 
   /** The outbound frame body plus the interpreted outcome. */
-  protected _respond(): { status: StatusCode; content: unknown } {
-    return { status: this._status, content: this._content };
+  protected _respond(): {
+    status: StatusCode;
+    content: unknown;
+    paging?: RapidContextResponse['paging'];
+  } {
+    // `paging` rides along so the transport can put it on the frame's
+    // `meta` — the socket equivalent of the HTTP paging headers, which
+    // a frame has no place for otherwise.
+    return {
+      status: this._status,
+      content: this._content,
+      ...(this._paging === undefined ? {} : { paging: this._paging }),
+    };
   }
 }

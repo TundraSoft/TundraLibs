@@ -314,7 +314,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
             }
           },
         );
-        let outcome: { status: StatusCode; content: unknown };
+        let outcome: {
+          status: StatusCode;
+          content: unknown;
+          paging?: RapidContextResponse['paging'];
+        };
         try {
           outcome = ctx.respond();
         } catch (error) {
@@ -342,6 +346,23 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
             code: envelope.code,
             ...(envelope.data === undefined ? {} : { data: envelope.data }),
           });
+        }
+        // The reply's window rides the frame's `meta`, beside `data` —
+        // the socket's answer to the HTTP paging headers, which a frame
+        // has no equivalent of. Page and size fall back to the resolved
+        // request window exactly as the HTTP side does, so a
+        // multi-transport handler reports the same thing either way.
+        if (outcome.paging !== undefined) {
+          const window = ctx.args.paging;
+          c.meta = {
+            paging: {
+              page: outcome.paging.page ?? window.page,
+              size: outcome.paging.size ?? window.size,
+              ...(outcome.paging.total === undefined
+                ? {}
+                : { total: outcome.paging.total }),
+            },
+          };
         }
         return outcome.content;
       });

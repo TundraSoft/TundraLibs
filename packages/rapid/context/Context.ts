@@ -273,11 +273,19 @@ export abstract class Context<
     return this._content === null ? null : { content: this._content };
   }
 
+  /**
+   * The reply's result-set window, kept beside the content so an
+   * envelope transport can carry it too — HTTP turns it into headers,
+   * which SOCKET and JOB do not have.
+   */
+  protected _paging: RapidContextResponse['paging'];
+
   /** The base setter's body — content storage + the freeze guard, in one place. */
   protected _setBaseResponse(response: RapidContextResponse | null): void {
     this._assertNotResponded();
     const replaced = this._content;
     this._content = response?.content ?? null;
+    this._paging = response?.paging;
     // A REPLACED stream body would otherwise never be read NOR cancelled
     // — its file handle (ctx.serve, static) leaks per occurrence, e.g.
     // every time an error path overrides a half-built stream response.
@@ -327,9 +335,11 @@ export abstract class Context<
 
   /** The shared `response` GETTER for the envelope transports — `content` + outcome `status`. */
   protected _envelopeResponse(): Readonly<RapidContextResponse> | null {
-    return this._content === null
-      ? null
-      : { content: this._content, status: this._status };
+    return this._content === null ? null : {
+      content: this._content,
+      status: this._status,
+      ...(this._paging === undefined ? {} : { paging: this._paging }),
+    };
   }
 
   /**

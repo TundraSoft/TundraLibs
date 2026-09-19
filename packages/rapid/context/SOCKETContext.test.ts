@@ -36,6 +36,30 @@ const make = async (payload: unknown, command = 'doThing') => {
 };
 
 describe('rapid.context.SOCKETContext', () => {
+  it('respond() carries the reply paging so the transport can put it on the frame — a socket has no headers to hold it', async () => {
+    const ctx = await make({ page: 2 });
+    ctx.response = { content: [{ id: 'a' }], paging: { total: 137 } };
+    const out = (ctx as unknown as {
+      _respond(): {
+        status: number;
+        content: unknown;
+        paging?: { total?: number };
+      };
+    })._respond();
+    asserts.assertEquals(out.content, [{ id: 'a' }]);
+    asserts.assertEquals(out.paging, { total: 137 });
+  });
+
+  it('a reply without paging carries none — the frame must not grow an empty meta', async () => {
+    const ctx = await make({});
+    ctx.response = { content: [{ id: 'a' }] };
+    const out = (ctx as unknown as {
+      _respond(): { paging?: unknown };
+    })._respond();
+    asserts.assertEquals(out.paging, undefined);
+    asserts.assertEquals('paging' in (out as object), false);
+  });
+
   it('exposes connection identity and echoes the frame id', async () => {
     const ctx = await make({});
     asserts.assertEquals(ctx.connectionId, 'conn-1');

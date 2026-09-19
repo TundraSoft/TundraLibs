@@ -171,9 +171,11 @@ app.get('/created', () => ({
 }));
 // A collection is the collection. Result-set metadata rides `paging`,
 // never an envelope around the rows: HTTP sets the three configured
-// headers, a template reads `view.paging`, a socket reply carries it on
-// the frame. Supply only `total` — page and size default to the resolved
-// request window, and an explicit value wins.
+// headers, a template reads `view.paging`, and a SOCKET reply puts it on
+// the result frame's `meta` (a frame has no headers). Supply only
+// `total` — page and size default to the resolved request window, and an
+// explicit value wins. On JOB the key is ignored, like `cookies` and
+// `redirect`, so a multi-transport method needs no branching.
 app.get('/items', () => ({ content: [{ id: 1 }], paging: { total: 137 } }));
 app.get('/none', () => ({ status: 204, content: '' }));
 app.get('/go', () => ({ content: '', redirect: '/items' })); // 302
