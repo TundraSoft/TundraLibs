@@ -43,6 +43,16 @@ from the declarations"). Every operation references one shared `RapidError`
 component for its `400`/`401`/`403`/`404`/`500` responses, so the error
 envelope is documented once.
 
+**Paging headers are documented on every `200`.** A reply that sets the
+`paging` key answers with the collection as the body and its window in
+the three configured `server.paging` headers, so the `200` response
+carries a `headers` section naming them with the app's own configured
+names. They are documented on every success response because whether a
+given handler paginates is a runtime fact: an absent header is the
+documented "not a paged result" case, and `total` is absent again when
+the handler did not count. Without this a generated client would have no
+way to learn that a result-set total exists at all.
+
 **`operationId` when one method serves several paths.** A list of prefixes
 or a list of paths mounts one method at more than one route, and the spec
 requires `operationId` to be unique across the document. Those operations

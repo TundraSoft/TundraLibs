@@ -824,6 +824,30 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
         }
       }
     }
+    // The reply `paging` key becomes the three configured headers. Page
+    // and size fall back to the RESOLVED request window — already
+    // defaulted and clamped — so a handler restates only what it alone
+    // knows, and forgetting the passthrough cannot silently drop them.
+    // `total` is never inferred: absent means "not counted", which is a
+    // different fact from zero.
+    if (response.paging !== undefined) {
+      const cfg = this.app.option('server')?.paging ?? {};
+      const window = this.args.paging;
+      this._headers.set(
+        cfg.pageHeader ?? 'x-page-number',
+        String(response.paging.page ?? window.page),
+      );
+      this._headers.set(
+        cfg.sizeHeader ?? 'x-page-size',
+        String(response.paging.size ?? window.size),
+      );
+      if (response.paging.total !== undefined) {
+        this._headers.set(
+          cfg.totalHeader ?? 'x-total-rows',
+          String(response.paging.total),
+        );
+      }
+    }
     // A DIFFERENT body than the one a `content-length` was stated for
     // (ctx.serve, static, a handler's own header) must not keep that
     // length: the disclosure envelope replacing a 4 KB file would

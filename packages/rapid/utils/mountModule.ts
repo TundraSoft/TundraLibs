@@ -187,15 +187,17 @@ function assertModuleReply(
     });
   }
   const content = (reply as RapidContextResponse).content;
+  // An ARRAY is a first-class body: a collection route answers with the
+  // collection, and its result-set metadata rides the `paging` key
+  // instead of an envelope around the rows.
   const validContent = typeof content === 'string' ||
     content instanceof Uint8Array ||
     isStreamBody(content) ||
-    (typeof content === 'object' && content !== null &&
-      !Array.isArray(content));
+    (typeof content === 'object' && content !== null);
   if (!validContent) {
     throw new RapidError('RAPID_RESPONSE_INVALID', {
       message:
-        `${label} response "content" must be a string, plain object, Uint8Array, or a stream`,
+        `${label} response "content" must be a string, array, plain object, Uint8Array, or a stream`,
       details: { label },
     });
   }

@@ -557,6 +557,7 @@ export class Application<S extends RapidContextState = RapidContextState>
           paging: {
             pageHeader: 'x-page-number',
             sizeHeader: 'x-page-size',
+            totalHeader: 'x-total-rows',
             defaultSize: 10,
             maxSize: 1000,
             maxPage: 1000,
@@ -2224,6 +2225,24 @@ export class Application<S extends RapidContextState = RapidContextState>
       if (!Number.isInteger(value) || (value as number) < 1) {
         throw new RapidError('RAPID_CONFIG', {
           message: `${key} must be a positive integer`,
+          details: { key, value },
+        });
+      }
+    }
+    // The three paging header names are written to the RESPONSE now, not
+    // only read from the request — an illegal name would throw a raw
+    // TypeError out of headers.set() on every paged reply, outside the
+    // disclosure path. Same check the other configurable header names get.
+    for (
+      const [key, value] of [
+        ['server.paging.pageHeader', paging?.pageHeader],
+        ['server.paging.sizeHeader', paging?.sizeHeader],
+        ['server.paging.totalHeader', paging?.totalHeader],
+      ] as const
+    ) {
+      if (typeof value !== 'string' || !HEADER_NAME.test(value)) {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `${key} must be a valid HTTP header name`,
           details: { key, value },
         });
       }

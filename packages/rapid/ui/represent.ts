@@ -45,6 +45,7 @@ export { isTemplate, normalizeRouteTemplate } from '../utils/routeTemplate.ts';
  */
 export function buildView<S extends RapidContextState>(
   ctx: HTTPContext<S>,
+  paging?: RapidContextResponse['paging'],
 ): RapidView {
   const url = new URL(ctx.url);
   // The token VALID FOR THIS RESPONSE: what csrf() issued or confirmed on
@@ -82,6 +83,16 @@ export function buildView<S extends RapidContextState>(
       Object.fromEntries(url.searchParams),
     ) as Readonly<Record<string, string>>,
     ...(csrfToken !== undefined ? { csrfToken } : {}),
+    // The reply's window — the one RESPONSE-derived field in the bag.
+    // Page and size fall back to the resolved request window, exactly as
+    // the HTTP headers do, so the two faces of a route never disagree.
+    ...(paging === undefined ? {} : {
+      paging: Object.freeze({
+        page: paging.page ?? ctx.args.paging.page,
+        size: paging.size ?? ctx.args.paging.size,
+        ...(paging.total === undefined ? {} : { total: paging.total }),
+      }),
+    }),
     ...extra,
   });
 }
@@ -313,7 +324,7 @@ export function represent<S extends RapidContextState>(
     });
   }
 
-  const view = buildView(ctx);
+  const view = buildView(ctx, returned.paging);
   ctx.meter?.representation(swap ? 'fragment' : 'page');
   // An identity-bearing view — a csrf token, or the app's `view`
   // projection (which typically reads ctx.auth) — makes the rendered

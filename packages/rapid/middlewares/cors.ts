@@ -49,6 +49,12 @@ export type CorsOptions = {
   /**
    * `access-control-expose-headers` on actual responses — absent or `[]`
    * sends none.
+   *
+   * A cross-origin browser client can read only the CORS-safelisted
+   * response headers otherwise. Name the `server.paging` headers here
+   * (`x-page-number`, `x-page-size`, `x-total-rows` by default) if such
+   * a client needs to read a paged reply's window — left out, `fetch`
+   * sees them as absent rather than erroring.
    * @default none
    */
   exposedHeaders?: readonly string[];

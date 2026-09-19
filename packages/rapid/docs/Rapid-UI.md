@@ -303,7 +303,12 @@ only.
 ## The view bag
 
 Every template receives a frozen, read-only `view` as its second parameter:
-`{ requestId, runtimePath, path, query, asset, csrfToken? }` (`csrfToken` is
+`{ requestId, runtimePath, path, query, asset, csrfToken?, paging? }`
+(`paging` is the reply's result-set window — `{ page, size, total? }` —
+present only when the handler set the `paging` key, and the one field here
+that comes from the RESPONSE rather than the request; it exists because a
+template can read neither response headers nor `ctx`, so a server-rendered
+pager would otherwise have nothing to count with. `csrfToken` is
 the token valid for THIS response — what `csrf()` issued or confirmed on the
 way in, else the request's `csrf` cookie — in a per-response MASKED form:
 render it verbatim into a hidden field or meta tag and send it back as-is,
@@ -630,7 +635,43 @@ secrets (they land in the address bar and browser history).
 
 ## Recipes
 
-- **Pagination / infinite scroll** — the fragment ends with its own next
+- **Paged list with a pager** — the collection is the body and its window
+  is on `view.paging`, so a pager needs nothing from the data type and is
+  reusable across every list. Give the links an `href` as well as a
+  `data-action` and they work without JavaScript; `data-push` puts the
+  page in the address bar so Back re-fetches it:
+
+  ```ts ignore
+  import { type RapidView, template, withQuery } from '@tundralibs/rapid/ui';
+
+  const Pager = (view: RapidView) => {
+    if (view.paging?.total === undefined) return html``;
+    const { page, size, total } = view.paging;
+    const last = Math.ceil(total / size);
+    const to = (n: number) => withQuery(view.path, view.query, { page: n });
+    const link = (n: number, label: string) =>
+      html`
+        <a href="${to(n)}" data-action="${to(n)}"
+          data-target="#posts" data-swap="outer" data-push>${label}</a>
+      `;
+    return html`<nav>
+      ${page > 1 && link(page - 1, 'Prev')}
+      <span>Page ${String(page)} of ${String(last)}</span>
+      ${page < last && link(page + 1, 'Next')}
+    </nav>`;
+  };
+
+  const PostList = template<Post[]>((rows, view) =>
+    html`<section id="posts">${rows.map(Row)}${Pager(view)}</section>`
+  );
+  ```
+
+  The region needs an `id` (the history module keys its entry on it) and
+  the fragment root must be that region, since an outer swap replaces the
+  element it targets. The page always travels in the query string: paging
+  can arrive as a request header, but a link can only carry a URL, and
+  starting from `view.query` is what preserves filters and sort.
+- **Infinite scroll** — the fragment ends with its own next
   button, which replaces ITSELF (`data-swap="outer"`, no `data-target`)
   with the next page: rows accumulate, and exactly ONE button ever
   exists — an `append` into the list would leave every previous button

@@ -102,8 +102,9 @@ server:
   #   prefix: /api # by path — stripped before routing (/api/users → /users)
   #   trustForwardedHost: false # match hosts on x-forwarded-host (needs trustProxy too)
   paging: # ctx.args.paging — query (page, pagelimit|limit) wins over the headers; clamped, never throws
-    pageHeader: x-page-number
-    sizeHeader: x-page-size
+    pageHeader: x-page-number # read in; echoed out on a reply that sets paging
+    sizeHeader: x-page-size # read in; echoed out likewise
+    totalHeader: x-total-rows # response only — written when the handler counted
     defaultSize: 10
     maxSize: 1000 # larger requests are clamped
     maxPage: 1000

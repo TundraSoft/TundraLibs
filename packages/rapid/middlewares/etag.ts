@@ -18,10 +18,28 @@ import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 const encoder = new TextEncoder();
 
-const bodyBytes = (content: RapidContextResponse['content']): Uint8Array => {
-  if (content instanceof Uint8Array) return content;
-  if (typeof content === 'string') return encoder.encode(content);
-  return encoder.encode(JSON.stringify(content));
+const bodyBytes = (
+  content: RapidContextResponse['content'],
+  paging: RapidContextResponse['paging'],
+): Uint8Array => {
+  // Paging joins the hashed surface even though it rides in HEADERS, not
+  // the body: two windows over the same data can produce byte-identical
+  // rows (an empty page past the end, a repeated first page under a
+  // different size), and hashing the body alone would collapse them onto
+  // one tag — a cache could then serve the wrong window's metadata.
+  const suffix = paging === undefined
+    ? ''
+    : `\u0000${paging.page ?? ''}:${paging.size ?? ''}:${paging.total ?? ''}`;
+  if (content instanceof Uint8Array) {
+    if (suffix === '') return content;
+    const extra = encoder.encode(suffix);
+    const out = new Uint8Array(content.length + extra.length);
+    out.set(content);
+    out.set(extra, content.length);
+    return out;
+  }
+  if (typeof content === 'string') return encoder.encode(content + suffix);
+  return encoder.encode(JSON.stringify(content) + suffix);
 };
 
 const computeTag = async (bytes: Uint8Array): Promise<string> => {
@@ -56,7 +74,7 @@ export function etag(): RapidMiddleware {
     // cheap stat-based weak ETag already.)
     if (isStreamBody(res.content)) return;
 
-    const tag = await computeTag(bodyBytes(res.content));
+    const tag = await computeTag(bodyBytes(res.content, res.paging));
     ctx.setHeader('etag', tag);
 
     const inm = ctx.headers.get('if-none-match');
