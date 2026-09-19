@@ -276,9 +276,12 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
     const { count: total } = await this.db.repo('Comments').count({
       '@postId': postId,
     });
-    // content must be an object/string/Uint8Array, never a bare array.
+    // A pure collection: the rows ARE the body, and the count rides the
+    // `paging` key — which becomes response headers for a JSON caller and
+    // `view.paging` for the template below. Contrast `list()` above,
+    // which keeps an object because it also carries filter state.
     // Dates serialize to ISO through JSON.stringify, so rows go as-is.
-    return { content: { rows: found.data, total } };
+    return { content: found.data, paging: { total } };
   }
 
   @POST('/:id:/comments', {

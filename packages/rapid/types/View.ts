@@ -40,5 +40,17 @@ export type RapidView<
     query: Readonly<Record<string, string>>;
     /** The `csrf()` cookie's token, when present on the request. */
     csrfToken?: string;
+    /**
+     * The reply's result-set window, when the handler set `paging` —
+     * the one field here that comes from the RESPONSE rather than the
+     * request. A template renders its pager from this, which is why the
+     * metadata cannot live only in HTTP headers: a template can read
+     * neither headers nor `ctx`.
+     *
+     * `page` and `size` are the effective values; `total` is present
+     * only when the handler counted, so a pager must treat its absence
+     * as "unknown length" rather than zero.
+     */
+    paging?: Readonly<{ page: number; size: number; total?: number }>;
   } & Extra
 >;

@@ -31,9 +31,34 @@ export type RapidContextResponse = {
   content:
     | string
     | Record<string, unknown>
+    | readonly unknown[]
     | Uint8Array
     | ReadableStream<Uint8Array>
     | AsyncIterable<Uint8Array | string>;
+  /**
+   * Result-set metadata that belongs BESIDE the content, never inside
+   * it — so a collection can be the bare array it is, rather than an
+   * envelope wrapping rows and a count.
+   *
+   * Each transport gives it a home: HTTP sets the three configured
+   * paging headers (`server.paging`), a templated route exposes it to
+   * the template as `view.paging`, and a SOCKET reply carries it on the
+   * frame. Supply only what the handler knows — `page` and `size`
+   * default to the RESOLVED request window (`ctx.args.paging`, already
+   * defaulted and clamped), and an explicit value wins.
+   *
+   * `total` is never inferred: it is the one figure only the handler
+   * can know, and it costs a second count query, so it is absent
+   * unless counted.
+   */
+  paging?: {
+    /** 1-based page number. Defaults to the request's resolved page. */
+    page?: number;
+    /** Page size. Defaults to the request's resolved size. */
+    size?: number;
+    /** Total matching rows across all pages. Omitted when not counted. */
+    total?: number;
+  };
   /** HTTP status / JOB outcome / SOCKET ok-error. */
   status?: StatusCode;
   /** Consumed by HTTP (merged per-key); ignored elsewhere. */

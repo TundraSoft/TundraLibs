@@ -193,6 +193,35 @@ const toOpenApiPath = (path: string): { path: string; params: string[] } => {
 };
 
 const errorRef = { $ref: '#/components/schemas/RapidError' };
+
+/**
+ * The response `headers` section for a 200 — the three a reply carrying
+ * `paging` sets. Documented on every success response because whether a
+ * given handler paginates is a runtime fact; an absent header on the
+ * wire is the documented "not a paged result" case, and `total` is
+ * absent again when the handler did not count.
+ */
+const pagingHeadersFor = (
+  names: { pageHeader?: string; sizeHeader?: string; totalHeader?: string },
+): Record<string, unknown> => ({
+  [names.pageHeader ?? 'x-page-number']: {
+    description:
+      'Effective 1-based page of this result set. Absent when the reply is not a paged result.',
+    required: false,
+    schema: { type: 'integer', minimum: 1 },
+  },
+  [names.sizeHeader ?? 'x-page-size']: {
+    description: 'Effective page size of this result set.',
+    required: false,
+    schema: { type: 'integer', minimum: 1 },
+  },
+  [names.totalHeader ?? 'x-total-rows']: {
+    description:
+      'Total matching rows across all pages. Absent when the handler did not count.',
+    required: false,
+    schema: { type: 'integer', minimum: 0 },
+  },
+});
 const errorResponse = (description: string) => ({
   description,
   content: { 'application/json': { schema: errorRef } },
@@ -221,6 +250,15 @@ export function buildOpenApi(
      * PAGES (`text/html` only, never JSON). @default 'json'
      */
     uiPrefer?: 'json' | 'html';
+    /**
+     * The configured `server.paging` header names, so the documented
+     * response headers match what the app actually sends.
+     */
+    pagingHeaders?: {
+      pageHeader?: string;
+      sizeHeader?: string;
+      totalHeader?: string;
+    };
     /**
      * Leave pages out of the document — the app has an api surface
      * (`server.api` / `ui.enabled: false`) on which they do not exist.
@@ -336,6 +374,12 @@ export function buildOpenApi(
       responses: {
         '200': {
           description: 'OK',
+          // A reply carrying `paging` sets these three, so document them
+          // — without a `headers` section a generated client has no way
+          // to know a result-set total exists at all. Emitted on every
+          // 200: whether a given handler paginates is a runtime fact,
+          // and an absent header is the documented "not paged" case.
+          headers: pagingHeadersFor(options.pagingHeaders ?? {}),
           // An API-first templated route serves BOTH representations —
           // JSON by default, a fragment on a swap; a PAGE (`prefer:
           // 'html'`) is a page or a fragment, never JSON (see ./ui).

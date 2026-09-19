@@ -24,6 +24,106 @@ import {
 const EVENTS = {};
 
 describe('rapid.utils.mountModule', () => {
+  it('a collection answers as a bare array, and the paging key becomes headers — page/size from the resolved window, total only when counted', async () => {
+    @Module('Posts', { prefix: '/posts' })
+    class Posts {
+      @GET('/')
+      list(): RapidContextResponse {
+        // Only what the handler alone knows.
+        return { content: [{ id: 'a' }, { id: 'b' }], paging: { total: 137 } };
+      }
+      @GET('/uncounted')
+      uncounted(): RapidContextResponse {
+        return { content: [], paging: {} };
+      }
+      @GET('/plain')
+      plain(): RapidContextResponse {
+        return { content: [{ id: 'a' }] };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-paging',
+      server: { port: 0 },
+    });
+    app.module(new Posts());
+
+    const res = await app.fetch(
+      new Request('http://x/posts/?page=2&limit=25'),
+    );
+    // The BODY is the collection — no envelope around it.
+    asserts.assertEquals(await res.json(), [{ id: 'a' }, { id: 'b' }]);
+    asserts.assertEquals(res.headers.get('x-page-number'), '2');
+    asserts.assertEquals(res.headers.get('x-page-size'), '25');
+    asserts.assertEquals(res.headers.get('x-total-rows'), '137');
+
+    // No count → no total header at all. Absent is a different fact from
+    // zero, so it must not be reported as 0.
+    const none = await app.fetch(new Request('http://x/posts/uncounted'));
+    asserts.assertEquals(none.headers.get('x-total-rows'), null);
+    asserts.assertEquals(none.headers.get('x-page-number'), '1');
+
+    // No paging key → none of the three headers.
+    const plain = await app.fetch(new Request('http://x/posts/plain'));
+    asserts.assertEquals(plain.headers.get('x-page-number'), null);
+    asserts.assertEquals(plain.headers.get('x-page-size'), null);
+  });
+
+  it('an explicit page/size in the reply overrides the request window', async () => {
+    @Module('Posts', { prefix: '/posts' })
+    class Posts {
+      @GET('/')
+      list(): RapidContextResponse {
+        // The handler clamped to the last real page.
+        return { content: [], paging: { page: 3, size: 5, total: 11 } };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-paging-override',
+      server: { port: 0 },
+    });
+    app.module(new Posts());
+    const res = await app.fetch(new Request('http://x/posts/?page=99'));
+    asserts.assertEquals(res.headers.get('x-page-number'), '3');
+    asserts.assertEquals(res.headers.get('x-page-size'), '5');
+    asserts.assertEquals(res.headers.get('x-total-rows'), '11');
+  });
+
+  it('the configured header names are the ones written, and an illegal name fails at boot', async () => {
+    @Module('Posts', { prefix: '/posts' })
+    class Posts {
+      @GET('/')
+      list(): RapidContextResponse {
+        return { content: [], paging: { total: 4 } };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-paging-names',
+      server: {
+        port: 0,
+        paging: {
+          pageHeader: 'x-pg',
+          sizeHeader: 'x-sz',
+          totalHeader: 'x-tot',
+        },
+      },
+    });
+    app.module(new Posts());
+    const res = await app.fetch(new Request('http://x/posts/'));
+    asserts.assertEquals(res.headers.get('x-tot'), '4');
+    asserts.assertEquals(res.headers.get('x-pg'), '1');
+    asserts.assertEquals(res.headers.get('x-total-rows'), null);
+
+    await asserts.assertRejects(
+      () =>
+        Application.initialize({
+          name: 'x-bad-header',
+          server: { port: 0, paging: { totalHeader: 'not a header' } },
+        }),
+      RapidError,
+      'must be a valid HTTP header name',
+    );
+  });
+
   it('prefixes × paths: one declaration mounts the whole cross product, and every operationId stays unique', async () => {
     @Module('Users', { prefix: ['', '/:orgCode:'] })
     class Users {

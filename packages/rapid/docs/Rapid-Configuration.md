@@ -180,10 +180,18 @@ Resolved from the `page` and `pagelimit` (or `limit`) query parameters, or
 the two headers; the query wins. Invalid values are ignored and both numbers
 are clamped — paging never throws.
 
+The same names carry the window back OUT. A reply that sets the `paging`
+key echoes the EFFECTIVE page and size — what the client actually got
+after defaults and clamping — and reports the row count on `totalHeader`,
+which is response-only because a total cannot be requested. All three are
+validated as header names at boot, since they are now written and not only
+read.
+
 | Key           | Type        | Default           | Validated                   |
 | ------------- | ----------- | ----------------- | --------------------------- |
-| `pageHeader`  | header name | `'x-page-number'` | —                           |
-| `sizeHeader`  | header name | `'x-page-size'`   | —                           |
+| `pageHeader`  | header name | `'x-page-number'` | valid header name           |
+| `sizeHeader`  | header name | `'x-page-size'`   | valid header name           |
+| `totalHeader` | header name | `'x-total-rows'`  | valid header name           |
 | `defaultSize` | integer     | `10`              | positive, at most `maxSize` |
 | `maxSize`     | integer     | `1000`            | positive                    |
 | `maxPage`     | integer     | `1000`            | positive                    |

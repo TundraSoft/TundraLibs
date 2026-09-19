@@ -48,17 +48,17 @@ const meta = (post: Post): Html =>
  * A post's comments — the fragment `GET /posts/:id:/comments` renders on
  * a swap. Newest first; the first row wears the arrival glow.
  */
-export const CommentsView = template<{ rows: Comment[]; total: number }>(
-  (data) =>
+export const CommentsView = template<Comment[]>(
+  (rows, view) =>
     html`<h3>
-      Comments <span class="count">${data.total}</span>
+      Comments <span class="count">${String(view.paging?.total ?? rows.length)}</span>
     </h3>
     ${
-      data.rows.length === 0
+      rows.length === 0
         ? html`<p class="meta">Nothing yet — the fake commenters are typing…</p>`
         : html`<ul class="comments">${
           // Rows arrive newest-first from the route's DESC window.
-          data.rows.map((c, i) =>
+          rows.map((c, i) =>
             html`<li class="comment" style="--i:${i}">
               <b>${c.author}</b>
               <time>${new Date(c.createdAt).toLocaleTimeString()}</time>

@@ -27,6 +27,70 @@ const UserList = template<{ items: string[] }>(
 );
 
 describe('rapid.ui.represent', () => {
+  it('a templated collection route renders from the array and reads its window off view.paging', async () => {
+    // The whole point of the reply key over bare headers: a template can
+    // read neither response headers nor ctx, so a server-rendered pager
+    // needs the window in the view bag.
+    const List = template<{ id: string }[]>((rows, view) =>
+      html`
+        <ul>${rows.map((r) => html`<li>${r.id}</li>`)}</ul>
+        <nav>page ${String(view.paging?.page)} of ${String(
+          Math.ceil((view.paging?.total ?? 0) / (view.paging?.size ?? 1)),
+        )}</nav>
+      `
+    );
+    @Module('Posts', { prefix: '/posts' })
+    class Posts {
+      @GET('/', { template: List })
+      list(): RapidContextResponse {
+        return { content: [{ id: 'a' }], paging: { total: 42 } };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-view-paging',
+      server: { port: 0 },
+    });
+    app.ui({});
+    app.module(new Posts());
+
+    const res = await app.fetch(
+      new Request('http://x/posts/?limit=10', {
+        headers: { 'rapid-swap': '1', accept: 'text/html' },
+      }),
+    );
+    const body = await res.text();
+    asserts.assertStringIncludes(body, '<li>a</li>');
+    // page from the resolved request window, total from the handler.
+    asserts.assertStringIncludes(body, 'page 1 of 5');
+    // The HTML face still carries the headers, so both faces agree.
+    asserts.assertEquals(res.headers.get('x-total-rows'), '42');
+  });
+
+  it('view.paging is absent when the reply sets no paging key', async () => {
+    const Bare = template<{ id: string }[]>((rows, view) =>
+      html`<p>${String(view.paging === undefined)}:${String(rows.length)}</p>`
+    );
+    @Module('Posts', { prefix: '/posts' })
+    class Posts {
+      @GET('/', { template: Bare })
+      list(): RapidContextResponse {
+        return { content: [{ id: 'a' }] };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-view-nopaging',
+      server: { port: 0 },
+    });
+    app.ui({});
+    app.module(new Posts());
+    const res = await app.fetch(
+      new Request('http://x/posts/', {
+        headers: { 'rapid-swap': '1', accept: 'text/html' },
+      }),
+    );
+    asserts.assertStringIncludes(await res.text(), '<p>true:1</p>');
+  });
+
   it('no swap + default prefer: JSON unchanged, but Vary: rapid-swap is stamped', async () => {
     const app = await make();
     app.get('/users', { template: UserList }, () => ({

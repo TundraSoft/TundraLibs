@@ -166,9 +166,15 @@ const app = await Application.initialize({ name: 'reply' });
 
 app.get('/created', () => ({
   status: 201,
-  content: { id: 1 }, // object → JSON; string → text; Uint8Array → bytes; stream → streamed
+  content: { id: 1 }, // object/array → JSON; string → text; Uint8Array → bytes; stream → streamed
   headers: { location: '/items/1' },
 }));
+// A collection is the collection. Result-set metadata rides `paging`,
+// never an envelope around the rows: HTTP sets the three configured
+// headers, a template reads `view.paging`, a socket reply carries it on
+// the frame. Supply only `total` — page and size default to the resolved
+// request window, and an explicit value wins.
+app.get('/items', () => ({ content: [{ id: 1 }], paging: { total: 137 } }));
 app.get('/none', () => ({ status: 204, content: '' }));
 app.get('/go', () => ({ content: '', redirect: '/items' })); // 302
 app.get('/moved', () => ({
