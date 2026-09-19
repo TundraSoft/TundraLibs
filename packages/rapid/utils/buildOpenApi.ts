@@ -290,7 +290,10 @@ export function buildOpenApi(
     const { path, params } = toOpenApiPath(route.path);
     const meta = route.openapi;
 
-    const parameters = params.map((name) => ({
+    // Declared here: both the request parameters and the response
+    // schema below key off it.
+    const paged = meta?.paging === true;
+    const parameters: Record<string, unknown>[] = params.map((name) => ({
       name,
       in: 'path',
       required: true,
@@ -307,12 +310,51 @@ export function buildOpenApi(
       }
     }
 
+    // A paged operation documents how to ASK for a page too — the query
+    // params and the two request headers `ctx.args.paging` resolves from
+    // — else a client can read the total but cannot discover how to move
+    // off page one.
+    if (paged) {
+      const names = options.pagingHeaders ?? {};
+      const already = new Set(
+        parameters.map((p) => `${String(p.in)}:${String(p.name)}`),
+      );
+      for (
+        const [name, where, description] of [
+          ['page', 'query', '1-based page number. Overrides the header.'],
+          ['limit', 'query', 'Page size. Overrides the header.'],
+          [
+            names.pageHeader ?? 'x-page-number',
+            'header',
+            '1-based page number.',
+          ],
+          [names.sizeHeader ?? 'x-page-size', 'header', 'Page size.'],
+        ] as const
+      ) {
+        if (already.has(`${where}:${name}`)) continue;
+        parameters.push({
+          name,
+          in: where,
+          required: false,
+          description,
+          schema: { type: 'integer', minimum: 1 },
+        });
+      }
+    }
+
     // The body is documented by a schema OBJECT bound via `payload(Schema)`;
     // a bare validator function still marks that a body exists. Both body and
     // response accept an OpenAPI OR a JSON-Schema emitter (the same fallback).
     const body = (meta?.binds ?? []).find((b) => b.source === 'payload');
+    // A DECLARED response is used verbatim — never wrapped, so the
+    // documented schema is exactly what DEVELOPMENT validates the reply
+    // against. Undeclared, the shape is a guess, and the only honest
+    // guess comes from the collection marker.
     const responseSchema = meta?.response?.toOpenAPI?.() ??
-      meta?.response?.toJSONSchema?.() ?? { type: 'object' };
+      meta?.response?.toJSONSchema?.() ??
+      (paged
+        ? { type: 'array', items: { type: 'object' } }
+        : { type: 'object' });
 
     // Aggregate the ACTUAL operation tags (module default + route extras), not
     // just the module name — so every tag reaches the top-level catalog and a
@@ -374,12 +416,12 @@ export function buildOpenApi(
       responses: {
         '200': {
           description: 'OK',
-          // A reply carrying `paging` sets these three, so document them
-          // — without a `headers` section a generated client has no way
-          // to know a result-set total exists at all. Emitted on every
-          // 200: whether a given handler paginates is a runtime fact,
-          // and an absent header is the documented "not paged" case.
-          headers: pagingHeadersFor(options.pagingHeaders ?? {}),
+          // Only where the route says it answers with a collection —
+          // documenting them everywhere would promise a total on routes
+          // that never have one.
+          ...(paged
+            ? { headers: pagingHeadersFor(options.pagingHeaders ?? {}) }
+            : {}),
           // An API-first templated route serves BOTH representations —
           // JSON by default, a fragment on a swap; a PAGE (`prefer:
           // 'html'`) is a page or a fragment, never JSON (see ./ui).

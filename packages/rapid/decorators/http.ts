@@ -100,6 +100,18 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
     toJSONSchema?: () => unknown;
   };
   /**
+   * This route answers with a COLLECTION. Documentation only: with no
+   * `response` the documented body becomes an array of object instead
+   * of the bare-object default, and the operation gains the
+   * `server.paging` request parameters plus the three response headers.
+   *
+   * A declared `response` is used VERBATIM — declare the array
+   * yourself, nothing is wrapped. Independent of the runtime `paging`
+   * reply key, which is what sets the headers: an envelope route leaves
+   * this unset, declares its own object schema, and still gets them.
+   */
+  paging?: boolean;
+  /**
    * HTML template for this route (see `@tundralibs/rapid/ui`): a bare
    * `RapidTemplate` or the `{ render, layout?, title?, meta?, prefer? }`
    * object form — `title` reaches both wrapper tiers (and swap replies
@@ -220,6 +232,7 @@ function route<This, A extends readonly unknown[]>(
         : {}),
       ...(options.security !== undefined ? { security: options.security } : {}),
       ...(options.response !== undefined ? { response: options.response } : {}),
+      ...(options.paging !== undefined ? { paging: options.paging } : {}),
       ...(options.template !== undefined ? { template: options.template } : {}),
       ...(options.layout !== undefined ? { layout: options.layout } : {}),
       ...(options.middleware !== undefined

@@ -59,6 +59,8 @@ export type RapidDecoration =
       toOpenAPI?: () => unknown;
       toJSONSchema?: () => unknown;
     };
+    /** Route answers with a COLLECTION — documentation shape only. */
+    paging?: boolean;
     /** Raw `template` route option — normalized + validated at mount. */
     template?: RapidTemplate<unknown> | RapidRouteTemplate;
     /** Raw `layout` route option (the object form's `layout` wins). */
