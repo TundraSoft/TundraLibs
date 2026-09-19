@@ -121,6 +121,29 @@ Failure:
 }
 ```
 
+A success frame may also carry an **optional** `meta` object, for
+metadata that belongs beside the return value rather than inside it —
+a result-set total and page window being the case it exists for:
+
+```jsonc
+{
+  "id": "1",
+  "type": "result",
+  "ok": true,
+  "data": [{ "id": "u-1" }, { "id": "u-2" }],
+  "meta": { "paging": { "page": 2, "size": 10, "total": 137 } }
+}
+```
+
+A handler supplies it by writing `ctx.meta`; middleware may set or amend
+it, and it is read once after the handler returns. The field is omitted
+entirely when unset, so a frame from a handler that never touches it is
+byte-identical to one sent before `meta` existed, and a peer that
+predates the field ignores it. Callers opt in to receiving it with
+`command(name, payload, { withMeta: true })`, which resolves
+`{ data, meta }` instead of the bare value — so adding `meta` to a
+handler never changes what existing call sites receive.
+
 `data` is omitted when undefined. The `error` object always has `code`
 and `message` strings, plus an **optional** `data` of structured detail
 a handler chose to send along (field-level validation errors, a retry

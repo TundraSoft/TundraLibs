@@ -50,7 +50,7 @@ import type {
 
 /** Internal record for an in-flight request awaiting a `result` frame. */
 type _PendingRequest = {
-  resolve: (data: unknown) => void;
+  resolve: (data: unknown, meta?: Record<string, unknown>) => void;
   reject: (err: Error) => void;
   timeoutHandle: number | undefined;
 };
@@ -295,6 +295,12 @@ export class Client {
    * (or the client's `defaultTimeoutMs`) — pass `0` to disable for a
    * single call.
    *
+   * `withMeta: true` resolves to `{ data, meta }` instead of the bare
+   * return value, surfacing any metadata the handler sent beside it
+   * (`meta` is absent when the handler set none). Without it the
+   * metadata is simply not delivered — the default shape never
+   * changes.
+   *
    * @throws If the send path throws (a throwing `useSend` middleware, or
    *   the socket leaving `OPEN` mid-send), the returned Promise rejects
    *   with that error and the pending entry is dropped — no orphaned
@@ -303,8 +309,18 @@ export class Client {
   async command<R = unknown>(
     name: string,
     payload?: unknown,
-    options?: { timeoutMs?: number },
-  ): Promise<R> {
+    options?: { timeoutMs?: number; withMeta?: false },
+  ): Promise<R>;
+  async command<R = unknown>(
+    name: string,
+    payload: unknown,
+    options: { timeoutMs?: number; withMeta: true },
+  ): Promise<{ data: R; meta?: Record<string, unknown> }>;
+  async command<R = unknown>(
+    name: string,
+    payload?: unknown,
+    options?: { timeoutMs?: number; withMeta?: boolean },
+  ): Promise<R | { data: R; meta?: Record<string, unknown> }> {
     this._assertSendable();
     const id = this._nextFrameId();
     const frame: CommandFrame = {
@@ -314,7 +330,11 @@ export class Client {
       ...(payload === undefined ? {} : { payload }),
     };
     const timeoutMs = options?.timeoutMs ?? this._defaultTimeoutMs;
-    const resultPromise = this._registerPending<R>(id, timeoutMs);
+    const resultPromise = this._registerPending<R>(
+      id,
+      timeoutMs,
+      options?.withMeta === true,
+    );
     try {
       await this._sendThroughMiddleware(frame);
     } catch (err) {
@@ -678,6 +698,7 @@ export class Client {
   protected _registerPending<R>(
     id: string,
     timeoutMs: number,
+    withMeta = false,
   ): Promise<R> {
     return new Promise<R>((resolve, reject) => {
       let timeoutHandle: number | undefined;
@@ -688,7 +709,13 @@ export class Client {
         }, timeoutMs) as unknown as number;
       }
       this._pending.set(id, {
-        resolve: (data) => resolve(data as R),
+        // `withMeta` callers get the frame's `meta` beside the value;
+        // everyone else keeps receiving the bare return value, so the
+        // default shape of command() is unchanged.
+        resolve: (data, meta) =>
+          resolve(
+            (withMeta ? { data, meta } : data) as R,
+          ),
         reject,
         timeoutHandle,
       });
@@ -934,7 +961,21 @@ export class Client {
       case 'result':
         if (typeof obj.id !== 'string') return null;
         if (obj.ok === true) {
-          return { id: obj.id, type: 'result', ok: true, data: obj.data };
+          // `meta` is reconstructed only when the peer sent an object —
+          // the frame is rebuilt field by field here, so a new field is
+          // dropped unless it is named, and a non-object meta from a
+          // misbehaving peer must not reach the caller.
+          const meta = typeof obj.meta === 'object' && obj.meta !== null &&
+              !Array.isArray(obj.meta)
+            ? obj.meta as Record<string, unknown>
+            : undefined;
+          return {
+            id: obj.id,
+            type: 'result',
+            ok: true,
+            data: obj.data,
+            ...(meta === undefined ? {} : { meta }),
+          };
         }
         if (obj.ok === false) {
           const err = obj.error as
@@ -1079,7 +1120,7 @@ export class Client {
     }
     this._pending.delete(frame.id);
     if (frame.ok) {
-      pending.resolve(frame.data);
+      pending.resolve(frame.data, frame.meta);
     } else {
       // The message format is unchanged (`CODE: text`); `code` and any
       // structured `data` are ALSO attached as properties, so callers
