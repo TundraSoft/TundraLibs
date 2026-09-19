@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.6.0...rapid-v0.7.0) (2026-09-19)
+
+
+### Features
+
+* **rapid:** carry the paging key onto the socket result frame ([#691](https://github.com/TundraSoft/TundraLibs/issues/691)) ([debeb04](https://github.com/TundraSoft/TundraLibs/commit/debeb04c8ff12e243e89abf2ff6dd029c12e2aed))
+
 ## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.5.0...rapid-v0.6.0) (2026-09-19)
 
 

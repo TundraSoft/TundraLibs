@@ -13,7 +13,7 @@
   "packages/oql": "1.1.4",
   "packages/pact": "0.9.1",
   "packages/radrouter": "1.3.2",
-  "packages/rapid": "0.6.0",
+  "packages/rapid": "0.7.0",
   "packages/restler": "1.2.1",
   "packages/rpc": "1.3.0",
   "packages/slogger": "1.2.4",
