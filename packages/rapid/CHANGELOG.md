@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.6.0...rapid-v0.7.0) (2026-09-19)
+
+
+### Features
+
+* **rapid:** a collection marker for routes, and expose the paging headers to browsers by default ([#693](https://github.com/TundraSoft/TundraLibs/issues/693)) ([5feff52](https://github.com/TundraSoft/TundraLibs/commit/5feff52b3d766f960d71157275ab23fd39e7e453))
+* **rapid:** carry the paging key onto the socket result frame ([#691](https://github.com/TundraSoft/TundraLibs/issues/691)) ([debeb04](https://github.com/TundraSoft/TundraLibs/commit/debeb04c8ff12e243e89abf2ff6dd029c12e2aed))
+
 ## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.5.0...rapid-v0.6.0) (2026-09-19)
 
 
