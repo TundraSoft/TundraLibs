@@ -355,6 +355,9 @@ function registerDecoration<S extends RapidContextState>(
         ...(tags.length > 0 ? { tags } : {}),
         ...(security !== undefined ? { security } : {}),
         ...(Object.keys(module).length > 0 ? { module } : {}),
+        ...(decoration.paging !== undefined
+          ? { paging: decoration.paging }
+          : {}),
         ...(decoration.response !== undefined
           ? { response: decoration.response }
           : {}),

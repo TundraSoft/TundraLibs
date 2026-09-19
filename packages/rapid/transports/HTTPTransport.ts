@@ -590,6 +590,21 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       // Enforce, never transform: the reply goes out as returned, so a
       // stripping/coercing schema cannot change PRODUCTION behavior.
       // Ordered so PRODUCTION pays one `undefined` check per request.
+      // DEV-only marker check: a route documented as a collection whose
+      // reply never sets `paging` promises headers in the document that
+      // never arrive. A WARNING, not a throw — the marker declares the
+      // body's SHAPE, and a legitimately empty or unpaged answer is not
+      // a contract breach.
+      if (
+        this._app.mode === 'DEVELOPMENT' && entry?.openapi?.paging === true &&
+        returned !== null && returned.paging === undefined &&
+        returned.redirect === undefined
+      ) {
+        this._app.log.warn(
+          'route is documented as paged but its reply set no `paging` — the documented headers will not be sent',
+          { action: ctx.action, requestId: ctx.requestId },
+        );
+      }
       const schema = entry?.openapi?.response;
       if (
         schema?.parse !== undefined && returned !== null &&
