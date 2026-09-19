@@ -15,6 +15,16 @@ import {
 } from '@tundralibs/compat/file';
 import { upgradeCommand } from './upgrade.ts';
 
+/**
+ * Swallow the command's output. Node 22's `node:test` runner corrupts
+ * its reporter IPC when a console.log() is followed by an async file
+ * write, repeated in one process — which is exactly this file, calling
+ * the command several times. The failure lands on an unrelated file as
+ * "Unable to deserialize cloned data", so the cheapest correct fix is
+ * to not write to stdout here at all.
+ */
+const quiet = (): void => {};
+
 const withTempDir = async (
   fn: (dir: string) => Promise<void>,
 ): Promise<void> => {
@@ -40,7 +50,7 @@ describe('norm.cli upgrade', () => {
           imports: { '@tundralibs/norm': 'jsr:@tundralibs/norm@^0.0.1' },
         }),
       );
-      asserts.assertEquals(await upgradeCommand(dir, fakeResolver), 0);
+      asserts.assertEquals(await upgradeCommand(dir, fakeResolver, quiet), 0);
       const after = await readTextFile(path);
       asserts.assertStringIncludes(after, '@^9.9.9');
     });
@@ -57,7 +67,7 @@ describe('norm.cli upgrade', () => {
           },
         }),
       );
-      asserts.assertEquals(await upgradeCommand(dir, fakeResolver), 0);
+      asserts.assertEquals(await upgradeCommand(dir, fakeResolver, quiet), 0);
       asserts.assertStringIncludes(
         await readTextFile(path),
         '@^9.9.9',
@@ -67,13 +77,13 @@ describe('norm.cli upgrade', () => {
 
   it('reports success with nothing to change when neither manifest exists', async () => {
     await withTempDir(async (dir) => {
-      asserts.assertEquals(await upgradeCommand(dir), 0);
+      asserts.assertEquals(await upgradeCommand(dir, undefined, quiet), 0);
     });
   });
 
   it('writes norm.agent.md and the AGENTS.md/CLAUDE.md pointer on a project that never had them', async () => {
     await withTempDir(async (dir) => {
-      asserts.assertEquals(await upgradeCommand(dir), 0);
+      asserts.assertEquals(await upgradeCommand(dir, undefined, quiet), 0);
       asserts.assertStringIncludes(
         await readTextFile(`${dir}/norm.agent.md`),
         '# norm',
@@ -94,7 +104,7 @@ describe('norm.cli upgrade', () => {
           '<!-- norm:start -->\n\n## norm\n\n### Schema\n\nold stale guide text\n\n<!-- norm:end -->\n',
       );
 
-      asserts.assertEquals(await upgradeCommand(dir), 0);
+      asserts.assertEquals(await upgradeCommand(dir, undefined, quiet), 0);
 
       const agents = await readTextFile(`${dir}/AGENTS.md`);
       asserts.assertStringIncludes(agents, 'Our own house rules go here.');
@@ -106,11 +116,11 @@ describe('norm.cli upgrade', () => {
 
   it('running upgrade twice in a row is idempotent (unchanged, not appended)', async () => {
     await withTempDir(async (dir) => {
-      await upgradeCommand(dir);
+      await upgradeCommand(dir, undefined, quiet);
       const guideBefore = await readTextFile(`${dir}/norm.agent.md`);
       const agentsBefore = await readTextFile(`${dir}/AGENTS.md`);
 
-      await upgradeCommand(dir);
+      await upgradeCommand(dir, undefined, quiet);
 
       asserts.assertEquals(
         await readTextFile(`${dir}/norm.agent.md`),

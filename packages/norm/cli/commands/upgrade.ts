@@ -48,29 +48,36 @@ async function bump(
  *
  * `resolveVersion` defaults to the real JSR lookup; tests pass a stub so
  * the suite never depends on network I/O.
+ *
+ * `log` defaults to `console.log` and exists so the suite can run the
+ * command WITHOUT writing to stdout. Node 22's `node:test` runner
+ * corrupts its own reporter IPC channel when a `console.log()` is
+ * followed by an async file write, repeated in one process — which is
+ * exactly what this command does, once per call, across the several
+ * calls a test file makes. The failure surfaces as an unrelated
+ * "Unable to deserialize cloned data" on whichever file was reporting.
+ * Silencing the command in tests removes the trigger outright; ordering
+ * the writes before the log (the previous mitigation) only lowered the
+ * odds.
  */
 export async function upgradeCommand(
   dir = '.',
   resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
+  log: (message: string) => void = console.log,
 ): Promise<number> {
   const cache = new Map<string, string | null>();
   const changes = [
     ...await bump(`${dir}/deno.json`, DENO_DEP, cache, resolveVersion),
     ...await bump(`${dir}/package.json`, NPM_DEP, cache, resolveVersion),
   ];
-  // ensureAgentDocs() runs BEFORE the summary is logged — not just after —
-  // because a console.log() immediately preceding a new async file-write
-  // call, repeated across calls in the same process, triggers a Node 22
-  // `node:test` runner bug that corrupts the test-reporter IPC channel
-  // ("Unable to deserialize cloned data due to invalid or unsupported
-  // version"). Confirmed by direct bisection: swapping the order alone
-  // takes the failure rate from ~majority of runs to zero across dozens
-  // of trials. Node 24, Deno, and Bun are unaffected either way.
+  // Still ordered writes-then-log: it costs nothing and keeps the Node 22
+  // trigger (see `log`) out of the command's own call, not just out of
+  // the suite's.
   await ensureAgentDocs(dir);
   if (changes.length === 0) {
-    console.log('✓ already up to date');
+    log('✓ already up to date');
   } else {
-    for (const c of [...new Set(changes)]) console.log(`↑ ${c}`);
+    for (const c of new Set(changes)) log(`↑ ${c}`);
   }
   return 0;
 }
