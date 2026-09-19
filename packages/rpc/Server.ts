@@ -635,6 +635,8 @@ export class Server<T = unknown> {
         ws,
         frame.id,
         handlerCalled ? handlerResult : undefined,
+        // Read ONCE, after the chain: middleware may set or amend it.
+        ctx.meta,
       );
     } catch (err) {
       const code = (err as { code?: unknown })?.code;
@@ -897,13 +899,27 @@ export class Server<T = unknown> {
     this._wss.__checkBackpressure(ws);
   }
 
-  /** Answer request `id` with a success `result` carrying `data`. */
+  /**
+   * Answer request `id` with a success `result` carrying `data`, and
+   * `meta` when the handler set `ctx.meta`.
+   *
+   * @param meta - Optional metadata sent beside `data`. Omitted from the
+   *   frame entirely when absent, keeping it byte-identical to
+   *   pre-`meta` peers.
+   */
   protected _sendResultOk(
     ws: ServerWebSocket<T>,
     id: string,
     data: unknown,
+    meta?: Record<string, unknown>,
   ): void {
-    this._send(ws, { id, type: 'result', ok: true, data });
+    this._send(ws, {
+      id,
+      type: 'result',
+      ok: true,
+      data,
+      ...(meta === undefined ? {} : { meta }),
+    });
   }
 
   /**

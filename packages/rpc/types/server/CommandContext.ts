@@ -17,6 +17,14 @@ export type CommandContext<T = unknown, P = unknown> = {
   /** Validated payload. */
   payload: P;
   /**
+   * Metadata to send ALONGSIDE the handler's return value, in the
+   * result frame's `meta` field rather than inside `data` — a total and
+   * page window for a paged command, say. Left unset, the frame carries
+   * no `meta` at all. Middleware may set or amend it; the value is read
+   * once, after the handler returns.
+   */
+  meta?: Record<string, unknown>;
+  /**
    * Mutable per-request state shared across the middleware chain.
    * Use this for cross-cutting concerns (auth, timing, request id).
    */

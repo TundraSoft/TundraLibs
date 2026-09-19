@@ -224,6 +224,46 @@ describe({
         await hub.close();
       });
 
+      it('ctx.meta rides the result frame beside data; an unset meta leaves the frame byte-identical', async () => {
+        const hub = new Server();
+        hub.command('list', undefined, (ctx) => {
+          ctx.meta = { paging: { page: 2, size: 10, total: 137 } };
+          return [{ id: 'a' }, { id: 'b' }];
+        });
+        hub.command('plain', undefined, () => ({ ok: true }));
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: '1', type: 'cmd', cmd: 'list' }),
+        );
+        asserts.assertEquals(ws.sent[0], {
+          id: '1',
+          type: 'result',
+          ok: true,
+          data: [{ id: 'a' }, { id: 'b' }],
+          meta: { paging: { page: 2, size: 10, total: 137 } },
+        });
+
+        // A handler that sets nothing must not grow a `meta` key at all —
+        // the frame stays exactly what a pre-meta peer would send.
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: '2', type: 'cmd', cmd: 'plain' }),
+        );
+        asserts.assertEquals(ws.sent[1], {
+          id: '2',
+          type: 'result',
+          ok: true,
+          data: { ok: true },
+        });
+        asserts.assertEquals('meta' in (ws.sent[1] as object), false);
+        await hub.close();
+      });
+
       it('UNKNOWN_COMMAND for unregistered command', async () => {
         const hub = new Server();
         const ws = new MockWs();

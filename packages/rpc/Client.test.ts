@@ -182,6 +182,42 @@ function suite() {
     asserts.assertEquals(r.got, { text: 'hi' });
   });
 
+  it('command({ withMeta }) resolves { data, meta }; the default shape stays the bare value', async () => {
+    server = new Server();
+    server.command('list', undefined, (ctx) => {
+      ctx.meta = { paging: { page: 2, size: 10, total: 137 } };
+      return [{ id: 'a' }];
+    });
+    server.command('plain', undefined, () => ({ ok: true }));
+    await server.listen({ port, hostname: '127.0.0.1' });
+    client = new Client({
+      url: `ws://127.0.0.1:${port}`,
+      reconnect: { enabled: false },
+    });
+    await client.connect();
+
+    const withMeta = await client.command<{ id: string }[]>('list', undefined, {
+      withMeta: true,
+    });
+    asserts.assertEquals(withMeta.data, [{ id: 'a' }]);
+    asserts.assertEquals(withMeta.meta, {
+      paging: { page: 2, size: 10, total: 137 },
+    });
+
+    // Same command WITHOUT the flag — the caller gets the value itself,
+    // so an existing call site is unaffected by a handler gaining meta.
+    const bare = await client.command<{ id: string }[]>('list');
+    asserts.assertEquals(bare, [{ id: 'a' }]);
+
+    // A handler that sets no meta still answers the withMeta shape,
+    // with meta simply absent.
+    const none = await client.command<{ ok: boolean }>('plain', undefined, {
+      withMeta: true,
+    });
+    asserts.assertEquals(none.data, { ok: true });
+    asserts.assertEquals(none.meta, undefined);
+  });
+
   it('command() rejects with server-side error message on handler throw', async () => {
     server = new Server();
     server.command('boom', undefined, () => {

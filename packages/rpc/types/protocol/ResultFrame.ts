@@ -1,6 +1,23 @@
 /** Server → client: response to a `cmd` / `sub` / `pub` frame. */
 export type ResultFrame =
-  | { id: string; type: 'result'; ok: true; data?: unknown }
+  | {
+    id: string;
+    type: 'result';
+    ok: true;
+    data?: unknown;
+    /**
+     * OPTIONAL metadata a handler sent ALONGSIDE `data` rather than
+     * inside it — a result-set total and page window being the case
+     * this exists for. A handler supplies it by writing
+     * `ctx.meta`; the client surfaces it only when the caller asks
+     * (`command(name, payload, { withMeta: true })`), so `data` stays
+     * the return value for everyone else.
+     *
+     * Additive: peers that predate it simply ignore the field, and the
+     * frame is byte-identical to before when no handler sets it.
+     */
+    meta?: Record<string, unknown>;
+  }
   | {
     id: string;
     type: 'result';
