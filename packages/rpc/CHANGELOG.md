@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.2.2...rpc-v1.3.0) (2026-09-19)
+
+
+### Features
+
+* **rpc:** optional meta on the result frame, for data that belongs beside the return value ([#688](https://github.com/TundraSoft/TundraLibs/issues/688)) ([bfea983](https://github.com/TundraSoft/TundraLibs/commit/bfea983e06b3ef79a2e586476cc87861191ee9f2))
+
 ## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.2.1...rpc-v1.2.2) (2026-09-18)
 
 

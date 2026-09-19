@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.5.0...rapid-v0.6.0) (2026-09-19)
+
+
+### Features
+
+* **rapid:** array content and a paging reply key, so a collection is the collection ([#689](https://github.com/TundraSoft/TundraLibs/issues/689)) ([76b1436](https://github.com/TundraSoft/TundraLibs/commit/76b1436c42d1c1907889bd3be462e4c09dd552e3))
+
 ## [0.5.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.4.0...rapid-v0.5.0) (2026-09-18)
 
 
