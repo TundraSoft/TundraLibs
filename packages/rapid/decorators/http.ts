@@ -112,6 +112,13 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    */
   paging?: boolean;
   /**
+   * Serve this route on the `api` surface ONLY — absent from the `ui`
+   * surface, so `onlyApi()`-scoped middleware cannot be bypassed via the
+   * un-prefixed URL. Requires `server.api`; a `RAPID_CONFIG` error at
+   * registration otherwise. See `RapidRouteOptions.apiOnly`.
+   */
+  apiOnly?: boolean;
+  /**
    * HTML template for this route (see `@tundralibs/rapid/ui`): a bare
    * `RapidTemplate` or the `{ render, layout?, title?, meta?, prefer? }`
    * object form — `title` reaches both wrapper tiers (and swap replies
@@ -233,6 +240,7 @@ function route<This, A extends readonly unknown[]>(
       ...(options.security !== undefined ? { security: options.security } : {}),
       ...(options.response !== undefined ? { response: options.response } : {}),
       ...(options.paging !== undefined ? { paging: options.paging } : {}),
+      ...(options.apiOnly !== undefined ? { apiOnly: options.apiOnly } : {}),
       ...(options.template !== undefined ? { template: options.template } : {}),
       ...(options.layout !== undefined ? { layout: options.layout } : {}),
       ...(options.middleware !== undefined
@@ -284,7 +292,8 @@ export const GET: RouteFactory = (
  * method must take no parameters (see {@link GET}).
  *
  * @throws {RapidError} RAPID_CONFIG at decoration time under legacy
- *   decorator compilation, or on a non-method/static/private target.
+ *   decorator compilation, on a non-method/static/private target, or on
+ *   an empty / duplicated path list.
  */
 export const POST: RouteFactory = (
   path: RoutePath,
@@ -297,7 +306,8 @@ export const POST: RouteFactory = (
  * method must take no parameters (see {@link GET}).
  *
  * @throws {RapidError} RAPID_CONFIG at decoration time under legacy
- *   decorator compilation, or on a non-method/static/private target.
+ *   decorator compilation, on a non-method/static/private target, or on
+ *   an empty / duplicated path list.
  */
 export const PUT: RouteFactory = (
   path: RoutePath,
@@ -310,7 +320,8 @@ export const PUT: RouteFactory = (
  * method must take no parameters (see {@link GET}).
  *
  * @throws {RapidError} RAPID_CONFIG at decoration time under legacy
- *   decorator compilation, or on a non-method/static/private target.
+ *   decorator compilation, on a non-method/static/private target, or on
+ *   an empty / duplicated path list.
  */
 export const PATCH: RouteFactory = (
   path: RoutePath,
@@ -323,7 +334,8 @@ export const PATCH: RouteFactory = (
  * method must take no parameters (see {@link GET}).
  *
  * @throws {RapidError} RAPID_CONFIG at decoration time under legacy
- *   decorator compilation, or on a non-method/static/private target.
+ *   decorator compilation, on a non-method/static/private target, or on
+ *   an empty / duplicated path list.
  */
 export const DELETE: RouteFactory = (
   path: RoutePath,

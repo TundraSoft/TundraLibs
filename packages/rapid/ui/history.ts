@@ -47,6 +47,9 @@ export const UI_HISTORY: string = `(() => {
   // wins, mirroring the runtime's per-target request semantics.
   let pending = null;
   let restoring = false;
+  // Which popstate restore is current: a superseded restore's settle
+  // must not navigate the page to ITS entry once a newer one took over.
+  let restoreGen = 0;
 
   const arm = (url, pushUrl) => {
     pending = { url, pushUrl: pushUrl || null };
@@ -55,6 +58,7 @@ export const UI_HISTORY: string = `(() => {
   // Capture phase: runs BEFORE the runtime's own listeners, so the
   // pending marker is set when the swap starts.
   doc.addEventListener('click', (e) => {
+    if (e.defaultPrevented) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const el = e.target instanceof Element
       ? e.target.closest('[data-action]')
@@ -64,6 +68,7 @@ export const UI_HISTORY: string = `(() => {
     }
   }, true);
   doc.addEventListener('submit', (e) => {
+    if (e.defaultPrevented) return;
     const form = e.target;
     if (
       form instanceof HTMLFormElement && form.dataset.action &&
@@ -72,6 +77,19 @@ export const UI_HISTORY: string = `(() => {
       arm(form.dataset.action, form.dataset.push);
     }
   }, true);
+  // The arm is set BEFORE the runtime decides whether to send. Every
+  // no-request exit (a refused origin, a dropped non-GET, no target)
+  // sends nothing and emits nothing — so the arm is bounded by the NEXT
+  // request instead: one for a different URL disarms it, and an error
+  // outcome disarms it, so a later unrelated swap can never consume a
+  // stale arm and rewrite the address bar.
+  doc.addEventListener('rapid:request', (e) => {
+    const detail = e.detail || {};
+    if (pending && pending.url !== detail.url) pending = null;
+  });
+  doc.addEventListener('rapid:error', () => {
+    pending = null;
+  });
 
   doc.addEventListener('rapid:swapped', (e) => {
     const detail = e.detail || {};
@@ -89,6 +107,12 @@ export const UI_HISTORY: string = `(() => {
       // would GET the action (a 405, then a full-page error). Only GET
       // swaps are pushable.
       console.warn('[rapid.history] only GET swaps are pushable');
+      return;
+    }
+    if (detail.swap === 'append' || detail.swap === 'prepend') {
+      // Restoring an append would re-append: the runtime refuses to key
+      // these as refresh sources for the same reason.
+      console.warn('[rapid.history] append/prepend swaps are not pushable');
       return;
     }
     const region = e.target;
@@ -151,7 +175,12 @@ export const UI_HISTORY: string = `(() => {
       return;
     }
     restoring = true;
+    const gen = ++restoreGen;
     window.rapid.swap(entry.url, region, { swap: entry.swap }).then((ok) => {
+      // A newer popstate superseded this one (its request was aborted, so
+      // ok is false exactly as it would be for a real failure) — the
+      // newer restore owns the outcome now.
+      if (gen !== restoreGen) return;
       if (!ok) {
         restoring = false;
         location.assign(entry.url);

@@ -76,10 +76,11 @@ dialect-agnostic `db.ts` — the dialect itself is DATA, not code: it lives in
 at a time) next to `configs/Application.yaml`, loaded the same way. `db.ts`
 never changes when you switch dialects.
 
-Every scaffold also writes the project's AI guide: **one** real file,
-`AGENTS.md`, plus `CLAUDE.md` (which imports it with `@AGENTS.md`, so Claude
-Code loads the full guide) and `.github/copilot-instructions.md` — every tool
-resolves to a single source that can't drift. The guide is rendered for _this_
+Every scaffold also writes the project's AI guide: one entry point, `AGENTS.md`, with `CLAUDE.md` (which imports it with `@AGENTS.md`) and
+`.github/copilot-instructions.md` pointing at it, plus the generated
+reference files it links — `rapid.agent.md` and `rapid-pact.agent.md`
+always, and `rapid-modules.agent.md` / `rapid-ui.agent.md` /
+`norm.agent.md` for the layers you chose. The guide is rendered for _this_
 project and _this_ rapid version: its module layout if you chose `--module`,
 the context API, the middleware catalog and the error registry (generated
 from the code), doc links pinned to the installed version, rapid's actual API
@@ -487,7 +488,7 @@ fields that may cross. Pages compose from THREE tiers: an irreplaceable
 app `core` (the document — head/css/scripts; `title` + `meta` are its
 per-page slots), the swappable module/route `layout` nesting inside it
 (route → `@Module` → app default; `false` opts out), and the content
-fragment built from plain view components. The small (~300-line) runtime
+fragment built from plain view components. The small (~400-line) runtime
 (`GET /__rapid/ui.js`, ETag-revalidated) swaps fragments via `data-action` /
 `data-target` / `data-swap` attributes (`data-load` for lazy regions —
 skeleton first, the slow-data answer) — no inline handlers
@@ -786,6 +787,10 @@ capabilities:
   registered), jobs are not scheduled (fire them from a cron trigger with
   `app.triggerJob(name)`), and file uploads degrade gracefully: they are rejected
   with a typed `RAPID_UPLOADS_UNAVAILABLE` (501) rather than crashing.
+- **The browser** — the package loads, but a browser has no
+  `AsyncLocalStorage` for `@tundralibs/ambient`'s correlation, so
+  `app.fetch()` refuses with a typed `RAPID_CONFIG` error rather than
+  serving. It is the target rapid serves pages _to_, not one it runs in.
 
 ## Examples & docs
 

@@ -68,38 +68,36 @@ export const UI_RUNTIME: string = `(() => {
     try { return decodeURIComponent(match[1]); } catch { return match[1]; }
   };
 
-  // Replace and hand back the node rapid:swapped fires on — for 'outer'
-  // that is the REPLACEMENT (the original is detached, so an event on it
-  // could never bubble to document listeners).
-  // Sibling roots an 'outer' swap produced beyond the first — a fragment
-  // with several top-level elements must have ALL its lazy regions load.
-  let extraRoots = [];
+  // Replace and hand back { node, extras }: node is what rapid:swapped
+  // fires on — for 'outer' the REPLACEMENT (the original is detached, so
+  // an event on it could never bubble) — and extras the sibling roots
+  // an 'outer' swap produced beyond the first, so a fragment with several
+  // top-level elements has ALL its lazy regions loaded. Returned, not
+  // kept in shared state: two swaps in flight at once (View Transitions
+  // suspend between apply and use) must never read each other's list.
   const apply = (target, mode, markup) => {
     if (mode === 'outer') {
       const parent = target.parentNode;
       const prev = target.previousSibling;
       const after = target.nextSibling;
       target.outerHTML = markup;
-      // *Element* walk: markup may open with whitespace, and the event
-      // (and refresh keying) must land on the real replacement, never a
-      // text node's parent.
-      const first = prev
-        ? prev.nextElementSibling
-        : parent && parent.firstElementChild;
-      extraRoots = [];
+      // *Element* walk, bounded by the swap's own end marker: markup may
+      // open with whitespace, and an EMPTY fragment (the delete-row
+      // idiom) must not hand back the unrelated element that followed.
+      const roots = [];
       for (
         let n = prev ? prev.nextSibling : parent && parent.firstChild;
         n && n !== after;
         n = n.nextSibling
       ) {
-        if (n instanceof Element && n !== first) extraRoots.push(n);
+        if (n instanceof Element) roots.push(n);
       }
-      return first instanceof Element ? first : parent || target;
+      return { node: roots[0] || parent || target, extras: roots.slice(1) };
     }
     if (mode === 'append') target.insertAdjacentHTML('beforeend', markup);
     else if (mode === 'prepend') target.insertAdjacentHTML('afterbegin', markup);
     else target.innerHTML = markup;
-    return target;
+    return { node: target, extras: [] };
   };
 
   const emit = (target, name, detail) =>
@@ -256,8 +254,11 @@ export const UI_RUNTIME: string = `(() => {
         ? active.id
         : null;
       let swapped;
+      let extras = [];
       const mutate = () => {
-        swapped = apply(target, opts.swap, body);
+        const applied = apply(target, opts.swap, body);
+        swapped = applied.node;
+        extras = applied.extras;
       };
       try {
         // View Transitions when the browser has them — every swap gets
@@ -319,9 +320,11 @@ export const UI_RUNTIME: string = `(() => {
       }
       settle();
       emit(swapped, 'rapid:swapped', detail);
-      loadLazy(swapped, url); // lazy regions the fragment brought with it
-      for (const root of extraRoots) loadLazy(root);
-      extraRoots = [];
+      // Lazy regions the fragment brought with it — every root, and every
+      // one guarded by the producing URL, or a sibling root that points
+      // back at this action would refetch at round-trip rate forever.
+      loadLazy(swapped, url);
+      for (const root of extras) loadLazy(root, url);
       return true;
     } finally {
       // Never earlier than the outcome: an entry deleted at the headers

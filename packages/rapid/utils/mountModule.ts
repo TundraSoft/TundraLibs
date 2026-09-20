@@ -313,6 +313,7 @@ function registerDecoration<S extends RapidContextState>(
   label: string,
   doc: ModuleDoc,
   disambiguate: boolean,
+  multiVerb: boolean,
 ): void {
   assertBindableOnKind(decoration, label);
   switch (decoration.kind) {
@@ -343,8 +344,14 @@ function registerDecoration<S extends RapidContextState>(
         // which OpenAPI requires to be unique across the document (and
         // which breaks every SDK generator). Suffix by PATH — stable and
         // order-independent, unlike an index.
+        // The verb joins the suffix only when the SAME method stacks
+        // several HTTP decorations — @GET + @POST on one path would
+        // otherwise share an id — so a single-decoration multi-path
+        // method keeps the ids it has today.
         operationId: disambiguate
-          ? `${baseOperationId}_${pathSlug(fullPath)}`
+          ? `${baseOperationId}_${
+            multiVerb ? `${decoration.method.toLowerCase()}_` : ''
+          }${pathSlug(fullPath)}`
           : baseOperationId,
         ...(decoration.summary !== undefined
           ? { summary: decoration.summary }
@@ -366,13 +373,17 @@ function registerDecoration<S extends RapidContextState>(
       // product. The invoker is built once and carries no path state.
       for (const prefix of prefixes) {
         for (const path of decoration.paths) {
-          const fullPath = prefix + path;
+          // Collapse a doubled separator: a prefix ending in `/` routes
+          // fine (radrouter normalises) but the RECORDED path — app.routes,
+          // OpenAPI — would name a URL the server never serves.
+          const fullPath = (prefix + path).replace(/\/{2,}/g, '/');
           target.route(
             decoration.method,
             fullPath,
             {
               ...(version !== undefined ? { version } : {}),
               openapi: openapiFor(fullPath),
+              ...(decoration.apiOnly === true ? { apiOnly: true } : {}),
               // Raw forms pass through; Application.route normalizes and
               // fail-fast-validates them (RAPID_CONFIG on a wrong import).
               ...(decoration.template !== undefined
@@ -586,6 +597,9 @@ export function mountModule<S extends RapidContextState>(
           d.kind === 'HTTP' ? total + prefixes.length * d.paths.length : total,
         0,
       );
+      const httpDecorations = decorations.filter((d) =>
+        d.kind === 'HTTP'
+      ).length;
       for (const decoration of decorations) {
         registerDecoration(
           target,
@@ -598,6 +612,7 @@ export function mountModule<S extends RapidContextState>(
           label,
           doc,
           httpRoutes > 1,
+          httpDecorations > 1,
         );
         mounted++;
       }

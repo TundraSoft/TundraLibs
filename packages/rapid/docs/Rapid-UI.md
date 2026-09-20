@@ -227,6 +227,16 @@ Scheme-relative targets (`//host`, `/\host`) are refused at assignment
 (open redirect); cross-origin on purpose is a full URL.
 
 Middleware scopes per side with `onlyApi()` / `onlyUi()` — `app.use(onlyApi(cors({ origin: [uiOrigin] })), onlyApi(rateLimit()))`.
+
+**A route is reachable on BOTH surfaces unless it says otherwise.** `/users`
+answers at `/api/users` (api) and at `/users` (ui), and `onlyApi()` skips
+its middleware on the second — so `onlyApi()` scopes _where_ a middleware
+runs and must never be the thing that decides access. A route that belongs
+to the API declares it: `app.get('/users', { apiOnly: true }, …)` or
+`@GET('/users', { apiOnly: true })`. It is then absent from the ui surface
+(a 404 there, indistinguishable from a missing URL), which is what closes
+the un-prefixed path. `apiOnly` needs an api surface configured; on an app
+with none it is a `RAPID_CONFIG` error at registration.
 Both RUN on sockets and jobs (no surface — fail-closed, unlike
 `onlyHTTP`). Do **not** scope `csrf()` or `session()` to `ui` on a
 shared host (`prefix` mode) unless nothing on the api surface
@@ -397,7 +407,11 @@ Requests carry `rapid-swap: 1` (the only header the representer reads) plus
   it to relative/same-origin URLs ONLY. A plain navigation keeps the ordinary
   301/302 — and that server-side `Location` is the handler's value verbatim:
   the same-origin guarantee is a SWAP-side property, so a handler building a
-  redirect from request input (`?next=`) must validate it itself.
+  redirect from request input (`?next=`) must validate it itself — the
+  SCHEME included: the server-side guard refuses a path that resolves off
+  origin but deliberately allows any explicit scheme, and while the bundled
+  runtime ignores a `javascript:` redirect header, a BYO client that follows
+  `HX-Redirect` verbatim would run it.
 - **In flight:** the target carries `aria-busy="true"` from the moment
   its request leaves until the outcome lands (swap or error) — style the
   pending state off `[aria-busy]`, no script needed — and `rapid:request`

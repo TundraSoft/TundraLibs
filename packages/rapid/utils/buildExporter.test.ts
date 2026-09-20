@@ -42,3 +42,22 @@ describe('rapid.buildExporter', () => {
     );
   });
 });
+
+describe('rapid.utils.buildExporter — OTLP is lazy but validated at boot', () => {
+  it('a malformed baseURL fails at build, not at first export', () => {
+    asserts.assertThrows(
+      () => buildExporter({ type: 'OTLP', baseURL: 'not a url' }),
+      RapidError,
+      'baseURL must be an absolute URL',
+    );
+  });
+  it('a valid descriptor yields an exporter without loading the OTLP module up front', () => {
+    const exporter = buildExporter({
+      type: 'OTLP',
+      baseURL: 'http://127.0.0.1:1/v1/traces',
+    });
+    asserts.assert(exporter !== undefined);
+    asserts.assertEquals(typeof exporter.export, 'function');
+    asserts.assertEquals(typeof exporter.shutdown, 'function');
+  });
+});

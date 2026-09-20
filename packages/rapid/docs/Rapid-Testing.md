@@ -82,7 +82,7 @@ surface (`host: 'api.rapid.test'` or an `/api/...` path).
 ```ts
 import { RapidModule } from '@tundralibs/rapid/modules';
 import { harness } from '@tundralibs/rapid/testing';
-import { inject, label } from '@tundralibs/doctor';
+import { inject, label } from '@tundralibs/doctor'; // also: deno add @tundralibs/doctor
 import * as asserts from '@std/assert';
 
 const Clock = label<{ now(): string }>('Clock');

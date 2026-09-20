@@ -18,6 +18,16 @@ export type RapidRouteOptions = {
   /** OpenAPI metadata (normally supplied by the decorator mount). */
   openapi?: RapidRouteOpenApi;
   /**
+   * Serve this route on the `api` surface ONLY — it is absent from the
+   * `ui` surface's route table (a 404 there, byte-identical to a missing
+   * URL). Without it every route answers on BOTH surfaces, and
+   * `onlyApi()`-scoped middleware (rate limiting, CORS, an authenticate
+   * step) is skipped on the un-prefixed ui-surface URL. Requires an api
+   * surface (`server.api`); registering an api-only route on an app that
+   * has none is a `RAPID_CONFIG` error, since it could never be reached.
+   */
+  apiOnly?: boolean;
+  /**
    * HTML template for this route — a bare `RapidTemplate` or the object
    * form with `layout`/`title`/`prefer` (see {@link RapidRouteTemplate}).
    * HTTP routes only (this options object never reaches `socket()`/

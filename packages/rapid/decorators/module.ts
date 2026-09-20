@@ -176,9 +176,10 @@ export function Module(options?: ModuleMountOptions): ModuleClassDecorator;
  *
  * @param name - The module's identity (diagnostics, and the default
  *   OpenAPI tag of its routes) — required, unlike everything in `options`.
- * @throws {RapidError} RAPID_CONFIG when `name` is empty, `prefix` is
- *   non-empty and does not start with `/`, or at decoration time
- *   under legacy decorator compilation.
+ * @throws {RapidError} RAPID_CONFIG when `name` is empty, a `prefix`
+ *   entry is non-empty and does not start with `/`, `prefix` is an empty
+ *   or repeated list, or at decoration time under legacy decorator
+ *   compilation.
  */
 export function Module(
   name: string,

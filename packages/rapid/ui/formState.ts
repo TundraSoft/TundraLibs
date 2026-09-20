@@ -20,12 +20,16 @@ import type { RapidFormError, RapidFormResult } from '../types/mod.ts';
  * objects, arrays, and file descriptors are dropped (never echo an
  * upload back into markup).
  */
-const keptValues = (body: unknown): Record<string, string> => {
+const keptValues = (
+  body: unknown,
+  omit?: readonly string[],
+): Record<string, string> => {
   const values: Record<string, string> = {};
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     return values;
   }
   for (const [key, value] of Object.entries(body)) {
+    if (omit?.includes(key)) continue;
     if (
       typeof value === 'string' || typeof value === 'number' ||
       typeof value === 'boolean'
@@ -44,7 +48,11 @@ const keptValues = (body: unknown): Record<string, string> => {
  * `validated()` policy, instead of shipping an internal exception
  * message into production HTML as a form error.
  */
-const toError = (cause: unknown, body: unknown): RapidFormError => {
+const toError = (
+  cause: unknown,
+  body: unknown,
+  omit?: readonly string[],
+): RapidFormError => {
   const recognized = cause instanceof RapidError &&
       cause.code === 'RAPID_VALIDATION_FAILED'
     ? cause // a validated()-wrapped throw already carries the fields
@@ -62,7 +70,7 @@ const toError = (cause: unknown, body: unknown): RapidFormError => {
     state: 'error',
     message: Object.values(fields)[0] ?? 'Validation failed',
     fields: Object.freeze(fields),
-    values: Object.freeze(keptValues(body)),
+    values: Object.freeze(keptValues(body, omit)),
   };
 };
 
@@ -91,19 +99,29 @@ const toError = (cause: unknown, body: unknown): RapidFormError => {
 export function formState<T>(
   schema: { parse(value: unknown): T | Promise<T> },
   body: unknown,
+  options?: {
+    /**
+     * Top-level fields to LEAVE OUT of the error arm's re-fill `values`.
+     * `values` echoes every primitive field of the submission back to the
+     * client, so a credential submitted alongside the field that failed
+     * (`password` beside a bad `email`) would otherwise travel back in
+     * the response body and into the re-rendered form.
+     */
+    omit?: readonly string[];
+  },
 ): RapidFormResult<T> | Promise<RapidFormResult<T>> {
   let parsed: T | Promise<T>;
   try {
     parsed = schema.parse(body);
   } catch (cause) {
-    return { ok: false, error: toError(cause, body) };
+    return { ok: false, error: toError(cause, body, options?.omit) };
   }
   if (isThenable(parsed)) {
     return parsed.then(
       (data): RapidFormResult<T> => ({ ok: true, data }),
       (cause): RapidFormResult<T> => ({
         ok: false,
-        error: toError(cause, body),
+        error: toError(cause, body, options?.omit),
       }),
     );
   }

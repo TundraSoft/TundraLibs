@@ -1,11 +1,14 @@
 import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
-import {
-  type ServerMetrics,
+// TYPE-ONLY: the listening server and the rpc server are loaded when a
+// listener is actually opened (listen()), never when this module is —
+// a fetch()-only deployment (Workers) must not bundle a port listener.
+import type {
+  ServerMetrics,
   WebServer,
-  type WebSocketHandler,
+  WebSocketHandler,
 } from '@tundralibs/compat/webserver';
 import { ulid } from '@tundralibs/id';
-import { type ChannelOptions, Server as RpcServer } from '@tundralibs/rpc';
+import type { ChannelOptions, Server as RpcServer } from '@tundralibs/rpc';
 import { RadRouter } from '@tundralibs/radrouter';
 import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
@@ -214,9 +217,14 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     const server = this._app.option('server')!;
     // Websocket commands mount the rpc server INTO this listener (one
     // server, one port, one TLS config) — only when commands exist.
+    // Deferred value imports — see the type-only imports at the top.
+    const [{ WebServer }, { Server: RpcServer }] = await Promise.all([
+      import('@tundralibs/compat/webserver'),
+      import('@tundralibs/rpc'),
+    ]);
     const websocket =
       this._app.socketCommands.length > 0 || this._app.channels.size > 0
-        ? this.__buildSocket(server.socketPath ?? '/ws')
+        ? this.__buildSocket(server.socketPath ?? '/ws', RpcServer)
         : undefined;
 
     this.__server = server.unixSocketPath !== undefined
@@ -249,7 +257,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
    * shared invocation cycle (ambient scope, SERVER span named by the
    * command, error disclosure by mode).
    */
-  private __buildSocket(socketPath: string): WebSocketHandler<SocketData> {
+  private __buildSocket(
+    socketPath: string,
+    RpcServer: (typeof import('@tundralibs/rpc'))['Server'],
+  ): WebSocketHandler<SocketData> {
     const socketOrigins = new Set(
       this._app.option('server')?.socketOrigins ?? [],
     );
@@ -319,8 +330,14 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           content: unknown;
           paging?: RapidContextResponse['paging'];
         };
+        // The request window for the frame's paging meta — resolved INSIDE
+        // the guarded block, because ctx.args validates the frame payload
+        // on first read and a short-circuiting middleware may have left
+        // that unvalidated; a throw here must become the same envelope.
+        let window: { page: number; size: number } | undefined;
         try {
           outcome = ctx.respond();
+          if (outcome.paging !== undefined) window = ctx.args.paging;
         } catch (error) {
           // Parity with HTTP __finalize and JOB __run: an early
           // respond() (a middleware breaking the contract) becomes a
@@ -352,8 +369,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         // has no equivalent of. Page and size fall back to the resolved
         // request window exactly as the HTTP side does, so a
         // multi-transport handler reports the same thing either way.
-        if (outcome.paging !== undefined) {
-          const window = ctx.args.paging;
+        if (outcome.paging !== undefined && window !== undefined) {
           c.meta = {
             paging: {
               page: outcome.paging.page ?? window.page,
@@ -525,8 +541,15 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // runtime route is not a match at all — cleared BEFORE the chain is
     // chosen, so its route middleware never runs (no 401 revealing a
     // 404) and the 404 is byte-identical to a missing URL.
+    // Each surface hides what the other owns: pages and UI runtime routes
+    // from the api surface, api-only routes from the ui surface — so an
+    // onlyApi()-scoped middleware cannot be bypassed via the un-prefixed
+    // URL. Cleared BEFORE the chain is chosen, so no route middleware runs
+    // and the 404 is byte-identical to a missing URL.
     const entry = match !== undefined &&
-        (surface === 'ui' || !this.__hiddenOnApi(match.middlewares[0]!))
+        (surface === 'ui'
+          ? !this.__hiddenOnUi(match.middlewares[0]!)
+          : !this.__hiddenOnApi(match.middlewares[0]!))
       ? match.middlewares[0]
       : undefined;
 
@@ -686,11 +709,14 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         // Allow header would reveal the page the 404 just denied.
         if (serverOptions.methodNotAllowed === true) {
           let methods = this.__router.allowedMethods(pathname, version);
-          if (surface === 'api' && methods.length > 0) {
+          if (methods.length > 0) {
             methods = methods.filter((m) => {
               const e = this.__router.find(m, pathname, version)
                 ?.middlewares[0];
-              return e !== undefined && !this.__hiddenOnApi(e);
+              return e !== undefined &&
+                (surface === 'api'
+                  ? !this.__hiddenOnApi(e)
+                  : !this.__hiddenOnUi(e));
             });
           }
           if (methods.length > 0) {
@@ -751,6 +777,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
    * (route → app, the configured value even on a `ui.enabled: false`
    * replica) is `'html'`.
    */
+  /** The mirror of {@link __hiddenOnApi}: api-only routes do not exist on the ui surface. */
+  private __hiddenOnUi(entry: RapidRouteEntry<S>): boolean {
+    return entry.apiOnly === true;
+  }
+
   private __hiddenOnApi(entry: RapidRouteEntry<S>): boolean {
     return entry.uiOnly === true ||
       (entry.template !== undefined &&

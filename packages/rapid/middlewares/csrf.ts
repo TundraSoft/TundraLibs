@@ -62,11 +62,18 @@ export type CsrfOptions = {
   /** Cookie path; must be absolute. @default '/' */
   path?: string;
   /**
-   * The session-id cookie the token is BOUND to — `session()`'s cookie
-   * name. A token verifies only for the session it was issued under
-   * (no session cookie = the anonymous binding); a session change
-   * re-issues it on the next response. Set this when `session()` was
-   * configured with a renamed cookie. @default 'sid'
+   * The cookie carrying the AUTHENTICATED session that the token is
+   * BOUND to. A token verifies only for the session it was issued under
+   * (no such cookie = the anonymous binding); a session change re-issues
+   * it on the next response.
+   *
+   * This MUST name the cookie your auth path actually sets — `session()`'s
+   * cookie, or `pactAuth`'s `bearer.cookie` (the documented example uses
+   * `'session'`). Left at the default when that cookie is never issued,
+   * every user shares the anonymous binding, and a same-site subdomain
+   * can plant a valid token: the cookie-tossing hole this binding exists
+   * to close. DEVELOPMENT logs a warning the first time an authenticated
+   * request arrives without the named cookie. @default 'sid'
    */
   session?: string;
 };
@@ -132,6 +139,7 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
   const cookieName = options.cookie ?? 'csrf';
   const headerName = options.header ?? 'x-csrf-token';
   const fieldName = options.field ?? '_csrf';
+  let warnedBinding = false;
   const sessionCookie = options.session ?? 'sid';
   assertCookieConfig('csrf', cookieName, options);
   if (!isToken(sessionCookie)) {
@@ -173,6 +181,16 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
       return fresh;
     };
     const binding = await bindingOf(ctx.cookies[sessionCookie], secret);
+    if (
+      !warnedBinding && ctx.auth !== undefined &&
+      ctx.cookies[sessionCookie] === undefined
+    ) {
+      warnedBinding = true;
+      ctx.app.log.warn(
+        `csrf(): an authenticated request carries no '${sessionCookie}' cookie — the token is bound to the ANONYMOUS session for every user, which re-opens same-site cookie tossing; pass csrf({ session: '<your auth cookie name>' })`,
+        { requestId: ctx.requestId },
+      );
+    }
     let token = ctx.cookies[cookieName];
     if (!token || (await verifyToken(token, secret)) !== binding) {
       token = await issue(binding);

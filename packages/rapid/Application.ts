@@ -32,7 +32,11 @@ import {
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
-import { HTTPTransport, JOBTransport } from './transports/mod.ts';
+import { HTTPTransport } from './transports/HTTPTransport.ts';
+// TYPE-ONLY: the cron scheduler is loaded when jobs actually start — a
+// fetch()-only deployment (Workers, where jobs never schedule) must not
+// bundle it.
+import type { JOBTransport } from './transports/JOBTransport.ts';
 import {
   type ApiSurface,
   buildExporter,
@@ -310,6 +314,8 @@ export class Application<S extends RapidContextState = RapidContextState>
    * one-shot triggerJob must not make the app look started).
    */
   private __started = false;
+  /** Set by `stop()`; `fetch()` refuses to rebuild a transport on a torn-down app. */
+  private __stopped = false;
 
   /** The resolved `mode` — steers error disclosure and log defaults. */
   get mode(): 'DEVELOPMENT' | 'PRODUCTION' {
@@ -952,12 +958,23 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (
       hasOptions && Object.keys(opts).length > 0 &&
       opts.version === undefined && opts.openapi === undefined &&
-      opts.template === undefined && opts.layout === undefined
+      opts.template === undefined && opts.layout === undefined &&
+      opts.apiOnly === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
           'unrecognized route options object — a template goes under { template: ... }',
         details: { method, path, keys: Object.keys(opts) },
+      });
+    }
+    // An api-only route on an app with no api surface could never be
+    // reached — every request resolves to the ui surface — so it is a
+    // configuration error, not a silently dead route.
+    if (opts.apiOnly === true && this.apiSurface === undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          "route option 'apiOnly' needs an api surface — configure server.api (hosts or prefix), or drop the option",
+        details: { method, path },
       });
     }
     if (opts.layout !== undefined && opts.template === undefined) {
@@ -988,6 +1005,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       ...(version !== undefined ? { version } : {}),
       ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
       ...(template !== undefined ? { template } : {}),
+      ...(opts.apiOnly === true ? { apiOnly: true } : {}),
     });
     return this;
   }
@@ -1695,6 +1713,7 @@ export class Application<S extends RapidContextState = RapidContextState>
   public async start(): Promise<this> {
     if (this.__started) return this;
     this.__started = true; // set FIRST so a boot failure can tear down
+    this.__stopped = false;
     try {
       // `stateMode: 'SHARE'` hands every invocation the SAME state
       // object; a middleware writing a per-invocation value there
@@ -1725,6 +1744,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         await this.__http.start();
       }
       if (this.__jobs.size > 0 && this.option('jobs')!.enabled !== false) {
+        const { JOBTransport } = await import('./transports/JOBTransport.ts');
         this.__jobTransport = new JOBTransport(this);
         await this.__jobTransport.start();
       }
@@ -1765,12 +1785,32 @@ export class Application<S extends RapidContextState = RapidContextState>
     request: Request,
     info?: RapidApplicationFetchInfo,
   ): Response | Promise<Response> {
+    // A request after stop() must not quietly build a NEW transport and
+    // serve from an app whose uploads dir is gone and whose module
+    // runtime is disposed. start() clears the flag, so a restart works.
+    if (this.__stopped && !this.__started) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'fetch() after stop(): the application has been torn down — create a new one, or call start() again before serving',
+      });
+    }
     const http = this.__http ?? this.__prepareFetch();
     return http.handle(request, info?.remoteAddress ?? null);
   }
 
   /** Build (once) the listener-less HTTP transport behind {@link fetch}. */
   private __prepareFetch(): HTTPTransport<S> {
+    // A browser has no AsyncLocalStorage for ambient's correlation, so the
+    // invoke cycle would reject with a RAW TypeError out of ambient.run —
+    // above the disclosure try, no Response at all. Refuse here, typed,
+    // before any transport is built: the browser is what rapid serves
+    // pages TO, not a runtime it serves FROM.
+    if (isBrowser) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'app.fetch() cannot serve in a browser: no AsyncLocalStorage for request correlation — run rapid on Deno, Bun, Node or Cloudflare Workers',
+      });
+    }
     if (this.__socketCommands.size > 0) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -1823,6 +1863,10 @@ export class Application<S extends RapidContextState = RapidContextState>
 
   /** The single-flight body of {@link stop}. */
   private async __stop(): Promise<this> {
+    // `__stopped` is set when teardown COMPLETES, on both paths below — not
+    // at entry: during the drain the app must keep answering (ready()
+    // reports 503 there), and only a request after the drain is served
+    // by a torn-down app.
     if (!this.__started) {
       // The upload temp dir is created at CONSTRUCTION, not start() — an
       // instance that never started still owns one (e.g. a validation
@@ -1831,6 +1875,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         await remove(this.__ownedUploadPath).catch(() => {});
       }
       await this.__disposeModules(); // booted via modules() + fetch(), never listened
+      this.__stopped = true;
       return this;
     }
     // The graceful-drain window handed to the HTTP transport; the nuclear
@@ -1884,6 +1929,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       return this;
     } finally {
       clearTimeout(timer);
+      this.__stopped = true;
     }
   }
 
@@ -1900,12 +1946,13 @@ export class Application<S extends RapidContextState = RapidContextState>
    * @throws {RapidError} RAPID_CONFIG when no job is registered under
    *   `name` (as a rejection of the returned promise).
    */
-  public triggerJob(
+  public async triggerJob(
     name: string,
     args?: Readonly<Record<string, unknown>>,
   ): Promise<{ status: number; content: unknown; handlerRan: boolean }> {
-    const transport = this.__jobTransport ?? new JOBTransport(this);
-    return transport.triggerNow(name, args);
+    const transport = this.__jobTransport ??
+      new (await import('./transports/JOBTransport.ts')).JOBTransport(this);
+    return await transport.triggerNow(name, args);
   }
 
   /**

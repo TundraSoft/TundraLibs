@@ -885,6 +885,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       content: base.content,
       status: this._status,
       headers: new Headers(this._headers),
+      // Middleware reading the reply back (etag folds the window into
+      // its hash) must see paging too, or the fold is dead code.
+      ...(this._paging === undefined ? {} : { paging: this._paging }),
     };
   }
 

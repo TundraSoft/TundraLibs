@@ -28,6 +28,13 @@ import {
 } from './commands/modules.ts';
 import { healthCommand } from './commands/health.ts';
 import { initCommand } from './commands/init.ts';
+
+/**
+ * A stubbed version lookup: the real one fetches jsr.io on every
+ * successful init, which made the suite non-hermetic and cost seconds of
+ * network per lane for no assertion.
+ */
+const pinned = (): Promise<string | null> => Promise.resolve('0.0.0');
 import { MIDDLEWARE_CATALOG, PACKAGE_DOCS, scaffold } from './templates.ts';
 
 describe('rapid.cli modules generator', () => {
@@ -483,6 +490,7 @@ describe('rapid.cli init scaffold', () => {
       const code = await initCommand(
         { _: ['sample'], module: true, norm: false, yes: true },
         base,
+        pinned,
       );
       asserts.assertEquals(code, 0);
       asserts.assert(await pathExists(`${base}/sample/main.ts`));
@@ -500,9 +508,9 @@ describe('rapid.cli init scaffold', () => {
     const base = await makeTempDir({ prefix: 'rapid-init-dup-' });
     try {
       const args = { _: ['twice'], yes: true };
-      asserts.assertEquals(await initCommand(args, base), 0);
+      asserts.assertEquals(await initCommand(args, base, pinned), 0);
       // Second run into the same base with the same name hits the guard.
-      asserts.assertEquals(await initCommand(args, base), 1);
+      asserts.assertEquals(await initCommand(args, base, pinned), 1);
     } finally {
       await removeDir(base, { recursive: true });
     }

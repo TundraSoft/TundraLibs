@@ -23,6 +23,7 @@ import { Client } from '@tundralibs/rpc';
 import { Doctor, inject, label } from '@tundralibs/doctor';
 import { sequenceID, ulid } from '@tundralibs/id';
 import { Application } from './Application.ts';
+import { onlyApi } from './middlewares/scope.ts';
 import { HTTPContext, JOBContext, SOCKETContext } from './context/mod.ts';
 import type { SOCKETConnection } from './context/mod.ts';
 import { RapidError } from './errors/mod.ts';
@@ -3713,5 +3714,125 @@ describe('rapid.Application — the SCHEDULED job path', () => {
     } finally {
       await app.stop();
     }
+  });
+});
+
+describe('rapid.Application — lifecycle and socket paging (audit)', () => {
+  it('fetch() after stop() refuses with RAPID_CONFIG instead of rebuilding a transport', async () => {
+    const app = await Application.initialize({
+      name: 'x-after-stop',
+      server: { port: 0 },
+    });
+    app.get('/ping', () => ({ content: { ok: true } }));
+    asserts.assertEquals(
+      (await app.fetch(new Request('http://x/ping'))).status,
+      200,
+    );
+    await app.stop();
+    let thrown: unknown;
+    try {
+      await app.fetch(new Request('http://x/ping'));
+    } catch (error) {
+      thrown = error;
+    }
+    asserts.assert(thrown instanceof RapidError);
+    asserts.assertEquals((thrown as RapidError).code, 'RAPID_CONFIG');
+    // start() clears the flag: a restarted app serves again.
+    await app.start();
+    try {
+      asserts.assertEquals(
+        (await app.fetch(new Request('http://x/ping'))).status,
+        200,
+      );
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('a socket reply carrying paging reaches the client as frame meta, window falling back to the request; no key → no meta', async () => {
+    const app = await Application.initialize({
+      name: 'x-sock-paging',
+      server: { port: 0 },
+    });
+    app.socket(
+      'list',
+      () => ({ content: [{ id: 'a' }], paging: { total: 42 } }),
+    );
+    app.socket('plain', () => ({ content: { ok: true } }));
+    await app.start();
+    const ws = new Client({
+      url: `ws://localhost:${app.port}/ws`,
+      reconnect: { enabled: false },
+    });
+    try {
+      await ws.connect();
+      const paged = await ws.command<{ id: string }[]>('list', {
+        page: 3,
+        limit: 7,
+      }, {
+        withMeta: true,
+      });
+      asserts.assertEquals(paged.data, [{ id: 'a' }]);
+      asserts.assertEquals(paged.meta, {
+        paging: { page: 3, size: 7, total: 42 },
+      });
+      const bare = await ws.command<{ ok: boolean }>('plain', {}, {
+        withMeta: true,
+      });
+      asserts.assertEquals(bare.data, { ok: true });
+      asserts.assertEquals(bare.meta, undefined);
+    } finally {
+      await ws.close();
+      await app.stop();
+    }
+  });
+});
+
+describe('rapid.Application — apiOnly routes (audit)', () => {
+  it('an apiOnly route is served on the api surface and is a 404 on the ui surface, so onlyApi-scoped middleware cannot be bypassed', async () => {
+    const app = await Application.initialize({
+      name: 'x-apionly',
+      server: { port: 0, api: { prefix: '/api' } },
+    });
+    const ran: string[] = [];
+    app.use(onlyApi(async (ctx, next) => {
+      ran.push(ctx.action);
+      await next();
+    }));
+    app.get('/users', { apiOnly: true }, () => ({ content: [] }));
+    app.get('/open', () => ({ content: { ok: true } }));
+
+    const api = await app.fetch(new Request('http://h/api/users'));
+    asserts.assertEquals(api.status, 200);
+    await api.text();
+    // The un-prefixed URL no longer exists — the exact path that used to
+    // reach the handler with the api-scoped middleware skipped.
+    const ui = await app.fetch(new Request('http://h/users'));
+    asserts.assertEquals(ui.status, 404);
+    await ui.text();
+    asserts.assertEquals(ran, ['GET /users']);
+    // An ordinary route still answers on both.
+    asserts.assertEquals(
+      (await app.fetch(new Request('http://h/open'))).status,
+      200,
+    );
+    asserts.assertEquals(
+      (await app.fetch(new Request('http://h/api/open'))).status,
+      200,
+    );
+    await app.stop();
+  });
+
+  it('apiOnly without an api surface is RAPID_CONFIG at registration — the route could never be reached', async () => {
+    const app = await Application.initialize({
+      name: 'x-apionly-none',
+      server: { port: 0 },
+    });
+    asserts.assertThrows(
+      () => app.get('/users', { apiOnly: true }, () => ({ content: [] })),
+      RapidError,
+      'needs an api surface',
+    );
+    await app.stop();
   });
 });

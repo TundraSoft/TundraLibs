@@ -148,8 +148,17 @@ function stampVary<S extends RapidContextState>(
   appUi: ReturnType<typeof uiOf>,
   reply?: RapidContextResponse,
 ): string {
-  let vary = replyHeader(reply?.headers, 'vary') ??
-    ctx.responseHeaders.get('vary');
+  // Seed from BOTH: what middleware stamped on ctx before the handler ran
+  // (cors's `origin`) and what the reply itself declares. Taking one or
+  // the other let a handler's own vary silently drop the other's names.
+  let vary = ctx.responseHeaders.get('vary');
+  const declared = replyHeader(reply?.headers, 'vary');
+  if (declared !== undefined && declared !== null) {
+    for (const name of declared.split(',')) {
+      const trimmed = name.trim();
+      if (trimmed !== '') vary = mergeVary(vary, trimmed);
+    }
+  }
   for (
     const name of [
       appUi?.swapHeader ?? 'rapid-swap',
@@ -262,7 +271,19 @@ export function represent<S extends RapidContextState>(
     // TARGET's body, the wrong thing to swap (D8). The bundled runtime
     // follows it same-origin only; htmx honours its own `HX-Redirect`
     // natively when `redirectHeader` names it.
-    if (!swap) return returned;
+    if (!swap) {
+      // The navigation path needs the swap Vary too: the same URL answers
+      // a 302 here and a 200 + redirect header on a swap, so a cache keyed
+      // without the swap header would cross-serve the two.
+      const vary = stampVary(ctx, appUi, returned);
+      const headers = new Headers(
+        returned.headers instanceof Headers
+          ? returned.headers
+          : (returned.headers as Record<string, string> | undefined),
+      );
+      headers.set('vary', vary);
+      return { ...returned, headers };
+    }
     const { redirect: _redirect, status: _status, ...rest } = returned;
     const url = typeof returned.redirect === 'string'
       ? returned.redirect
@@ -316,7 +337,10 @@ export function represent<S extends RapidContextState>(
     if (isStreamBody(returned.content)) {
       // Release the source (a file stream's fd, a generator's finally)
       // — the representation error must not leak it.
-      void toReadableStream(returned.content).cancel();
+      // An errored or locked stream REJECTS cancel(); unobserved that
+      // is an unhandled rejection, a process crash on Deno/Node instead
+      // of the 500 below. Same guard the base context already has.
+      toReadableStream(returned.content).cancel().catch(() => {});
     }
     throw new RapidError('RAPID_RESPONSE_INVALID', {
       message:

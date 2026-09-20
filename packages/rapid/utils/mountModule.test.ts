@@ -8,7 +8,7 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
-import { GET, JOB, Module, param, SOCKET } from '../decorators/mod.ts';
+import { GET, JOB, Module, param, POST, SOCKET } from '../decorators/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
   RapidContextResponse,
@@ -24,6 +24,56 @@ import {
 const EVENTS = {};
 
 describe('rapid.utils.mountModule', () => {
+  it('a method stacking two verbs on one path gets the verb in its operationId; a single-decoration multi-path method keeps its path-only id', async () => {
+    @Module('Items', { prefix: '/items' })
+    class Items {
+      @GET('/x')
+      @POST('/x')
+      handle(): RapidContextResponse {
+        return { content: {} };
+      }
+      @GET(['/a', '/b'])
+      alias(): RapidContextResponse {
+        return { content: {} };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-verb',
+      server: { port: 0 },
+    });
+    app.module(new Items());
+    const ids = app.routes.map((r) =>
+      `${r.method} ${r.path} ${r.openapi?.operationId}`
+    ).sort();
+    asserts.assertEquals(ids, [
+      'GET /items/a Items_alias_items_a',
+      'GET /items/b Items_alias_items_b',
+      'GET /items/x Items_handle_get_items_x',
+      'POST /items/x Items_handle_post_items_x',
+    ]);
+    // OpenAPI requires document-wide uniqueness — no two may collide.
+    const only = app.routes.map((r) => r.openapi?.operationId);
+    asserts.assertEquals(new Set(only).size, only.length);
+  });
+
+  it('a prefix ending in a slash records the path the server actually serves', async () => {
+    @Module('A', { prefix: '/api/' })
+    class A {
+      @GET('/users')
+      list(): RapidContextResponse {
+        return { content: [] };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'x-slash',
+      server: { port: 0 },
+    });
+    app.module(new A());
+    asserts.assertEquals(app.routes.map((r) => r.path), ['/api/users']);
+    const res = await app.fetch(new Request('http://x/api/users'));
+    asserts.assertEquals(res.status, 200);
+  });
+
   it('a collection answers as a bare array, and the paging key becomes headers — page/size from the resolved window, total only when counted', async () => {
     @Module('Posts', { prefix: '/posts' })
     class Posts {

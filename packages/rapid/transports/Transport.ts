@@ -95,6 +95,7 @@ export abstract class Transport<
         parent,
         attributes,
         finalize,
+        started,
       );
     }
     const transport = ctx.type;

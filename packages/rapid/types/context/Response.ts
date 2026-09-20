@@ -49,7 +49,8 @@ export type RapidContextResponse = {
    *
    * `total` is never inferred: it is the one figure only the handler
    * can know, and it costs a second count query, so it is absent
-   * unless counted.
+   * unless counted. JOB ignores the key, like `cookies` and `redirect`,
+   * so a multi-transport method needs no branching.
    */
   paging?: {
     /** 1-based page number. Defaults to the request's resolved page. */
