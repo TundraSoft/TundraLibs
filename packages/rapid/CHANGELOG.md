@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.7.0...rapid-v0.7.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **rapid:** audit remediation — surface bypass, browser fetch, runtime loops, ETag fold, and the rest of the verified findings ([#695](https://github.com/TundraSoft/TundraLibs/issues/695)) ([724a660](https://github.com/TundraSoft/TundraLibs/commit/724a66085de8e1e758f5d70ffa9559e261af5fb2))
+
 ## [0.7.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.6.0...rapid-v0.7.0) (2026-09-19)
 
 
