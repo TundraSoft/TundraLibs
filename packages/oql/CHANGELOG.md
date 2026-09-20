@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.1.4...oql-v1.2.0) (2026-09-20)
+
+
+### Features
+
+* **oql:** UNIX_TIMESTAMP expression — the current time as a 64-bit integer epoch ([#697](https://github.com/TundraSoft/TundraLibs/issues/697)) ([bf37250](https://github.com/TundraSoft/TundraLibs/commit/bf3725013118802987ab2ce84b83f1c39c270324))
+
 ## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.1.3...oql-v1.1.4) (2026-09-18)
 
 
