@@ -625,4 +625,11 @@ export class PostgresTranslator extends AbstractTranslator {
     }
     return this._renderTypeSuffix(baseType, def);
   }
+
+  /** Epoch as BIGINT — EXTRACT yields numeric (PG14+) or double, so floor and cast. */
+  protected override _unixTimestamp(unit: 'seconds' | 'milliseconds'): string {
+    return unit === 'milliseconds'
+      ? 'FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT'
+      : 'FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::BIGINT';
+  }
 }

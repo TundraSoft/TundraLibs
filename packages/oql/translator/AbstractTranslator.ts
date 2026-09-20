@@ -928,6 +928,12 @@ export abstract class AbstractTranslator {
     params: Parameters,
     hasJoins: boolean,
   ): string {
+    // A TRANSLATION-TIME switch, not a value: `unit` is a literal on the
+    // node and is never bound as a parameter, so the dialect picks its
+    // whole form here rather than branching in SQL like DATE_DIFF must.
+    if (expr.$$_expression === 'UNIX_TIMESTAMP') {
+      return this._unixTimestamp(expr.unit ?? 'seconds');
+    }
     const emit = this._expressionMap.get(expr.$$_expression);
     if (!emit) {
       throw new DialectUnsupportedError(
@@ -937,6 +943,20 @@ export abstract class AbstractTranslator {
     }
     const args = this.__flattenExprArgs(expr, scope, params, hasJoins);
     return emit(args);
+  }
+
+  /**
+   * The current time as a 64-bit integer epoch in `unit`. Each dialect
+   * overrides with its native form; the default refuses, so a dialect
+   * that never implemented it fails loudly rather than emitting nothing.
+   *
+   * @throws {DialectUnsupportedError} when the dialect has no override.
+   */
+  protected _unixTimestamp(_unit: 'seconds' | 'milliseconds'): string {
+    throw new DialectUnsupportedError(
+      this.Dialect,
+      "expression 'UNIX_TIMESTAMP'",
+    );
   }
 
   /**

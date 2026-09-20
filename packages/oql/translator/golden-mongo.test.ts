@@ -999,6 +999,34 @@ const CASES: Case[] = [
     },
   },
   {
+    name:
+      'INSERT with UNIX_TIMESTAMP — a Long in seconds, or milliseconds by unit',
+    method: 'insert',
+    query: {
+      type: 'INSERT',
+      table: 'logs',
+      columns: ['id', 'createdAt', 'updatedAt'],
+      data: {
+        id: 1,
+        createdAt: { $$_expression: 'UNIX_TIMESTAMP' },
+        updatedAt: { $$_expression: 'UNIX_TIMESTAMP', unit: 'milliseconds' },
+      },
+    },
+    expected: {
+      sql: 'insert',
+      params: {
+        collection: 'logs',
+        data: {
+          id: 1,
+          createdAt: {
+            $toLong: { $floor: { $divide: [{ $toLong: '$$NOW' }, 1000] } },
+          },
+          updatedAt: { $toLong: '$$NOW' },
+        },
+      },
+    },
+  },
+  {
     name: 'INSERT with NOW expression',
     method: 'insert',
     query: {

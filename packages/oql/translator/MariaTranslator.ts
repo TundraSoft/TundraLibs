@@ -665,4 +665,11 @@ export class MariaTranslator extends AbstractTranslator {
     }
     return sql;
   }
+
+  /** Epoch as BIGINT — `UNIX_TIMESTAMP()` is integer seconds; milliseconds need `NOW(3)`. */
+  protected override _unixTimestamp(unit: 'seconds' | 'milliseconds'): string {
+    return unit === 'milliseconds'
+      ? 'CAST(FLOOR(UNIX_TIMESTAMP(NOW(3)) * 1000) AS SIGNED)'
+      : 'UNIX_TIMESTAMP()';
+  }
 }

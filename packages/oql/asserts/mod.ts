@@ -191,6 +191,7 @@ export {
   assertSubstrExpression,
   assertSubtractExpression,
   assertTrimExpression,
+  assertUnixTimestampExpression,
   assertUpperExpression,
   assertUUIDExpression,
   isAbsExpression,

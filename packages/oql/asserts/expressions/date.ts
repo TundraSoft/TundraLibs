@@ -296,6 +296,42 @@ export const isCurrentTimestampTZExpression: (
 };
 
 /**
+ * Asserts that a value is a valid UNIX_TIMESTAMP expression — the current
+ * time as a 64-bit integer epoch, seconds unless `unit` is
+ * `'milliseconds'`. `unit`, when present, must be one of the two
+ * literals: it is a translation-time switch and is never parameterised.
+ *
+ * @param x - The value to validate
+ * @throws {TypeError} If the value is not a valid UNIX_TIMESTAMP expression
+ *
+ * @example
+ * ```ts
+ * assertUnixTimestampExpression({ $$_expression: 'UNIX_TIMESTAMP' });
+ * assertUnixTimestampExpression({ $$_expression: 'UNIX_TIMESTAMP', unit: 'milliseconds' });
+ * ```
+ */
+export const assertUnixTimestampExpression: (
+  x: unknown,
+) => asserts x is Extract<Expressions, { $$_expression: 'UNIX_TIMESTAMP' }> = (
+  x: unknown,
+): asserts x is Extract<Expressions, { $$_expression: 'UNIX_TIMESTAMP' }> => {
+  assertBaseExpression(x);
+  if (x.$$_expression !== 'UNIX_TIMESTAMP') {
+    throw new TypeError(
+      `Invalid Expression type: Expected 'UNIX_TIMESTAMP', got '${x.$$_expression}'`,
+    );
+  }
+  const unit = (x as { unit?: unknown }).unit;
+  if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
+    throw new TypeError(
+      `Invalid UNIX_TIMESTAMP unit: Expected 'seconds' or 'milliseconds', got '${
+        String(unit)
+      }'`,
+    );
+  }
+};
+
+/**
  * Asserts that a value is a valid DATE_ADD expression.
  *
  * The DATE_ADD expression adds or subtracts a specified amount of time from a date.
@@ -484,6 +520,8 @@ export const assertDateExpression: (
     assertCurrentTimestampTZExpression(x);
   } else if (x.$$_expression === 'DATE_ADD') {
     assertDateAddExpression(x, columnList);
+  } else if (x.$$_expression === 'UNIX_TIMESTAMP') {
+    assertUnixTimestampExpression(x);
   } else {
     throw new TypeError(
       `Invalid Expression type: Expected a Date expression type, got '${x.$$_expression}'`,

@@ -6,6 +6,7 @@ export {
   assertDateAddExpression,
   assertDateExpression,
   assertNowExpression,
+  assertUnixTimestampExpression,
   isCurrentDateExpression,
   isCurrentTimeExpression,
   isCurrentTimestampExpression,

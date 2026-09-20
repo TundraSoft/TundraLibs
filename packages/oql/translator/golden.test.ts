@@ -1912,6 +1912,35 @@ const CASES: Case[] = [
     },
   },
   {
+    name:
+      'INSERT with UNIX_TIMESTAMP — seconds by default, milliseconds by unit, 64-bit integer on every dialect',
+    method: 'insert',
+    query: {
+      type: 'INSERT',
+      table: 'logs',
+      columns: ['id', 'createdAt', 'updatedAt'],
+      data: {
+        id: 1,
+        createdAt: { $$_expression: 'UNIX_TIMESTAMP' },
+        updatedAt: { $$_expression: 'UNIX_TIMESTAMP', unit: 'milliseconds' },
+      },
+    } satisfies Query<'INSERT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `INSERT INTO "logs" ("id", "createdAt", "updatedAt") VALUES (:p_0:, CAST(strftime('%s', 'now') AS INTEGER), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) RETURNING "id", "createdAt", "updatedAt"`,
+      },
+      postgres: {
+        sql:
+          'INSERT INTO "logs" ("id", "createdAt", "updatedAt") VALUES (:p_0:, FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::BIGINT, FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT) RETURNING "id", "createdAt", "updatedAt"',
+      },
+      maria: {
+        sql:
+          'INSERT INTO `logs` (`id`, `createdAt`, `updatedAt`) VALUES (:p_0:, UNIX_TIMESTAMP(), CAST(FLOOR(UNIX_TIMESTAMP(NOW(3)) * 1000) AS SIGNED)) RETURNING `id`, `createdAt`, `updatedAt`',
+      },
+    },
+  },
+  {
     name: 'INSERT with expression value (NOW)',
     method: 'insert',
     query: {
