@@ -485,3 +485,48 @@ describe('rapid session() — cookie attributes', () => {
     }
   });
 });
+
+describe('rapid.middlewares.session — a loaded session marks the response private (audit)', () => {
+  it('a route that reads its session gets Vary: Cookie + cache-control: private; one that never touches it gets neither', async () => {
+    const app = await Application.initialize({
+      name: 'session-cache',
+      server: { port: 0 },
+      secret: 'test-secret-0123456789-abcdefghijklmnop',
+    });
+    app.use(session({ secure: false }));
+    app.get('/touch', async (ctx) => {
+      await getSession(ctx);
+      return { content: { ok: true } };
+    });
+    app.get('/plain', () => ({ content: { ok: true } }));
+    app.get('/own', async (ctx) => {
+      await getSession(ctx);
+      return {
+        content: { ok: true },
+        headers: { 'cache-control': 'no-store', vary: 'accept' },
+      };
+    });
+
+    const touched = await app.fetch(new Request('http://x/touch'));
+    await touched.text();
+    asserts.assertStringIncludes(touched.headers.get('vary') ?? '', 'Cookie');
+    asserts.assertEquals(touched.headers.get('cache-control'), 'private');
+
+    const plain = await app.fetch(new Request('http://x/plain'));
+    await plain.text();
+    asserts.assertEquals(plain.headers.get('cache-control'), null);
+    asserts.assertEquals(
+      (plain.headers.get('vary') ?? '').toLowerCase().includes('cookie'),
+      false,
+    );
+
+    // A handler's own policy is kept: cache-control is not overridden, and
+    // Cookie is APPENDED to an existing Vary, not substituted for it.
+    const own = await app.fetch(new Request('http://x/own'));
+    await own.text();
+    asserts.assertEquals(own.headers.get('cache-control'), 'no-store');
+    const vary = (own.headers.get('vary') ?? '').toLowerCase();
+    asserts.assert(vary.includes('accept') && vary.includes('cookie'), vary);
+    await app.stop();
+  });
+});

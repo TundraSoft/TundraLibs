@@ -134,3 +134,39 @@ describe('rapid.middlewares.etag', () => {
     }
   });
 });
+
+describe('rapid.middlewares.etag — paging is part of the tag', () => {
+  it('two windows over byte-identical rows get DIFFERENT tags, so a 304 can never hand back the other window', async () => {
+    const app = await Application.initialize({
+      name: 'etag-paging',
+      server: { port: 0 },
+    });
+    app.use(etag());
+    // Same rows, different result-set totals — an empty page past the end
+    // vs. a repeated window under a changed count.
+    app.get('/a', () => ({ content: [], paging: { total: 100 } }));
+    app.get('/b', () => ({ content: [], paging: { total: 999 } }));
+    app.get('/plain', () => ({ content: [] }));
+    const a = await app.fetch(new Request('http://x/a?page=1'));
+    const b = await app.fetch(new Request('http://x/b?page=99'));
+    await a.text();
+    await b.text();
+    const tagA = a.headers.get('etag');
+    const tagB = b.headers.get('etag');
+    asserts.assert(tagA !== null && tagB !== null);
+    asserts.assertNotEquals(tagA, tagB);
+    // The other window's tag must not validate this one.
+    const cond = await app.fetch(
+      new Request('http://x/b?page=99', {
+        headers: { 'if-none-match': tagA! },
+      }),
+    );
+    asserts.assertEquals(cond.status, 200);
+    await cond.text();
+    // And an unpaged reply is unaffected by the fold.
+    const plain = await app.fetch(new Request('http://x/plain'));
+    await plain.text();
+    asserts.assert(plain.headers.get('etag') !== null);
+    await app.stop();
+  });
+});

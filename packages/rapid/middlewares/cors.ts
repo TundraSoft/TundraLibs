@@ -47,8 +47,7 @@ export type CorsOptions = {
    */
   allowedHeaders?: readonly string[];
   /**
-   * `access-control-expose-headers` on actual responses — absent or `[]`
-   * sends none.
+   * `access-control-expose-headers` on actual responses.
    *
    * A cross-origin browser client can read only the CORS-safelisted
    * response headers otherwise, so a paged reply's window would be

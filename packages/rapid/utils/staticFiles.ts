@@ -118,9 +118,21 @@ export function normalizeStaticConfig(
         message: `server.static['${prefix}']: fingerprint must be a boolean`,
       });
     }
-    const root = path.isAbsolute(entry.root)
-      ? path.resolve(entry.root)
-      : path.resolve(baseDir ?? '.', entry.root);
+    let root: string;
+    try {
+      root = path.isAbsolute(entry.root)
+        ? path.resolve(entry.root)
+        : path.resolve(baseDir ?? '.', entry.root);
+    } catch (cause) {
+      // A relative root needs a working directory; a browser has none
+      // and the path library throws a raw TypeError — surface it typed.
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          `server.static: cannot resolve the relative root '${entry.root}' on this runtime (no working directory) — use an absolute path`,
+        details: { prefix, root: entry.root },
+        cause: cause instanceof Error ? cause : undefined,
+      });
+    }
     mounts.push({
       prefix: prefix.replace(/\/+$/, ''),
       root,

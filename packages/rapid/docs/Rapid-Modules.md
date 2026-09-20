@@ -66,14 +66,14 @@ other's classes, and a second `import()` of the same file is a cache hit.
 
 ### Decorators
 
-| Decorator                                        | Records                                                                                                                                                   |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `template`, `layout`, `middleware`. |
-| `@SOCKET(command, { bind?, middleware? })`       | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                        |
-| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.             |
-| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.         |
-| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                          |
-| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                 |
+| Decorator                                        | Records                                                                                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `paging`, `apiOnly`, `template`, `layout`, `middleware`. |
+| `@SOCKET(command, { bind?, middleware? })`       | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                                             |
+| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.                                  |
+| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.                              |
+| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                                               |
+| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                                      |
 
 Decorators stack: one method may be `@GET` and `@JOB` at once. Ordering of
 rapid decorators relative to third-party wrapping decorators does not
@@ -319,7 +319,7 @@ standalone context it takes.
   spec requires operation ids to be unique. A method serving ONE route keeps
   the plain `Module_method` id. The suffix comes from the path rather than a
   counter, so reordering the list never renames an operation.
-- `namespace` (the `RapidModule` field, or `@Module({ namespace })` on a
+- `namespace` (the `RapidModule` field, or `@Module('Name', { namespace })` on a
   plain class) dots onto socket command and job names: `blog.posts.get`.
 - `@Module({ version })` is the default version for the class's routes;
   `@GET(path, { version })` overrides; `server.versioning` decides where a

@@ -49,7 +49,7 @@ import {
   timeout,
 } from '@tundralibs/rapid/middlewares';
 import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
-import type { Pact } from '@tundralibs/pact';
+import type { Pact } from '@tundralibs/pact'; // also: deno add @tundralibs/pact
 
 declare const pact: Pact<{ READ: 1n }, 'Admin'>;
 const { authenticate, authorize } = pactAuth(pact);
@@ -251,14 +251,14 @@ so errors are readable by the browser; preflights (`OPTIONS` +
 A disallowed origin is **not** an error: the response simply carries no CORS
 headers and the browser blocks it.
 
-| Option           | Type / values                                                                             | Default                               |
-| ---------------- | ----------------------------------------------------------------------------------------- | ------------------------------------- |
-| `origin`         | `'*'`, one serialized origin, a list of them, or `(origin) => boolean`                    | `'*'`                                 |
-| `methods`        | non-empty list of HTTP tokens                                                             | `GET, HEAD, PUT, PATCH, POST, DELETE` |
-| `allowedHeaders` | list of HTTP tokens; absent → the request's `Access-Control-Request-Headers` is reflected | reflected                             |
-| `exposedHeaders` | list of HTTP tokens                                                                       | none                                  |
-| `credentials`    | `boolean`                                                                                 | `false`                               |
-| `maxAge`         | non-negative integer **seconds** (`Access-Control-Max-Age`)                               | unset                                 |
+| Option           | Type / values                                                                             | Default                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `origin`         | `'*'`, one serialized origin, a list of them, or `(origin) => boolean`                    | `'*'`                                                                                   |
+| `methods`        | non-empty list of HTTP tokens                                                             | `GET, HEAD, PUT, PATCH, POST, DELETE`                                                   |
+| `allowedHeaders` | list of HTTP tokens; absent → the request's `Access-Control-Request-Headers` is reflected | reflected                                                                               |
+| `exposedHeaders` | list of HTTP tokens                                                                       | the three `server.paging` header names; an explicit list is verbatim, `[]` exposes none |
+| `credentials`    | `boolean`                                                                                 | `false`                                                                                 |
+| `maxAge`         | non-negative integer **seconds** (`Access-Control-Max-Age`)                               | unset                                                                                   |
 
 **Validated at build:** origin strings must be _serialized origins_
 (`https://app.example`, `http://localhost:3000` — no path, lowercase; browsers

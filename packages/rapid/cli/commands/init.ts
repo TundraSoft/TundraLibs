@@ -79,6 +79,7 @@ async function resolveVendorCss(
 export async function initCommand(
   args: ParsedArgs,
   base = '.',
+  resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
 ): Promise<number> {
   const yes = args.yes === true;
   let name = (args._[0] as string | undefined) ??
@@ -136,9 +137,9 @@ export async function initCommand(
   // null (offline / unpublished) → the manifest pins no version (= latest).
   // norm/utils are only ever fetched when --norm — no network cost otherwise.
   const [rapidVersion, normVersion, utilsVersion] = await Promise.all([
-    latestVersion('rapid'),
-    norm ? latestVersion('norm') : Promise.resolve(null),
-    norm ? latestVersion('utils') : Promise.resolve(null),
+    resolveVersion('rapid'),
+    norm ? resolveVersion('norm') : Promise.resolve(null),
+    norm ? resolveVersion('utils') : Promise.resolve(null),
   ]);
   const files = scaffold(
     {

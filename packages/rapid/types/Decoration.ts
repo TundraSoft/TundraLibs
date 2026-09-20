@@ -61,6 +61,8 @@ export type RapidDecoration =
     };
     /** Route answers with a COLLECTION — documentation shape only. */
     paging?: boolean;
+    /** Serve on the `api` surface only (see `RapidRouteOptions.apiOnly`). */
+    apiOnly?: boolean;
     /** Raw `template` route option — normalized + validated at mount. */
     template?: RapidTemplate<unknown> | RapidRouteTemplate;
     /** Raw `layout` route option (the object form's `layout` wins). */

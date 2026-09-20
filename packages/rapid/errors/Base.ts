@@ -1,5 +1,5 @@
 import type { StatusCode } from '@tundralibs/compat/http';
-import { BaseError } from '@tundralibs/utils';
+import { BaseError } from '@tundralibs/utils/BaseError';
 import { RAPID_ERROR_CODES, type RapidErrorCode } from './RapidErrorCodes.ts';
 
 /** Context carried by every {@link RapidError}. */

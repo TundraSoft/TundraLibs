@@ -19,6 +19,7 @@
  * @module
  */
 import { ulid } from '@tundralibs/id';
+import type { HTTPContext } from '../context/mod.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { MIDDLEWARE_SCOPE } from './scope.ts';
@@ -344,6 +345,25 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
         // save.
         if (loading !== undefined) {
           await loading.catch(() => {});
+          // A response that READ its session is per-user, whether or not
+          // anything changed: a shared cache keyed on the URL alone would
+          // hand one user's page or JSON to the next visitor. Stamped
+          // here, independent of the UI layer's own personal-page rule
+          // (which fires only on a csrf token or a view projection), so
+          // a session-authenticated route is covered by construction.
+          if (loaded) {
+            const http = ctx as HTTPContext;
+            const vary = http.responseHeaders.get('vary');
+            const names = vary === null
+              ? []
+              : vary.split(',').map((v) => v.trim()).filter((v) => v !== '');
+            if (!names.some((v) => v.toLowerCase() === 'cookie')) {
+              http.setHeader('vary', [...names, 'Cookie'].join(', '));
+            }
+            if (http.responseHeaders.get('cache-control') === null) {
+              http.setHeader('cache-control', 'private');
+            }
+          }
           // `loaded` gates everything: a load that FAILED mid-way (a
           // transient read error) may have verified `id` already —
           // saving then would overwrite the live record with an empty

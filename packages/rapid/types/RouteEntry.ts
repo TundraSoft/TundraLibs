@@ -37,4 +37,6 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
    * stamped only.
    */
   uiOnly?: boolean;
+  /** Serve on the `api` surface only — absent from the `ui` route table. */
+  apiOnly?: boolean;
 };

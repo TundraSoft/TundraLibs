@@ -8,7 +8,16 @@
 
 import { RapidError } from '../errors/mod.ts';
 
-/** A target with an explicit scheme — the author's deliberate, untouched choice. */
+/**
+ * A target with an explicit scheme — the author's deliberate, untouched
+ * choice. ANY scheme passes, `javascript:` and `data:` included: the rule
+ * here is about a path that secretly leaves the origin, not about which
+ * schemes an author may redirect to. So a handler that builds its target
+ * from request input (`?next=`) must validate the scheme itself — the
+ * bundled runtime refuses a non-http(s) redirect header (opaque origin),
+ * but a BYO client that follows the header verbatim (htmx) would execute
+ * a `javascript:` value.
+ */
 const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 
 /**

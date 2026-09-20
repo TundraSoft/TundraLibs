@@ -15,6 +15,7 @@
  */
 
 import { readDir, readFile } from '@tundralibs/compat/file';
+import { RapidError } from '../errors/mod.ts';
 import * as path from '@tundralibs/compat/path';
 import { djb2 } from '../utils/hash.ts';
 
@@ -60,6 +61,17 @@ export async function fingerprintAssets(
       }
     }
   };
-  await walk(path.resolve(root), '');
+  let resolved: string;
+  try {
+    resolved = path.resolve(root);
+  } catch (cause) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `fingerprintAssets: cannot resolve the relative root '${root}' on this runtime (no working directory) — use an absolute path`,
+      details: { root },
+      cause: cause instanceof Error ? cause : undefined,
+    });
+  }
+  await walk(resolved, '');
   return out;
 }
