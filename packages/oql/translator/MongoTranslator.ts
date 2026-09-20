@@ -2046,6 +2046,13 @@ export class MongoTranslator {
         return '$$NOW';
       case 'CURRENT_DATE':
         return { $dateTrunc: { date: '$$NOW', unit: 'day' } };
+      case 'UNIX_TIMESTAMP': {
+        // A Long (int64) either way: $$NOW is ms since epoch once cast.
+        const unit = (expr as { unit?: string }).unit ?? 'seconds';
+        return unit === 'milliseconds'
+          ? { $toLong: '$$NOW' }
+          : { $toLong: { $floor: { $divide: [{ $toLong: '$$NOW' }, 1000] } } };
+      }
       case 'CURRENT_TIME':
         // Mongo has no time-only type; emit NOW and let the caller
         // decide how to extract.

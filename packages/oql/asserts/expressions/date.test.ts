@@ -8,6 +8,7 @@ import {
   assertDateAddExpression,
   assertDateExpression,
   assertNowExpression,
+  assertUnixTimestampExpression,
   isCurrentDateExpression,
   isCurrentTimeExpression,
   isCurrentTimestampExpression,
@@ -449,5 +450,39 @@ describe('oql.asserts.Expressions.Date', () => {
         asserts.assertEquals(expr.$$_expression, 'NOW');
       }
     });
+  });
+});
+
+describe('oql.asserts.date — UNIX_TIMESTAMP', () => {
+  it('accepts the bare form and both unit literals, and is routed by the date-category assert', () => {
+    assertUnixTimestampExpression({ $$_expression: 'UNIX_TIMESTAMP' });
+    assertUnixTimestampExpression({
+      $$_expression: 'UNIX_TIMESTAMP',
+      unit: 'seconds',
+    });
+    assertUnixTimestampExpression({
+      $$_expression: 'UNIX_TIMESTAMP',
+      unit: 'milliseconds',
+    });
+    assertDateExpression({
+      $$_expression: 'UNIX_TIMESTAMP',
+      unit: 'milliseconds',
+    });
+  });
+  it('rejects any other unit and a wrong discriminant, naming the offending value', () => {
+    asserts.assertThrows(
+      () =>
+        assertUnixTimestampExpression({
+          $$_expression: 'UNIX_TIMESTAMP',
+          unit: 'minutes',
+        }),
+      TypeError,
+      "got 'minutes'",
+    );
+    asserts.assertThrows(
+      () => assertUnixTimestampExpression({ $$_expression: 'NOW' }),
+      TypeError,
+      "Expected 'UNIX_TIMESTAMP'",
+    );
   });
 });

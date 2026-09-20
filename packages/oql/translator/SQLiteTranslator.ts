@@ -643,4 +643,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     const joined = side === 'left' ? `${pad} || ${str}` : `${str} || ${pad}`;
     return `substr(${joined}, 1, ${width})`;
   }
+
+  /** Epoch as a 64-bit INTEGER — `strftime('%s')` is text, `julianday` gives sub-second. */
+  protected override _unixTimestamp(unit: 'seconds' | 'milliseconds'): string {
+    return unit === 'milliseconds'
+      ? "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"
+      : "CAST(strftime('%s', 'now') AS INTEGER)";
+  }
 }

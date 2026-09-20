@@ -64,6 +64,7 @@ const DATE_TYPES = new Set<string>([
   'CURRENT_TIMESTAMP',
   'CURRENT_TIMESTAMPTZ',
   'DATE_ADD',
+  'UNIX_TIMESTAMP',
 ]);
 
 /**
