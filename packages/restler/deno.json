@@ -9,6 +9,6 @@
     "./errors": "./errors/mod.ts"
   },
   "imports": {
-    "$xml": "jsr:@libs/xml@^8.0.0"
+    "$xml": "jsr:@libs/xml@^8.0.1"
   }
 }
