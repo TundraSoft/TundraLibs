@@ -84,8 +84,9 @@ export type RapidContextResponse = {
    * transports reject), so a shared method may return one harmlessly. On
    * a TEMPLATED route the representer owns it: a real 3xx on a ui
    * navigation, the redirect header on a swap, and DROPPED on the api
-   * surface, where the reply is its `content` — one sign-in route serves
-   * the no-JS form, the swap and the API client.
+   * surface, where the reply is its `content` (an API client would follow
+   * the 3xx and receive the target page, not the result) — one sign-in
+   * route serves the no-JS form, the swap and the API client.
    */
   redirect?: string | { url: string; permanent?: boolean };
 };

@@ -222,7 +222,10 @@ compare against this, never `new URL(ctx.url).pathname`), and
 `ctx.href(path)`. Rapid never rewrites redirects or links. On a
 TEMPLATED route the representer owns `redirect`: a real 3xx on a ui
 navigation, the redirect header on a swap, and dropped on the api surface,
-where the reply is its `content` — so one sign-in route returns
+where the reply is its `content`. Dropped, not sent: an API client's
+`fetch` follows a 3xx transparently (a POST's 302 re-issued as a GET) and
+would hand back the TARGET's body — the console page, never the session
+the client asked for. So one sign-in route returns
 `{ content: session, redirect: next }` and serves the no-JS form, the swap
 runtime and the API client alike. An UNTEMPLATED route's `redirect` stays
 a real 3xx on either surface (a URL shortener's hop); keep an API client on
