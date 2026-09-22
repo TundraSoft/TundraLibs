@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.4](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.3...compat-v2.7.4) (2026-09-22)
+
+
+### Bug Fixes
+
+* **compat:** hide the cloudflare:sockets specifier from bundlers ([#705](https://github.com/TundraSoft/TundraLibs/issues/705)) ([58a34a8](https://github.com/TundraSoft/TundraLibs/commit/58a34a8e1d04cc496d7d80637dc936d13d531149))
+
 ## [2.7.3](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.2...compat-v2.7.3) (2026-09-18)
 
 

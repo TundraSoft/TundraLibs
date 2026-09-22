@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.3.1...utils-v1.4.0) (2026-09-22)
+
+
+### Features
+
+* **utils:** give every module its own subpath export ([#706](https://github.com/TundraSoft/TundraLibs/issues/706)) ([21c4882](https://github.com/TundraSoft/TundraLibs/commit/21c488218db1eca891c0c7c562b72871206088a0))
+
 ## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.3.0...utils-v1.3.1) (2026-09-18)
 
 

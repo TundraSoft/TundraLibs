@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.6...cronus-v1.1.0) (2026-09-22)
+
+
+### Features
+
+* **cronus:** export schedule and Cronus as their own subpaths ([#707](https://github.com/TundraSoft/TundraLibs/issues/707)) ([ca6b3c1](https://github.com/TundraSoft/TundraLibs/commit/ca6b3c1c15772fcf99b0ee2bf3aae28893313301))
+
 ## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.5...cronus-v1.0.6) (2026-09-18)
 
 
