@@ -35,6 +35,7 @@ immediate.
 | `issueApiKey` / `revokeApiKey`             | `saveApiKey` / `revokeApiKey`                                                                                                                                          |
 | `logoutAll`                                | `deleteSessions`                                                                                                                                                       |
 | `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
+| Email verification                         | `getUser` + `saveResetToken` / `consumeResetToken` — the status change is yours (no status hook)                                                                       |
 | `verifyMFA`                                | `getUser`                                                                                                                                                              |
 | OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on)                                                                                                                  |
 | Passkeys (all four ceremonies)             | `getPasskey` + `getPasskeys` + `savePasskey` + `updatePasskeyCounter` + `getUser` — checked at construction; `finishPasskeyLogin` additionally needs the session store |
@@ -48,7 +49,7 @@ All shapes are exported from `@tundralibs/pact/types`.
 | `PactStoredUser`       | `id`, `status`, `passwordHash?`, `mfaSecret?`, `grants`, `metadata?`                                           |
 | `PactStoredApiKey`     | `id`, `userId?`, `status`, `secret` (raw at this boundary), `grants`, `metadata?`                              |
 | `PactStoredSession`    | `id` (token sha-256), `userId`, `expiresAt`, `generation?`, `rotatedAt?`, `metadata?`                          |
-| `PactStoredResetToken` | `id` (token sha-256), `userId`, `expiresAt`                                                                    |
+| `PactStoredResetToken` | `id` (token sha-256), `userId`, `purpose` (`PASSWORD_RESET` \| `EMAIL_VERIFICATION`), `expiresAt`              |
 | `PactStoredPasskey`    | `id` (credential id), `userId`, `publicKey` (JWK string), `algorithm`, `signCount`, `transports?`, `metadata?` |
 | `PactUserQuery`        | `{by:'ID'}` \| `{by:'IDENTIFIER'}` \| `{by:'OAUTH', provider, subject}`                                        |
 | `PactCreateUserInput`  | What `createUser` receives, including the OAuth link on JIT provisioning                                       |
@@ -82,7 +83,10 @@ points:
   are pact-minted, and a blind upsert lets a deleted session be resurrected
   by a late write racing a logout.
 - **`consumeResetToken(id)`** returns and deletes in one motion, which is
-  what makes reset tokens single-use even under concurrent attempts.
+  what makes action tokens single-use even under concurrent attempts.
+  Return the record whatever its `purpose`: pact checks the purpose after
+  consumption, so a reset token presented to `verifyEmail` (or the reverse)
+  is rejected and burned in the same motion.
 
 Actor ids share one namespace across kinds: a user id and an API-key id
 must never collide (pact's generated `pact_ak_...` key ids make this true
@@ -98,7 +102,7 @@ shapes assume it:
 | Password                | pbkdf2 hash (pact hashes it for you)             | Verification only ever compares hashes                           |
 | API-key secret          | Encrypt at rest, app-side                        | APIKEY comparison and HMAC recomputation both need the raw bytes |
 | TOTP seed (`mfaSecret`) | Encrypt at rest, app-side                        | TOTP computation needs the raw seed                              |
-| Session / reset tokens  | Nothing — the stored `id` is the token's sha-256 | The raw token is shown once and never stored                     |
+| Session / action tokens | Nothing — the stored `id` is the token's sha-256 | The raw token is shown once and never stored                     |
 
 Hooks return raw secrets: decrypt inside `getApiKey`/`getUser`, encrypt
 inside `saveApiKey`/your enrollment write. pact never sees or owns your

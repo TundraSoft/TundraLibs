@@ -73,9 +73,10 @@ CREATE TABLE passkeys (
 );
 CREATE INDEX passkeys_user_id ON passkeys (user_id);  -- getPasskeys(userId)
 
-CREATE TABLE reset_tokens (
-  id             TEXT PRIMARY KEY,          -- sha-256 of the reset token
+CREATE TABLE reset_tokens (                 -- password reset AND email verification
+  id             TEXT PRIMARY KEY,          -- sha-256 of the token
   user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  purpose        TEXT NOT NULL,             -- 'PASSWORD_RESET' | 'EMAIL_VERIFICATION'
   expires_at     TIMESTAMP NOT NULL
 );
 ```
@@ -147,7 +148,8 @@ both directions. `created_at` columns are app-only; pact never reads them.
 | Column       | Type      | Null     | Hook field · TS type                 | Requirement                                                    |
 | ------------ | --------- | -------- | ------------------------------------ | -------------------------------------------------------------- |
 | `id`         | TEXT      | NOT NULL | `PactStoredResetToken.id` · `string` | Primary key; 64 hex chars (sha-256 of the token, pact-minted)  |
-| `user_id`    | TEXT      | NOT NULL | `.userId` · `string`                 | FK to the user being reset                                     |
+| `user_id`    | TEXT      | NOT NULL | `.userId` · `string`                 | FK to the user the token was minted for                        |
+| `purpose`    | TEXT      | NOT NULL | `.purpose` · `PactTokenPurpose`      | `PASSWORD_RESET` or `EMAIL_VERIFICATION`; returned verbatim    |
 | `expires_at` | TIMESTAMP | NOT NULL | `.expiresAt` · `Date`                | Absolute window end; `consumeResetToken` deletes on first read |
 
 ## Hook implementation sketch
@@ -205,7 +207,7 @@ const hooks: PactHooks<'Post' | 'Billing'> = {
   // saveResetToken, consumeResetToken: single-statement writes on the
   // tables above. consumeResetToken is DELETE ... RETURNING (or a
   // SELECT + DELETE in one transaction) — return-and-delete is what
-  // makes reset tokens single-use.
+  // makes action tokens single-use.
 };
 ```
 
@@ -236,8 +238,9 @@ const hooks: PactHooks<'Post' | 'Billing'> = {
   Write `updatePasskeyCounter` as a guarded update —
   `UPDATE passkeys SET sign_count = ? WHERE id = ? AND sign_count < ?` —
   so concurrent assertions cannot race the clone check backwards.
-- **reset_tokens** — rows are short-lived (default 15-minute window) and
-  deleted on consumption; the same expiry sweep applies.
+- **reset_tokens** — rows are short-lived (default 15-minute reset window,
+  24-hour verification window) and deleted on consumption; the same expiry
+  sweep applies.
 
 ---
 

@@ -565,6 +565,43 @@ describe('Pact login and sessions', () => {
     asserts.assertFalse(await pact.resetPassword(expired!.token, 'x'));
   });
 
+  it('should run email verification end to end, and burn a token presented to the wrong flow', async () => {
+    asserts.assertStrictEquals(
+      await pact.requestEmailVerification('ghost@example.dev'),
+      null,
+    );
+    const verify = await pact.requestEmailVerification('ada@example.dev');
+    asserts.assertExists(verify);
+    asserts.assert(verify.token.startsWith('pact_ev_'));
+    const rec = store.resets.get(await sha256(verify.token))!;
+    asserts.assertEquals(rec.purpose, 'EMAIL_VERIFICATION');
+    asserts.assertEquals(
+      rec.expiresAt.getTime() - Date.now() > 1439 * 60_000,
+      true,
+    );
+    asserts.assertStrictEquals(await pact.verifyEmail(verify.token), 'lu1');
+    asserts.assertStrictEquals(
+      await pact.verifyEmail(verify.token),
+      null,
+      'token must be single-use',
+    );
+
+    // Cross-purpose: each flow rejects the other's token AND consumes it.
+    const before = store.lastSetPassword;
+    const crossed = await pact.requestEmailVerification('ada@example.dev');
+    asserts.assertFalse(await pact.resetPassword(crossed!.token, 'pwned123'));
+    asserts.assertStrictEquals(store.lastSetPassword, before);
+    asserts.assertStrictEquals(await pact.verifyEmail(crossed!.token), null);
+    const reset = await pact.requestPasswordReset('ada@example.dev');
+    asserts.assertStrictEquals(await pact.verifyEmail(reset!.token), null);
+    asserts.assertFalse(await pact.resetPassword(reset!.token, 'again'));
+
+    const expired = await pact.requestEmailVerification('ada@example.dev');
+    const late = store.resets.get(await sha256(expired!.token))!;
+    store.resets.set(late.id, { ...late, expiresAt: new Date(Date.now() - 1) });
+    asserts.assertStrictEquals(await pact.verifyEmail(expired!.token), null);
+  });
+
   it('should use the session cache as the store in cache-only mode', async () => {
     const cacheOnly = Pact.create({
       ...BASE,

@@ -40,8 +40,10 @@ for unknown identifiers, so timing does not distinguish them either).
 verified, and is therefore not an existence oracle. What to disclose to
 the end user is the application's call; the codes give it the choice.
 
-`requestPasswordReset` returns `null` for an unknown identifier rather
-than throwing, so a reset endpoint can answer uniformly.
+`requestPasswordReset` and `requestEmailVerification` return `null` for an
+unknown identifier rather than throwing, so those endpoints can answer
+uniformly. The two flows share one token store, told apart by `purpose`:
+a token minted for one flow is rejected — and consumed — by the other.
 
 ## Bound principals
 

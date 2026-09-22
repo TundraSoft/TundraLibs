@@ -79,11 +79,13 @@ export type PactHooks<M extends string = string> = {
     userId: string,
     passwordHash: string,
   ) => void | Promise<void>;
-  /** Persist a single-use reset token (already keyed by sha-256). */
+  /** Persist a single-use action token — password reset or email
+   * verification, told apart by `purpose` (already keyed by sha-256). */
   saveResetToken?: (record: PactStoredResetToken) => void | Promise<void>;
   /**
-   * Return AND delete the reset token in one motion — single use by
-   * construction. `null` when absent or already consumed.
+   * Return AND delete the action token in one motion — single use by
+   * construction. `null` when absent or already consumed. Return the
+   * record whatever its `purpose`: pact checks it after consumption.
    */
   consumeResetToken?: (
     id: string,

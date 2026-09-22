@@ -39,6 +39,7 @@ export type {
   PactStoredResetToken,
   PactStoredSession,
   PactStoredUser,
+  PactTokenPurpose,
   PactUserQuery,
   PactVerifiedCredentials,
   PermissionBits,

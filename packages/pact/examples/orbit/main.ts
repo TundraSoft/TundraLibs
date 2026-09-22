@@ -176,17 +176,21 @@ router.post('/register', async (ctx) => {
   const user = await pact.register({
     identifier: email,
     password,
-    status: 'PENDING', // activation flips it — see /activate
+    status: 'PENDING', // verifying the email flips it — see /activate
     grants: { Projects: BITS.READ | BITS.CREATE },
   });
+  const verify = await pact.requestEmailVerification(email);
   ctx.response.status = 201;
-  ctx.response.body = { id: user.id, status: user.status };
+  // Deliver the token by email in reality — returned here so the demo can run.
+  ctx.response.body = { id: user.id, status: user.status, token: verify!.token };
 });
 
-// Demo stand-in for an email-verification link.
+// The email-verification link: pact burns the token and names the user;
+// the status write is the app's (pact has no status hook).
 router.post('/activate', async (ctx) => {
-  const { userId } = await ctx.request.body.json();
-  ctx.response.status = activateUser(userId) ? 200 : 404;
+  const { token } = await ctx.request.body.json();
+  const userId = await pact.verifyEmail(token);
+  ctx.response.status = userId !== null && activateUser(userId) ? 200 : 400;
   ctx.response.body = {};
 });
 

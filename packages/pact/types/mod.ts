@@ -33,6 +33,7 @@ export type { PactStoredPasskey } from './PactStoredPasskey.ts';
 export type { PactStoredResetToken } from './PactStoredResetToken.ts';
 export type { PactStoredSession } from './PactStoredSession.ts';
 export type { PactStoredUser } from './PactStoredUser.ts';
+export type { PactTokenPurpose } from './PactTokenPurpose.ts';
 export type { PactUserQuery } from './PactUserQuery.ts';
 export type { PactVerifiedCredentials } from './PactVerifiedCredentials.ts';
 export type { PermissionBits } from './PermissionBits.ts';

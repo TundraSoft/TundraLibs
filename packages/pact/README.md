@@ -245,7 +245,7 @@ Three runnable mini-apps live in `packages/pact/examples/`, each with its own
 README and per-runtime run commands:
 
 - **orbit** — a project-management API on oak exercising the whole surface:
-  register/activate, login/logout/refresh (JWT strategy), password reset,
+  register + email verification, login/logout/refresh (JWT strategy), password reset,
   API keys, HMAC, MFA, per-route authorization, and the audit-trail events.
 - **passkey-signin** — passwordless sign-up and sign-in with passkeys in a
   real browser, including usernameless login and the oak middleware.
@@ -258,8 +258,9 @@ README and per-runtime run commands:
 Header/cookie parsing, redirects, routes, CSRF, and every other transport
 concern (the framework's — though the [middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware)
 covers the common cases); user/session storage (yours, via hooks — no schema,
-no adapters, no migrations); account-management flows (email verification,
-password-reset delivery); per-instance authorization ("edit this post" is app
+no adapters, no migrations); token delivery (the reset / verification email
+is yours to send) and the status write a verified email unlocks; per-instance
+authorization ("edit this post" is app
 logic); group/role membership resolution (compose effective grants in your
 `getUser`).
 

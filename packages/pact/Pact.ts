@@ -231,6 +231,7 @@ export class Pact<B extends PermissionBits, M extends string>
         refresh: { ttl: 10_080, grace: 30 },
       },
       reset: { ttl: 15 },
+      verification: { ttl: 1440 },
     });
     this.bits = Object.freeze({ ...bits });
     this.__validateBits();
@@ -1011,17 +1012,77 @@ export class Pact<B extends PermissionBits, M extends string>
     await saveResetToken({
       id: await sha256(token),
       userId: user.id,
+      purpose: 'PASSWORD_RESET',
       expiresAt,
     });
     return { token, expiresAt };
   }
 
   /**
+   * Begin an email verification: mint a single-use token for the
+   * application to deliver — the same primitive as the password reset,
+   * tagged `EMAIL_VERIFICATION`. Register the user with a pending status
+   * (see {@link register}) and flip it to an active one when
+   * {@link verifyEmail} returns the id. Returns `null` for an unknown
+   * identifier, so a "resend" endpoint can answer uniformly.
+   *
+   * @throws {PactError} `MISSING_HOOK` without `getUser` +
+   *   `saveResetToken`.
+   */
+  public async requestEmailVerification(
+    identifier: string,
+  ): Promise<{ token: string; expiresAt: Date } | null> {
+    const { getUser, saveResetToken } = this._hooks;
+    if (getUser === undefined || saveResetToken === undefined) {
+      throw new PactError('MISSING_HOOK', {
+        hook: 'getUser and saveResetToken',
+      });
+    }
+    const user = await getUser({ by: 'IDENTIFIER', identifier });
+    if (user === null) return null;
+    const ttl = this._getOption('verification')?.ttl ?? 1440;
+    const expiresAt = new Date(Date.now() + ttl * 60_000);
+    const token = this.generateEmailVerificationToken();
+    await saveResetToken({
+      id: await sha256(token),
+      userId: user.id,
+      purpose: 'EMAIL_VERIFICATION',
+      expiresAt,
+    });
+    return { token, expiresAt };
+  }
+
+  /**
+   * Complete an email verification: consume the token (single-use) and
+   * return the verified user's id — the application writes the status
+   * change (pact has no status hook) and then invalidates the principal.
+   * `null` on an invalid, expired, already-used, or wrong-purpose token;
+   * a wrong-purpose token is burned all the same.
+   *
+   * @throws {PactError} `MISSING_HOOK` without `consumeResetToken`.
+   */
+  public async verifyEmail(token: string): Promise<string | null> {
+    const { consumeResetToken } = this._hooks;
+    if (consumeResetToken === undefined) {
+      throw new PactError('MISSING_HOOK', { hook: 'consumeResetToken' });
+    }
+    const record = await consumeResetToken(await sha256(token));
+    if (
+      record === null || record.purpose !== 'EMAIL_VERIFICATION' ||
+      this.__sessionExpired(record)
+    ) {
+      return null;
+    }
+    return record.userId;
+  }
+
+  /**
    * Complete a password reset: consume the token (single-use — the hook
    * returns AND deletes), check its window, then delegate to
    * {@link setPassword} (which also evicts the principal and ends
-   * sessions when possible). `false` on an invalid, expired, or
-   * already-used token.
+   * sessions when possible). `false` on an invalid, expired,
+   * already-used, or wrong-purpose token (an email-verification token
+   * cannot reset a password — and is burned by the attempt).
    *
    * @throws {PactError} `MISSING_HOOK` without `consumeResetToken` +
    *   `setPassword`.
@@ -1037,7 +1098,10 @@ export class Pact<B extends PermissionBits, M extends string>
       });
     }
     const record = await consumeResetToken(await sha256(token));
-    if (record === null || this.__sessionExpired(record)) {
+    if (
+      record === null || record.purpose !== 'PASSWORD_RESET' ||
+      this.__sessionExpired(record)
+    ) {
       return false;
     }
     await this.setPassword(record.userId, newPassword);
@@ -1058,6 +1122,12 @@ export class Pact<B extends PermissionBits, M extends string>
    * sha-256 — see {@link requestPasswordReset}). */
   public generatePasswordResetToken(): string {
     return this._generateSecret('pr', 32);
+  }
+
+  /** Generate one `<prefix>_ev_` email-verification token (store only
+   * its sha-256 — see {@link requestEmailVerification}). */
+  public generateEmailVerificationToken(): string {
+    return this._generateSecret('ev', 32);
   }
 
   /** Generate one `<prefix>_st_` opaque session token (stored by
@@ -1541,6 +1611,7 @@ export class Pact<B extends PermissionBits, M extends string>
           );
           break;
         case 'reset':
+        case 'verification':
           this.__validateTtlGroup(key, value as { ttl?: number });
           break;
         case 'oauth':
