@@ -36,6 +36,27 @@ jobs:
             exit 1
           fi
 
+  bundle:
+    name: Browser bundlability
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Check every export bundles for a browser
+        # Golden rule one: a package LOADS on all five targets unless it
+        # documents otherwise. Nothing enforced the browser half, and on
+        # 2026-09-22 fourteen of twenty barrels could not be bundled at
+        # all — every one aborting on the same specifier. Fails closed;
+        # genuine browser-less entrypoints are carved out by name in the
+        # script.
+        run: deno task check:bundle
+
   doc-links:
     name: Documentation links
     runs-on: ubuntu-latest
