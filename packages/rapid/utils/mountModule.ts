@@ -384,6 +384,7 @@ function registerDecoration<S extends RapidContextState>(
               ...(version !== undefined ? { version } : {}),
               openapi: openapiFor(fullPath),
               ...(decoration.apiOnly === true ? { apiOnly: true } : {}),
+              ...(decoration.uiOnly === true ? { uiOnly: true } : {}),
               // Raw forms pass through; Application.route normalizes and
               // fail-fast-validates them (RAPID_CONFIG on a wrong import).
               ...(decoration.template !== undefined

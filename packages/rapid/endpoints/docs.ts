@@ -304,6 +304,9 @@ export function docs<S extends RapidContextState = RapidContextState>(
   app.get(
     path,
     {
+      // UI infrastructure, like the runtime scripts: the reference must
+      // not list itself, and it is a page of the ui surface only.
+      uiOnly: true,
       template: {
         render,
         prefer: 'html',
@@ -339,10 +342,6 @@ export function docs<S extends RapidContextState = RapidContextState>(
       return { content: data as unknown as Record<string, unknown> };
     },
   );
-  // UI infrastructure, like the runtime scripts: the reference must not
-  // list itself, and the page has no api-surface existence anyway.
-  app.routes[app.routes.length - 1]!.uiOnly = true;
-
   const has = (p: string) => app.routes.some((r) => r.path === p);
   if (tryIt !== false && !has(TRYIT_PATH)) {
     app._scriptRoute(

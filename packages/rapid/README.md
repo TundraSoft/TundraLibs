@@ -508,8 +508,8 @@ to swaps — and `ui.history: true` the history module: opt-in push-state
 per interaction (`data-push` / `rapid.history.push()`), no DOM cache
 (back re-fetches), `document.title` synced from `rapid-title`.
 `server.api` (`hosts` / `prefix`) splits an **api surface** off the same
-routes — `api.example.com/users` or `/api/users` answer JSON only, pages
-are 404 there, `onlyApi()` / `onlyUi()` scope middleware per side;
+routes — `api.example.com/users` or `/api/users` answer JSON only (pages
+included; `uiOnly` routes are 404 there), `onlyApi()` / `onlyUi()` scope middleware per side;
 `ui.enabled: false` makes every request that surface. `htmlDocument()`, `withQuery()`, `when()` / `each()`
 (value-truthiness branches and lists with an empty state — `0 && …` would
 render the `0`), `ctx.isSwap`, typed view projections, and `testing`'s

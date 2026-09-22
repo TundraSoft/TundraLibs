@@ -232,11 +232,12 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /**
    * Which face of the app this request addresses — resolved by the
    * transport before routing from `server.api` (`hosts` / `prefix`) and
-   * `ui.enabled`. On `'api'` the representer is off and pages, static
-   * files and the UI runtime routes do not exist; on `'ui'` everything
-   * behaves as documented for the UI layer. Branch on it for dual
-   * routes (`ctx.surface === 'api' ? { status: 201, content } :
-   * { redirect: '/done' }`).
+   * `ui.enabled`. On `'api'` every templated route answers JSON (a reply
+   * `redirect` is dropped there) and static files, the UI runtime routes
+   * and `uiOnly` routes do not exist; on `'ui'` everything behaves as
+   * documented for the UI layer. Branch on it only where an UNTEMPLATED
+   * dual route must differ (`ctx.surface === 'api' ? { status: 201,
+   * content } : { redirect: '/done' }`).
    */
   public readonly surface: RapidContextSurface;
   /**

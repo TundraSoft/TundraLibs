@@ -28,6 +28,16 @@ export type RapidRouteOptions = {
    */
   apiOnly?: boolean;
   /**
+   * Serve this route on the `ui` surface ONLY — absent from the `api`
+   * surface's route table (a 404 there, byte-identical to a missing
+   * URL). The api surface otherwise serves every templated route as
+   * JSON, pages included; mark the ones whose content is not an API
+   * contract (a sign-in form, a settings page). On a `ui.enabled: false`
+   * replica every request is the api surface, so the route is simply
+   * absent there. Excludes `apiOnly` (`RAPID_CONFIG`).
+   */
+  uiOnly?: boolean;
+  /**
    * HTML template for this route — a bare `RapidTemplate` or the object
    * form with `layout`/`title`/`prefer` (see {@link RapidRouteTemplate}).
    * HTTP routes only (this options object never reaches `socket()`/

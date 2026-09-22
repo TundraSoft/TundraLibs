@@ -7,11 +7,12 @@ mechanism for server-rendered pages with fragment swaps.
 
 ## The decision table — deterministic; `Accept` never picks a route's representation
 
-| Request                                        | Representation                     |
-| ---------------------------------------------- | ---------------------------------- |
-| `rapid-swap` header present (our runtime)      | HTML **fragment** — always         |
-| absent, resolved `prefer` = `'json'` (default) | **JSON**, the reply goes out as-is |
-| absent, resolved `prefer` = `'html'`           | HTML **page** (layout ▸ core)      |
+| Request                                        | Representation                        |
+| ---------------------------------------------- | ------------------------------------- |
+| on the `api` surface (`server.api`)            | **JSON** — always; `redirect` dropped |
+| `rapid-swap` header present (our runtime)      | HTML **fragment** — always            |
+| absent, resolved `prefer` = `'json'` (default) | **JSON**, the reply goes out as-is    |
+| absent, resolved `prefer` = `'html'`           | HTML **page** (layout ▸ core)         |
 
 `prefer` resolves route → `ui.prefer` → `'json'`. A fragment and a
 page are both `text/html`, so `Accept` could never tell them apart; ignoring
@@ -197,17 +198,17 @@ and `api.example.com/v1/users` both reach the route registered as
 `/users` (the prefix comes off first, then a path-mode version). What
 differs:
 
-| On the `api` surface                                        | On the `ui` surface |
-| ----------------------------------------------------------- | ------------------- |
-| templated `prefer: 'json'` route → JSON, swap ignored       | as documented above |
-| page route (`prefer: 'html'`) → **404**, as if unregistered | page / fragment     |
-| errors → the JSON envelope; no `Vary: rapid-swap`           | error pages         |
-| `server.static`, `/__rapid/*` → 404                         | served              |
-| non-templated routes                                        | identical           |
+| On the `api` surface                                         | On the `ui` surface |
+| ------------------------------------------------------------ | ------------------- |
+| any templated route → JSON, swap ignored, `redirect` dropped | as documented above |
+| `uiOnly` route → **404**, as if unregistered                 | page / fragment     |
+| errors → the JSON envelope; no `Vary: rapid-swap`            | error pages         |
+| `server.static`, `/__rapid/*`, the `docs()` page → 404       | served              |
+| non-templated routes (a `redirect` stays a real 3xx)         | identical           |
 
-A page 404 is a true no-match: its route middleware never runs and, with
-`server.methodNotAllowed`, it is absent from `Allow` — so an API client
-(or a spoofed `Host`) learns nothing about pages. Hostnames compare
+A `uiOnly` 404 is a true no-match: its route middleware never runs and,
+with `server.methodNotAllowed`, it is absent from `Allow` — so an API
+client (or a spoofed `Host`) learns nothing about it. Hostnames compare
 case-insensitively (punycode, trailing dot and port ignored) against the
 URL's host; behind a proxy that rewrites it, set
 `server.api.trustForwardedHost: true` (with `server.trustProxy`) to read
@@ -218,10 +219,14 @@ one the client can send.
 On the context: `ctx.surface` (`'ui' | 'api'`), `ctx.basePath` (`'/api'`
 when the prefix was stripped, else `''`), `ctx.path` (the routed path —
 compare against this, never `new URL(ctx.url).pathname`), and
-`ctx.href(path)`. Rapid never rewrites redirects or links: a handler's
-`redirect: '/posts'` reaches the `/posts` page from either surface.
-Keep an API client on its prefix explicitly — `ctx.redirect(ctx.href('/posts'))`
-— or branch: a dual POST is
+`ctx.href(path)`. Rapid never rewrites redirects or links. On a
+TEMPLATED route the representer owns `redirect`: a real 3xx on a ui
+navigation, the redirect header on a swap, and dropped on the api surface,
+where the reply is its `content` — so one sign-in route returns
+`{ content: session, redirect: next }` and serves the no-JS form, the swap
+runtime and the API client alike. An UNTEMPLATED route's `redirect` stays
+a real 3xx on either surface (a URL shortener's hop); keep an API client on
+its prefix explicitly — `ctx.redirect(ctx.href('/posts'))` — or branch:
 `ctx.surface === 'api' ? { status: 201, content } : { redirect: '/posts' }`.
 Scheme-relative targets (`//host`, `/\host`) are refused at assignment
 (open redirect); cross-origin on purpose is a full URL.
@@ -236,7 +241,11 @@ to the API declares it: `app.get('/users', { apiOnly: true }, …)` or
 `@GET('/users', { apiOnly: true })`. It is then absent from the ui surface
 (a 404 there, indistinguishable from a missing URL), which is what closes
 the un-prefixed path. `apiOnly` needs an api surface configured; on an app
-with none it is a `RAPID_CONFIG` error at registration.
+with none it is a `RAPID_CONFIG` error at registration. The mirror is
+`uiOnly`: the api surface otherwise serves every templated route as JSON,
+pages included, so a page whose content is not an API contract (a sign-in
+form) declares `{ uiOnly: true }` and is a 404 there. The two exclude each
+other.
 Both RUN on sockets and jobs (no surface — fail-closed, unlike
 `onlyHTTP`). Do **not** scope `csrf()` or `session()` to `ui` on a
 shared host (`prefix` mode) unless nothing on the api surface
@@ -245,9 +254,10 @@ cookie-authenticated POST at `/api/…` is a cross-site hole. A pure
 token API (`Authorization` only) may scope them; a browser SPA that logs
 in through `/api` keeps `csrf()` unscoped and echoes the token.
 
-`ui.enabled: false` is the blunt form: every request is `api`. Sockets
-and jobs have no surface; `/ws` upgrades under the prefix too. OpenAPI
-omits pages when an api surface exists (they are not reachable there).
+`ui.enabled: false` is the blunt form: every request is `api` — the same
+app code serves JSON only, and its `uiOnly` routes simply do not exist.
+Sockets and jobs have no surface; `/ws` upgrades under the prefix too.
+OpenAPI documents a page as `application/json` when an api surface exists.
 In tests, `client(app).get('/users', { host: 'api.rapid.test' })`
 addresses a host.
 
@@ -730,7 +740,9 @@ secrets (they land in the address bar and browser history).
   it the POST is a plain navigation, so return `redirect` on success (the
   navigation path keeps the real 302 — PRG) and the error-state union page
   on failure, values re-filled from the returned data. No framework knob —
-  the D3/D8 rules compose into it.
+  the D3/D8 rules compose into it. The same route is an API endpoint on the
+  api surface: put the result in `content` and the redirect is dropped
+  there, no branch in the handler.
 - **Strict CSP (nonces)** — the projection carries per-request data, so a
   style/script nonce is just a view field (note the built-in
   `DefaultErrorPage` styles itself with inline `style=` attributes, which a
@@ -881,7 +893,8 @@ final HTML. Slow DATA is a different problem, answered by lazy regions
 ## OpenAPI
 
 A templated route's `200` lists both `application/json` and `text/html`;
-a page (`prefer: 'html'`) lists `text/html` only. The reference page the
+a page (`prefer: 'html'`) lists `text/html` only — `application/json` on an
+app with an api surface, where that is what it serves. The reference page the
 `docs()` endpoint mounts is itself a page of the app — rendered inside your
 core/layout — see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
 

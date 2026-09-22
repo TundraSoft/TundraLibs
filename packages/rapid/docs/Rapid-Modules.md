@@ -66,14 +66,14 @@ other's classes, and a second `import()` of the same file is a cache hit.
 
 ### Decorators
 
-| Decorator                                        | Records                                                                                                                                                                        |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `paging`, `apiOnly`, `template`, `layout`, `middleware`. |
-| `@SOCKET(command, { bind?, middleware? })`       | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                                             |
-| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.                                  |
-| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.                              |
-| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                                               |
-| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                                      |
+| Decorator                                        | Records                                                                                                                                                                                  |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `paging`, `apiOnly`, `uiOnly`, `template`, `layout`, `middleware`. |
+| `@SOCKET(command, { bind?, middleware? })`       | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                                                       |
+| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.                                            |
+| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.                                        |
+| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                                                         |
+| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                                                |
 
 Decorators stack: one method may be `@GET` and `@JOB` at once. Ordering of
 rapid decorators relative to third-party wrapping decorators does not

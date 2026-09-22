@@ -54,8 +54,8 @@ Every handler is a plain `RapidHTTPHandler`, so the path, the method and any
 route middleware are yours. Two consequences worth knowing:
 
 - **Surfaces.** On an app with an api surface (`server.api`), the JSON
-  handlers exist on both surfaces like any API route; the `docs()` page is a
-  page, so it exists on the ui surface only. Prefix the probe paths the way
+  handlers exist on both surfaces like any API route; the `docs()` page is
+  UI infrastructure (`uiOnly`), so it exists on the ui surface only. Prefix the probe paths the way
   your platform expects — nothing is reserved.
 - **Versioning.** A versioned app resolves these routes like any other
   (exact → default → unversioned). Mount them unversioned unless you want

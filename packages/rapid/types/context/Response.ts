@@ -81,7 +81,11 @@ export type RapidContextResponse = {
    * `301 Moved Permanently` when `permanent`. Sets `location` and takes
    * precedence over `status` (the body is sent empty). HTTP-ONLY: SILENTLY
    * IGNORED on JOB/SOCKET — it never becomes a 3xx there (which those
-   * transports reject), so a shared method may return one harmlessly.
+   * transports reject), so a shared method may return one harmlessly. On
+   * a TEMPLATED route the representer owns it: a real 3xx on a ui
+   * navigation, the redirect header on a swap, and DROPPED on the api
+   * surface, where the reply is its `content` — one sign-in route serves
+   * the no-JS form, the swap and the API client.
    */
   redirect?: string | { url: string; permanent?: boolean };
 };

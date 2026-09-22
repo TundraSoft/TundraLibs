@@ -78,8 +78,8 @@ export function assembleOpenApi<S extends RapidContextState>(
     uiPrefer: app.uiPrefer,
     // Document the names this app actually sends, not the defaults.
     pagingHeaders: app.option('server')?.paging ?? {},
-    // Pages are not reachable where an api surface exists.
-    omitPages: app.apiSurface !== undefined || !app.uiEnabled,
+    // Where an api surface exists a page is served as JSON there.
+    apiSurface: app.apiSurface !== undefined || !app.uiEnabled,
     ...(options.servers !== undefined ? { servers: options.servers } : {}),
     ...(options.securitySchemes !== undefined
       ? { securitySchemes: options.securitySchemes }

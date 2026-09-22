@@ -537,15 +537,12 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       serverOptions.versioning!,
     );
     const match = this.__router.find(method, pathname, version);
-    // On the api surface a PAGE (a `prefer: 'html'` template) or a UI
-    // runtime route is not a match at all — cleared BEFORE the chain is
-    // chosen, so its route middleware never runs (no 401 revealing a
-    // 404) and the 404 is byte-identical to a missing URL.
-    // Each surface hides what the other owns: pages and UI runtime routes
-    // from the api surface, api-only routes from the ui surface — so an
-    // onlyApi()-scoped middleware cannot be bypassed via the un-prefixed
-    // URL. Cleared BEFORE the chain is chosen, so no route middleware runs
-    // and the 404 is byte-identical to a missing URL.
+    // Each surface hides what the other owns: UI infrastructure and
+    // `uiOnly` routes from the api surface, `apiOnly` routes from the ui
+    // surface — so an onlyApi()-scoped middleware cannot be bypassed via
+    // the un-prefixed URL. Cleared BEFORE the chain is chosen, so no route
+    // middleware runs (no 401 revealing a 404) and the 404 is
+    // byte-identical to a missing URL.
     const entry = match !== undefined &&
         (surface === 'ui'
           ? !this.__hiddenOnUi(match.middlewares[0]!)
@@ -599,10 +596,9 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       // A `null` return means "no body" (→ 204) on templated routes
       // too — only a real reply is represented.
       const commit = (): void => {
-        // The api surface short-circuits representation entirely —
-        // templated routes serve their content as JSON.
-        ctx.response = returned !== null && entry?.template !== undefined &&
-            surface === 'ui'
+        // A templated route is represented on EITHER surface — the api
+        // surface's row of the decision table is JSON, always.
+        ctx.response = returned !== null && entry?.template !== undefined
           ? represent(returned, entry.template, ctx)
           : returned;
       };
@@ -771,21 +767,18 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     );
   }
 
-  /**
-   * Whether a route is absent from the api surface's table: a UI runtime
-   * route, or a page — a templated route whose resolved `prefer`
-   * (route → app, the configured value even on a `ui.enabled: false`
-   * replica) is `'html'`.
-   */
-  /** The mirror of {@link __hiddenOnApi}: api-only routes do not exist on the ui surface. */
+  /** Api-only routes do not exist on the ui surface. */
   private __hiddenOnUi(entry: RapidRouteEntry<S>): boolean {
     return entry.apiOnly === true;
   }
 
+  /**
+   * The mirror: UI infrastructure (the runtime scripts, the docs page)
+   * and `uiOnly` routes do not exist on the api surface. A PAGE is not
+   * hidden — the api surface serves it as JSON (see `represent`).
+   */
   private __hiddenOnApi(entry: RapidRouteEntry<S>): boolean {
-    return entry.uiOnly === true ||
-      (entry.template !== undefined &&
-        (entry.template.prefer ?? this._app.uiPrefer) === 'html');
+    return entry.uiOnly === true;
   }
 
   private __finalize(
