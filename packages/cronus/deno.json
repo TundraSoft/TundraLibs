@@ -5,6 +5,8 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
+    "./Cronus": "./Cronus.ts",
+    "./schedule": "./schedule.ts",
     "./errors": "./errors/mod.ts",
     "./types": "./types/mod.ts"
   },
