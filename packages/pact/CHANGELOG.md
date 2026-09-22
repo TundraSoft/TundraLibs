@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.9.1...pact-v0.10.0) (2026-09-22)
+
+
+### Features
+
+* **pact:** purpose-tagged action tokens and email verification ([#701](https://github.com/TundraSoft/TundraLibs/issues/701)) ([956f1ef](https://github.com/TundraSoft/TundraLibs/commit/956f1ef9304732eb0dfd46ae558f6e35c7a140f2))
+
 ## [0.9.1](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.9.0...pact-v0.9.1) (2026-09-18)
 
 

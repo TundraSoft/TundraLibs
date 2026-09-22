@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.7.1...rapid-v0.8.0) (2026-09-22)
+
+
+### Features
+
+* **rapid:** the api surface is JSON always, and uiOnly becomes a route option ([#702](https://github.com/TundraSoft/TundraLibs/issues/702)) ([501b04a](https://github.com/TundraSoft/TundraLibs/commit/501b04a5f16d03b552632de32442df4c93b73ab7))
+
 ## [0.7.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.7.0...rapid-v0.7.1) (2026-09-20)
 
 
