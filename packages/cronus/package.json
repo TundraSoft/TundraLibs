@@ -1,8 +1,8 @@
 {
   "name": "@tundralibs/cronus",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "type": "module",
-  "description": "Cross-runtime minute-resolution cron scheduler \u2014 tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.",
+  "description": "Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.",
   "keywords": [
     "typescript",
     "deno",
@@ -19,8 +19,6 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
-    "./Cronus": "./Cronus.ts",
-    "./schedule": "./schedule.ts",
     "./errors": "./errors/mod.ts",
     "./types": "./types/mod.ts"
   },
