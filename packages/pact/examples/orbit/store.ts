@@ -118,7 +118,7 @@ export const hooks: PactHooks = {
 
 // ── app-side writes pact deliberately does not own ──────────────────
 
-/** Email-verification stand-in: flip a PENDING user to ACTIVE. */
+/** The write a verified email unlocks: flip a PENDING user to ACTIVE. */
 export function activateUser(userId: string): boolean {
   const row = users.get(userId);
   if (row === undefined) return false;

@@ -54,4 +54,10 @@ export type PactOptions = {
    * @default { ttl: 15 }
    */
   reset?: { ttl?: number };
+  /**
+   * Email-verification behavior; `ttl` is the verification-token
+   * validity window in minutes.
+   * @default { ttl: 1440 }
+   */
+  verification?: { ttl?: number };
 };

@@ -24,12 +24,13 @@ The app listens on `http://localhost:8734`.
 ## Walk through it
 
 ```bash
-# Register (PENDING) and activate:
+# Register (PENDING; the demo returns the verification token it would
+# email) and activate by verifying the email:
 curl -s -X POST localhost:8734/register \
   -H 'content-type: application/json' \
   -d '{"email":"ada@example.dev","password":"correct-horse-9"}'
 curl -s -X POST localhost:8734/activate \
-  -H 'content-type: application/json' -d '{"userId":"<id>"}'
+  -H 'content-type: application/json' -d '{"token":"<token>"}'
 
 # Login → access + refresh tokens (JWT strategy):
 curl -s -X POST localhost:8734/login \

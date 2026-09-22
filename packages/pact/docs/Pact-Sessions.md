@@ -111,8 +111,9 @@ rotation fields — see [Storage](Pact-Storage.md).
 | `session.refresh.ttl`   | `10080`  | Minutes the refresh family lives (7 days)         |
 | `session.refresh.grace` | `30`     | Seconds a previous-generation refresh re-issues   |
 | `reset.ttl`             | `15`     | Minutes a password-reset token stays valid        |
+| `verification.ttl`      | `1440`   | Minutes an email-verification token stays valid   |
 
-The `session` and `reset` option groups replace wholesale: passing
+The `session`, `reset` and `verification` option groups replace wholesale: passing
 `session: { strategy: 'JWT', secret }` resets the other session fields to
 their defaults rather than merging with an earlier value.
 
