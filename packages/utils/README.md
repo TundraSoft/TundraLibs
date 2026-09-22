@@ -39,11 +39,13 @@ the barrel never throws there. Two exceptions need a real OS to mean
 anything: `getFreePort()` binds a real socket to probe availability,
 and `Config`/`loadConfig()` reads real files from disk — neither
 concept exists in a Worker or a browser, so don't reach for them
-there. Prefer the narrow subpath imports (`@tundralibs/utils/BaseError`,
-`@tundralibs/utils/Singleton`, …) over the barrel when bundle size for
-an edge target matters — the barrel pulls in every module's inert
-`node:*` builtin references even when unused (harmless, since they
-resolve through a guarded lookup that never throws, but still bytes).
+there. **Every module has its own subpath** — `@tundralibs/utils/syslog`,
+`@tundralibs/utils/envArgs`, `@tundralibs/utils/BaseError`, one per file —
+so the barrel is a convenience, never the only way in. Prefer a subpath
+when bundle size matters: the barrel is one module graph, so importing it
+for a single symbol pulls the whole package in. Measured with
+`deno info`, `@tundralibs/utils/syslog` is a 2-module graph where the
+barrel is 158.
 
 ## Installation
 

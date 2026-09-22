@@ -504,7 +504,12 @@ async function _loadCloudflareSockets(
   operation: string,
 ): Promise<CloudflareSocketsModule> {
   try {
-    return await import('cloudflare:sockets' as string);
+    // Built at runtime, never a literal: a bundler resolves a literal
+    // specifier eagerly and aborts on `cloudflare:sockets` for every
+    // other target, which made 14 of the workspace's barrels unbundlable
+    // for the browser. workerd still resolves it at runtime.
+    const specifier = ['cloudflare', 'sockets'].join(':');
+    return await import(specifier) as CloudflareSocketsModule;
   } catch (err) {
     throw new UnsupportedRuntimeError(
       operation,
