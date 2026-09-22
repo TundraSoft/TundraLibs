@@ -172,78 +172,84 @@ migrations via `oql`'s builder. Ships a small Deno/Bun/Node CLI.
 
 Not new packages — monorepo-wide hardening passes that touch existing packages.
 
-### Browser-bundlability — one line in `compat` _(do this first)_
+### Browser-bundlability — **shipped** 2026-09-22
 
-**14 of the 20 package barrels cannot be bundled for the browser today**, and
-every one fails at the same site: the `cloudflare:sockets` dynamic import in
-`compat/net.ts`. The `as string` cast there hides the specifier from
-TypeScript's module resolution but **not** from the bundler, which tries to
-resolve it and aborts. Measured 2026-09-22 with `deno bundle --platform
-browser <pkg>/mod.ts`:
+Kept here as the record of what the gate now protects, and removed from the
+pending list.
 
-| Bundles today (6)                          | Fails (14)                                                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| ambient, doctor, drivers, id, oql, restler | cacher, compat, cronus, crypt, guardian, metro-man, norm, pact, radrouter, rapid, rpc, slogger, tracer, utils |
+**14 of the 20 package barrels could not be bundled for a browser**, every one
+aborting on the same site: the `cloudflare:sockets` dynamic import in
+`compat/net.ts`, whose `as string` cast hid the specifier from TypeScript's
+module resolution but not from a bundler. The casualties included `guardian`,
+`crypt`, `radrouter` and `metro-man` — packages with no business touching a
+socket, which is what a missing gate looks like rather than fourteen design
+problems.
 
-Subpaths split the same way: `rapid/ui` and `rapid/types` bundle, while
-`rapid`'s `mod`, `endpoints`, `middlewares`, `decorators` and `testing` do not.
+Fixed in **compat 2.7.4** by building the specifier at runtime, so a bundler
+has nothing to resolve while workerd still resolves it at load. All barrels
+bundle now, and `deno task check:bundle` gates every published export of every
+package, failing closed, with five carve-outs named and reasoned
+(`drivers/engines`, `drivers/sqlite`, `norm/engines/sqlite`, `norm/cli`,
+`rapid/cli` — native bindings and filesystem CLIs). It runs in PR checks.
 
-The failing list includes packages with no business touching a socket —
-`guardian` (validation), `crypt` (WebCrypto), `radrouter` (routing),
-`metro-man` (metrics) — which is the tell that this is one plumbing defect,
-not fourteen design problems.
+**The lesson worth keeping:** `check:edge-safety` existed the whole time but is
+scoped to `packages/drivers` alone, so it protected one package while the other
+nineteen regressed unnoticed. A gate that covers one package is a gate that
+tells you nothing about the others.
 
-**Verified fix:** make the specifier non-literal so the bundler cannot resolve
-it statically (`['cloudflare', 'sockets'].join(':')`). Tested 2026-09-22: all
-**20** barrels then bundle, `deno check` on the compat barrel is clean, and
-`compat/net.test.ts` passes (64 steps). One package, one line, **non-breaking**
-— no consumer changes, nothing relocated.
+### Barrel-pull hygiene — narrow the imports _(in progress, non-breaking)_
 
-- **Composes:** compat
+Everything bundles now; what remains is **size**. A barrel is one module graph,
+so importing it for a single symbol pulls the whole package — and because
+packages import each other's barrels, the cost compounds.
+
+Measured with `deno info`:
+
+| Import                        | Modules in graph |
+| ----------------------------- | ---------------- |
+| `@tundralibs/utils`           | 158              |
+| `@tundralibs/utils/syslog`    | 2                |
+| `cronus/schedule.ts` (before) | 172              |
+| `cronus/schedule.ts` (after)  | 100              |
+
+**This does NOT need a breaking change.** The approach is additive: give every
+module a subpath, then narrow each package's own imports onto them. The barrels
+keep every export they have.
+
+Shipped so far: **utils 1.4.0** exports every module under its own name in both
+manifests (the three most-imported symbols in this workspace —
+`SyslogSeverities`, `envArgs`, `loadConfig` — previously had no subpath at all,
+so the README's long-standing "prefer subpaths" advice could not be followed).
+**cronus 1.1.0** adds `./schedule` and `./Cronus`.
+
+**The lesson from cronus:** adding the subpath changed nothing on its own
+(172 → 172 modules). It only paid off once cronus's _own_ `errors/Base.ts`
+stopped importing the utils barrel (→ 100). A subpath is worthless if the
+package behind it still drags the barrel.
+
+Still to do, each its own PR, none breaking:
+
+- **~109 bare-barrel imports across 16 packages** still to narrow — the biggest
+  holders are slogger (32 files), drivers (26), then rapid, oql and norm (9
+  each). `rapid` additionally still imports `parseSchedule` from the cronus
+  barrel; it can move to `cronus/schedule` now that 1.1.0 is out.
+- **compat's barrel** re-exports `net` / `udp` / `webserver` / `websocket`. Its
+  subpaths already exist, so this is consumer-side narrowing, not relocation.
+- **`BaseError` pulls 71 modules of `@std/path`**, via `compat/file`, because it
+  reads source files to build rich stack traces. Every error class in the suite
+  pays that. Worth a decision: keep it, make the source-reading lazy, or move it
+  behind a flag. Not a barrel problem — a design one.
+
+**The precedent is `norm`**, which already splits `./core` + `./engines/<dialect>`
+and documents it in its own barrel header. Its `.` barrel stays deliberately
+unbundlable-by-design because it registers every dialect; the escape hatch is
+the point, not barrel purity.
+
+- **Composes:** every package (+ compat, utils, cronus as the providers)
 - **New-pkg prereq:** none
-- **Notes / open questions:** The one thing to confirm before shipping is the
-  **workerd** direction: with the specifier computed, a bundler targeting
-  workerd can no longer see the dependency statically, so `cloudflare:sockets`
-  must still resolve at **runtime** there (it does under `nodejs_compat`, but
-  prove it on a real deploy, not by reasoning). Also note the existing
-  `check:edge-safety` import-smoke check is scoped to **drivers only**
-  (`deno task --cwd packages/drivers check:edge-safety`, run in CI), which is
-  exactly why this regressed everywhere else unnoticed — **extend it
-  repo-wide** in the same PR so the fix stays fixed.
-
-### Barrel-pull hygiene — subpath relocation _(the breaking half)_
-
-What is left **after** the bundlability fix above, and genuinely breaking:
-a consumer importing a barrel for one _pure_ symbol still drags the whole
-runtime-only stack into its static import graph. Bundlable, but fat — and the
-reason a pure package's graph reaches `compat/net` at all.
-
-- **compat** barrel re-exports `net` / `udp` / `webserver` / `websocket`
-  (→ `node:net`/`node:tls`/`node:dgram`/`node:http`/`node:https`).
-- **utils** barrel re-exports `getFreePort` (→ `compat/net`), `envArgs`,
-  `isInSubnet` / `isPublicIP` / `isSubnet`. This is the specific hop that puts
-  `compat/net` in the graph of every package importing `@tundralibs/utils`
-  for `BaseError` or `Options` — rapid alone does so from nine modules.
-- **cronus** exports only `.` / `./errors` / `./types` — no `./schedule`. So
-  `rapid`'s `Application.ts` and `decorators/job.ts`, which import
-  `parseSchedule` for decoration-time validation, statically pull the whole
-  `Cronus` scheduler and its timers. Called out during the rapid audit
-  (2026-09-20) and deferred then as "a cronus PR"; this is that PR.
-
-**The shipped precedent is `norm`.** It already splits `./core` +
-`./engines/<dialect>` and documents the pattern in its own barrel header, so
-an edge consumer takes `@tundralibs/norm/core` plus one engine. Its `.` barrel
-stays deliberately unbundlable-by-design (it registers every dialect) — the
-escape hatch is the point, not barrel purity. Relocating compat's and utils'
-net symbols onto subpaths is the same move.
-
-- **Composes:** compat, utils, cronus (+ every consumer)
-- **New-pkg prereq:** none
-- **Notes / open questions:** **Breaking** (consumers of relocated symbols
-  switch to subpaths), so a deliberate coordinated pass, not incremental —
-  and worth far less urgency now that bundlability is severable from it. Do it
-  **after** the one-line fix, never as a prerequisite for it. Drivers was
-  already made edge-clean this way, surgically, and is the worked example.
+- **Notes / open questions:** Only a _later, optional_ major would slim the
+  barrels themselves. Nothing here requires it, and the measured win comes from
+  narrowing consumers, not from removing exports.
 
 ---
 
