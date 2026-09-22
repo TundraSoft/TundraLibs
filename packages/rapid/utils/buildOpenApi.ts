@@ -247,7 +247,7 @@ export function buildOpenApi(
     securitySchemes?: OpenApiSecuritySchemes;
     /**
      * The app-wide `ui.prefer` — decides which templated routes are
-     * PAGES (`text/html` only, never JSON). @default 'json'
+     * PAGES (`text/html` only — unless `apiSurface`). @default 'json'
      */
     uiPrefer?: 'json' | 'html';
     /**
@@ -260,10 +260,11 @@ export function buildOpenApi(
       totalHeader?: string;
     };
     /**
-     * Leave pages out of the document — the app has an api surface
-     * (`server.api` / `ui.enabled: false`) on which they do not exist.
+     * The app has an api surface (`server.api` / `ui.enabled: false`),
+     * where a page is served as JSON — so a page documents
+     * `application/json` in place of `text/html`.
      */
-    omitPages?: boolean;
+    apiSurface?: boolean;
   } = {},
 ): Record<string, unknown> {
   const paths: Record<string, Record<string, unknown>> = {};
@@ -275,11 +276,11 @@ export function buildOpenApi(
   let secured = false;
 
   for (const route of routes) {
-    // UI infrastructure (the client runtime scripts) is not API.
+    // UI infrastructure (the runtime scripts, the docs page) and
+    // `uiOnly` routes are not API.
     if (route.uiOnly === true) continue;
     const page = route.template !== undefined &&
       (route.template.prefer ?? options.uiPrefer ?? 'json') === 'html';
-    if (page && options.omitPages === true) continue;
     if (route.version !== undefined) versions.add(route.version);
     if (
       options.version !== undefined && route.version !== undefined &&
@@ -424,15 +425,17 @@ export function buildOpenApi(
             : {}),
           // An API-first templated route serves BOTH representations —
           // JSON by default, a fragment on a swap; a PAGE (`prefer:
-          // 'html'`) is a page or a fragment, never JSON (see ./ui).
-          content: page
+          // 'html'`) is a page or a fragment on the ui surface and JSON
+          // on the api surface (see ./ui).
+          content: route.template === undefined ||
+              (page && options.apiSurface === true)
+            ? { 'application/json': { schema: responseSchema } }
+            : page
             ? { 'text/html': { schema: { type: 'string' } } }
-            : route.template !== undefined
-            ? {
+            : {
               'application/json': { schema: responseSchema },
               'text/html': { schema: { type: 'string' } },
-            }
-            : { 'application/json': { schema: responseSchema } },
+            },
         },
         '400': errorResponse('Bad request'),
         '401': errorResponse('Unauthenticated'),

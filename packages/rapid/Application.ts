@@ -959,7 +959,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       hasOptions && Object.keys(opts).length > 0 &&
       opts.version === undefined && opts.openapi === undefined &&
       opts.template === undefined && opts.layout === undefined &&
-      opts.apiOnly === undefined
+      opts.apiOnly === undefined && opts.uiOnly === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -974,6 +974,15 @@ export class Application<S extends RapidContextState = RapidContextState>
       throw new RapidError('RAPID_CONFIG', {
         message:
           "route option 'apiOnly' needs an api surface — configure server.api (hosts or prefix), or drop the option",
+        details: { method, path },
+      });
+    }
+    // No ui-surface precondition for `uiOnly` (unlike `apiOnly`): a
+    // `ui.enabled: false` replica runs the SAME app code, and its pages
+    // must register and simply not exist, not fail the boot.
+    if (opts.uiOnly === true && opts.apiOnly === true) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: "route options 'apiOnly' and 'uiOnly' exclude each other",
         details: { method, path },
       });
     }
@@ -1006,6 +1015,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
       ...(template !== undefined ? { template } : {}),
       ...(opts.apiOnly === true ? { apiOnly: true } : {}),
+      ...(opts.uiOnly === true ? { uiOnly: true } : {}),
     });
     return this;
   }
@@ -1561,7 +1571,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     load: () => Promise<readonly [source: string, etag: string]>,
   ): void {
     let script: Promise<readonly [string, string]> | undefined;
-    this.get(path, async (ctx) => {
+    this.get(path, { uiOnly: true }, async (ctx) => {
       const [source, etag] = await (script ??= load());
       const inm = ctx.headers.get('if-none-match');
       const matches = inm !== null && ifNoneMatch(inm, etag);
@@ -1579,14 +1589,13 @@ export class Application<S extends RapidContextState = RapidContextState>
         },
       };
     });
-    this.__routes[this.__routes.length - 1]!.uiOnly = true;
   }
 
   /**
    * Whether this app ever emits HTML — `false` only when the UI was
    * configured with `enabled: false`, which makes EVERY request the
-   * `'api'` surface: templated `prefer: 'json'` routes serve JSON, page
-   * routes (`prefer: 'html'`) and the UI runtime routes are 404, static
+   * `'api'` surface: every templated route serves JSON whatever its
+   * `prefer`, the UI runtime routes and `uiOnly` routes are 404, static
    * files are not served. Distinct from "UI never configured": route-
    * level templates work without any app-level UI configuration.
    */

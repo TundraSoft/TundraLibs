@@ -452,14 +452,14 @@ describe('rapid.ui.tiers', () => {
     await app.stop();
   });
 
-  it('ui.enabled false: every request is the api surface — pages 404, API-first routes serve JSON, no runtime route', async () => {
+  it('ui.enabled false: every request is the api surface — pages and API-first routes serve JSON, no runtime route', async () => {
     const app = await Application.initialize({
       name: 'tiers-disabled',
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
       ui: { enabled: false, prefer: 'html', core: Core, layout: PageShape },
     });
-    // Resolves to a page through the APP-level prefer — still hidden.
+    // Resolves to a page through the APP-level prefer — JSON here.
     app.get(
       '/p',
       { template: UserList },
@@ -471,9 +471,9 @@ describe('rapid.ui.tiers', () => {
       () => ({ content: { items: ['b'] } }),
     );
     const page = await app.fetch(new Request('http://app/p'));
-    asserts.assertEquals(page.status, 404);
+    asserts.assertEquals(page.status, 200);
     asserts.assertEquals(page.headers.get('content-type'), 'application/json');
-    await page.body?.cancel();
+    asserts.assertEquals(await page.json(), { items: ['a'] });
     const json = await app.fetch(new Request('http://app/api-first'));
     asserts.assertEquals(json.headers.get('content-type'), 'application/json');
     asserts.assertEquals(json.headers.get('vary'), null);

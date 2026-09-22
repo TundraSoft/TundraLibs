@@ -63,6 +63,8 @@ export type RapidDecoration =
     paging?: boolean;
     /** Serve on the `api` surface only (see `RapidRouteOptions.apiOnly`). */
     apiOnly?: boolean;
+    /** Serve on the `ui` surface only (see `RapidRouteOptions.uiOnly`). */
+    uiOnly?: boolean;
     /** Raw `template` route option — normalized + validated at mount. */
     template?: RapidTemplate<unknown> | RapidRouteTemplate;
     /** Raw `layout` route option (the object form's `layout` wins). */

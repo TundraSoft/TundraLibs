@@ -1,10 +1,11 @@
 /**
  * @fileoverview The representer — the innermost-onion step that turns a
  * templated route's data reply into HTML when the request asks for it.
- * Two deterministic signals decide (never `Accept`): the `rapid-swap`
- * request header (our client runtime) → the FRAGMENT, always; otherwise
- * the route's `prefer` → JSON unchanged (default) or the layout-wrapped
- * page. (One deliberate exception: `representError` consults `Accept`
+ * Three deterministic signals decide (never `Accept`): the `api`
+ * surface → JSON, always; otherwise the `rapid-swap` request header
+ * (our client runtime) → the FRAGMENT, always; otherwise the route's
+ * `prefer` → JSON unchanged (default) or the layout-wrapped page. (One
+ * deliberate exception: `representError` consults `Accept`
  * for UNMATCHED requests when `errorTemplates` are configured — see
  * its doc.) Runs before every middleware's post-`next()` view, so
  * `etag`/`compress`/loggers see the final HTML, not the data object.
@@ -249,7 +250,9 @@ function callChecked<T>(fn: () => T, what: string): T {
  * headers — `status`/`cookies`/`redirect` pass through untouched. Adds
  * the swap header (and every `swapUnless` name) to `Vary` on every
  * templated response so an intermediary cache never serves a fragment
- * to a navigation (or vice versa).
+ * to a navigation (or vice versa). On the `api` surface none of that
+ * happens: the reply is JSON with no swap Vary, and a reply `redirect`
+ * — a page-flow directive — is dropped in favour of the content.
  *
  * @throws {RapidError} RAPID_RESPONSE_INVALID when an HTML
  *   representation is asked of a stream/`Uint8Array` content — a
@@ -260,6 +263,31 @@ export function represent<S extends RapidContextState>(
   template: RapidRouteTemplate,
   ctx: HTTPContext<S>,
 ): RapidContextResponse {
+  // THE FIRST ROW: the api surface is JSON, always — no page, no
+  // fragment, no swap Vary. A reply `redirect` (PRG on a no-JS form, a
+  // swap's redirect header) means nothing to an API client: the content
+  // is the body and the directive goes, taking a 3xx `status` with it
+  // (`ctx.redirect()` embeds 302 + `location`). An UNTEMPLATED route has
+  // no page flow, so its redirect stays a real 3xx on either surface.
+  if (ctx.surface === 'api') {
+    ctx.meter?.representation('json');
+    if (returned.redirect === undefined) return returned;
+    const { redirect: _redirect, status, ...rest } = returned;
+    const headers = new Headers(
+      rest.headers instanceof Headers
+        ? rest.headers
+        : (rest.headers as Record<string, string> | undefined),
+    );
+    headers.delete('location');
+    return {
+      ...rest,
+      status: status !== undefined && (status < 300 || status >= 400)
+        ? status
+        : 200,
+      headers,
+    };
+  }
+
   const appUi = uiOf(ctx);
   let vary = stampVary(ctx, appUi, returned);
 

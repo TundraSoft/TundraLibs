@@ -119,6 +119,13 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    */
   apiOnly?: boolean;
   /**
+   * Serve this route on the `ui` surface ONLY — absent from the `api`
+   * surface, which otherwise serves every templated route as JSON. The
+   * mirror of `apiOnly`; the two exclude each other. See
+   * `RapidRouteOptions.uiOnly`.
+   */
+  uiOnly?: boolean;
+  /**
    * HTML template for this route (see `@tundralibs/rapid/ui`): a bare
    * `RapidTemplate` or the `{ render, layout?, title?, meta?, prefer? }`
    * object form — `title` reaches both wrapper tiers (and swap replies
@@ -241,6 +248,7 @@ function route<This, A extends readonly unknown[]>(
       ...(options.response !== undefined ? { response: options.response } : {}),
       ...(options.paging !== undefined ? { paging: options.paging } : {}),
       ...(options.apiOnly !== undefined ? { apiOnly: options.apiOnly } : {}),
+      ...(options.uiOnly !== undefined ? { uiOnly: options.uiOnly } : {}),
       ...(options.template !== undefined ? { template: options.template } : {}),
       ...(options.layout !== undefined ? { layout: options.layout } : {}),
       ...(options.middleware !== undefined

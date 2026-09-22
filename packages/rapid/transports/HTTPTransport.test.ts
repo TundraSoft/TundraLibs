@@ -279,17 +279,50 @@ describe('rapid.http.surface', () => {
     await trusted.stop();
   });
 
-  it('the api surface: pages are a byte-identical 404, API-first templates are JSON with no Vary, swaps are ignored', async () => {
+  it('the api surface is JSON, always: a page serves its content as JSON with no Vary, swaps are ignored, a reply redirect is dropped', async () => {
     const app = await surfaceApp();
     threeRoutes(app);
-    const page = await envelope(
-      await app.fetch(new Request('http://example.test/api/page')),
-    );
-    const missing = await envelope(
-      await app.fetch(new Request('http://example.test/api/nope')),
-    );
-    asserts.assertEquals(page, missing);
-    asserts.assertEquals(page.status, 404);
+    // One sign-in route: the no-JS form's PRG redirect on the ui surface,
+    // the content for an API client — no 302 to follow, no `location`.
+    app.post('/login', { template: { render: List, prefer: 'html' } }, () => ({
+      content: { items: ['session'] },
+      redirect: '/console',
+    }));
+    app.post('/go', { template: List }, (ctx) => ctx.redirect('/console'));
+    app.post('/made', { template: List }, () => ({
+      status: 201,
+      content: { items: [] },
+      redirect: '/console',
+    }));
+    const page = await app.fetch(new Request('http://example.test/api/page'));
+    asserts.assertEquals(page.status, 200);
+    asserts.assertEquals(page.headers.get('content-type'), 'application/json');
+    asserts.assertEquals(page.headers.get('vary'), null);
+    asserts.assertEquals(await page.json(), { items: ['y'] });
+
+    const post = (path: string, headers?: Record<string, string>) =>
+      app.fetch(
+        new Request(`http://example.test${path}`, { method: 'POST', headers }),
+      );
+    const login = await post('/api/login');
+    asserts.assertEquals(login.status, 200);
+    asserts.assertEquals(login.headers.get('location'), null);
+    asserts.assertEquals(await login.json(), { items: ['session'] });
+    const go = await post('/api/go'); // ctx.redirect() embeds 302 + location
+    asserts.assertEquals(go.status, 200);
+    asserts.assertEquals(go.headers.get('location'), null);
+    await go.body?.cancel();
+    const made = await post('/api/made'); // a non-3xx status survives
+    asserts.assertEquals(made.status, 201);
+    await made.body?.cancel();
+    const uiLogin = await post('/login');
+    asserts.assertEquals(uiLogin.status, 302);
+    asserts.assertEquals(uiLogin.headers.get('location'), '/console');
+    await uiLogin.body?.cancel();
+    const swapLogin = await post('/login', { 'rapid-swap': '1' });
+    asserts.assertEquals(swapLogin.status, 200);
+    asserts.assertEquals(swapLogin.headers.get('rapid-redirect'), '/console');
+    await swapLogin.body?.cancel();
 
     const list = await app.fetch(
       new Request('http://example.test/api/list', {
@@ -313,12 +346,12 @@ describe('rapid.http.surface', () => {
     await app.stop();
   });
 
-  it('a hidden page is a TRUE no-match: its route middleware never runs and 405/OPTIONS do not list it', async () => {
+  it('a uiOnly route is a TRUE no-match on the api surface: its route middleware never runs and 405/OPTIONS do not list it', async () => {
     const app = await surfaceApp({ methodNotAllowed: true });
     const ran: string[] = [];
     app.get(
       '/page',
-      { template: { render: List, prefer: 'html' } },
+      { uiOnly: true, template: { render: List, prefer: 'html' } },
       async (ctx, next) => {
         ran.push(ctx.surface);
         await next();
@@ -537,9 +570,10 @@ describe('rapid.http.surface', () => {
     await app.stop();
   });
 
-  it('OpenAPI omits pages when an api surface exists, and lists a page as text/html only otherwise', async () => {
+  it('OpenAPI documents a page as application/json when an api surface exists, as text/html only otherwise, and never a uiOnly route', async () => {
     const withApi = await surfaceApp();
     threeRoutes(withApi);
+    withApi.get('/signin', { uiOnly: true }, () => ({ content: {} }));
     withApi.get('/openapi.json', openapi({ expose: 'ALL' }));
     const doc = await (await withApi.fetch(
       new Request('http://example.test/openapi.json'),
@@ -547,8 +581,13 @@ describe('rapid.http.surface', () => {
     asserts.assertEquals(Object.keys(doc.paths).sort(), [
       '/list',
       '/openapi.json',
+      '/page',
       '/users',
     ]);
+    asserts.assertEquals(
+      Object.keys(doc.paths['/page'].get.responses['200'].content),
+      ['application/json'],
+    );
     asserts.assertEquals(
       Object.keys(doc.paths['/list'].get.responses['200'].content),
       ['application/json', 'text/html'],
@@ -581,8 +620,8 @@ describe('rapid.http.surface', () => {
     const c = client(app);
     asserts.assertEquals((await c.get('/page')).status, 200);
     asserts.assertEquals(
-      (await c.get('/page', { host: 'api.example.test' })).status,
-      404,
+      (await c.get('/page', { host: 'api.example.test' })).body,
+      { items: ['y'] },
     );
     asserts.assertEquals(
       (await c.get('/users', { host: 'api.example.test' })).body,

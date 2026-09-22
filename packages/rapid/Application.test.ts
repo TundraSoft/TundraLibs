@@ -3823,6 +3823,41 @@ describe('rapid.Application — apiOnly routes (audit)', () => {
     await app.stop();
   });
 
+  it('a uiOnly route (plain or decorated) is served on the ui surface and is a 404 on the api surface; apiOnly + uiOnly is RAPID_CONFIG', async () => {
+    const app = await Application.initialize({
+      name: 'x-uionly',
+      server: { port: 0, api: { prefix: '/api' } },
+    });
+    app.get('/signin', { uiOnly: true }, () => ({ content: { form: true } }));
+    class Pages extends RapidModule {
+      readonly name = 'Pages';
+      readonly namespace = 'pages';
+      protected readonly events = {};
+      @GET('/settings', { uiOnly: true })
+      settings() {
+        return { content: { page: true } };
+      }
+    }
+    await app.modules({ modules: [{ Pages }] });
+    asserts.assertThrows(
+      () =>
+        app.get('/both', { apiOnly: true, uiOnly: true }, () => ({
+          content: {},
+        })),
+      RapidError,
+      'exclude each other',
+    );
+    for (const path of ['/signin', '/settings']) {
+      const ui = await app.fetch(new Request(`http://h${path}`));
+      asserts.assertEquals(ui.status, 200, path);
+      await ui.text();
+      const api = await app.fetch(new Request(`http://h/api${path}`));
+      asserts.assertEquals(api.status, 404, path);
+      await api.text();
+    }
+    await app.stop();
+  });
+
   it('apiOnly without an api surface is RAPID_CONFIG at registration — the route could never be reached', async () => {
     const app = await Application.initialize({
       name: 'x-apionly-none',

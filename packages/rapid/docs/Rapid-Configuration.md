@@ -142,8 +142,10 @@ they are served by the same `metrics()` endpoint.
 
 ### `server.api` — the api surface
 
-Requests that address the api surface get JSON only: pages, static files
-and the UI runtime scripts do not exist there (a byte-identical 404).
+Requests that address the api surface get JSON only: every templated route
+answers its content as JSON (a reply `redirect` is dropped); static files,
+the UI runtime scripts and `uiOnly` routes do not exist there (a
+byte-identical 404).
 
 | Key                  | Type              | Default | Validated                                                       | Read by                                                                           |
 | -------------------- | ----------------- | ------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------- |

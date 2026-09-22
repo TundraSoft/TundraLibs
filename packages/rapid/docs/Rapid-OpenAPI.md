@@ -110,10 +110,10 @@ Things the assembler decides for you:
   (the query is client-controlled).
 - **Pages.** A templated route with `prefer: 'html'` documents a `text/html`
   200; an API-first templated route documents both representations. On an app
-  with an api surface (`server.api`, or `ui.enabled: false`) pages are left out
-  — they do not exist on that surface.
-- **UI infrastructure** (the runtime scripts, the `docs()` page itself) is
-  never listed.
+  with an api surface (`server.api`, or `ui.enabled: false`) a page documents
+  `application/json` instead — that is what the api surface serves.
+- **UI infrastructure** (the runtime scripts, the `docs()` page itself) and
+  `uiOnly` routes are never listed.
 
 ## Security schemes
 
