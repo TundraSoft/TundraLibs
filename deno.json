@@ -27,6 +27,7 @@
     "workspace:remove": "deno run --allow-read --allow-write .github/scripts/workspace.ts remove",
     "workspace:sync": "deno run --allow-read --allow-write .github/scripts/workspace.ts sync",
     "workspace:sync:check": "deno run --allow-read .github/scripts/workspace.ts sync --check",
+    "check:bundle": "deno run --allow-read --allow-run --allow-env .github/scripts/check-bundle.ts",
     "docs:links": "deno run --allow-read --allow-env .github/scripts/doc-links.ts",
     "docs:links:fix": "deno run --allow-read --allow-env --allow-write .github/scripts/doc-links.ts --fix",
     "docs:wiki:check": "deno run --allow-read --allow-write --allow-env .github/scripts/wiki-sync.ts --out=/tmp/wiki-check"
