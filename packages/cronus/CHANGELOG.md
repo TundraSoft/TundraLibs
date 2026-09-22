@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.1.0...cronus-v1.1.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **cronus:** restore the schedule and Cronus subpath exports ([#709](https://github.com/TundraSoft/TundraLibs/issues/709)) ([11016a1](https://github.com/TundraSoft/TundraLibs/commit/11016a115cba0b8c5ae54150d6f70a0fc2e1a6ea))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.6...cronus-v1.1.0) (2026-09-22)
 
 
