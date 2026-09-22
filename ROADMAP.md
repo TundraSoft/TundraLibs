@@ -7,7 +7,7 @@ passes that have since shipped are removed, not struck through: `rapid`
 (the HTTP keystone, formerly "rAPId/outpost"), `ambient`, `tracer`, and the two
 fold candidates that landed inside rapid — OpenAPI generation (`blueprint` →
 `openapi()`/`docs()`) and health probes (`vitals` → `health()`/`ready()`).
-Last pruned **2026-09-18**.
+Last pruned **2026-09-22**.
 
 **Every capability is listed as its own standalone package.** Where the review
 discussion flagged that a capability _could_ instead be a module, a middleware,
@@ -172,40 +172,78 @@ migrations via `oql`'s builder. Ships a small Deno/Bun/Node CLI.
 
 Not new packages — monorepo-wide hardening passes that touch existing packages.
 
-### Edge-safe barrel hygiene
+### Browser-bundlability — one line in `compat` _(do this first)_
 
-Make the `@tundralibs/compat` and `@tundralibs/utils` package **barrels**
-(`mod.ts`) net-free, so any consumer is edge/serverless-bundle-safe **by
-default**. Today both barrels statically re-export runtime-only helpers whose
-`node:*` imports (lazy, runtime-gated inside `compat/net.ts`, but still
-_statically reachable_) land in every consumer's import graph:
+**14 of the 20 package barrels cannot be bundled for the browser today**, and
+every one fails at the same site: the `cloudflare:sockets` dynamic import in
+`compat/net.ts`. The `as string` cast there hides the specifier from
+TypeScript's module resolution but **not** from the bundler, which tries to
+resolve it and aborts. Measured 2026-09-22 with `deno bundle --platform
+browser <pkg>/mod.ts`:
+
+| Bundles today (6)                          | Fails (14)                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| ambient, doctor, drivers, id, oql, restler | cacher, compat, cronus, crypt, guardian, metro-man, norm, pact, radrouter, rapid, rpc, slogger, tracer, utils |
+
+Subpaths split the same way: `rapid/ui` and `rapid/types` bundle, while
+`rapid`'s `mod`, `endpoints`, `middlewares`, `decorators` and `testing` do not.
+
+The failing list includes packages with no business touching a socket —
+`guardian` (validation), `crypt` (WebCrypto), `radrouter` (routing),
+`metro-man` (metrics) — which is the tell that this is one plumbing defect,
+not fourteen design problems.
+
+**Verified fix:** make the specifier non-literal so the bundler cannot resolve
+it statically (`['cloudflare', 'sockets'].join(':')`). Tested 2026-09-22: all
+**20** barrels then bundle, `deno check` on the compat barrel is clean, and
+`compat/net.test.ts` passes (64 steps). One package, one line, **non-breaking**
+— no consumer changes, nothing relocated.
+
+- **Composes:** compat
+- **New-pkg prereq:** none
+- **Notes / open questions:** The one thing to confirm before shipping is the
+  **workerd** direction: with the specifier computed, a bundler targeting
+  workerd can no longer see the dependency statically, so `cloudflare:sockets`
+  must still resolve at **runtime** there (it does under `nodejs_compat`, but
+  prove it on a real deploy, not by reasoning). Also note the existing
+  `check:edge-safety` import-smoke check is scoped to **drivers only**
+  (`deno task --cwd packages/drivers check:edge-safety`, run in CI), which is
+  exactly why this regressed everywhere else unnoticed — **extend it
+  repo-wide** in the same PR so the fix stays fixed.
+
+### Barrel-pull hygiene — subpath relocation _(the breaking half)_
+
+What is left **after** the bundlability fix above, and genuinely breaking:
+a consumer importing a barrel for one _pure_ symbol still drags the whole
+runtime-only stack into its static import graph. Bundlable, but fat — and the
+reason a pure package's graph reaches `compat/net` at all.
 
 - **compat** barrel re-exports `net` / `udp` / `webserver` / `websocket`
   (→ `node:net`/`node:tls`/`node:dgram`/`node:http`/`node:https`).
 - **utils** barrel re-exports `getFreePort` (→ `compat/net`), `envArgs`,
-  `isInSubnet` / `isPublicIP` / `isSubnet`.
+  `isInSubnet` / `isPublicIP` / `isSubnet`. This is the specific hop that puts
+  `compat/net` in the graph of every package importing `@tundralibs/utils`
+  for `BaseError` or `Options` — rapid alone does so from nine modules.
+- **cronus** exports only `.` / `./errors` / `./types` — no `./schedule`. So
+  `rapid`'s `Application.ts` and `decorators/job.ts`, which import
+  `parseSchedule` for decoration-time validation, statically pull the whole
+  `Cronus` scheduler and its timers. Called out during the rapid audit
+  (2026-09-20) and deferred then as "a cronus PR"; this is that PR.
 
-Any package that imports either barrel for a _pure_ symbol (e.g. `BaseError`,
-`Options`, `variableReplacer`, `StatusCode`) drags the whole socket stack into
-its static graph. The Neon HTTP driver was made edge-clean **surgically** —
-narrowing only its own spine's barrel imports (drivers error classes +
-`ConnectionEngine`/`SQLEngine` → `@tundralibs/utils/*` subpaths;
-`utils/BaseError` → `@tundralibs/compat/file`) — and pinned with an
-`check:edge-safety` import-smoke check. Doing it **everywhere** means relocating
-the net symbols **off the barrels onto subpaths** and repointing all consumers.
+**The shipped precedent is `norm`.** It already splits `./core` +
+`./engines/<dialect>` and documents the pattern in its own barrel header, so
+an edge consumer takes `@tundralibs/norm/core` plus one engine. Its `.` barrel
+stays deliberately unbundlable-by-design (it registers every dialect) — the
+escape hatch is the point, not barrel purity. Relocating compat's and utils'
+net symbols onto subpaths is the same move.
 
-- **Composes:** compat, utils (+ every consumer)
+- **Composes:** compat, utils, cronus (+ every consumer)
 - **New-pkg prereq:** none
-- **Notes / open questions:** This is a **breaking** change (consumers of the
-  relocated symbols must switch to subpaths), so it's a deliberate coordinated
-  pass, not incremental. Enforce with the import-smoke check across every
-  edge-targeted package (drivers edge engines, `restler`, `cacher` HTTP engines,
-  future `silo`/`relay`/`herald` HTTP engines). Pairs directly with the
-  edge/serverless driver push (Neon, Turso and D1 shipped)
-  — the barrels are the last thing between "edge-safe in practice" and
-  "edge-safe by construction, CI-enforced." Same barrel-pull anti-pattern also
-  bloats non-edge bundles (every `drivers` consumer pulls all engines) — see the
-  related `norm`/dialect-factory subpath item.
+- **Notes / open questions:** **Breaking** (consumers of relocated symbols
+  switch to subpaths), so a deliberate coordinated pass, not incremental —
+  and worth far less urgency now that bundlability is severable from it. Do it
+  **after** the one-line fix, never as a prerequisite for it. Drivers was
+  already made edge-clean this way, surgically, and is the worked example.
 
 ---
 
@@ -222,5 +260,12 @@ the net symbols **off the barrels onto subpaths** and repointing all consumers.
 | strata   | —              | overlaps norm Migrator                                    |
 | fuse     | —              | fold candidate → `governor`                               |
 
-_Generated from the adversarial-review new-package ideation. Proposals only —
-nothing listed here is built; shipped items are removed (see the top)._
+| Cross-cutting pass   | Size                                  | Breaking? |
+| -------------------- | ------------------------------------- | --------- |
+| Browser-bundlability | one line in `compat` + CI             | no        |
+| Barrel-pull hygiene  | compat, utils, cronus + all consumers | yes       |
+
+_Capabilities are proposals only — nothing under **Capabilities** is built, and
+shipped items are removed (see the top). **Cross-cutting engineering** is a
+different kind of entry: those describe measured defects in shipped code, with
+the measurement date and command recorded so the numbers can be re-run._
