@@ -3691,6 +3691,38 @@ describe('RESTler — streaming', () => {
     asserts.assertEquals(calls, 1);
   });
 
+  it('cancelling the returned stream cancels the UPSTREAM source', async () => {
+    // Pull-based on purpose. A fixture that enqueues everything and closes in
+    // `start` can be fully drained by the time it is cancelled, and
+    // `cancel()` on a drained stream resolves WITHOUT invoking the sink hook
+    // — so the propagation this asserts would pass whether or not it happened.
+    let cancelledWith: unknown = 'NOT CANCELLED';
+    let remaining = 3;
+    const source = new ReadableStream<Uint8Array>({
+      pull(ctrl) {
+        if (remaining-- <= 0) {
+          ctrl.close();
+          return;
+        }
+        ctrl.enqueue(new TextEncoder().encode('chunk'));
+      },
+      cancel(reason) {
+        cancelledWith = reason;
+      },
+    });
+    const c = client();
+    c.setFetch(() => Promise.resolve(new Response(source, { status: 200 })));
+    const res = await c.makeStreamRequest({ path: '/f', method: 'GET' });
+    const reader = res.body!.getReader();
+    await reader.read(); // one chunk taken, more still to come
+    await reader.cancel('caller gave up');
+    asserts.assertEquals(
+      cancelledWith,
+      'caller gave up',
+      'the caller abandoning the stream must release the transport, with the reason',
+    );
+  });
+
   it('an idle stall aborts the transfer without the total-duration cap killing a healthy one', async () => {
     const c = client();
     c.setFetch((_u, init) =>
