@@ -1086,6 +1086,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns The response, its `body` an unread stream.
    * @throws {@link RESTlerTimeoutError} On header timeout, or an idle stall
    *   mid-transfer (surfaced on the stream, not from this call).
+   * @throws {@link RESTlerRateLimitError} On a rate-limited response that
+   *   `maxRetryWait` cannot serve, as on {@link _makeRequest}.
    * @throws {@link RESTlerRequestError} On a transport failure.
    */
   protected _makeStreamRequest<H = ResponseBody>(
@@ -1128,19 +1130,33 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       timeTaken: 0,
     };
     const start = performance.now();
-    const controller = new AbortController();
-    // Bounds the wait for HEADERS only — disarmed the moment they arrive,
-    // whereupon the idle timer takes over for the transfer itself.
-    let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(
-      () =>
-        controller.abort(
-          new DOMException(
-            `Request exceeded its ${request.timeout}s timeout`,
-            'TimeoutError',
+    let controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Armed PER ATTEMPT, as on the buffered path. Bounds the wait for HEADERS
+    // only — disarmed the moment they arrive, whereupon the idle timer takes
+    // over for the transfer itself.
+    const attempt = async (): Promise<Response> => {
+      controller = new AbortController();
+      timer = setTimeout(
+        () =>
+          controller.abort(
+            new DOMException(
+              `Request exceeded its ${request.timeout}s timeout`,
+              'TimeoutError',
+            ),
           ),
-        ),
-      request.timeout * 1000,
-    );
+        request.timeout * 1000,
+      );
+      return await this._fetch(
+        request.url,
+        this.__buildInit(request, controller.signal),
+      );
+    };
+    const recordStatus = (r: Response): void => {
+      response.status = r.status;
+      response.statusText = STATUS_TEXT[r.status] ?? r.statusText ?? 'Unknown';
+      response.headers = Object.fromEntries(r.headers.entries());
+    };
     // The `call` event fires exactly once, whenever the exchange truly ends:
     // an early throw here, or the stream closing/erroring/being cancelled
     // long after this method returned.
@@ -1161,14 +1177,42 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     };
 
     try {
-      const resp = await this._fetch(
-        request.url,
-        this.__buildInit(request, controller.signal),
-      );
-      response.status = resp.status;
-      response.statusText = STATUS_TEXT[resp.status] ??
-        resp.statusText ?? 'Unknown';
-      response.headers = Object.fromEntries(resp.headers.entries());
+      let resp = await attempt();
+      recordStatus(resp);
+
+      // Rate-limit handling, identical to the buffered path's: decided on the
+      // raw status, before the failure body is read for `responseHandler`.
+      // `__retryDecision` refuses a `STREAM` request body, so only a streamed
+      // RESPONSE gains the retry — an upload cannot be replayed.
+      if (
+        response.status !== null &&
+        this._rateLimitStatus.includes(response.status as StatusCode)
+      ) {
+        const decision = this.__retryDecision(request, response.headers, false);
+        if (decision.action === 'THROW') throw decision.error;
+        if (decision.action === 'RETRY') {
+          await resp.body?.cancel().catch(() => {});
+          clearTimeout(timer);
+          timer = undefined;
+          this.__safeEmit(
+            'retry',
+            this.vendor,
+            this.__redactedRequest(request),
+            decision.waitSeconds,
+          );
+          await this._sleep(decision.waitSeconds * 1000);
+          resp = await attempt();
+          recordStatus(resp);
+          if (
+            response.status !== null &&
+            this._rateLimitStatus.includes(response.status as StatusCode)
+          ) {
+            // `retried` — always terminal, never a second wait.
+            const again = this.__retryDecision(request, response.headers, true);
+            if (again.action === 'THROW') throw again.error;
+          }
+        }
+      }
       response.timeTaken = performance.now() - start;
       this.__emitStatusEvents(request, response as RESTlerResponse);
 

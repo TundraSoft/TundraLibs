@@ -4031,3 +4031,160 @@ describe('RESTler — rate-limit retry', () => {
     );
   });
 });
+
+describe('RESTler — rate-limit retry on a streamed request', () => {
+  const client = (maxRetryWait?: number) =>
+    new TestRESTler({ baseURL: 'https://api.test', maxRetryWait });
+
+  it('waits the hinted time, retries once and streams the second body', async () => {
+    const c = client(60);
+    const signals: AbortSignal[] = [];
+    let i = 0;
+    c.setFetch((_u, init) => {
+      signals.push((init as RequestInit).signal!);
+      return Promise.resolve(
+        i++ === 0
+          ? limited({ 'retry-after': '1' })
+          : streamingResponse(['alpha', 'beta']),
+      );
+    });
+    const waits: number[] = [];
+    c.on('retry', (_v, _r, w) => waits.push(w));
+    const res = await c.makeStreamRequest({ path: '/f', method: 'GET' });
+    asserts.assertEquals(res.status, 200);
+    asserts.assertEquals(c.slept, [1000]);
+    asserts.assertEquals(waits, [1]);
+    asserts.assertEquals(await drain(res.body!), 'alphabeta');
+    asserts.assert(
+      signals[0] !== signals[1],
+      'the retry must get its own controller and header timeout',
+    );
+  });
+
+  it('the idle timeout guards the retried attempt', async () => {
+    const c = client(60);
+    let i = 0;
+    c.setFetch((_u, init) =>
+      Promise.resolve(
+        i++ === 0 ? limited({ 'retry-after': '1' }) : streamingResponse(
+          ['first'],
+          {},
+          true,
+          (init as RequestInit).signal ?? undefined,
+        ),
+      )
+    );
+    const res = await c.makeStreamRequest(
+      { path: '/f', method: 'GET' },
+      { idleTimeout: 1 },
+    );
+    const reader = res.body!.getReader();
+    await reader.read();
+    await asserts.assertRejects(() => reader.read(), RESTlerTimeoutError);
+  });
+
+  it('a retry that is rate-limited again is terminal, with retried set', async () => {
+    const c = client(60);
+    c.setFetch(
+      queue(limited({ 'retry-after': '1' }), limited({ 'retry-after': '1' })),
+    );
+    const err = await asserts.assertRejects(
+      () => c.makeStreamRequest({ path: '/f', method: 'GET' }),
+      RESTlerRateLimitError,
+    ) as RESTlerRateLimitError & {
+      context: { retryAfter?: number; retried: boolean };
+    };
+    asserts.assertEquals(err.context.retried, true);
+    asserts.assertEquals(err.context.retryAfter, 1);
+    asserts.assertEquals(c.slept, [1000]);
+  });
+
+  it('refuses a hint longer than maxRetryWait without waiting', async () => {
+    const c = client(5);
+    c.setFetch(queue(limited({ 'retry-after': '120' })));
+    const err = await asserts.assertRejects(
+      () => c.makeStreamRequest({ path: '/f', method: 'GET' }),
+      RESTlerRateLimitError,
+    ) as RESTlerRateLimitError & {
+      context: { retryAfter?: number; retried: boolean };
+    };
+    asserts.assertEquals(err.context.retried, false);
+    asserts.assertEquals(err.context.retryAfter, 120);
+    asserts.assertEquals(c.slept, []);
+  });
+
+  it('is OFF by default — the vendor hook still receives the 429', async () => {
+    const c = client();
+    c.setFetch(
+      queue(limited({ 'retry-after': '1' }), streamingResponse(['x'])),
+    );
+    const seen: (number | null)[] = [];
+    const err = await asserts.assertRejects(
+      () =>
+        c.makeStreamRequest({ path: '/f', method: 'GET' }, {
+          responseHandler: (r) => {
+            seen.push(r.status);
+          },
+        }),
+      RESTlerRequestError,
+    );
+    asserts.assertFalse(err instanceof RESTlerRateLimitError);
+    asserts.assertEquals(seen, [429]);
+    asserts.assertEquals(c.slept, []);
+  });
+
+  it('never retries a STREAM upload, which cannot be replayed', async () => {
+    const c = client(60);
+    let calls = 0;
+    const next = queue(
+      limited({ 'retry-after': '1' }),
+      streamingResponse(['x']),
+    );
+    c.setFetch(() => {
+      calls++;
+      return next();
+    });
+    const err = await asserts.assertRejects(
+      () =>
+        c.makeStreamRequest({
+          path: '/up',
+          method: 'PUT',
+          contentType: 'STREAM',
+          payload: new ReadableStream<Uint8Array>({
+            start(ctrl) {
+              ctrl.close();
+            },
+          }),
+        } as RESTlerEndpoint),
+      RESTlerRateLimitError,
+    ) as RESTlerRateLimitError & { context: { retried: boolean } };
+    asserts.assertEquals(err.context.retried, false);
+    asserts.assertEquals(calls, 1);
+    asserts.assertEquals(c.slept, []);
+  });
+
+  it('cancels the discarded attempt before sleeping', async () => {
+    const c = client(60);
+    let sleptWhenCancelled: number | undefined;
+    // Pull-based with no read-ahead, so an unread body's `cancel()` reaches
+    // this source. Finite, so a path that reads it instead still ends.
+    let sent = false;
+    const discarded = new Response(
+      new ReadableStream<Uint8Array>({
+        pull(ctrl) {
+          if (sent) return ctrl.close();
+          sent = true;
+          ctrl.enqueue(new TextEncoder().encode('slow down'));
+        },
+        cancel() {
+          sleptWhenCancelled = c.slept.length;
+        },
+      }, { highWaterMark: 0 }),
+      { status: 429, headers: { 'retry-after': '1' } },
+    );
+    c.setFetch(queue(discarded, streamingResponse(['ok'])));
+    const res = await c.makeStreamRequest({ path: '/f', method: 'GET' });
+    await drain(res.body!);
+    asserts.assertEquals(sleptWhenCancelled, 0, 'cancelled before the wait');
+  });
+});

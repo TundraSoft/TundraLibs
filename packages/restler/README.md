@@ -652,6 +652,10 @@ sees an attempt that is about to be retried.
 A `retry` event fires before the wait, so tracing and logs see the pause coming
 instead of inferring it from a latency spike.
 
+`_makeStreamRequest` retries the same way. The header timeout bounds each
+attempt, and `idleTimeout` covers only the body of the attempt that succeeds.
+A `STREAM` request body is still never retried.
+
 The `request` handed to `call` and `authFailure` — and the copy stored on a
 `RESTlerError`'s `context` (including one thrown by your own
 `_responseHandler`) — is credential-redacted before it reaches a listener or
