@@ -4166,16 +4166,20 @@ describe('RESTler — rate-limit retry on a streamed request', () => {
   it('cancels the discarded attempt before sleeping', async () => {
     const c = client(60);
     let sleptWhenCancelled: number | undefined;
-    // Pull-based and never drained, so `cancel()` reaches this source.
+    // Pull-based with no read-ahead, so an unread body's `cancel()` reaches
+    // this source. Finite, so a path that reads it instead still ends.
+    let sent = false;
     const discarded = new Response(
       new ReadableStream<Uint8Array>({
         pull(ctrl) {
+          if (sent) return ctrl.close();
+          sent = true;
           ctrl.enqueue(new TextEncoder().encode('slow down'));
         },
         cancel() {
           sleptWhenCancelled = c.slept.length;
         },
-      }),
+      }, { highWaterMark: 0 }),
       { status: 429, headers: { 'retry-after': '1' } },
     );
     c.setFetch(queue(discarded, streamingResponse(['ok'])));
