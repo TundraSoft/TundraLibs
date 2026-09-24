@@ -21,11 +21,13 @@ import type {
   RESTlerRequestOptions,
   RESTlerResponse,
   RESTlerResponseHandler,
+  RESTlerRetryHeader,
   RESTlerStreamOptions,
 } from './types/mod.ts';
 import {
   RESTlerConfigError,
   RESTlerError,
+  RESTlerRateLimitError,
   RESTlerRequestError,
   RESTlerResponseValidationError,
   RESTlerTimeoutError,
@@ -129,6 +131,28 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _rateLimitStatus: StatusCode[] = [
     429,
+  ];
+
+  /**
+   * Headers that tell a client when it may try again, each paired with the
+   * format its value is written in — consulted in order, first readable value
+   * wins.
+   *
+   * The pairing is load-bearing, not decoration. These headers do NOT share a
+   * format: `X-RateLimit-Reset` is an absolute epoch while
+   * `X-RateLimit-Reset-After` is a delta, and Discord sends both on the same
+   * response. Reading one as the other is not a rounding error — an epoch read
+   * as a delta waits decades.
+   *
+   * Override per vendor to add a private header or drop one this vendor
+   * misuses. `Retry-After` is `AUTO` because RFC 9110 genuinely allows either
+   * delta-seconds or an HTTP-date in that one header.
+   */
+  protected _retryHeaders: RESTlerRetryHeader[] = [
+    { name: 'retry-after', as: 'AUTO' },
+    { name: 'x-ratelimit-reset-after', as: 'DELTA_SECONDS' },
+    { name: 'ratelimit-reset', as: 'DELTA_SECONDS' },
+    { name: 'x-ratelimit-reset', as: 'EPOCH_SECONDS' },
   ];
 
   /**
@@ -891,26 +915,72 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     // The abort reason is a `TimeoutError` so the catch classifies it the same
     // way `AbortSignal.timeout` was classified. `DOMException` is available and
     // propagates its `name` verbatim through `fetch` on Deno, Bun, and Node.
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () =>
-        controller.abort(
-          new DOMException(
-            `Request exceeded its ${request.timeout}s timeout`,
-            'TimeoutError',
+    // Armed PER ATTEMPT: `timeout` bounds one attempt, and a retry gets its
+    // own full budget. The wait between attempts sits outside both, so a
+    // vendor asking for 25s cannot consume the 30s a request was allowed.
+    let controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = async (): Promise<Response> => {
+      controller = new AbortController();
+      timer = setTimeout(
+        () =>
+          controller.abort(
+            new DOMException(
+              `Request exceeded its ${request.timeout}s timeout`,
+              'TimeoutError',
+            ),
           ),
-        ),
-      request.timeout * 1000,
-    );
-    try {
-      const resp = await this._fetch(
+        request.timeout * 1000,
+      );
+      return await this._fetch(
         request.url,
         this.__buildInit(request, controller.signal),
       );
-      response.status = resp.status;
-      response.statusText = STATUS_TEXT[resp.status] ??
-        resp.statusText ?? 'Unknown';
-      response.headers = Object.fromEntries(resp.headers.entries());
+    };
+    const recordStatus = (r: Response): void => {
+      response.status = r.status;
+      response.statusText = STATUS_TEXT[r.status] ?? r.statusText ?? 'Unknown';
+      response.headers = Object.fromEntries(r.headers.entries());
+    };
+    try {
+      let resp = await attempt();
+      recordStatus(resp);
+
+      // Rate-limit handling, decided on the RAW status: before the body is
+      // read (no point buffering a document we are about to discard) and
+      // before `responseHandler`, so a vendor hook never sees an attempt that
+      // is about to be retried and turns it into a terminal error.
+      if (
+        response.status !== null &&
+        this._rateLimitStatus.includes(response.status as StatusCode)
+      ) {
+        const decision = this.__retryDecision(request, response.headers, false);
+        if (decision.action === 'THROW') throw decision.error;
+        if (decision.action === 'RETRY') {
+          // Release the discarded attempt before sleeping: its body would
+          // otherwise hold the connection open for the whole wait.
+          await resp.body?.cancel().catch(() => {});
+          clearTimeout(timer);
+          timer = undefined;
+          this.__safeEmit(
+            'retry',
+            this.vendor,
+            this.__redactedRequest(request),
+            decision.waitSeconds,
+          );
+          await this._sleep(decision.waitSeconds * 1000);
+          resp = await attempt();
+          recordStatus(resp);
+          if (
+            response.status !== null &&
+            this._rateLimitStatus.includes(response.status as StatusCode)
+          ) {
+            // `retried` — always terminal, never a second wait.
+            const again = this.__retryDecision(request, response.headers, true);
+            if (again.action === 'THROW') throw again.error;
+          }
+        }
+      }
       const responseType = endpoint.responseType;
       if (responseType === 'BLOB') {
         response.body = (await resp.blob()) as B;
@@ -1180,6 +1250,139 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       settle(wrapped);
       throw wrapped;
     }
+  }
+
+  /**
+   * Pause between retry attempts.
+   *
+   * A seam, like {@link _fetch}: a test overrides it to advance instantly
+   * instead of making the suite sleep for real, which is the difference
+   * between exercising the retry path and disabling it. Written around a
+   * resolvable timer rather than a bare `await` so a caller-supplied
+   * `AbortSignal`, should RESTler ever accept one, can cancel a wait in one
+   * place.
+   *
+   * @param ms - Milliseconds to wait.
+   */
+  protected _sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Read the vendor's retry hint out of the response headers, in SECONDS from
+   * now, walking {@link _retryHeaders} in order and taking the first value
+   * that parses.
+   *
+   * Absolute formats (`EPOCH_SECONDS`, `HTTP_DATE`) are differences against
+   * the local clock, so a skewed client can compute a negative wait — that
+   * clamps to `0` (retry at once) rather than going backwards. A value that
+   * does not parse is skipped, not guessed at: the next header gets its turn,
+   * and if none parses the caller learns there was no hint.
+   *
+   * @param headers - The response headers, lower-cased keys.
+   * @param now - Milliseconds since the epoch, injected so tests are stable.
+   * @returns Seconds to wait, or `undefined` when no header was readable.
+   */
+  protected _parseRetryAfter(
+    headers: Record<string, string> | undefined,
+    now: number = Date.now(),
+  ): number | undefined {
+    if (!headers) return undefined;
+    for (const { name, as } of this._retryHeaders) {
+      const raw = headers[name.toLowerCase()]?.trim();
+      if (raw === undefined || raw === '') continue;
+      const numeric = Number(raw);
+      const isNumeric = raw !== '' && !Number.isNaN(numeric) &&
+        Number.isFinite(numeric);
+      let seconds: number | undefined;
+      switch (as) {
+        case 'DELTA_SECONDS':
+          if (isNumeric) seconds = numeric;
+          break;
+        case 'EPOCH_SECONDS':
+          if (isNumeric) seconds = numeric - now / 1000;
+          break;
+        case 'HTTP_DATE': {
+          const at = Date.parse(raw);
+          if (!Number.isNaN(at)) seconds = (at - now) / 1000;
+          break;
+        }
+        case 'AUTO':
+          // RFC 9110 §10.2.3: delta-seconds OR an HTTP-date, in one header.
+          if (isNumeric) {
+            seconds = numeric;
+          } else {
+            const at = Date.parse(raw);
+            if (!Number.isNaN(at)) seconds = (at - now) / 1000;
+          }
+          break;
+      }
+      if (seconds === undefined) continue;
+      return seconds < 0 ? 0 : seconds;
+    }
+    return undefined;
+  }
+
+  /**
+   * Decide what to do about a rate-limited response.
+   *
+   * Returns a verdict rather than always throwing, because the three outcomes
+   * are genuinely different. `PASS` means the feature is switched off
+   * (`maxRetryWait` absent) and the response must flow on EXACTLY as it did
+   * before this feature existed — reaching the body read and the vendor
+   * `responseHandler`, which is where a 429 has always been dealt with. That
+   * is what keeps the default byte-identical for every existing caller.
+   *
+   * `THROW` is for a caller who DID opt in and hit a case that cannot be
+   * served: no readable hint and no configured fallback, a hint longer than
+   * they agreed to block for, a request body that cannot be replayed, or a
+   * retry already spent. Each carries the same metadata so the caller can tell
+   * which happened.
+   *
+   * @param request - The rate-limited request.
+   * @param headers - The response headers.
+   * @param retried - Whether the single retry has already been spent.
+   */
+  private __retryDecision(
+    request: RESTlerRequest,
+    headers: Record<string, string> | undefined,
+    retried: boolean,
+  ):
+    | { action: 'RETRY'; waitSeconds: number }
+    | { action: 'THROW'; error: RESTlerRateLimitError }
+    | { action: 'PASS' } {
+    const max = this._getOption('maxRetryWait');
+    // Off: not our business. The response continues down the path it always
+    // took, so enabling nothing changes nothing.
+    if (max === undefined) return { action: 'PASS' };
+
+    const hinted = this._parseRetryAfter(headers);
+    const stop = (): { action: 'THROW'; error: RESTlerRateLimitError } => ({
+      action: 'THROW',
+      error: new RESTlerRateLimitError({
+        vendor: this.vendor,
+        request: this.__redactedRequest(request),
+        ...(hinted !== undefined ? { retryAfter: hinted } : {}),
+        retried,
+      }),
+    });
+
+    // One retry, never a second.
+    if (retried) return stop();
+    // A streamed request body was consumed by the first attempt and cannot be
+    // replayed; retrying would send a truncated or empty body.
+    if (
+      (request as { contentType?: RESTlerContentType }).contentType === 'STREAM'
+    ) {
+      return stop();
+    }
+    const wait = hinted ?? this._getOption('defaultRetryWait');
+    // No readable hint and no configured fallback: never invent a delay.
+    if (wait === undefined) return stop();
+    // Longer than this caller agreed to block for — hand the decision back
+    // rather than impose the wait.
+    if (wait > max) return stop();
+    return { action: 'RETRY', waitSeconds: wait };
   }
 
   /**
@@ -1736,6 +1939,23 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         if (!this._validateTimeout(value)) {
           throw new RESTlerConfigError(
             `Timeout must be a number between 1 and ${MAX_TIMEOUT_VALUE}.`,
+            { vendor: this.vendor, key: key, value: value },
+          );
+        }
+        break;
+      case 'maxRetryWait':
+      case 'defaultRetryWait':
+        // Same shape as `timeout`, and capped by the same ceiling: a wait
+        // longer than the longest a request may take is not a wait, it is a
+        // hang. `0` is legal and means "never wait", which is how a caller
+        // disables the retry without removing the option.
+        if (
+          value !== undefined &&
+          (typeof value !== 'number' || !Number.isFinite(value) ||
+            value < 0 || value > MAX_TIMEOUT_VALUE)
+        ) {
+          throw new RESTlerConfigError(
+            `${key} must be a number between 0 and ${MAX_TIMEOUT_VALUE} seconds.`,
             { vendor: this.vendor, key: key, value: value },
           );
         }

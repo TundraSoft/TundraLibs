@@ -20,6 +20,10 @@ export type { RESTlerMethodPayload } from './RESTlerMethodPayload.ts';
 export type { RESTlerOptions } from './RESTlerOptions.ts';
 export type { RESTlerRequest } from './RESTlerRequest.ts';
 export type { RESTlerRequestOptions } from './RESTlerRequestOptions.ts';
+export type {
+  RESTlerRetryHeader,
+  RESTlerRetryHeaderFormat,
+} from './RESTlerRetryHeader.ts';
 export type { RESTlerStreamOptions } from './RESTlerStreamOptions.ts';
 export type { ResponseBody } from './ResponseBody.ts';
 export type { RESTlerResponse } from './RESTlerResponse.ts';

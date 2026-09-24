@@ -30,6 +30,8 @@ export type {
   RESTlerResponse,
   RESTlerResponseHandler,
   RESTlerResponseSchema,
+  RESTlerRetryHeader,
+  RESTlerRetryHeaderFormat,
   RESTlerStreamOptions,
   Witness,
   WitnessInfo,
