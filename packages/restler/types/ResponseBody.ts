@@ -13,4 +13,5 @@ export type ResponseBody =
   | string // Text or unparsable content
   | Blob // Binary body read via `responseType: 'BLOB'`
   | ArrayBuffer // Binary body read via `responseType: 'ARRAY_BUFFER'`
+  | ReadableStream<Uint8Array> // Unread body handed back by `_makeStreamRequest`
   | undefined; // No content

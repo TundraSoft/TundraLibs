@@ -21,6 +21,7 @@ import type {
   RESTlerRequestOptions,
   RESTlerResponse,
   RESTlerResponseHandler,
+  RESTlerStreamOptions,
 } from './types/mod.ts';
 import {
   RESTlerConfigError,
@@ -902,22 +903,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       request.timeout * 1000,
     );
     try {
-      const headers: Record<string, string> = { ...request.headers };
-      const body = this._buildBody(request, headers);
-      // compat's `fetch` resolves TLS and Unix-socket transport
-      // internally — we just hand it the options.
-      const init: RequestInit & { unix?: string; tls?: TLSOptions } = {
-        method: request.method,
-        headers,
-        signal: controller.signal,
-      };
-      if (body !== undefined) init.body = body;
-      const socketPath = this._getOption('socketPath');
-      if (socketPath) init.unix = socketPath;
-      const tls = this._getOption('tls');
-      if (tls) init.tls = tls;
-
-      const resp = await this._fetch(request.url, init);
+      const resp = await this._fetch(
+        request.url,
+        this.__buildInit(request, controller.signal),
+      );
       response.status = resp.status;
       response.statusText = STATUS_TEXT[resp.status] ??
         resp.statusText ?? 'Unknown';
@@ -936,37 +925,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       }
       response.timeTaken = performance.now() - start;
 
-      // Check for authentication failure
-      if (response.status && this._authStatus.includes(response.status)) {
-        this.__safeEmit(
-          'authFailure',
-          this.vendor,
-          this.__redactedRequest(request),
-          this.__redactedResponse(response as RESTlerResponse),
-        );
-      }
-
-      // Check for rate limiting
-      if (response.status && this._rateLimitStatus.includes(response.status)) {
-        // Extract rate limit information from headers
-        const limit = this._extractHeaderNumber(
-          response.headers,
-          'x-ratelimit-limit',
-          'ratelimit-limit',
-        );
-        const remaining = this._extractHeaderNumber(
-          response.headers,
-          'x-ratelimit-remaining',
-          'ratelimit-remaining',
-        );
-        const reset = this._extractHeaderNumber(
-          response.headers,
-          'x-ratelimit-reset',
-          'ratelimit-reset',
-        );
-
-        this.__safeEmit('rateLimit', this.vendor, limit, reset, remaining);
-      }
+      this.__emitStatusEvents(request, response as RESTlerResponse);
 
       // Vendor response hook — runs on every response (any status, empty
       // body included) so it can translate vendor conventions: throw to
@@ -1002,47 +961,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       return response;
     } catch (error) {
       response.timeTaken = performance.now() - start;
-      if (error instanceof Error) {
-        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-          response.error = new RESTlerTimeoutError(
-            {
-              vendor: this.vendor,
-              request: this.__redactedRequest(request),
-            },
-          );
-        } else if (error instanceof RESTlerError) {
-          // A vendor `_responseHandler` surfaces its `RESTlerError` subclass
-          // unwrapped, but its `context.request` (built from the raw
-          // `response.url`) must be redacted first — this error is re-thrown to
-          // the caller and handed to the `call` event. Any transport URL the
-          // handler preserved in the error's `cause` chain is scrubbed too.
-          if (error.cause instanceof Error) {
-            this.__redactedCause(error.cause, request.url);
-          }
-          response.error = this.__redactedError(error);
-        } else {
-          response.error = new RESTlerRequestError(
-            'Unknown error processing the request',
-            {
-              vendor: this.vendor,
-              request: this.__redactedRequest(request),
-            },
-            // `fetch`'s transport error embeds the full (credential-bearing)
-            // request URL in its message/stack and nested `cause` on some
-            // runtimes; scrub it out of the whole chain before preserving it
-            // as this error's `cause` (see `__redactedCause`).
-            this.__redactedCause(error, request.url),
-          );
-        }
-      } else {
-        response.error = new RESTlerRequestError(
-          'Unknown error processing the request',
-          {
-            vendor: this.vendor,
-            request: this.__redactedRequest(request),
-          },
-        );
-      }
+      response.error = this.__toResponseError(error, request);
       throw response.error;
     } finally {
       // Released here, not when `fetch` resolves: `fetch` settles as soon as
@@ -1058,6 +977,341 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         response.error,
       );
     }
+  }
+
+  /**
+   * Make a request whose RESPONSE BODY is handed back unread, as a
+   * `ReadableStream<Uint8Array>`.
+   *
+   * The sibling of {@link _makeRequest}, not a mode of it. Both share one
+   * pipeline — endpoint resolution, auth, the header provider, the witnessed
+   * span, the `authFailure`/`rateLimit` events and error classification are
+   * the same code. Three things differ, and each is why this is a separate
+   * method rather than a flag:
+   *
+   * 1. **The body is never buffered or parsed.** `responseSchema` therefore
+   *    cannot exist here (validating a stream consumes it), which is enforced
+   *    by {@link RESTlerStreamOptions} not having the option rather than by a
+   *    doc note. `responseHandler` runs only on a failure status.
+   * 2. **The timeout is an IDLE timeout.** The vendor-wide `timeout` caps a
+   *    request's total duration at 120s, which would kill any sizeable
+   *    transfer. Here it bounds the wait for response HEADERS only; once they
+   *    arrive, `idleTimeout` takes over and resets on every chunk. A slow but
+   *    healthy download runs as long as it needs; a stalled one still dies.
+   * 3. **The `call` event fires when the STREAM settles**, not when this
+   *    method returns — which is the moment the transfer actually finished,
+   *    failed, or was cancelled. `timeTaken` on the returned response measures
+   *    time-to-headers; the event's copy measures the whole transfer.
+   *
+   * The caller OWNS the returned stream and must consume or `cancel()` it;
+   * until then the connection stays open and the idle timer stays armed.
+   *
+   * A streamed REQUEST body is separate and needs no special method: give the
+   * endpoint `contentType: 'STREAM'` with a `ReadableStream` payload, on this
+   * method or on `_makeRequest`.
+   *
+   * @typeParam H - What a failure-path `responseHandler` receives.
+   * @param endpoint - The endpoint to call.
+   * @param options - Stream-specific options.
+   * @returns The response, its `body` an unread stream.
+   * @throws {@link RESTlerTimeoutError} On header timeout, or an idle stall
+   *   mid-transfer (surfaced on the stream, not from this call).
+   * @throws {@link RESTlerRequestError} On a transport failure.
+   */
+  protected _makeStreamRequest<H = ResponseBody>(
+    endpoint: RESTlerEndpoint,
+    options: RESTlerStreamOptions<H> = {},
+  ): Promise<RESTlerResponse<ReadableStream<Uint8Array>>> {
+    const witness = this._getOption('witness');
+    if (witness === undefined) {
+      return this.__streamRequest<H>(endpoint, options);
+    }
+    return witness(
+      {
+        name: `restler.${this.vendor} ${endpoint.method}`,
+        attributes: {
+          'restler.vendor': this.vendor,
+          'http.request.method': endpoint.method,
+          'url.path': endpoint.path,
+        },
+      },
+      () => this.__streamRequest<H>(endpoint, options),
+    );
+  }
+
+  /** The streamed pipeline {@link _makeStreamRequest} runs (witnessed or not). */
+  private async __streamRequest<H = ResponseBody>(
+    endpoint: RESTlerEndpoint,
+    options: RESTlerStreamOptions<H> = {},
+  ): Promise<RESTlerResponse<ReadableStream<Uint8Array>>> {
+    const handler = options.responseHandler ??
+      (this._responseHandler as RESTlerResponseHandler<H> | undefined);
+    const isError = options.errorStatus ??
+      ((status: number) => status < 200 || status > 299);
+    const request = await this._processEndpoint(endpoint, {
+      skipAuth: options.skipAuth,
+    });
+    const response: RESTlerResponse<ReadableStream<Uint8Array>> = {
+      url: request.url,
+      status: null,
+      statusText: null,
+      timeTaken: 0,
+    };
+    const start = performance.now();
+    const controller = new AbortController();
+    // Bounds the wait for HEADERS only — disarmed the moment they arrive,
+    // whereupon the idle timer takes over for the transfer itself.
+    let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(
+      () =>
+        controller.abort(
+          new DOMException(
+            `Request exceeded its ${request.timeout}s timeout`,
+            'TimeoutError',
+          ),
+        ),
+      request.timeout * 1000,
+    );
+    // The `call` event fires exactly once, whenever the exchange truly ends:
+    // an early throw here, or the stream closing/erroring/being cancelled
+    // long after this method returned.
+    let settled = false;
+    const settle = (error?: RESTlerError) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      response.timeTaken = performance.now() - start;
+      if (error) response.error = error;
+      this.__safeEmit(
+        'call',
+        this.vendor,
+        this.__redactedRequest(request),
+        this.__redactedResponse(response as RESTlerResponse),
+        response.error,
+      );
+    };
+
+    try {
+      const resp = await this._fetch(
+        request.url,
+        this.__buildInit(request, controller.signal),
+      );
+      response.status = resp.status;
+      response.statusText = STATUS_TEXT[resp.status] ??
+        resp.statusText ?? 'Unknown';
+      response.headers = Object.fromEntries(resp.headers.entries());
+      response.timeTaken = performance.now() - start;
+      this.__emitStatusEvents(request, response as RESTlerResponse);
+
+      // A failure body is a small error document, not the payload the caller
+      // asked to stream: read it so the vendor hook can translate it, exactly
+      // as the buffered path would.
+      if (isError(resp.status)) {
+        const text = await resp.text();
+        const errorResponse = {
+          ...response,
+          body: this._parseResponseBody(
+            text,
+            resp.headers.get('content-type')?.toLowerCase(),
+          ),
+        } as unknown as RESTlerResponse<unknown>;
+        if (handler) await handler(errorResponse as RESTlerResponse<H>);
+        // No hook, or a hook that returned instead of throwing: the status is
+        // still a failure, and there is no stream to hand back.
+        throw new RESTlerRequestError(
+          `Request failed with status ${resp.status}`,
+          { vendor: this.vendor, request: this.__redactedRequest(request) },
+        );
+      }
+
+      // 204/205, or a HEAD: no body to stream. An empty stream keeps the
+      // caller's code shape uniform.
+      if (resp.body === null) {
+        response.body = new ReadableStream<Uint8Array>({
+          start: (ctrl) => ctrl.close(),
+        });
+        settle();
+        return response;
+      }
+
+      // Headers are in: swap the total-duration bound for the idle one.
+      clearTimeout(timer);
+      timer = undefined;
+      const idleMs = (options.idleTimeout ?? 60) * 1000;
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(
+          () =>
+            controller.abort(
+              new DOMException(
+                `Stream stalled for ${options.idleTimeout ?? 60}s`,
+                'TimeoutError',
+              ),
+            ),
+          idleMs,
+        );
+      };
+      const reader = resp.body.getReader();
+      response.body = new ReadableStream<Uint8Array>({
+        start: () => arm(),
+        pull: async (ctrl) => {
+          try {
+            const { done, value } = await reader.read();
+            if (done) {
+              settle();
+              ctrl.close();
+              return;
+            }
+            arm(); // progress: the stall clock restarts
+            ctrl.enqueue(value);
+          } catch (error) {
+            const wrapped = this.__toResponseError(error, request);
+            settle(wrapped);
+            ctrl.error(wrapped);
+          }
+        },
+        cancel: (reason) => {
+          settle();
+          return reader.cancel(reason);
+        },
+      });
+      return response;
+    } catch (error) {
+      const wrapped = this.__toResponseError(error, request);
+      settle(wrapped);
+      throw wrapped;
+    }
+  }
+
+  /**
+   * Build the `fetch` init for one processed request — shared by the
+   * buffered ({@link _makeRequest}) and streamed ({@link _makeStreamRequest})
+   * paths so auth headers, the Unix-socket transport and TLS options cannot
+   * drift between them.
+   *
+   * Sets `duplex: 'half'` when, and only when, the body is a stream: Node
+   * REJECTS a `ReadableStream` body without it (`RequestInit: duplex option is
+   * required when sending a body`), while Deno, Bun and workerd accept the
+   * body either way. Scoping it to stream bodies keeps every existing request
+   * byte-identical on the wire.
+   *
+   * @param request - The processed request.
+   * @param signal - Abort signal for the request's timeout.
+   */
+  private __buildInit(
+    request: RESTlerRequest,
+    signal: AbortSignal,
+  ): RequestInit & { unix?: string; tls?: TLSOptions; duplex?: 'half' } {
+    const headers: Record<string, string> = { ...request.headers };
+    const body = this._buildBody(request, headers);
+    // compat's `fetch` resolves TLS and Unix-socket transport
+    // internally — we just hand it the options.
+    const init: RequestInit & {
+      unix?: string;
+      tls?: TLSOptions;
+      duplex?: 'half';
+    } = {
+      method: request.method,
+      headers,
+      signal,
+    };
+    if (body !== undefined) init.body = body;
+    if (body instanceof ReadableStream) init.duplex = 'half';
+    const socketPath = this._getOption('socketPath');
+    if (socketPath) init.unix = socketPath;
+    const tls = this._getOption('tls');
+    if (tls) init.tls = tls;
+    return init;
+  }
+
+  /**
+   * Emit the `authFailure` and `rateLimit` events a response's status earns.
+   * Shared by both request paths — a streamed request is as rate-limited as a
+   * buffered one, and neither event reads the body.
+   *
+   * @param request - The processed request (redacted before it is emitted).
+   * @param response - The response so far (status and headers populated).
+   */
+  private __emitStatusEvents(
+    request: RESTlerRequest,
+    response: RESTlerResponse,
+  ): void {
+    // Check for authentication failure
+    if (response.status && this._authStatus.includes(response.status)) {
+      this.__safeEmit(
+        'authFailure',
+        this.vendor,
+        this.__redactedRequest(request),
+        this.__redactedResponse(response),
+      );
+    }
+
+    // Check for rate limiting
+    if (response.status && this._rateLimitStatus.includes(response.status)) {
+      // Extract rate limit information from headers
+      const limit = this._extractHeaderNumber(
+        response.headers,
+        'x-ratelimit-limit',
+        'ratelimit-limit',
+      );
+      const remaining = this._extractHeaderNumber(
+        response.headers,
+        'x-ratelimit-remaining',
+        'ratelimit-remaining',
+      );
+      const reset = this._extractHeaderNumber(
+        response.headers,
+        'x-ratelimit-reset',
+        'ratelimit-reset',
+      );
+
+      this.__safeEmit('rateLimit', this.vendor, limit, reset, remaining);
+    }
+  }
+
+  /**
+   * Map a thrown value onto the `RESTlerError` this vendor surfaces, with
+   * every credential-bearing URL scrubbed. Extracted from the buffered path's
+   * catch so the streamed path classifies failures identically.
+   *
+   * @param error - The thrown value.
+   * @param request - The processed request (raw; redacted here).
+   */
+  private __toResponseError(
+    error: unknown,
+    request: RESTlerRequest,
+  ): RESTlerError {
+    if (error instanceof Error) {
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        return new RESTlerTimeoutError({
+          vendor: this.vendor,
+          request: this.__redactedRequest(request),
+        });
+      }
+      if (error instanceof RESTlerError) {
+        // A vendor `_responseHandler` surfaces its `RESTlerError` subclass
+        // unwrapped, but its `context.request` (built from the raw
+        // `response.url`) must be redacted first — this error is re-thrown to
+        // the caller and handed to the `call` event. Any transport URL the
+        // handler preserved in the error's `cause` chain is scrubbed too.
+        if (error.cause instanceof Error) {
+          this.__redactedCause(error.cause, request.url);
+        }
+        return this.__redactedError(error);
+      }
+      return new RESTlerRequestError(
+        'Unknown error processing the request',
+        { vendor: this.vendor, request: this.__redactedRequest(request) },
+        // `fetch`'s transport error embeds the full (credential-bearing)
+        // request URL in its message/stack and nested `cause` on some
+        // runtimes; scrub it out of the whole chain before preserving it
+        // as this error's `cause` (see `__redactedCause`).
+        this.__redactedCause(error, request.url),
+      );
+    }
+    return new RESTlerRequestError(
+      'Unknown error processing the request',
+      { vendor: this.vendor, request: this.__redactedRequest(request) },
+    );
   }
 
   /**
@@ -1133,6 +1387,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         return payload as string;
       case 'BLOB':
         return payload as Blob;
+      case 'STREAM':
+        // Handed to fetch unbuffered. No length is known ahead of time, so no
+        // Content-Length: the transfer is chunked. `__buildInit` adds the
+        // `duplex: 'half'` Node requires for a stream body.
+        if (!hasContentType) {
+          headers['Content-Type'] = 'application/octet-stream';
+        }
+        return payload as ReadableStream<Uint8Array>;
       default:
         return undefined;
     }
@@ -1405,7 +1667,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   ): RESTlerContentType | undefined {
     if (contentType !== undefined && !this._validateContentType(contentType)) {
       throw new RESTlerConfigError(
-        `Content type must be one of: JSON, XML, FORM, TEXT, BLOB.`,
+        `Content type must be one of: JSON, XML, FORM, TEXT, BLOB, STREAM.`,
         { vendor: this.vendor, key: 'contentType', value: contentType },
       );
     }
@@ -1481,7 +1743,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       case 'contentType':
         if (!this._validateContentType(value)) {
           throw new RESTlerConfigError(
-            `Content type must be one of: JSON, XML, FORM, TEXT, BLOB.`,
+            `Content type must be one of: JSON, XML, FORM, TEXT, BLOB, STREAM.`,
             { vendor: this.vendor, key: key, value: value },
           );
         }
@@ -1631,7 +1893,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   ): value is RESTlerOptions['contentType'] {
     return (
       !value || (typeof value === 'string' &&
-        ['JSON', 'XML', 'FORM', 'TEXT', 'BLOB']
+        ['JSON', 'XML', 'FORM', 'TEXT', 'BLOB', 'STREAM']
           .includes(value.toUpperCase()))
     );
   }

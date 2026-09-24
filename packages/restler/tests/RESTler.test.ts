@@ -14,6 +14,7 @@ import type {
   RESTlerOptions,
   RESTlerRequestOptions,
   RESTlerResponseHandler,
+  RESTlerStreamOptions,
 } from '../types/mod.ts';
 
 // Test implementation of RESTler
@@ -36,6 +37,13 @@ class TestRESTler extends RESTler {
     options?: RESTlerRequestOptions<H, B>,
   ) {
     return this._makeRequest<H, B>(endpoint, options);
+  }
+
+  public makeStreamRequest<H = ResponseBody>(
+    endpoint: RESTlerEndpoint,
+    options?: RESTlerStreamOptions<H>,
+  ) {
+    return this._makeStreamRequest<H>(endpoint, options);
   }
 
   public async processEndpoint(
@@ -3580,5 +3588,186 @@ describe('restler.requestOptions (#342/#344: skipAuth, responseSchema)', () => {
         { status: 'error', error: 'not found' },
       );
     });
+  });
+});
+
+// ============================================================================
+// Streaming — `_makeStreamRequest`
+// ============================================================================
+
+/**
+ * A response whose body arrives in chunks. `stall` leaves the stream open
+ * after the chunks — a source that has gone quiet without closing.
+ *
+ * The stream honours `signal` the way a real `fetch` body does: aborting the
+ * request errors the body. Without that the mock could never exercise the
+ * idle timer, because nothing would interrupt a read.
+ */
+const streamingResponse = (
+  chunks: string[],
+  init: ResponseInit = {},
+  stall = false,
+  signal?: AbortSignal,
+) =>
+  new Response(
+    new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        for (const c of chunks) ctrl.enqueue(new TextEncoder().encode(c));
+        if (!stall) {
+          ctrl.close();
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          try {
+            ctrl.error(signal.reason);
+          } catch { /* already closed */ }
+        }, { once: true });
+      },
+    }),
+    { status: 200, headers: { 'content-type': 'text/plain' }, ...init },
+  );
+
+const drain = async (stream: ReadableStream<Uint8Array>) => {
+  let out = '';
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    out += new TextDecoder().decode(value);
+  }
+  return out;
+};
+
+describe('RESTler — streaming', () => {
+  const client = () => new TestRESTler({ baseURL: 'https://api.test' });
+
+  it('hands back the body unread and streams it chunk by chunk', async () => {
+    const c = client();
+    c.setFetch(() => Promise.resolve(streamingResponse(['alpha', 'beta'])));
+    const res = await c.makeStreamRequest({ path: '/f', method: 'GET' });
+    asserts.assertEquals(res.status, 200);
+    asserts.assert(
+      res.body instanceof ReadableStream,
+      'body must be an unread stream, not a buffered value',
+    );
+    asserts.assertEquals(await drain(res.body!), 'alphabeta');
+  });
+
+  it('fires `call` when the STREAM settles, not when the method returns', async () => {
+    const c = client();
+    c.setFetch(() => Promise.resolve(streamingResponse(['x'])));
+    let calls = 0;
+    c.on('call', () => calls++);
+    const res = await c.makeStreamRequest({ path: '/f', method: 'GET' });
+    // Returned, but the transfer has not finished — the event must not have
+    // fired yet. This is the behaviour that distinguishes it from _makeRequest.
+    asserts.assertEquals(calls, 0, '`call` fired before the stream was read');
+    await drain(res.body!);
+    asserts.assertEquals(calls, 1, '`call` did not fire when the stream ended');
+  });
+
+  it('cancelling the stream settles the exchange exactly once', async () => {
+    const c = client();
+    c.setFetch(() => Promise.resolve(streamingResponse(['a', 'b', 'c'])));
+    let calls = 0;
+    c.on('call', () => calls++);
+    const res = await c.makeStreamRequest({ path: '/f', method: 'GET' });
+    await res.body!.cancel('caller gave up');
+    asserts.assertEquals(calls, 1);
+  });
+
+  it('an idle stall aborts the transfer without the total-duration cap killing a healthy one', async () => {
+    const c = client();
+    c.setFetch((_u, init) =>
+      Promise.resolve(
+        streamingResponse(
+          ['first'],
+          {},
+          true,
+          (init as RequestInit)?.signal ?? undefined,
+        ),
+      )
+    );
+    const res = await c.makeStreamRequest(
+      { path: '/f', method: 'GET' },
+      { idleTimeout: 1 },
+    );
+    const reader = res.body!.getReader();
+    asserts.assertEquals(
+      new TextDecoder().decode((await reader.read()).value),
+      'first',
+    );
+    // The source never closes; the idle timer must surface a timeout rather
+    // than hanging forever.
+    await asserts.assertRejects(() => reader.read(), RESTlerTimeoutError);
+  });
+
+  it('a failure status reads the error document and runs the vendor hook', async () => {
+    const c = client();
+    c.setFetch(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: 'nope' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    );
+    let seen: unknown;
+    await asserts.assertRejects(() =>
+      c.makeStreamRequest({ path: '/f', method: 'GET' }, {
+        responseHandler: (r) => {
+          seen = r.body;
+          throw new RESTlerRequestError('vendor said no', {
+            vendor: 'TestRESTler',
+            request: { url: 'https://api.test/f', method: 'GET', timeout: 10 },
+          });
+        },
+      })
+    );
+    asserts.assertEquals(seen, { error: 'nope' });
+  });
+
+  it('a 204 yields an empty stream rather than a null body', async () => {
+    const c = client();
+    c.setFetch(() => Promise.resolve(new Response(null, { status: 204 })));
+    const res = await c.makeStreamRequest({ path: '/f', method: 'DELETE' });
+    asserts.assert(res.body instanceof ReadableStream);
+    asserts.assertEquals(await drain(res.body!), '');
+  });
+
+  it('sends a ReadableStream request body with duplex, and only then', async () => {
+    const c = client();
+    const seen: RequestInit[] = [];
+    c.setFetch((_u, init) => {
+      seen.push(init as RequestInit);
+      return Promise.resolve(streamingResponse(['ok']));
+    });
+    const payload = new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        ctrl.enqueue(new TextEncoder().encode('chunk'));
+        ctrl.close();
+      },
+    });
+    await drain(
+      (await c.makeStreamRequest({
+        path: '/up',
+        method: 'POST',
+        contentType: 'STREAM',
+        payload,
+      } as RESTlerEndpoint)).body!,
+    );
+    asserts.assertEquals(
+      (seen[0] as { duplex?: string }).duplex,
+      'half',
+      'Node rejects a stream body without duplex:half',
+    );
+    // A buffered body must NOT gain duplex — existing requests stay identical.
+    await c.makeRequest({
+      path: '/j',
+      method: 'POST',
+      contentType: 'JSON',
+      payload: { a: 1 },
+    } as RESTlerEndpoint);
+    asserts.assertEquals((seen[1] as { duplex?: string }).duplex, undefined);
   });
 });

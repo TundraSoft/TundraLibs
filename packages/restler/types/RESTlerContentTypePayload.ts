@@ -26,10 +26,12 @@ export type RESTlerContentTypePayload<
    *   {@link RESTlerContentType}
    * - TEXT: string
    * - BLOB: Blob
+   * - STREAM: `ReadableStream<Uint8Array>` — sent unbuffered, consumed once
    */
   payload?: P extends 'JSON' | 'XML' ? Record<string, unknown>
     : P extends 'FORM' ? FormData | URLSearchParams | Record<string, unknown>
     : P extends 'TEXT' ? string
     : P extends 'BLOB' ? Blob
+    : P extends 'STREAM' ? ReadableStream<Uint8Array>
     : never;
 };

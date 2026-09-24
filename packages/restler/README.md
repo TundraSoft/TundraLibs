@@ -35,6 +35,7 @@ ignored. Plain HTTP/HTTPS needs neither and works everywhere.
 - [Defining a Client](#defining-a-client)
 - [Requests & Responses](#requests--responses)
 - [Content Types](#content-types)
+- [Streaming](#streaming)
 - [Authentication](#authentication)
 - [Unix Sockets](#unix-sockets)
 - [TLS Client Authentication](#tls-client-authentication)
@@ -56,7 +57,8 @@ sets a `vendor` identifier and exposes domain methods (e.g. `getUser`,
 - builds the full URL from `baseURL` + `path` (+ optional `port`, `version`,
   `query`);
 - injects authentication headers;
-- serializes the request body by content type and parses the response body;
+- serializes the request body by content type and parses the response body,
+  or streams either without buffering;
 - enforces a per-request timeout;
 - emits lifecycle events (`call`, `authFailure`, `rateLimit`, …);
 - maps failures onto typed errors.
@@ -72,6 +74,7 @@ extensions.
 | ------------------------------------------- | ---- | --- | ------- | ------- | ------- |
 | HTTP / HTTPS requests                       | ✅   | ✅  | ✅      | ✅      | ✅      |
 | JSON / XML / FORM / TEXT / BLOB bodies      | ✅   | ✅  | ✅      | ✅      | ✅      |
+| Streaming request & response bodies         | ✅   | ✅  | ✅      | ✅      | ✅      |
 | BASIC / BEARER / custom authentication      | ✅   | ✅  | ✅      | ✅      | ✅      |
 | Per-request timeout                         | ✅   | ✅  | ✅      | ✅      | ✅      |
 | Lifecycle events & rate-limit parsing       | ✅   | ✅  | ✅      | ✅      | ✅      |
@@ -157,7 +160,7 @@ console.log(res.status, res.body?.title);
 | `port`           | `number`                 | —        | 1–65535.                                                                                          |
 | `headers`        | `Record<string, string>` | `{}`     | Default headers sent with every request.                                                          |
 | `timeout`        | `number`                 | `30`     | Seconds. Must be `>= 1` and `<= 120`.                                                             |
-| `contentType`    | `RESTlerContentType`     | `'JSON'` | Default body content type (`JSON \| XML \| FORM \| TEXT \| BLOB`).                                |
+| `contentType`    | `RESTlerContentType`     | `'JSON'` | Default body content type (`JSON \| XML \| FORM \| TEXT \| BLOB \| STREAM`).                      |
 | `version`        | `string`                 | —        | Replaces `{version}` in URLs, query values, and headers.                                          |
 | `socketPath`     | `string`                 | —        | Route over a Unix socket (Deno/Bun). Must point to an existing path.                              |
 | `tls`            | `TLSOptions`             | —        | TLS client auth (Deno/Bun). See [TLS](#tls-client-authentication).                                |
@@ -249,9 +252,13 @@ provided one.
 | `FORM`        | `URLSearchParams` or plain object | urlencoded string / `application/x-www-form-urlencoded`\*\* |
 | `TEXT`        | `string`                          | raw string / `text/plain`                                   |
 | `BLOB`        | `Blob`                            | the `Blob` as-is                                            |
+| `STREAM`      | `ReadableStream<Uint8Array>`      | streamed unbuffered / `application/octet-stream`\*\*\*      |
 
 \* For a `FormData` payload, any inherited `Content-Type` header is removed
 so `fetch` can set the correct `multipart/form-data` boundary.
+
+\*\*\* A `STREAM` payload is sent without being held in memory and is consumed
+ONCE, so such a request can never be replayed — see [Streaming](#streaming).
 
 \*\* `FORM`'s wire format is decided by the payload's SHAPE — a `URLSearchParams`
 or plain object sends `application/x-www-form-urlencoded`, the format
@@ -298,6 +305,76 @@ class FileAPI extends RESTler {
 const res = await new FileAPI().download('report.pdf');
 console.log(res.body?.size, res.body?.type); // Blob size and MIME type
 ```
+
+## Streaming
+
+For bodies too large to hold in memory. Both directions stream; they are
+independent of each other.
+
+### Response bodies
+
+`_makeStreamRequest` is a sibling of `_makeRequest`, not a mode of it. It hands
+back the response body **unread**, as a `ReadableStream<Uint8Array>`:
+
+```ts ignore
+class Storage extends RESTler {
+  public readonly vendor = 'Storage';
+
+  download(key: string) {
+    return this._makeStreamRequest({ path: `/objects/${key}`, method: 'GET' });
+  }
+}
+
+const { body } = await new Storage({ baseURL: 'https://api.example.com' })
+  .download('backup.tar');
+// `body` is a ReadableStream — pipe it somewhere, don't buffer it.
+```
+
+Three things differ from `_makeRequest`, and each is why it is a separate
+method rather than a flag:
+
+- **The body is never parsed.** `responseSchema` cannot validate a stream
+  without consuming it, so `RESTlerStreamOptions` simply does not have the
+  option. `responseHandler` still runs, but only on a failure status — an
+  error envelope is a small document worth reading, a success body is the
+  payload you asked to stream.
+- **The timeout is an idle timeout.** `timeout` bounds the wait for response
+  _headers_ only; once they arrive, `idleTimeout` (default 60s) takes over and
+  resets on every chunk. A slow but healthy transfer runs as long as it needs,
+  while a stalled one still dies — unlike `timeout`, whose 120s ceiling would
+  cut off any sizeable download.
+- **The `call` event fires when the stream settles**, not when the method
+  returns — the moment the transfer actually finished, failed, or was
+  cancelled. `timeTaken` on the returned response measures time-to-headers;
+  the event's copy measures the whole transfer.
+
+You own the returned stream: consume it or `cancel()` it, or the connection
+stays open and the idle timer stays armed. A `204` yields an empty stream
+rather than a null body, so calling code keeps one shape.
+
+### Request bodies
+
+A streamed request body needs no special method — `contentType: 'STREAM'` with
+a `ReadableStream` payload works on either:
+
+```ts ignore
+upload(key: string, body: ReadableStream<Uint8Array>) {
+  return this._makeRequest({
+    path: `/objects/${key}`,
+    method: 'PUT',
+    contentType: 'STREAM',
+    payload: body,
+  });
+}
+```
+
+It is sent unbuffered with no `Content-Length`, so the transfer is chunked, and
+`Content-Type` defaults to `application/octet-stream`. Node requires
+`duplex: 'half'` for a stream body and RESTler sets it for you — only when the
+body is a stream, so every other request is unchanged.
+
+**A streamed request body is consumed once and cannot be replayed**, so nothing
+in RESTler will ever resend one.
 
 ## Authentication
 
@@ -937,8 +1014,13 @@ validates and stores options; `defaults` are applied where `options` omit them.
   `RESTlerAuthTypes` is the discriminator; `RESTlerAuthBasic`
   (`{ username, password }` — password may be empty, RFC 7617) and
   `RESTlerAuthBearer` (`{ token, prefix? }`) are the per-scheme payloads.
-- `RESTlerContentType` — `'JSON' | 'XML' | 'FORM' | 'TEXT' | 'BLOB'`. `FORM`'s
-  wire format depends on the payload's shape — see [Content Types](#content-types).
+- `RESTlerContentType` — `'JSON' | 'XML' | 'FORM' | 'TEXT' | 'BLOB' | 'STREAM'`.
+  `FORM`'s wire format depends on the payload's shape — see
+  [Content Types](#content-types); `STREAM` is described under
+  [Streaming](#streaming).
+- `RESTlerStreamOptions<H>` — `_makeStreamRequest`'s options bag:
+  `{ responseHandler?, skipAuth?, errorStatus?, idleTimeout? }`. Deliberately
+  has no `responseSchema` — see [Streaming](#streaming).
 - `RESTlerMethod` — `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'`.
 - `RESTlerEvents` — the event handler signatures.
 - `RESTlerErrorMeta` — metadata carried by every `RESTlerError`: `vendor` plus

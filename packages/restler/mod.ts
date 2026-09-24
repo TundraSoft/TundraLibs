@@ -30,6 +30,7 @@ export type {
   RESTlerResponse,
   RESTlerResponseHandler,
   RESTlerResponseSchema,
+  RESTlerStreamOptions,
   Witness,
   WitnessInfo,
 } from './types/mod.ts';
