@@ -4,6 +4,7 @@ import { makeTempFile, removeSync } from '@tundralibs/compat';
 import { RESTler } from '../mod.ts';
 import {
   RESTlerConfigError,
+  RESTlerRateLimitError,
   RESTlerRequestError,
   RESTlerResponseValidationError,
   RESTlerTimeoutError,
@@ -37,6 +38,20 @@ class TestRESTler extends RESTler {
     options?: RESTlerRequestOptions<H, B>,
   ) {
     return this._makeRequest<H, B>(endpoint, options);
+  }
+
+  /** Record waits instead of performing them — the retry seam. */
+  public readonly slept: number[] = [];
+  protected override _sleep(ms: number): Promise<void> {
+    this.slept.push(ms);
+    return Promise.resolve();
+  }
+
+  public parseRetryAfter(
+    headers: Record<string, string> | undefined,
+    now?: number,
+  ) {
+    return this._parseRetryAfter(headers, now);
   }
 
   public makeStreamRequest<H = ResponseBody>(
@@ -3769,5 +3784,218 @@ describe('RESTler — streaming', () => {
       payload: { a: 1 },
     } as RESTlerEndpoint);
     asserts.assertEquals((seen[1] as { duplex?: string }).duplex, undefined);
+  });
+});
+
+// ============================================================================
+// Rate-limit retry — `maxRetryWait` / `_retryHeaders`
+// ============================================================================
+
+const limited = (headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify({ error: 'slow down' }), {
+    status: 429,
+    headers: { 'content-type': 'application/json', ...headers },
+  });
+
+const okJson = () =>
+  new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+
+/** Serve the queued responses in order. */
+const queue = (...responses: Response[]) => {
+  let i = 0;
+  return () => Promise.resolve(responses[i++] ?? okJson());
+};
+
+describe('RESTler — rate-limit retry', () => {
+  it('reads each retry header in its OWN format, not as a common one', () => {
+    const c = new TestRESTler({ baseURL: 'https://api.test' });
+    const now = 1_774_000_000_000; // fixed clock, ms
+    // A delta stays a delta.
+    asserts.assertEquals(c.parseRetryAfter({ 'retry-after': '5' }, now), 5);
+    // The SAME numeric value as an epoch means "now", not "in 56 years".
+    asserts.assertEquals(
+      c.parseRetryAfter({ 'x-ratelimit-reset': '1774000030' }, now),
+      30,
+    );
+    // Fractional deltas (Discord) survive.
+    asserts.assertEquals(
+      c.parseRetryAfter({ 'x-ratelimit-reset-after': '1.5' }, now),
+      1.5,
+    );
+    // Retry-After's other legal form: an HTTP-date.
+    asserts.assertEquals(
+      c.parseRetryAfter(
+        { 'retry-after': new Date(now + 10_000).toUTCString() },
+        now,
+      ),
+      10,
+    );
+    // A past epoch (clock skew) clamps to 0 rather than going backwards.
+    asserts.assertEquals(
+      c.parseRetryAfter({ 'x-ratelimit-reset': '1773999000' }, now),
+      0,
+    );
+    // Nothing readable is `undefined`, never a guess.
+    asserts.assertEquals(
+      c.parseRetryAfter({ 'retry-after': 'soon' }, now),
+      undefined,
+    );
+    asserts.assertEquals(c.parseRetryAfter({}, now), undefined);
+  });
+
+  it('waits the hinted time and retries exactly once', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      maxRetryWait: 30,
+    });
+    c.setFetch(queue(limited({ 'retry-after': '2' }), okJson()));
+    const waits: number[] = [];
+    c.on('retry', (_v, _r, w) => waits.push(w));
+    const res = await c.makeRequest({ path: '/x', method: 'GET' });
+    asserts.assertEquals(res.status, 200);
+    asserts.assertEquals(res.body, { ok: true });
+    asserts.assertEquals(c.slept, [2000], 'waited the hinted 2s, once');
+    asserts.assertEquals(waits, [2], 'retry event carries the wait');
+  });
+
+  it('is OFF by default — a 429 behaves exactly as before', async () => {
+    const c = new TestRESTler({ baseURL: 'https://api.test' });
+    c.setFetch(queue(limited({ 'retry-after': '2' }), okJson()));
+    let retries = 0;
+    c.on('retry', () => retries++);
+    // No retry, no wait: the 429 flows to the caller as it always has.
+    const res = await c.makeRequest({ path: '/x', method: 'GET' });
+    asserts.assertEquals(res.status, 429);
+    asserts.assertEquals(c.slept, []);
+    asserts.assertEquals(retries, 0);
+  });
+
+  it('refuses to wait longer than maxRetryWait and says what was asked', async () => {
+    const c = new TestRESTler({ baseURL: 'https://api.test', maxRetryWait: 5 });
+    c.setFetch(queue(limited({ 'retry-after': '60' })));
+    const err = await asserts.assertRejects(
+      () => c.makeRequest({ path: '/x', method: 'GET' }),
+      RESTlerRateLimitError,
+    ) as RESTlerRateLimitError & {
+      context: { retryAfter?: number; retried: boolean };
+    };
+    asserts.assertEquals(err.context.retryAfter, 60, 'carries what was asked');
+    asserts.assertEquals(err.context.retried, false);
+    asserts.assertEquals(c.slept, [], 'must not have waited');
+  });
+
+  it('never invents a delay when no header is readable', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      maxRetryWait: 30,
+    });
+    c.setFetch(queue(limited()));
+    const err = await asserts.assertRejects(
+      () => c.makeRequest({ path: '/x', method: 'GET' }),
+      RESTlerRateLimitError,
+    ) as RESTlerRateLimitError & { context: { retryAfter?: number } };
+    asserts.assertEquals(err.context.retryAfter, undefined);
+    asserts.assertEquals(c.slept, []);
+  });
+
+  it('uses defaultRetryWait only when configured, still capped', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      maxRetryWait: 30,
+      defaultRetryWait: 3,
+    });
+    c.setFetch(queue(limited(), okJson()));
+    const res = await c.makeRequest({ path: '/x', method: 'GET' });
+    asserts.assertEquals(res.status, 200);
+    asserts.assertEquals(c.slept, [3000]);
+  });
+
+  it('a retry that is rate-limited again is terminal, with retried set', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      maxRetryWait: 30,
+    });
+    c.setFetch(
+      queue(limited({ 'retry-after': '1' }), limited({ 'retry-after': '1' })),
+    );
+    const err = await asserts.assertRejects(
+      () => c.makeRequest({ path: '/x', method: 'GET' }),
+      RESTlerRateLimitError,
+    ) as RESTlerRateLimitError & { context: { retried: boolean } };
+    asserts.assertEquals(err.context.retried, true);
+    asserts.assertEquals(c.slept, [1000], 'waited once, never twice');
+  });
+
+  it('never retries a streamed request body, which cannot be replayed', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      maxRetryWait: 30,
+    });
+    c.setFetch(queue(limited({ 'retry-after': '1' }), okJson()));
+    await asserts.assertRejects(
+      () =>
+        c.makeRequest({
+          path: '/up',
+          method: 'POST',
+          contentType: 'STREAM',
+          payload: new ReadableStream<Uint8Array>({
+            start(ctrl) {
+              ctrl.close();
+            },
+          }),
+        } as RESTlerEndpoint),
+      RESTlerRateLimitError,
+    );
+    asserts.assertEquals(c.slept, []);
+  });
+
+  it('the vendor responseHandler never sees a retried attempt', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      maxRetryWait: 30,
+    });
+    c.setFetch(queue(limited({ 'retry-after': '1' }), okJson()));
+    const seen: (number | null)[] = [];
+    const res = await c.makeRequest({ path: '/x', method: 'GET' }, {
+      responseHandler: (r) => {
+        seen.push(r.status);
+        return r.body;
+      },
+    });
+    asserts.assertEquals(res.status, 200);
+    // Only the successful attempt reached the hook — the 429 was handled
+    // before it, or the hook would have turned it into a terminal error.
+    asserts.assertEquals(seen, [200]);
+  });
+
+  it('each attempt gets a fresh timeout; the wait is not charged to it', async () => {
+    const c = new TestRESTler({
+      baseURL: 'https://api.test',
+      timeout: 1,
+      maxRetryWait: 30,
+    });
+    const signals: (AbortSignal | undefined)[] = [];
+    let i = 0;
+    c.setFetch((_u, init) => {
+      signals.push((init as RequestInit)?.signal ?? undefined);
+      return Promise.resolve(
+        i++ === 0 ? limited({ 'retry-after': '25' }) : okJson(),
+      );
+    });
+    const res = await c.makeRequest({ path: '/x', method: 'GET' });
+    asserts.assertEquals(res.status, 200);
+    asserts.assertEquals(c.slept, [25000]);
+    asserts.assertEquals(signals.length, 2);
+    asserts.assert(
+      signals[0] !== signals[1],
+      'the retry must get its own controller, not the first attempt spent one',
+    );
+    asserts.assertFalse(
+      signals[1]!.aborted,
+      'a 25s wait must not consume the 1s per-attempt timeout',
+    );
   });
 });

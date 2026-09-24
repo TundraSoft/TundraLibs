@@ -34,6 +34,20 @@ export type RESTlerEvents = {
    * @param request - The request that triggered the authentication failure
    * @param response - The response containing the authentication error
    */
+  /**
+   * A rate-limited response is about to be retried after honouring the
+   * vendor's own retry hint. Fires BEFORE the wait, so a listener sees the
+   * pause coming rather than inferring it from a latency spike.
+   *
+   * @param vendor - The vendor that rate-limited the request.
+   * @param request - The request about to be retried (redacted).
+   * @param waitSeconds - How long RESTler is about to wait.
+   */
+  retry: (
+    vendor: string,
+    request: RESTlerRequest,
+    waitSeconds: number,
+  ) => void;
   authFailure: (
     vendor: string,
     request: RESTlerRequest,

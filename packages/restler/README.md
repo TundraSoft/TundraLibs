@@ -40,6 +40,7 @@ ignored. Plain HTTP/HTTPS needs neither and works everywhere.
 - [Unix Sockets](#unix-sockets)
 - [TLS Client Authentication](#tls-client-authentication)
 - [Events](#events)
+- [Rate-limit retry](#rate-limit-retry)
 - [Observability](#observability)
 - [Vendor Response Handling](#vendor-response-handling)
 - [Error Handling](#error-handling)
@@ -154,19 +155,21 @@ console.log(res.status, res.body?.title);
 `RESTlerOptions` is passed to `super(...)` in your subclass constructor. Only
 `baseURL` is required.
 
-| Option           | Type                     | Default  | Notes                                                                                             |
-| ---------------- | ------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
-| `baseURL`        | `string`                 | —        | Required. May contain a `{version}` placeholder.                                                  |
-| `port`           | `number`                 | —        | 1–65535.                                                                                          |
-| `headers`        | `Record<string, string>` | `{}`     | Default headers sent with every request.                                                          |
-| `timeout`        | `number`                 | `30`     | Seconds. Must be `>= 1` and `<= 120`.                                                             |
-| `contentType`    | `RESTlerContentType`     | `'JSON'` | Default body content type (`JSON \| XML \| FORM \| TEXT \| BLOB \| STREAM`).                      |
-| `version`        | `string`                 | —        | Replaces `{version}` in URLs, query values, and headers.                                          |
-| `socketPath`     | `string`                 | —        | Route over a Unix socket (Deno/Bun). Must point to an existing path.                              |
-| `tls`            | `TLSOptions`             | —        | TLS client auth (Deno/Bun). See [TLS](#tls-client-authentication).                                |
-| `auth`           | `RESTlerAuth`            | —        | Default authentication. See [Authentication](#authentication).                                    |
-| `witness`        | `Witness`                | —        | Observability wrap hook (suite convention). See [Observability](#observability).                  |
-| `headerProvider` | `RESTlerHeaderProvider`  | —        | Per-request outbound headers (traceparent, correlation ids). See [Observability](#observability). |
+| Option             | Type                     | Default  | Notes                                                                                                                                  |
+| ------------------ | ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseURL`          | `string`                 | —        | Required. May contain a `{version}` placeholder.                                                                                       |
+| `port`             | `number`                 | —        | 1–65535.                                                                                                                               |
+| `headers`          | `Record<string, string>` | `{}`     | Default headers sent with every request.                                                                                               |
+| `timeout`          | `number`                 | `30`     | Seconds. Must be `>= 1` and `<= 120`.                                                                                                  |
+| `contentType`      | `RESTlerContentType`     | `'JSON'` | Default body content type (`JSON \| XML \| FORM \| TEXT \| BLOB \| STREAM`).                                                           |
+| `maxRetryWait`     | `number`                 | —        | Seconds. Enables one retry of a rate-limited request, and caps the wait. Absent = no retry. See [Rate-limit retry](#rate-limit-retry). |
+| `defaultRetryWait` | `number`                 | —        | Seconds to wait when rate-limited with no readable hint. Absent = no retry in that case.                                               |
+| `version`          | `string`                 | —        | Replaces `{version}` in URLs, query values, and headers.                                                                               |
+| `socketPath`       | `string`                 | —        | Route over a Unix socket (Deno/Bun). Must point to an existing path.                                                                   |
+| `tls`              | `TLSOptions`             | —        | TLS client auth (Deno/Bun). See [TLS](#tls-client-authentication).                                                                     |
+| `auth`             | `RESTlerAuth`            | —        | Default authentication. See [Authentication](#authentication).                                                                         |
+| `witness`          | `Witness`                | —        | Observability wrap hook (suite convention). See [Observability](#observability).                                                       |
+| `headerProvider`   | `RESTlerHeaderProvider`  | —        | Per-request outbound headers (traceparent, correlation ids). See [Observability](#observability).                                      |
 
 Values are validated in the constructor; an invalid value — or a missing
 required `baseURL` (including when it's absent from loosely-typed config loaded
@@ -374,7 +377,7 @@ It is sent unbuffered with no `Content-Length`, so the transfer is chunked, and
 body is a stream, so every other request is unchanged.
 
 **A streamed request body is consumed once and cannot be replayed**, so nothing
-in RESTler will ever resend one.
+in RESTler will ever resend one — see [Rate-limit retry](#rate-limit-retry).
 
 ## Authentication
 
@@ -590,16 +593,64 @@ class SecureAPI extends RESTler {
 
 `RESTler` is an event emitter. Subscribe with `on` / `once` / `off`.
 
-| Event            | Fires when                                | Handler arguments                      |
-| ---------------- | ----------------------------------------- | -------------------------------------- |
-| `call`           | After every request (success or failure)  | `(vendor, request, response, error?)`  |
-| `authFailure`    | Response status is 401, 403, or 407       | `(vendor, request, response)`          |
-| `rateLimit`      | Response status is 429                    | `(vendor, limit?, reset?, remaining?)` |
-| `authentication` | Your subclass authenticates (you emit it) | `(vendor, data?)`                      |
-| `track`          | Custom tracking (you emit it)             | `(vendor, name, data)`                 |
+| Event            | Fires when                                     | Handler arguments                      |
+| ---------------- | ---------------------------------------------- | -------------------------------------- |
+| `call`           | After every request (success or failure)       | `(vendor, request, response, error?)`  |
+| `authFailure`    | Response status is 401, 403, or 407            | `(vendor, request, response)`          |
+| `rateLimit`      | Response status is 429                         | `(vendor, limit?, reset?, remaining?)` |
+| `retry`          | Before waiting to retry a rate-limited request | `(vendor, request, waitSeconds)`       |
+| `authentication` | Your subclass authenticates (you emit it)      | `(vendor, data?)`                      |
+| `track`          | Custom tracking (you emit it)                  | `(vendor, name, data)`                 |
 
 On a `rateLimit`, RESTler reads `x-ratelimit-limit` / `-remaining` / `-reset`
 (and the unprefixed variants) from the response headers.
+
+## Rate-limit retry
+
+Off unless you ask for it. Set `maxRetryWait` (seconds) and a rate-limited
+response is retried **once**, after waiting exactly as long as the vendor
+asked:
+
+```ts ignore
+const api = new MyAPI({ baseURL: 'https://api.example.com', maxRetryWait: 10 });
+```
+
+RESTler honours the vendor's own hint rather than inventing a schedule. That
+is why each header is read in **its own format** — they do not share one:
+
+| Header                    | Value means                       |
+| ------------------------- | --------------------------------- |
+| `Retry-After`             | delta seconds **or** an HTTP-date |
+| `X-RateLimit-Reset-After` | delta seconds (may be fractional) |
+| `RateLimit-Reset`         | delta seconds                     |
+| `X-RateLimit-Reset`       | an absolute Unix timestamp        |
+
+Reading one as another is not a rounding error: `X-RateLimit-Reset: 1774000000`
+taken as a delta would wait 56 years. Override `_retryHeaders` on your subclass
+to add a vendor's private header or drop one it misuses, pairing each name with
+its format.
+
+It throws [`RESTlerRateLimitError`](#errors) — rather than waiting — when:
+
+- the vendor gave no readable hint and no `defaultRetryWait` is set (RESTler
+  never guesses a delay; several vendors send a bare 429);
+- the hint is longer than `maxRetryWait`, so the decision goes back to you
+  rather than a long block being imposed;
+- the single retry was itself rate-limited;
+- the request body was a `STREAM`, which cannot be replayed.
+
+The error carries `context.retryAfter` (the parsed wait in seconds, when there
+was one) and `context.retried`, so a caller can schedule its own attempt and
+knows whether a silent pause already happened.
+
+Two timing guarantees worth knowing: `timeout` bounds **each attempt**, and the
+wait between them is not charged against it — a 25-second wait cannot consume a
+30-second request budget. And the retry is decided on the raw status **before**
+the body is read and before `_responseHandler` runs, so a vendor hook never
+sees an attempt that is about to be retried.
+
+A `retry` event fires before the wait, so tracing and logs see the pause coming
+instead of inferring it from a latency spike.
 
 The `request` handed to `call` and `authFailure` — and the copy stored on a
 `RESTlerError`'s `context` (including one thrown by your own
@@ -896,13 +947,14 @@ an expected error shape.
 unless a [response handler](#vendor-response-handling) inspects the body and
 throws, or a [response schema](#responseschema) rejects the response.
 
-| Error                            | Thrown when                                                                                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RESTlerConfigError`             | Invalid client options or endpoint config (bad `baseURL`/`port`/`auth`/…).                                                                             |
-| `RESTlerTimeoutError`            | The request exceeded `timeout`.                                                                                                                        |
-| `RESTlerResponseValidationError` | `responseSchema` threw — the request succeeded, but the response didn't match what you declared to expect. The original error is preserved as `cause`. |
-| `RESTlerRequestError`            | Any other failure while making the request. `RESTlerTimeoutError` and `RESTlerResponseValidationError` are both subclasses.                            |
-| `RESTlerError`                   | Base class for all of the above.                                                                                                                       |
+| Error                            | Thrown when                                                                                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RESTlerConfigError`             | Invalid client options or endpoint config (bad `baseURL`/`port`/`auth`/…).                                                                                                      |
+| `RESTlerTimeoutError`            | The request exceeded `timeout`.                                                                                                                                                 |
+| `RESTlerRateLimitError`          | Rate-limited with no retry possible. `context.retryAfter` carries the parsed wait in seconds when the vendor gave one; `context.retried` says whether a wait was already spent. |
+| `RESTlerResponseValidationError` | `responseSchema` threw — the request succeeded, but the response didn't match what you declared to expect. The original error is preserved as `cause`.                          |
+| `RESTlerRequestError`            | Any other failure while making the request. `RESTlerTimeoutError` and `RESTlerResponseValidationError` are both subclasses.                                                     |
+| `RESTlerError`                   | Base class for all of the above.                                                                                                                                                |
 
 > Every error's `context.request` is credential-redacted the same way as the
 > `call` event's copy (see [Restler-Security](https://github.com/TundraSoft/TundraLibs/wiki/Restler-Security)) — but

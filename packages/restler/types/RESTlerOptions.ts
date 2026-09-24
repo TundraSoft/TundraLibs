@@ -40,6 +40,34 @@ export type RESTlerOptions = {
   timeout?: number;
 
   /**
+   * Longest a rate-limited request may be made to wait, in SECONDS (the same
+   * unit as `timeout`), before it is retried once.
+   *
+   * **Absent means no retry at all** — a 429 throws immediately, as it always
+   * has. Setting it both enables the single retry and caps it: if the vendor
+   * asks for longer than this, RESTler refuses to wait and throws
+   * {@link RESTlerRateLimitError} carrying the requested `retryAfter`, so the
+   * caller can decide rather than having a long block imposed on it.
+   *
+   * The wait sits BETWEEN attempts and does NOT count against `timeout`,
+   * which bounds each attempt on its own.
+   *
+   * @default undefined (no retry)
+   */
+  maxRetryWait?: number;
+
+  /**
+   * Seconds to wait when the response is rate-limited but carries NO readable
+   * retry hint. Absent means no retry in that case — RESTler never invents a
+   * number, because guessing a delay is how a busy service is made busier.
+   *
+   * Only consulted when `maxRetryWait` is set, and still capped by it.
+   *
+   * @default undefined (no retry without a hint)
+   */
+  defaultRetryWait?: number;
+
+  /**
    * Optional default content type for requests.
    * Default: 'JSON'
    */
