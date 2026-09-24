@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.2.1...restler-v1.3.0) (2026-09-24)
+
+
+### Features
+
+* **restler:** honour a vendor's retry hint on a rate-limited request ([#712](https://github.com/TundraSoft/TundraLibs/issues/712)) ([1581507](https://github.com/TundraSoft/TundraLibs/commit/1581507c6d32c12f4788048f012778800ceee1c6))
+* **restler:** stream a response body with _makeStreamRequest ([#711](https://github.com/TundraSoft/TundraLibs/issues/711)) ([3c1d6fb](https://github.com/TundraSoft/TundraLibs/commit/3c1d6fbcebe10df15e2a2f4383ee43eefc3b9b2c))
+
 ## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.2.0...restler-v1.2.1) (2026-09-18)
 
 
