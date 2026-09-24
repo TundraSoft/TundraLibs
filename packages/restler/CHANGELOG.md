@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.3.0...restler-v1.3.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **restler:** retry a rate-limited streamed request under maxRetryWait ([#715](https://github.com/TundraSoft/TundraLibs/issues/715)) ([bdc3fcc](https://github.com/TundraSoft/TundraLibs/commit/bdc3fcce817d2627158299cb40c36e83ac067f7d))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.2.1...restler-v1.3.0) (2026-09-24)
 
 

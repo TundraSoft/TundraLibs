@@ -14,7 +14,7 @@
   "packages/pact": "0.10.0",
   "packages/radrouter": "1.3.2",
   "packages/rapid": "0.8.0",
-  "packages/restler": "1.3.0",
+  "packages/restler": "1.3.1",
   "packages/rpc": "1.3.0",
   "packages/slogger": "1.2.4",
   "packages/tracer": "0.6.4",
