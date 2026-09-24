@@ -40,6 +40,7 @@ export {
   RESTlerConfigError,
   RESTlerError,
   type RESTlerErrorMeta,
+  RESTlerRateLimitError,
   RESTlerRequestError,
   RESTlerResponseValidationError,
   RESTlerTimeoutError,
