@@ -15,6 +15,7 @@ export type {
   PactCreateUserInput,
   PactCredential,
   PactEvents,
+  PactGrantKey,
   PactHmacAlgorithm,
   PactHooks,
   PactJweEncryption,

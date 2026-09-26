@@ -1,4 +1,8 @@
-import type { PactPrincipal, PermissionBits } from './types/mod.ts';
+import type {
+  PactGrantKey,
+  PactPrincipal,
+  PermissionBits,
+} from './types/mod.ts';
 import { PactError } from './errors/mod.ts';
 
 /**
@@ -10,9 +14,9 @@ import { PactError } from './errors/mod.ts';
 export type BoundPrincipalKernel<B extends PermissionBits, M extends string> = {
   /** Mask-level check against the pact definition (clamp + evaluate). */
   readonly evaluate: (
-    module: M,
+    module: PactGrantKey<M>,
     permission: keyof B,
-    grants: Readonly<Partial<Record<M, bigint>>> | null,
+    grants: Readonly<Partial<Record<PactGrantKey<M>, bigint>>> | null,
   ) => boolean;
   /** Fresh resolution by id (cache → hooks, owner gate included). */
   readonly resolve: (id: string) => Promise<PactPrincipal<M> | null>;
@@ -54,11 +58,11 @@ export class BoundPrincipal<B extends PermissionBits, M extends string> {
 
   /** The currently-held effective masks (frozen; swapped wholesale on
    * refresh — mutation attempts throw in strict mode). */
-  public get grants(): Readonly<Partial<Record<M, bigint>>> {
+  public get grants(): Readonly<Partial<Record<PactGrantKey<M>, bigint>>> {
     return this.__grants;
   }
 
-  private __grants: Readonly<Partial<Record<M, bigint>>>;
+  private __grants: Readonly<Partial<Record<PactGrantKey<M>, bigint>>>;
   private __mintedAt: number;
   private __epoch: number;
 
@@ -79,13 +83,14 @@ export class BoundPrincipal<B extends PermissionBits, M extends string> {
   /**
    * Does this principal hold `permission` in `module`? Free bit math
    * while fresh; re-resolves through the minting pact when stale.
+   * `module` may be tenant-scoped (`acme::POST`); see {@link PactGrantKey}.
    *
    * @throws {PactError} `UNKNOWN_MODULE` / `UNKNOWN_PERMISSION` /
    *   `PERMISSION_NOT_IN_MODULE` on definition misuse — the grants
    *   verdict itself is always a boolean.
    */
   public async hasPermission(
-    module: M,
+    module: PactGrantKey<M>,
     permission: keyof B,
   ): Promise<boolean> {
     const kernel = KERNELS.get(this) as
@@ -104,7 +109,10 @@ export class BoundPrincipal<B extends PermissionBits, M extends string> {
    * @throws {PactError} `PERMISSION_DENIED` when the permission is not
    *   held; definition-misuse codes as in {@link hasPermission}.
    */
-  public async assert(module: M, permission: keyof B): Promise<void> {
+  public async assert(
+    module: PactGrantKey<M>,
+    permission: keyof B,
+  ): Promise<void> {
     if (!await this.hasPermission(module, permission)) {
       throw new PactError('PERMISSION_DENIED', {
         kind: this.kind,

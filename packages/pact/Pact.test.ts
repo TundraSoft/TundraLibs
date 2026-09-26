@@ -270,6 +270,105 @@ describe('Pact authorization', () => {
   });
 });
 
+describe('Pact tenant-scoped grants', () => {
+  const PRINCIPALS: Record<string, PactPrincipal<'Post' | 'Billing'>> = {
+    admin: { kind: 'USER', id: 'admin', grants: { Post: 1n } },
+    colonAdmin: { kind: 'USER', id: 'colonAdmin', grants: { '::Post': 1n } },
+    alice: { kind: 'USER', id: 'alice', grants: { 'acme::Post': 3n } },
+    mixed: {
+      kind: 'USER',
+      id: 'mixed',
+      grants: { Post: 1n, 'acme::Post': 2n },
+    },
+    nested: { kind: 'USER', id: 'nested', grants: { 'a::b::Post': 1n } },
+    neg: { kind: 'USER', id: 'neg', grants: { 'acme::Post': -1n } },
+  };
+  const pact = Pact.create({
+    ...BASE,
+    hooks: { getPrincipal: (id) => PRINCIPALS[id] ?? null },
+  });
+
+  it('confines a tenant grant to its tenant', async () => {
+    asserts.assert(await pact.hasPermission('alice', 'acme::Post', 'EDIT'));
+    asserts.assertFalse(
+      await pact.hasPermission('alice', 'globex::Post', 'READ'),
+    );
+    asserts.assertFalse(await pact.hasPermission('alice', 'Post', 'READ'));
+    asserts.assertFalse(await pact.hasPermission('alice', '::Post', 'READ'));
+  });
+
+  it('lets a global grant apply in every tenant', async () => {
+    for (
+      const key of ['Post', '::Post', 'acme::Post', 'globex::Post'] as const
+    ) {
+      asserts.assert(await pact.hasPermission('admin', key, 'READ'), key);
+      asserts.assert(await pact.hasPermission('colonAdmin', key, 'READ'), key);
+    }
+    asserts.assertFalse(
+      await pact.hasPermission('admin', 'acme::Post', 'EDIT'),
+    );
+  });
+
+  it('combines the tenant mask with the global one', async () => {
+    asserts.assert(await pact.hasPermission('mixed', 'acme::Post', 'READ'));
+    asserts.assert(await pact.hasPermission('mixed', 'acme::Post', 'EDIT'));
+    asserts.assertFalse(
+      await pact.hasPermission('mixed', 'globex::Post', 'EDIT'),
+    );
+  });
+
+  it('denies, never throws, on a tenant containing the separator', async () => {
+    asserts.assertFalse(
+      await pact.hasPermission('nested', 'a::b::Post', 'READ'),
+    );
+    asserts.assertFalse(
+      await pact.hasPermission('alice', 'acme::x::Post', 'READ'),
+    );
+  });
+
+  it('clamps a hostile tenant mask to no access', async () => {
+    asserts.assertFalse(await pact.hasPermission('neg', 'acme::Post', 'READ'));
+  });
+
+  it('keeps an unknown module loud behind a tenant', async () => {
+    await expectCode(
+      pact.hasPermission('alice', 'acme::constructor' as never, 'READ'),
+      'UNKNOWN_MODULE',
+    );
+    const undeclared = 'acme::Nope';
+    await expectCode(
+      // @ts-expect-error: the module half must be a declared module
+      pact.hasPermission('alice', undeclared, 'READ'),
+      'UNKNOWN_MODULE',
+    );
+  });
+
+  it('names the tenant-scoped key in PERMISSION_DENIED', async () => {
+    const denied = await expectCode(
+      pact.assert('alice', 'globex::Post', 'READ'),
+      'PERMISSION_DENIED',
+    );
+    asserts.assertStringIncludes(denied.message, "'globex::Post'");
+  });
+
+  it('checks tenant keys on a bound principal', async () => {
+    const bound = (await pact.principalOf('alice'))!;
+    asserts.assert(await bound.hasPermission('acme::Post', 'EDIT'));
+    asserts.assertFalse(await bound.hasPermission('globex::Post', 'READ'));
+  });
+
+  it('rejects a module name containing the separator', () => {
+    expectThrowCode(
+      () =>
+        Pact.create({
+          bits: { READ: 1n },
+          modulePermissions: { 'acme::Post': ['READ'] },
+        }),
+      'INVALID_OPTION',
+    );
+  });
+});
+
 // =============================================================================
 // Caching
 // =============================================================================

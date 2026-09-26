@@ -37,7 +37,7 @@ immediate.
 | `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
 | Email verification                         | `getUser` + `saveResetToken` / `consumeResetToken` — the status change is yours (no status hook)                                                                       |
 | `verifyMFA`                                | `getUser`                                                                                                                                                              |
-| OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on)                                                                                                                  |
+| OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on, and optionally `oauthIdentifier`)                                                                                |
 | Passkeys (all four ceremonies)             | `getPasskey` + `getPasskeys` + `savePasskey` + `updatePasskeyCounter` + `getUser` — checked at construction; `finishPasskeyLogin` additionally needs the session store |
 
 ## Stored shapes
@@ -53,7 +53,7 @@ All shapes are exported from `@tundralibs/pact/types`.
 | `PactStoredPasskey`    | `id` (credential id), `userId`, `publicKey` (JWK string), `algorithm`, `signCount`, `transports?`, `metadata?` |
 | `PactUserQuery`        | `{by:'ID'}` \| `{by:'IDENTIFIER'}` \| `{by:'OAUTH', provider, subject}`                                        |
 | `PactCreateUserInput`  | What `createUser` receives, including the OAuth link on JIT provisioning                                       |
-| `PactPrincipal`        | What `getPrincipal` returns: `kind`, `id`, per-module bigint `grants`                                          |
+| `PactPrincipal`        | What `getPrincipal` returns: `kind`, `id`, per-module bigint `grants` (keys may be tenant-scoped)              |
 
 `grants` on stored records is the serialized form — a JSON object of module
 name to decimal bit-string, produced by `serializeGrants` and parsed by
@@ -76,6 +76,10 @@ points:
   JIT provisioning `input.oauth` carries the link (`provider`, `subject`,
   normalized `profile`) — store it so the `by: 'OAUTH'` query finds the user
   next login.
+- **`oauthIdentifier(identifier, profile)`** maps the identifier pact derives
+  for a JIT-provisioned user before the duplicate check and `createUser`.
+  Use it to scope accounts per tenant; see
+  [Tenants](Pact-Tenants.md#accounts-per-tenant).
 - **`getApiKey(keyId)`** returns the record with `secret` decrypted — see
   [How secrets are stored](#how-secrets-are-stored).
 - **`saveSession(session)`** should be an insert (or a

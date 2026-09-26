@@ -1,4 +1,5 @@
 import type { PactCreateUserInput } from './PactCreateUserInput.ts';
+import type { PactOAuthProfile } from './PactOAuthProfile.ts';
 import type { PactPrincipal } from './PactPrincipal.ts';
 import type { PactStoredApiKey } from './PactStoredApiKey.ts';
 import type { PactStoredPasskey } from './PactStoredPasskey.ts';
@@ -44,6 +45,18 @@ export type PactHooks<M extends string = string> = {
   createUser?: (
     input: PactCreateUserInput,
   ) => PactStoredUser | Promise<PactStoredUser>;
+  /**
+   * Map the identifier pact derives for an OAuth auto-provisioned user
+   * (the verified email, else `provider:subject`) to the one it checks
+   * for duplicates and stores. Use it when each tenant has its own
+   * accounts: provider `acme:entra` can yield `acme::alice@x.com`, so the
+   * same person can hold separate accounts in two tenants. Absent, the
+   * derived identifier is used as-is.
+   */
+  oauthIdentifier?: (
+    identifier: string,
+    profile: PactOAuthProfile,
+  ) => string | Promise<string>;
   /** Persist a freshly issued API key — encrypt `secret` at rest. */
   saveApiKey?: (key: PactStoredApiKey) => void | Promise<void>;
   /** Revoke a key: delete it or flip its status to a non-active one. */

@@ -114,7 +114,9 @@ provider, subject })`). When no link exists:
   provider vouches for it (`email_verified`); otherwise the identifier is
   `provider:subject`. Either way an existing user with that identifier
   makes provisioning throw `USER_EXISTS` — a first OAuth login can never
-  claim an established local account.
+  claim an established local account. The `oauthIdentifier` hook can
+  rewrite the identifier first, to give each tenant its own account
+  ([Tenants](Pact-Tenants.md#accounts-per-tenant)).
 
 JIT-provisioned users get empty grants in the `createUser` input; seeding
 defaults is the hook's decision.

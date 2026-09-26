@@ -85,6 +85,10 @@ Your login route becomes `/auth/:tenant/:kind/redirect` and
 `` `${tenant}:${kind}` `` — no separate lookup table mapping a route
 parameter to a provider name.
 
+The same prefix lets the `oauthIdentifier` hook give each tenant its own
+account for one email, and lets grants be scoped per tenant. See
+[Tenants](Pact-Tenants.md).
+
 ## Validate at write time, not at first login
 
 The whole point of building every `OAuthClient` eagerly (constructor or
