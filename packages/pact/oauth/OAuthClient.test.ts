@@ -9,7 +9,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Pact } from '../mod.ts';
 import { PactError } from '../errors/mod.ts';
-import type { PactStoredUser } from '../types/mod.ts';
+import type { PactOAuthProfile, PactStoredUser } from '../types/mod.ts';
 
 const byId = new Map<string, PactStoredUser>();
 const links = new Map<string, string>();
@@ -325,5 +325,96 @@ describe('runtime OAuth provider mutation', () => {
       PactError,
     );
     asserts.assertStrictEquals(error.code, 'UNKNOWN_PROVIDER');
+  });
+});
+
+describe('oauthLogin per-tenant provisioning', () => {
+  /** Two tenants' IdPs asserting the same verified email. */
+  function tenantPact(
+    oauthIdentifier?: (id: string, profile: PactOAuthProfile) => string,
+  ) {
+    const users = new Map<string, PactStoredUser>();
+    const idents = new Map<string, string>();
+    const linked = new Map<string, string>();
+    const provider = (redirectUri: string) => ({
+      kind: 'GOOGLE' as const,
+      clientId: 'cid',
+      redirectUri,
+      autoProvision: true,
+    });
+    const p = Pact.create({
+      bits: { READ: 1n },
+      modulePermissions: { Post: ['READ'] },
+      hooks: {
+        getUser: (q) => {
+          const id = q.by === 'ID'
+            ? q.id
+            : q.by === 'IDENTIFIER'
+            ? idents.get(q.identifier)
+            : linked.get(`${q.provider}|${q.subject}`);
+          return id === undefined ? null : users.get(id) ?? null;
+        },
+        createUser: (input) => {
+          const user: PactStoredUser = {
+            id: `u${users.size + 1}`,
+            status: input.status,
+            grants: input.grants,
+          };
+          users.set(user.id, user);
+          idents.set(input.identifier, user.id);
+          linked.set(
+            `${input.oauth!.provider}|${input.oauth!.subject}`,
+            user.id,
+          );
+          return user;
+        },
+        ...(oauthIdentifier === undefined ? {} : { oauthIdentifier }),
+      },
+      options: {
+        cache: { ttl: { session: 5 } },
+        oauth: {
+          'acme:gw': provider('https://app.example.dev/acme'),
+          'globex:gw': provider('https://app.example.dev/globex'),
+        },
+      },
+    });
+    for (const name of ['acme:gw', 'globex:gw']) {
+      // deno-lint-ignore no-explicit-any
+      (p as any).__oauth.get(name)._makeRequest = (o: { method: string }) =>
+        o.method === 'POST' ? { status: 200, body: { access_token: 'at' } } : {
+          status: 200,
+          body: { sub: 'same-sub', email: 'ada@x.test', email_verified: true },
+        };
+    }
+    const login = (name: string) =>
+      p.oauthLogin(name, { code: 'c', state: 's' }, {
+        state: 's',
+        codeVerifier: 'v',
+      });
+    return { login, idents };
+  }
+
+  it('collides across tenants without the hook', async () => {
+    const { login } = tenantPact();
+    await login('acme:gw');
+    await expectCode(login('globex:gw'), 'USER_EXISTS');
+  });
+
+  it('provisions one account per tenant through oauthIdentifier', async () => {
+    const { login, idents } = tenantPact((id, profile) =>
+      `${profile.provider.split(':')[0]}::${id}`
+    );
+    const acme = await login('acme:gw');
+    const globex = await login('globex:gw');
+    asserts.assertNotStrictEquals(acme.principal.id, globex.principal.id);
+    asserts.assertEquals([...idents.keys()], [
+      'acme::ada@x.test',
+      'globex::ada@x.test',
+    ]);
+  });
+
+  it('rejects an empty identifier from the hook', async () => {
+    const { login } = tenantPact(() => '');
+    await expectCode(login('acme:gw'), 'INVALID_OPTION');
   });
 });

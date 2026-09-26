@@ -23,6 +23,7 @@ import type {
   PactCacheType,
   PactCredential,
   PactEvents,
+  PactGrantKey,
   PactHmacAlgorithm,
   PactHooks,
   PactJweEncryption,
@@ -64,6 +65,9 @@ import {
 
 /** Auto-name counter for unnamed instances (`pact-<n>`). */
 let instanceSeq = 0;
+
+/** Separates a tenant from a module in a grant key (`acme::POST`). */
+const TENANT_SEP = '::';
 
 /**
  * The auth engine: bitmask authorization, login and sessions (opaque or
@@ -354,7 +358,9 @@ export class Pact<B extends PermissionBits, M extends string>
    * Does the principal behind `principalId` hold `permission` in
    * `module`? Resolution goes principal-cache → `getPrincipal` hook; an
    * unresolvable id (or a module absent from the resolved grants)
-   * evaluates as an empty mask — fail-closed.
+   * evaluates as an empty mask — fail-closed. `module` may be
+   * tenant-scoped (`acme::POST`), in which case the principal's global
+   * `POST` mask also counts; see {@link PactGrantKey}.
    *
    * @throws {PactError} `MISSING_HOOK` when no `getPrincipal` hook is
    *   configured; `UNKNOWN_MODULE` / `UNKNOWN_PERMISSION` /
@@ -363,15 +369,11 @@ export class Pact<B extends PermissionBits, M extends string>
    */
   public async hasPermission(
     principalId: string,
-    module: M,
+    module: PactGrantKey<M>,
     permission: keyof B,
   ): Promise<boolean> {
     const principal = await this._resolvePrincipal(principalId);
-    return this.__evaluate(
-      module,
-      permission,
-      this.__grantOf(principal?.grants ?? null, module),
-    );
+    return this.__check(module, permission, principal?.grants ?? null);
   }
 
   /**
@@ -384,17 +386,11 @@ export class Pact<B extends PermissionBits, M extends string>
    */
   public async assert(
     principalId: string,
-    module: M,
+    module: PactGrantKey<M>,
     permission: keyof B,
   ): Promise<void> {
     const principal = await this._resolvePrincipal(principalId);
-    if (
-      !this.__evaluate(
-        module,
-        permission,
-        this.__grantOf(principal?.grants ?? null, module),
-      )
-    ) {
+    if (!this.__check(module, permission, principal?.grants ?? null)) {
       throw new PactError('PERMISSION_DENIED', {
         kind: principal?.kind ?? 'PRINCIPAL',
         principal: principalId,
@@ -437,7 +433,7 @@ export class Pact<B extends PermissionBits, M extends string>
     // discriminated union — the mint seam vouches for the shape.
     return new BoundPrincipal<B, M>(principal, {
       evaluate: (module, permission, grants) =>
-        this.__evaluate(module, permission, this.__grantOf(grants, module)),
+        this.__check(module, permission, grants),
       resolve: (id) => this._resolvePrincipal(id),
       epoch: () => this.__revocationEpoch,
       freshnessMs: this.__principalFreshnessMs,
@@ -460,7 +456,7 @@ export class Pact<B extends PermissionBits, M extends string>
   public async register(input: {
     identifier: string;
     password: string;
-    grants?: Readonly<Partial<Record<M, bigint>>>;
+    grants?: Readonly<Partial<Record<PactGrantKey<M>, bigint>>>;
     status?: string;
     metadata?: Readonly<Record<string, unknown>>;
   }): Promise<PactStoredUser> {
@@ -494,7 +490,7 @@ export class Pact<B extends PermissionBits, M extends string>
    */
   public async issueApiKey(input: {
     userId?: string;
-    grants?: Readonly<Partial<Record<M, bigint>>>;
+    grants?: Readonly<Partial<Record<PactGrantKey<M>, bigint>>>;
     status?: string;
     metadata?: Readonly<Record<string, unknown>>;
   } = {}): Promise<{ key: string; secret: string }> {
@@ -661,7 +657,10 @@ export class Pact<B extends PermissionBits, M extends string>
    *   `OAUTH_UNLINKED` when no user is linked and autoProvision is off;
    *   `NOT_ACTIVE` / `INVALID_GRANTS` as in {@link login};
    *   `MISSING_HOOK` without `getUser` (or `createUser` when
-   *   provisioning fires), or without any session store.
+   *   provisioning fires), or without any session store;
+   *   `USER_EXISTS` when provisioning would reuse an identifier;
+   *   `INVALID_OPTION` when `hooks.oauthIdentifier` returns an empty or
+   *   non-string identifier.
    */
   public async oauthLogin(
     provider: string,
@@ -704,10 +703,20 @@ export class Pact<B extends PermissionBits, M extends string>
       // the existence check entirely: enforce it here too, so an OAuth
       // first-login can never clobber an established account. Linking
       // an existing account to a provider stays an explicit app flow.
-      const identifier = profile.email !== undefined &&
+      const derived = profile.email !== undefined &&
           profile.emailVerified === true
         ? profile.email
         : `${provider}:${profile.id}`;
+      const mapIdentifier = this._hooks.oauthIdentifier;
+      const identifier = mapIdentifier === undefined
+        ? derived
+        : await mapIdentifier(derived, profile);
+      if (typeof identifier !== 'string' || identifier.length === 0) {
+        throw new PactError('INVALID_OPTION', {
+          option: 'hooks.oauthIdentifier',
+          reason: 'must return a non-empty string',
+        });
+      }
       if (await getUser({ by: 'IDENTIFIER', identifier }) !== null) {
         throw new PactError('USER_EXISTS', { identifier });
       }
@@ -1859,7 +1868,7 @@ export class Pact<B extends PermissionBits, M extends string>
       // Unknown module keys in stored grants are harmless — evaluation
       // only ever reads declared modules.
       const grants = deserializeGrants(user.grants) as Readonly<
-        Partial<Record<M, bigint>>
+        Partial<Record<PactGrantKey<M>, bigint>>
       >;
       return { kind: 'USER', id: user.id, grants, metadata: user.metadata };
     } catch {
@@ -2199,7 +2208,7 @@ export class Pact<B extends PermissionBits, M extends string>
     if (!this.__activeStatusSet.has(key.status)) return null;
     try {
       const grants = deserializeGrants(key.grants) as Readonly<
-        Partial<Record<M, bigint>>
+        Partial<Record<PactGrantKey<M>, bigint>>
       >;
       return {
         kind: 'APIKEY',
@@ -2319,20 +2328,43 @@ export class Pact<B extends PermissionBits, M extends string>
   }
 
   /**
-   * Effective mask for one module — own keys only (a prototype-chain
+   * Evaluate a possibly tenant-scoped key against `grants`. The key splits
+   * at its last `::`: the right side must be a declared module, the left
+   * side is the tenant (empty means global). A tenant containing `::`
+   * cannot match a grant, so it denies instead of throwing: the tenant is
+   * usually request-derived, and a malformed one is a 403, not a 500.
+   */
+  private __check(
+    key: PactGrantKey<M>,
+    permission: keyof B,
+    grants: Readonly<Partial<Record<PactGrantKey<M>, bigint>>> | null,
+  ): boolean {
+    const split = key.lastIndexOf(TENANT_SEP);
+    const module = (split === -1 ? key : key.slice(split + 2)) as M;
+    const tenant = split === -1 ? '' : key.slice(0, split);
+    let mask = this.__grantOf(grants, module) |
+      this.__grantOf(grants, `${TENANT_SEP}${module}`);
+    if (tenant !== '' && !tenant.includes(TENANT_SEP)) {
+      mask |= this.__grantOf(grants, `${tenant}${TENANT_SEP}${module}`);
+    }
+    return this.__evaluate(module, permission, mask);
+  }
+
+  /**
+   * Effective mask for one grant key — own keys only (a prototype-chain
    * name like 'constructor' must not resolve to a Function), bigints
    * only, and negative masks clamp to 0n: a sign bug in app grant
    * composition must never become all-access (-1n & bit is true for
    * every bit).
    */
   private __grantOf(
-    grants: Readonly<Partial<Record<M, bigint>>> | null,
-    module: M,
+    grants: Readonly<Partial<Record<PactGrantKey<M>, bigint>>> | null,
+    key: string,
   ): bigint {
-    if (grants === null || !Object.hasOwn(grants, module)) {
+    if (grants === null || !Object.hasOwn(grants, key)) {
       return 0n;
     }
-    const mask = grants[module];
+    const mask = grants[key as PactGrantKey<M>];
     return typeof mask === 'bigint' && mask > 0n ? mask : 0n;
   }
 
@@ -2535,6 +2567,8 @@ export class Pact<B extends PermissionBits, M extends string>
    * Validation IS resolution: an unknown permission name throws while
    * building the masks, so no separate validation pass exists to drift out
    * of sync. Unknown modules cannot exist — the keys ARE the modules.
+   * A module name may not contain '::', which would make a tenant-scoped
+   * grant key ambiguous.
    */
   private __resolveModuleMasks(
     modulePermissions: ModulePermissions<B>,
@@ -2543,6 +2577,12 @@ export class Pact<B extends PermissionBits, M extends string>
     // an own key, not a silent prototype swap.
     const masks: Partial<Record<M, bigint>> = Object.create(null);
     for (const [module, permissions] of Object.entries(modulePermissions)) {
+      if (module.includes(TENANT_SEP)) {
+        throw new PactError('INVALID_OPTION', {
+          option: 'modulePermissions',
+          reason: `module '${module}' must not contain '::' (tenant separator)`,
+        });
+      }
       let mask = 0n;
       for (const permission of permissions) {
         const bit = this.bits[permission];

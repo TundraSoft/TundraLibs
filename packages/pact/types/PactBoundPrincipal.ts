@@ -1,3 +1,4 @@
+import type { PactGrantKey } from './PactGrantKey.ts';
 import type { PactPrincipal } from './PactPrincipal.ts';
 import type { PermissionBits } from './PermissionBits.ts';
 
@@ -14,6 +15,6 @@ export type PactBoundPrincipal<
   M extends string = string,
   B extends PermissionBits = PermissionBits,
 > = PactPrincipal<M> & {
-  hasPermission(module: M, permission: keyof B): Promise<boolean>;
-  assert(module: M, permission: keyof B): Promise<void>;
+  hasPermission(module: PactGrantKey<M>, permission: keyof B): Promise<boolean>;
+  assert(module: PactGrantKey<M>, permission: keyof B): Promise<void>;
 };

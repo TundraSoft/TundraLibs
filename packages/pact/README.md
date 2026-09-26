@@ -49,6 +49,7 @@ or better-auth. All cryptography is delegated to
 | [Sessions](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Sessions)                   | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode                                |
 | [OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-OAuth)                         | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy                            |
 | [Multi-tenant OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-MultiTenantOAuth) | Per-tenant IdPs registered at runtime: `updateOAuth`/`removeOAuth`, propagation across instances |
+| [Tenants](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Tenants)                     | Tenant-scoped grants (`acme::Post`), global super-admin grants, accounts per tenant              |
 | [Caching](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Caching)                     | Opt-in caches, the instance name, TTLs, invalidation                                             |
 | [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security)                   | The error contract, enumeration resistance, bound principals, threat notes                       |
 | [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware)               | express / fastify / oak / hono adapters and the neutral core                                     |
@@ -205,6 +206,10 @@ See [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware).
 - **Bitmask authorization** — module × permission over unbounded BigInt
   masks. Definition typos throw at construction; per-request junk fails
   closed. Grants serialize through a prototype-pollution-safe codec.
+- **Tenant-scoped grants** — a check on `acme::Post` passes on the
+  principal's `acme::Post` grant or its global `Post` grant, so one grant
+  map covers tenant users and platform admins. See
+  [Tenants](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Tenants).
 - **OAuth as helpers, not a framework** — `oauthRedirect()` (URL, state,
   PKCE verifier, nonce) and `oauthLogin()` feeding the standard session
   pipeline. Seven presets plus generic OIDC discovery; inbound `id_token`s

@@ -1,3 +1,5 @@
+import type { PactGrantKey } from './PactGrantKey.ts';
+
 /**
  * The unified authorized actor pact evaluates permissions against — a
  * resolved user or API key. Plain readonly data: serializable, cacheable,
@@ -9,6 +11,7 @@
  * whitelist), and no status — a principal exists iff its source was
  * ACTIVE at resolution time. Grants are PER-MODULE effective masks; a
  * module missing from the map holds no permissions there (fail-closed).
+ * A key may be tenant-scoped (`acme::POST`); see {@link PactGrantKey}.
  */
 export type PactPrincipal<M extends string = string> =
   | {
@@ -18,7 +21,7 @@ export type PactPrincipal<M extends string = string> =
     readonly id: string;
     /** Module → effective permission mask; a missing module means no
      * access in it. */
-    readonly grants: Readonly<Partial<Record<M, bigint>>>;
+    readonly grants: Readonly<Partial<Record<PactGrantKey<M>, bigint>>>;
     /** App-owned bag, copied verbatim from the stored record. */
     readonly metadata?: Readonly<Record<string, unknown>>;
   }
@@ -31,7 +34,7 @@ export type PactPrincipal<M extends string = string> =
     readonly userId?: string;
     /** Module → effective permission mask; a missing module means no
      * access in it. */
-    readonly grants: Readonly<Partial<Record<M, bigint>>>;
+    readonly grants: Readonly<Partial<Record<PactGrantKey<M>, bigint>>>;
     /** App-owned bag, copied verbatim from the stored record. */
     readonly metadata?: Readonly<Record<string, unknown>>;
   };
