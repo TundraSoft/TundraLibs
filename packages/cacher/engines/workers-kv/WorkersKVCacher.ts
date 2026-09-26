@@ -137,9 +137,11 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
   protected async _set(key: string, value: CacheValue): Promise<void> {
     let reason: string | undefined;
     if (value.window) {
-      reason = 'window mode is not supported: Workers KV cannot extend a TTL without rewriting the value';
+      reason =
+        'window mode is not supported: Workers KV cannot extend a TTL without rewriting the value';
     } else if (value.expiry > 0 && value.expiry < KV_MIN_EXPIRY_SECONDS) {
-      reason = `expiry must be 0 or at least ${KV_MIN_EXPIRY_SECONDS} seconds on Workers KV`;
+      reason =
+        `expiry must be 0 or at least ${KV_MIN_EXPIRY_SECONDS} seconds on Workers KV`;
     }
     if (reason !== undefined) {
       throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
