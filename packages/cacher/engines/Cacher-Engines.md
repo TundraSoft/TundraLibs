@@ -18,11 +18,12 @@ Built-in cache engine implementations for the Cacher package.
 
 The `@tundralibs/cacher/engines` module re-exports all built-in cache engine classes and their option types. You can import individual engines directly rather than going through the `Cacher` manager.
 
-| Engine                                       | Identifier    | External dependency | Description                        |
-| -------------------------------------------- | ------------- | ------------------- | ---------------------------------- |
-| [`MemoryCacher`](memory/Cacher-Memory.md)    | `'MEMORY'`    | None                | In-process memory cache            |
-| [`RedisCacher`](redis/Cacher-Redis.md)       | `'REDIS'`     | Redis server        | Redis-backed distributed cache     |
-| [`MemCacher`](memcached/Cacher-Memcached.md) | `'MEMCACHED'` | Memcached server    | Memcached-backed distributed cache |
+| Engine                                              | Identifier     | External dependency | Description                        |
+| --------------------------------------------------- | -------------- | ------------------- | ---------------------------------- |
+| [`MemoryCacher`](memory/Cacher-Memory.md)           | `'MEMORY'`     | None                | In-process memory cache            |
+| [`RedisCacher`](redis/Cacher-Redis.md)              | `'REDIS'`      | Redis server        | Redis-backed distributed cache     |
+| [`MemCacher`](memcached/Cacher-Memcached.md)        | `'MEMCACHED'`  | Memcached server    | Memcached-backed distributed cache |
+| [`WorkersKVCacher`](workers-kv/Cacher-WorkersKV.md) | `'WORKERS_KV'` | Workers KV binding  | Cloudflare Workers KV cache        |
 
 ## Installation
 
@@ -151,10 +152,11 @@ await cache.delete('user:1');
 
 Removes all entries in this instance's namespace. The mechanism is
 backend-specific — Memory and Redis delete outright (Redis via `KEYS` +
-`DEL`, not `SCAN`-based), Memcached bumps a version counter instead of
-deleting — see each engine's own doc for the tradeoffs:
+`DEL`, not `SCAN`-based), Memcached and Workers KV switch to a new
+version instead of deleting — see each engine's own doc for the tradeoffs:
 [Cacher-Redis.md#notes](redis/Cacher-Redis.md#notes),
-[Cacher-Memcached.md#notes](memcached/Cacher-Memcached.md#notes).
+[Cacher-Memcached.md#notes](memcached/Cacher-Memcached.md#notes),
+[Cacher-WorkersKV.md#notes](workers-kv/Cacher-WorkersKV.md#notes).
 
 ```typescript
 import { MemoryCacher } from '@tundralibs/cacher/engines';
@@ -190,20 +192,23 @@ await cache.finalize();
 
 ## Engine Comparison
 
-| Capability               | Memory | Redis | Memcached |
-| ------------------------ | :----: | :---: | :-------: |
-| No external dependencies |   ✅   |  ❌   |    ❌     |
-| Shared across processes  |   ❌   |  ✅   |    ✅     |
-| TLS / SSL support        |   ❌   |  ✅   |    ✅     |
-| Sliding (window) expiry  |   ✅   |  ✅   |    ✅     |
-| Per-entry custom TTL     |   ✅   |  ✅   |    ✅     |
-| Namespace isolation      |   ✅   |  ✅   |    ✅     |
+| Capability               | Memory | Redis | Memcached | Workers KV |
+| ------------------------ | :----: | :---: | :-------: | :--------: |
+| No external dependencies |   ✅   |  ❌   |    ❌     |     ✅     |
+| Shared across processes  |   ❌   |  ✅   |    ✅     |     ✅     |
+| TLS / SSL support        |   ❌   |  ✅   |    ✅     |    n/a     |
+| Sliding (window) expiry  |   ✅   |  ✅   |    ✅     |     ❌     |
+| Per-entry custom TTL     |   ✅   |  ✅   |    ✅     |    ✅\*    |
+| Namespace isolation      |   ✅   |  ✅   |    ✅     |     ✅     |
+
+\* Workers KV accepts `0` (no expiry) or at least 60 seconds.
 
 ## Detailed Documentation
 
 - [MemoryCacher](memory/Cacher-Memory.md) — In-process cache, no dependencies
 - [RedisCacher](redis/Cacher-Redis.md) — Redis-backed cache with TLS support
 - [MemCacher](memcached/Cacher-Memcached.md) — Memcached-backed cache with TLS support
+- [WorkersKVCacher](workers-kv/Cacher-WorkersKV.md) — Cloudflare Workers KV cache, Workers only
 
 ---
 

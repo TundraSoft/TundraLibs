@@ -1,6 +1,6 @@
 # Cacher
 
-Cross-runtime caching with a unified, TTL-aware API over Memory, Redis, and Memcached engines — for Deno, Bun, and Node.js.
+Cross-runtime caching with a unified, TTL-aware API over Memory, Redis, Memcached and Cloudflare Workers KV engines — for Deno, Bun, and Node.js.
 
 [![JSR](https://jsr.io/badges/@tundralibs/cacher)](https://jsr.io/@tundralibs/cacher)
 [![JSR Score](https://jsr.io/badges/@tundralibs/cacher/score)](https://jsr.io/@tundralibs/cacher)
@@ -25,6 +25,10 @@ real TCP through `cloudflare:sockets` — no `nodejs_compat` flag needed —
 so both engines work there. In a plain **browser** they still don't:
 a browser has no raw TCP at all, `cloudflare:sockets` included.
 
+The `WORKERS_KV` engine stores entries in a Workers KV namespace. It needs
+the namespace binding from the Worker's `env`, so it runs only in a Worker or
+under Miniflare. It has no REST mode for other runtimes.
+
 `RedisCacher`/`MemCacher` statically import those `@tundralibs/drivers`
 engines at module top level, so importing `@tundralibs/cacher` never
 throws or fails to bundle anywhere — the driver classes load fine; it is
@@ -39,7 +43,7 @@ runs fine and a Redis/Memcached engine fails only if you actually try to
 | ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `Cacher` (default) | Singleton manager for engine registration and cache instance creation | This page                                                                      |
 | `AbstractEngine`   | Base class for custom cache engine implementations                    | [Custom Engine](#custom-engine)                                                |
-| `./engines`        | Built-in engines: Memory, Redis, Memcached                            | [Cacher-Engines](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Engines) |
+| `./engines`        | Built-in engines: Memory, Redis, Memcached, Workers KV                | [Cacher-Engines](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Engines) |
 | `./errors`         | `CacherError` and `CacherEngineError` error classes                   | [Cacher-Errors](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Errors)   |
 | `./types`          | `CacherOptions`, `CacheValue`, `CacheValueOptions`                    | —                                                                              |
 
@@ -49,6 +53,7 @@ runs fine and a Redis/Memcached engine fails only if you actually try to
 - [Memory Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Memory) — In-process cache, no dependencies
 - [Redis Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Redis) — Redis-backed cache with TLS support
 - [Memcached Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Memcached) — Memcached-backed cache with TLS support
+- [Workers KV Engine](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-WorkersKV) — Cloudflare Workers KV-backed cache for Workers
 - [Errors](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-Errors) — Error classes and error code reference
 
 ## Installation
@@ -138,6 +143,21 @@ const cache = Cacher.create('MEMCACHED', 'object-cache', {
 await cache.set('product:1', { id: 1, name: 'Widget', price: 9.99 });
 ```
 
+### Workers KV Cache
+
+```typescript
+import { Cacher, type WorkersKVNamespace } from '@tundralibs/cacher';
+
+declare const env: { CACHE: WorkersKVNamespace }; // the Worker's env
+
+const cache = Cacher.create('WORKERS_KV', 'page-cache', {
+  binding: env.CACHE,
+  defaultExpiry: 600,
+});
+
+await cache.set('page:home', { title: 'Home' });
+```
+
 ## Engines
 
 ### Memory (`MEMORY`)
@@ -173,6 +193,18 @@ Uses a Memcached server as the cache backend.
 | `maxBufferSize` | `number`                      | `10`     | Maximum buffer size in MB               |
 | `ssl`           | `boolean \| EngineSSLOptions` | —        | TLS configuration (`true` for defaults) |
 | `defaultExpiry` | `number`                      | `300`    | Default TTL in seconds                  |
+
+### Workers KV (`WORKERS_KV`)
+
+Uses a Cloudflare Workers KV namespace as the cache backend. KV is eventually
+consistent: a delete or `clear()` can take 60 seconds to reach other data
+centres. The engine rejects `window` mode and any `expiry` between 1 and 59
+seconds. See [Cacher-WorkersKV](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-WorkersKV).
+
+| Option          | Type                 | Default  | Description                                           |
+| --------------- | -------------------- | -------- | ----------------------------------------------------- |
+| `binding`       | `WorkersKVNamespace` | required | The KV namespace from the Worker's `env`              |
+| `defaultExpiry` | `number`             | `300`    | Default TTL in seconds: `0` (no expiry) or 60–2592000 |
 
 ## API Reference
 
@@ -270,7 +302,7 @@ import { Cacher } from '@tundralibs/cacher';
 
 Cacher.create('MEMORY', 'inventory-demo', { defaultExpiry: 300 });
 
-console.log(Cacher.getRegisteredEngines()); // ['MEMCACHED', 'MEMORY', 'REDIS']
+console.log(Cacher.getRegisteredEngines()); // ['MEMCACHED', 'MEMORY', 'REDIS', 'WORKERS_KV']
 console.log(Cacher.getActiveInstances().includes('inventory-demo')); // true
 ```
 
