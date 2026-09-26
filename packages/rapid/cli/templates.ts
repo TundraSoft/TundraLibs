@@ -617,7 +617,7 @@ using it — do not guess.
 | Authentication (JWT, API keys, HMAC signing), permissions | \`@tundralibs/pact\`                                                   |
 | Database models / ORM                                     | \`@tundralibs/norm\` (it builds its engine from its \`database\` config) |
 | Hand-built typed query → SQL                              | \`@tundralibs/oql\`                                                    |
-| Cache (memory / Redis / Memcached)                        | \`@tundralibs/cacher\`                                                 |
+| Cache (memory / Redis / Memcached / Workers KV)           | \`@tundralibs/cacher\`                                                 |
 | Generate ids (nanoid / ulid / sequence)                   | \`@tundralibs/id\`                                                     |
 | Hash, encrypt, sign, password hashing                     | \`@tundralibs/crypt\`                                                  |
 | Call an upstream REST API                                 | \`@tundralibs/restler\`                                                |
@@ -662,12 +662,15 @@ using it — do not guess.
   first.
 - **Caching — \`@tundralibs/cacher\`.** Swappable backends: \`const cache =
   Cacher.create('MEMORY', 'my-cache', { defaultExpiry: 300 })\` (or \`'REDIS'\`,
-  \`'MEMCACHED'\`; the options bag is REQUIRED, \`defaultExpiry\` in seconds); \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`,
+  \`'MEMCACHED'\`, or \`'WORKERS_KV'\` with \`{ binding: env.KV }\` in a Cloudflare
+  Worker; the options bag is REQUIRED, \`defaultExpiry\` in seconds); \`await cache.set(key, value)\`, \`await cache.get<T>(key)\`,
   \`has\`, \`delete\`, \`clear\`. Same API across backends, so start in-memory and
   switch by config. rapid's \`session()\`/\`rateLimit()\`/\`idempotency()\` take
   persistence \`hooks\` (\`getSession\`/\`saveSession\`/\`deleteSession\`/
   \`touchSession\`, an atomic \`increment\`, a set-if-absent \`claim\`) — a cacher
-  instance implements them in a few lines (same seconds unit).
+  instance implements them in a few lines (same seconds unit). Not on
+  \`WORKERS_KV\`: it is eventually consistent, has no atomic increment or
+  set-if-absent, and takes one write per key per second.
 - **Ids — \`@tundralibs/id\`.** \`nanoID()\` (21-char URL-safe; \`nanoID(10,
   NUMBERS)\` for length/alphabet), \`ulid()\` (sortable), \`sequenceID()\` (a
   FACTORY: \`const seq = sequenceID(); seq()\` → a bigint, counter-based,
@@ -791,7 +794,12 @@ fills \`ctx.auth\` with a \`PactAuthContext\` (\`principal\`, \`via\`) from Bear
 (header or \`bearer.cookie\`), Basic, ApiKey or HMAC carriers; absent →
 anonymous (\`optional: false\` → 401); present-but-invalid → 401, never
 anonymous. \`authorize('Module', 'PERMISSION')\` is typed by the pact instance
-and checked against its catalog when called. Options are pact's own
+and checked against its catalog when called. Tenant-scoped grants use
+\`tenant::Module\` keys (a bare \`Module\` grant applies in every tenant):
+check them in the handler with
+\`await ctx.auth.principal.hasPermission(org + '::Posts', 'EDIT')\` and throw
+\`RapidError('RAPID_ACCESS_DENIED')\` when false, then use that same \`org\`
+for every query. Options are pact's own
 middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
 signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
 authenticate from the upgrade request's headers/cookies. A stale bearer
