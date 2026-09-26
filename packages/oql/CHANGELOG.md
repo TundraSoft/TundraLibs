@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.2.0...oql-v1.2.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **global:** pass the Weekly Health deno-canary lane under TypeScript 7 ([#717](https://github.com/TundraSoft/TundraLibs/issues/717)) ([fee29d6](https://github.com/TundraSoft/TundraLibs/commit/fee29d6e7484b8d8010ecc81789fa939e0a29eb1))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.1.4...oql-v1.2.0) (2026-09-20)
 
 
