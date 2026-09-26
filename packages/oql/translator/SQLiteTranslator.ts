@@ -195,7 +195,7 @@ export class SQLiteTranslator extends AbstractTranslator {
       'DATE_DIFF',
       (a) => {
         const [from, to, unit] = a;
-        const scale = this._timeUnitCase(unit, {
+        const scale = this._timeUnitCase(unit!, {
           DAYS: '1',
           HOURS: '24',
           MINUTES: '1440',

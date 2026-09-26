@@ -212,13 +212,13 @@ export class MariaTranslator extends AbstractTranslator {
       // inlined, not parameterised, so a CASE maps the OQL unit string to
       // the SQL keyword.
       const [date, amount, unit] = a;
-      const unitKeyword = this._timeUnitCase(unit, MARIA_INTERVAL_UNITS);
+      const unitKeyword = this._timeUnitCase(unit!, MARIA_INTERVAL_UNITS);
       return `TIMESTAMPADD(${unitKeyword}, ${amount}, ${date})`;
     }],
     ['DATE_DIFF', (a) => {
       // MariaDB: TIMESTAMPDIFF(unit, from, to) — unit can't be parameterised.
       const [from, to, unit] = a;
-      const unitKeyword = this._timeUnitCase(unit, MARIA_INTERVAL_UNITS);
+      const unitKeyword = this._timeUnitCase(unit!, MARIA_INTERVAL_UNITS);
       return `TIMESTAMPDIFF(${unitKeyword}, ${from}, ${to})`;
     }],
     ['UUID', () => 'UUID()'],
