@@ -506,13 +506,14 @@ audit can see the escape hatch in use; `query()` does not.
 Off by default. Pass a `cache` config to `new Norm({...})` and give each
 entity a `cache` TTL in minutes. Non-transactional `find`, `findOne`,
 `count`, and `getByPK` reads are then served from `@tundralibs/cacher`,
-keyed by the query. The TTL is windowed: each hit resets the clock.
+keyed by the query. The TTL is windowed: each hit resets the clock
+(except on `WORKERS_KV`, where it is fixed).
 
 ```typescript ignore
 const norm = new Norm({
-  name: 'app', // namespaces the cache (required on REDIS / MEMCACHED)
+  name: 'app', // namespaces the cache (required on any engine but MEMORY)
   database: { dialect: 'sqlite', path: ':memory:' },
-  cache: { engine: 'MEMORY' }, // or REDIS/MEMCACHED + options
+  cache: { engine: 'MEMORY' }, // or REDIS/MEMCACHED/WORKERS_KV + options
 });
 
 // Per-entity opt-in (minutes; 0/omitted = off):
@@ -545,10 +546,13 @@ await db.clearCache(); // drop every entity's cache
   is unreachable, a failed `get` is a miss and a failed `set` or prune is
   skipped. Each surfaces a `cache-error` warning. The query itself never
   fails.
-- **Any cacher engine.** `MEMORY`, `REDIS`, and `MEMCACHED` all work
-  through cacher's unified API, and each engine's `clear()` is scoped to
-  the namespace. Memcached bumps a version counter rather than flushing
-  the server.
+- **Any cacher engine.** `MEMORY`, `REDIS`, `MEMCACHED`, and
+  `WORKERS_KV` all work through cacher's unified API, and each engine's
+  `clear()` is scoped to the namespace. Memcached and Workers KV switch
+  to a new namespace version rather than flushing the store. Workers KV
+  is eventually consistent; see
+  [Read caching](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Caching#workers-kv)
+  before using it.
 - **Caveats.** Prune-on-write is not atomic with the database write, so
   staleness is bounded to one read window. `raw()` and external writes do
   not invalidate.

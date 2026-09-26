@@ -50,7 +50,8 @@ const norm = new Norm({
 const db = norm.use(App);
 ```
 
-The TTL is windowed: each cache hit resets the clock, so a hot query
+The TTL is windowed (fixed on `WORKERS_KV`, see
+[Workers KV](#workers-kv)): each cache hit resets the clock, so a hot query
 stays cached as long as it keeps being read. `cache: 0` (or omitting
 it) turns caching off for that entity.
 
@@ -58,10 +59,10 @@ The `Norm`'s `name` roots the cache namespace and is the isolation
 boundary: two `Norm`s pointed at the same cache engine must use
 different names, or they would share (and cross-prune) each other's
 entries. It defaults to `norm-<n>`, a per-process counter. That is fine
-for `MEMORY`, whose store is private to the process, but a `REDIS` or
-`MEMCACHED` engine requires an explicit `name`, since every process
-would otherwise call itself `norm-1`; the constructor throws
-`INVALID_CACHE_CONFIG` without one.
+for `MEMORY`, whose store is private to the process, but every other
+engine (`REDIS`, `MEMCACHED`, `WORKERS_KV`) requires an explicit `name`,
+since every process would otherwise call itself `norm-1`; the
+constructor throws `INVALID_CACHE_CONFIG` without one.
 
 ## What gets cached
 
@@ -189,7 +190,8 @@ engine throws a `NormError` (`INVALID_CACHE_CONFIG`) at `use()` time.
 ## Cache engines
 
 Any engine registered on the `@tundralibs/cacher` singleton works. norm
-goes through cacher's unified API and never special-cases an engine:
+goes through cacher's unified API; the one engine-specific rule is the
+fixed TTL on `WORKERS_KV`:
 
 ```typescript ignore
 // In-process, no dependencies (the only engine that may cache encrypted
@@ -201,6 +203,9 @@ cache: {
   engine: 'REDIS',
   options: { host: '10.0.0.1', port: 6379, username: '', password: '…', db: 0 },
 }
+
+// Cloudflare Workers KV — the namespace binding from the Worker's env:
+cache: { engine: 'WORKERS_KV', options: { binding: env.CACHE } }
 ```
 
 Each entity gets its own cache namespace (`<name>__Entity`, rooted at
@@ -208,7 +213,25 @@ the `Norm`'s `name`), and every engine's namespace clear is scoped:
 Redis deletes `name:*`, Memcached bumps a per-namespace version counter
 (never a server-wide `flush_all`), and Memory clears its own map.
 Pruning one table never disturbs another table's cache or another app
-sharing the same server.
+sharing the same server. Workers KV writes a new namespace version, like
+Memcached.
+
+### Workers KV
+
+`WORKERS_KV` suits read-mostly entities in a Worker. Its limits change
+three things:
+
+| Behaviour    | On Workers KV                                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TTL          | Fixed, not windowed: KV can extend a TTL only by rewriting the value. The entity's `cache` minutes still apply                                                                               |
+| Invalidation | A write's prune reaches other data centres within about 60 seconds, so reads elsewhere can be stale for that long                                                                            |
+| Write rate   | Each prune writes one key, and KV accepts one write per second per key. On a table written faster than that, prunes fail with a `cache-error` warning and entries stay stale until their TTL |
+
+Cache an entity on Workers KV only if it is written less than once a
+second and a minute of cross-region staleness is acceptable. For
+anything else, leave `cache` off on that entity. See
+[Cacher-WorkersKV](../../cacher/engines/workers-kv/Cacher-WorkersKV.md)
+for the engine itself.
 
 ## Backend failures
 

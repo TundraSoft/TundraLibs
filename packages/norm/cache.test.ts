@@ -684,3 +684,33 @@ describe('norm read cache', () => {
     });
   });
 });
+
+describe('norm read cache on Workers KV', () => {
+  it('caches with a fixed TTL, since KV cannot slide one', async () => {
+    const store = new Map<string, string>();
+    const ttls: (number | undefined)[] = [];
+    const binding = {
+      get: (k: string) => Promise.resolve(store.get(k) ?? null),
+      put: (k: string, v: string, o?: { expirationTtl?: number }) => {
+        ttls.push(o?.expirationTtl);
+        store.set(k, v);
+        return Promise.resolve();
+      },
+      delete: (k: string) => Promise.resolve(void store.delete(k)),
+    };
+    const { db, exec, events } = setup({ Users }, {
+      engine: 'WORKERS_KV',
+      options: { binding },
+    });
+    exec.selectRows = [{ id: 1, name: 'a' }];
+    await db.repo('Users').find();
+    const r2 = await db.repo('Users').find();
+    asserts.assertEquals(exec.selects(), 1, 'second read must hit KV');
+    asserts.assertEquals(r2.data, [{ id: 1, name: 'a' }]);
+    asserts.assertEquals(ttls, [300], 'the entity TTL, as a fixed expiry');
+    asserts.assertEquals(
+      events.filter((e) => e.event === 'warning').length,
+      0,
+    );
+  });
+});
