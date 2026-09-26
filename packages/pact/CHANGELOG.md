@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.10.0...pact-v0.11.0) (2026-09-26)
+
+
+### Features
+
+* **pact:** scope grants to a tenant with TENANT::MODULE keys ([#720](https://github.com/TundraSoft/TundraLibs/issues/720)) ([33fd601](https://github.com/TundraSoft/TundraLibs/commit/33fd601547c8d1fbb495a4e72d47fc599ac5deb7))
+
 ## [0.10.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.9.1...pact-v0.10.0) (2026-09-22)
 
 

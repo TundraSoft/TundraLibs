@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.5](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.4...norm-v1.9.5) (2026-09-26)
+
+
+### Bug Fixes
+
+* **norm:** cache on Workers KV with a fixed TTL ([#721](https://github.com/TundraSoft/TundraLibs/issues/721)) ([cd5c816](https://github.com/TundraSoft/TundraLibs/commit/cd5c8165cdb9eb7dac944a32a932c243f4d9804e))
+
 ## [1.9.4](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.3...norm-v1.9.4) (2026-09-19)
 
 

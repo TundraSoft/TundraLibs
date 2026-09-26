@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.1.1...cacher-v1.2.0) (2026-09-26)
+
+
+### Features
+
+* **cacher:** add a Cloudflare Workers KV engine ([#718](https://github.com/TundraSoft/TundraLibs/issues/718)) ([c03db54](https://github.com/TundraSoft/TundraLibs/commit/c03db544da44e83e41320a59ebc73cc1a3d017f3))
+
+
+### Bug Fixes
+
+* **global:** pass the Weekly Health deno-canary lane under TypeScript 7 ([#717](https://github.com/TundraSoft/TundraLibs/issues/717)) ([fee29d6](https://github.com/TundraSoft/TundraLibs/commit/fee29d6e7484b8d8010ecc81789fa939e0a29eb1))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.1.0...cacher-v1.1.1) (2026-09-18)
 
 

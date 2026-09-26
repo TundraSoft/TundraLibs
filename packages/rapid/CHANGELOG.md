@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.0...rapid-v0.8.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **global:** pass the Weekly Health deno-canary lane under TypeScript 7 ([#717](https://github.com/TundraSoft/TundraLibs/issues/717)) ([fee29d6](https://github.com/TundraSoft/TundraLibs/commit/fee29d6e7484b8d8010ecc81789fa939e0a29eb1))
+
+
+### Documentation
+
+* **rapid:** cover pact tenant-scoped checks and the Workers KV cacher ([#722](https://github.com/TundraSoft/TundraLibs/issues/722)) ([515cb87](https://github.com/TundraSoft/TundraLibs/commit/515cb872d08c0be2198c1b5a436a0e0974791f9f))
+
 ## [0.8.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.7.1...rapid-v0.8.0) (2026-09-22)
 
 
