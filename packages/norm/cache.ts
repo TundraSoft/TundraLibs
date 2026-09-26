@@ -49,6 +49,11 @@ const NS_SEP = '__';
  * per-entity `cache` minutes up front instead. */
 const MAX_TTL_SECONDS = 2592000;
 
+/** Engines that cannot slide a TTL on read. Entries there get a fixed
+ * TTL instead: Workers KV rejects `window` mode, since extending a TTL
+ * means rewriting the value. */
+const FIXED_TTL_ENGINES: ReadonlySet<string> = new Set(['WORKERS_KV']);
+
 /**
  * Enable read caching on a `Norm`. Passed as `cache` to the
  * constructor; the `Norm`'s `name` roots the namespace (explicit on an
@@ -58,7 +63,7 @@ const MAX_TTL_SECONDS = 2592000;
 export type NormCacheConfig = {
   /**
    * Cacher engine name — `'MEMORY'` (default, in-process),
-   * `'REDIS'`, `'MEMCACHED'`, or any engine registered on the
+   * `'REDIS'`, `'MEMCACHED'`, `'WORKERS_KV'`, or any engine registered on the
    * `@tundralibs/cacher` singleton. Encrypted columns may only be
    * cached on `'MEMORY'` (see the compose-time guard in
    * `compileRuntime`): an external store would hold their plaintext.
@@ -269,8 +274,9 @@ export class QueryCache {
   }
 
   /** Store a value under this entity's windowed TTL (each read resets
-   * the clock). No-op if the entity is not cacheable; a backend failure
-   * is swallowed (the read already succeeded — it just was not cached). */
+   * the clock), or a fixed TTL on an engine in {@link FIXED_TTL_ENGINES}.
+   * No-op if the entity is not cacheable; a backend failure is swallowed
+   * (the read already succeeded — it just was not cached). */
   public async set(
     entityKey: string,
     key: string,
@@ -281,7 +287,7 @@ export class QueryCache {
     try {
       await this.__engineFor(entityKey).set(key, encodeForCache(value), {
         expiry: ttl,
-        window: true,
+        window: !FIXED_TTL_ENGINES.has(this.engineName),
       });
     } catch (e) {
       this.__warn(entityKey, `cache write failed (not cached): ${msg(e)}`);

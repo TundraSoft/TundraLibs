@@ -14,16 +14,16 @@
 
 ## Current state
 
-| Layer               | Status   | Notes                                                                                                                                                                                                |
-| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Typed model surface | Complete | Schema, querying, aggregates, scoping, transactions (with savepoints)                                                                                                                                |
-| Engine support      | Complete | Seven dialects: PostgreSQL / MariaDB / SQLite / MongoDB self-hosted and live-proven; Neon / Turso / D1 fetch-only for edge runtimes (no pooling, no transactions). One migration + encryption story  |
-| At-rest encryption  | Complete | `.encrypt().hash().mask()`; key rotation via `rotateKey()` (key-id envelope); since 1.5.0 the GCM path derives one AES key per secret per process instead of PBKDF2 per cell                         |
-| Temporal & audit    | Complete | Shipped in 1.4.0: insert-only versioned tables and generated read-only audit replicas over one supersede primitive; best-effort on Mongo and the fetch-only dialects. Design in `DESIGN-Temporal.md` |
-| Migrations          | Complete | Stored reviewed plans + hash-verified apply + advisory lock                                                                                                                                          |
-| Observability       | Complete | `witness` hook bridges the metadata-only event bus to `@tundralibs/tracer`                                                                                                                           |
-| Read caching        | Complete | Opt-in per-entity TTL over `@tundralibs/cacher`; per-table namespaced pruning; view/query dep-invalidation; MEMORY/REDIS/MEMCACHED; degrades on backend failure. Joins deferred (see below)          |
-| Escape hatch        | Partial  | `db.raw<R>()` typed passthrough (crypto-blind by design); `query(IR)`                                                                                                                                |
+| Layer               | Status   | Notes                                                                                                                                                                                                                    |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Typed model surface | Complete | Schema, querying, aggregates, scoping, transactions (with savepoints)                                                                                                                                                    |
+| Engine support      | Complete | Seven dialects: PostgreSQL / MariaDB / SQLite / MongoDB self-hosted and live-proven; Neon / Turso / D1 fetch-only for edge runtimes (no pooling, no transactions). One migration + encryption story                      |
+| At-rest encryption  | Complete | `.encrypt().hash().mask()`; key rotation via `rotateKey()` (key-id envelope); since 1.5.0 the GCM path derives one AES key per secret per process instead of PBKDF2 per cell                                             |
+| Temporal & audit    | Complete | Shipped in 1.4.0: insert-only versioned tables and generated read-only audit replicas over one supersede primitive; best-effort on Mongo and the fetch-only dialects. Design in `DESIGN-Temporal.md`                     |
+| Migrations          | Complete | Stored reviewed plans + hash-verified apply + advisory lock                                                                                                                                                              |
+| Observability       | Complete | `witness` hook bridges the metadata-only event bus to `@tundralibs/tracer`                                                                                                                                               |
+| Read caching        | Complete | Opt-in per-entity TTL over `@tundralibs/cacher`; per-table namespaced pruning; view/query dep-invalidation; MEMORY/REDIS/MEMCACHED/WORKERS_KV (fixed TTL on KV); degrades on backend failure. Joins deferred (see below) |
+| Escape hatch        | Partial  | `db.raw<R>()` typed passthrough (crypto-blind by design); `query(IR)`                                                                                                                                                    |
 
 ## Planned / deferred
 

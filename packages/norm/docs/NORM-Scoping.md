@@ -17,6 +17,7 @@ a forgotten tenant filter cannot leak across tenants.
 - [Rules and limits](#rules-and-limits)
 - [Scoping and temporal / audit tables](#scoping-and-temporal--audit-tables)
 - [Scoping vs views](#scoping-vs-views)
+- [Pairing with pact tenant checks](#pairing-with-pact-tenant-checks)
 
 ## Creating a scoped handle
 
@@ -287,6 +288,38 @@ changes with every request. For a static read model (only active rows,
 only published posts), define a VIEW instead. It is explicit, appears
 in the schema and the migration plan, and can be joined. Scoping and
 views are complementary, not competing.
+
+## Pairing with pact tenant checks
+
+`@tundralibs/pact` checks tenant-scoped permissions with keys like
+`42::Tickets` (see
+[Pact-Tenants](../../pact/docs/Pact-Tenants.md)).
+Scope the handle with the same tenant value you checked. Checking one
+tenant and scoping another is a confused-deputy bug that neither
+library can detect.
+
+```typescript
+import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
+
+// The shape of a pact bound principal's assert().
+declare const principal: {
+  assert(key: string, permission: string): Promise<void>;
+};
+
+const db = new Norm({ database: { dialect: 'sqlite', path: './data' } })
+  .use(Schema('App', {
+    Tickets: Entity('tickets', {
+      id: Column.integer(),
+      orgId: Column.integer(),
+    }, { pk: ['id'] }),
+  }));
+
+async function listTickets(orgId: number) {
+  await principal.assert(`${orgId}::Tickets`, 'READ');
+  return await db.scope({ '@orgId': orgId }).repo('Tickets').find();
+}
+console.log(listTickets);
+```
 
 ---
 
