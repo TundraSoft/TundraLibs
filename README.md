@@ -28,7 +28,7 @@ generation — each independent and dependency-light.
 <!-- workspace:packages:start -->
 
 - **[Ambient](packages/ambient/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/ambient)](https://jsr.io/@tundralibs/ambient) — Cross-runtime request-scoped context over AsyncLocalStorage — correlation/trace ids and custom fields that survive await, no threading
-- **[Cacher](packages/cacher/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/cacher)](https://jsr.io/@tundralibs/cacher) — Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines
+- **[Cacher](packages/cacher/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/cacher)](https://jsr.io/@tundralibs/cacher) — Cross-runtime caching with a unified API over Memory, Redis, Memcached and Cloudflare Workers KV engines
 - **[compat](packages/compat/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/compat)](https://jsr.io/@tundralibs/compat) — Compatibility layer smoothing API differences across Deno, Bun, and Node.js
 - **[Cronus](packages/cronus/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/cronus)](https://jsr.io/@tundralibs/cronus) — Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.
 - **[crypt](packages/crypt/README.md)** [![JSR](https://jsr.io/badges/@tundralibs/crypt)](https://jsr.io/@tundralibs/crypt) — Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA/ECDSA/Ed25519 signing, JWT, OTP, key derivation, and secure random

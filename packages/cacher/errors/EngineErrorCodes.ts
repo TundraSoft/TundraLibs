@@ -48,7 +48,8 @@ export const CacherEngineErrorCodes = {
    * A required configuration key was absent. Raised while options are
    * being validated, before any connection is attempted — Redis
    * without a `host`, or with only one half of the `username` /
-   * `password` pair; Memcached without a `host`.
+   * `password` pair; Memcached without a `host`; Workers KV without a
+   * `binding`.
    *
    * Variables: `configKey` (the missing key). Some sites also set
    * `reason`, which this template does not interpolate.
@@ -57,7 +58,8 @@ export const CacherEngineErrorCodes = {
   /**
    * A configuration value was present but failed validation — a
    * non-positive `port`, a negative `db`, a `defaultExpiry` outside
-   * 0–2592000 seconds, or an empty cacher `name`. Fix the option; the
+   * 0–2592000 seconds (or 1–59 on Workers KV), a Workers KV `binding`
+   * without `get`/`put`/`delete`, or an empty cacher `name`. Fix the option; the
    * engine cannot be constructed until you do.
    *
    * Variables: `configKey` (the offending key), `reason` (why it is
@@ -138,8 +140,10 @@ export const CacherEngineErrorCodes = {
    * The arguments handed to an operation are unusable — raised by
    * `AbstractEngine` before the call reaches the engine, for an
    * `expiry` outside 0–2592000 seconds or a value that is not
-   * JSON-serialisable (`undefined`, a function, a symbol). A caller
-   * bug: fix the arguments rather than retry.
+   * JSON-serialisable (`undefined`, a function, a symbol). Workers KV
+   * also raises it for `window: true` or an `expiry` of 1–59 seconds,
+   * which KV cannot store. A caller bug: fix the arguments rather than
+   * retry.
    *
    * Variables: `operation` (always `'SET'` today), `reason` (which
    * argument is wrong). The meta also carries `key`.

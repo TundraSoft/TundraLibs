@@ -1,14 +1,16 @@
 /**
  * @fileoverview `@tundralibs/cacher` entrypoint.
  *
- * Provides a unified cache abstraction over in-memory, Redis, and
- * Memcached backends behind the same `Cacher` manager API. The package
+ * Provides a unified cache abstraction over in-memory, Redis, Memcached
+ * and Cloudflare Workers KV backends behind the same `Cacher` manager API. The package
  * is designed for server runtimes and exposes the concrete engine
  * constructors and option types needed to wire a cache into an app.
  *
  * Browser and worker bundles should only use the in-memory engine when
  * the runtime supports equivalent process-local semantics; the networked
- * Redis / Memcached engines depend on server-side socket lifecycles.
+ * Redis / Memcached engines depend on server-side socket lifecycles. The
+ * Workers KV engine needs a KV namespace binding, which only a Worker (or
+ * Miniflare) provides.
  *
  * @module
  */
@@ -18,7 +20,12 @@ export { AbstractEngine } from './AbstractEngine.ts';
 export { Cacher } from './Cacher.ts';
 
 // Concrete engines — re-exported through the engines/ barrel.
-export { MemCacher, MemoryCacher, RedisCacher } from './engines/mod.ts';
+export {
+  MemCacher,
+  MemoryCacher,
+  RedisCacher,
+  WorkersKVCacher,
+} from './engines/mod.ts';
 
 // Error surface — single re-export site at ./errors/mod.ts.
 export {
@@ -34,6 +41,8 @@ export type {
   MemCacherOptions,
   MemoryCacherOptions,
   RedisCacherOptions,
+  WorkersKVCacherOptions,
+  WorkersKVNamespace,
 } from './engines/mod.ts';
 export type { CacherEngineErrorCode, CacherErrorMeta } from './errors/mod.ts';
 export type {

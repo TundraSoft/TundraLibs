@@ -100,7 +100,7 @@ const DEFAULT_ENGINES = new Set(
   // pollutes the registry during discovery. Anything not built-in is removed
   // here so the snapshot reflects the genuine defaults.
   Cacher.getRegisteredEngines().filter((n) =>
-    ['MEMORY', 'REDIS', 'MEMCACHED'].includes(n)
+    ['MEMORY', 'REDIS', 'MEMCACHED', 'WORKERS_KV'].includes(n)
   ),
 );
 
@@ -135,6 +135,7 @@ describe({
         asserts.assert(engines.includes('MEMORY'));
         asserts.assert(engines.includes('REDIS'));
         asserts.assert(engines.includes('MEMCACHED'));
+        asserts.assert(engines.includes('WORKERS_KV'));
       });
 
       it('should have no active instances initially', () => {

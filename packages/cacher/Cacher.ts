@@ -1,7 +1,12 @@
 import { Singleton } from '@tundralibs/utils';
 import type { CacherOptions, EngineConstructor } from './types/mod.ts';
 import { AbstractEngine } from './AbstractEngine.ts';
-import { MemCacher, MemoryCacher, RedisCacher } from './engines/mod.ts';
+import {
+  MemCacher,
+  MemoryCacher,
+  RedisCacher,
+  WorkersKVCacher,
+} from './engines/mod.ts';
 import { CacherError } from './errors/mod.ts';
 
 /**
@@ -191,7 +196,7 @@ class Manager {
   /**
    * Create or retrieve a cache instance.
    *
-   * @param engine - The engine type to use (e.g., 'MEMORY', 'REDIS', 'MEMCACHED')
+   * @param engine - The engine type to use (e.g., 'MEMORY', 'REDIS', 'WORKERS_KV')
    * @param name - Unique name for the cache instance
    * @param options - Configuration options for the cache engine
    * @returns Cache instance
@@ -570,6 +575,10 @@ class Manager {
       'MEMCACHED',
       MemCacher,
     );
+    this.addEngine(
+      'WORKERS_KV',
+      WorkersKVCacher,
+    );
   }
 }
 
@@ -577,10 +586,11 @@ class Manager {
  * The process-wide cache manager: registry of engine types plus the named
  * instances built from them.
  *
- * `MEMORY`, `REDIS` and `MEMCACHED` are registered on first import. Reach for
- * this instead of constructing engines directly when different parts of an
- * application need to share one cache by name — {@link Manager.create} returns
- * the existing instance for a name it has already built.
+ * `MEMORY`, `REDIS`, `MEMCACHED` and `WORKERS_KV` are registered on first
+ * import. Reach for this instead of constructing engines directly when
+ * different parts of an application need to share one cache by name —
+ * {@link Manager.create} returns the existing instance for a name it has
+ * already built.
  *
  * @example
  * ```ts
