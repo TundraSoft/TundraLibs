@@ -15,7 +15,7 @@ import type { MemoryCacherOptions } from './types/mod.ts';
  * Note: This cacher is local to the current process and doesn't support sharing
  * across multiple processes or servers.
  *
- * @extends AbstractCacher<MemoryCacherOptions>
+ * @extends AbstractEngine<MemoryCacherOptions>
  * @see {@link AbstractEngine} for details on the base implementation
  * @see {@link MemoryCacherOptions} for configuration options
  * @example
