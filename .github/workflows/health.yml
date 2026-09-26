@@ -2,7 +2,8 @@ name: Weekly Health
 
 # Drift detection: nothing in the repo changed, but the world did —
 # new runtime releases, newly published CVEs. Runs a broader matrix
-# than PR CI and files/updates a tracking issue on failure.
+# than PR CI and files/updates a tracking issue on failure. Dispatchable on
+# any branch to verify a fix; only a run on main touches the tracking issue.
 on:
   schedule:
     - cron: '17 5 * * 1' # Mondays 05:17 UTC
@@ -218,7 +219,7 @@ jobs:
   close-on-success:
     name: Close health issue on a green run
     needs: [drift, audit, consumer-docs]
-    if: success()
+    if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -241,7 +242,7 @@ jobs:
   report:
     name: File issue on failure
     needs: [drift, audit, consumer-docs]
-    if: failure()
+    if: failure() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

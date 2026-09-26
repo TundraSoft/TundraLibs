@@ -39,7 +39,6 @@
  * ```
  */
 
-/// <reference types="npm:@types/node@22" />
 // mongodb is pinned to 6.x (see deno.json / package.json `$mongo`): mongodb 7
 // crashes on Bun — `node:v8` isBuildingSnapshot is unimplemented — and the
 // package.json version is shared with Bun, so every runtime stays on 6.

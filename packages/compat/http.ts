@@ -198,7 +198,7 @@ type AcceptEntry = { type: string; subtype: string; q: number };
 const parseAccept = (header: string): AcceptEntry[] => {
   const entries: AcceptEntry[] = [];
   for (const part of header.split(',')) {
-    const [media, ...params] = part.trim().split(';');
+    const [media = '', ...params] = part.trim().split(';');
     const slash = media.indexOf('/');
     if (slash === -1) continue;
     const type = media.slice(0, slash).trim().toLowerCase();

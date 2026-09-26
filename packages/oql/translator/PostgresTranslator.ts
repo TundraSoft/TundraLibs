@@ -200,7 +200,7 @@ export class PostgresTranslator extends AbstractTranslator {
     ['DATE_DIFF', (a) => {
       // EXTRACT(EPOCH FROM (to - from)) gives seconds; scale by unit.
       const [from, to, unit] = a;
-      const scale = this._timeUnitCase(unit, {
+      const scale = this._timeUnitCase(unit!, {
         DAYS: '1.0/86400',
         HOURS: '1.0/3600',
         MINUTES: '1.0/60',

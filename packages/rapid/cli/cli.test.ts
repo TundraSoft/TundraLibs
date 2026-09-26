@@ -626,7 +626,16 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
     bun: false,
     node: false,
     fn: async () => {
-      const dir = await makeTempDir({ prefix: 'rapid-scaffold-check-' });
+      // The scaffold's deno.json pins a registry version; the workspace
+      // root config resolves the SAME specifiers to the local packages.
+      const root = new URL('../../../', import.meta.url).pathname;
+      // Created under the workspace root, not the OS temp dir: the TS 7
+      // checker (Deno canary) does not resolve workspace members for files
+      // outside the workspace, so `@tundralibs/rapid` went unresolved.
+      const dir = await makeTempDir({
+        dir: root,
+        prefix: '.rapid-scaffold-check-',
+      });
       try {
         const files = base({});
         for (const [path, body] of Object.entries(files)) {
@@ -638,9 +647,6 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
           }
           await writeTextFile(`${dir}/${path}`, body);
         }
-        // The scaffold's deno.json pins a registry version; the workspace
-        // root config resolves the SAME specifiers to the local packages.
-        const root = new URL('../../../', import.meta.url).pathname;
         const run = async (...args: string[]) => {
           const out = await new Deno.Command(Deno.execPath(), {
             args: [...args, '--config', `${root}deno.json`],

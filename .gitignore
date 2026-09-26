@@ -57,3 +57,6 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# rapid cli.test.ts scaffold check (left behind only if a run is killed)
+.rapid-scaffold-check-*/
