@@ -20,7 +20,9 @@ of them come first; read those once.
 - **Stateful middleware take `hooks`**, pact-style: a few purpose-named
   functions (`getSession`, `increment`, `claim`…) you implement over redis,
   cacher or anything else. Each ships an in-memory default so zero-config
-  works on one replica.
+  works on one replica. Cacher's `WORKERS_KV` engine cannot back
+  `increment` or `claim`: KV has no atomic increment or set-if-absent, and a
+  key accepts one write per second.
 - **Order is meaning.** `app.use(a, b, c)` is an onion: `a` wraps `b` wraps
   `c`. The catalog states each middleware's place; the summary table below
   is the order to register them in.

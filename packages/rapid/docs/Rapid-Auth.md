@@ -158,6 +158,37 @@ the BOUND principal (`id`, `kind: 'USER' | 'APIKEY'`, `grants`,
 (`'Posts'`, `'READ'`), and a JS caller's typo is a `RAPID_CONFIG` at the
 call site, not on the first request.
 
+### Tenant-scoped permissions
+
+pact grants can be scoped to a tenant (`acme::Posts`), with a bare `Posts`
+grant applying in every tenant; see
+[Pact-Tenants](../../pact/docs/Pact-Tenants.md).
+`authorize(module, permission)` is fixed per route, and the tenant comes
+from each request, so check a tenant-scoped key in the handler. Throw
+`RAPID_ACCESS_DENIED` for the 403: an uncaught pact error in a handler is a
+500.
+
+```ts
+import { Application, RapidError } from '@tundralibs/rapid';
+import type { PactAuthContext } from '@tundralibs/pact';
+
+const app = await Application.initialize({ name: 'tenants' });
+
+app.post('/orgs/:org:/posts', async (ctx) => {
+  const auth = ctx.auth as PactAuthContext<'Posts'> | undefined;
+  if (auth === undefined) throw new RapidError('RAPID_UNAUTHENTICATED');
+  const org = String(ctx.args.params.org);
+  if (!await auth.principal.hasPermission(`${org}::Posts`, 'EDIT')) {
+    throw new RapidError('RAPID_ACCESS_DENIED', {
+      details: { module: `${org}::Posts`, permission: 'EDIT' },
+    });
+  }
+  // Query and write with `org`, the value just checked, never a second
+  // tenant id from the body.
+  return { content: { org } };
+});
+```
+
 ### Sessions — `login`, `logout`, `refresh`, `me`
 
 The factory also returns the four session handlers, thin HTTP wrappers over
