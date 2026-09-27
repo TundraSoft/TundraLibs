@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.6](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.5...norm-v1.9.6) (2026-09-27)
+
+
+### Bug Fixes
+
+* **norm:** read legacy zone-less SQLite timestamps as UTC ([#731](https://github.com/TundraSoft/TundraLibs/issues/731)) ([6b08b9e](https://github.com/TundraSoft/TundraLibs/commit/6b08b9e5ac16825caf5a78fe374dc25a2d8512a2))
+
 ## [1.9.5](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.4...norm-v1.9.5) (2026-09-26)
 
 

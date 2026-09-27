@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.2...rapid-v0.8.3) (2026-09-27)
+
+
+### Bug Fixes
+
+* **rapid:** send a GET form's fields as the query string ([#729](https://github.com/TundraSoft/TundraLibs/issues/729)) ([d1be432](https://github.com/TundraSoft/TundraLibs/commit/d1be4328e593a8086c0bc3a34d9062a2419ebd54))
+
 ## [0.8.2](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.1...rapid-v0.8.2) (2026-09-27)
 
 
