@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.2.1...oql-v1.2.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **oql:** render SQLite timestamps as ISO 8601 UTC ([#728](https://github.com/TundraSoft/TundraLibs/issues/728)) ([4ac0f35](https://github.com/TundraSoft/TundraLibs/commit/4ac0f3555c4519053459ea6c7cd87861b9657d06))
+
 ## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.2.0...oql-v1.2.1) (2026-09-26)
 
 
