@@ -693,8 +693,6 @@ Further rules:
   and a `defaultOnUpdate` function runs once per statement, as in
   `update()`.
 - Copied values come from the prepared insert row, after `beforeInsert`.
-- On MongoDB, `update` and `defaultOnUpdate` values also land on a newly
-  inserted document, since `$set` applies to both branches there.
 
 An encrypted column can never be a conflict key, since its ciphertext is
 nondeterministic; use its `<col>_hash` sibling. Updating an encrypted and
