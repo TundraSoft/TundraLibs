@@ -2847,7 +2847,8 @@ export class Repo<
     // the same columns: a row that omitted one would have it overwritten
     // with its insert default.
     const shapeOf = (row: Row) =>
-      Object.keys(row).filter((k) => row[k] !== undefined).sort().join(',');
+      Object.keys(row).filter((k) => row[k] !== undefined)
+        .sort((a, b) => a.localeCompare(b)).join(',');
     const callerShape = callerRows.length > 0 ? shapeOf(callerRows[0]!) : '';
     if (callerRows.some((row) => shapeOf(row) !== callerShape)) {
       throw new NormQueryError(
@@ -2973,18 +2974,22 @@ export class Repo<
     // (prepared exactly like update()) or, when copying, from the
     // defaultOnUpdate columns. Nothing to write means DO NOTHING.
     const scopeCols = new Set(scopeApplied?.keys() ?? []);
-    const copied = opts.updateOnConflict !== undefined
-      ? [...(opts.updateOnConflict as readonly string[])]
-      : opts.update !== undefined
-      ? []
-      : callerCols.filter((col) =>
+    let copied: string[];
+    if (opts.updateOnConflict !== undefined) {
+      copied = [...(opts.updateOnConflict as readonly string[])];
+    } else if (opts.update === undefined) {
+      copied = callerCols.filter((col) =>
         !pk.has(col) && !conflictCols.includes(col) && !scopeCols.has(col) &&
         c.updatableColumns.has(col)
       );
+    } else {
+      copied = [];
+    }
     // Conflict-updating an encrypted column must also update its
     // norm-owned hash sibling, or the digest desyncs from the new
     // ciphertext and findByHash misses the row.
-    for (const col of [...copied]) {
+    // Appending while iterating is safe: a sibling has no sibling.
+    for (const col of copied) {
       const sibling = c.hashSiblings.get(col);
       if (sibling === undefined || copied.includes(sibling)) continue;
       const withSibling = rows.filter((r) => r[sibling] !== undefined);
