@@ -60,4 +60,12 @@ export type PactOptions = {
    * @default { ttl: 1440 }
    */
   verification?: { ttl?: number };
+  /**
+   * TOTP brute-force limit for `verifyMFA`: at most `maxAttempts` attempts
+   * per user per `window` minutes, after which it throws `MFA_LOCKED`
+   * until the window ends. A successful verification resets the count.
+   * `maxAttempts: 0` turns the limit off.
+   * @default { maxAttempts: 5, window: 15 }
+   */
+  mfa?: { maxAttempts?: number; window?: number };
 };

@@ -15,10 +15,12 @@ export type PactPasskeyConfig = {
   origins: readonly string[];
   /**
    * Server-side stance on user verification (PIN/biometric):
-   * `'REQUIRED'` rejects assertions without the UV flag;
-   * `'PREFERRED'`/`'DISCOURAGED'` only shape the client hint.
+   * `'REQUIRED'` rejects registrations and assertions without the UV
+   * flag; `'PREFERRED'`/`'DISCOURAGED'` only shape the client hint and
+   * accept user presence alone. A passkey login replaces both the
+   * password and the second factor, so the default demands verification.
    *
-   * @default 'PREFERRED'
+   * @default 'REQUIRED'
    */
   userVerification?: 'REQUIRED' | 'PREFERRED' | 'DISCOURAGED';
   /**

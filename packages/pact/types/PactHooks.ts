@@ -78,7 +78,10 @@ export type PactHooks<M extends string = string> = {
   /**
    * Fetch a stored API key by id with `secret` DECRYPTED (see
    * `PactStoredApiKey`). Return `null` for no match — never throw for
-   * absence.
+   * absence. The returned `grants` are what the key may do; pact does not
+   * compare them with the owner's. A key whose owner is inactive is
+   * already refused, but to bound a key by its owner's current grants
+   * (or its tenant's status), compute `grants` / `status` here.
    */
   getApiKey?: (
     keyId: string,
@@ -92,13 +95,38 @@ export type PactHooks<M extends string = string> = {
     userId: string,
     passwordHash: string,
   ) => void | Promise<void>;
+  /**
+   * Atomically record `step` as the user's last accepted TOTP time step,
+   * only if it is later than the stored one, and return whether it was
+   * recorded. This makes a TOTP code single-use across replicas (RFC 6238
+   * §5.2), e.g. `UPDATE users SET totp_step = $2 WHERE id = $1 AND
+   * (totp_step IS NULL OR totp_step < $2)`, true when a row changed.
+   * Without it pact tracks steps in process memory, which protects one
+   * process only.
+   */
+  claimTotpStep?: (userId: string, step: number) => boolean | Promise<boolean>;
+  /**
+   * Count one MFA attempt and return the attempts in the current window,
+   * starting a `window`-second window when none is live (a redis `INCR` +
+   * `EXPIRE NX`). `verifyMFA` throws `MFA_LOCKED` above
+   * `options.mfa.maxAttempts`. Without it, counts live in process memory.
+   */
+  countMfaAttempt?: (
+    userId: string,
+    window: number,
+  ) => number | Promise<number>;
+  /** Clear the user's MFA attempt count after a successful verification. */
+  resetMfaAttempts?: (userId: string) => void | Promise<void>;
   /** Persist a single-use action token — password reset or email
    * verification, told apart by `purpose` (already keyed by sha-256). */
   saveResetToken?: (record: PactStoredResetToken) => void | Promise<void>;
   /**
    * Return AND delete the action token in one motion — single use by
-   * construction. `null` when absent or already consumed. Return the
-   * record whatever its `purpose`: pact checks it after consumption.
+   * construction. `null` when absent or already consumed. It must be
+   * atomic, e.g. `DELETE … WHERE id = $1 RETURNING *`: a read followed by
+   * a delete lets two concurrent attempts both succeed. Return the record
+   * whatever its `purpose`: pact checks it after consumption, so a token
+   * presented to the wrong flow is rejected and burned.
    */
   consumeResetToken?: (
     id: string,

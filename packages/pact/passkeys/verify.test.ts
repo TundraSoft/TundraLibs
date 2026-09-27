@@ -49,7 +49,7 @@ async function registered(
 
 describe('normalizePasskeyConfig', () => {
   it('should apply defaults and canonicalize origins', () => {
-    asserts.assertStrictEquals(CONFIG.userVerification, 'PREFERRED');
+    asserts.assertStrictEquals(CONFIG.userVerification, 'REQUIRED');
     asserts.assertEquals([...CONFIG.algorithms].sort(), ['ES256', 'RS256']);
     asserts.assertStrictEquals(CONFIG.timeout, 60_000);
     asserts.assert(CONFIG.origins.has(ORIGIN));
@@ -360,6 +360,37 @@ describe('verifyAssertionCeremony', () => {
       passkey,
     );
     asserts.assertFalse(verdict.valid);
+  });
+
+  it('should require user verification by default, PREFERRED opting out', async () => {
+    const { authenticator, passkey } = await registered();
+    const presenceOnly = () =>
+      authenticator.assertionResponse({
+        challenge: CHALLENGE,
+        origin: ORIGIN,
+        signCount: 1,
+        flags: 0x01, // UP only
+      });
+    const byDefault = await verifyAssertionCeremony(
+      await presenceOnly(),
+      CHALLENGE,
+      CONFIG,
+      passkey,
+    );
+    asserts.assertFalse(byDefault.valid, 'presence alone must not sign in');
+    const preferred = normalizePasskeyConfig({
+      rpId: RP_ID,
+      rpName: 'Example',
+      origins: [ORIGIN],
+      userVerification: 'PREFERRED',
+    });
+    const optedOut = await verifyAssertionCeremony(
+      await presenceOnly(),
+      CHALLENGE,
+      preferred,
+      passkey,
+    );
+    asserts.assert(optedOut.valid);
   });
 
   it('should fail closed on a corrupt stored public key', async () => {

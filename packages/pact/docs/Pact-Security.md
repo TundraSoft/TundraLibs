@@ -92,11 +92,24 @@ contract: cover at least what the default template covers.
 
 ## TOTP
 
-`verifyMFA` is stateless RFC 6238 verification: a correct code verifies
-repeatedly within its time window. Applications that must reject replays
-(a code intercepted and reused seconds later) should record the last
-accepted step per user and refuse repeats — one column next to
-`mfa_secret`.
+`verifyMFA` accepts a code within one 30-second step of now, and each code
+works once:
+
+- **Replay.** Once a step is accepted, that step and every earlier one are
+  refused (RFC 6238 §5.2), so an intercepted code cannot be reused. The
+  `claimTotpStep` hook stores the last step, e.g. a `totp_step` column next
+  to `mfa_secret`. Without it pact remembers steps in process memory, which
+  protects a single process only.
+- **Guessing.** With three valid codes at any moment, unlimited attempts
+  make a known password plus brute force practical. `options.mfa` allows
+  `maxAttempts` (default 5) per `window` minutes (default 15). Past that,
+  `verifyMFA` throws `MFA_LOCKED` even for a correct code, until the window
+  ends; map it to 429. A success resets the count. Counts go through the
+  `countMfaAttempt` / `resetMfaAttempts` hooks, or process memory without
+  them.
+
+Run more than one process? Implement all three hooks, or the protections
+hold per process only.
 
 ## Content signing
 

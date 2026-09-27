@@ -369,6 +369,113 @@ describe('Pact tenant-scoped grants', () => {
   });
 });
 
+describe('Pact MFA hardening', () => {
+  async function enrolled(
+    options: { maxAttempts?: number; window?: number } = {},
+    hooks: Record<string, unknown> = {},
+  ) {
+    const store = makeStore();
+    const pact = Pact.create({
+      ...BASE,
+      hooks: { ...store.hooks, ...hooks },
+      options: { mfa: options },
+    });
+    const seed = pact.generateMFASecret();
+    store.seed('m1', 'm1@example.dev', { mfaSecret: seed });
+    const wrong = async () => {
+      const code = await generateTOTP(seed);
+      return code === '123456' ? '654321' : '123456';
+    };
+    return { pact, seed, wrong };
+  }
+
+  it('refuses a code already used', async () => {
+    const { pact, seed } = await enrolled();
+    const code = await generateTOTP(seed);
+    asserts.assert(await pact.verifyMFA('m1', code));
+    asserts.assertFalse(await pact.verifyMFA('m1', code), 'replay');
+  });
+
+  it('refuses an earlier step once a later one is accepted', async () => {
+    const { pact, seed } = await enrolled();
+    const now = Date.now();
+    const current = await generateTOTP(seed, { epoch: now });
+    const previous = await generateTOTP(seed, { epoch: now - 30_000 });
+    asserts.assert(await pact.verifyMFA('m1', current));
+    asserts.assertFalse(await pact.verifyMFA('m1', previous));
+  });
+
+  it('delegates the step claim to claimTotpStep', async () => {
+    const claims: [string, number][] = [];
+    const { pact, seed } = await enrolled({}, {
+      claimTotpStep: (userId: string, step: number) => {
+        claims.push([userId, step]);
+        return false;
+      },
+    });
+    const before = Math.floor(Date.now() / 30_000);
+    asserts.assertFalse(await pact.verifyMFA('m1', await generateTOTP(seed)));
+    asserts.assertEquals(claims.length, 1);
+    asserts.assertEquals(claims[0]![0], 'm1');
+    asserts.assert(Math.abs(claims[0]![1] - before) <= 1);
+  });
+
+  it('locks after maxAttempts, even for a correct code', async () => {
+    const { pact, seed, wrong } = await enrolled({ maxAttempts: 3 });
+    for (let i = 0; i < 3; i++) {
+      asserts.assertFalse(await pact.verifyMFA('m1', await wrong()));
+    }
+    const locked = await expectCode(
+      pact.verifyMFA('m1', await generateTOTP(seed)),
+      'MFA_LOCKED',
+    );
+    asserts.assertStringIncludes(locked.message, '15 minutes');
+  });
+
+  it('resets the attempt count on success', async () => {
+    const { pact, seed, wrong } = await enrolled({ maxAttempts: 3 });
+    await pact.verifyMFA('m1', await wrong());
+    await pact.verifyMFA('m1', await wrong());
+    asserts.assert(await pact.verifyMFA('m1', await generateTOTP(seed)));
+    for (let i = 0; i < 3; i++) {
+      asserts.assertFalse(await pact.verifyMFA('m1', await wrong()));
+    }
+    await expectCode(pact.verifyMFA('m1', await wrong()), 'MFA_LOCKED');
+  });
+
+  it('turns the limit off with maxAttempts 0', async () => {
+    const { pact, wrong } = await enrolled({ maxAttempts: 0 });
+    for (let i = 0; i < 10; i++) {
+      asserts.assertFalse(await pact.verifyMFA('m1', await wrong()));
+    }
+  });
+
+  it('counts through countMfaAttempt with the window in seconds', async () => {
+    const calls: [string, number][] = [];
+    const { pact, wrong } = await enrolled({ maxAttempts: 2, window: 10 }, {
+      countMfaAttempt: (userId: string, window: number) => {
+        calls.push([userId, window]);
+        return calls.length;
+      },
+    });
+    await pact.verifyMFA('m1', await wrong());
+    await pact.verifyMFA('m1', await wrong());
+    await expectCode(pact.verifyMFA('m1', await wrong()), 'MFA_LOCKED');
+    asserts.assertEquals(calls[0], ['m1', 600]);
+  });
+
+  it('validates the mfa option', () => {
+    for (
+      const mfa of [{ maxAttempts: -1 }, { window: 0 }, { maxAttempts: 1.5 }]
+    ) {
+      expectThrowCode(
+        () => Pact.create({ ...BASE, options: { mfa } }),
+        'INVALID_OPTION',
+      );
+    }
+  });
+});
+
 // =============================================================================
 // Caching
 // =============================================================================
