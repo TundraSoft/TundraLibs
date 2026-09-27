@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.1...rapid-v0.8.2) (2026-09-27)
+
+
+### Documentation
+
+* **rapid:** map pact MFA_LOCKED to a 429 in a TOTP route ([#725](https://github.com/TundraSoft/TundraLibs/issues/725)) ([3cb0777](https://github.com/TundraSoft/TundraLibs/commit/3cb07773c125dcde85fdd832c7a7433da6fa3a30))
+
 ## [0.8.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.0...rapid-v0.8.1) (2026-09-26)
 
 
