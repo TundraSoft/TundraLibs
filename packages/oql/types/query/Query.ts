@@ -165,9 +165,8 @@ export type Query<
                  * incoming row's, one object for every conflicting row.
                  * Literals are bound as parameters; an expression may
                  * reference the existing row's columns (`{ $$_expression:
-                 * 'ADD', args: ['@clicks', 1] }`). SQL dialects apply it
-                 * only when a row conflicts. On Mongo it becomes `$set`,
-                 * which also applies to a newly inserted document.
+                 * 'ADD', args: ['@clicks', 1] }`). Applied only when a row
+                 * conflicts, on every dialect.
                  */
                 updateSet?: DataWithExpressions<PT>;
                 /**

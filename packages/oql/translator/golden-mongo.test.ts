@@ -998,51 +998,6 @@ const CASES: Case[] = [
       },
     },
   },
-  {
-    name:
-      'INSERT with UNIX_TIMESTAMP — a Long in seconds, or milliseconds by unit',
-    method: 'insert',
-    query: {
-      type: 'INSERT',
-      table: 'logs',
-      columns: ['id', 'createdAt', 'updatedAt'],
-      data: {
-        id: 1,
-        createdAt: { $$_expression: 'UNIX_TIMESTAMP' },
-        updatedAt: { $$_expression: 'UNIX_TIMESTAMP', unit: 'milliseconds' },
-      },
-    },
-    expected: {
-      sql: 'insert',
-      params: {
-        collection: 'logs',
-        data: {
-          id: 1,
-          createdAt: {
-            $toLong: { $floor: { $divide: [{ $toLong: '$$NOW' }, 1000] } },
-          },
-          updatedAt: { $toLong: '$$NOW' },
-        },
-      },
-    },
-  },
-  {
-    name: 'INSERT with NOW expression',
-    method: 'insert',
-    query: {
-      type: 'INSERT',
-      table: 'logs',
-      columns: ['id', 'createdAt'],
-      data: { id: 1, createdAt: { $$_expression: 'NOW' } },
-    },
-    expected: {
-      sql: 'insert',
-      params: {
-        collection: 'logs',
-        data: { id: 1, createdAt: '$$NOW' },
-      },
-    },
-  },
 
   // ---------------------------------------------------------------------------
   // UPDATE / DELETE
@@ -1114,29 +1069,85 @@ const CASES: Case[] = [
   },
 
   {
-    // updateSet goes to $set, and its fields leave $setOnInsert: Mongo
-    // rejects a field in both operators.
-    name: 'UPSERT updateSet values go to $set and never also $setOnInsert',
+    // updateSet makes the update a pipeline: the insert branch (no _id
+    // yet) keeps the row's value, the conflict branch takes updateSet's.
+    name: 'UPSERT updateSet is a pipeline branching on a new document',
     method: 'upsert',
     query: {
       type: 'UPSERT',
       table: 'users',
-      columns: ['id', 'name', 'status'],
+      columns: ['id', 'name', 'status', 'seenAt'],
       data: { id: 1, name: 'John', status: 'NEW' },
       conflictKeys: ['@id'],
       updateOnConflict: [],
-      updateSet: { status: 'SEEN' },
+      updateSet: { status: 'SEEN', seenAt: { $$_expression: 'NOW' } },
     },
     expected: {
       sql: 'update',
       params: {
         collection: 'users',
         filter: { id: 1 },
-        data: {
-          $set: { status: 'SEEN' },
-          $setOnInsert: { id: 1, name: 'John' },
-        },
+        data: [{
+          $set: {
+            id: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $literal: 1 },
+                '$id',
+              ],
+            },
+            name: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $literal: 'John' },
+                '$name',
+              ],
+            },
+            status: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $literal: 'NEW' },
+                { $literal: 'SEEN' },
+              ],
+            },
+            seenAt: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                '$$REMOVE',
+                '$$NOW',
+              ],
+            },
+          },
+        }],
         options: { upsert: true },
+      },
+    },
+  },
+  {
+    name: 'UPDATE with an expression is a pipeline; literals are $literal',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'stats',
+      columns: ['id', 'clicks', 'label'],
+      data: {
+        clicks: { $$_expression: 'ADD', args: ['@clicks', 1] },
+        label: '$not-a-field',
+      },
+      where: { '@id': 1 },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'stats',
+        filter: { id: 1 },
+        data: [{
+          $set: {
+            clicks: { $add: ['$clicks', 1] },
+            label: { $literal: '$not-a-field' },
+          },
+        }],
+        options: { multiple: true },
       },
     },
   },
@@ -1892,6 +1903,49 @@ describe('oql.translator.MongoTranslator — JSON path filters', () => {
       () => t.select(q as any),
       TypeError,
       "Operator '$gt' is not supported on JSON path '@profile.@age'",
+    );
+  });
+});
+
+describe('oql.translator.MongoTranslator — insert expressions', () => {
+  const t = new MongoTranslator();
+  const insert = (data: Record<string, unknown> | Record<string, unknown>[]) =>
+    t.insert({
+      type: 'INSERT',
+      table: 'logs',
+      columns: ['id', 'at', 'secs', 'ms', 'day', 'ref'],
+      data,
+    } as Query<'INSERT'>).params.data;
+
+  it('computes clock expressions at one instant per statement', () => {
+    const before = Date.now();
+    const rows = insert([
+      { id: 1, at: { $$_expression: 'NOW' } },
+      {
+        id: 2,
+        at: { $$_expression: 'CURRENT_TIMESTAMP' },
+        secs: { $$_expression: 'UNIX_TIMESTAMP' },
+        ms: { $$_expression: 'UNIX_TIMESTAMP', unit: 'milliseconds' },
+        day: { $$_expression: 'CURRENT_DATE' },
+      },
+    ]) as Record<string, unknown>[];
+    const at = rows[0]!.at as Date;
+    asserts.assertInstanceOf(at, Date);
+    asserts.assert(at.getTime() >= before && at.getTime() <= Date.now());
+    asserts.assertEquals(rows[1]!.at, at, 'the same instant');
+    asserts.assertEquals(rows[1]!.ms, at.getTime());
+    asserts.assertEquals(rows[1]!.secs, Math.floor(at.getTime() / 1000));
+    asserts.assertEquals(
+      (rows[1]!.day as Date).toISOString(),
+      at.toISOString().slice(0, 10) + 'T00:00:00.000Z',
+    );
+  });
+
+  it('refuses an expression an insert document cannot evaluate', () => {
+    asserts.assertThrows(
+      () => insert({ id: 1, ref: { $$_expression: 'UPPER', args: 'x' } }),
+      DialectUnsupportedError,
+      "'UPPER'",
     );
   });
 });

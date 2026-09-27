@@ -205,8 +205,9 @@ helpers, which skip the re-fetch.
 - **MariaDB**: `INSERT … ON DUPLICATE KEY UPDATE …`. When there is nothing
   to set we emit the idempotent self-assignment trick (`<key> = <key>`).
 - **MongoDB**: single-row `data` emits `update` with `upsert: true`.
-  `updateSet` values go to `$set`, which Mongo also applies to a newly
-  inserted document, unlike the SQL dialects.
+  With `updateSet`, or any expression value, the update is an aggregation
+  pipeline that tells a new document by its missing `_id`: insert values
+  apply only to the insert and `updateSet` only to a conflict, as on SQL.
   Array `data` emits a `bulkWrite` action — one `updateOne` op per row,
   applied in one round-trip. RETURNING is mirrored by a single follow-up
   `find($or: [...filters])`, so the driver makes two round-trips total
@@ -221,6 +222,20 @@ helpers, which skip the re-fetch.
   than corrupt an unrelated record; the guard tests the value, not merely
   key presence. (On the SQL dialects the same row is a benign plain insert:
   the column takes DEFAULT/NULL and `ON CONFLICT` never fires.)
+
+### Expressions on MongoDB
+
+A classic update operator such as `$set` stores an expression value
+literally, so `$$NOW` would be saved as the string `"$$NOW"`.
+
+- **UPDATE**: when any `data` value is an expression, the update is an
+  aggregation pipeline (`[{ $set: … }]`), which evaluates it. Literals in
+  it are wrapped in `$literal`. Plain-value updates stay a classic `$set`.
+- **INSERT**: an insert document cannot evaluate expressions. `NOW`,
+  `CURRENT_TIMESTAMP(TZ)`, `CURRENT_DATE`, `CURRENT_TIME`,
+  `UNIX_TIMESTAMP` and `UUID` are computed by the translator, the clock
+  ones at one instant per statement. Any other expression throws
+  `DialectUnsupportedError`.
 
 ### INSERT … SELECT (`INSERT_FROM_QUERY`)
 
