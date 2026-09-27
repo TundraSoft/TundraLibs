@@ -265,6 +265,10 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
 - Handles joins via $lookup
 - Supports aggregates via $group
 - Converts expressions to $project stages
+- Evaluates expressions in writes: an UPDATE or UPSERT holding one becomes
+  a pipeline update, and an INSERT computes clock expressions and `UUID`
+  itself (see
+  [Compatibility](../docs/OQL-Compatibility.md#expressions-on-mongodb))
 
 > **Join `type` is not honoured.** `__buildLookup` reads a join's
 > `table`, `columns`, and `on`, but never its `type` — `INNER`, `LEFT`,
