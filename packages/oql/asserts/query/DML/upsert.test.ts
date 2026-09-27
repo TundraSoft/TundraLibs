@@ -583,22 +583,6 @@ describe('oql.asserts.Query.DML.Upsert', () => {
       );
     });
 
-    it('empty updateOnConflict array', () => {
-      asserts.assertThrows(
-        () =>
-          assertUpsertQuery({
-            type: 'UPSERT',
-            table: 'users',
-            columns: ['id', 'name'],
-            data: { id: 1, name: 'John' },
-            conflictKeys: ['@id'],
-            updateOnConflict: [],
-          }),
-        TypeError,
-        'cannot be an empty array',
-      );
-    });
-
     it('updateOnConflict key without @ prefix', () => {
       asserts.assertThrows(
         () =>
@@ -657,5 +641,50 @@ describe('oql.asserts.Query.DML.Upsert', () => {
         asserts.assert(typeof query.data === 'object');
       }
     });
+  });
+});
+
+describe('oql.asserts.Query.DML.Upsert — updateSet', () => {
+  const base = {
+    type: 'UPSERT',
+    table: 'stats',
+    columns: ['id', 'clicks', 'updatedAt'],
+    data: { id: 1, clicks: 1 },
+    conflictKeys: ['@id'],
+  };
+
+  it('accepts an empty updateOnConflict (ignore the conflict)', () => {
+    assertUpsertQuery({ ...base, updateOnConflict: [] });
+  });
+
+  it('accepts literal and expression values', () => {
+    assertUpsertQuery({
+      ...base,
+      updateOnConflict: [],
+      updateSet: {
+        clicks: { $$_expression: 'ADD', args: ['@clicks', 1] },
+        updatedAt: { $$_expression: 'NOW' },
+      },
+    });
+  });
+
+  it('rejects a non-object, a conflict key, an unknown column, or overlap', () => {
+    for (
+      const [extra, message] of [
+        [{ updateSet: [] }, 'must be an object'],
+        [{ updateSet: { id: 2 } }, 'should not include conflictKey'],
+        [{ updateSet: { nope: 1 } }, 'nope'],
+        [
+          { updateOnConflict: ['@clicks'], updateSet: { clicks: 2 } },
+          'in both updateOnConflict and updateSet',
+        ],
+      ] as const
+    ) {
+      asserts.assertThrows(
+        () => assertUpsertQuery({ ...base, ...extra }),
+        TypeError,
+        message,
+      );
+    }
   });
 });

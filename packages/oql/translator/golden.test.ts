@@ -1991,6 +1991,65 @@ const CASES: Case[] = [
     },
   },
 
+  {
+    // updateSet: explicit conflict values; references read the EXISTING
+    // row, which Postgres only allows through a table qualifier.
+    name: 'UPSERT with updateSet (copied column + existing-row expression)',
+    method: 'upsert',
+    query: {
+      type: 'UPSERT',
+      table: 'stats',
+      columns: ['id', 'label', 'clicks', 'updatedAt'],
+      data: { id: 1, label: 'x', clicks: 1 },
+      conflictKeys: ['@id'],
+      updateOnConflict: ['@label'],
+      updateSet: {
+        clicks: { $$_expression: 'ADD', args: ['@clicks', 5] },
+        updatedAt: { $$_expression: 'NOW' },
+      },
+    } satisfies Query<'UPSERT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `INSERT INTO "stats" AS __base__ ("id", "label", "clicks") VALUES (:p_0:, :p_1:, :p_0:) ON CONFLICT ("id") DO UPDATE SET "label" = excluded."label", "clicks" = (__base__."clicks" + :p_2:), "updatedAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') RETURNING "id", "label", "clicks", "updatedAt"`,
+      },
+      postgres: {
+        sql:
+          'INSERT INTO "stats" AS __base__ ("id", "label", "clicks") VALUES (:p_0:, :p_1:, :p_0:) ON CONFLICT ("id") DO UPDATE SET "label" = EXCLUDED."label", "clicks" = (__base__."clicks" + :p_2:), "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "label", "clicks", "updatedAt"',
+      },
+      maria: {
+        sql:
+          'INSERT INTO `stats` (`id`, `label`, `clicks`) VALUES (:p_0:, :p_1:, :p_0:) ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `clicks` = (`clicks` + :p_2:), `updatedAt` = NOW() RETURNING `id`, `label`, `clicks`, `updatedAt`',
+      },
+    },
+  },
+  {
+    name: 'UPSERT with an empty updateOnConflict ignores the conflict',
+    method: 'upsert',
+    query: {
+      type: 'UPSERT',
+      table: 'stats',
+      columns: ['id', 'label'],
+      data: { id: 1, label: 'x' },
+      conflictKeys: ['@id'],
+      updateOnConflict: [],
+    } satisfies Query<'UPSERT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'INSERT INTO "stats" ("id", "label") VALUES (:p_0:, :p_1:) ON CONFLICT ("id") DO NOTHING RETURNING "id", "label"',
+      },
+      postgres: {
+        sql:
+          'INSERT INTO "stats" ("id", "label") VALUES (:p_0:, :p_1:) ON CONFLICT ("id") DO NOTHING RETURNING "id", "label"',
+      },
+      maria: {
+        sql:
+          'INSERT INTO `stats` (`id`, `label`) VALUES (:p_0:, :p_1:) ON DUPLICATE KEY UPDATE `id` = `id` RETURNING `id`, `label`',
+      },
+    },
+  },
+
   // ---------------------------------------------------------------------------
   // UPDATE / DELETE
   // ---------------------------------------------------------------------------

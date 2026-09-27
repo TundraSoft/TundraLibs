@@ -539,9 +539,10 @@ export class MongoTranslator {
     // built by `__buildUpsertOp` either way.
     const conflictKeys = q.conflictKeys.map((k) => k.slice(1));
     const updateOnConflict = q.updateOnConflict?.map((k) => k.slice(1));
+    const updateSet = this.__translateUpdateBody(q.updateSet ?? {});
     if (Array.isArray(q.data)) {
       const ops: MongoBulkUpsertOp[] = q.data.map((row) =>
-        this.__buildUpsertOp(row, conflictKeys, updateOnConflict)
+        this.__buildUpsertOp(row, conflictKeys, updateOnConflict, updateSet)
       );
       return {
         sql: 'bulkWrite',
@@ -552,6 +553,7 @@ export class MongoTranslator {
       q.data,
       conflictKeys,
       updateOnConflict,
+      updateSet,
     );
     return {
       sql: 'update',
@@ -573,6 +575,10 @@ export class MongoTranslator {
    *   `updateOnConflict` is undefined) and `$setOnInsert` (applied only
    *   on the insert branch — honours `disableUpdate` semantics).
    *
+   * - `updateSet` values go to `$set` as well, so on Mongo they also land
+   *   on a newly inserted document; a field is never in both operators,
+   *   which Mongo rejects.
+   *
    * Empty `$set` / `$setOnInsert` operators are omitted because Mongo
    * rejects them.
    */
@@ -580,6 +586,7 @@ export class MongoTranslator {
     row: Record<string, unknown>,
     conflictKeys: string[],
     updateOnConflict: string[] | undefined,
+    updateSet: Record<string, unknown>,
   ): MongoBulkUpsertOp {
     // Every conflict key MUST carry a concrete VALUE in the row — not merely
     // be present. A key that is absent, `undefined`, or `null` all reduce to
@@ -602,13 +609,14 @@ export class MongoTranslator {
       }
     }
     const filter: Record<string, unknown> = {};
-    const setBody: Record<string, unknown> = {};
+    const setBody: Record<string, unknown> = { ...updateSet };
     const insertOnly: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(row)) {
       if (conflictKeys.includes(key)) {
         filter[key] = value;
         continue;
       }
+      if (key in updateSet) continue;
       const rendered = this.__renderValue(value);
       if (updateOnConflict === undefined || updateOnConflict.includes(key)) {
         setBody[key] = rendered;

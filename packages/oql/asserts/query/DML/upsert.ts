@@ -1,6 +1,7 @@
 /**
  * `UPSERT` query validator. Insert-or-update keyed by `conflictKeys`, with
- * optional partial-update column list `updateOnConflict`.
+ * optional partial-update column list `updateOnConflict` and explicit
+ * conflict values `updateSet`.
  *
  * @module asserts/Query/DML/Upsert
  */
@@ -43,9 +44,9 @@ const validateConflictKeys = (
 };
 
 /**
- * Validates `updateOnConflict`: a non-empty array of column identifiers,
- * disjoint from `conflictKeys` (no point updating the columns you matched
- * on), and each must be present in the supplied data row.
+ * Validates `updateOnConflict`: an array of column identifiers, disjoint
+ * from `conflictKeys` (no point updating the columns you matched on),
+ * each present in the supplied data row. It may be empty.
  *
  * @internal
  */
@@ -60,12 +61,6 @@ const validateUpdateOnConflict = (
       `Invalid UPSERT query: 'updateOnConflict' must be an array if provided`,
     );
   }
-  if (updateOnConflict.length === 0) {
-    throw new TypeError(
-      `Invalid UPSERT query: 'updateOnConflict' cannot be an empty array`,
-    );
-  }
-
   const dataKeys = typeof firstData === 'object' && firstData !== null
     ? Object.keys(firstData as Record<string, unknown>)
     : [];
@@ -89,6 +84,42 @@ const validateUpdateOnConflict = (
     if (!dataKeys.includes(columnName)) {
       throw new TypeError(
         `Invalid UPSERT query: updateOnConflict column '${identifier}' (${columnName}) must exist in data`,
+      );
+    }
+  }
+};
+
+/**
+ * Validates `updateSet`: a plain object of declared columns, none of them a
+ * conflict key or also listed in `updateOnConflict`, with valid values.
+ *
+ * @internal
+ */
+const validateUpdateSet = (
+  updateSet: unknown,
+  conflictKeys: string[],
+  updateOnConflict: unknown,
+  columnList: string[],
+): void => {
+  if (
+    typeof updateSet !== 'object' || updateSet === null ||
+    Array.isArray(updateSet)
+  ) {
+    throw new TypeError(
+      `Invalid UPSERT query: 'updateSet' must be an object if provided`,
+    );
+  }
+  const copied = Array.isArray(updateOnConflict) ? updateOnConflict : [];
+  for (const [key, value] of Object.entries(updateSet)) {
+    validateDataEntry(key, value, columnList, 'UPSERT query: updateSet');
+    if (conflictKeys.includes(`@${key}`)) {
+      throw new TypeError(
+        `Invalid UPSERT query: updateSet should not include conflictKey '@${key}'`,
+      );
+    }
+    if (copied.includes(`@${key}`)) {
+      throw new TypeError(
+        `Invalid UPSERT query: '@${key}' is in both updateOnConflict and updateSet`,
       );
     }
   }
@@ -133,8 +164,9 @@ const validateDataObject = (
  * Asserts a value is a valid `UPSERT` query: `table` and `columns` are
  * valid, optional `schema` is valid, `data` is a non-empty object (or array
  * of non-empty objects), `conflictKeys` is a non-empty array of declared
- * columns, and optional `updateOnConflict` lists columns disjoint from
- * `conflictKeys` that exist in the supplied data.
+ * columns, optional `updateOnConflict` lists columns disjoint from
+ * `conflictKeys` that exist in the supplied data, and optional `updateSet`
+ * maps other declared columns to values.
  */
 export const assertUpsertQuery: <PT extends TableType = TableType>(
   x: unknown,
@@ -179,6 +211,15 @@ export const assertUpsertQuery: <PT extends TableType = TableType>(
       query.conflictKeys as string[],
       columnList,
       firstData,
+    );
+  }
+
+  if (query.updateSet !== undefined) {
+    validateUpdateSet(
+      query.updateSet,
+      query.conflictKeys as string[],
+      query.updateOnConflict,
+      columnList,
     );
   }
 };
