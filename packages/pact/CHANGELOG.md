@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.11.0...pact-v0.12.0) (2026-09-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pact:** verifyMFA refuses a reused code and throws MFA_LOCKED after options.mfa.maxAttempts attempts. Passkey registrations and assertions without the user-verification flag are rejected unless userVerification is set to PREFERRED or DISCOURAGED.
+
+### Features
+
+* **pact:** single-use TOTP codes, MFA attempt limits, passkey UV by default ([#723](https://github.com/TundraSoft/TundraLibs/issues/723)) ([76b5693](https://github.com/TundraSoft/TundraLibs/commit/76b5693e23b0b2ab225fab0324669f4cfc3288d1))
+
 ## [0.11.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.10.0...pact-v0.11.0) (2026-09-26)
 
 
