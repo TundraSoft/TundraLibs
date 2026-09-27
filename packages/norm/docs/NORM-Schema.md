@@ -138,19 +138,20 @@ to range-check on a boolean.
 These chain on every builder kind; a few are overridden on
 [masks](#masked-columns):
 
-| Modifier                | Effect                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.nullable()`           | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                                      |
-| `.default(v)`           | Insert default; see [Defaults](#defaults).                                                                                                    |
-| `.defaultOnUpdate(v)`   | Auto-touch on every update (e.g. `updatedAt`).                                                                                                |
-| `.comment(text)`        | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                          |
-| `.hidden()`             | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                               |
-| `.unfilterable()`       | Reject the column in `WHERE` / `ORDER BY`.                                                                                                    |
-| `.renamedFrom(oldName)` | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.             |
-| `.beforeWrite(fn)`      | [Transform](#transforms) before validate/encrypt/write.                                                                                       |
-| `.afterRead(fn)`        | [Transform](#transforms) on the way back out.                                                                                                 |
-| `.guard(g)`             | [Value validation + transforms](#validation-and-transforms) — an already-built Guardian, pinned to the column's own concrete class. One-shot. |
-| `.encrypt()`            | [Encrypt at rest](#encryption-and-hashing).                                                                                                   |
+| Modifier                | Effect                                                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.nullable()`           | Column accepts `NULL`; also makes it omittable on insert. Adds `\| null` to the TS type.                                                          |
+| `.default(v)`           | Insert default; see [Defaults](#defaults).                                                                                                        |
+| `.defaultOnUpdate(v)`   | Auto-touch on every update (e.g. `updatedAt`).                                                                                                    |
+| `.comment(text)`        | Documentation + DDL comment (`COMMENT ON COLUMN …`).                                                                                              |
+| `.insertOnly()`         | Written on insert, then fixed: `update()` rejects it, `UpdateOf` omits it, and an upsert conflict never changes it. For authorship (`CreatedBy`). |
+| `.hidden()`             | Exclude from default projections. `ReadRowOf` drops it, but it stays explicitly projectable and stays writable.                                   |
+| `.unfilterable()`       | Reject the column in `WHERE` / `ORDER BY`.                                                                                                        |
+| `.renamedFrom(oldName)` | Migration hint: emit `RENAME COLUMN` instead of a data-losing drop+add. Inert everywhere else; delete it once applied everywhere.                 |
+| `.beforeWrite(fn)`      | [Transform](#transforms) before validate/encrypt/write.                                                                                           |
+| `.afterRead(fn)`        | [Transform](#transforms) on the way back out.                                                                                                     |
+| `.guard(g)`             | [Value validation + transforms](#validation-and-transforms) — an already-built Guardian, pinned to the column's own concrete class. One-shot.     |
+| `.encrypt()`            | [Encrypt at rest](#encryption-and-hashing).                                                                                                       |
 
 ```typescript
 import { Column } from '@tundralibs/norm';

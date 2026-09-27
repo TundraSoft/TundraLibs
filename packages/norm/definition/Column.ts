@@ -204,14 +204,20 @@ export type AnyColumnBuilder = ColumnBuilder<any, boolean>;
 /** The `.hidden()` type brand. */
 type _HiddenBrand = { readonly spec: { readonly project: false } };
 
+/** The `.insertOnly()` type brand: `UpdateOf` drops the column. */
+type _InsertOnlyBrand = { readonly spec: { readonly disableUpdate: true } };
+
 /**
- * Preserve the `.hidden()` brand across generic-CHANGING modifiers
- * (`nullable` / `default` / `lov` / `encrypt` / `hash` return fresh
- * builder kinds, which would otherwise silently drop the brand while
- * the runtime spec keeps stripping the column — a type/runtime
+ * Preserve the `.hidden()` and `.insertOnly()` brands across
+ * generic-CHANGING modifiers (`nullable` / `default` / `lov` / `encrypt`
+ * / `hash` return fresh builder kinds, which would otherwise silently
+ * drop a brand while the runtime spec keeps it — a type/runtime
  * divergence).
  */
-type _KeepHidden<Self, B> = Self extends _HiddenBrand ? B & _HiddenBrand : B;
+type _KeepHidden<Self, B> =
+  & B
+  & (Self extends _HiddenBrand ? _HiddenBrand : unknown)
+  & (Self extends _InsertOnlyBrand ? _InsertOnlyBrand : unknown);
 
 /** Is `v` an OQL expression marker (DB-evaluated default)? The ONE
  * canonical predicate — guardians / asserts / docs all import THIS
@@ -311,6 +317,16 @@ export class ColumnBuilder<
   /** Documentation + DDL comment for this column. */
   public comment(text: string): this {
     return this._clone({ comment: text });
+  }
+
+  /**
+   * Insert-only: written on insert, then fixed. `update()` rejects the
+   * column, `UpdateOf` omits it, and an upsert that hits an existing row
+   * never changes it. Use it for authorship (`CreatedBy`) and other
+   * values set once at creation.
+   */
+  public insertOnly(): this & _InsertOnlyBrand {
+    return this._clone({ disableUpdate: true }) as this & _InsertOnlyBrand;
   }
 
   /** Exclude from default projections (explicit opt-in still works).

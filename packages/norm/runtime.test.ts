@@ -967,12 +967,72 @@ describe('norm.runtime (compile + repos over mock executor)', () => {
       NormQueryError,
       'nondeterministic',
     );
-    await db.repo('Users').upsert(
-      { email: 'a@b.c', passwordHash: 'x', displayName: 'Ada' },
-      { conflictKeys: ['id'], updateOnConflict: ['email', 'displayName'] },
+    // `email` is outside Users' declared update list, so a conflict may
+    // not change it either.
+    await asserts.assertRejects(
+      () =>
+        db.repo('Users').upsert(
+          { email: 'a@b.c', passwordHash: 'x', displayName: 'Ada' },
+          { conflictKeys: ['id'], updateOnConflict: ['email', 'displayName'] },
+        ),
+      NormQueryError,
+      'insert-only or norm-owned',
     );
-    const ir = exec.lastOf('UPSERT').q as { updateOnConflict: string[] };
-    asserts.assertEquals(ir.updateOnConflict.includes('@email_hash'), true);
+    // An updatable encrypted column brings its hash sibling along,
+    // whether listed or copied implicitly.
+    const Contacts = Entity('contacts', {
+      id: Column.integer(),
+      email: Column.varchar(255).encrypt().hash(),
+    }, { pk: ['id'] });
+    const contactsRegistry = use(Schema('C', { Contacts }));
+    const runtime = compileRuntime(
+      contactsRegistry,
+      { secret: SECRET },
+      exec,
+      () => {},
+    );
+    const contacts = new NormDb<typeof contactsRegistry>(
+      runtime,
+      exec,
+      undefined,
+    )
+      .repo('Contacts');
+    for (const extra of [{ updateOnConflict: ['email' as const] }, {}]) {
+      await contacts.upsert({ id: 1, email: 'a@b.c' }, {
+        conflictKeys: ['id'],
+        ...extra,
+      });
+      const ir = exec.lastOf('UPSERT').q as { updateOnConflict: string[] };
+      asserts.assertEquals(ir.updateOnConflict, ['@email', '@email_hash']);
+    }
+  });
+
+  it('upsert DO NOTHING audits only rows it wrote, when every row is returned', async () => {
+    // MariaDB and Mongo return every upserted row, conflicted or not; the
+    // mock echoes them the same way. A row that already existed must not
+    // get a no-change audit version.
+    const Tags = Entity('tags', {
+      id: Column.integer(),
+      name: Column.varchar(40),
+    }, { pk: ['id'], audit: { name: 'TagAudit' } });
+    const reg = use(Schema('T', { Tags }));
+    const exec = new MockExecutor();
+    const tags = new NormDb<typeof reg>(
+      compileRuntime(reg, { secret: SECRET }, exec, () => {}),
+      exec,
+      undefined,
+    ).repo('Tags');
+    exec.selectQueue.push([{ id: 1, name: 'old' }]);
+    const r = await tags.upsert(
+      [{ id: 1, name: 'x' }, { id: 2, name: 'y' }],
+      { conflictKeys: ['id'], updateOnConflict: [] },
+    );
+    const mirrored = exec.calls
+      .filter((c) => c.q.type === 'INSERT')
+      .map((c) => (c.q as { data: Row[] }).data[0]!.id);
+    asserts.assertEquals(mirrored, [2]);
+    asserts.assertEquals(r.count, 1);
+    asserts.assertEquals(r.data.map((row) => row.name), ['old', 'y']);
   });
 
   it('unknown-key validation issues carry the offending key as path', async () => {
