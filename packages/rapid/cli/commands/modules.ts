@@ -54,10 +54,12 @@ export async function generateBarrel(dir: string): Promise<string> {
   return HEADER + lines.join('\n') + (lines.length ? '\n' : '');
 }
 
-/** The `modules` command. Returns the process exit code. */
+/** The `modules` command. Returns the process exit code.
+ * `log` receives the success lines; tests pass a no-op. */
 export async function modulesCommand(
   dir: string,
   opts: { check?: boolean; force?: boolean } = {},
+  log: (line: string) => void = console.log,
 ): Promise<number> {
   let barrel: string;
   try {
@@ -78,7 +80,7 @@ export async function modulesCommand(
       console.error(`✗ ${out} is stale — run \`rapid modules ${dir}\``);
       return 1;
     }
-    console.log(`✓ ${out} is up to date`);
+    log(`✓ ${out} is up to date`);
     return 0;
   }
   // Only a file this command wrote (or none) is overwritten: a hand-written
@@ -98,6 +100,6 @@ export async function modulesCommand(
     return 1;
   }
   await writeTextFile(out, barrel);
-  console.log(`✓ wrote ${out}`);
+  log(`✓ wrote ${out}`);
   return 0;
 }

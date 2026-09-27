@@ -4,10 +4,12 @@
  * @module
  */
 
-/** The `health` command. Returns the process exit code. */
+/** The `health` command. Returns the process exit code.
+ * `log` receives the result line; tests pass a no-op. */
 export async function healthCommand(
   url: string,
   opts: { path?: string } = {},
+  log: (line: string) => void = console.log,
 ): Promise<number> {
   // Parsed INSIDE the try: a scheme-less `localhost:3000` is a TypeError from
   // the URL constructor, and it must print like any other probe failure.
@@ -19,7 +21,7 @@ export async function healthCommand(
     // crafted response cannot forge extra log lines.
     const body = (await res.text()).replace(/[\r\n\t]+/g, ' ');
     const ok = res.status >= 200 && res.status < 300;
-    console.log(`${ok ? '✓' : '✗'} ${target} → ${res.status} ${body}`.trim());
+    log(`${ok ? '✓' : '✗'} ${target} → ${res.status} ${body}`.trim());
     return ok ? 0 : 1;
   } catch (error) {
     console.error(
