@@ -189,6 +189,39 @@ app.post('/orgs/:org:/posts', async (ctx) => {
 });
 ```
 
+### A second factor (TOTP)
+
+`pactAuth` does not run TOTP; call `pact.verifyMFA` in your own route. A
+code works once, and past `options.mfa.maxAttempts` attempts pact throws
+`MFA_LOCKED` even for a correct code. Map it to `RAPID_RATE_LIMITED`: an
+uncaught pact error in a handler is a 500.
+
+```ts
+import { Application, RapidError } from '@tundralibs/rapid';
+import { type Pact, PactError } from '@tundralibs/pact';
+
+declare const pact: Pact<{ READ: 1n }, 'Posts'>;
+const app = await Application.initialize({ name: 'mfa' });
+
+app.post('/mfa', async (ctx) => {
+  const { userId, code } = await ctx.payload as {
+    userId: string;
+    code: string;
+  };
+  try {
+    if (!await pact.verifyMFA(userId, code)) {
+      throw new RapidError('RAPID_UNAUTHENTICATED');
+    }
+  } catch (e) {
+    if (e instanceof PactError && e.code === 'MFA_LOCKED') {
+      throw new RapidError('RAPID_RATE_LIMITED');
+    }
+    throw e;
+  }
+  return { content: { ok: true } };
+});
+```
+
 ### Sessions — `login`, `logout`, `refresh`, `me`
 
 The factory also returns the four session handlers, thin HTTP wrappers over
