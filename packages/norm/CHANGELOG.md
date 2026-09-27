@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.10.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.6...norm-v1.10.0) (2026-09-27)
+
+
+### Features
+
+* **norm:** safe upsert conflicts, update payloads and insert-only columns ([#735](https://github.com/TundraSoft/TundraLibs/issues/735)) ([ddab1e3](https://github.com/TundraSoft/TundraLibs/commit/ddab1e34150d98e99e3ec00213a89d58ec96e16b))
+
+
+### Documentation
+
+* **norm:** cover upsert conflicts and Mongo expression defaults everywhere ([#740](https://github.com/TundraSoft/TundraLibs/issues/740)) ([4be05c5](https://github.com/TundraSoft/TundraLibs/commit/4be05c5bc1e83d8ddf0f70ac035f32a52bb7fe07))
+* **norm:** drop the MongoDB upsert caveat now that oql matches SQL ([#739](https://github.com/TundraSoft/TundraLibs/issues/739)) ([75baf00](https://github.com/TundraSoft/TundraLibs/commit/75baf000828b5d4b9cf9962cdc323793915ce99a))
+
 ## [1.9.6](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.5...norm-v1.9.6) (2026-09-27)
 
 
