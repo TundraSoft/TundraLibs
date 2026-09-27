@@ -90,6 +90,9 @@ const COLLECTIONS = [
   'active_links',
   'tags_of_posts',
   '_norm_migrations',
+  // The resume checkpoint pairs with the history: dropping only the
+  // history leaves a checkpoint for a plan that no longer exists.
+  '_norm_migration_progress',
 ];
 
 // deno-lint-ignore no-explicit-any
