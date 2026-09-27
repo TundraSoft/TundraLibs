@@ -414,7 +414,9 @@ export class MongoEngine
   }
 
   /**
-   * Update at most one document. Returns the count of matched (found)
+   * Update at most one document. `update` is an operator document or an
+   * aggregation pipeline, as for {@link updateMany}. Returns the count of
+   * matched (found)
    * documents — `matchedCount + upsertedCount`, NOT `modifiedCount`. This
    * mirrors SQL affected-rows semantics: a filter that matches a row whose
    * `$set` values already equal the stored values reports 1 (Postgres
@@ -429,7 +431,7 @@ export class MongoEngine
   public async updateOne(
     collection: string,
     filter: Record<string, unknown>,
-    update: Record<string, unknown>,
+    update: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>,
     opts: { upsert?: boolean } = {},
   ): Promise<number> {
     return await this.__run('updateOne', collection, async (col) => {
@@ -443,7 +445,9 @@ export class MongoEngine
   }
 
   /**
-   * Update all matching documents. Returns the count of matched (found)
+   * Update all matching documents. `update` is an operator document
+   * (`{ $set: … }`) or an aggregation pipeline, which evaluates
+   * expressions such as `$$NOW`. Returns the count of matched (found)
    * documents (`matchedCount`), NOT `modifiedCount` — see {@link updateOne}
    * for why matched-rows is the SQL-consistent choice.
    *
@@ -455,7 +459,7 @@ export class MongoEngine
   public async updateMany(
     collection: string,
     filter: Record<string, unknown>,
-    update: Record<string, unknown>,
+    update: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>,
   ): Promise<number> {
     return await this.__run('updateMany', collection, async (col) => {
       const r = await col.updateMany(
@@ -482,7 +486,7 @@ export class MongoEngine
     collection: string,
     ops: ReadonlyArray<{
       filter: Record<string, unknown>;
-      update: Record<string, unknown>;
+      update: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>;
     }>,
   ): Promise<number> {
     if (ops.length === 0) return 0;
