@@ -51,9 +51,15 @@ export const UI_HISTORY: string = `(() => {
   // must not navigate the page to ITS entry once a newer one took over.
   let restoreGen = 0;
 
-  const arm = (url, pushUrl) => {
-    pending = { url, pushUrl: pushUrl || null };
+  const arm = (url, pushUrl, query) => {
+    pending = { url, pushUrl: pushUrl || null, query: query === true };
   };
+  // A GET form's request URL carries its fields as the query string, so
+  // its arm matches on the path alone.
+  const bare = (url) => String(url).split('#')[0].split('?')[0];
+  const armedFor = (url) =>
+    pending !== null &&
+    (pending.url === url || (pending.query && bare(pending.url) === bare(url)));
 
   // Capture phase: runs BEFORE the runtime's own listeners, so the
   // pending marker is set when the swap starts.
@@ -74,7 +80,8 @@ export const UI_HISTORY: string = `(() => {
       form instanceof HTMLFormElement && form.dataset.action &&
       form.dataset.push !== undefined
     ) {
-      arm(form.dataset.action, form.dataset.push);
+      const method = (form.dataset.method || 'post').toLowerCase();
+      arm(form.dataset.action, form.dataset.push, method === 'get');
     }
   }, true);
   // The arm is set BEFORE the runtime decides whether to send. Every
@@ -85,7 +92,7 @@ export const UI_HISTORY: string = `(() => {
   // stale arm and rewrite the address bar.
   doc.addEventListener('rapid:request', (e) => {
     const detail = e.detail || {};
-    if (pending && pending.url !== detail.url) pending = null;
+    if (pending && !armedFor(detail.url)) pending = null;
   });
   doc.addEventListener('rapid:error', () => {
     pending = null;
@@ -99,7 +106,7 @@ export const UI_HISTORY: string = `(() => {
       if (detail.title) doc.title = detail.title;
       return;
     }
-    if (!pending || pending.url !== detail.url) return;
+    if (!armedFor(detail.url)) return;
     const armed = pending;
     pending = null;
     if (detail.method && detail.method !== 'GET') {

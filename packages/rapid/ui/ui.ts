@@ -27,7 +27,9 @@ import { djb2 } from '../utils/hash.ts';
 
 /**
  * The swap runtime. Attributes: `data-action` (URL), `data-method`
- * (default `get`; forms default `post`), `data-target` (selector;
+ * (default `get`; forms default `post`; a GET form sends its fields as
+ * the query string, replacing any on the action, like a native form),
+ * `data-target` (selector;
  * default: the element itself), `data-swap` = `replace` (default) |
  * `outer` | `append` | `prepend`, `data-load` (present → the element
  * fetches its own action on DOM ready, or right after the swap that
@@ -354,17 +356,32 @@ export const UI_RUNTIME: string = `(() => {
         return Promise.resolve(false);
       }
     }
+    const method = (el.dataset.method || (form ? 'post' : 'get'))
+      .toLowerCase();
+    let url = el.dataset.action;
     let body;
     if (form) {
       const data = new FormData(form, submitter);
-      let hasFile = false;
-      data.forEach((value) => {
-        if (typeof value !== 'string') hasFile = true;
-      });
-      body = hasFile ? data : new URLSearchParams(data).toString();
+      if (method === 'get' || method === 'head') {
+        // A GET cannot carry a body (fetch rejects one): the fields become
+        // the query string, replacing the action's, as a native form
+        // does. A file field contributes its name, also as natively.
+        const query = new URLSearchParams();
+        data.forEach((value, name) => {
+          query.append(name, typeof value === 'string' ? value : value.name);
+        });
+        const qs = query.toString();
+        url = url.split('#')[0].split('?')[0] + (qs ? '?' + qs : '');
+      } else {
+        let hasFile = false;
+        data.forEach((value) => {
+          if (typeof value !== 'string') hasFile = true;
+        });
+        body = hasFile ? data : new URLSearchParams(data).toString();
+      }
     }
-    return request(el.dataset.action, target, {
-      method: el.dataset.method || (form ? 'post' : 'get'),
+    return request(url, target, {
+      method,
       swap: el.dataset.swap,
       body,
     });

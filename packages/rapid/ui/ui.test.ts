@@ -1104,3 +1104,85 @@ describe('rapid.ui runtime — executed against a minimal DOM shim', () => {
     asserts.assertEquals(await newer, true);
   });
 });
+
+describe('rapid.ui runtime — form submission (fake DOM)', () => {
+  /** Runs the real runtime script against the few browser globals a form
+   * submission touches, recording every fetch. */
+  const boot = () => {
+    const listeners: Record<string, ((e: unknown) => void)[]> = {};
+    const fetched: { url: string; init: RequestInit }[] = [];
+    class FakeForm {
+      constructor(
+        public dataset: Record<string, string>,
+        public fields: [string, string][],
+      ) {}
+      setAttribute() {}
+      removeAttribute() {}
+      dispatchEvent() {
+        return true;
+      }
+    }
+    const globals = {
+      window: {},
+      document: {
+        body: { dataset: {} },
+        cookie: '',
+        readyState: 'complete',
+        addEventListener: (type: string, fn: (e: unknown) => void) =>
+          (listeners[type] ??= []).push(fn),
+        querySelectorAll: () => [],
+      },
+      location: { href: 'https://app.test/', origin: 'https://app.test' },
+      HTMLFormElement: FakeForm,
+      Element: FakeForm,
+      FormData: class {
+        constructor(private form: FakeForm) {}
+        forEach(fn: (value: string, name: string) => void) {
+          for (const [name, value] of this.form.fields) fn(value, name);
+        }
+        [Symbol.iterator]() {
+          return this.form.fields[Symbol.iterator]();
+        }
+      },
+      fetch: (url: string, init: RequestInit) => {
+        fetched.push({ url, init });
+        return Promise.resolve(new Response('', { status: 500 }));
+      },
+      CustomEvent: class {
+        constructor(public type: string, public init: unknown) {}
+      },
+    };
+    new Function(...Object.keys(globals), UI_RUNTIME)(
+      ...Object.values(globals),
+    );
+    const submit = async (form: FakeForm) => {
+      for (const fn of listeners.submit ?? []) {
+        fn({ defaultPrevented: false, target: form, preventDefault() {} });
+      }
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    return { FakeForm, fetched, submit };
+  };
+
+  it('a GET form sends its fields as the query string, not a body', async () => {
+    const { FakeForm, fetched, submit } = boot();
+    await submit(
+      new FakeForm({ action: '/search?page=2#top', method: 'get' }, [
+        ['q', 'hello world'],
+        ['tag', 'a&b'],
+      ]),
+    );
+    asserts.assertEquals(fetched.length, 1);
+    asserts.assertEquals(fetched[0]!.url, '/search?q=hello+world&tag=a%26b');
+    asserts.assertEquals(fetched[0]!.init.method, 'GET');
+    asserts.assertEquals(fetched[0]!.init.body, undefined);
+  });
+
+  it('a POST form still sends an urlencoded body', async () => {
+    const { FakeForm, fetched, submit } = boot();
+    await submit(new FakeForm({ action: '/notes' }, [['text', 'hi']]));
+    asserts.assertEquals(fetched[0]!.url, '/notes');
+    asserts.assertEquals(fetched[0]!.init.method, 'POST');
+    asserts.assertEquals(fetched[0]!.init.body, 'text=hi');
+  });
+});

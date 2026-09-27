@@ -400,13 +400,13 @@ stylesheet caches forever.
 One delegated `click` + one `submit` listener over `data-action` elements —
 no inline handlers anywhere, so `script-src 'self'` suffices.
 
-| attribute     | meaning                                                                             |
-| ------------- | ----------------------------------------------------------------------------------- |
-| `data-action` | URL to fetch                                                                        |
-| `data-method` | default `get`; forms default `post`                                                 |
-| `data-target` | selector to swap into (default: the element itself)                                 |
-| `data-swap`   | `replace` (default) \| `outer` \| `append` \| `prepend`                             |
-| `data-load`   | present → fetch the action on DOM ready / when swapped in (a lazy region; GET only) |
+| attribute     | meaning                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `data-action` | URL to fetch                                                                                                                          |
+| `data-method` | default `get`; forms default `post`. A GET form sends its fields as the query string, replacing any on the action, like a native form |
+| `data-target` | selector to swap into (default: the element itself)                                                                                   |
+| `data-swap`   | `replace` (default) \| `outer` \| `append` \| `prepend`                                                                               |
+| `data-load`   | present → fetch the action on DOM ready / when swapped in (a lazy region; GET only)                                                   |
 
 Requests carry `rapid-swap: 1` (the only header the representer reads) plus
 `Accept: text/html` as a courtesy. Forms post
