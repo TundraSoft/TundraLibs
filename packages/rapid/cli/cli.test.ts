@@ -37,6 +37,11 @@ import { initCommand } from './commands/init.ts';
 const pinned = (): Promise<string | null> => Promise.resolve('0.0.0');
 import { MIDDLEWARE_CATALOG, PACKAGE_DOCS, scaffold } from './templates.ts';
 
+// Success lines go nowhere: repeated console.log output between file
+// writes in one process corrupts Node 22's node:test reporter channel
+// ('Unable to deserialize cloned data'), failing an unrelated file.
+const quiet = (): void => {};
+
 describe('rapid.cli modules generator', () => {
   it('exportedClasses picks concrete classes and skips abstract bases', () => {
     const src = [
@@ -73,10 +78,16 @@ describe('rapid.cli modules generator', () => {
         ],
       );
       // write, then --check is clean; mutate → --check fails
-      asserts.assertEquals(await modulesCommand(dir), 0);
-      asserts.assertEquals(await modulesCommand(dir, { check: true }), 0);
+      asserts.assertEquals(await modulesCommand(dir, {}, quiet), 0);
+      asserts.assertEquals(
+        await modulesCommand(dir, { check: true }, quiet),
+        0,
+      );
       await writeTextFile(`${dir}/New.ts`, 'export class New {}');
-      asserts.assertEquals(await modulesCommand(dir, { check: true }), 1);
+      asserts.assertEquals(
+        await modulesCommand(dir, { check: true }, quiet),
+        1,
+      );
     } finally {
       await removeDir(dir, { recursive: true });
     }
@@ -491,6 +502,7 @@ describe('rapid.cli init scaffold', () => {
         { _: ['sample'], module: true, norm: false, yes: true },
         base,
         pinned,
+        quiet,
       );
       asserts.assertEquals(code, 0);
       asserts.assert(await pathExists(`${base}/sample/main.ts`));
@@ -508,9 +520,9 @@ describe('rapid.cli init scaffold', () => {
     const base = await makeTempDir({ prefix: 'rapid-init-dup-' });
     try {
       const args = { _: ['twice'], yes: true };
-      asserts.assertEquals(await initCommand(args, base, pinned), 0);
+      asserts.assertEquals(await initCommand(args, base, pinned, quiet), 0);
       // Second run into the same base with the same name hits the guard.
-      asserts.assertEquals(await initCommand(args, base, pinned), 1);
+      asserts.assertEquals(await initCommand(args, base, pinned, quiet), 1);
     } finally {
       await removeDir(base, { recursive: true });
     }
@@ -520,7 +532,12 @@ describe('rapid.cli init scaffold', () => {
     const base = await makeTempDir({ prefix: 'rapid-init-esc-' });
     try {
       asserts.assertEquals(
-        await initCommand({ _: ['../escape'], yes: true }, base),
+        await initCommand(
+          { _: ['../escape'], yes: true },
+          base,
+          undefined,
+          quiet,
+        ),
         1,
       );
       // The guard fires before any write — base stays empty of the escape.
@@ -536,7 +553,7 @@ describe('rapid.cli init scaffold', () => {
       // A bare `""` positional skips the default and, unguarded, makes `root`
       // empty → writes at `/`. The guard must reject it.
       asserts.assertEquals(
-        await initCommand({ _: [''], yes: true }, base),
+        await initCommand({ _: [''], yes: true }, base, undefined, quiet),
         1,
       );
     } finally {
@@ -557,8 +574,14 @@ describe('rapid.cli health', () => {
     await app.start();
     try {
       const base = `http://127.0.0.1:${app.port}`;
-      asserts.assertEquals(await healthCommand(base, { path: '/health' }), 0);
-      asserts.assertEquals(await healthCommand(base, { path: '/nope' }), 1);
+      asserts.assertEquals(
+        await healthCommand(base, { path: '/health' }, quiet),
+        0,
+      );
+      asserts.assertEquals(
+        await healthCommand(base, { path: '/nope' }, quiet),
+        1,
+      );
     } finally {
       await app.stop();
     }
@@ -567,7 +590,7 @@ describe('rapid.cli health', () => {
   it('returns 1 when the app is unreachable (fetch throws)', async () => {
     // Nothing listens on port 1 — the fetch rejects, hitting the catch.
     asserts.assertEquals(
-      await healthCommand('http://127.0.0.1:1', { path: '/health' }),
+      await healthCommand('http://127.0.0.1:1', { path: '/health' }, quiet),
       1,
     );
   });
@@ -677,6 +700,8 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
         const code = await initCommand(
           { _: [name], module: false, norm: false, yes: true },
           tmp,
+          undefined,
+          quiet,
         );
         asserts.assertEquals(code, 1, name);
         asserts.assertEquals(await pathExists(`${tmp}/${name}`), false, name);
@@ -684,6 +709,8 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
       const ok = await initCommand(
         { _: ['my-app.v2'], module: false, norm: false, yes: true },
         tmp,
+        undefined,
+        quiet,
       );
       asserts.assertEquals(ok, 0);
     } finally {
@@ -703,7 +730,7 @@ describe('rapid.cli modules generator — duplicate class names', () => {
         Error,
         "'Users' is exported by both A.ts and B.ts",
       );
-      asserts.assertEquals(await modulesCommand(dir), 1);
+      asserts.assertEquals(await modulesCommand(dir, {}, quiet), 1);
       asserts.assertEquals(await pathExists(`${dir}/mod.ts`), false);
     } finally {
       await removeDir(dir, { recursive: true });
@@ -718,16 +745,19 @@ describe('rapid.cli modules generator — overwrite guard', () => {
       await writeTextFile(`${dir}/A.ts`, 'export class Users {}\n');
       const handWritten = 'export const notABarrel = 1;\n';
       await writeTextFile(`${dir}/mod.ts`, handWritten);
-      asserts.assertEquals(await modulesCommand(dir), 1);
+      asserts.assertEquals(await modulesCommand(dir, {}, quiet), 1);
       asserts.assertEquals(await readTextFile(`${dir}/mod.ts`), handWritten);
-      asserts.assertEquals(await modulesCommand(dir, { force: true }), 0);
+      asserts.assertEquals(
+        await modulesCommand(dir, { force: true }, quiet),
+        0,
+      );
       const generated = await readTextFile(`${dir}/mod.ts`);
       asserts.assertStringIncludes(
         generated,
         "export { Users } from './A.ts';",
       );
       await writeTextFile(`${dir}/B.ts`, 'export class Orders {}\n');
-      asserts.assertEquals(await modulesCommand(dir), 0); // generated → no --force needed
+      asserts.assertEquals(await modulesCommand(dir, {}, quiet), 0); // generated → no --force needed
       asserts.assertStringIncludes(
         await readTextFile(`${dir}/mod.ts`),
         "export { Orders } from './B.ts';",

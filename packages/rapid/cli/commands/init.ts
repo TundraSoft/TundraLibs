@@ -75,11 +75,13 @@ async function resolveVendorCss(
   }
 }
 
-/** The `init` command. Returns the process exit code. */
+/** The `init` command. Returns the process exit code.
+ * `log` receives the success lines; tests pass a no-op. */
 export async function initCommand(
   args: ParsedArgs,
   base = '.',
   resolveVersion: (pkg: string) => Promise<string | null> = latestVersion,
+  log: (line: string) => void = console.log,
 ): Promise<number> {
   const yes = args.yes === true;
   let name = (args._[0] as string | undefined) ??
@@ -163,10 +165,10 @@ export async function initCommand(
     await writeTextFile(path, content);
   }
 
-  console.log(`\n✓ created ${name}/`);
-  console.log(`  ${Object.keys(files).length} files`);
-  console.log(`\n  cd ${name}`);
-  console.log(
+  log(`\n✓ created ${name}/`);
+  log(`  ${Object.keys(files).length} files`);
+  log(`\n  cd ${name}`);
+  log(
     `  deno task dev        (or: npm run dev / bun --watch main.ts)\n`,
   );
   return 0;
