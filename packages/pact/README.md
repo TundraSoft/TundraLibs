@@ -49,7 +49,7 @@ or better-auth. All cryptography is delegated to
 | [Sessions](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Sessions)                   | Opaque vs JWT, refresh rotation, reuse detection, cache-only mode                                |
 | [OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-OAuth)                         | Provider presets, PKCE/state/nonce, JIT provisioning, id_token policy                            |
 | [Multi-tenant OAuth](https://github.com/TundraSoft/TundraLibs/wiki/Pact-MultiTenantOAuth) | Per-tenant IdPs registered at runtime: `updateOAuth`/`removeOAuth`, propagation across instances |
-| [Tenants](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Tenants)                     | Tenant-scoped grants (`acme::Post`), global super-admin grants, accounts per tenant              |
+| [Tenants](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Tenants)                     | Tenant-scoped grants (`acme::Post`): building, checking and refreshing them; account models      |
 | [Caching](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Caching)                     | Opt-in caches, the instance name, TTLs, invalidation                                             |
 | [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security)                   | The error contract, enumeration resistance, bound principals, threat notes                       |
 | [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware)               | express / fastify / oak / hono adapters and the neutral core                                     |
