@@ -1854,6 +1854,10 @@ export abstract class AbstractTranslator {
    * upsert. Shared by the Postgres and SQLite translators, which differ only
    * in the {@link _excludedKeyword} case. MariaDB uses
    * `ON DUPLICATE KEY UPDATE` instead and supplies its own `_buildUpsert`.
+   *
+   * `updateSet` values reference the existing row through a table alias:
+   * Postgres rejects a bare column in `DO UPDATE SET` as ambiguous with
+   * `EXCLUDED`. The alias is only emitted when `updateSet` is present.
    */
   protected _buildOnConflictUpsert(
     q: Query<'UPSERT'>,
@@ -1872,26 +1876,65 @@ export abstract class AbstractTranslator {
     const conflictCols = conflictKeys
       .map((c) => this._quoteIdentifier(c))
       .join(', ');
-    const updateCols = q.updateOnConflict
-      ? q.updateOnConflict.map((k) => k.slice(1))
-      : insertCols.filter((c) => !conflictKeys.includes(c));
+    const setEntries = Object.entries(q.updateSet ?? {});
+    const updateCols = this._upsertCopiedColumns(q, insertCols, conflictKeys);
 
     const excluded = this._excludedKeyword;
-    const onConflict = updateCols.length > 0
-      ? `ON CONFLICT (${conflictCols}) DO UPDATE SET ${
-        updateCols
-          .map((c) => {
-            const quoted = this._quoteIdentifier(c);
-            return `${quoted} = ${excluded}.${quoted}`;
-          })
-          .join(', ')
-      }`
+    const setClauses = [
+      ...updateCols.map((c) => {
+        const quoted = this._quoteIdentifier(c);
+        return `${quoted} = ${excluded}.${quoted}`;
+      }),
+      ...setEntries.map(([c, value]) =>
+        `${this._quoteIdentifier(c)} = ${
+          this._translateUpsertSetValue(value, cols, params, true)
+        }`
+      ),
+    ];
+    const onConflict = setClauses.length > 0
+      ? `ON CONFLICT (${conflictCols}) DO UPDATE SET ${setClauses.join(', ')}`
       : `ON CONFLICT (${conflictCols}) DO NOTHING`;
 
+    const alias = setEntries.length > 0 ? ` AS ${BASE_ALIAS}` : '';
     const returnCols = (q.projection as ReadonlyArray<string> | undefined) ??
       cols;
     const returning = this._buildReturning(returnCols, 'upsert');
-    return `INSERT INTO ${tableSql} (${colList}) VALUES ${valuesSql} ${onConflict}${returning}`;
+    return `INSERT INTO ${tableSql}${alias} (${colList}) VALUES ${valuesSql} ${onConflict}${returning}`;
+  }
+
+  /**
+   * The columns an upsert copies from the incoming row on conflict:
+   * `updateOnConflict` when given, otherwise every inserted column except
+   * the conflict keys and the `updateSet` keys.
+   */
+  protected _upsertCopiedColumns(
+    q: Query<'UPSERT'>,
+    insertCols: string[],
+    conflictKeys: string[],
+  ): string[] {
+    if (q.updateOnConflict) return q.updateOnConflict.map((k) => k.slice(1));
+    const explicit = Object.keys(q.updateSet ?? {});
+    return insertCols.filter((c) =>
+      !conflictKeys.includes(c) && !explicit.includes(c)
+    );
+  }
+
+  /**
+   * Render one `updateSet` value. With `qualified`, column references
+   * render against {@link BASE_ALIAS}, the alias the ON CONFLICT builder
+   * gives the target table.
+   */
+  protected _translateUpsertSetValue(
+    value: unknown,
+    columns: string[],
+    params: Parameters,
+    qualified: boolean,
+  ): string {
+    if (value === null || value === undefined) return 'NULL';
+    if (this.__isExpressionNode(value)) {
+      return this._translateExpression(value, columns, params, qualified);
+    }
+    return this._parameterize(value, params);
   }
 
   /**

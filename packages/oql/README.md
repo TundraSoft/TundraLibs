@@ -152,8 +152,12 @@ one.
   reference `@col` (the row being modified).
 - **DELETE** - Delete records
 - **UPSERT** - Insert or update (conflict resolution). `updateOnConflict`
-  must be disjoint from `conflictKeys` and every entry must exist as a
-  key in `data` — see [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#upsert-query).
+  lists columns copied from the incoming row; it must be disjoint from
+  `conflictKeys` and every entry must exist as a key in `data`.
+  `updateSet` sets explicit values on conflict, and its expressions may
+  reference the existing row (`@clicks + 1`). With neither, an empty
+  `updateOnConflict` leaves the existing row untouched — see
+  [Validators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#upsert-query).
 - **COUNT** - Count records with optional filtering and
   `COUNT(DISTINCT col)`. No `having` — a COUNT has no GROUP BY to filter
   against; use `SELECT` with `aggregates` + `having` instead.

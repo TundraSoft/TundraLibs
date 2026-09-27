@@ -245,8 +245,8 @@ const valid = isUpsert(query);
   inside Expressions **are** permitted (like UPDATE — an upsert's
   UPDATE branch can reference the row being modified)
 - `conflictKeys` is a non-empty array of declared column identifiers
-- Optional `updateOnConflict`, if present, must be a **non-empty**
-  array where **every entry is disjoint from `conflictKeys`** (throws
+- Optional `updateOnConflict`, if present, must be an array (empty
+  means copy nothing) where **every entry is disjoint from `conflictKeys`** (throws
   `updateOnConflict should not include conflictKey '<id>'` — there's no
   point updating the column you matched the conflict on) **and every
   entry must name a key present in the supplied `data`** (throws
@@ -259,6 +259,11 @@ const valid = isUpsert(query);
   [Compatibility Matrix](../docs/OQL-Compatibility.md#upsert-semantics); on
   the SQL dialects a missing non-conflict column just takes its
   DEFAULT/NULL).
+- Optional `updateSet`, if present, must be a plain object whose keys are
+  declared columns, none of them a conflict key or also listed in
+  `updateOnConflict` (throws `'@<col>' is in both updateOnConflict and
+  updateSet`). Values follow the same rules as UPDATE data, so an
+  expression may reference `@col` (the existing row).
 
 ### COUNT Query
 

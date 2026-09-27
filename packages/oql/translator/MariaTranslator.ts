@@ -318,20 +318,25 @@ export class MariaTranslator extends AbstractTranslator {
     const tableSql = this._qualifiedTable(q.table, q.schema);
 
     const conflictKeys = q.conflictKeys.map((k) => k.slice(1));
-    const updateCols = q.updateOnConflict
-      ? q.updateOnConflict.map((k) => k.slice(1))
-      : insertCols.filter((c) => !conflictKeys.includes(c));
+    const updateCols = this._upsertCopiedColumns(q, insertCols, conflictKeys);
+    // A bare column in ON DUPLICATE KEY UPDATE is the existing row's.
+    const setClauses = [
+      ...updateCols.map((c) => {
+        const quoted = this._quoteIdentifier(c);
+        return `${quoted} = VALUES(${quoted})`;
+      }),
+      ...Object.entries(q.updateSet ?? {}).map(([c, value]) =>
+        `${this._quoteIdentifier(c)} = ${
+          this._translateUpsertSetValue(value, cols, params, false)
+        }`
+      ),
+    ];
 
     // ON DUPLICATE KEY UPDATE has no DO NOTHING; we emit an idempotent
     // self-assignment when there's nothing to update (col = col is a
     // standard MySQL trick for the ignore case, lighter than INSERT IGNORE).
-    const setClause = updateCols.length > 0
-      ? updateCols
-        .map((c) => {
-          const quoted = this._quoteIdentifier(c);
-          return `${quoted} = VALUES(${quoted})`;
-        })
-        .join(', ')
+    const setClause = setClauses.length > 0
+      ? setClauses.join(', ')
       : `${this._quoteIdentifier(conflictKeys[0]!)} = ${
         this._quoteIdentifier(conflictKeys[0]!)
       }`;

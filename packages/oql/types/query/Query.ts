@@ -151,12 +151,25 @@ export type Query<
                  */
                 conflictKeys: ColumnIdentifier[];
                 /**
-                 * Optional — which fields to update on conflict.
-                 * When omitted, every field in `data` (except
-                 * `conflictKeys`) is updated. Use `@`-prefixed
+                 * Optional — which fields to update on conflict, each
+                 * copied from the incoming row. When omitted, every
+                 * field in `data` (except `conflictKeys` and
+                 * `updateSet` keys) is updated. An empty array copies
+                 * nothing; with no `updateSet` either, a conflict
+                 * leaves the existing row untouched. Use `@`-prefixed
                  * identifiers.
                  */
                 updateOnConflict?: ColumnIdentifier[];
+                /**
+                 * Optional — values to set on conflict instead of the
+                 * incoming row's, one object for every conflicting row.
+                 * Literals are bound as parameters; an expression may
+                 * reference the existing row's columns (`{ $$_expression:
+                 * 'ADD', args: ['@clicks', 1] }`). SQL dialects apply it
+                 * only when a row conflicts. On Mongo it becomes `$set`,
+                 * which also applies to a newly inserted document.
+                 */
+                updateSet?: DataWithExpressions<PT>;
                 /**
                  * Optional `RETURNING` projection — same semantics
                  * as on `INSERT`.

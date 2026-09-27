@@ -1113,6 +1113,34 @@ const CASES: Case[] = [
     },
   },
 
+  {
+    // updateSet goes to $set, and its fields leave $setOnInsert: Mongo
+    // rejects a field in both operators.
+    name: 'UPSERT updateSet values go to $set and never also $setOnInsert',
+    method: 'upsert',
+    query: {
+      type: 'UPSERT',
+      table: 'users',
+      columns: ['id', 'name', 'status'],
+      data: { id: 1, name: 'John', status: 'NEW' },
+      conflictKeys: ['@id'],
+      updateOnConflict: [],
+      updateSet: { status: 'SEEN' },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: { id: 1 },
+        data: {
+          $set: { status: 'SEEN' },
+          $setOnInsert: { id: 1, name: 'John' },
+        },
+        options: { upsert: true },
+      },
+    },
+  },
+
   // Bulk UPSERT: array data emits a `bulkWrite` action, one updateOne
   // op per row. Each op carries the same filter / $set / $setOnInsert
   // shape the single-row case does.

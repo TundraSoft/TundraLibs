@@ -236,7 +236,8 @@ Like `INSERT`, `data` values may be expressions, and an optional
   columns: Array<keyof PT>;
   data: DataWithExpressions<PT> | Array<DataWithExpressions<PT>>;
   conflictKeys: ColumnIdentifier[];
-  updateOnConflict?: ColumnIdentifier[];
+  updateOnConflict?: ColumnIdentifier[]; // copied from the incoming row
+  updateSet?: DataWithExpressions<PT>; // explicit values on conflict
   // Optional RETURNING — same semantics as INSERT.
   projection?: ReadonlyArray<keyof PT & string>;
 }

@@ -198,11 +198,15 @@ helpers, which skip the re-fetch.
 
 ### UPSERT semantics
 
-- **Postgres / SQLite**: `INSERT … ON CONFLICT (keys) DO UPDATE SET …`.
-- **MariaDB**: `INSERT … ON DUPLICATE KEY UPDATE …`. When `updateOnConflict`
-  is empty we emit the idempotent self-assignment trick
-  (`<key> = <key>`).
+- **Postgres / SQLite**: `INSERT … ON CONFLICT (keys) DO UPDATE SET …`, or
+  `DO NOTHING` when there is nothing to set. With `updateSet`, the target
+  table is aliased so its expressions can reference the existing row
+  (Postgres rejects a bare column there as ambiguous with `EXCLUDED`).
+- **MariaDB**: `INSERT … ON DUPLICATE KEY UPDATE …`. When there is nothing
+  to set we emit the idempotent self-assignment trick (`<key> = <key>`).
 - **MongoDB**: single-row `data` emits `update` with `upsert: true`.
+  `updateSet` values go to `$set`, which Mongo also applies to a newly
+  inserted document, unlike the SQL dialects.
   Array `data` emits a `bulkWrite` action — one `updateOne` op per row,
   applied in one round-trip. RETURNING is mirrored by a single follow-up
   `find($or: [...filters])`, so the driver makes two round-trips total
