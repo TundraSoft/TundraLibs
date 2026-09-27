@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.12.0...pact-v0.12.1) (2026-09-27)
+
+
+### Documentation
+
+* **pact:** lead the tenants guide with derived grant keys ([#732](https://github.com/TundraSoft/TundraLibs/issues/732)) ([09d4acd](https://github.com/TundraSoft/TundraLibs/commit/09d4acd693aed7a1323500d4d1773fd6e67e291f))
+
 ## [0.12.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.11.0...pact-v0.12.0) (2026-09-27)
 
 

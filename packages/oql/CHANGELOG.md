@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.2.2...oql-v1.3.0) (2026-09-27)
+
+
+### Features
+
+* **oql:** explicit conflict values for UPSERT with updateSet ([#734](https://github.com/TundraSoft/TundraLibs/issues/734)) ([e34a193](https://github.com/TundraSoft/TundraLibs/commit/e34a19395ddf70045e641b50a40ef6148a39ac13))
+
+
+### Bug Fixes
+
+* **oql:** evaluate expressions on MongoDB instead of storing them literally ([#738](https://github.com/TundraSoft/TundraLibs/issues/738)) ([6f0ad02](https://github.com/TundraSoft/TundraLibs/commit/6f0ad0257d4ff66e610725b41447199881996940))
+
+
+### Documentation
+
+* **oql:** note Mongo insert expressions in the capability rows ([#741](https://github.com/TundraSoft/TundraLibs/issues/741)) ([8a59e5b](https://github.com/TundraSoft/TundraLibs/commit/8a59e5b88ee01ce084874dfd8675ad8fff5300ef))
+
 ## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.2.1...oql-v1.2.2) (2026-09-27)
 
 

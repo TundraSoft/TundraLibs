@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.2.3...drivers-v1.3.0) (2026-09-27)
+
+
+### Features
+
+* **drivers:** accept an aggregation pipeline in Mongo updates ([#737](https://github.com/TundraSoft/TundraLibs/issues/737)) ([178f23c](https://github.com/TundraSoft/TundraLibs/commit/178f23c87c49841e64f0cdb37f121642474b74b6))
+
 ## [1.2.3](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.2.2...drivers-v1.2.3) (2026-09-26)
 
 
