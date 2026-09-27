@@ -206,6 +206,37 @@ describe({
         }
       });
 
+      it('updates and upserts take a pipeline, which evaluates expressions', async () => {
+        const engine = new MongoEngine('crud-pipe', TEST_CONFIG);
+        const coll = colName('pipeline');
+        try {
+          await engine.insertMany(coll, [{ name: 'A', clicks: 1 }]);
+          const bump = [{
+            $set: { clicks: { $add: ['$clicks', 1] }, at: '$$NOW' },
+          }];
+          asserts.assertEquals(
+            await engine.updateMany(coll, { name: 'A' }, bump),
+            1,
+          );
+          await engine.updateOne(coll, { name: 'A' }, bump);
+          await engine.bulkUpsert(coll, [{
+            filter: { name: 'B' },
+            update: bump,
+          }]);
+          const a = await engine.findOne<{ clicks: number; at: unknown }>(
+            coll,
+            { name: 'A' },
+          );
+          asserts.assertEquals(a?.clicks, 3);
+          asserts.assertInstanceOf(a?.at, Date, '$$NOW was evaluated');
+          const b = await engine.findOne<{ at: unknown }>(coll, { name: 'B' });
+          asserts.assertInstanceOf(b?.at, Date);
+        } finally {
+          await engine.deleteMany(coll, {});
+          await engine.disconnect();
+        }
+      });
+
       it('deleteOne / deleteMany should remove matching docs', async () => {
         const engine = new MongoEngine('crud-5', TEST_CONFIG);
         const coll = colName('delete');
