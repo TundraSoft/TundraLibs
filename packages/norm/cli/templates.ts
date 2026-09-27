@@ -183,7 +183,9 @@ Chainable on (most of) these: \`.nullable()\`, \`.guard(g)\` (an already-built
 \`@tundralibs/guardian\` instance — validators AND transforms, in your own
 order; pinned to the column's own concrete guardian class), \`.beforeWrite(fn)\`/
 \`.afterRead(fn)\`, \`.default(v)\`, \`.hidden()\`/\`.unfilterable()\`,
-\`.comment(text)\`. \`Column.enum([...])\` is its own factory (not chained) —
+\`.insertOnly()\` (set once at insert: \`update()\` rejects it and an upsert
+conflict never changes it, e.g. \`CreatedBy\`), \`.comment(text)\`.
+\`Column.enum([...])\` is its own factory (not chained) —
 narrows the TS type to the literal union, no \`as const\` needed.
 
 ## Entity kinds
@@ -242,6 +244,9 @@ await db.repo('Users').find({ '@role': 'admin' }, {
   project: { '@id': true, '@displayName': true, '@Profile': { '@bio': true } },
 });
 await db.repo('Users').update({ role: 'admin' }, { '@id': id });
+// On conflict: only the columns you passed (never keys, insert-only or
+// insert-default-only ones) plus defaultOnUpdate; \`update: {...}\` sets
+// exactly that instead (counters), \`updateOnConflict: []\` leaves the row.
 await db.repo('Users').upsert({ email: 'a@b.com', role: 'admin' }, opts);
 await db.repo('Users').delete({ '@id': id }); // delete({}) = all rows
 await db.repo('Users').truncate(); // refused on a temporal or scoped entity

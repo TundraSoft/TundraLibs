@@ -353,6 +353,13 @@ An `ExpressionDefault` is `{ $$_expression: string, args?: unknown }`.
 It is passed through to the query untouched and never validated as a
 JS value.
 
+On MongoDB an insert document cannot evaluate expressions, so the clock
+expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `UNIX_TIMESTAMP`)
+and `UUID` are computed when the insert is built, the clock ones at one
+instant per statement. Any other expression default fails the insert with
+`DialectUnsupportedError`; use a local generator instead. Updates and
+upserts evaluate expressions in the database on every dialect.
+
 ### Transforms
 
 `.beforeWrite(fn)` normalizes a value before it is validated,

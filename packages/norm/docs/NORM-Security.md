@@ -263,6 +263,8 @@ ciphertext cannot:
 // nondeterministic — so conflict on the id and update email; NORM
 // auto-adds `email_hash` to updateOnConflict so the digest re-syncs
 // with the new ciphertext and plaintext lookups keep finding the row.
+// `email` must be updatable on the entity: a column outside its
+// `update` list is refused on conflict too (UPSERT_CONFLICT_KEY).
 await db.repo('Users').upsert({
   id: userId,
   email: 'ada.lovelace@shortly.dev',
