@@ -133,15 +133,16 @@ export type MongoInsertAction = {
 
 /**
  * An update. `params.data` is already wrapped in its Mongo update
- * operators (`$set`, and `$setOnInsert` on the upsert path) — pass it
- * through untouched.
+ * operators (`$set`, and `$setOnInsert` on the upsert path), or is an
+ * aggregation pipeline when a value is an expression — pass it through
+ * untouched.
  */
 export type MongoUpdateAction = {
   sql: 'update';
   params: {
     collection: string;
     filter: Record<string, unknown>;
-    data: Record<string, unknown>;
+    data: Record<string, unknown> | Array<Record<string, unknown>>;
     options?: { multiple?: boolean; upsert?: boolean };
   };
 };
@@ -153,7 +154,7 @@ export type MongoUpdateAction = {
  */
 export type MongoBulkUpsertOp = {
   filter: Record<string, unknown>;
-  update: Record<string, unknown>;
+  update: Record<string, unknown> | Array<Record<string, unknown>>;
 };
 
 /**
@@ -492,7 +493,7 @@ export class MongoTranslator {
         filter: q.where
           ? this.__translateFilter(q.where, this.__columnsOf(q))
           : {},
-        data: { $set: this.__translateUpdateBody(q.data) },
+        data: this.__updateBody(q.data),
         options: { multiple: true },
       },
     };
@@ -539,7 +540,7 @@ export class MongoTranslator {
     // built by `__buildUpsertOp` either way.
     const conflictKeys = q.conflictKeys.map((k) => k.slice(1));
     const updateOnConflict = q.updateOnConflict?.map((k) => k.slice(1));
-    const updateSet = this.__translateUpdateBody(q.updateSet ?? {});
+    const updateSet = q.updateSet ?? {};
     if (Array.isArray(q.data)) {
       const ops: MongoBulkUpsertOp[] = q.data.map((row) =>
         this.__buildUpsertOp(row, conflictKeys, updateOnConflict, updateSet)
@@ -575,9 +576,12 @@ export class MongoTranslator {
    *   `updateOnConflict` is undefined) and `$setOnInsert` (applied only
    *   on the insert branch — honours `disableUpdate` semantics).
    *
-   * - `updateSet` values go to `$set` as well, so on Mongo they also land
-   *   on a newly inserted document; a field is never in both operators,
-   *   which Mongo rejects.
+   * - With `updateSet`, or when any value is an expression, the update is
+   *   an aggregation pipeline instead, because only a pipeline evaluates
+   *   expressions (a classic `$set` stores `$$NOW` as a string). A new
+   *   document is one whose `_id` is still missing, which lets each field
+   *   take its insert value on the insert branch and its `updateSet` or
+   *   existing value on the conflict branch, as the SQL dialects do.
    *
    * Empty `$set` / `$setOnInsert` operators are omitted because Mongo
    * rejects them.
@@ -609,19 +613,44 @@ export class MongoTranslator {
       }
     }
     const filter: Record<string, unknown> = {};
-    const setBody: Record<string, unknown> = { ...updateSet };
+    for (const ck of conflictKeys) filter[ck] = row[ck];
+    const copies = (key: string) =>
+      updateOnConflict === undefined
+        ? !(key in updateSet)
+        : updateOnConflict.includes(key);
+    const values = [...Object.values(row), ...Object.values(updateSet)];
+    if (
+      Object.keys(updateSet).length > 0 ||
+      values.some((v) => this.__isExpression(v))
+    ) {
+      const isNew = { $eq: [{ $type: '$_id' }, 'missing'] };
+      const set: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(row)) {
+        const inserted = this.__pipelineValue(value);
+        if (key in updateSet) {
+          set[key] = {
+            $cond: [isNew, inserted, this.__pipelineValue(updateSet[key])],
+          };
+        } else if (!conflictKeys.includes(key) && copies(key)) {
+          set[key] = inserted;
+        } else {
+          set[key] = { $cond: [isNew, inserted, `$${key}`] };
+        }
+      }
+      for (const [key, value] of Object.entries(updateSet)) {
+        if (key in row) continue;
+        set[key] = { $cond: [isNew, '$$REMOVE', this.__pipelineValue(value)] };
+      }
+      return { filter, update: [{ $set: set }] };
+    }
+    const setBody: Record<string, unknown> = {};
     const insertOnly: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(row)) {
-      if (conflictKeys.includes(key)) {
-        filter[key] = value;
-        continue;
-      }
-      if (key in updateSet) continue;
-      const rendered = this.__renderValue(value);
-      if (updateOnConflict === undefined || updateOnConflict.includes(key)) {
-        setBody[key] = rendered;
+      if (conflictKeys.includes(key)) continue;
+      if (copies(key)) {
+        setBody[key] = value;
       } else {
-        insertOnly[key] = rendered;
+        insertOnly[key] = value;
       }
     }
     const update: Record<string, unknown> = {};
@@ -1350,23 +1379,90 @@ export class MongoTranslator {
   }
 
   /**
-   * Build the body of an INSERT — single document or array. Each value
-   * is rendered via `__renderValue` so expressions inside (e.g. NOW)
-   * become Mongo-native.
+   * Build the body of an INSERT — single document or array. An insert
+   * document cannot evaluate expressions, so clock expressions and UUID
+   * are computed here, one instant per statement like SQL's `NOW`.
    */
   private __renderData(
     data: Record<string, unknown> | Array<Record<string, unknown>>,
   ): Record<string, unknown> | Array<Record<string, unknown>> {
-    if (Array.isArray(data)) return data.map((row) => this.__renderRow(row));
-    return this.__renderRow(data);
+    const now = new Date();
+    const render = (row: Record<string, unknown>) => {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(row)) {
+        out[k] = this.__insertValue(k, v, now);
+      }
+      return out;
+    };
+    return Array.isArray(data) ? data.map(render) : render(data);
   }
 
-  private __renderRow(row: Record<string, unknown>): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(row)) {
-      out[k] = this.__renderValue(v);
+  /**
+   * One INSERT value: literals pass through, clock expressions and UUID
+   * are computed at `now`.
+   *
+   * @throws {@link DialectUnsupportedError} For any other expression.
+   */
+  private __insertValue(column: string, value: unknown, now: Date): unknown {
+    if (!this.__isExpression(value)) return value ?? null;
+    const expr = value as Expressions;
+    switch (expr.$$_expression) {
+      case 'NOW':
+      case 'CURRENT_TIMESTAMP':
+      case 'CURRENT_TIMESTAMPTZ':
+      case 'CURRENT_TIME':
+        return now;
+      case 'CURRENT_DATE':
+        return new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        );
+      case 'UNIX_TIMESTAMP':
+        return (expr as { unit?: string }).unit === 'milliseconds'
+          ? now.getTime()
+          : Math.floor(now.getTime() / 1000);
+      case 'UUID':
+        return crypto.randomUUID();
+      default:
+        throw new DialectUnsupportedError(
+          this.Dialect,
+          `INSERT value for '${column}' is the expression '${expr.$$_expression}', which a Mongo insert document cannot evaluate. Compute it in the application; only NOW, CURRENT_TIMESTAMP(TZ), CURRENT_DATE, CURRENT_TIME, UNIX_TIMESTAMP and UUID are computed at insert.`,
+        );
     }
-    return out;
+  }
+
+  /**
+   * An UPDATE body: a classic `$set` for plain values, or a pipeline
+   * `$set` when any value is an expression, which only a pipeline
+   * evaluates.
+   */
+  private __updateBody(
+    data: Record<string, unknown>,
+  ): Record<string, unknown> | Array<Record<string, unknown>> {
+    if (!Object.values(data).some((v) => this.__isExpression(v))) {
+      return { $set: this.__translateUpdateBody(data) };
+    }
+    const set: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) set[k] = this.__pipelineValue(v);
+    return [{ $set: set }];
+  }
+
+  /** Is `v` an OQL expression node? */
+  private __isExpression(v: unknown): boolean {
+    return typeof v === 'object' && v !== null && !(v instanceof Date) &&
+      '$$_expression' in v;
+  }
+
+  /**
+   * A value inside a pipeline stage. Expressions translate; literals are
+   * wrapped in `$literal`, so a string starting with `$` or a plain
+   * object is never read as a field path or an operator.
+   */
+  private __pipelineValue(value: unknown): unknown {
+    if (value === null || value === undefined) return null;
+    if (this.__isExpression(value)) {
+      return this.__translateExpression(value as Expressions);
+    }
+    return { $literal: value };
   }
 
   /** Translate UPDATE `data` to a Mongo-flat `$set` body. */
