@@ -102,3 +102,47 @@ describe('rapid.ui.history — restore selector', () => {
     );
   });
 });
+
+describe('rapid.ui.history — GET form push', () => {
+  it('pushes a GET form swap whose URL gained a query string', () => {
+    // Runs the real module against the few browser globals a push touches.
+    const listeners: Record<string, ((e: unknown) => void)[]> = {};
+    const pushed: string[] = [];
+    class FakeElement {
+      constructor(public dataset: Record<string, string>, public id = '') {}
+    }
+    const globals = {
+      window: {},
+      document: {
+        addEventListener: (type: string, fn: (e: unknown) => void) =>
+          (listeners[type] ??= []).push(fn),
+      },
+      addEventListener: () => {},
+      location: { pathname: '/', search: '', hash: '' },
+      history: {
+        state: null,
+        replaceState: () => {},
+        pushState: (_s: unknown, _t: string, url: string) => pushed.push(url),
+      },
+      CSS: { escape: (id: string) => id },
+      Element: FakeElement,
+      HTMLFormElement: FakeElement,
+    };
+    new Function(...Object.keys(globals), UI_HISTORY)(
+      ...Object.values(globals),
+    );
+    const fire = (type: string, event: unknown) => {
+      for (const fn of listeners[type] ?? []) fn(event);
+    };
+    const form = new FakeElement({
+      action: '/search',
+      method: 'get',
+      push: '',
+    });
+    fire('submit', { defaultPrevented: false, target: form });
+    const detail = { url: '/search?q=hi', method: 'GET' };
+    fire('rapid:request', { detail });
+    fire('rapid:swapped', { detail, target: new FakeElement({}, 'results') });
+    asserts.assertEquals(pushed, ['/search?q=hi']);
+  });
+});
