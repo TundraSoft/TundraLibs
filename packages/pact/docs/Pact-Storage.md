@@ -26,6 +26,7 @@ CREATE TABLE users (
   status         TEXT NOT NULL,             -- ACTIVE / PENDING / LOCKED / ...
   password_hash  TEXT,                      -- pbkdf2 string from pact; NULL = password-less
   mfa_secret     TEXT,                      -- TOTP seed, ENCRYPTED app-side; NULL = not enrolled
+  totp_step      BIGINT,                    -- last accepted TOTP step (claimTotpStep)
   grants         TEXT NOT NULL,             -- serializeGrants() JSON
   metadata       JSON,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

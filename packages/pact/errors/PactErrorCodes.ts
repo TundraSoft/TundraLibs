@@ -102,6 +102,13 @@ export const PactErrorCodes = {
   NOT_ACTIVE: "Account is not active (status '${status}')",
 
   /**
+   * `verifyMFA` saw more than `options.mfa.maxAttempts` attempts for the
+   * user in the current window. Map it to 429; retry after the window.
+   * Variables: window (minutes)
+   */
+  MFA_LOCKED: 'Too many MFA attempts; try again within ${window} minutes',
+
+  /**
    * An operation requires a hook that was not configured.
    * Variables: hook
    */

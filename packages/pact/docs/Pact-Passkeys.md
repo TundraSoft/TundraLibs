@@ -31,7 +31,7 @@ const pact = Pact.create({
       rpId: 'example.com', // the domain credentials are scoped to
       rpName: 'Example',
       origins: ['https://app.example.com'],
-      // userVerification: 'PREFERRED' | 'REQUIRED' | 'DISCOURAGED'
+      // userVerification: 'REQUIRED' (default) | 'PREFERRED' | 'DISCOURAGED'
       // algorithms: ['ES256', 'RS256']
       // timeout: 60000
     },
@@ -40,7 +40,10 @@ const pact = Pact.create({
 ```
 
 Option values follow pact's uppercase convention; pact maps them to the
-lowercase wire values WebAuthn expects. Configuring `passkeys` makes
+lowercase wire values WebAuthn expects. `userVerification` defaults to
+`'REQUIRED'`: a passkey login replaces the password and the second factor,
+so presence alone (an unlocked key without a PIN) is refused. Set
+`'PREFERRED'` to accept authenticators that cannot verify the user. Configuring `passkeys` makes
 `getPasskey`, `getPasskeys`, `savePasskey`, `updatePasskeyCounter`, and
 `getUser` required — checked at construction, so a missing hook fails at
 boot rather than surfacing mid-request. The stored shape is

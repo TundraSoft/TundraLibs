@@ -36,7 +36,7 @@ immediate.
 | `logoutAll`                                | `deleteSessions`                                                                                                                                                       |
 | `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
 | Email verification                         | `getUser` + `saveResetToken` / `consumeResetToken` — the status change is yours (no status hook)                                                                       |
-| `verifyMFA`                                | `getUser`                                                                                                                                                              |
+| `verifyMFA`                                | `getUser`, plus `claimTotpStep` + `countMfaAttempt` + `resetMfaAttempts` when more than one process runs (otherwise tracked per process)                               |
 | OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on, and optionally `oauthIdentifier`)                                                                                |
 | Passkeys (all four ceremonies)             | `getPasskey` + `getPasskeys` + `savePasskey` + `updatePasskeyCounter` + `getUser` — checked at construction; `finishPasskeyLogin` additionally needs the session store |
 
@@ -82,15 +82,30 @@ points:
   [Tenants](Pact-Tenants.md#accounts-per-tenant).
 - **`getApiKey(keyId)`** returns the record with `secret` decrypted — see
   [How secrets are stored](#how-secrets-are-stored).
+  The `grants` it returns are what the key may do. pact refuses a key whose
+  owner is inactive, but does not compare the key's grants with the
+  owner's: to cap a key at its owner's current grants, or suspend it with
+  its tenant, compute `grants` and `status` here. With an `apiKey` cache
+  TTL, changes apply when the cached entry expires.
 - **`saveSession(session)`** should be an insert (or a
   conditional/keyed write), not a blind upsert of arbitrary ids: session ids
   are pact-minted, and a blind upsert lets a deleted session be resurrected
   by a late write racing a logout.
 - **`consumeResetToken(id)`** returns and deletes in one motion, which is
-  what makes action tokens single-use even under concurrent attempts.
-  Return the record whatever its `purpose`: pact checks the purpose after
-  consumption, so a reset token presented to `verifyEmail` (or the reverse)
-  is rejected and burned in the same motion.
+  what makes action tokens single-use even under concurrent attempts. It
+  must be atomic, e.g. `DELETE … WHERE id = $1 RETURNING *`; a read then a
+  delete lets two concurrent resets both succeed. Return the record
+  whatever its `purpose`: pact checks the purpose after consumption, so a
+  reset token presented to `verifyEmail` (or the reverse) is rejected and
+  burned in the same motion.
+- **`claimTotpStep(userId, step)`** atomically stores `step` as the user's
+  last accepted TOTP step only if it is later than the stored one, and
+  returns whether it did: `UPDATE users SET totp_step = $2 WHERE id = $1
+  AND (totp_step IS NULL OR totp_step < $2)`, true when a row changed.
+- **`countMfaAttempt(userId, window)`** counts one attempt and returns the
+  count in the live window, starting a `window`-second one when none is
+  live (redis `INCR` + `EXPIRE NX`); **`resetMfaAttempts(userId)`** clears
+  it after a success.
 
 Actor ids share one namespace across kinds: a user id and an API-key id
 must never collide (pact's generated `pact_ak_...` key ids make this true

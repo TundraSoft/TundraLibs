@@ -46,6 +46,7 @@ import type {
 } from './types/mod.ts';
 import { PACT_AUTH_FAILURE_CODES, PactError } from './errors/mod.ts';
 import { BoundPrincipal } from './BoundPrincipal.ts';
+import { MemoryMfaGuard } from './MemoryMfaGuard.ts';
 import { deserializeGrants, serializeGrants } from './grants.ts';
 import { OAuthClient } from './oauth/mod.ts';
 import {
@@ -65,6 +66,9 @@ import {
 
 /** Auto-name counter for unnamed instances (`pact-<n>`). */
 let instanceSeq = 0;
+
+/** TOTP step length: crypt's default period, 30 seconds. */
+const TOTP_PERIOD_MS = 30_000;
 
 /** Separates a tenant from a module in a grant key (`acme::POST`). */
 const TENANT_SEP = '::';
@@ -147,6 +151,8 @@ export class Pact<B extends PermissionBits, M extends string>
 
   /** Validated passkey configuration; undefined = feature off. */
   private readonly __passkeys?: NormalizedPasskeyConfig;
+  /** In-process replay and attempt tracking when the MFA hooks are absent. */
+  private readonly __mfaGuard = new MemoryMfaGuard();
   // Per-type TTLs in SECONDS (validated minutes × 60).
   private readonly __cacheTtl: ReadonlyMap<PactCacheType, number>;
 
@@ -236,6 +242,7 @@ export class Pact<B extends PermissionBits, M extends string>
       },
       reset: { ttl: 15 },
       verification: { ttl: 1440 },
+      mfa: { maxAttempts: 5, window: 15 },
     });
     this.bits = Object.freeze({ ...bits });
     this.__validateBits();
@@ -1428,21 +1435,37 @@ export class Pact<B extends PermissionBits, M extends string>
 
   /**
    * Verify a TOTP code against the user's enrolled seed. Returns
-   * `false` for a wrong code, an unenrolled or non-active user, an
-   * unknown id, or a corrupt seed — fail-closed, boolean like a check.
+   * `false` for a wrong or reused code, an unenrolled or non-active user,
+   * an unknown id, or a corrupt seed — fail-closed, boolean like a check.
    * Seed generation lives in {@link generateMFASecret} /
    * {@link generateMFAAuthURL}; persisting the seed (encrypted at rest)
-   * is the application's write. NOTE: verification is stateless — a
-   * code verifies repeatedly within its ±30s window, so applications
-   * that must reject replays (RFC 6238 §5.2) have to record the last
-   * accepted code/step themselves for now.
+   * is the application's write.
    *
-   * @throws {PactError} `MISSING_HOOK` without `getUser`.
+   * A code is single-use: once a time step is accepted, it and every
+   * earlier step are refused (RFC 6238 §5.2), through the
+   * `claimTotpStep` hook or, without it, per process. Attempts are
+   * limited by `options.mfa` through `countMfaAttempt` /
+   * `resetMfaAttempts`, likewise per process without the hooks.
+   *
+   * @throws {PactError} `MISSING_HOOK` without `getUser`; `MFA_LOCKED`
+   *   when the user exceeded `options.mfa.maxAttempts` in the window,
+   *   even if this code is correct.
    */
   public async verifyMFA(userId: string, code: string): Promise<boolean> {
     const getUser = this._hooks.getUser;
     if (getUser === undefined) {
       throw new PactError('MISSING_HOOK', { hook: 'getUser' });
+    }
+    const limit = this._getOption('mfa')!;
+    const maxAttempts = limit.maxAttempts ?? 5;
+    const windowMinutes = limit.window ?? 15;
+    if (maxAttempts > 0) {
+      const count = this._hooks.countMfaAttempt === undefined
+        ? this.__mfaGuard.countAttempt(userId, windowMinutes * 60)
+        : await this._hooks.countMfaAttempt(userId, windowMinutes * 60);
+      if (count > maxAttempts) {
+        throw new PactError('MFA_LOCKED', { window: windowMinutes, userId });
+      }
     }
     const user = await getUser({ by: 'ID', id: userId });
     if (
@@ -1451,12 +1474,47 @@ export class Pact<B extends PermissionBits, M extends string>
     ) {
       return false;
     }
+    let step: number | undefined;
     try {
-      return await verifyTOTP(code, user.mfaSecret);
+      step = await this.__matchTotpStep(code, user.mfaSecret);
     } catch {
       // A corrupt stored seed must honor the boolean contract, not 500.
       return false;
     }
+    if (step === undefined) return false;
+    const claimed = this._hooks.claimTotpStep === undefined
+      ? this.__mfaGuard.claimStep(user.id, step)
+      : await this._hooks.claimTotpStep(user.id, step);
+    if (!claimed) return false;
+    if (maxAttempts > 0) {
+      if (this._hooks.resetMfaAttempts === undefined) {
+        this.__mfaGuard.resetAttempts(userId);
+      } else {
+        await this._hooks.resetMfaAttempts(userId);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * The 30-second TOTP step `code` matches within ±1 step of now, or
+   * undefined. All three steps are always checked, so timing does not
+   * reveal which one matched; the latest match wins.
+   */
+  private async __matchTotpStep(
+    code: string,
+    seed: string,
+  ): Promise<number | undefined> {
+    const now = Date.now();
+    const current = Math.floor(now / TOTP_PERIOD_MS);
+    let matched: number | undefined;
+    for (const offset of [-1, 0, 1]) {
+      const epoch = (current + offset) * TOTP_PERIOD_MS;
+      if (await verifyTOTP(code, seed, { window: 0, epoch })) {
+        matched = current + offset;
+      }
+    }
+    return matched;
   }
 
   /**
@@ -1622,6 +1680,11 @@ export class Pact<B extends PermissionBits, M extends string>
         case 'reset':
         case 'verification':
           this.__validateTtlGroup(key, value as { ttl?: number });
+          break;
+        case 'mfa':
+          this.__validateMfaOption(
+            value as NonNullable<PactOptions['mfa']>,
+          );
           break;
         case 'oauth':
           // Shallow shape only — per-instance validation happens in the
@@ -2452,6 +2515,35 @@ export class Pact<B extends PermissionBits, M extends string>
   /**
    * Shared shape check for the { ttl?: minutes } option groups.
    */
+  private __validateMfaOption(value: NonNullable<PactOptions['mfa']>): void {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'mfa',
+        reason: 'must be an object',
+      });
+    }
+    const { maxAttempts, window } = value;
+    if (
+      maxAttempts !== undefined &&
+      (!Number.isInteger(maxAttempts) || maxAttempts < 0)
+    ) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'mfa.maxAttempts',
+        reason: 'must be a non-negative integer (0 turns the limit off)',
+      });
+    }
+    if (
+      window !== undefined &&
+      (!Number.isInteger(window) || window < 1 || window > MAX_TTL_MINUTES)
+    ) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'mfa.window',
+        reason: 'must be an integer number of minutes between 1 and ' +
+          `${MAX_TTL_MINUTES} (30 days)`,
+      });
+    }
+  }
+
   private __validateTtlGroup(option: string, value: { ttl?: number }): void {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
       throw new PactError('INVALID_OPTION', {

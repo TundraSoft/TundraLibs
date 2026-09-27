@@ -89,7 +89,7 @@ export function normalizePasskeyConfig(
     }
     origins.add(url.origin);
   }
-  const userVerification = config.userVerification ?? 'PREFERRED';
+  const userVerification = config.userVerification ?? 'REQUIRED';
   if (!USER_VERIFICATION_VALUES.has(userVerification)) {
     throw invalid(
       "userVerification must be 'REQUIRED', 'PREFERRED', or 'DISCOURAGED'",
