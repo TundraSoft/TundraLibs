@@ -87,7 +87,8 @@ the source's primary key:
 
 - **`insert`** opens a new version.
 - **`update`** and **`upsert`** close the current version and open a
-  new one from the row's full post-write state.
+  new one from the row's full post-write state. An upsert conflict that
+  writes nothing adds no version.
 - **`delete`** closes the current version with no successor. A closed
   version with no successor unambiguously means the source row was
   deleted, so norm adds no separate INSERT/UPDATE/DELETE column to say

@@ -648,22 +648,58 @@ await db.repo('PostTags').delete({}); // explicit all-rows, no warning
 
 ### upsert
 
-`upsert(data, { conflictKeys, updateOnConflict?, decrypt? })` inserts,
-or updates on conflict, and returns the resulting rows. An encrypted
-column can never be a conflict key, since its ciphertext is
-nondeterministic; use its `<col>_hash` sibling. Updating an encrypted
-and hashed column re-syncs its digest sibling so plaintext lookups keep
-working.
+`upsert(data, { conflictKeys, updateOnConflict?, update?, decrypt? })`
+inserts each row or, when a row conflicts on `conflictKeys`, updates the
+existing one, and returns the resulting rows. What a conflict writes
+depends on the options:
+
+| Options                  | On conflict                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| neither                  | The columns you passed, copied from the incoming row, plus the `defaultOnUpdate` columns                                 |
+| `updateOnConflict: [..]` | Exactly those columns, copied, plus the `defaultOnUpdate` columns                                                        |
+| `update: {..}`           | That payload, prepared like `update()` (validation, `beforeUpdate`, `defaultOnUpdate`); expressions see the existing row |
+| `updateOnConflict: []`   | Nothing: the existing row is left as it is and returned                                                                  |
+
+A conflict never changes the primary key, the conflict keys, an
+`.insertOnly()` or norm-owned column, or a column whose value came only
+from an insert default (a generated id, `CreatedOn`, `Status: 'ACTIVE'`).
+Naming one of them in `updateOnConflict` or `update` throws
+`UPSERT_CONFLICT_KEY`.
+
+When a conflict has nothing to write (you passed only keys and insert-only
+columns, or `updateOnConflict: []`), the row is untouched: no
+`defaultOnUpdate` stamp and no audit version. `count` includes only the
+rows actually written.
+
+An `update` payload suits counters, since its expressions read the
+existing row:
 
 ```typescript ignore
-await db.repo('Links').upsert({
-  id: 500,
-  slug: 'link-00', // collides with the unique index
-  targetUrl: 'https://x.dev/replaced',
-  ownerId,
-  createdById,
-}, { conflictKeys: ['slug'], updateOnConflict: ['targetUrl'] });
+await db.repo('LinkStats').upsert({ linkId, day, clicks: 1 }, {
+  conflictKeys: ['linkId', 'day'],
+  update: { clicks: { $$_expression: 'ADD', args: ['@clicks', 1] } },
+});
 ```
+
+Further rules:
+
+- Every row of a batch must pass the same columns, or the upsert throws
+  `UPSERT_BATCH_SHAPE`. Pass `null` where you mean null, or upsert rows one
+  at a time.
+- An entity with a `beforeUpdate` hook cannot copy columns on conflict,
+  because the hook cannot see them. Pass `update: {..}`, which the hook
+  runs on.
+- `update` applies the same payload to every conflicting row of a batch,
+  and a `defaultOnUpdate` function runs once per statement, as in
+  `update()`.
+- Copied values come from the prepared insert row, after `beforeInsert`.
+- On MongoDB, `update` and `defaultOnUpdate` values also land on a newly
+  inserted document, since `$set` applies to both branches there.
+
+An encrypted column can never be a conflict key, since its ciphertext is
+nondeterministic; use its `<col>_hash` sibling. Updating an encrypted and
+hashed column re-syncs its digest sibling so plaintext lookups keep
+working.
 
 On a `db.scope(...)` handle, `upsert` enforces the scope like `insert`
 and `update`: the scope column is filled in, a contradicting payload is

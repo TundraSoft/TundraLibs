@@ -823,23 +823,20 @@ export function runLiveSuite(fixture: LiveFixture): void {
         );
         asserts.assertEquals(after.data?.id, 1); // updated, not inserted
 
-        // Conflict-updating an ENCRYPTED+HASHED column: the sibling is
-        // auto-added to updateOnConflict, so plaintext lookups follow.
-        await db.repo('Users').upsert({
-          id: ada,
-          email: 'ada.lovelace@shortly.dev',
-          apiKey: 'ak-ada-0002',
-          displayName: 'Ada L.',
-          passwordHash: 'bcrypt$ada',
-        }, { conflictKeys: ['id'], updateOnConflict: ['email'] });
-        const byNew = await db.repo('Users').findOne({
-          '@email': 'ada.lovelace@shortly.dev',
-        });
-        asserts.assertEquals(byNew.data?.id, ada);
-        const byOld = await db.repo('Users').findOne({
-          '@email': 'ada@shortly.dev',
-        });
-        asserts.assertEquals(byOld.data, null); // digest moved WITH the email
+        // `email` is outside Users' declared update list, so a conflict
+        // may not change it either (the upsert side door is closed).
+        await asserts.assertRejects(
+          () =>
+            db.repo('Users').upsert({
+              id: ada,
+              email: 'ada.lovelace@shortly.dev',
+              apiKey: 'ak-ada-0002',
+              displayName: 'Ada L.',
+              passwordHash: 'bcrypt$ada',
+            }, { conflictKeys: ['id'], updateOnConflict: ['email'] }),
+          NormQueryError,
+          'insert-only or norm-owned',
+        );
 
         // Encrypted conflict keys are rejected up front.
         await asserts.assertRejects(

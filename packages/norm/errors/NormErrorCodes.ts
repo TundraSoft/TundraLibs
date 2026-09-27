@@ -27,10 +27,14 @@ export type NormErrorCode =
   /** An aggregate request is malformed or combined with an
    * incompatible option (relations, masks, total, encrypted column). */
   | 'AGGREGATE_MISUSE'
-  /** An upsert `conflictKeys` / `updateOnConflict` entry is invalid —
-   * an encrypted (nondeterministic) key, a virtual mask, or a batch
-   * that cannot keep a hash sibling in sync. */
+  /** An upsert `conflictKeys` / `updateOnConflict` / `update` entry is
+   * invalid — an encrypted (nondeterministic) key, a virtual mask, a
+   * primary-key or insert-only column, a batch that cannot keep a
+   * hash sibling in sync, or a copy a `beforeUpdate` hook cannot see. */
   | 'UPSERT_CONFLICT_KEY'
+  /** An upsert batch passes different columns in different rows; one
+   * conflict clause cannot serve them all. */
+  | 'UPSERT_BATCH_SHAPE'
   /** A `db.scope(...)` spec is invalid, or a scoped write would move a
    * row out of its scope. */
   | 'SCOPE_VIOLATION'

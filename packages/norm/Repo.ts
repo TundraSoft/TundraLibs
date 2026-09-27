@@ -2766,6 +2766,7 @@ export class Repo<
     opts: {
       conflictKeys: ReadonlyArray<keyof D['columns'] & string>;
       updateOnConflict?: ReadonlyArray<keyof D['columns'] & string>;
+      update?: UpdateOf<D>;
       decrypt?: boolean;
     },
   ): Promise<NormResult<ReadRowOf<D>[]>> {
@@ -2810,8 +2811,54 @@ export class Repo<
         );
       }
     }
+    // A conflict never changes a key or an insert-only column: a PK
+    // change belongs in update(), and norm-owned columns are never
+    // caller-written.
+    const pk = new Set(
+      (c.def as { primaryKeys?: readonly string[] }).primaryKeys ?? [],
+    );
+    const refuse = (key: string, why: string): never => {
+      throw new NormQueryError(
+        `Column '${key}' on entity '${c.key}' cannot be updated on ` +
+          `conflict — ${why}.`,
+        { entity: c.key, subject: key, code: 'UPSERT_CONFLICT_KEY' },
+      );
+    };
+    for (const key of opts.updateOnConflict ?? []) {
+      if (pk.has(key)) refuse(key, 'it is part of the primary key');
+      if (!c.updatableColumns.has(key)) {
+        refuse(key, 'it is insert-only or norm-owned');
+      }
+    }
+    for (const key of Object.keys((opts.update ?? {}) as Row)) {
+      if (pk.has(key)) refuse(key, 'it is part of the primary key');
+      if ((opts.conflictKeys as readonly string[]).includes(key)) {
+        refuse(key, 'it is a conflict key');
+      }
+      if (
+        (opts.updateOnConflict as readonly string[] | undefined)?.includes(key)
+      ) {
+        refuse(key, 'it is in both updateOnConflict and update');
+      }
+    }
     const isBatch = Array.isArray(data);
     const callerRows = isBatch ? [...(data as Row[])] : [data as Row];
+    // One ON CONFLICT clause serves every row, so every row must supply
+    // the same columns: a row that omitted one would have it overwritten
+    // with its insert default.
+    const shapeOf = (row: Row) =>
+      Object.keys(row).filter((k) => row[k] !== undefined)
+        .sort((a, b) => a.localeCompare(b)).join(',');
+    const callerShape = callerRows.length > 0 ? shapeOf(callerRows[0]!) : '';
+    if (callerRows.some((row) => shapeOf(row) !== callerShape)) {
+      throw new NormQueryError(
+        `upsert batch on '${c.key}' passes different columns in different ` +
+          `rows. Pass the same columns in every row (null where you mean ` +
+          `null), or upsert one row at a time.`,
+        { entity: c.key, code: 'UPSERT_BATCH_SHAPE' },
+      );
+    }
+    const callerCols = callerShape === '' ? [] : callerShape.split(',');
     // Scope parity with insert(): a scoped upsert must land IN the scope.
     // Without this, upsert() is a silent cross-tenant write hole on a
     // scoped handle — every other write method (insert/update/delete)
@@ -2851,31 +2898,6 @@ export class Repo<
           Object.assign(row, await this.__encryptRow(inject));
         }
       }
-    }
-    // Conflict-updating an encrypted column must also update its
-    // norm-owned hash sibling, or the digest desyncs from the new
-    // ciphertext and findByHash misses the row.
-    let updateOnConflict = opts.updateOnConflict as string[] | undefined;
-    if (updateOnConflict !== undefined) {
-      const expanded = [...updateOnConflict];
-      for (const col of updateOnConflict) {
-        const sibling = c.hashSiblings.get(col);
-        if (sibling === undefined || expanded.includes(sibling)) continue;
-        const withSibling = rows.filter((r) => r[sibling] !== undefined);
-        if (withSibling.length === rows.length) {
-          expanded.push(sibling);
-        } else if (withSibling.length > 0) {
-          // Silently skipping the sibling would desync digests for the
-          // rows that DID carry a new value — refuse loudly instead.
-          throw new NormQueryError(
-            `upsert batch on '${c.key}' mixes rows with and without ` +
-              `'${col}' while updateOnConflict includes it — the hash ` +
-              `sibling cannot be updated uniformly. Split the batch.`,
-            { entity: c.key, subject: col, code: 'UPSERT_CONFLICT_KEY' },
-          );
-        }
-      }
-      updateOnConflict = expanded;
     }
     // Scoped conflict matching. Two mechanisms, deliberately separate:
     //
@@ -2946,48 +2968,185 @@ export class Repo<
         id,
       );
     }
+    // What a conflict writes. Copied columns take the incoming row's
+    // value; they default to the caller's own columns minus keys, scope,
+    // and anything not updatable. Explicit values come from `update`
+    // (prepared exactly like update()) or, when copying, from the
+    // defaultOnUpdate columns. Nothing to write means DO NOTHING.
+    const scopeCols = new Set(scopeApplied?.keys() ?? []);
+    let copied: string[];
+    if (opts.updateOnConflict !== undefined) {
+      copied = [...(opts.updateOnConflict as readonly string[])];
+    } else if (opts.update === undefined) {
+      copied = callerCols.filter((col) =>
+        !pk.has(col) && !conflictCols.includes(col) && !scopeCols.has(col) &&
+        c.updatableColumns.has(col)
+      );
+    } else {
+      copied = [];
+    }
+    // Conflict-updating an encrypted column must also update its
+    // norm-owned hash sibling, or the digest desyncs from the new
+    // ciphertext and findByHash misses the row.
+    // Appending while iterating is safe: a sibling has no sibling.
+    for (const col of copied) {
+      const sibling = c.hashSiblings.get(col);
+      if (sibling === undefined || copied.includes(sibling)) continue;
+      const withSibling = rows.filter((r) => r[sibling] !== undefined);
+      if (withSibling.length === rows.length) {
+        copied.push(sibling);
+      } else if (withSibling.length > 0) {
+        // Silently skipping the sibling would desync digests for the
+        // rows that DID carry a new value — refuse loudly instead.
+        throw new NormQueryError(
+          `upsert batch on '${c.key}' mixes rows with and without ` +
+            `'${col}' while updateOnConflict includes it — the hash ` +
+            `sibling cannot be updated uniformly. Split the batch.`,
+          { entity: c.key, subject: col, code: 'UPSERT_CONFLICT_KEY' },
+        );
+      }
+    }
+    const beforeUpdate = (c.hooks as { beforeUpdate?: unknown })
+      ?.beforeUpdate;
+    if (typeof beforeUpdate === 'function' && copied.length > 0) {
+      throw new NormQueryError(
+        `upsert on '${c.key}' would copy incoming columns on conflict, ` +
+          `but its beforeUpdate hook cannot run on them. Pass update: ` +
+          `{...} (the hook runs on it) or updateOnConflict: [].`,
+        { entity: c.key, code: 'UPSERT_CONFLICT_KEY' },
+      );
+    }
+    let updateSet: Row | undefined;
+    if (opts.update !== undefined) {
+      let payload = { ...(opts.update as Row) };
+      for (const [col, value] of scopeApplied ?? []) {
+        if (col in payload && payload[col] !== value) {
+          throw new NormQueryError(
+            `${c.key}.upsert(): '${col}' is scope-bound to ` +
+              `${JSON.stringify(value)} — a scoped upsert cannot move a ` +
+              `row to a different scope.`,
+            { entity: c.key, subject: col, code: 'SCOPE_VIOLATION' },
+          );
+        }
+      }
+      if (typeof beforeUpdate === 'function') {
+        const replacement = await this._runHook(
+          'beforeUpdate',
+          () => (beforeUpdate as (r: Row) => Row | void)(payload),
+        );
+        if (replacement !== undefined) payload = replacement as Row;
+      }
+      [updateSet] = await this.__prepareValidated([payload], false, 'update');
+    } else if (copied.length > 0) {
+      [updateSet] = await this.__prepareValidated([{}], false, 'update');
+    }
+    if (updateSet !== undefined) {
+      // A copied column keeps the caller's value over a defaultOnUpdate.
+      for (const col of copied) delete updateSet[col];
+      if (Object.keys(updateSet).length === 0) updateSet = undefined;
+    }
+    const doNothing = copied.length === 0 && updateSet === undefined;
     const q = {
       type: 'UPSERT',
       ...this._irBase(),
       columns: this._compiled.columnNames,
       data: rows as never,
       conflictKeys: conflictCols.map((k) => `@${k}` as const),
-      ...(updateOnConflict
-        ? { updateOnConflict: updateOnConflict.map((k) => `@${k}`) }
-        : {}),
+      updateOnConflict: copied.map((k) => `@${k}`),
+      ...(updateSet !== undefined ? { updateSet } : {}),
     } as Query<'UPSERT'>;
-    let res: { data: Row[]; time: number; isSlow: boolean };
+    // DO NOTHING returns no row for a conflict (Postgres/SQLite), and a
+    // conflicted row must not reach the audit replica as a new version.
+    // Both need to know which rows already exist, read first.
+    const keyOf = (row: Row) =>
+      JSON.stringify(conflictCols.map((col) => {
+        const v = row[col];
+        return v instanceof Date ? v.toISOString() : String(v);
+      }));
+    const run = async (txId: string | undefined) => {
+      const existing = doNothing
+        ? await this.__selectByConflict(rows, conflictCols, scopeApplied, txId)
+        : { data: [] as Row[], time: 0, isSlow: false };
+      const before = new Set(existing.data.map(keyOf));
+      const r = await this._executor.execute<Row>(q, txId);
+      const written = r.data.filter((row) => !before.has(keyOf(row)));
+      return {
+        written,
+        existing: existing.data,
+        time: existing.time + r.time,
+        isSlow: existing.isSlow || r.isSlow,
+      };
+    };
+    let res: Awaited<ReturnType<typeof run>>;
     if (c.audit !== undefined) {
       res = await this._withTx(async (txId) => {
-        const r = await this._executor.execute<Row>(q, txId);
-        let time = r.time;
-        let isSlow = r.isSlow;
-        for (const row of r.data) {
+        const r = await run(txId);
+        for (const row of r.written) {
           const m = await this._auditMirror(this._pkValuesOf(row), row, txId);
-          time += m.time;
-          isSlow ||= m.isSlow;
+          r.time += m.time;
+          r.isSlow ||= m.isSlow;
         }
-        return { data: r.data, time, isSlow };
+        return r;
       });
     } else {
-      res = await this._executor.execute<Row>(q);
+      res = await run(undefined);
     }
     this._emitCall('UPSERT', res.time, res.isSlow, id);
     await this._invalidateCache();
+    // Rows in input order: each written row, or the existing row a
+    // DO NOTHING conflict left in place.
+    const byKey = new Map<string, Row>();
+    for (const row of res.existing) byKey.set(keyOf(row), row);
+    for (const row of res.written) byKey.set(keyOf(row), row);
+    const ordered = doNothing
+      ? rows.map((row) => byKey.get(keyOf(row))).filter((r) => r !== undefined)
+      : res.written;
     const returned = await this.__finishReturning(
-      res.data,
+      ordered,
       opts.decrypt !== false,
     );
     return makeResult<ReadRowOf<D>[]>({
       id,
       op: 'UPSERT',
       txId: this._txId,
-      count: returned.length,
+      count: res.written.length,
       time: res.time,
       isSlow: res.isSlow,
       scoped: this._scopedEnvelope(scopeApplied),
       data: returned,
     });
+  }
+
+  /** The stored rows whose conflict columns match any of `rows`, read in
+   * scope. Rows with a null conflict value can never conflict and are
+   * skipped. */
+  private async __selectByConflict(
+    rows: Row[],
+    conflictCols: string[],
+    scopeApplied: Map<string, unknown> | null,
+    txId: string | undefined,
+  ): Promise<{ data: Row[]; time: number; isSlow: boolean }> {
+    const c = this._compiled;
+    const matches = rows
+      .filter((row) => conflictCols.every((col) => row[col] != null))
+      .map((row) =>
+        Object.fromEntries(conflictCols.map((col) => [`@${col}`, row[col]]))
+      );
+    if (matches.length === 0) return { data: [], time: 0, isSlow: false };
+    const where = await this._mergeScopeWhere(
+      (matches.length === 1 ? matches[0] : { $or: matches }) as QueryFilter,
+      scopeApplied,
+    );
+    const selQ = {
+      type: 'SELECT',
+      ...this._irBase(),
+      columns: c.columnNames,
+      projection: Object.fromEntries(
+        c.columnNames.map((col) => [`@${col}`, true]),
+      ),
+      where,
+    } as Query<'SELECT'>;
+    return await this._executor.execute<Row>(selQ, txId);
   }
 
   /**
