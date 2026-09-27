@@ -90,6 +90,12 @@ function nextTemporalCutover(): string {
  * the moment between building a payload and executing it). */
 const TEMPORAL_SKEW_MS = 1000;
 
+/** SQLite's own `datetime()` text: UTC with no zone marker. Rows written
+ * by a `NOW` default before oql rendered ISO 8601 hold this form, and
+ * `new Date()` would read it as local time. */
+const SQLITE_ZONELESS_DATETIME =
+  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
+
 /** Loose structural bound shared by the repo generics. */
 type AnyDef = { readonly columns: Record<string, ColumnSpec> };
 type AnyTableDef = AnyDef & { readonly primaryKeys: readonly string[] };
@@ -1838,16 +1844,24 @@ export class ReadRepo<
    * running this first would try to parse ciphertext as a date, and
    * with `decrypt: false` the ciphertext must survive untouched). Only
    * top-level row columns; a date column nested inside a joined
-   * relation value is not decoded here. */
+   * relation value is not decoded here. On SQLite, a zone-less
+   * `YYYY-MM-DD HH:MM:SS` value is read as UTC, which is what SQLite's
+   * date functions produce. */
   protected _decodeDateColumns(rows: Row[]): void {
     if (rows.length === 0) return;
     const c = this._compiled;
     const specs = c.def.columns as Record<string, ColumnSpec>;
+    const sqlite = this._executor.capabilities.dialect === 'sqlite';
     for (const [key, spec] of Object.entries(specs)) {
       if (!DATE_TYPES.has(spec.type) || c.localEncrypted.has(key)) continue;
       for (const row of rows) {
         const v = row[key];
-        if (typeof v === 'string') row[key] = new Date(v);
+        if (typeof v !== 'string') continue;
+        row[key] = new Date(
+          sqlite && SQLITE_ZONELESS_DATETIME.test(v)
+            ? `${v.replace(' ', 'T')}Z`
+            : v,
+        );
       }
     }
   }

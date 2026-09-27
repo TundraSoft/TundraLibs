@@ -1088,3 +1088,60 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     asserts.assertEquals(Object.keys(q2.joins ?? {}), ['Items']);
   });
 });
+
+describe('live SQLite — timestamps', () => {
+  const Events = Entity('events_ts', {
+    Id: Column.varchar(40).default(() => crypto.randomUUID()),
+    CreatedOn: Column.timestamp().default({ $$_expression: 'NOW' }),
+  }, { pk: ['Id'] });
+
+  const open = async () => {
+    const norm = new Norm({
+      database: { dialect: 'sqlite', path: ':memory:' },
+    });
+    const db = norm.use(Schema('TS', { Events }));
+    await norm.connect();
+    await db.raw(
+      'CREATE TABLE events_ts (Id TEXT PRIMARY KEY, CreatedOn TEXT NOT NULL)',
+    );
+    return { norm, db };
+  };
+
+  it('a NOW default reads back as the current instant and compares with app-written dates', async () => {
+    const { norm, db } = await open();
+    try {
+      const before = new Date(Date.now() - 1000);
+      await db.repo('Events').insert({});
+      const after = Date.now() + 1000;
+      const row = (await db.repo('Events').find()).data[0]!;
+      const at = row.CreatedOn.getTime();
+      asserts.assert(at >= before.getTime() && at <= after, `read ${at}`);
+      // SQLite compares text: the stored value must sort like the ISO text
+      // its driver writes for `before`.
+      const newer = await db.repo('Events').find({
+        '@CreatedOn': { $gte: before },
+      });
+      asserts.assertEquals(newer.count, 1);
+    } finally {
+      await norm.disconnect();
+    }
+  });
+
+  it('reads a legacy zone-less SQLite datetime as UTC', async () => {
+    // Fails under a non-UTC TZ without the fix: new Date() would parse the
+    // stored text as local time.
+    const { norm, db } = await open();
+    try {
+      await db.raw(
+        "INSERT INTO events_ts (Id, CreatedOn) VALUES ('old', '2026-01-02 03:04:05')",
+      );
+      const row = (await db.repo('Events').find()).data[0]!;
+      asserts.assertEquals(
+        row.CreatedOn.toISOString(),
+        '2026-01-02T03:04:05.000Z',
+      );
+    } finally {
+      await norm.disconnect();
+    }
+  });
+});
