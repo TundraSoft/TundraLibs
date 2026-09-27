@@ -79,7 +79,7 @@ points:
 - **`oauthIdentifier(identifier, profile)`** maps the identifier pact derives
   for a JIT-provisioned user before the duplicate check and `createUser`.
   Use it to scope accounts per tenant; see
-  [Tenants](Pact-Tenants.md#accounts-per-tenant).
+  [Tenants](Pact-Tenants.md#one-account-per-tenant).
 - **`getApiKey(keyId)`** returns the record with `secret` decrypted — see
   [How secrets are stored](#how-secrets-are-stored).
   The `grants` it returns are what the key may do. pact refuses a key whose
