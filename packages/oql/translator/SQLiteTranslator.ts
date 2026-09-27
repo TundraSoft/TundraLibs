@@ -42,6 +42,15 @@ import type {
 import { Parameters } from './Parameters.ts';
 
 /**
+ * `strftime` format for DB-side timestamps: ISO 8601 UTC with
+ * milliseconds, the same text the SQLite drivers write for a `Date`
+ * (`toISOString()`). `datetime('now')` returns `YYYY-MM-DD HH:MM:SS`
+ * instead: no zone, so JavaScript reads it as local time, and a space
+ * that sorts before `T`, so it misorders against app-written values.
+ */
+const ISO_8601_UTC = "'%Y-%m-%dT%H:%M:%fZ'";
+
+/**
  * SQL data-type map. SQLite's storage classes (TEXT, INTEGER, REAL, BLOB,
  * NUMERIC) are advisory but kept readable for portability.
  */
@@ -178,17 +187,17 @@ export class SQLiteTranslator extends AbstractTranslator {
     // asked for, exactly as it does on Postgres and MariaDB.
     ['LPAD', (a) => this.__padExpression(a, 'left')],
     ['RPAD', (a) => this.__padExpression(a, 'right')],
-    ['NOW', () => `datetime('now')`],
+    ['NOW', () => `strftime(${ISO_8601_UTC}, 'now')`],
     ['CURRENT_DATE', () => `date('now')`],
     ['CURRENT_TIME', () => `time('now')`],
-    ['CURRENT_TIMESTAMP', () => `datetime('now')`],
-    ['CURRENT_TIMESTAMPTZ', () => `datetime('now')`],
+    ['CURRENT_TIMESTAMP', () => `strftime(${ISO_8601_UTC}, 'now')`],
+    ['CURRENT_TIMESTAMPTZ', () => `strftime(${ISO_8601_UTC}, 'now')`],
     [
       'DATE_ADD',
       (a) => {
-        // datetime(date, '+' || amount || ' ' || unit)
+        // strftime(ISO, date, '+' || amount || ' ' || unit)
         const [date, amount, unit] = a;
-        return `datetime(${date}, '+' || ${amount} || ' ' || ${unit})`;
+        return `strftime(${ISO_8601_UTC}, ${date}, '+' || ${amount} || ' ' || ${unit})`;
       },
     ],
     [

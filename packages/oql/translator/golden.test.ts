@@ -1952,7 +1952,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `INSERT INTO "logs" ("id", "createdAt") VALUES (:p_0:, datetime('now')) RETURNING "id", "createdAt"`,
+          `INSERT INTO "logs" ("id", "createdAt") VALUES (:p_0:, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) RETURNING "id", "createdAt"`,
       },
       postgres: {
         sql:
@@ -1961,6 +1961,32 @@ const CASES: Case[] = [
       maria: {
         sql:
           'INSERT INTO `logs` (`id`, `createdAt`) VALUES (:p_0:, NOW()) RETURNING `id`, `createdAt`',
+      },
+    },
+  },
+
+  {
+    // SQLite stores DB-side timestamps as ISO 8601 UTC text, the format its
+    // drivers write for a Date, so they parse as UTC and sort correctly.
+    name: 'SQLite timestamps are ISO 8601 UTC (CURRENT_TIMESTAMP, DATE_ADD)',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt'],
+      expressions: {
+        stamp: { $$_expression: 'CURRENT_TIMESTAMP' },
+        due: {
+          $$_expression: 'DATE_ADD',
+          args: { date: '@createdAt', amount: 7, unit: 'DAYS' },
+        },
+      },
+      projection: { '@id': true, '@stamp': 'stamp', '@due': 'due' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", '+' || :p_0: || ' ' || :p_1:) AS "due" FROM "orders"`,
       },
     },
   },
