@@ -1,6 +1,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import {
+  md5PasswordResponse,
   scramClientFinal,
   type ScramContext,
   scramVerifyFinal,
@@ -157,5 +158,26 @@ describe('drivers.postgres.auth.scramClientFinal (SASLprep)', () => {
     );
     asserts.assert(result.clientFinalMessage.length > 0);
     asserts.assert(result.expectedServerSignature.length > 0);
+  });
+});
+
+describe('drivers.postgres.auth.md5PasswordResponse', () => {
+  const salt = new Uint8Array([1, 2, 3, 4]);
+
+  it('computes "md5" + md5(md5(password + user) + salt)', () => {
+    asserts.assertStrictEquals(
+      md5PasswordResponse('app', 'secret', salt),
+      'md5911f527656472583a006e7727877b33e',
+    );
+  });
+
+  it('hashes the raw password without SASLprep', () => {
+    // SASLprep would map the SOFT HYPHEN (U+00AD) to nothing, turning this
+    // into "pass" (md5b590075927aa5f52241ee74b0fcbbda0). Postgres hashes the
+    // raw bytes, so the response must not match that.
+    asserts.assertStrictEquals(
+      md5PasswordResponse('app', 'pa\u00ADss', salt),
+      'md56744c2e696d0a85364ab35ecc35132b0',
+    );
   });
 });

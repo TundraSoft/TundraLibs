@@ -19,7 +19,8 @@ suite (`packages/drivers/engines/postgres/soak.ts`).
 
 - PostgreSQL wire protocol v3.0 (Postgres ≥ 7.4)
 - SCRAM-SHA-256 auth (PG 10+ default) + cleartext password (warns when sent
-  over an unencrypted connection — see `allowCleartextPassword`)
+  over an unencrypted connection — see `allowCleartextPassword`) + MD5
+  password when opted in with `allowMd5Password`
 - **Binary parameter format** for `int4`, `int8`, `float8`, `bool`,
   `timestamptz`, `bytea`, `jsonb` — text format for everything else
 - Result decoding: text format (binary decode is a v1.x add)
@@ -28,14 +29,11 @@ suite (`packages/drivers/engines/postgres/soak.ts`).
 - Server `NOTICE` messages emitted as the `notice` event
 - Custom `applicationName` and `statementTimeoutMs`
 
-MD5 password auth is **not** supported — configure your `pg_hba.conf` to
-use `scram-sha-256`.
-
 ## Authentication
 
 SCRAM-SHA-256 is the recommended mechanism and provides mutual
 authentication (the server must prove it knows the stored key). MD5 is
-refused outright.
+refused by default — see [MD5](#md5) below.
 
 Cleartext-password auth (`AuthenticationCleartextPassword`) sends the
 password in the clear. Over an **unencrypted** connection that leaks the
@@ -53,7 +51,7 @@ your logs.
 
 To harden, set **`allowCleartextPassword: false`**: the driver then throws
 `INVALID_AUTH` instead of sending the password over an unencrypted socket.
-Combined with the unconditional MD5 refusal, that pins the connection to
+Combined with the default MD5 refusal, that pins the connection to
 SCRAM-SHA-256 (or to cleartext over TLS, which is always permitted — the
 transport is already encrypted).
 
@@ -74,6 +72,38 @@ Password normalization follows PostgreSQL: SCRAM applies SASLprep
 (RFC 4013), and for a password SASLprep rejects (a prohibited code point or
 a bidi violation) the driver falls back to the **raw** password — matching
 what the server and libpq do, so such credentials keep authenticating.
+
+### MD5
+
+When the server asks for MD5 (`AuthenticationMD5Password`) the driver throws
+`INVALID_AUTH` unless **`allowMd5Password: true`** is set. MD5 has no server
+proof, so with the flag on a rogue server can ask for it instead of
+SCRAM-SHA-256 and take away a salted hash of the password to crack offline.
+Set it only for a peer that offers nothing better: Cloudflare Hyperdrive asks
+Workers for MD5 on the Worker → Hyperdrive hop, with short-lived credentials
+it generates, and PgBouncer with `auth_type = md5` asks for it too.
+
+```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+// The Worker's Hyperdrive binding (`env.HYPERDRIVE`).
+declare const hyperdrive: {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+};
+
+const pg = new PostgresEngine('app', {
+  host: hyperdrive.host,
+  port: hyperdrive.port,
+  username: hyperdrive.user,
+  password: hyperdrive.password,
+  database: hyperdrive.database,
+  allowMd5Password: true,
+});
+```
 
 ## Quick Start
 
@@ -113,6 +143,7 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 | `statementTimeoutMs`     | `number`  | —       | Sent as `statement_timeout` GUC.                                                                                                                                                                                             |
 | `ssl`                    | various   | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration).                                                                                                                                                               |
 | `allowCleartextPassword` | `boolean` | `true`  | Permit cleartext-password auth over an **unencrypted** connection. Permitted by default but warns via `notice` on every such handshake; set `false` to throw `INVALID_AUTH` instead (see [Authentication](#authentication)). |
+| `allowMd5Password`       | `boolean` | `false` | Answer MD5 password auth. Refused with `INVALID_AUTH` by default; set `true` only for a peer that offers nothing better, such as Cloudflare Hyperdrive (see [MD5](#md5)).                                                    |
 
 ## Behind PgBouncer / pgcat / RDS Proxy
 
@@ -126,8 +157,8 @@ with PgBouncer's transaction-pooling mode out of the box. Don't use
 LISTEN/NOTIFY, advisory locks, or session-scoped `SET` under transaction
 pooling — those break regardless of the driver.
 
-On auth: PgBouncer's `auth_type = md5` is **not** supported (MD5 is refused
-outright — use `scram-sha-256`). `auth_type = plain` works, but if the hop
+On auth: PgBouncer's `auth_type = md5` needs `allowMd5Password: true` (see
+[MD5](#md5)); prefer `scram-sha-256`. `auth_type = plain` works, but if the hop
 to the pooler is unencrypted every connection emits the cleartext-auth
 warning described under [Authentication](#authentication); set
 `allowCleartextPassword: false` if you would rather that be a hard failure.

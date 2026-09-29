@@ -5,8 +5,9 @@
  * versions (≥ 7.4). Authentication via SCRAM-SHA-256 (PG 10+ default,
  * RFC 5802) or cleartext password — the latter emits a loud `notice` when it
  * happens over an unencrypted socket, and can be refused outright with
- * `allowCleartextPassword: false`. MD5 password auth is not supported —
- * configure your `pg_hba.conf` to use `scram-sha-256`.
+ * `allowCleartextPassword: false`. MD5 password auth is refused unless
+ * `allowMd5Password: true` (for peers that offer nothing better, such as
+ * Cloudflare Hyperdrive).
  *
  * Design notes:
  * - Parameters use `:name:` placeholders, rewritten to `$N` numeric markers
@@ -145,6 +146,7 @@ export class PostgresEngine
     // explicit `allowCleartextPassword: false` turns that into a refusal.
     const allowCleartextPassword =
       this._getOption('allowCleartextPassword') !== false;
+    const allowMd5Password = this._getOption('allowMd5Password') === true;
 
     // First attempt: plain TCP, then SSL upgrade if configured. `tlsActive`
     // tracks whether the socket ended up encrypted — used to gate
@@ -184,6 +186,7 @@ export class PostgresEngine
         statementTimeoutMs: this._getOption('statementTimeoutMs'),
         tlsActive,
         allowCleartextPassword,
+        allowMd5Password,
       });
       return pg;
     } catch (e) {
@@ -221,6 +224,7 @@ export class PostgresEngine
             // Plaintext fallback — the socket is unencrypted.
             tlsActive: false,
             allowCleartextPassword,
+            allowMd5Password,
           });
           return pgPlain;
         } catch (retryErr) {

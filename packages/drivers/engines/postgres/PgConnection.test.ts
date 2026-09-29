@@ -492,3 +492,84 @@ describe('drivers.postgres.PgConnection cleartext-auth downgrade guard', () => {
     asserts.assertStrictEquals(conn.txStatus, 'I');
   });
 });
+
+// =============================================================================
+// MD5 password auth: refused by default (no server proof, so a rogue server
+// could downgrade to it), answered only with `allowMd5Password: true` for
+// peers that offer nothing better (Cloudflare Hyperdrive, PgBouncer md5).
+// =============================================================================
+
+/** A server that asks for MD5 with salt [1,2,3,4] and records the reply. */
+class Md5MockServer implements Connection {
+  /** The PasswordMessage payload the client sent, or null if none. */
+  password: string | null = null;
+  private __chunks: Uint8Array[] = [];
+  private __pending: ((v: Uint8Array | null) => void) | null = null;
+  private __step = 0;
+
+  read(): Promise<Uint8Array | null> {
+    const next = this.__chunks.shift();
+    if (next) return Promise.resolve(next);
+    return new Promise((resolve) => {
+      this.__pending = resolve;
+    });
+  }
+  async write(data: Uint8Array | string): Promise<number> {
+    const bytes = typeof data === 'string' ? enc.encode(data) : data;
+    await this.__handle(bytes);
+    return bytes.length;
+  }
+  close(): void {}
+
+  private __push(chunk: Uint8Array): void {
+    if (this.__pending) {
+      const p = this.__pending;
+      this.__pending = null;
+      p(chunk);
+    } else {
+      this.__chunks.push(chunk);
+    }
+  }
+  private __handle(bytes: Uint8Array): void {
+    if (this.__step === 0) {
+      // StartupMessage → AuthenticationMD5Password (auth code 5) + salt.
+      this.__step = 1;
+      this.__push(authFrame(5, new Uint8Array([1, 2, 3, 4])));
+      return;
+    }
+    // PasswordMessage: 'p' + len(4) + payload + NUL terminator.
+    this.password = dec.decode(bytes.subarray(5, bytes.length - 1));
+    this.__push(authOk());
+    this.__push(readyForQuery());
+  }
+}
+
+describe('drivers.postgres.PgConnection MD5 password auth', () => {
+  it('refuses MD5 by default without sending a password', async () => {
+    const server = new Md5MockServer();
+    const conn = new PgConnection(server, undefined, 'test-instance');
+    const err = await asserts.assertRejects(
+      () => conn.connect({ user: 'app', database: 'app', password: 'secret' }),
+      EngineError,
+    );
+    asserts.assertStrictEquals((err as EngineError).code, 'INVALID_AUTH');
+    asserts.assertStringIncludes((err as EngineError).message, 'MD5');
+    asserts.assertStrictEquals(server.password, null);
+  });
+
+  it('answers with the salted MD5 response when opted in', async () => {
+    const server = new Md5MockServer();
+    const conn = new PgConnection(server, undefined, 'test-instance');
+    await conn.connect({
+      user: 'app',
+      database: 'app',
+      password: 'secret',
+      allowMd5Password: true,
+    });
+    asserts.assertStrictEquals(
+      server.password,
+      'md5911f527656472583a006e7727877b33e',
+    );
+    asserts.assertStrictEquals(conn.txStatus, 'I');
+  });
+});

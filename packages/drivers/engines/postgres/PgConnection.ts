@@ -32,6 +32,7 @@ import {
 import type { EncodedParam } from './binary.ts';
 import { decodeText, decodeValue } from './values.ts';
 import {
+  md5PasswordResponse,
   scramClientFinal,
   type ScramContext,
   scramStart,
@@ -144,6 +145,8 @@ export class PgConnection {
      * pass `false` to refuse instead.
      */
     allowCleartextPassword?: boolean;
+    /** Answer `AuthenticationMD5Password`. Defaults to `false` (refuse). */
+    allowMd5Password?: boolean;
   }): Promise<void> {
     const params: Record<string, string> = {
       user: opts.user,
@@ -173,6 +176,7 @@ export class PgConnection {
         case 'R':
           await this.__handleAuth(
             msg.auth,
+            opts.user,
             opts.password ?? '',
             (_ctx, sig) => {
               scramExpectedSignature = sig;
@@ -180,6 +184,7 @@ export class PgConnection {
             opts.tlsActive === true,
             // Permissive by default; only an explicit `false` refuses.
             opts.allowCleartextPassword !== false,
+            opts.allowMd5Password === true,
           );
           if (msg.auth.kind === 'sasl-final') {
             if (
@@ -246,10 +251,12 @@ export class PgConnection {
    */
   private async __handleAuth(
     auth: AuthRequest,
+    user: string,
     password: string,
     saveScramCtx: (ctx: ScramContext, expectedSignature: string) => void,
     tlsActive: boolean,
     allowCleartextPassword: boolean,
+    allowMd5Password: boolean,
   ): Promise<void> {
     switch (auth.kind) {
       case 'ok':
@@ -292,11 +299,23 @@ export class PgConnection {
         await this.__write(buildPasswordMessage(password));
         return;
       case 'md5':
-        throw new EngineError('INVALID_AUTH', {
-          instanceId: this.__instanceId,
-          reason:
-            'MD5 password auth is not supported by this driver; configure pg_hba.conf to use scram-sha-256 instead',
-        });
+        // MD5 has no server proof, so a rogue server can ask for it instead
+        // of SCRAM and brute-force the salted hash offline. Refused unless
+        // the caller opts in for a peer that offers nothing better
+        // (Cloudflare Hyperdrive, PgBouncer `auth_type = md5`).
+        if (!allowMd5Password) {
+          throw new EngineError('INVALID_AUTH', {
+            instanceId: this.__instanceId,
+            reason: 'server requested MD5 password auth, which is refused ' +
+              'by default; configure pg_hba.conf to use scram-sha-256, or ' +
+              'set `allowMd5Password: true` for a peer that only offers ' +
+              'MD5 (e.g. Cloudflare Hyperdrive, PgBouncer `auth_type = md5`).',
+          });
+        }
+        await this.__write(
+          buildPasswordMessage(md5PasswordResponse(user, password, auth.salt)),
+        );
+        return;
       case 'sasl': {
         if (!auth.mechanisms.includes('SCRAM-SHA-256')) {
           throw new EngineError('INVALID_AUTH', {
