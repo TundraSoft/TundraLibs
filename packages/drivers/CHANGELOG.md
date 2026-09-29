@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.3.0...drivers-v1.4.0) (2026-09-29)
+
+
+### Features
+
+* **drivers:** answer Postgres MD5 password auth behind allowMd5Password ([#744](https://github.com/TundraSoft/TundraLibs/issues/744)) ([f8388cc](https://github.com/TundraSoft/TundraLibs/commit/f8388cc293e38173651ddb661e7d2872f22d7ef0))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.2.3...drivers-v1.3.0) (2026-09-27)
 
 
