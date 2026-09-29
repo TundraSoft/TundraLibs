@@ -41,7 +41,20 @@ export type PostgresEngineOptions = SQLEngineOptions & {
    * instead of sending the password over an unencrypted socket. Cleartext
    * over TLS is always allowed regardless of this flag (the transport is
    * already encrypted). This does not affect SCRAM-SHA-256, which stays the
-   * recommended mechanism, or MD5, which is refused outright.
+   * recommended mechanism, or MD5, which is gated by `allowMd5Password`.
    */
   allowCleartextPassword?: boolean;
+  /**
+   * Answer `AuthenticationMD5Password`. Default `false`: the driver throws
+   * `INVALID_AUTH` when the server asks for MD5.
+   *
+   * Turn it on only for a peer that offers nothing better, such as the
+   * Worker → Cloudflare Hyperdrive hop or PgBouncer `auth_type = md5`. MD5 has
+   * no server proof, so while the flag is on a rogue server can ask for it
+   * instead of SCRAM-SHA-256 and take away a salted hash of the password to
+   * crack offline; over an unencrypted connection an eavesdropper captures
+   * the same hash, and no warning is emitted. Enforced, verified TLS closes
+   * both. Keep it off for connections that go straight to Postgres.
+   */
+  allowMd5Password?: boolean;
 };

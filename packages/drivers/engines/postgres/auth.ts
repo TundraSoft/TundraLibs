@@ -1,22 +1,14 @@
 /**
- * @fileoverview SCRAM-SHA-256 client implementation for Postgres auth.
- *
- * Implements RFC 5802 (SCRAM) with the SHA-256 hash and Postgres's wrapping.
- *
- * Supported mechanisms:
- * - `SCRAM-SHA-256` (Postgres 10+ default)
- * - cleartext password (rare in modern setups; transmitted only over TLS)
- * - AuthenticationOk (no auth needed)
- *
- * Not supported:
- * - MD5 password (Postgres pre-10 default). Web Crypto deprecated MD5; the
- *   driver throws `INVALID_AUTH` if the server requests it. Configure your
- *   Postgres to use `scram-sha-256` in `pg_hba.conf`.
+ * @fileoverview Password-auth responses for Postgres: the SCRAM-SHA-256
+ * client (RFC 5802 with Postgres's wrapping) and the legacy MD5 password
+ * response. `PgConnection` decides which mechanism it may answer; cleartext
+ * needs no helper.
  *
  * @module
  */
 
 import { DriverError } from '../../errors/mod.ts';
+import { md5Hex } from './md5.ts';
 import { saslPrep } from './saslprep.ts';
 
 const enc = new TextEncoder();
@@ -209,6 +201,24 @@ export function scramVerifyFinal(
     return false;
   }
   return _timingSafeEqual(expectedBytes, actualBytes);
+}
+
+/**
+ * The PasswordMessage payload for `AuthenticationMD5Password`:
+ * `"md5" + md5hex(md5hex(password + user) + salt)`. `user` is the role name
+ * sent in the StartupMessage, and neither value is SASLprep-normalized
+ * (Postgres hashes the raw UTF-8 bytes).
+ */
+export function md5PasswordResponse(
+  user: string,
+  password: string,
+  salt: Uint8Array,
+): string {
+  const inner = enc.encode(md5Hex(enc.encode(password + user)));
+  const salted = new Uint8Array(inner.length + salt.length);
+  salted.set(inner);
+  salted.set(salt, inner.length);
+  return 'md5' + md5Hex(salted);
 }
 
 /**
