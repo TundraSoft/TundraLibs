@@ -52,7 +52,9 @@ export type PostgresEngineOptions = SQLEngineOptions & {
    * Worker → Cloudflare Hyperdrive hop or PgBouncer `auth_type = md5`. MD5 has
    * no server proof, so while the flag is on a rogue server can ask for it
    * instead of SCRAM-SHA-256 and take away a salted hash of the password to
-   * crack offline. Keep it off for connections that go straight to Postgres.
+   * crack offline; over an unencrypted connection an eavesdropper captures
+   * the same hash, and no warning is emitted. Enforced, verified TLS closes
+   * both. Keep it off for connections that go straight to Postgres.
    */
   allowMd5Password?: boolean;
 };

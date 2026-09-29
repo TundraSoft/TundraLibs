@@ -76,12 +76,27 @@ what the server and libpq do, so such credentials keep authenticating.
 ### MD5
 
 When the server asks for MD5 (`AuthenticationMD5Password`) the driver throws
-`INVALID_AUTH` unless **`allowMd5Password: true`** is set. MD5 has no server
-proof, so with the flag on a rogue server can ask for it instead of
-SCRAM-SHA-256 and take away a salted hash of the password to crack offline.
-Set it only for a peer that offers nothing better: Cloudflare Hyperdrive asks
-Workers for MD5 on the Worker → Hyperdrive hop, with short-lived credentials
-it generates, and PgBouncer with `auth_type = md5` asks for it too.
+`INVALID_AUTH` unless **`allowMd5Password: true`** is set. Set it only for a
+peer that offers nothing better: Cloudflare Hyperdrive asks Workers for MD5 on
+the Worker → Hyperdrive hop, with short-lived credentials it generates, and
+PgBouncer with `auth_type = md5` asks for it too.
+
+While the flag is on, the password is exposed to offline cracking:
+
+- **Downgrade.** MD5 has no server proof, so a rogue server, or anyone who can
+  intercept the connection, can ask for MD5 even where the real server would
+  use SCRAM-SHA-256. It chooses the salt and receives
+  `md5(md5(password + user) + salt)`, which it can brute-force offline.
+- **Eavesdropping.** Over an unencrypted connection, anyone who can read the
+  traffic captures the same salted hash. The driver emits **no** warning for
+  this, unlike cleartext passwords, because it would fire on every Hyperdrive
+  connection.
+
+TLS closes both when `ssl` is set with `enforce` left on (the default) and
+certificate verification not disabled: an interceptor can neither read the
+exchange nor answer in the server's place. Keep the flag off for connections
+that go straight to Postgres, and give it its own engine configuration rather
+than sharing one config between the Hyperdrive connection and a direct one.
 
 ```typescript
 import { PostgresEngine } from '@tundralibs/drivers/postgres';
