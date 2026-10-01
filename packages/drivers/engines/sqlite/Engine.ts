@@ -68,9 +68,9 @@ const STATEMENT_CACHE_SIZE = 100;
  * (e.g. a caught UNIQUE violation), which would otherwise surface from
  * whichever unrelated query triggers the finalize.
  */
-function _finalizeQuietly(stmt: SqliteStmt | undefined): void {
+function _finalizeQuietly(stmt: SqliteStmt): void {
   try {
-    stmt?.finalize?.();
+    stmt.finalize?.();
   } catch {
     // The statement is discarded either way.
   }
@@ -327,14 +327,11 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     const stmt = db.prepare(sql);
     cache.set(sql, stmt);
     if (cache.size > STATEMENT_CACHE_SIZE) {
-      // Evict the oldest. `Map.keys().next()` returns insertion order,
-      // so the first key is the LRU candidate.
-      const oldestKey = cache.keys().next().value as string | undefined;
-      if (oldestKey !== undefined) {
-        const oldest = cache.get(oldestKey);
-        cache.delete(oldestKey);
-        _finalizeQuietly(oldest);
-      }
+      // Evict the oldest. Map iteration follows insertion order, so the
+      // first entry is the LRU candidate; the size check means it exists.
+      const [oldestKey, oldest] = cache.entries().next().value!;
+      cache.delete(oldestKey);
+      _finalizeQuietly(oldest);
     }
     return stmt;
   }

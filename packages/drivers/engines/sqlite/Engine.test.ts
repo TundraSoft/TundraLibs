@@ -4,6 +4,7 @@ import { makeTempDir, removeDir, stat } from '@tundralibs/compat/file';
 import { SQLiteEngine } from './Engine.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EnginePoolOptions, EngineQuery } from '../../types/mod.ts';
+import type { SqliteDb } from './adapter.ts';
 
 // SQLite is embedded — always available IF the runtime's native binding is
 // loadable. On Node.js: `node:sqlite` (built-in, Node 22.5+) or
@@ -793,6 +794,51 @@ describe({
           await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
           await engine.disconnect();
         }
+      });
+
+      it('a throwing finalize() never escapes a discarded statement', async () => {
+        // Only @db/sqlite throws from finalize(); inject one so every
+        // runtime exercises eviction, cache drop, and the non-DML path.
+        let finalized = 0;
+        class ThrowingFinalizeEngine extends SQLiteEngine {
+          protected override async _openDatabase(
+            path: string,
+            options: { readonly?: boolean; create?: boolean },
+          ): Promise<SqliteDb> {
+            const db = await super._openDatabase(path, options);
+            return {
+              exec: (sql) => db.exec(sql),
+              close: () => db.close(),
+              prepare: (sql) => {
+                const stmt = db.prepare(sql);
+                return {
+                  ...stmt,
+                  finalize: () => {
+                    finalized++;
+                    stmt.finalize?.();
+                    throw new Error('stale step error');
+                  },
+                };
+              },
+            };
+          }
+        }
+        const engine = new ThrowingFinalizeEngine(
+          'sqlite-throwing-finalize',
+          TEST_CONFIG,
+        );
+        await engine.connect();
+        for (let i = 0; i < 150; i++) {
+          await engine.execute({ sql: `SELECT ${i} AS n` });
+        }
+        // 50 LRU evictions so far; the DDL finalizes itself (1) and then
+        // drops the 100 cached statements.
+        await engine.execute({
+          sql: 'CREATE TABLE throwing_finalize (id INT)',
+        });
+        await engine.execute({ sql: 'SELECT id FROM throwing_finalize' });
+        await engine.disconnect();
+        asserts.assertEquals(finalized, 50 + 1 + 100 + 1);
       });
 
       it('NOT_NULL_VIOLATION on missing required column', async () => {
