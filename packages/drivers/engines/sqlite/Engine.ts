@@ -63,6 +63,20 @@ import type { SQLiteEngineOptions } from './types/mod.ts';
 const STATEMENT_CACHE_SIZE = 100;
 
 /**
+ * Finalize a statement that is being thrown away, swallowing any error.
+ * `@db/sqlite`'s `finalize()` rethrows the statement's last step error
+ * (e.g. a caught UNIQUE violation), which would otherwise surface from
+ * whichever unrelated query triggers the finalize.
+ */
+function _finalizeQuietly(stmt: SqliteStmt): void {
+  try {
+    stmt.finalize?.();
+  } catch {
+    // The statement is discarded either way.
+  }
+}
+
+/**
  * Cheap detection for "is this DML?". DML statements are deterministic
  * with respect to the schema, so their prepared form is safe to cache
  * and reuse. DDL (CREATE/ALTER/DROP/ATTACH/DETACH/PRAGMA/VACUUM) can
@@ -281,7 +295,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
             resolve({ data: [], count: r.changes });
           }
         } finally {
-          stmt.finalize?.();
+          _finalizeQuietly(stmt);
           // Savepoint open/release don't mutate the schema — keep the
           // prepared-statement cache so nested transactions don't thrash
           // it on the single shared connection.
@@ -313,14 +327,11 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     const stmt = db.prepare(sql);
     cache.set(sql, stmt);
     if (cache.size > STATEMENT_CACHE_SIZE) {
-      // Evict the oldest. `Map.keys().next()` returns insertion order,
-      // so the first key is the LRU candidate.
-      const oldestKey = cache.keys().next().value as string | undefined;
-      if (oldestKey !== undefined) {
-        const oldest = cache.get(oldestKey);
-        cache.delete(oldestKey);
-        oldest?.finalize?.();
-      }
+      // Evict the oldest. Map iteration follows insertion order, so the
+      // first entry is the LRU candidate; the size check means it exists.
+      const [oldestKey, oldest] = cache.entries().next().value!;
+      cache.delete(oldestKey);
+      _finalizeQuietly(oldest);
     }
     return stmt;
   }
@@ -329,14 +340,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   private __dropCache(db: SqliteDb): void {
     const cache = this.__preparedCache.get(db);
     if (!cache) return;
-    for (const stmt of cache.values()) {
-      try {
-        stmt.finalize?.();
-      } catch {
-        // Statement may already be invalidated by the DDL we're
-        // responding to — ignore, the goal is to drop the reference.
-      }
-    }
+    for (const stmt of cache.values()) _finalizeQuietly(stmt);
     cache.clear();
   }
 
