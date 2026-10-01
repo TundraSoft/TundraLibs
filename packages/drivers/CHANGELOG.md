@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.4.0...drivers-v1.4.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **drivers:** stop a caught SQLite error resurfacing on statement eviction ([#747](https://github.com/TundraSoft/TundraLibs/issues/747)) ([cf2c167](https://github.com/TundraSoft/TundraLibs/commit/cf2c167f4608527c2d9ea5aaa1f41cb92a01f38c))
+* **drivers:** stop sending Close per query so Postgres works through Hyperdrive ([#750](https://github.com/TundraSoft/TundraLibs/issues/750)) ([eebcdc2](https://github.com/TundraSoft/TundraLibs/commit/eebcdc23f8c9e8bec3c0b7f78c2e9553b8103a99))
+
 ## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.3.0...drivers-v1.4.0) (2026-09-29)
 
 
