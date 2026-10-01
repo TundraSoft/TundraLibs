@@ -54,7 +54,8 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  *
  * Expects the envelope produced by {@link encryptAES}: hex
  * `data:iv:salt` for `GCM`, or `data:iv:salt:mac` for `CBC`/`CTR`. The AES key
- * is re-derived from the supplied secret + embedded salt with PBKDF2-SHA-256.
+ * is re-derived from the supplied secret + embedded salt with PBKDF2, using
+ * the same `options.pbkdf2` the envelope was encrypted with.
  *
  * With an AES-GCM `CryptoKey` as `secret`, no derivation runs and the
  * envelope is the 2-part `data:iv` form {@link encryptAES} emits for keys —
@@ -81,7 +82,10 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  * @throws {Error} When CBC/CTR authentication fails (tampered ciphertext or wrong secret)
  * @throws {Error} When the IV/counter or salt is empty
  * @throws {Error} When a `CryptoKey` secret is combined with CBC/CTR, is not
- *   an AES-GCM key, or contradicts an explicit `keyLength` option
+ *   an AES-GCM key, contradicts an explicit `keyLength` option, or is given
+ *   with `options.pbkdf2`
+ * @throws {RangeError} When `options.pbkdf2.iterations` is not a positive
+ *   integer
  *
  * @see {@link encryptAES} for encryption
  * @see {@link AESOptions} for available options
@@ -145,7 +149,13 @@ export async function decryptAES(
   // Pre-derived CryptoKey: the envelope is the 2-part `data:iv` form
   // encryptAES emits for keys — GCM (AEAD) authenticates it natively.
   if (typeof secret !== 'string') {
-    validateAESKey(secret, mode, options?.keyLength, 'decrypt');
+    validateAESKey(
+      secret,
+      mode,
+      options?.keyLength,
+      'decrypt',
+      options?.pbkdf2,
+    );
     const keyParts = data.split(':');
     if (keyParts.length !== 2) {
       throw new Error(
@@ -216,7 +226,13 @@ export async function decryptAES(
   }
 
   const algorithm: 'AES-GCM' | 'AES-CBC' | 'AES-CTR' = `AES-${mode}`;
-  const key = await derivePBKDF2Key(secret, salt, algorithm, keyLength);
+  const key = await derivePBKDF2Key(
+    secret,
+    salt,
+    algorithm,
+    keyLength,
+    options?.pbkdf2,
+  );
 
   const decryptConfig: AesGcmParams | AesCbcParams | AesCtrParams = mode ===
       'CTR'

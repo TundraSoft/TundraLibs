@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { encryptAES, encryptRSA } from './mod.ts';
+import { decryptAES, encryptAES, encryptRSA } from './mod.ts';
 import { describe, it } from '@tundralibs/compat/test';
 
 describe('crypt.encrypt', () => {
@@ -713,5 +713,42 @@ describe('crypt.encrypt', () => {
 
     // But both should be valid base64 strings
     asserts.assertEquals(/^[A-Za-z0-9+/]+=*$/.test(encrypted2), true);
+  });
+});
+
+describe('crypt.encrypt AES pbkdf2 option', () => {
+  const pbkdf2 = { iterations: 1000 };
+
+  for (const mode of ['GCM', 'CBC'] as const) {
+    it(`${mode}: a string-secret envelope needs the same pbkdf2 settings to decrypt`, async () => {
+      const sealed = await encryptAES('hello', 'secret', { mode, pbkdf2 });
+      asserts.assertEquals(
+        await decryptAES(sealed, 'secret', { mode, pbkdf2 }),
+        'hello',
+      );
+      await asserts.assertRejects(() => decryptAES(sealed, 'secret', { mode }));
+      await asserts.assertRejects(() =>
+        decryptAES(sealed, 'secret', { mode, pbkdf2: { iterations: 1001 } })
+      );
+    });
+  }
+
+  it('is refused with a CryptoKey secret, which is already derived', async () => {
+    const key = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+    const sealed = await encryptAES('hello', key);
+    await asserts.assertRejects(
+      () => encryptAES('hello', key, { pbkdf2 }),
+      Error,
+      'options.pbkdf2',
+    );
+    await asserts.assertRejects(
+      () => decryptAES(sealed, key, { pbkdf2 }),
+      Error,
+      'options.pbkdf2',
+    );
   });
 });

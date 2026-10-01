@@ -1,6 +1,11 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { derivePBKDF2Key, hkdf, PBKDF2_ITERATIONS } from './derive.ts';
+import {
+  deriveHKDFKey,
+  derivePBKDF2Key,
+  hkdf,
+  PBKDF2_ITERATIONS,
+} from './derive.ts';
 
 // Derived CryptoKeys are non-extractable, so equality is tested by encrypting
 // a fixed plaintext + IV with both keys and comparing ciphertexts.
@@ -124,6 +129,40 @@ describe('crypt.generators.derive.derivePBKDF2Key', () => {
     asserts.assertEquals(await sameCipherProbe(emptyKey, uniKey), false);
   });
 
+  it('iterations and hash options change the key; omitting them is the default', async () => {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const derive = (options?: Parameters<typeof derivePBKDF2Key>[4]) =>
+      derivePBKDF2Key('s', salt, 'AES-GCM', 256, options);
+
+    asserts.assertEquals(
+      await sameCipherProbe(
+        await derive(),
+        await derive({ iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }),
+      ),
+      true,
+    );
+    const workers = await derive({ iterations: 100_000 });
+    asserts.assertEquals(await sameCipherProbe(await derive(), workers), false);
+    asserts.assertEquals(
+      await sameCipherProbe(
+        workers,
+        await derive({ iterations: 100_000, hash: 'SHA-512' }),
+      ),
+      false,
+    );
+  });
+
+  it('rejects a non-positive or fractional iteration count', async () => {
+    const salt = new Uint8Array(16);
+    for (const iterations of [0, -1, 1.5]) {
+      await asserts.assertRejects(
+        () => derivePBKDF2Key('s', salt, 'AES-GCM', 256, { iterations }),
+        RangeError,
+        'iterations must be a positive integer',
+      );
+    }
+  });
+
   it('long secret does not collapse onto its truncation', async () => {
     // Old zero-pad scheme would have truncated to keyLength bytes, so
     // "AAAA...32x" and "AAAA...32x + suffix" yielded the same key. PBKDF2
@@ -183,6 +222,43 @@ describe('crypt.generators.derive.hkdf', () => {
     await asserts.assertRejects(
       () => hkdf('s', { length: 255 * 32 + 1 }),
       RangeError,
+    );
+  });
+});
+
+describe('crypt.generators.derive.deriveHKDFKey', () => {
+  it('is the hkdf output imported as an AES key', async () => {
+    const secret = 'a'.repeat(64);
+    const raw = await hkdf(secret, { info: 'cells', salt: 's', length: 32 });
+    const expected = await crypto.subtle.importKey(
+      'raw',
+      raw as BufferSource,
+      'AES-GCM',
+      false,
+      ['encrypt'],
+    );
+    const key = await deriveHKDFKey(secret, { info: 'cells', salt: 's' });
+    asserts.assertEquals(await sameCipherProbe(key, expected), true);
+  });
+
+  it('a different info gives an unrelated key', async () => {
+    const a = await deriveHKDFKey('secret', { info: 'a' });
+    const b = await deriveHKDFKey('secret', { info: 'b' });
+    asserts.assertEquals(await sameCipherProbe(a, b), false);
+  });
+
+  it('binds keyLength and algorithm, and is non-extractable', async () => {
+    const key = await deriveHKDFKey('secret', {
+      info: 'x',
+      keyLength: 128,
+      algorithm: 'AES-CTR',
+    });
+    asserts.assertEquals(key.algorithm.name, 'AES-CTR');
+    asserts.assertEquals((key.algorithm as AesKeyAlgorithm).length, 128);
+    asserts.assertEquals(key.extractable, false);
+    asserts.assertEquals(
+      (await deriveHKDFKey('secret', { info: 'x' })).algorithm,
+      { name: 'AES-GCM', length: 256 } as KeyAlgorithm,
     );
   });
 });
