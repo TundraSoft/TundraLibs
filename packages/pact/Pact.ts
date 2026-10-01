@@ -73,6 +73,13 @@ const TOTP_PERIOD_MS = 30_000;
 /** Separates a tenant from a module in a grant key (`acme::POST`). */
 const TENANT_SEP = '::';
 
+/** Digests crypt's `pbkdf2Hash` accepts. */
+const PBKDF2_HASHES: ReadonlySet<string> = new Set([
+  'SHA-256',
+  'SHA-384',
+  'SHA-512',
+]);
+
 /**
  * The auth engine: bitmask authorization, login and sessions (opaque or
  * JWT with refresh rotation), four credential schemes, TOTP MFA, OAuth
@@ -332,6 +339,15 @@ export class Pact<B extends PermissionBits, M extends string>
         }
       }
     }
+    // A hash written by one scheme cannot be checked by the other.
+    const { hashPassword, verifyPassword } = this._hooks;
+    if ((hashPassword === undefined) !== (verifyPassword === undefined)) {
+      throw new PactError('MISSING_HOOK', {
+        hook: hashPassword === undefined
+          ? 'hashPassword (required with verifyPassword)'
+          : 'verifyPassword (required with hashPassword)',
+      });
+    }
   }
 
   /**
@@ -481,7 +497,7 @@ export class Pact<B extends PermissionBits, M extends string>
     return await createUser({
       identifier: input.identifier,
       status: input.status ?? this.activeStatuses[0]!,
-      passwordHash: await pbkdf2Hash(input.password),
+      passwordHash: await this.__hashPassword(input.password),
       grants: serializeGrants(input.grants ?? {}),
       metadata: input.metadata,
     });
@@ -993,7 +1009,7 @@ export class Pact<B extends PermissionBits, M extends string>
     if (hook === undefined) {
       throw new PactError('MISSING_HOOK', { hook: 'setPassword' });
     }
-    await hook(userId, await pbkdf2Hash(newPassword));
+    await hook(userId, await this.__hashPassword(newPassword));
     await this.invalidatePrincipal(userId);
     const deleteSessions = this._hooks.deleteSessions;
     if (deleteSessions !== undefined) {
@@ -1686,6 +1702,11 @@ export class Pact<B extends PermissionBits, M extends string>
             value as NonNullable<PactOptions['mfa']>,
           );
           break;
+        case 'password':
+          this.__validatePasswordOption(
+            value as NonNullable<PactOptions['password']>,
+          );
+          break;
         case 'oauth':
           // Shallow shape only — per-instance validation happens in the
           // OAuthClient constructor, eagerly, at Pact construction.
@@ -2104,7 +2125,8 @@ export class Pact<B extends PermissionBits, M extends string>
     // Truthiness deliberately: an EMPTY stored hash must also burn the
     // dummy pbkdf2, or those accounts fail measurably faster.
     const hash = user?.passwordHash || await this.__getDummyHash();
-    const verified = await pbkdf2Verify(password, hash);
+    const verify = this._hooks.verifyPassword ?? pbkdf2Verify;
+    const verified = await verify(password, hash);
     if (user === null || user.passwordHash === undefined || !verified) {
       throw new PactError('INVALID_CREDENTIALS');
     }
@@ -2338,8 +2360,16 @@ export class Pact<B extends PermissionBits, M extends string>
   /** A lazily-built pbkdf2 hash burned on unknown-identifier logins so
    * account existence is not measurable from response timing. */
   private async __getDummyHash(): Promise<string> {
-    this.__dummyHash ??= await pbkdf2Hash(generateHexSecret(16));
+    this.__dummyHash ??= await this.__hashPassword(generateHexSecret(16));
     return this.__dummyHash;
+  }
+
+  /** The `hashPassword` hook, else crypt's PBKDF2 under the `password`
+   * option. */
+  private async __hashPassword(password: string): Promise<string> {
+    const hook = this._hooks.hashPassword;
+    if (hook !== undefined) return await hook(password);
+    return await pbkdf2Hash(password, this._getOption('password'));
   }
 
   /**
@@ -2515,6 +2545,43 @@ export class Pact<B extends PermissionBits, M extends string>
   /**
    * Shared shape check for the { ttl?: minutes } option groups.
    */
+  private __validatePasswordOption(
+    value: NonNullable<PactOptions['password']>,
+  ): void {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'password',
+        reason: 'must be an object',
+      });
+    }
+    if (
+      this._hooks.hashPassword !== undefined ||
+      this._hooks.verifyPassword !== undefined
+    ) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'password',
+        reason: 'has no effect with the hashPassword/verifyPassword hooks; ' +
+          'set the hash settings inside the hooks instead',
+      });
+    }
+    const { iterations, hash } = value;
+    if (
+      iterations !== undefined &&
+      (!Number.isInteger(iterations) || iterations < 1)
+    ) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'password.iterations',
+        reason: 'must be a positive integer',
+      });
+    }
+    if (hash !== undefined && !PBKDF2_HASHES.has(hash)) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'password.hash',
+        reason: "must be 'SHA-256', 'SHA-384' or 'SHA-512'",
+      });
+    }
+  }
+
   private __validateMfaOption(value: NonNullable<PactOptions['mfa']>): void {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
       throw new PactError('INVALID_OPTION', {

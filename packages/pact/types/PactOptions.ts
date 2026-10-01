@@ -1,3 +1,4 @@
+import type { PBKDF2Hash } from '@tundralibs/crypt/digest';
 import type { PactCacheConfig } from './PactCacheConfig.ts';
 import type { PactOAuthProviderConfig } from './PactOAuthProviderConfig.ts';
 import type { PactPasskeyConfig } from './PactPasskeyConfig.ts';
@@ -48,6 +49,16 @@ export type PactOptions = {
    * misconfiguration fails at boot rather than mid-request.
    */
   passkeys?: PactPasskeyConfig;
+  /**
+   * PBKDF2 settings for new password hashes (register, `setPassword`,
+   * reset, and the dummy hash that equalizes unknown-user timing).
+   * Stored hashes record their own count, so changing this never breaks
+   * existing logins. Cloudflare Workers refuses more than 100 000
+   * iterations, so a Workers deployment sets `iterations: 100_000`. Not
+   * allowed together with the `hashPassword` / `verifyPassword` hooks.
+   * @default crypt's `pbkdf2Hash` defaults: 600 000 iterations of SHA-256
+   */
+  password?: { iterations?: number; hash?: PBKDF2Hash };
   /**
    * Password-reset behavior; `ttl` is the reset-token validity window
    * in minutes.

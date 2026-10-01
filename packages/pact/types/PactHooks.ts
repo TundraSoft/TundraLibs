@@ -90,7 +90,23 @@ export type PactHooks<M extends string = string> = {
   deleteSession?: (sessionId: string) => void | Promise<void>;
   /** Delete every session of a user (logout-all, password change). */
   deleteSessions?: (userId: string) => void | Promise<void>;
-  /** Store a user's new password hash (already pbkdf2-hashed). */
+  /**
+   * Replace pact's PBKDF2 password hashing, e.g. to add a pepper. pact
+   * calls it wherever it hashes: register, `setPassword`, reset, and the
+   * dummy hash for unknown users. Configure together with
+   * `verifyPassword`; the `password` option is then not allowed.
+   */
+  hashPassword?: (password: string) => string | Promise<string>;
+  /**
+   * Check a password against a hash from `hashPassword`. Return `false`
+   * for a wrong password; throw only for a failure that is not the
+   * user's fault, which pact surfaces instead of `INVALID_CREDENTIALS`.
+   */
+  verifyPassword?: (
+    password: string,
+    stored: string,
+  ) => boolean | Promise<boolean>;
+  /** Store a user's new password hash (already hashed). */
   setPassword?: (
     userId: string,
     passwordHash: string,

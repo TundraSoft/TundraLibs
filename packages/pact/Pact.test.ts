@@ -599,7 +599,8 @@ describe('Pact register and API keys', () => {
       password: 'correct horse',
       grants: { Post: 3n },
     });
-    asserts.assert(user.passwordHash?.startsWith('pbkdf2-'));
+    // crypt's recommended default, unchanged by the `password` option.
+    asserts.assert(user.passwordHash?.startsWith('pbkdf2-sha256$600000$'));
     asserts.assertStrictEquals(user.status, 'ACTIVE');
     await expectCode(
       pact.register({ identifier: 'ada@example.dev', password: 'x' }),
@@ -1865,5 +1866,164 @@ describe('Pact passkeys multi-device', () => {
       PactError,
     );
     asserts.assertStrictEquals(error.code, 'INVALID_CREDENTIALS');
+  });
+});
+
+// =============================================================================
+// Password hashing: the `password` option and the hashPassword/verifyPassword
+// hooks (Cloudflare Workers refuses PBKDF2 above 100 000 iterations).
+// =============================================================================
+
+describe('Pact password hashing', () => {
+  /** A store whose createUser keeps what pact hashed. */
+  function storeWithCreate() {
+    const store = makeStore();
+    const hooks = {
+      ...store.hooks,
+      createUser: (input: {
+        identifier: string;
+        status: string;
+        passwordHash?: string;
+        grants: string;
+      }) => {
+        const user: PactStoredUser = {
+          id: `pu${store.byId.size + 1}`,
+          status: input.status,
+          passwordHash: input.passwordHash,
+          grants: input.grants,
+        };
+        store.byId.set(user.id, user);
+        store.byIdentifier.set(input.identifier, user.id);
+        return user;
+      },
+    };
+    return { store, hooks };
+  }
+
+  it('the password option sets the PBKDF2 count and digest for register and setPassword', async () => {
+    const { store, hooks } = storeWithCreate();
+    const pact = Pact.create({
+      ...BASE,
+      hooks,
+      options: { password: { iterations: 1000, hash: 'SHA-512' } },
+    });
+    const user = await pact.register({
+      identifier: 'a@x.dev',
+      password: 'pw1',
+    });
+    asserts.assert(user.passwordHash?.startsWith('pbkdf2-sha512$1000$'));
+    await pact.login({ identifier: 'a@x.dev', password: 'pw1' });
+    await pact.setPassword(user.id, 'pw2');
+    asserts.assert(
+      store.lastSetPassword?.hash.startsWith('pbkdf2-sha512$1000$'),
+    );
+    await pact.login({ identifier: 'a@x.dev', password: 'pw2' });
+  });
+
+  it('hooks replace hashing everywhere, including the dummy hash for unknown users', async () => {
+    const { store, hooks } = storeWithCreate();
+    const hashed: string[] = [];
+    const verified: string[] = [];
+    const pact = Pact.create({
+      ...BASE,
+      hooks: {
+        ...hooks,
+        hashPassword: (password: string) => {
+          hashed.push(password);
+          return `peppered:${password}`;
+        },
+        verifyPassword: (password: string, stored: string) => {
+          verified.push(stored);
+          return stored === `peppered:${password}`;
+        },
+      },
+    });
+    const user = await pact.register({ identifier: 'b@x.dev', password: 'pw' });
+    asserts.assertStrictEquals(user.passwordHash, 'peppered:pw');
+    await pact.login({ identifier: 'b@x.dev', password: 'pw' });
+    await expectCode(
+      pact.login({ identifier: 'b@x.dev', password: 'nope' }),
+      'INVALID_CREDENTIALS',
+    );
+    await pact.setPassword(user.id, 'pw2');
+    asserts.assertStrictEquals(store.lastSetPassword?.hash, 'peppered:pw2');
+
+    // An unknown identifier burns the hook too, against a dummy hash.
+    const before = hashed.length;
+    await expectCode(
+      pact.login({ identifier: 'ghost@x.dev', password: 'pw' }),
+      'INVALID_CREDENTIALS',
+    );
+    asserts.assertStrictEquals(hashed.length, before + 1);
+    asserts.assertMatch(hashed.at(-1)!, /^[0-9a-f]{32}$/);
+    asserts.assertStrictEquals(verified.at(-1), `peppered:${hashed.at(-1)}`);
+  });
+
+  it('a verify failure that is not a wrong password surfaces as itself', async () => {
+    const store = makeStore();
+    store.seed('vu1', 'c@x.dev');
+    const boom = new Error('runtime refused the derivation');
+    const failed: string[] = [];
+    const pact = Pact.create({
+      ...BASE,
+      hooks: {
+        ...store.hooks,
+        hashPassword: (password: string) => password,
+        verifyPassword: () => {
+          throw boom;
+        },
+      },
+    });
+    pact.on('loginFailed', (_identifier, code) => {
+      failed.push(code);
+    });
+    const err = await asserts.assertRejects(() =>
+      pact.login({ identifier: 'c@x.dev', password: 'secret123' })
+    );
+    asserts.assertStrictEquals(err, boom);
+    asserts.assertEquals(failed, []);
+  });
+
+  it('rejects a half-configured hook pair, and the option alongside the hooks', () => {
+    const store = makeStore();
+    const hashPassword = (p: string) => p;
+    const verifyPassword = () => true;
+    expectThrowCode(
+      () => Pact.create({ ...BASE, hooks: { ...store.hooks, hashPassword } }),
+      'MISSING_HOOK',
+    );
+    expectThrowCode(
+      () => Pact.create({ ...BASE, hooks: { ...store.hooks, verifyPassword } }),
+      'MISSING_HOOK',
+    );
+    expectThrowCode(
+      () =>
+        Pact.create({
+          ...BASE,
+          hooks: { ...store.hooks, hashPassword, verifyPassword },
+          options: { password: { iterations: 100_000 } },
+        }),
+      'INVALID_OPTION',
+    );
+  });
+
+  it('rejects malformed password options', () => {
+    for (
+      const password of [
+        { iterations: 0 },
+        { iterations: 1.5 },
+        { hash: 'MD5' },
+        'fast',
+      ]
+    ) {
+      expectThrowCode(
+        () =>
+          Pact.create({
+            ...BASE,
+            options: { password: password as never },
+          }),
+        'INVALID_OPTION',
+      );
+    }
   });
 });
