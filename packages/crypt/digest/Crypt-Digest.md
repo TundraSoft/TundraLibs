@@ -263,8 +263,12 @@ const ok = await pbkdf2Verify('correct horse battery staple', stored); // true
 ### `pbkdf2Verify()`
 
 Verify a password against a `pbkdf2Hash` output. Constant-time on the digest
-comparison; returns `false` on any malformed or unrecognised input rather
-than throwing.
+comparison. A wrong password or a malformed stored string returns `false`. If
+the runtime refuses the derivation the stored string asks for, it throws a
+`DigestError` instead. For example, Cloudflare Workers refuses more than 100 000
+iterations, so a 600 000-iteration hash cannot be checked there. `pbkdf2Hash`
+and `pbkdf2` throw the same error. On Workers, hash with
+`{ iterations: 100_000 }` or fewer.
 
 ```typescript ignore
 pbkdf2Verify(password: string, stored: string): Promise<boolean>

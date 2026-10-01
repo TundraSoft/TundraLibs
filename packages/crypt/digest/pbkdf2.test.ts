@@ -1,5 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { DigestError } from './errors/mod.ts';
 import {
   pbkdf2,
   PBKDF2_PASSWORD_ITERATIONS,
@@ -60,7 +61,7 @@ describe('crypt.digest.pbkdf2 (password hashing)', () => {
     asserts.assertEquals(await pbkdf2Verify('pw', s512), true);
   });
 
-  it('verify returns false (never throws) on malformed input', async () => {
+  it('verify returns false on malformed input', async () => {
     asserts.assertEquals(await pbkdf2Verify('x', 'not-a-hash'), false);
     asserts.assertEquals(await pbkdf2Verify('x', 'pbkdf2-md5$1$aa$bb'), false);
     asserts.assertEquals(await pbkdf2Verify('x', ''), false);
@@ -94,14 +95,16 @@ describe('crypt.digest.pbkdf2 (password hashing)', () => {
     asserts.assertEquals(await pbkdf2Verify('pw', legacy), true);
   });
 
-  it('verify returns false on a zero iteration count (no OperationError leak)', async () => {
-    // The regex accepts `\d+`, so "0" parses; Web Crypto then rejects
-    // `iterations: 0` with a DOMException. That must be swallowed into `false`
-    // to honour the documented never-throws contract, not propagate out.
-    asserts.assertEquals(
-      await pbkdf2Verify('x', 'pbkdf2-sha256$0$abcd$abcd'),
-      false,
-    );
+  it('verify returns false on an out-of-range iteration count', async () => {
+    // The regex accepts any `\d+`; counts Web Crypto cannot take are
+    // malformed input, so they verify false instead of throwing DigestError.
+    for (const count of ['0', '4294967296', '1' + '0'.repeat(30)]) {
+      asserts.assertEquals(
+        await pbkdf2Verify('x', `pbkdf2-sha256$${count}$abcd$abcd`),
+        false,
+        count,
+      );
+    }
     // A genuine hash still round-trips correctly alongside the guard.
     const stored = await pbkdf2Hash('hunter2', { iterations: 1000 });
     asserts.assertEquals(await pbkdf2Verify('hunter2', stored), true);
@@ -112,5 +115,58 @@ describe('crypt.digest.pbkdf2 (password hashing)', () => {
     // Password storage defaults to the OWASP SHA-256 count (600k), asserted
     // end-to-end in the digest-aware default test above.
     asserts.assertEquals(PBKDF2_PASSWORD_ITERATIONS['SHA-256'], 600_000);
+  });
+});
+
+// Cloudflare Workers rejects PBKDF2 above 100 000 iterations. Simulate that
+// runtime by making deriveBits reject, then restore the real method.
+const WORKERS_REJECTION =
+  'Pbkdf2 failed: iteration counts above 100000 are not supported';
+async function withRejectingDeriveBits(fn: () => Promise<void>): Promise<void> {
+  const subtle = crypto.subtle as unknown as Record<string, unknown>;
+  const own = Object.getOwnPropertyDescriptor(subtle, 'deriveBits');
+  Object.defineProperty(subtle, 'deriveBits', {
+    configurable: true,
+    writable: true,
+    value: () => Promise.reject(new Error(WORKERS_REJECTION)),
+  });
+  try {
+    await fn();
+  } finally {
+    if (own) Object.defineProperty(subtle, 'deriveBits', own);
+    else delete subtle.deriveBits;
+  }
+}
+
+describe('crypt.digest.pbkdf2 (runtime rejects the derivation)', () => {
+  it('verify throws DigestError instead of reporting a wrong password', async () => {
+    const stored = await pbkdf2Hash('pw', { iterations: 1000 });
+    await withRejectingDeriveBits(async () => {
+      const err = await asserts.assertRejects(
+        () => pbkdf2Verify('pw', stored),
+        DigestError,
+        'PBKDF2-SHA-256 derivation at 1000 iterations was rejected',
+      );
+      asserts.assertEquals((err as DigestError).context, {
+        hash: 'SHA-256',
+        iterations: 1000,
+      });
+      asserts.assertEquals(
+        ((err as DigestError).cause as Error).message,
+        WORKERS_REJECTION,
+      );
+    });
+    // Restored: the same stored hash verifies again.
+    asserts.assertEquals(await pbkdf2Verify('pw', stored), true);
+  });
+
+  it('hash throws DigestError', async () => {
+    await withRejectingDeriveBits(async () => {
+      await asserts.assertRejects(
+        () => pbkdf2Hash('pw', { iterations: 600_000 }),
+        DigestError,
+        'at 600000 iterations',
+      );
+    });
   });
 });

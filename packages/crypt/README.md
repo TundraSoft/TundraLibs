@@ -89,6 +89,9 @@ declare const masterSecret: Uint8Array;
 // Passwords: slow, salted PBKDF2 (store the string, verify against it)
 const stored = await pbkdf2Hash('correct horse battery staple');
 const ok = await pbkdf2Verify('correct horse battery staple', stored); // true
+// Cloudflare Workers refuses PBKDF2 above 100 000 iterations; pass a lower
+// count there. Verifying a higher-count hash on Workers throws DigestError.
+const edgeStored = await pbkdf2Hash('hunter2', { iterations: 100_000 });
 
 // High-entropy secrets: HKDF for domain separation (fast, one secret → many keys)
 const signKey = await hkdf(masterSecret, { info: 'jwt' });

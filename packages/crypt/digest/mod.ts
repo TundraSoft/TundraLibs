@@ -17,6 +17,7 @@
 
 export { digest, sha1, sha256, sha384, sha512 } from './digest.ts';
 export { DIGEST_OUTPUT_BYTES, validateDigestAlgorithm } from './helper.ts';
+export { DigestError, type DigestErrorMeta } from './errors/mod.ts';
 export {
   pbkdf2,
   PBKDF2_PASSWORD_ITERATIONS,

@@ -399,10 +399,14 @@ const isValid = await validateBIP39Mnemonic('abandon ability able...');
 
 #### `derivePBKDF2Key()`
 
-Derives a non-extractable AES `CryptoKey` from a secret + salt using
-PBKDF2-SHA-256 at `PBKDF2_ITERATIONS` (210,000) — the same derivation
+Derives a non-extractable AES `CryptoKey` from a secret + salt using PBKDF2,
+by default SHA-256 at `PBKDF2_ITERATIONS` (210,000), the same derivation
 `encryptAES` / `decryptAES` run per message. The key is bound to a single AES
-algorithm + length, ready for `crypto.subtle.encrypt` / `decrypt`.
+algorithm + length, ready for `crypto.subtle.encrypt` / `decrypt`. Nothing about
+the derivation is stored, so pass the same `iterations` and `hash` to
+re-derive. Cloudflare Workers refuses more than 100 000 iterations; set
+`iterations` at or below that there. A non-positive or fractional count throws
+`RangeError`.
 
 ```typescript ignore
 derivePBKDF2Key(
@@ -410,6 +414,10 @@ derivePBKDF2Key(
   salt: Uint8Array,
   algorithm: 'AES-GCM' | 'AES-CBC' | 'AES-CTR',
   keyLengthBits: 128 | 192 | 256,
+  options?: {
+    iterations?: number; // default PBKDF2_ITERATIONS (210 000)
+    hash?: 'SHA-256' | 'SHA-384' | 'SHA-512'; // default 'SHA-256'
+  },
 ): Promise<CryptoKey>
 ```
 
@@ -422,6 +430,37 @@ import { derivePBKDF2Key } from '@tundralibs/crypt/generators';
 const salt = new Uint8Array(16).fill(7);
 const key = await derivePBKDF2Key('mySecret', salt, 'AES-GCM', 256);
 // Reuse `key` across many crypto.subtle.encrypt/decrypt calls.
+```
+
+#### `deriveHKDFKey()`
+
+`hkdf()` straight into a non-extractable AES `CryptoKey`. HKDF does no
+stretching, so it is fast and has no iteration limit, but only use it on a
+secret that is already random (32+ random bytes, for example). The same
+inputs always give the same key, so nothing needs storing.
+
+```typescript ignore
+deriveHKDFKey(
+  secret: string | Uint8Array,
+  options: {
+    info: string | Uint8Array; // domain-separation label
+    salt?: string | Uint8Array; // default empty
+    keyLength?: 128 | 192 | 256; // default 256
+    algorithm?: 'AES-GCM' | 'AES-CBC' | 'AES-CTR'; // default 'AES-GCM'
+  },
+): Promise<CryptoKey>
+```
+
+**Example:**
+
+```typescript
+import { deriveHKDFKey } from '@tundralibs/crypt/generators';
+import { decryptAES, encryptAES } from '@tundralibs/crypt/encrypt';
+
+const secret = 'f'.repeat(64); // in practice: 64 random hex characters
+const key = await deriveHKDFKey(secret, { info: 'cell-encryption' });
+const sealed = await encryptAES('hello', key);
+console.log(await decryptAES(sealed, key)); // "hello"
 ```
 
 #### `hkdf()`

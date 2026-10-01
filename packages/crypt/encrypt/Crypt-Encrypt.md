@@ -74,6 +74,7 @@ async function encryptAES(
 - `options`:
   - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode (default: `'GCM'`; a `CryptoKey` secret permits only `'GCM'`)
   - `keyLength?: 128 | 192 | 256` - Key length in bits (default: `256`)
+  - `pbkdf2?: { iterations?: number; hash?: 'SHA-256' | 'SHA-384' | 'SHA-512' }` - PBKDF2 settings for a string secret (default `{ iterations: 210_000, hash: 'SHA-256' }`). They are not stored in the envelope, so `decryptAES` needs the same value. Cloudflare Workers refuses more than 100 000 iterations. Passing it with a `CryptoKey` secret throws.
 
 **Returns:** Encrypted data as a hex-string envelope — `{ciphertext}:{iv}:{salt}` for GCM, `{ciphertext}:{iv}:{salt}:{mac}` for CBC/CTR (the 4th part is the encrypt-then-MAC HMAC), and `{ciphertext}:{iv}` for a `CryptoKey` secret (no salt — no derivation ran)
 
@@ -117,6 +118,7 @@ async function decryptAES(
 - `options`:
   - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode
   - `keyLength?: 128 | 192 | 256` - Key length in bits
+  - `pbkdf2?: { iterations?: number; hash?: … }` - The same PBKDF2 settings the envelope was encrypted with (string secret only)
   - `returnBinary?: boolean` - Return Uint8Array instead of string
 
 **Returns:** Decrypted data as string or Uint8Array
@@ -341,7 +343,7 @@ console.log(await decryptAES(a, key)); // "first"
 **Choosing a KDF.** The package ships two derivation families for different jobs — pick by the entropy of your input, not by convenience:
 
 - **PBKDF2** (`pbkdf2Hash` / `pbkdf2Verify` / `pbkdf2` in [Digest](../digest/Crypt-Digest.md), `derivePBKDF2Key` in [Generators](../generators/Crypt-Generators.md)) — for **low-entropy secrets** (user passwords). Deliberately slow and salted so brute-forcing a stolen hash stays expensive.
-- **HKDF** (`hkdf` in [Generators](../generators/Crypt-Generators.md)) — for **high-entropy secrets** you already trust (a master key, a shared secret). Fast, and built for **domain separation**: derive many independent sub-keys from one secret by varying `info`. Do **not** use it to stretch passwords — it provides no work factor.
+- **HKDF** (`hkdf` / `deriveHKDFKey` in [Generators](../generators/Crypt-Generators.md)) — for **high-entropy secrets** you already trust (a master key, a shared secret). Fast, and built for **domain separation**: derive many independent sub-keys from one secret by varying `info`. Do **not** use it to stretch passwords — it provides no work factor.
 
 ### RSA Considerations
 

@@ -14,14 +14,22 @@
  * Validates a pre-derived AES key against the requested operation. `CryptoKey`
  * secrets are GCM-only (AEAD — CBC/CTR's encrypt-then-MAC needs a string
  * secret to derive the MAC key), and an explicit `keyLength` option that
- * contradicts the key's own length is refused rather than silently ignored.
+ * contradicts the key's own length is refused rather than silently ignored,
+ * as is a `pbkdf2` option, which has nothing to derive.
  */
 export const validateAESKey = (
   key: CryptoKey,
   mode: string,
   keyLength: number | undefined,
   purpose: 'encrypt' | 'decrypt',
+  pbkdf2: object | undefined,
 ): void => {
+  if (pbkdf2 !== undefined) {
+    throw new Error(
+      'options.pbkdf2 derives a key from a string secret — a CryptoKey is ' +
+        'already derived, so drop the option',
+    );
+  }
   if (mode !== 'GCM') {
     throw new Error(
       'A CryptoKey secret supports GCM only — CBC/CTR authenticate with ' +

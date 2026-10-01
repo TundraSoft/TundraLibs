@@ -45,10 +45,11 @@ const CBC_IV_BYTES = 16;
 /**
  * Encrypts data using AES with the specified mode and key length.
  *
- * The AES key is derived from the supplied secret with PBKDF2-SHA-256
- * using a fresh random per-message salt, replacing the prior zero-padding
- * scheme. The salt is embedded in the output so decrypt can derive the
- * same key.
+ * The AES key is derived from the supplied secret with PBKDF2 (SHA-256,
+ * 210 000 iterations unless `options.pbkdf2` says otherwise) using a fresh
+ * random per-message salt. The salt is embedded in the output so decrypt can
+ * derive the same key; the PBKDF2 settings are not, so decrypt must be passed
+ * the same `options.pbkdf2`.
  *
  * Output format (all components hex-encoded):
  * - `GCM` (default, AEAD): `{dataHex}:{ivHex}:{saltHex}`.
@@ -96,7 +97,10 @@ const CBC_IV_BYTES = 16;
  * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
  * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
  * @throws {Error} When a `CryptoKey` secret is combined with CBC/CTR, is not
- *   an AES-GCM key, or contradicts an explicit `keyLength` option
+ *   an AES-GCM key, contradicts an explicit `keyLength` option, or is given
+ *   with `options.pbkdf2`
+ * @throws {RangeError} When `options.pbkdf2.iterations` is not a positive
+ *   integer
  *
  * @example
  * ```typescript
@@ -134,13 +138,25 @@ export const encryptAES = async (
   // Pre-derived CryptoKey: no PBKDF2, no salt part — GCM (AEAD) only, since
   // CBC/CTR's encrypt-then-MAC needs a string secret to derive the MAC key.
   if (typeof secret !== 'string') {
-    validateAESKey(secret, mode, options?.keyLength, 'encrypt');
+    validateAESKey(
+      secret,
+      mode,
+      options?.keyLength,
+      'encrypt',
+      options?.pbkdf2,
+    );
     return await encryptAESGCMCBC(secret, 'AES-GCM', dataToEncrypt);
   }
 
   const algorithm: 'AES-GCM' | 'AES-CBC' | 'AES-CTR' = `AES-${mode}`;
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const key = await derivePBKDF2Key(secret, salt, algorithm, keyLength);
+  const key = await derivePBKDF2Key(
+    secret,
+    salt,
+    algorithm,
+    keyLength,
+    options?.pbkdf2,
+  );
 
   const blob = mode === 'CTR'
     ? await encryptAESCTR(key, dataToEncrypt)

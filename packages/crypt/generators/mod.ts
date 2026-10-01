@@ -74,6 +74,7 @@ export {
 
 // Export key derivation functions
 export {
+  deriveHKDFKey,
   derivePBKDF2Key,
   hkdf,
   type HKDFHash,
