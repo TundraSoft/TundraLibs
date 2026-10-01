@@ -619,9 +619,15 @@ describe('rapid.middlewares.idempotency — cookies and the lost claim', () => {
     const records = new Map<string, IdempotencyRecord>();
     const claimed = new Set<string>();
     let reads = 0;
+    let claims = 0;
+    let bothClaimed!: () => void;
+    const raced = new Promise<void>((resolve) => {
+      bothClaimed = resolve;
+    });
     const hooks: IdempotencyHooks = {
       getRecord: (key) => (reads++ < 2 ? undefined : records.get(key)),
       claim: (key, record) => {
+        if (++claims === 2) bothClaimed();
         if (claimed.has(key)) return false;
         claimed.add(key);
         records.set(key, record);
@@ -661,7 +667,9 @@ describe('rapid.middlewares.idempotency — cookies and the lost claim', () => {
     try {
       const a = post();
       const b = post();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // Hold the winner until the loser has tried to claim; a fixed delay
+      // let a slow runner finish the winner first, so the loser replayed 200.
+      await raced;
       release();
       const [ra, rb] = await Promise.all([a, b]);
       const statuses = [ra.status, rb.status].sort();
