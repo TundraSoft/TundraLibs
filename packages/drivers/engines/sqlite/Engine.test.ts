@@ -764,6 +764,37 @@ describe({
         }
       });
 
+      it('a caught failure does not resurface on reuse or cache eviction', async () => {
+        const engine = new SQLiteEngine('sqlite-err-stale', TEST_CONFIG);
+        await engine.connect();
+        const t = tableName('err_stale');
+        const insert = `INSERT INTO ${t} VALUES (:id)`;
+        try {
+          await engine.execute({
+            sql: `CREATE TABLE ${t} (id INT PRIMARY KEY)`,
+          });
+          await engine.execute({ sql: insert, params: { id: 1 } });
+          await asserts.assertRejects(
+            () => engine.execute({ sql: insert, params: { id: 1 } }),
+            EngineError,
+          );
+          // The cached statement runs again with good params.
+          await engine.execute({ sql: insert, params: { id: 2 } });
+          await asserts.assertRejects(
+            () => engine.execute({ sql: insert, params: { id: 2 } }),
+            EngineError,
+          );
+          // More distinct statements than the LRU holds, so the failed
+          // statement is evicted (and finalized) by one of them.
+          for (let i = 0; i < 150; i++) {
+            await engine.execute({ sql: `SELECT ${i} AS n FROM ${t}` });
+          }
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
       it('NOT_NULL_VIOLATION on missing required column', async () => {
         const engine = new SQLiteEngine('sqlite-err-nn', TEST_CONFIG);
         await engine.connect();
