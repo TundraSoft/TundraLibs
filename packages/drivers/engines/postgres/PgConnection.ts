@@ -16,7 +16,6 @@ import {
   type BackendMessage,
   type BoundParam,
   buildBind,
-  buildClose,
   buildDescribe,
   buildExecute,
   buildParse,
@@ -439,7 +438,7 @@ export class PgConnection {
   }
 
   /**
-   * Shared Parse → Bind → Describe → Execute → Close → Sync exchange and
+   * Shared Parse → Bind → Describe → Execute → Sync exchange and
    * message loop for {@link query} / {@link queryRaw}. The only thing that
    * varies between them is how a Data row (`'D'`) is turned into a JS row, so
    * that step is a `decodeRow` callback; the wire handling is identical.
@@ -468,7 +467,8 @@ export class PgConnection {
       buildBind('', '', bind),
       buildDescribe('P', ''),
       buildExecute('', 0),
-      buildClose('S', ''),
+      // No Close for the unnamed statement: the next Parse replaces it, and
+      // Cloudflare Hyperdrive answers a Close with FATAL 58000.
       buildSync(),
     ];
     let total = 0;
@@ -512,6 +512,7 @@ export class PgConnection {
           break;
         case 'E':
           serverError = msg.fields;
+          this.__throwIfFatal(serverError);
           break;
         case 'Z':
           this.txStatus = msg.status;
@@ -554,6 +555,7 @@ export class PgConnection {
           break;
         case 'E':
           serverError = msg.fields;
+          this.__throwIfFatal(serverError);
           break;
         case 'Z':
           this.txStatus = msg.status;
@@ -659,6 +661,23 @@ export class PgConnection {
     }
     this.__buffer.set(chunk, this.__writeOff);
     this.__writeOff += chunk.length;
+  }
+
+  /**
+   * A FATAL or PANIC ErrorResponse ends the session, so no ReadyForQuery
+   * follows. Throw it now rather than wait and report the EOF as a bare
+   * lost connection.
+   */
+  private __throwIfFatal(fields: Map<string, string>): void {
+    const severity = fields.get('V') ?? fields.get('S');
+    if (severity !== 'FATAL' && severity !== 'PANIC') return;
+    this.__closed = true;
+    try {
+      this.__conn.close();
+    } catch {
+      // the server has likely closed it already
+    }
+    throw _toServerError(fields);
   }
 
   /** Forward a backend NoticeResponse to the notice callback. */

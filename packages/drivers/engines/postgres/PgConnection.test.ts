@@ -14,6 +14,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import type { Connection } from '@tundralibs/compat';
 import { PgConnection } from './PgConnection.ts';
+import { PgServerError } from './PgServerError.ts';
 import { EngineError } from '../../errors/mod.ts';
 
 const enc = new TextEncoder();
@@ -572,4 +573,120 @@ describe('drivers.postgres.PgConnection MD5 password auth', () => {
     );
     asserts.assertStrictEquals(conn.txStatus, 'I');
   });
+});
+
+// =============================================================================
+// Cloudflare Hyperdrive answers a frontend Close ('C') with FATAL 58000 and
+// drops the connection, so the per-query pipeline must not send one; and a
+// FATAL ErrorResponse must surface as itself, not as a bare lost connection.
+// =============================================================================
+
+/** ErrorResponse ('E') carrying the given fields. */
+function errorFrame(fields: Record<string, string>): Uint8Array {
+  let body = '';
+  for (const [k, v] of Object.entries(fields)) body += `${k}${v}\0`;
+  return frame('E', enc.encode(`${body}\0`));
+}
+
+/** A Hyperdrive-like server: FATALs on any Close, else answers the query. */
+class HyperdriveMockServer implements Connection {
+  /** Frontend message types received after startup, in order. */
+  seen: string[] = [];
+  /** When set, every query is answered with this FATAL instead. */
+  fatalOnQuery = false;
+  private __chunks: (Uint8Array | null)[] = [];
+  private __pending: ((v: Uint8Array | null) => void) | null = null;
+  private __started = false;
+
+  read(): Promise<Uint8Array | null> {
+    if (this.__chunks.length > 0) {
+      return Promise.resolve(this.__chunks.shift()!);
+    }
+    return new Promise((resolve) => {
+      this.__pending = resolve;
+    });
+  }
+  write(data: Uint8Array | string): Promise<number> {
+    const bytes = typeof data === 'string' ? enc.encode(data) : data;
+    this.__handle(bytes);
+    return Promise.resolve(bytes.length);
+  }
+  close(): void {}
+
+  private __push(chunk: Uint8Array | null): void {
+    if (this.__pending) {
+      const p = this.__pending;
+      this.__pending = null;
+      p(chunk);
+    } else {
+      this.__chunks.push(chunk);
+    }
+  }
+  private __fatal(message: string): void {
+    this.__push(errorFrame({ S: 'FATAL', C: '58000', M: message }));
+    this.__push(null);
+  }
+  private __handle(bytes: Uint8Array): void {
+    if (!this.__started) {
+      // StartupMessage (untyped) → trust auth.
+      this.__started = true;
+      this.__push(authOk());
+      this.__push(readyForQuery());
+      return;
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset);
+    for (let off = 0; off < bytes.length; off += 1 + view.getUint32(off + 1)) {
+      this.seen.push(String.fromCharCode(bytes[off]!));
+    }
+    if (this.seen.includes('C')) {
+      return this.__fatal('Protocol Error: Unexpected protocol code: C');
+    }
+    if (this.fatalOnQuery) return this.__fatal('terminating connection');
+    if (this.seen.at(-1) === 'Q') {
+      this.__push(frame('C', enc.encode('SET\0')));
+    } else {
+      this.__push(frame('1', new Uint8Array(0)));
+      this.__push(frame('2', new Uint8Array(0)));
+      this.__push(frame('n', new Uint8Array(0)));
+      this.__push(frame('C', enc.encode('SELECT 0\0')));
+    }
+    this.__push(readyForQuery());
+  }
+}
+
+describe('drivers.postgres.PgConnection through a Hyperdrive-style pooler', () => {
+  const connect = async (server: HyperdriveMockServer) => {
+    const conn = new PgConnection(server, undefined, 'test-instance');
+    await conn.connect({ user: 'app', database: 'app', password: 'x' });
+    return conn;
+  };
+
+  it('runs an extended query without sending Close', async () => {
+    const server = new HyperdriveMockServer();
+    const conn = await connect(server);
+    const result = await conn.query('SELECT 1');
+    asserts.assertStrictEquals(result.commandTag, 'SELECT 0');
+    asserts.assertEquals(server.seen, ['P', 'B', 'D', 'E', 'S']);
+    asserts.assertStrictEquals(conn.closed, false);
+  });
+
+  for (
+    const [label, run] of [
+      ['query', (c: PgConnection) => c.query('SELECT 1')],
+      ['simpleQuery', (c: PgConnection) => c.simpleQuery('SET x = 1')],
+    ] as const
+  ) {
+    it(`${label} surfaces a FATAL ErrorResponse, not a lost connection`, async () => {
+      const server = new HyperdriveMockServer();
+      const conn = await connect(server);
+      server.fatalOnQuery = true;
+      const err = await asserts.assertRejects(
+        () => run(conn),
+        PgServerError,
+        'terminating connection',
+      );
+      asserts.assertStrictEquals((err as PgServerError).code, '58000');
+      asserts.assertStrictEquals(conn.closed, true);
+    });
+  }
 });
