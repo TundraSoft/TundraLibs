@@ -11,6 +11,7 @@ where the trust boundaries sit.
 - [Bound principals](#bound-principals)
 - [HMAC requests](#hmac-requests)
 - [TOTP](#totp)
+- [Password hashing](#password-hashing)
 - [Content signing](#content-signing)
 - [Trust boundaries](#trust-boundaries)
 
@@ -110,6 +111,38 @@ works once:
 
 Run more than one process? Implement all three hooks, or the protections
 hold per process only.
+
+## Password hashing
+
+pact hashes passwords with crypt's `pbkdf2Hash`: 600 000 iterations of
+SHA-256 by default. It does this at `register`, `setPassword`, password
+reset, and for the dummy hash that unknown identifiers are verified against.
+Each stored hash records its own count, so changing the settings never
+breaks an existing login.
+
+Cloudflare Workers refuses PBKDF2 above 100 000 iterations, so a Workers
+deployment lowers the count:
+
+```ts
+import { Pact } from '@tundralibs/pact';
+
+const pact = Pact.create({
+  bits: { READ: 1n },
+  modulePermissions: { Post: ['READ'] },
+  options: { password: { iterations: 100_000 } },
+});
+```
+
+Hashes written at a higher count cannot be checked on Workers. crypt throws a
+`DigestError` for them rather than reporting a wrong password, so they surface
+as a 500, not `INVALID_CREDENTIALS`. Those users need a password reset.
+
+For anything else, such as a pepper (an HMAC under a server-side key before
+hashing), supply the `hashPassword` and `verifyPassword` hooks. pact then
+uses them everywhere it hashes, including the dummy hash. They must be
+configured together, and the `password` option is refused alongside them.
+`verifyPassword` returns `false` for a wrong password and throws only for a
+failure that is not the user's.
 
 ## Content signing
 

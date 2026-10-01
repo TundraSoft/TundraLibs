@@ -35,6 +35,7 @@ immediate.
 | `issueApiKey` / `revokeApiKey`             | `saveApiKey` / `revokeApiKey`                                                                                                                                          |
 | `logoutAll`                                | `deleteSessions`                                                                                                                                                       |
 | `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
+| Custom password hashing (e.g. a pepper)    | `hashPassword` + `verifyPassword`, together — checked at construction ([Security](Pact-Security.md#password-hashing))                                                  |
 | Email verification                         | `getUser` + `saveResetToken` / `consumeResetToken` — the status change is yours (no status hook)                                                                       |
 | `verifyMFA`                                | `getUser`, plus `claimTotpStep` + `countMfaAttempt` + `resetMfaAttempts` when more than one process runs (otherwise tracked per process)                               |
 | OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on, and optionally `oauthIdentifier`)                                                                                |
@@ -118,7 +119,7 @@ shapes assume it:
 
 | Value                   | Treatment                                        | Why                                                              |
 | ----------------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
-| Password                | pbkdf2 hash (pact hashes it for you)             | Verification only ever compares hashes                           |
+| Password                | pbkdf2 hash (pact hashes it, or `hashPassword`)  | Verification only ever compares hashes                           |
 | API-key secret          | Encrypt at rest, app-side                        | APIKEY comparison and HMAC recomputation both need the raw bytes |
 | TOTP seed (`mfaSecret`) | Encrypt at rest, app-side                        | TOTP computation needs the raw seed                              |
 | Session / action tokens | Nothing — the stored `id` is the token's sha-256 | The raw token is shown once and never stored                     |
