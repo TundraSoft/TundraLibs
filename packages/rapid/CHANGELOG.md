@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.3...rapid-v0.8.4) (2026-10-01)
+
+
+### Documentation
+
+* **rapid:** password hashing for pact on Cloudflare Workers ([#754](https://github.com/TundraSoft/TundraLibs/issues/754)) ([d7dc91d](https://github.com/TundraSoft/TundraLibs/commit/d7dc91dacdc7602b19e9887dbfb709a5a14548c7))
+
 ## [0.8.3](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.2...rapid-v0.8.3) (2026-09-27)
 
 

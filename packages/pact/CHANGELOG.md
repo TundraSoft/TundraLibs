@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.12.1...pact-v0.13.0) (2026-10-01)
+
+
+### Features
+
+* **pact:** configurable password hashing via a password option or hooks ([#753](https://github.com/TundraSoft/TundraLibs/issues/753)) ([0e2e3cf](https://github.com/TundraSoft/TundraLibs/commit/0e2e3cf90cbb7a8a14b3c87aaf67ccfc51bb5cbf))
+
 ## [0.12.1](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.12.0...pact-v0.12.1) (2026-09-27)
 
 

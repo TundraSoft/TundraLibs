@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.4.1...crypt-v1.5.0) (2026-10-01)
+
+
+### Features
+
+* **crypt:** configurable PBKDF2 key derivation, deriveHKDFKey, and DigestError ([#752](https://github.com/TundraSoft/TundraLibs/issues/752)) ([670275b](https://github.com/TundraSoft/TundraLibs/commit/670275b5bda4cd9c53adafc32cb7938602cc96fd))
+
 ## [1.4.1](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.4.0...crypt-v1.4.1) (2026-09-18)
 
 
