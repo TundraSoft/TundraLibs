@@ -299,6 +299,17 @@ a 400 `RAPID_VALIDATION_FAILED` with `details.reason: 'ENCRYPTION_INVALID'`.
 
 ---
 
+### On Cloudflare Workers
+
+Workers refuses PBKDF2 above 100 000 iterations, and pact hashes passwords at
+600 000 by default, so `register`, `login` and password reset fail there. A
+Workers deployment passes `options: { password: { iterations: 100_000 } }` to
+`Pact.create`. For a different scheme, such as a pepper, pass the
+`hashPassword` / `verifyPassword` hooks. Hashes already stored at a higher
+count cannot be checked on Workers and need a password reset. See the
+Password hashing section of [`@tundralibs/pact`](https://jsr.io/@tundralibs/pact)'s
+Security guide (pact 0.13+).
+
 ## Norm + pact
 
 pact owns no storage — its hooks are just queries. For the full pattern
