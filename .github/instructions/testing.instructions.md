@@ -425,7 +425,7 @@ deno coverage coverage --include="fetch.ts"
 bun test --coverage packages/compat/fetch.test.ts
 
 # Node.js
-node --experimental-test-coverage --test packages/compat/fetch.test.ts
+node --enable-source-maps --import tsx --experimental-test-coverage --test packages/compat/fetch.test.ts
 ```
 
 ## Testing Cross-Runtime Code

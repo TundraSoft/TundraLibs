@@ -7,7 +7,7 @@
     "test:node": "node --import tsx --test 'packages/**/*.test.ts'",
     "test:coverage": "deno test --allow-all --parallel --coverage=./coverage && deno coverage ./coverage",
     "test:coverage:bun": "bun test --coverage packages/",
-    "test:coverage:node": "node --import tsx --test --experimental-test-coverage 'packages/**/*.test.ts'",
+    "test:coverage:node": "node --enable-source-maps --import tsx --test --experimental-test-coverage 'packages/**/*.test.ts'",
     "bench": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --all",
     "bench:deno": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --lanes=deno --all",
     "bench:bun": "deno run --allow-run --allow-read --allow-env --allow-write packages/compat/scripts/bench-all.ts --lanes=bun --all",

@@ -316,9 +316,11 @@ jobs:
         run: |
           # Coverage only on node-24 (identical code across node legs — one
           # LCOV is enough); node-22 still runs the full suite for compat.
+          # --enable-source-maps maps tsx output back to .ts lines; without
+          # it Node reports transpiled line numbers against the .ts files.
           if [ "${{ matrix.name }}" = 'node-24' ]; then
             mkdir -p lcov
-            node --import tsx --test --experimental-test-coverage \
+            node --enable-source-maps --import tsx --test --experimental-test-coverage \
               --test-reporter=spec --test-reporter-destination=stdout \
               --test-reporter=lcov --test-reporter-destination=lcov/node.lcov \
               'packages/**/*.test.ts'
