@@ -573,12 +573,16 @@ Mount where you like: \`app.get('/healthz', health({ check? }))\` (liveness;
 \`app.get('/readyz', ready({ check? }))\` (readiness: 503 \`draining\` once
 \`stop()\` began, 503 on a failing check), \`app.get('/metrics',
 metrics({ format: 'prometheus' | 'json' }))\` (503 until \`server.metrics\`),
-\`app.get('/openapi.json', openapi({ info, servers, securitySchemes, expose }))\`
-(built from the routes + decorators; \`expose\` defaults to DEVELOPMENT only;
-\`securitySchemes\` takes the exact OpenAPI shapes — http / apiKey / oauth2 /
-openIdConnect — validated at mount, and \`bearerAuth\` is always declared).
+\`app.get('/openapi.json', openapi({ info, servers, securitySchemes, expose,
+filter }))\` (built from the routes + decorators; \`expose\` defaults to
+DEVELOPMENT only; \`securitySchemes\` takes the exact OpenAPI shapes — http /
+apiKey / oauth2 / openIdConnect — validated at mount, and \`bearerAuth\` is
+always declared; \`filter: 'access'\` cuts the document PER VIEWER through the
+auth binding — each operation's \`x-access\` judged for the caller, public ones
+kept — or \`(operation, ctx) => boolean\`; pair with \`expose: 'ALL'\` for a
+signed-in production reference; never cut the document by hand).
 \`docs(app, { path, viewer, spec, tryIt, render, layout, guards, expose,
-info, servers, securitySchemes })\` mounts the API reference PAGE itself:
+filter, info, servers, securitySchemes })\` mounts the API reference PAGE itself:
 rendered server-side from rapid's templates inside the app's core/layout (no
 CDN; \`layout: false\` opts out), a credential box generated from the declared
 schemes plus an optional sign-in form (\`tryIt: { login: { path, fields } }\`),

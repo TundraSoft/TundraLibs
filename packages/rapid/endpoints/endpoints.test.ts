@@ -206,6 +206,79 @@ describe('rapid.endpoints', () => {
     await app.stop();
   });
 
+  it("filter: 'access' cuts the document per viewer through the auth binding; a function filter decides itself; the cached document is never modified", async () => {
+    const app = await make();
+    app.auth({
+      authenticate: (ctx) =>
+        ctx.type === 'HTTP' && ctx.headers.get('x-user') !== null
+          ? { role: ctx.headers.get('x-user') }
+          : undefined,
+      authorize: (ctx, access) =>
+        access === 'signed-in'
+          ? ctx.auth !== undefined
+          : (ctx.auth as { role?: string } | undefined)?.role === access,
+    });
+    app.get('/open', () => ({ content: {} }));
+    app.get('/mine', { access: 'signed-in' }, () => ({ content: {} }));
+    app.get('/admin', { access: 'admin' }, () => ({ content: {} }));
+    app.post('/admin', { access: 'admin' }, () => ({ content: {} }));
+    app.get('/openapi.json', openapi({ expose: 'ALL', filter: 'access' }));
+    app.get(
+      '/reads.json',
+      openapi({ expose: 'ALL', filter: (op) => op.method === 'GET' }),
+    );
+    const pathsFor = async (path: string, user?: string) => {
+      const doc = await (await app.fetch(
+        new Request(`http://app${path}`, {
+          headers: user === undefined ? {} : { 'x-user': user },
+        }),
+      )).json();
+      return Object.entries(doc.paths as Record<string, object>).map((
+        [p, item],
+      ) => `${p}:${Object.keys(item).sort().join(',')}`).sort();
+    };
+    // The admin first, so the full document sits in the cache before
+    // the anonymous cut is taken from it.
+    asserts.assertEquals(await pathsFor('/openapi.json', 'admin'), [
+      '/admin:get,post',
+      '/mine:get',
+      '/open:get',
+      '/openapi.json:get',
+      '/reads.json:get',
+    ]);
+    asserts.assertEquals(await pathsFor('/openapi.json'), [
+      '/open:get',
+      '/openapi.json:get',
+      '/reads.json:get',
+    ]);
+    asserts.assertEquals(await pathsFor('/openapi.json', 'member'), [
+      '/mine:get',
+      '/open:get',
+      '/openapi.json:get',
+      '/reads.json:get',
+    ]);
+    asserts.assertEquals(await pathsFor('/openapi.json', 'admin'), [
+      '/admin:get,post',
+      '/mine:get',
+      '/open:get',
+      '/openapi.json:get',
+      '/reads.json:get',
+    ]);
+    asserts.assertEquals(
+      (await pathsFor('/reads.json')).find((p) => p.startsWith('/admin')),
+      '/admin:get',
+    );
+    await app.stop();
+
+    const unbound = await make();
+    unbound.get('/x', () => ({ content: {} }));
+    unbound.get('/openapi.json', openapi({ filter: 'access' }));
+    const res = await unbound.fetch(new Request('http://app/openapi.json'));
+    asserts.assertEquals(res.status, 500);
+    asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
+    await unbound.stop();
+  });
+
   it('openapi(): ?version filters per version, plain serves all, cache-hit is byte-identical', async () => {
     const app = await make();
     app.route('GET', '/v1/thing', { version: 'v1' }, () => ({ content: {} }));
@@ -450,6 +523,30 @@ describe('rapid.endpoints.docs', () => {
     );
     asserts.assertEquals(again.status, 304);
     await again.body?.cancel();
+    await app.stop();
+  });
+
+  it("filter: 'access' on the page lists only what the viewer may call", async () => {
+    const app = await secured();
+    app.auth({
+      authenticate: (ctx) =>
+        ctx.type === 'HTTP' && ctx.headers.get('x-user') === 'admin'
+          ? { admin: true }
+          : undefined,
+      authorize: (ctx) => ctx.auth !== undefined,
+    });
+    app.get('/admin/stats', { access: 'admin' }, () => ({ content: {} }));
+    docs(app, { filter: 'access' });
+    const anonymous = (await page(app)).flat;
+    asserts.assertStringIncludes(anonymous, 'id="op-get-posts-id"');
+    asserts.assertEquals(anonymous.includes('op-get-admin-stats'), false);
+    const r = await app.fetch(
+      new Request('http://app/docs', { headers: { 'x-user': 'admin' } }),
+    );
+    asserts.assertStringIncludes(
+      (await r.text()).replace(/\s+/g, ' '),
+      'op-get-admin-stats',
+    );
     await app.stop();
   });
 

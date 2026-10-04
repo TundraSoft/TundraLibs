@@ -20,7 +20,11 @@ import type {
 } from '../types/mod.ts';
 import { type Html, html, htmlDocument } from '../ui/html.ts';
 import { assertSecuritySchemes } from '../utils/buildOpenApi.ts';
-import { assembleOpenApi, type OpenApiDocumentOptions } from './openapi.ts';
+import {
+  assembleOpenApi,
+  filterOpenApi,
+  type OpenApiDocumentOptions,
+} from './openapi.ts';
 import {
   type DocsDocument,
   DocsPage,
@@ -315,18 +319,20 @@ export function docs<S extends RapidContextState = RapidContextState>(
       },
     },
     ...(options.guards ?? []),
-    (ctx: HTTPContext<S>) => {
+    async (ctx: HTTPContext<S>) => {
       if (expose !== 'ALL' && expose !== ctx.app.mode) {
         throw new RapidError('RAPID_NOT_FOUND');
       }
       const version = new URL(ctx.request.url).searchParams.get('version') ??
         '';
-      const doc = assembleOpenApi(
-        ctx.app,
-        options,
-        cache,
-        version,
-      ) as unknown as DocsDocument;
+      const assembled = assembleOpenApi(ctx.app, options, cache, version);
+      // The viewer's cut, when asked: the page lists what THIS caller may call.
+      const doc =
+        (options.filter === undefined ? assembled : await filterOpenApi(
+          assembled,
+          ctx,
+          options.filter,
+        )) as unknown as DocsDocument;
       const ui = ctx.app.uiOptions;
       const layout = options.layout !== undefined ? options.layout : ui?.layout;
       const data: DocsPageData & { viewer: 'rapid' | DocsViewerConfig } = {
