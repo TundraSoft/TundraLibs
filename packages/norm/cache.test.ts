@@ -43,6 +43,8 @@ class MockExec implements Executor {
   public calls: ExecutorQuery[] = [];
   public selectRows: Row[] = [];
   public countValue = 5;
+  /** Rows an UPDATE/DELETE reports as affected. */
+  public writeCount = 1;
   public committed = 0;
   public rolledBack = 0;
 
@@ -90,7 +92,17 @@ class MockExec implements Executor {
       }
       case 'UPDATE':
       case 'DELETE':
-        return make([], 1);
+        // `writeCount` as reported — `undefined` stays undefined (an
+        // engine that cannot count), unlike make()'s length fallback.
+        return Promise.resolve(
+          {
+            type: q.type,
+            data: [] as R[],
+            count: this.writeCount,
+            time: 1,
+            isSlow: false,
+          } as unknown as EngineQueryResult<R>,
+        );
       default:
         return make([]);
     }
@@ -370,6 +382,29 @@ describe('norm read cache', () => {
 
         await users.find();
         asserts.assertEquals(exec.selects(), 2, `${w} should have pruned`);
+      });
+    }
+
+    for (const w of ['update', 'delete'] as const) {
+      it(`${w} matching no rows leaves the cache alone; an unreported count still prunes`, async () => {
+        const { db, exec } = setup({ Users }, { engine: 'MEMORY' });
+        const users = db.repo('Users');
+        exec.selectRows = [{ id: 1, name: 'a' }];
+        await users.find();
+        exec.writeCount = 0;
+        if (w === 'update') await users.update({ name: 'z' }, { '@id': 9 });
+        else await users.delete({ '@id': 9 });
+        await users.find();
+        asserts.assertEquals(
+          exec.selects(),
+          1,
+          `${w} of 0 rows must not prune`,
+        );
+        exec.writeCount = undefined as unknown as number; // an engine that cannot say
+        if (w === 'update') await users.update({ name: 'z' }, { '@id': 9 });
+        else await users.delete({ '@id': 9 });
+        await users.find();
+        asserts.assertEquals(exec.selects(), 2, 'unknown count prunes');
       });
     }
   });

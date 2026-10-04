@@ -3271,7 +3271,10 @@ export class Repo<
       res = await this._executor.execute<Row>(q);
     }
     this._emitCall('UPDATE', res.time, res.isSlow, id);
-    await this._invalidateCache();
+    // An update that matched nothing changed nothing: the cache stays, and
+    // a shared engine is spared a prune write (KV meters them per key).
+    // An engine that reports no count (`undefined`) still prunes.
+    if (res.count !== 0) await this._invalidateCache();
     return makeResult({
       id,
       op: 'UPDATE',
@@ -3391,8 +3394,9 @@ export class Repo<
     this._emitCall('DELETE', res.time, res.isSlow, id);
     // Cascading: an ON DELETE CASCADE FK removes rows in OTHER tables
     // too, so their caches need pruning even though norm never called
-    // their own delete().
-    await this._invalidateCache(true);
+    // their own delete(). A delete that matched nothing cascaded nothing
+    // either — no prune (same rule as update).
+    if (res.count !== 0) await this._invalidateCache(true);
     return makeResult({
       id,
       op: 'DELETE',
