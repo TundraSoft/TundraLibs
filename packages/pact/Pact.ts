@@ -47,6 +47,7 @@ import type {
 import { PACT_AUTH_FAILURE_CODES, PactError } from './errors/mod.ts';
 import { BoundPrincipal } from './BoundPrincipal.ts';
 import { MemoryMfaGuard } from './MemoryMfaGuard.ts';
+import { MemoryNonceStore } from './MemoryNonceStore.ts';
 import { deserializeGrants, serializeGrants } from './grants.ts';
 import { OAuthClient } from './oauth/mod.ts';
 import {
@@ -160,6 +161,8 @@ export class Pact<B extends PermissionBits, M extends string>
   private readonly __passkeys?: NormalizedPasskeyConfig;
   /** In-process replay and attempt tracking when the MFA hooks are absent. */
   private readonly __mfaGuard = new MemoryMfaGuard();
+  /** In-process nonce tracking when the `claimNonce` hook is absent. */
+  private readonly __nonces = new MemoryNonceStore();
   // Per-type TTLs in SECONDS (validated minutes × 60).
   private readonly __cacheTtl: ReadonlyMap<PactCacheType, number>;
 
@@ -1566,6 +1569,24 @@ export class Pact<B extends PermissionBits, M extends string>
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Record that the API key `keyId` used `nonce`, for `ttl` seconds, and
+   * return whether this is its first use — `false` means a replay. The
+   * HMAC middleware calls it for every signed request whose template
+   * signs `${x-nonce}`; call it yourself when you verify signed requests
+   * by hand. Goes through the `claimNonce` hook, or process memory
+   * without it (one process only).
+   */
+  public async claimNonce(
+    keyId: string,
+    nonce: string,
+    ttl: number,
+  ): Promise<boolean> {
+    return this._hooks.claimNonce === undefined
+      ? this.__nonces.claim(keyId, nonce, ttl)
+      : await this._hooks.claimNonce(keyId, nonce, ttl);
   }
 
   /**

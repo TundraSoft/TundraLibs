@@ -217,7 +217,7 @@ verifies that with the secret it holds. Response signing is on by default
 | `keyHeader`           | `x-key-id`    | The API key id                                                                                 |
 | `signatureHeader`     | `x-signature` | Hex HMAC, request and response                                                                 |
 | `timestampHeader`     | `x-timestamp` | Integer Unix seconds; missing, malformed, or outside `maxSkew` (300 s) → 401 `STALE_TIMESTAMP` |
-| `nonceHeader`         | `x-nonce`     | Optional client nonce, echoed on the response (a nonce store is on the roadmap)                |
+| `nonceHeader`         | `x-nonce`     | Client nonce, echoed on the response; single-use when the template signs it (below)            |
 
 Templates name RFC 9421 components inside `${…}`; anything between them is
 literal separator text. Keys are frozen — renaming a header does not rename
@@ -296,6 +296,16 @@ hmac: {
   maxSkew: 60,
 }
 ```
+
+A template that signs `${x-nonce}` makes every request single-use. Each one
+must carry a nonce of 1-128 characters (else 401 `INVALID_NONCE`), and a
+key that sends the same nonce twice inside the timestamp window gets 401
+`NONCE_REUSED`. The nonce is claimed only after the signature verifies, so a
+forged request cannot spend one. Pact remembers nonces in process memory by
+default, which protects one process; behind more than one replica, give it
+the `claimNonce` hook over a shared store (see
+[Hooks](../docs/Pact-Hooks.md)). An unsigned nonce is only echoed: whoever
+replays the request could rewrite it.
 
 ## Encrypted payloads (JWE)
 

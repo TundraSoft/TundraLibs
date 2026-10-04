@@ -1352,6 +1352,14 @@ describe('Pact key-bound seams', () => {
       'INVALID_CREDENTIALS',
     );
   });
+
+  it('should claim a nonce once per key until its ttl runs out', async () => {
+    asserts.assert(await pact.claimNonce('k1', 'n', 60));
+    asserts.assertFalse(await pact.claimNonce('k1', 'n', 60));
+    asserts.assert(await pact.claimNonce('k2', 'n', 60));
+    asserts.assert(await pact.claimNonce('k1', 'gone', 0));
+    asserts.assert(await pact.claimNonce('k1', 'gone', 60));
+  });
 });
 
 // =============================================================================

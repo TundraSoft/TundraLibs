@@ -45,6 +45,10 @@ const req = (
   ...extra,
 });
 
+/** The default request template with the nonce signed. */
+const NONCE_TEMPLATE =
+  '${@method}\n${@path}${@query}\n${x-timestamp}\n${x-nonce}\n${content-digest}';
+
 /** A request signed as a client would, over the default template. */
 async function signed(
   input: {
@@ -54,6 +58,9 @@ async function signed(
     body?: string | null;
     timestamp?: number;
     nonce?: string;
+    /** Sign over {@link NONCE_TEMPLATE} instead of the default. */
+    signNonce?: boolean;
+    secret?: string;
     headers?: Record<string, string>;
   } = {},
 ): Promise<PactMiddlewareRequest> {
@@ -62,13 +69,14 @@ async function signed(
   const query = input.query ?? '';
   const body = input.body === undefined ? '{"sku":"a1"}' : input.body;
   const timestamp = String(input.timestamp ?? Math.floor(Date.now() / 1000));
+  const nonceLine = input.signNonce === true ? `${input.nonce ?? ''}\n` : '';
   const payload =
-    `${method}\n${path}${query}\n${timestamp}\n${await contentDigest(
+    `${method}\n${path}${query}\n${timestamp}\n${nonceLine}${await contentDigest(
       body,
     )}`;
   const headers: Record<string, string> = {
     'x-key-id': 'k1',
-    'x-signature': await signHMAC(payload, 's1'),
+    'x-signature': await signHMAC(payload, input.secret ?? 's1'),
     'x-timestamp': timestamp,
     ...(input.nonce === undefined ? {} : { 'x-nonce': input.nonce }),
     ...input.headers,
@@ -271,6 +279,68 @@ describe('createPactMiddleware — HMAC', () => {
     const silent = await quiet.authenticate(await signed());
     asserts.assert(silent.ok && silent.auth?.via === 'HMAC');
     asserts.assertStrictEquals(silent.respond, undefined);
+  });
+
+  it('a signed nonce is single-use per key: missing or oversized is refused before the body is read, and a forged request cannot spend one', async () => {
+    const core = createPactMiddleware(pact, {
+      hmac: { template: NONCE_TEMPLATE },
+    });
+    const once = { nonce: 'n-1', signNonce: true };
+    const forged = await core.authenticate(
+      await signed({ ...once, secret: 'not-s1' }),
+    );
+    asserts.assert(!forged.ok);
+    asserts.assertEquals(forged.denial.body, { error: 'INVALID_CREDENTIALS' });
+    asserts.assert((await core.authenticate(await signed(once))).ok);
+    const replay = await core.authenticate(await signed(once));
+    asserts.assert(!replay.ok);
+    asserts.assertEquals(replay.denial.status, 401);
+    asserts.assertEquals(replay.denial.body, { error: 'NONCE_REUSED' });
+    for (const nonce of [undefined, 'n'.repeat(129)]) {
+      const request = await signed({ nonce, signNonce: true });
+      const verdict = await core.authenticate({
+        ...request,
+        body: () => Promise.reject(new Error('body read without a nonce')),
+      });
+      asserts.assert(!verdict.ok);
+      asserts.assertEquals(verdict.denial.body, { error: 'INVALID_NONCE' });
+    }
+    // Unsigned, a nonce is only echoed: a replay could rewrite it anyway.
+    const echoing = createPactMiddleware(pact, { hmac: {} });
+    const unsigned = { nonce: 'n-1' };
+    asserts.assert((await echoing.authenticate(await signed(unsigned))).ok);
+    asserts.assert((await echoing.authenticate(await signed(unsigned))).ok);
+  });
+
+  it('claims nonces through the claimNonce hook for the whole timestamp window', async () => {
+    const claims: [string, string, number][] = [];
+    const hooked = Pact.create({
+      bits: { READ: 1n },
+      modulePermissions: { Post: ['READ'] },
+      hooks: {
+        getApiKey: (id) =>
+          id === 'k1'
+            ? { id, status: 'ACTIVE', secret: 's1', grants: '{}' }
+            : null,
+        claimNonce: (keyId, nonce, ttl) => {
+          claims.push([keyId, nonce, ttl]);
+          return claims.length === 1;
+        },
+      },
+    });
+    const core = createPactMiddleware(hooked, {
+      hmac: { template: NONCE_TEMPLATE, maxSkew: 60 },
+    });
+    const first = await core.authenticate(
+      await signed({ nonce: 'a', signNonce: true }),
+    );
+    asserts.assert(first.ok);
+    const second = await core.authenticate(
+      await signed({ nonce: 'b', signNonce: true }),
+    );
+    asserts.assert(!second.ok);
+    asserts.assertEquals(second.denial.body, { error: 'NONCE_REUSED' });
+    asserts.assertEquals(claims, [['k1', 'a', 120], ['k1', 'b', 120]]);
   });
 
   it('honours a custom response template, header names, and algorithm', async () => {

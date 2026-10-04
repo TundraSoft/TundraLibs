@@ -102,7 +102,15 @@ export type PactMiddlewareOptions = {
     readonly signatureHeader?: string;
     /** Integer Unix seconds, request and response. @default 'x-timestamp' */
     readonly timestampHeader?: string;
-    /** Client nonce, echoed on the response. @default 'x-nonce' */
+    /**
+     * Client nonce, echoed on the response. When `template` signs
+     * `${x-nonce}`, every request must carry one (1-128 characters, else
+     * 401 `INVALID_NONCE`) and each key may use it once within the
+     * timestamp window (else 401 `NONCE_REUSED`) — see the `claimNonce`
+     * hook. An unsigned nonce is only echoed.
+     *
+     * @default 'x-nonce'
+     */
     readonly nonceHeader?: string;
     /**
      * What the client signs. Mandatory keys: `${@method}`, `${@path}`,

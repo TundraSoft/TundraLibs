@@ -35,6 +35,8 @@ const CHALLENGE_NAME = {
   HMAC: 'HMAC',
 } as const;
 const JOSE = 'application/jose';
+/** Longest nonce accepted: room for any random token, not for a payload. */
+const MAX_NONCE_LENGTH = 128;
 const DECODER = new TextDecoder();
 
 /** Build the `WWW-Authenticate` value: one challenge per scheme (RFC 7235). */
@@ -118,6 +120,7 @@ export function createPactMiddleware<
 ): PactMiddlewareCore<B, M> {
   const config = resolveOptions(options);
   const challenge = challengeFor(config, options);
+  const signsNonce = config.hmac.template.keys.includes('x-nonce');
   const denialHeaders = (status: number): Readonly<Record<string, string>> =>
     status === 401 && options.challenge !== false
       ? { 'www-authenticate': challenge }
@@ -246,6 +249,14 @@ export function createPactMiddleware<
       ) {
         return { ok: false, denial: deny(401, 'STALE_TIMESTAMP') };
       }
+      // A signed nonce makes each request single-use; an unsigned one
+      // could be rewritten by whoever replays it, so it is only echoed.
+      const nonce = carrier.kind === 'hmac' && signsNonce
+        ? req.header(config.hmac.nonceHeader) ?? ''
+        : null;
+      if (nonce !== null && (nonce === '' || nonce.length > MAX_NONCE_LENGTH)) {
+        return { ok: false, denial: deny(401, 'INVALID_NONCE') };
+      }
       const credential = carrier.kind === 'credential' ? carrier.credential : {
         scheme: 'HMAC' as const,
         keyId: carrier.keyId,
@@ -263,6 +274,14 @@ export function createPactMiddleware<
         return { ok: true, auth };
       }
       const keyId = credential.keyId;
+      // Claimed only once the signature holds, so a forged request cannot
+      // spend a nonce. The window covers every timestamp still accepted.
+      if (
+        nonce !== null &&
+        !(await pact.claimNonce(keyId, nonce, 2 * config.hmac.maxSkew))
+      ) {
+        return { ok: false, denial: deny(401, 'NONCE_REUSED') };
+      }
       const opened = await openPayload(keyId, req);
       if (opened !== undefined && !(opened instanceof Uint8Array)) {
         return { ok: false, denial: opened.denial };
