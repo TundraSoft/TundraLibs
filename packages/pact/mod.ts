@@ -20,6 +20,7 @@ export type {
   PactHooks,
   PactJweEncryption,
   PactLoginResult,
+  PactMfaAttempt,
   PactOAuthCallbackParams,
   PactOAuthProfile,
   PactOAuthProfileNormalizer,

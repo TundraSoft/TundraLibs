@@ -432,6 +432,37 @@ describe('Pact MFA hardening', () => {
     asserts.assertStringIncludes(locked.message, '15 minutes');
   });
 
+  it('attemptMFA returns the lockout instead of throwing, without checking the code', async () => {
+    const claims: number[] = [];
+    const { pact, seed, wrong } = await enrolled(
+      { maxAttempts: 2, window: 5 },
+      {
+        claimTotpStep: (_userId: string, step: number) => {
+          claims.push(step);
+          return true;
+        },
+      },
+    );
+    asserts.assertEquals(await pact.attemptMFA('m1', await wrong()), {
+      ok: false,
+      reason: 'INVALID_CODE',
+    });
+    await pact.attemptMFA('m1', await wrong());
+    asserts.assertEquals(
+      await pact.attemptMFA('m1', await generateTOTP(seed)),
+      { ok: false, reason: 'LOCKED', window: 5 },
+    );
+    asserts.assertEquals(claims, []);
+  });
+
+  it('attemptMFA reports a correct code as ok', async () => {
+    const { pact, seed } = await enrolled();
+    asserts.assertEquals(
+      await pact.attemptMFA('m1', await generateTOTP(seed)),
+      { ok: true },
+    );
+  });
+
   it('resets the attempt count on success', async () => {
     const { pact, seed, wrong } = await enrolled({ maxAttempts: 3 });
     await pact.verifyMFA('m1', await wrong());

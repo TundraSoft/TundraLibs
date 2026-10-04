@@ -105,7 +105,9 @@ works once:
   make a known password plus brute force practical. `options.mfa` allows
   `maxAttempts` (default 5) per `window` minutes (default 15). Past that,
   `verifyMFA` throws `MFA_LOCKED` even for a correct code, until the window
-  ends; map it to 429. A success resets the count. Counts go through the
+  ends; map it to 429. `attemptMFA` applies the same count but returns the
+  lockout as `{ ok: false, reason: 'LOCKED', window }`, so a sign-in flow
+  can answer it without a `try`. A success resets the count. Counts go through the
   `countMfaAttempt` / `resetMfaAttempts` hooks, or process memory without
   them.
 

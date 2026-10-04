@@ -14,6 +14,7 @@ export type { PactEvents } from './PactEvents.ts';
 export type { PactGrantKey } from './PactGrantKey.ts';
 export type { PactHooks } from './PactHooks.ts';
 export type { PactLoginResult } from './PactLoginResult.ts';
+export type { PactMfaAttempt } from './PactMfaAttempt.ts';
 export type { PactOAuthCallbackParams } from './PactOAuthCallbackParams.ts';
 export type { PactOAuthProfile } from './PactOAuthProfile.ts';
 export type { PactOAuthProfileNormalizer } from './PactOAuthProfileNormalizer.ts';

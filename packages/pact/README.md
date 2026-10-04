@@ -224,7 +224,8 @@ See [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware).
   counter-based clone detection; the minted session is an ordinary
   bearer. See [Passkeys](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Passkeys).
 - **TOTP as plain secondary verification** — `generateMFASecret()` /
-  `generateMFAAuthURL()` for enrollment, `verifyMFA()` to check; the app
+  `generateMFAAuthURL()` for enrollment, `verifyMFA()` or `attemptMFA()`
+  to check; the app
   decides when to demand the second step. Codes are single-use and
   attempts are limited (5 per 15 minutes by default). See
   [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security#totp).
