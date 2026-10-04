@@ -33,6 +33,9 @@ import type {
   PactOAuthTokens,
 } from '../types/mod.ts';
 
+/** A bare lowercase hostname, as `URL.hostname` renders one. */
+const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/;
+
 /** OIDC discovery-document cache lifetime — one hour. */
 const DISCOVERY_TTL_MS = 3_600_000;
 
@@ -54,6 +57,7 @@ const PROVIDER_CONFIG_SCHEMA = Guardian.object({
   redirectUri: Guardian.string().url(),
   scopes: Guardian.array(Guardian.string()).optional(),
   issuer: Guardian.string().url().optional(),
+  discoveryHosts: Guardian.array(Guardian.string()).optional(),
   tenant: Guardian.string().notEmpty().optional(),
   idToken: Guardian.string().optional(),
   autoProvision: Guardian.boolean().optional(),
@@ -119,7 +123,8 @@ function splitUrl(
  * construction.
  *
  * @throws {PactError} `INVALID_OPTION` for an unknown provider kind, a
- *   missing `OIDC` issuer, or a non-https issuer.
+ *   missing `OIDC` issuer, a non-https issuer, or `discoveryHosts` that
+ *   are not hostnames or are set on a kind other than `OIDC`.
  */
 function resolveAnchor(name: string, config: PactOAuthProviderConfig): string {
   try {
@@ -159,7 +164,21 @@ function resolveAnchor(name: string, config: PactOAuthProviderConfig): string {
         reason: 'the OIDC kind requires an https issuer',
       });
     }
+    for (const host of config.discoveryHosts ?? []) {
+      if (!HOSTNAME.test(host)) {
+        throw new PactError('INVALID_OPTION', {
+          option: `oauth.${name}.discoveryHosts`,
+          reason: `'${host}' is not a lowercase hostname`,
+        });
+      }
+    }
     return new URL(config.issuer).origin;
+  }
+  if (config.discoveryHosts !== undefined) {
+    throw new PactError('INVALID_OPTION', {
+      option: `oauth.${name}.discoveryHosts`,
+      reason: 'only the OIDC kind discovers its endpoints',
+    });
   }
   return new URL(preset.token.replace('{tenant}', config.tenant ?? 'common'))
     .origin;
@@ -372,19 +391,19 @@ export class OAuthClient extends RESTler {
         }
         this.__discoveredAt = Date.now();
         this.__discovered = {
-          authorization: this.__requireHttps(
+          authorization: this.__requireTrusted(
             discovered.authorization_endpoint,
             'authorization',
           ),
-          token: this.__requireHttps(discovered.token_endpoint, 'token'),
+          token: this.__requireTrusted(discovered.token_endpoint, 'token'),
           userinfo: discovered.userinfo_endpoint === undefined
             ? undefined
-            : this.__requireHttps(discovered.userinfo_endpoint, 'userinfo'),
+            : this.__requireTrusted(discovered.userinfo_endpoint, 'userinfo'),
           // https-enforced here too (symmetric with the other three) —
           // the verifier's own check only DEGRADES under 'PREFERRED'.
           jwks: discovered.jwks_uri === undefined
             ? undefined
-            : this.__requireHttps(discovered.jwks_uri, 'jwks'),
+            : this.__requireTrusted(discovered.jwks_uri, 'jwks'),
         };
       }
       return this.__discovered;
@@ -399,19 +418,34 @@ export class OAuthClient extends RESTler {
   }
 
   /**
-   * Reject a discovered endpoint that isn't `https`. The endpoints a
-   * discovery document DECLARES are attacker-influenceable data — and
-   * the token endpoint carries the code + client_secret while userinfo
-   * carries the bearer token.
+   * Reject a discovered endpoint that isn't `https`, or whose host is
+   * neither the issuer's host, a subdomain of it, nor listed in
+   * `discoveryHosts`. The endpoints a discovery document DECLARES are
+   * attacker-influenceable data: the user is sent to the authorization
+   * endpoint, the token endpoint carries the code + client_secret,
+   * userinfo the bearer token, and the JWKS decides which id_tokens
+   * verify.
    *
    * @throws {PactError} `OAUTH_EXCHANGE_FAILED` when `endpoint` is not
-   *   an `https://` URL.
+   *   an `https://` URL or sits on an untrusted host.
    */
-  private __requireHttps(endpoint: string, kind: string): string {
+  private __requireTrusted(endpoint: string, kind: string): string {
     if (!endpoint.startsWith('https://')) {
       throw new PactError('OAUTH_EXCHANGE_FAILED', {
         provider: this.__name,
         reason: `discovery returned a non-https ${kind} endpoint`,
+      });
+    }
+    const host = new URL(endpoint).hostname;
+    const issuer = new URL(this.__config.issuer!).hostname;
+    if (
+      host !== issuer && !host.endsWith(`.${issuer}`) &&
+      !(this.__config.discoveryHosts ?? []).includes(host)
+    ) {
+      throw new PactError('OAUTH_EXCHANGE_FAILED', {
+        provider: this.__name,
+        reason:
+          `discovery returned a ${kind} endpoint on '${host}', outside the issuer's host (list it in discoveryHosts if the provider serves it there)`,
       });
     }
     return endpoint;

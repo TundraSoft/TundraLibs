@@ -9,6 +9,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Pact } from '../mod.ts';
 import { PactError } from '../errors/mod.ts';
+import { OAuthClient } from './mod.ts';
 import type { PactOAuthProfile, PactStoredUser } from '../types/mod.ts';
 
 const byId = new Map<string, PactStoredUser>();
@@ -231,6 +232,19 @@ describe('provider config validation', () => {
     const cases = [
       { kind: 'GOOGLE', clientId: '', redirectUri: 'not-a-url' },
       { kind: 'OIDC', clientId: 'x', redirectUri: 'https://a/cb' }, // no issuer
+      {
+        kind: 'OIDC',
+        clientId: 'x',
+        redirectUri: 'https://a/cb',
+        issuer: 'https://idp.example',
+        discoveryHosts: ['IdP.Other.example'],
+      },
+      {
+        kind: 'GITHUB',
+        clientId: 'x',
+        redirectUri: 'https://a/cb',
+        discoveryHosts: ['github.com'],
+      },
     ] as const;
     for (const bad of cases) {
       const error = asserts.assertThrows(
@@ -416,5 +430,67 @@ describe('oauthLogin per-tenant provisioning', () => {
   it('rejects an empty identifier from the hook', async () => {
     const { login } = tenantPact(() => '');
     await expectCode(login('acme:gw'), 'INVALID_OPTION');
+  });
+});
+
+describe('OIDC discovery host guard', () => {
+  /** An OIDC client whose discovery document declares `endpoints`. */
+  function discovering(
+    endpoints: Record<string, string>,
+    discoveryHosts?: string[],
+  ): OAuthClient {
+    const client = new OAuthClient('sso', {
+      kind: 'OIDC',
+      clientId: 'cid',
+      redirectUri: 'https://app.example.dev/cb',
+      issuer: 'https://login.acme.example',
+      ...(discoveryHosts === undefined ? {} : { discoveryHosts }),
+    });
+    // deno-lint-ignore no-explicit-any
+    (client as any)._makeRequest = () => ({ status: 200, body: endpoints });
+    return client;
+  }
+  const SAME_HOST = {
+    authorization_endpoint: 'https://login.acme.example/authorize',
+    token_endpoint: 'https://auth.login.acme.example/token',
+    jwks_uri: 'https://login.acme.example/keys',
+  };
+
+  it('accepts endpoints on the issuer host or a subdomain of it', async () => {
+    const { url } = await discovering(SAME_HOST).authorizationUrl();
+    asserts.assert(url.startsWith('https://login.acme.example/authorize?'));
+  });
+
+  it('refuses an authorization, token, userinfo or JWKS endpoint on another host', async () => {
+    for (
+      const [field, kind] of [
+        ['authorization_endpoint', 'authorization'],
+        ['token_endpoint', 'token'],
+        ['userinfo_endpoint', 'userinfo'],
+        ['jwks_uri', 'jwks'],
+      ]
+    ) {
+      const client = discovering({
+        ...SAME_HOST,
+        [field!]: 'https://evillogin.acme.example/x',
+      });
+      const error = await asserts.assertRejects(
+        () => client.authorizationUrl(),
+        PactError,
+      );
+      asserts.assertStrictEquals(error.code, 'OAUTH_EXCHANGE_FAILED');
+      asserts.assertStringIncludes(
+        error.message,
+        `${kind} endpoint on 'evillogin.acme.example'`,
+      );
+    }
+  });
+
+  it('accepts a host listed in discoveryHosts', async () => {
+    const client = discovering(
+      { ...SAME_HOST, token_endpoint: 'https://tokens.acme-cdn.example/t' },
+      ['tokens.acme-cdn.example'],
+    );
+    asserts.assert((await client.authorizationUrl()).url !== '');
   });
 });

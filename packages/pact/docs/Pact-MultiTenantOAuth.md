@@ -65,6 +65,9 @@ mid-flight when you replace the provider it started with.
 Both `updateOAuth` and `removeOAuth`, like the constructor's own `oauth`
 loop, do no network I/O — even the `OIDC` kind only resolves its
 discovery document lazily, on first `oauthRedirect`/`oauthLogin` call.
+That is also when a tenant's discovery document pointing an endpoint off
+its issuer's host is refused (see [OAuth](Pact-OAuth.md)); validate any
+`discoveryHosts` a tenant admin supplies as strictly as the issuer itself.
 Registering a thousand tenant IdPs costs nothing until a user from one of
 them actually tries to log in.
 
