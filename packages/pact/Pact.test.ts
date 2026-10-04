@@ -889,6 +889,73 @@ describe('Pact login and sessions', () => {
     asserts.assertStrictEquals(await pact.verifyEmail(expired!.token), null);
   });
 
+  it('should verify an email by a six-digit code: one live code per user, single use, five wrong guesses', async () => {
+    asserts.assertStrictEquals(
+      await pact.requestEmailVerification('ghost@example.dev', {
+        kind: 'CODE',
+      }),
+      null,
+    );
+    const first = await pact.requestEmailVerification('ada@example.dev', {
+      kind: 'CODE',
+      ttl: 10,
+    });
+    asserts.assertMatch(first!.token, /^\d{6}$/);
+    const ms = first!.expiresAt.getTime() - Date.now();
+    asserts.assert(ms > 9 * 60_000 && ms <= 10 * 60_000);
+    // A new code replaces the old one.
+    const code = (await pact.requestEmailVerification('ada@example.dev', {
+      kind: 'CODE',
+    }))!.token;
+    if (first!.token !== code) {
+      asserts.assertStrictEquals(
+        await pact.verifyEmailCode('ada@example.dev', first!.token),
+        null,
+      );
+    }
+    asserts.assertStrictEquals(
+      await pact.verifyEmailCode('ada@example.dev', code),
+      'lu1',
+    );
+    asserts.assertStrictEquals(
+      await pact.verifyEmailCode('ada@example.dev', code),
+      null,
+      'a code is single-use',
+    );
+
+    const fresh = (await pact.requestEmailVerification('ada@example.dev', {
+      kind: 'CODE',
+    }))!.token;
+    const miss = fresh === '000000' ? '000001' : '000000';
+    for (let i = 0; i < 4; i++) {
+      asserts.assertStrictEquals(
+        await pact.verifyEmailCode('ada@example.dev', miss),
+        null,
+      );
+    }
+    asserts.assertStrictEquals(
+      await pact.verifyEmailCode('ada@example.dev', fresh),
+      'lu1',
+      'four wrong guesses leave the code live',
+    );
+    const burned = (await pact.requestEmailVerification('ada@example.dev', {
+      kind: 'CODE',
+    }))!.token;
+    const off = burned === '000000' ? '000001' : '000000';
+    for (let i = 0; i < 5; i++) {
+      await pact.verifyEmailCode('ada@example.dev', off);
+    }
+    asserts.assertStrictEquals(
+      await pact.verifyEmailCode('ada@example.dev', burned),
+      null,
+      'the fifth wrong guess burns the code',
+    );
+    await expectCode(
+      pact.requestEmailVerification('ada@example.dev', { ttl: 0 }),
+      'INVALID_OPTION',
+    );
+  });
+
   it('should use the session cache as the store in cache-only mode', async () => {
     const cacheOnly = Pact.create({
       ...BASE,

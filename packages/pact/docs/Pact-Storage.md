@@ -78,7 +78,9 @@ CREATE TABLE reset_tokens (                 -- password reset AND email verifica
   id             TEXT PRIMARY KEY,          -- sha-256 of the token
   user_id        TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   purpose        TEXT NOT NULL,             -- 'PASSWORD_RESET' | 'EMAIL_VERIFICATION'
-  expires_at     TIMESTAMP NOT NULL
+  expires_at     TIMESTAMP NOT NULL,
+  code           TEXT,                      -- verification codes only: sha-256 of the code
+  attempts       INTEGER                    -- verification codes only: wrong guesses so far
 );
 ```
 
@@ -152,6 +154,8 @@ both directions. `created_at` columns are app-only; pact never reads them.
 | `user_id`    | TEXT      | NOT NULL | `.userId` · `string`                 | FK to the user the token was minted for                        |
 | `purpose`    | TEXT      | NOT NULL | `.purpose` · `PactTokenPurpose`      | `PASSWORD_RESET` or `EMAIL_VERIFICATION`; returned verbatim    |
 | `expires_at` | TIMESTAMP | NOT NULL | `.expiresAt` · `Date`                | Absolute window end; `consumeResetToken` deletes on first read |
+| `code`       | TEXT      | NULL     | `.code?` · `string`                  | Code-kind email verification only; returned verbatim           |
+| `attempts`   | INTEGER   | NULL     | `.attempts?` · `number`              | Code-kind email verification only; returned verbatim           |
 
 ## Hook implementation sketch
 

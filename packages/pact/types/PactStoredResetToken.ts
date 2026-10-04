@@ -18,4 +18,12 @@ export type PactStoredResetToken = {
   readonly purpose: PactTokenPurpose;
   /** Absolute expiry of the window. */
   readonly expiresAt: Date;
+  /**
+   * Code-kind email verification only: sha-256 of the six-digit code. The
+   * record's `id` is then derived from the user, not the code, so a new
+   * code replaces the old one.
+   */
+  readonly code?: string;
+  /** Code-kind only: wrong guesses spent on this code so far. */
+  readonly attempts?: number;
 };
