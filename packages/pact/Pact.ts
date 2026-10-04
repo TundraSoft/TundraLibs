@@ -719,21 +719,35 @@ export class Pact<B extends PermissionBits, M extends string>
    * `verifyMFA`), magic links, and impersonation — gate it accordingly;
    * pact asks no questions here. `metadata` is stored on the session
    * record; `method` labels the emitted `login` event (default
-   * `'DIRECT'`).
+   * `'DIRECT'`). `ttl` overrides `session.ttl` for this session, in
+   * minutes — a short session for a shared device, a long one for
+   * "remember me". Under the JWT strategy it sets the refresh family's
+   * lifetime in place of `session.refresh.ttl`; access tokens keep
+   * `session.ttl`.
    *
    * @throws {PactError} `INVALID_CREDENTIALS` when `userId` does not
    *   resolve to an active USER principal (API keys hold no sessions);
-   *   `MISSING_HOOK` when no session store exists.
+   *   `INVALID_OPTION` for a `ttl` that is not a whole number of
+   *   minutes up to 30 days; `MISSING_HOOK` when no session store
+   *   exists.
    */
   public async createSession(userId: string, options?: {
     metadata?: Readonly<Record<string, unknown>>;
     method?: string;
+    ttl?: number;
   }): Promise<PactLoginResult<M>> {
+    if (options?.ttl !== undefined) {
+      this.__validateTtlGroup('createSession', { ttl: options.ttl });
+    }
     const principal = await this._resolvePrincipal(userId);
     if (principal === null || principal.kind !== 'USER') {
       throw new PactError('INVALID_CREDENTIALS');
     }
-    const session = await this.__mintSession(userId, options?.metadata);
+    const session = await this.__mintSession(
+      userId,
+      options?.metadata,
+      options?.ttl,
+    );
     const bound = this.__bind(principal);
     this._emit('login', bound, options?.method ?? 'DIRECT');
     return { principal: bound, session };
@@ -1442,19 +1456,38 @@ export class Pact<B extends PermissionBits, M extends string>
   /**
    * Verify a passkey assertion and mint a session for the credential's
    * owner (through {@link createSession}; the `login` event fires with
-   * method `'PASSKEY'`). Every verification failure — unknown
-   * credential, challenge/origin mismatch, bad signature, suspected
-   * clone — collapses into the same `INVALID_CREDENTIALS`; a counter
-   * regression additionally emits `passkeyCloneSuspected` server-side.
+   * method `'PASSKEY'`). Failures are {@link verifyPasskeyLogin}'s.
    *
-   * @throws {PactError} `INVALID_CREDENTIALS` as above (a 401);
-   *   `INVALID_OPTION` when passkeys are not configured;
-   *   `MISSING_HOOK` when no session store exists.
+   * @throws {PactError} `INVALID_CREDENTIALS` as in
+   *   {@link verifyPasskeyLogin} (a 401); `INVALID_OPTION` when passkeys
+   *   are not configured; `MISSING_HOOK` when no session store exists.
    */
   public async finishPasskeyLogin(
     response: PactPasskeyAssertionResponse,
     expected: { challenge: string },
   ): Promise<PactLoginResult<M>> {
+    const principal = await this.verifyPasskeyLogin(response, expected);
+    return await this.createSession(principal.id, { method: 'PASSKEY' });
+  }
+
+  /**
+   * The identity half of {@link finishPasskeyLogin}: verify the
+   * assertion and return the credential owner's bound principal WITHOUT
+   * minting a session — for a flow that mints its own
+   * ({@link createSession} with metadata or a `ttl`) or uses the
+   * passkey as a step-up. Every verification failure — unknown
+   * credential, challenge/origin mismatch, bad signature, suspected
+   * clone, an owner who can no longer sign in — collapses into the same
+   * `INVALID_CREDENTIALS` and emits `loginFailed`; a counter regression
+   * additionally emits `passkeyCloneSuspected` server-side.
+   *
+   * @throws {PactError} `INVALID_CREDENTIALS` as above (a 401);
+   *   `INVALID_OPTION` when passkeys are not configured.
+   */
+  public async verifyPasskeyLogin(
+    response: PactPasskeyAssertionResponse,
+    expected: { challenge: string },
+  ): Promise<PactBoundPrincipal<M, B>> {
     const cfg = this.__requirePasskeys();
     // Credential ids are at most 1023 bytes (1364 base64url chars) —
     // anything longer is junk and must not reach store hooks or event
@@ -1486,7 +1519,11 @@ export class Pact<B extends PermissionBits, M extends string>
       if (verdict.signCount > passkey.signCount) {
         await this._hooks.updatePasskeyCounter!(passkey.id, verdict.signCount);
       }
-      return await this.createSession(passkey.userId, { method: 'PASSKEY' });
+      const principal = await this._resolvePrincipal(passkey.userId);
+      if (principal === null || principal.kind !== 'USER') {
+        throw new PactError('INVALID_CREDENTIALS');
+      }
+      return this.__bind(principal);
     } catch (error) {
       if (
         error instanceof PactError && PACT_AUTH_FAILURE_CODES.has(error.code)
@@ -2121,10 +2158,11 @@ export class Pact<B extends PermissionBits, M extends string>
   private async __mintSession(
     userId: string,
     metadata?: Readonly<Record<string, unknown>>,
+    lifetime?: number,
   ): Promise<{ token: string; expiresAt: Date; refreshToken?: string }> {
     const cfg = this._getOption('session');
     if (cfg?.strategy === 'JWT') {
-      const familyTtl = cfg.refresh?.ttl ?? 10_080;
+      const familyTtl = lifetime ?? cfg.refresh?.ttl ?? 10_080;
       const sid = generateHexSecret(16);
       await this.__storeSession({
         id: sid,
@@ -2136,7 +2174,7 @@ export class Pact<B extends PermissionBits, M extends string>
       });
       return await this.__issueJwtPair(userId, sid, 0);
     }
-    const ttl = cfg?.ttl ?? 480;
+    const ttl = lifetime ?? cfg?.ttl ?? 480;
     const expiresAt = new Date(Date.now() + ttl * 60_000);
     const token = this.generateSessionToken();
     await this.__storeSession({

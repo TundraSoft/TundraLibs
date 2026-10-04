@@ -84,8 +84,13 @@ const result = await pact.createSession(principal.id, { method: 'MFA' });
 and reports whether the user carries an MFA secret. `createSession` mints
 for an active user id with no credential proof — the caller vouches, which
 is precisely what magic links and impersonation need; gate it accordingly.
-It also accepts session `metadata` (stored on the record) and a `method`
-label for the `login` event.
+It also accepts session `metadata` (stored on the record), a `method`
+label for the `login` event, and a `ttl` in minutes that overrides
+`session.ttl` for that one session, for a shared device or "remember me".
+Under the JWT strategy the `ttl` sets the refresh family's lifetime; access
+tokens keep `session.ttl`. Passkeys have the same split:
+`verifyPasskeyLogin` returns the owner's principal without a session, and
+`finishPasskeyLogin` is it plus `createSession`.
 
 ## Logout and revocation
 

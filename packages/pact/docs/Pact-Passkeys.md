@@ -95,6 +95,10 @@ const anonymous = await pact.beginPasskeyLogin();
 // Finish mints a session through the standard pipeline — the result is
 // a PactLoginResult, the `login` event fires with method 'PASSKEY'.
 const result = await pact.finishPasskeyLogin(responseJson, { challenge });
+
+// Or verify only, and mint your own session (device metadata, a ttl).
+const principal = await pact.verifyPasskeyLogin(responseJson, { challenge });
+await pact.createSession(principal.id, { method: 'PASSKEY', ttl: 60 });
 ```
 
 An unknown identifier is indistinguishable from a user with no
@@ -110,13 +114,13 @@ and origin; `rpIdHash` against the configured `rpId`; user presence, and
 user verification when `'REQUIRED'`; the assertion signature against the
 stored public key (ES256 and RS256).
 
-| Path                                  | Failure                                                                                                                                        |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `finishPasskeyLogin`                  | `INVALID_CREDENTIALS` — collapsed: unknown credential, origin or challenge mismatch, bad signature, and suspected clones are identical outward |
-| `finishPasskeyRegistration`           | `PASSKEY_REGISTRATION_FAILED` with a diagnostic `reason`                                                                                       |
-| Ceremonies without `options.passkeys` | `INVALID_OPTION`                                                                                                                               |
-| Missing passkey hooks                 | `MISSING_HOOK`, thrown at construction (the five hooks above)                                                                                  |
-| No session store at login             | `MISSING_HOOK` from `finishPasskeyLogin` — a session store is a login-time need, not construction-checked                                      |
+| Path                                        | Failure                                                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `finishPasskeyLogin` / `verifyPasskeyLogin` | `INVALID_CREDENTIALS` — collapsed: unknown credential, origin or challenge mismatch, bad signature, and suspected clones are identical outward |
+| `finishPasskeyRegistration`                 | `PASSKEY_REGISTRATION_FAILED` with a diagnostic `reason`                                                                                       |
+| Ceremonies without `options.passkeys`       | `INVALID_OPTION`                                                                                                                               |
+| Missing passkey hooks                       | `MISSING_HOOK`, thrown at construction (the five hooks above)                                                                                  |
+| No session store at login                   | `MISSING_HOOK` from `finishPasskeyLogin` — a session store is a login-time need, not construction-checked                                      |
 
 ## Clone detection
 

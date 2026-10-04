@@ -1000,6 +1000,16 @@ describe('Pact credential seam', () => {
     asserts.assertEquals(login?.detail, ['ada', 'MAGIC_LINK']);
   });
 
+  it('should honour a per-session ttl and refuse a malformed one', async () => {
+    const before = Date.now();
+    const short = await pact.createSession('ada', { ttl: 5 });
+    const ms = short.session.expiresAt.getTime() - before;
+    asserts.assert(ms >= 5 * 60_000 && ms < 6 * 60_000, String(ms));
+    for (const ttl of [0, 1.5, 43_201]) {
+      await expectCode(pact.createSession('ada', { ttl }), 'INVALID_OPTION');
+    }
+  });
+
   it('should refuse unknown ids, API keys, and inactive users', async () => {
     await expectCode(pact.createSession('nobody'), 'INVALID_CREDENTIALS');
     await expectCode(pact.createSession('k1'), 'INVALID_CREDENTIALS');
@@ -1213,6 +1223,16 @@ describe('Pact JWT and refresh', () => {
       'INVALID_CREDENTIALS',
     );
     await expectCode(pact.refresh(result.session.token), 'INVALID_CREDENTIALS');
+  });
+
+  it('a per-session ttl sets the refresh family lifetime, not the access token', async () => {
+    const before = Date.now();
+    const result = await pact.createSession('rf1', { ttl: 600 });
+    const family = [...store.sessions.values()].at(-1)!;
+    const familyMs = family.expiresAt.getTime() - before;
+    asserts.assert(familyMs >= 600 * 60_000 && familyMs < 601 * 60_000);
+    const accessMs = result.session.expiresAt.getTime() - before;
+    asserts.assert(accessMs >= 60 * 60_000 && accessMs < 61 * 60_000);
   });
 
   it('should rotate on refresh, absorb races in grace, kill the family on reuse', async () => {
@@ -1603,6 +1623,46 @@ describe('Pact passkeys', () => {
       counters.some(([id, n]) => id === authenticator.credentialId && n === 1),
       'updatePasskeyCounter must record the advance',
     );
+  });
+
+  it('should verify a passkey without minting a session, and refuse an owner who can no longer sign in', async () => {
+    events.length = 0;
+    const authenticator = await createAuthenticator(RP_ID);
+    const begin = await pact.beginPasskeyRegistration('ada');
+    await pact.finishPasskeyRegistration(
+      'ada',
+      await authenticator.registrationResponse({
+        challenge: begin.challenge,
+        origin: ORIGIN,
+      }),
+      { challenge: begin.challenge },
+    );
+    const assertion = async (signCount: number) => {
+      const login = await pact.beginPasskeyLogin();
+      return [
+        await authenticator.assertionResponse({
+          challenge: login.challenge,
+          origin: ORIGIN,
+          signCount,
+          userHandle: 'ada',
+        }),
+        { challenge: login.challenge },
+      ] as const;
+    };
+    const principal = await pact.verifyPasskeyLogin(...await assertion(1));
+    asserts.assertStrictEquals(principal.id, 'ada');
+    asserts.assert(await principal.hasPermission('Post', 'READ'));
+    asserts.assertEquals(events, []);
+    store.byId.set('ada', { ...store.byId.get('ada')!, status: 'LOCKED' });
+    try {
+      await expectCode(
+        pact.verifyPasskeyLogin(...await assertion(2)),
+        'INVALID_CREDENTIALS',
+      );
+    } finally {
+      store.byId.set('ada', { ...store.byId.get('ada')!, status: 'ACTIVE' });
+    }
+    asserts.assertStrictEquals(events.at(-1)?.event, 'loginFailed');
   });
 
   it('should support usernameless login via the discoverable path', async () => {
