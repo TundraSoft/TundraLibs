@@ -51,4 +51,12 @@ export type RapidRouteOptions = {
    * out of the module tier entirely (straight into the core).
    */
   layout?: RapidTemplate<{ body: Html; title?: string }> | false;
+  /**
+   * Who may call this route, in the app's auth binding's grammar — rapid
+   * passes the string as written to the binding's `authorize`, on the HTTP
+   * request and on every other path to the same method. Absent: public,
+   * no check runs. A declared `access` with no `app.auth()` binding fails
+   * the boot (RAPID_AUTH_UNBOUND).
+   */
+  access?: string;
 };

@@ -268,9 +268,9 @@ describe('rapid.utils.mountModule', () => {
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
     });
-    app.use((ctx, next) => {
-      ctx.setAuth({ role: 'admin' });
-      return next();
+    app.auth({
+      authenticate: () => ({ role: 'admin' }),
+      authorize: () => true,
     });
     await app.modules({ modules: [{ Orders, Shop }] });
     const res = await app.fetch(

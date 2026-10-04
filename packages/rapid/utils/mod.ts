@@ -44,6 +44,12 @@ export {
 } from './staticFiles.ts';
 export { validated } from './validated.ts';
 export {
+  accessGuard,
+  type AccessHost,
+  authPrelude,
+  enforceAccess,
+} from './access.ts';
+export {
   hasDecorations,
   type ModuleMountTarget,
   mountModule,

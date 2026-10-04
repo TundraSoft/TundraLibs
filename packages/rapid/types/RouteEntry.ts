@@ -39,4 +39,6 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
   uiOnly?: boolean;
   /** Serve on the `api` surface only — absent from the `ui` route table. */
   apiOnly?: boolean;
+  /** The declared `access` string, judged by the auth binding before the route's own middleware. */
+  access?: string;
 };

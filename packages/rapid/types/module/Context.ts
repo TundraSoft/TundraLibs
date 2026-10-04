@@ -9,6 +9,7 @@
 
 import type { Slogger } from '@tundralibs/slogger';
 import type { ConfigType } from '@tundralibs/utils';
+import type { RapidAuthBinding } from '../AuthBinding.ts';
 
 /** The host-provided runtime context. */
 export type RapidModuleContext = {
@@ -22,4 +23,12 @@ export type RapidModuleContext = {
    * @default 'PRODUCTION'
    */
   mode?: 'DEVELOPMENT' | 'PRODUCTION';
+  /**
+   * The auth binding that judges `access` strings on `invoke()`. An app
+   * passes a RESOLVER (`() => app.authBinding`) so `app.auth()` may be
+   * called before or after `app.modules()`; a standalone runtime (tests,
+   * scripts) passes the binding itself. Absent on a standalone runtime
+   * whose modules declare `access` → the boot fails (RAPID_AUTH_UNBOUND).
+   */
+  auth?: RapidAuthBinding | (() => RapidAuthBinding | undefined);
 };

@@ -27,6 +27,20 @@ export const RAPID_ERROR_CODES = {
   RAPID_UNAUTHENTICATED: { status: 401, message: 'Authentication required' },
   /** Valid principal, insufficient grants (distinct from 401 by design). */
   RAPID_ACCESS_DENIED: { status: 403, message: 'Access denied' },
+  /**
+   * An action declares `access` but no `app.auth()` binding exists to
+   * judge it — thrown loudly at boot, never at request time.
+   */
+  RAPID_AUTH_UNBOUND: { status: 500, message: 'Invalid configuration' },
+  /**
+   * The binding's `authenticate` failed (an infrastructure error, not a
+   * refused credential) on an action that declares `access`.
+   */
+  RAPID_AUTH_UNAVAILABLE: {
+    status: 503,
+    message: 'Authentication unavailable',
+    specific: true,
+  },
   /** CSRF token missing, mismatched, or unsigned on a state-changing request. */
   RAPID_CSRF_INVALID: { status: 403, message: 'CSRF token invalid' },
   /** No route/handler matched. */

@@ -54,12 +54,13 @@ import { pactAuth } from '@tundralibs/rapid/middlewares/pact';
 import type { Pact } from '@tundralibs/pact'; // also: deno add @tundralibs/pact
 
 declare const pact: Pact<{ READ: 1n }, 'Admin'>;
-const { authenticate, authorize } = pactAuth(pact);
+const { binding, authorize } = pactAuth(pact);
 
 const app = await Application.initialize({
   name: 'api',
   secret: 'at-least-thirty-two-characters-long!',
 });
+app.auth(binding); // identifies first: ctx.auth is set before any app.use()
 
 app.use(
   secureHeaders(), // stamp first — survives every error override
@@ -70,7 +71,6 @@ app.use(
   etag(),
   csrf(), // outside session: re-binds its token on the rotating response
   session(),
-  authenticate, // fills ctx.auth for everything below
   idempotency({
     scope: (ctx) =>
       (ctx.auth as { principal: { id: string } } | undefined)?.principal.id,
@@ -132,7 +132,7 @@ middleware never called `next()` is a distinct, logged outcome
   and return without `next()`. The transports treat the response like a
   handler's.
 - **Enrich before `next()`**: headers (`ctx.setHeader`), cookies,
-  `ctx.state`, `ctx.setAuth()`. A header set before `next()` survives an
+  `ctx.state`. A header set before `next()` survives an
   error inside the chain — the error override replaces the body, not the
   accumulated headers. That is why `secureHeaders` and `cors` stamp first.
 - **Post-process after `await next()`**: read `ctx.response`, `ctx.status`
@@ -529,8 +529,8 @@ a fence.
 
 ## pact (`@tundralibs/rapid/middlewares/pact`)
 
-`pactAuth(pact, options) → { authenticate, authorize, login, logout, refresh,
-me }` — rapid's adapter over pact's neutral middleware core plus the session
+`pactAuth(pact, options) → { binding, authorize, login, logout, refresh,
+me }` — the `app.auth()` binding over pact's neutral middleware core, a per-route guard, and the session
 handlers over the instance. Options are pact's `PactMiddlewareOptions`
 (carriers per scheme, `hmac`, `encryption`, `challenge`, `realm`) plus
 `bearer.cookie`, `optional` defaulting to `true`, and `session` (`fields`,

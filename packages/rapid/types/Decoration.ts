@@ -71,6 +71,8 @@ export type RapidDecoration =
     layout?: RapidRouteTemplate['layout'];
     /** Route-scoped middleware, run after the owning module's, before the handler. */
     middleware?: readonly RapidHTTPMiddleware[];
+    /** The `access` string the route declares (see `RapidRouteOptions.access`). */
+    access?: string;
   }
   | {
     kind: 'SOCKET';
@@ -80,6 +82,8 @@ export type RapidDecoration =
     methodName: string;
     /** Command-scoped middleware, run after the owning module's, before the handler. */
     middleware?: readonly RapidSOCKETMiddleware[];
+    /** The `access` string the command declares. */
+    access?: string;
   }
   | {
     kind: 'JOB';
@@ -91,4 +95,6 @@ export type RapidDecoration =
     args?: Readonly<Record<string, unknown>>;
     binds: readonly RapidBinder[];
     methodName: string;
+    /** The `access` string the job declares. */
+    access?: string;
   };

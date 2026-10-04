@@ -45,14 +45,15 @@ describe('rapid.context.Context (base)', () => {
     asserts.assertEquals(adopted.requestId, 'fixed-1');
   });
 
-  it('setAuth writes the bag once; a second call throws RAPID_CONFIG', async () => {
+  it('the auth bag is written once (the binding path, _setAuth); a second write throws RAPID_CONFIG; there is no public setter', async () => {
     const app = await makeApp();
     const ctx = new TestContext(app, { action: 'a' });
     asserts.assertEquals(ctx.auth, undefined);
-    ctx.setAuth({ user: 'ada' });
+    asserts.assertEquals('setAuth' in ctx, false);
+    ctx._setAuth({ user: 'ada' });
     asserts.assertEquals(ctx.auth, { user: 'ada' });
     const err = asserts.assertThrows(
-      () => ctx.setAuth({ user: 'grace' }),
+      () => ctx._setAuth({ user: 'grace' }),
       RapidError,
     );
     asserts.assertEquals((err as RapidError).code, 'RAPID_CONFIG');

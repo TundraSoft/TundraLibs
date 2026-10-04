@@ -19,4 +19,6 @@ export type RapidJobEntry<S extends RapidContextState = RapidContextState> = {
    * from these; `triggerJob(name, args)` overrides merge on top.
    */
   args?: Readonly<Record<string, unknown>>;
+  /** The declared `access` string, judged by the auth binding before the handler. */
+  access?: string;
 };

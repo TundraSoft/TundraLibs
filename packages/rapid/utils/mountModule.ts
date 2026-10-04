@@ -22,7 +22,12 @@ import {
   decorationsOf,
   moduleMetaOf,
 } from '../decorators/mod.ts';
-import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
+import {
+  accessOf,
+  isActionOf,
+  middlewareOf,
+  onEventsOf,
+} from '../decorators/registry.ts';
 import { _isAttached, RapidModule } from '../modules/RapidModule.ts';
 import { _seedRequestFrame } from '../modules/ModuleRuntime.ts';
 import { getSession } from '../middlewares/session.ts';
@@ -62,13 +67,14 @@ export type ModuleMountTarget<S extends RapidContextState> = {
   ): unknown;
   socket(
     command: string,
+    options: { access?: string },
     ...chain: [...RapidSOCKETMiddleware[], RapidSOCKETHandler<S>]
   ): unknown;
   job(
     name: string,
     schedule: string,
     handler: RapidJOBHandler<S>,
-    options?: { args?: Readonly<Record<string, unknown>> },
+    options?: { args?: Readonly<Record<string, unknown>>; access?: string },
   ): unknown;
 };
 
@@ -400,6 +406,9 @@ function registerDecoration<S extends RapidContextState>(
                     doc.layout !== undefined)
                 ? { layout: decoration.layout ?? doc.layout }
                 : {}),
+              ...(decoration.access !== undefined
+                ? { access: decoration.access }
+                : {}),
               // Module chain first, then the route's own — the same order a
               // plain route lists them; a universal middleware narrows to
               // HTTP here by contravariance.
@@ -417,6 +426,7 @@ function registerDecoration<S extends RapidContextState>(
         namespace !== undefined
           ? `${namespace}.${decoration.command}`
           : decoration.command,
+        decoration.access !== undefined ? { access: decoration.access } : {},
         ...doc.middleware,
         ...(decoration.middleware ?? []),
         buildInvoker<S>(fn, decoration.binds, instance, label),
@@ -429,7 +439,12 @@ function registerDecoration<S extends RapidContextState>(
           : decoration.name,
         decoration.schedule,
         buildInvoker<S>(fn, decoration.binds, instance, label),
-        { args: decoration.args },
+        {
+          args: decoration.args,
+          ...(decoration.access !== undefined
+            ? { access: decoration.access }
+            : {}),
+        },
       );
       break;
   }
@@ -533,10 +548,11 @@ export function mountModule<S extends RapidContextState>(
         if (
           !isModule &&
           (middlewareOf(level!, name) !== undefined ||
-            onEventsOf(level!, name) !== undefined)
+            onEventsOf(level!, name) !== undefined ||
+            isActionOf(level!, name) || accessOf(level!, name) !== undefined)
         ) {
           throw new RapidError('RAPID_CONFIG', {
-            message: `${ctorName}.${String(name)} has @Use/@On, but ` +
+            message: `${ctorName}.${String(name)} has @Use/@On/@Action, but ` +
               `${ctorName} is not a RapidModule — only a RapidModule runs the ` +
               `invoke/event tier those decorators need, so here they would be ` +
               `ignored silently. Extend RapidModule, or remove them.`,

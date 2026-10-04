@@ -228,7 +228,7 @@ boot refuses that combination — corruption under concurrency is not a
 warning.
 
 **Retired**: the generic `auth.ts` (`authenticate({ verify })` /
-`authorize(check)` — the seam is `ctx.setAuth` itself, the helpers were ten
+`authorize(check)` — the seam is `ctx.auth` itself, the helpers were ten
 lines and their names collided with the pact factory's), `requestId`,
 `responseTimer`, `requestLogger` (core config now), `serveStatic` (config),
 `store.ts` (hooks), `healthCheck()` (a path-intercepting middleware that
@@ -364,8 +364,8 @@ request-scoped providers.
 **Two layers, deliberately separated.**
 
 1. **The generic seam, in core and auth-agnostic**: `ctx.auth` /
-   `ctx.setAuth(identity)`, a write-once bag. Any identity system is a
-   middleware that verifies its credential and sets the bag. The pact adapter fills the same bag, so an app can mix systems. Session
+   set once by the `app.auth()` binding. Any identity system is a
+   binding that verifies its credential and answers the bag. The pact adapter ships one. Session
    endpoints are the adapter's, not `endpoints/`: pact already owns `login` /
    `logout` / `refresh`, and hanging the HTTP wrapping off `pactAuth` means
    the cookie `login` sets is the one `authenticate` reads, declared once (a
@@ -373,7 +373,7 @@ request-scoped providers.
    name in two places).
 2. **The pact adapter** (`middlewares/pact.ts`, its own subpath so the
    middleware barrel stays pact-free): `pactAuth(pact, options) →
-   { authenticate, authorize, login, logout, refresh, me }`, glue over pact 0.8's neutral
+   { binding, authorize, login, logout, refresh, me }`, glue over pact 0.8's neutral
    `createPactMiddleware` core exactly like pact's own express/hono/oak
    adapters. rapid keeps only what pact leaves to the framework: the bearer
    cookie carrier, sockets authenticating from the upgrade request, jobs

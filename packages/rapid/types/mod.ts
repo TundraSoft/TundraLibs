@@ -27,6 +27,8 @@ export type { RapidApplicationUploadOptions } from './application/UploadOptions.
 export type { RapidChannelOptions } from './ChannelOptions.ts';
 export type { RapidClusterMember } from './cluster/Member.ts';
 export type { RapidClusterSnapshot } from './cluster/Snapshot.ts';
+export type { RapidAccessReportRow } from './AccessReportRow.ts';
+export type { RapidAccessContext, RapidAuthBinding } from './AuthBinding.ts';
 export type { RapidBinder, RapidBinderSource } from './Binder.ts';
 export type { RapidBinds } from './Binds.ts';
 export type { RapidDecoration } from './Decoration.ts';

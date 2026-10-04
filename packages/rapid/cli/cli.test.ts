@@ -28,6 +28,7 @@ import {
 } from './commands/modules.ts';
 import { healthCommand } from './commands/health.ts';
 import { initCommand } from './commands/init.ts';
+import { accessCommand, formatAccessReport } from './commands/access.ts';
 
 /**
  * A stubbed version lookup: the real one fetches jsr.io on every
@@ -41,6 +42,65 @@ import { MIDDLEWARE_CATALOG, PACKAGE_DOCS, scaffold } from './templates.ts';
 // writes in one process corrupts Node 22's node:test reporter channel
 // ('Unable to deserialize cloned data'), failing an unrelated file.
 const quiet = (): void => {};
+
+describe('rapid.cli access audit', () => {
+  it('formatAccessReport prints one line per action, `public` for an undeclared one, and the totals', () => {
+    const text = formatAccessReport([
+      { kind: 'HTTP', action: 'GET /open' },
+      { kind: 'HTTP', action: 'GET /read', access: 'Posts:READ' },
+      { kind: 'JOB', action: 'nightly', access: 'system' },
+    ]);
+    asserts.assertStringIncludes(text, 'HTTP    GET /open  public');
+    asserts.assertStringIncludes(text, 'HTTP    GET /read  Posts:READ');
+    asserts.assertStringIncludes(text, 'JOB     nightly    system');
+    asserts.assertStringIncludes(
+      text,
+      '3 actions: 1 public (no access declared), 2 declared',
+    );
+  });
+
+  it("loads the entry module's app, prints its report, and --fail-on-undeclared exits 1 on a public action", async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-cli-access-' });
+    const entry = `${dir}/entry.mts`; // .mts: ESM under tsx too (top-level await)
+    const application = new URL('../Application.ts', import.meta.url).href;
+    await writeTextFile(
+      entry,
+      [
+        `import { Application } from '${application}';`,
+        `export const app = await Application.initialize({ name: 'cli-access', logger: { handlers: [] } });`,
+        `app.get('/open', () => ({ content: 'o' }));`,
+        `app.get('/guarded', { access: 'Posts:READ' }, () => ({ content: 'g' }));`,
+      ].join('\n'),
+    );
+    try {
+      const lines: string[] = [];
+      const log = (line: string) => void lines.push(line);
+      asserts.assertEquals(await accessCommand(entry, {}, log), 0);
+      asserts.assertStringIncludes(
+        lines.join('\n'),
+        'GET /guarded  Posts:READ',
+      );
+      asserts.assertStringIncludes(lines.join('\n'), 'GET /open     public');
+      asserts.assertEquals(
+        await accessCommand(entry, { failOnUndeclared: true }, quiet),
+        1,
+      );
+      const json: string[] = [];
+      await accessCommand(entry, { json: true }, (l) => void json.push(l));
+      asserts.assertEquals(
+        (JSON.parse(json[0]!) as { action: string }[]).map((r) => r.action)
+          .sort(),
+        ['GET /guarded', 'GET /open'],
+      );
+      asserts.assertEquals(
+        await accessCommand(`${dir}/missing.ts`, {}, quiet),
+        1,
+      );
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+});
 
 describe('rapid.cli modules generator', () => {
   it('exportedClasses picks concrete classes and skips abstract bases', () => {

@@ -395,6 +395,9 @@ export function buildOpenApi(
         ? { tags: [...meta.tags] }
         : {}),
       ...(route.version !== undefined ? { 'x-version': route.version } : {}),
+      // The declared `access` string, as written — what the auth binding
+      // judges; a reviewer sees it beside the operation.
+      ...(route.access !== undefined ? { 'x-access': route.access } : {}),
       // `[]` is meaningful: it overrides any document-level requirement and
       // marks the operation public, so it is emitted as-is.
       ...(meta?.security !== undefined

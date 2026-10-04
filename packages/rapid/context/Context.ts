@@ -124,13 +124,17 @@ export abstract class Context<
     return this.app.publish(channel, data);
   }
 
-  /** Backing slot for {@link auth} — set once via {@link setAuth}. */
+  /** Backing slot for {@link auth} — set once via {@link _setAuth}. */
   protected _auth?: Record<string, unknown>;
+  /** What the binding's `authenticate` threw, when it failed (see {@link authFailed}). */
+  private __authFailed?: unknown;
+  /** The per-invocation memo behind {@link memo}, allocated on first use. */
+  private __memo?: Map<string, Promise<unknown>>;
 
   /**
    * The authenticated identity for this invocation, or `undefined` when
-   * anonymous — a set-once, read-only bag an authentication middleware
-   * fills (`ctx.setAuth(...)`). The caller type-casts on use
+   * anonymous — a set-once, read-only bag the app's `auth()` binding
+   * fills from its `authenticate` answer. The caller type-casts on use
    * (`ctx.auth as MyUser`). Distinct from `ctx.state`: never shared across
    * invocations, and it rides the module `invoke` seed.
    */
@@ -139,18 +143,58 @@ export abstract class Context<
   }
 
   /**
-   * Set the auth bag — once. A second call throws, so a later middleware
-   * can't silently overwrite the identity.
+   * Set the auth bag — once; the framework's own path (the `app.auth()`
+   * binding's `authenticate` answer). There is no public setter: the
+   * identity is the binding's answer alone, so nothing later in the chain
+   * can elevate a request. A second call throws.
    *
+   * @internal
    * @throws {RapidError} RAPID_CONFIG when auth is already set.
    */
-  public setAuth(auth: Record<string, unknown>): void {
+  public _setAuth(auth: Record<string, unknown>): void {
     if (this._auth !== undefined) {
       throw new RapidError('RAPID_CONFIG', {
         message: 'ctx.auth is already set — the auth bag is written once',
       });
     }
     this._auth = auth;
+  }
+
+  /**
+   * The error the auth binding's `authenticate` threw for this
+   * invocation, or `undefined` when it answered (or no binding exists).
+   * Set only for an INFRASTRUCTURE failure (a refused credential is
+   * thrown as the response instead): an action declaring `access` was
+   * already answered 503 before its handler ran; an action without one
+   * runs anonymous and may read this to say "sign-in is unavailable".
+   */
+  public get authFailed(): unknown {
+    return this.__authFailed;
+  }
+
+  /** Record a failed `authenticate` (see {@link authFailed}). @internal */
+  public _markAuthFailed(error: unknown): void {
+    this.__authFailed = error;
+  }
+
+  /**
+   * A per-invocation memo: `load` runs once per `key` for the life of
+   * this invocation and every caller of the same key — concurrent ones
+   * included — shares the one promise. A rejected load is forgotten so
+   * the next caller retries. For values that are derived per request
+   * and read in several places (a policy's resolved grants, a tenant's
+   * row); never shared across invocations.
+   */
+  public memo<T>(key: string, load: () => T | Promise<T>): Promise<T> {
+    const memo = this.__memo ??= new Map();
+    const hit = memo.get(key);
+    if (hit !== undefined) return hit as Promise<T>;
+    const pending = Promise.resolve().then(load);
+    memo.set(key, pending);
+    pending.catch(() => {
+      if (memo.get(key) === pending) memo.delete(key);
+    });
+    return pending;
   }
 
   /**

@@ -59,6 +59,7 @@ npx jsr add @tundralibs/rapid
 | `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                             |
 | `modules [dir] [--check] [--force]`                                       | (Re)generate the modules barrel (`--check` fails CI when it's stale; an existing hand-written `mod.ts` needs `--force`). |
 | `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                          |
+| `access <entry.ts> [--fail-on-undeclared] [--json]`                       | List every action with its `access` string; undeclared = public. `--fail-on-undeclared` exits 1 for CI.                  |
 
 `init` has **no runtime prompt** — both `deno.json` and `package.json` are
 always written (every package in this monorepo ships both), so the scaffold
@@ -564,18 +565,20 @@ Every handler's replies, options and probe guidance are in the
 
 ## Auth
 
-rAPId owns only the auth bag: `ctx.auth`, written once by `ctx.setAuth()`,
-`undefined` when anonymous. The `@tundralibs/pact` adapter at
-`@tundralibs/rapid/middlewares/pact` fills it — one factory over your
-instance: `const { authenticate, authorize, login, logout, refresh, me } =
-pactAuth(pact, options)`. `authenticate` sets `ctx.auth` to pact's auth
-context (Bearer / Basic / ApiKey / HMAC, a bearer cookie for UIs; signed
-responses and JWE payloads when configured); `authorize('Module',
-'PERMISSION')` is typed by the instance's catalog; the four session
-handlers wrap `pact.login` / `logout` / `refresh` with one cookie name
-declared once (`bearer.cookie`), one 401 for every failure and a minimal
-principal projection. The options are pact's own middleware options — the
-same wire contract as its express/fastify/oak/hono adapters:
+rAPId owns the auth bag and the `access` string, and interprets neither. An
+app binds an auth platform once, `app.auth({ authenticate, authorize })`:
+`authenticate` runs once per request, job run or module `invoke()` and its
+answer is `ctx.auth` (`undefined` = anonymous); every `access` string a
+route, socket command, job or `@Action` declares goes to `authorize`, as
+written — `false` is 401 anonymous / 403 identified. **No `access` means
+public**, and `rapid access <entry.ts>` lists every action so that stays a
+decision. Declaring `access` with nothing bound fails boot
+(`RAPID_AUTH_UNBOUND`); a binding whose `authenticate` breaks answers
+declared actions 503, never anonymous. The `@tundralibs/pact` adapter at
+`@tundralibs/rapid/middlewares/pact` ships a binding (grammar
+`Module:PERMISSION`, `signed-in`, `|` any-of; unknown = denied) plus the
+four session handlers, over pact's own middleware options — the same wire
+contract as its express/fastify/oak/hono adapters:
 
 ```ts
 import { Application } from '@tundralibs/rapid';
@@ -585,22 +588,19 @@ import type { Pact } from '@tundralibs/pact'; // also: deno add @tundralibs/pact
 declare const pact: Pact<{ READ: 1n }, 'Admin'>;
 
 const app = await Application.initialize({ name: 'api' });
-const { authenticate, authorize, login, logout, me } = pactAuth(pact, {
+const { binding, login, logout, me } = pactAuth(pact, {
   bearer: { cookie: 'session' },
 });
 
-app.use(authenticate);
+app.auth(binding);
 app.post('/login', login()); // { token, expiresAt, principal } + the cookie
 app.post('/logout', logout()); // 204, cookie cleared
 app.get('/me', me()); // { principal, via } or 401
-app.get(
-  '/admin',
-  authorize('Admin', 'READ'),
-  () => ({ content: { ok: true } }),
-);
+app.get('/admin', { access: 'Admin:READ' }, () => ({ content: { ok: true } }));
 ```
 
-Any other identity system is a ten-line middleware over the same bag — see
+Any other identity system is two functions over the same seam, and the
+string is also `x-access` in the OpenAPI document — see
 [Authentication & authorization](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-Auth).
 
 ## Cookies, sessions & CSRF

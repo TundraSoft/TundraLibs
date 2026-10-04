@@ -2,11 +2,12 @@
  * @fileoverview `pactAuth(pact, options)` — the `@tundralibs/pact` adapter:
  * rapid's glue over pact's own neutral middleware core, the same shape as
  * pact's express/fastify/oak/hono adapters. One factory, one wire
- * contract, two middlewares: `authenticate` turns a presented credential
- * into `ctx.auth` (pact's `PactAuthContext`) and seals the response after
- * `next()` when the caller is HMAC-signed or exchanging encrypted
- * payloads; `authorize(module, permission)` — typed by the instance's
- * catalog — gates on the bound principal. Rapid adds what pact leaves to
+ * contract: the `binding` for `app.auth()` turns a presented credential
+ * into `ctx.auth` (pact's `PactAuthContext`), judges `access` strings
+ * against the bound principal's grants, and seals the response when the
+ * caller is HMAC-signed or exchanging encrypted payloads;
+ * `authorize(module, permission)` — typed by the instance's catalog — is
+ * the per-route guard for an extra check. Rapid adds what pact leaves to
  * the framework: a bearer cookie for browser UIs, socket frames
  * authenticating from the upgrade request, jobs passing through, and
  * rapid's own error codes on the wire. Published as the
@@ -36,6 +37,8 @@ import {
 import type { HTTPContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
+  RapidAccessContext,
+  RapidAuthBinding,
   RapidContext,
   RapidContextResponse,
   RapidContextState,
@@ -122,18 +125,19 @@ export type PactAuthOptions = Omit<PactMiddlewareOptions, 'bearer'> & {
 /** What {@link pactAuth} returns. */
 export type PactAuthMiddlewares<B extends PermissionBits, M extends string> = {
   /**
-   * Identify the caller: extract the credential, `pact.authenticate` it,
-   * set `ctx.auth` to the {@link PactAuthContext}. HTTP reads the request
-   * headers (and the raw body, for an HMAC digest or a JWE), a socket
-   * frame the upgrade request's headers (header-only schemes), a job
-   * passes through (no client). No credential → continues anonymous
-   * unless `optional: false` (401). A credential that fails → 401, never
-   * anonymous. After `next()` an HMAC caller's response is signed and a
-   * JWE caller's response encrypted; a thrown error is answered unsealed.
-   * Register once, before anything that reads the body and before any
-   * `authorize`.
+   * The binding for `app.auth(…)`. `authenticate` identifies the caller:
+   * extracts the credential, `pact.authenticate`s it, answers the
+   * {@link PactAuthContext}. HTTP reads the request headers (and the raw
+   * body, for an HMAC digest or a JWE), a socket frame the upgrade
+   * request's headers (header-only schemes), a job has no caller
+   * (anonymous). No credential → anonymous unless `optional: false`
+   * (401). A credential that fails → 401, never anonymous. `authorize`
+   * judges the `access` string: `'Module:PERMISSION'` → the bound
+   * principal's grant (unknown module/permission → denied), `'signed-in'`
+   * → any identity, several clauses joined with `|` → any of them.
+   * `finish` signs an HMAC caller's response and encrypts a JWE caller's.
    */
-  authenticate: RapidMiddleware;
+  binding: RapidAuthBinding;
   /**
    * Require `permission` in `module` of the authenticated principal
    * (pact's bound `principal.assert`, no store round-trip). 401 (with the
@@ -168,7 +172,7 @@ export type PactAuthMiddlewares<B extends PermissionBits, M extends string> = {
   /**
    * `GET` handler: `{ principal, via }` for the current credential, through
    * the same `session.principal` projection `login` uses; 401 when
-   * anonymous. Mount it after `authenticate`.
+   * anonymous (the app must bind `binding`).
    */
   me: () => RapidHTTPHandler;
 };
@@ -176,23 +180,23 @@ export type PactAuthMiddlewares<B extends PermissionBits, M extends string> = {
 const JOSE = 'application/jose';
 
 /**
- * Build the two pact middlewares over one instance and one options bag.
- * Create the instance and call this at module load (an `auth.ts`) — the
- * returned middlewares are plain values any route registration imports,
- * with no boot-order dependency.
+ * Build the auth binding, the `authorize` guard and the session handlers
+ * over one instance and one options bag. Create the instance and call
+ * this at module load (an `auth.ts`) — the returned values are plain
+ * values any route registration imports, with no boot-order dependency.
  *
  * @example
  * ```ts ignore
  * // auth.ts
  * export const pact = Pact.create({ bits, modulePermissions, hooks });
- * export const { authenticate, authorize } = pactAuth(pact, {
+ * export const { binding, login } = pactAuth(pact, {
  *   schemes: ['BEARER', 'APIKEY'],
  *   bearer: { cookie: 'session' }, // the cookie your login route sets
  *   apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
  * });
  * // main.ts
- * app.use(onlyApi(authenticate));
- * app.get('/posts', authorize('Posts', 'READ'), list);
+ * app.auth(binding);
+ * app.get('/posts', { access: 'Posts:READ' }, list);
  * ```
  *
  * @throws {RapidError} RAPID_CONFIG for a malformed option (pact's
@@ -402,8 +406,22 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     }
   };
 
-  const authenticate: RapidMiddleware = async (ctx, next) => {
-    if (ctx.type === 'JOB') return await next();
+  /**
+   * The identification behind `binding.authenticate`: the identity (or
+   * `undefined` for anonymous), with the response sealer when the caller
+   * is HMAC-signed / JWE. A refused credential throws rapid's 401/403.
+   */
+  const identify = async (
+    ctx: RapidContext,
+  ): Promise<
+    {
+      auth: Record<string, unknown> | undefined;
+      respond?: NonNullable<
+        Extract<PactMiddlewareVerdict<M, B>, { ok: true }>['respond']
+      >;
+    }
+  > => {
+    if (ctx.type === 'JOB') return { auth: undefined };
     if (ctx.type === 'SOCKET') {
       const verdict = await socketCore.authenticate({
         method: 'GET',
@@ -411,10 +429,9 @@ export function pactAuth<B extends PermissionBits, M extends string>(
         header: headerOf(ctx.connection.headers),
       });
       if (!verdict.ok) throw denied(ctx, verdict.denial);
-      if (verdict.auth !== undefined) {
-        ctx.setAuth(verdict.auth as unknown as Record<string, unknown>);
-      }
-      return await next();
+      return {
+        auth: verdict.auth as unknown as Record<string, unknown> | undefined,
+      };
     }
     const verdict = await core.authenticate(viewOf(ctx));
     if (!verdict.ok) {
@@ -440,19 +457,73 @@ export function pactAuth<B extends PermissionBits, M extends string>(
         if (optional === false) {
           throw unauthenticated(ctx, 'NO_CREDENTIALS', undefined);
         }
-        return await next();
+        return { auth: undefined };
       }
       throw denied(ctx, verdict.denial);
     }
-    if (verdict.auth !== undefined) {
+    if (verdict.body !== undefined) ctx._replacePayload(verdict.body);
+    return {
       // Stored by reference: the bound principal's assert/hasPermission
       // live in a WeakMap keyed by this object; a copy would lose them.
-      ctx.setAuth(verdict.auth as unknown as Record<string, unknown>);
-    }
-    if (verdict.body !== undefined) ctx._replacePayload(verdict.body);
-    const outcome = await next();
-    if (verdict.respond !== undefined) await seal(ctx, verdict.respond);
-    return outcome;
+      auth: verdict.auth as unknown as Record<string, unknown> | undefined,
+      ...(verdict.respond !== undefined ? { respond: verdict.respond } : {}),
+    };
+  };
+
+  // ---- The binding: the identification, the string policy, the seal.
+  /** The sealer each HMAC/JWE request's `identify` produced, until `finish`. */
+  const sealers = new WeakMap<
+    object,
+    NonNullable<Extract<PactMiddlewareVerdict<M, B>, { ok: true }>['respond']>
+  >();
+  /** `core.authorize(module, permission)` guards, one per clause, built on first use. */
+  const guards = new Map<
+    string,
+    ReturnType<typeof core.authorize>
+  >();
+  /** Whether `clause` names a module and permission this instance knows. */
+  const known = (
+    module: string,
+    permission: string,
+  ): module is M =>
+    pact.modules.includes(module as M) &&
+    pact.getModulePermissions(module as M).map(String).includes(permission);
+  const binding: RapidAuthBinding = {
+    authenticate: async (ctx) => {
+      const { auth, respond } = await identify(ctx);
+      if (respond !== undefined) sealers.set(ctx, respond);
+      return auth;
+    },
+    authorize: async (ctx: RapidAccessContext, access: string) => {
+      const auth = ctx.auth as PactAuthContext<M, B> | undefined;
+      for (const raw of access.split('|')) {
+        const clause = raw.trim();
+        if (clause === 'signed-in') {
+          if (auth !== undefined) return true;
+          continue;
+        }
+        const colon = clause.indexOf(':');
+        if (colon <= 0 || colon === clause.length - 1) continue;
+        const module = clause.slice(0, colon);
+        const permission = clause.slice(colon + 1);
+        // An unknown module or permission is never granted: the audit
+        // lists every clause in use, so a typo is a visible denial.
+        if (!known(module, permission)) continue;
+        let guard = guards.get(clause);
+        if (guard === undefined) {
+          guard = core.authorize(module, permission as keyof B & string);
+          guards.set(clause, guard);
+        }
+        if ((await guard(auth)) === undefined) return true;
+      }
+      return false;
+    },
+    finish: async (ctx) => {
+      const respond = sealers.get(ctx);
+      if (respond === undefined || ctx.type !== 'HTTP') return;
+      sealers.delete(ctx);
+      await seal(ctx, respond);
+    },
   };
 
   const authorize = (
@@ -660,5 +731,5 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     };
   };
 
-  return { authenticate, authorize, login, logout, refresh, me };
+  return { binding, authorize, login, logout, refresh, me };
 }

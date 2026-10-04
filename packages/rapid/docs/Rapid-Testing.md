@@ -122,6 +122,12 @@ await h.dispose();
 - `h.runtime.emit('ns:Module:Event', payload)` fires subscribers;
   `h.invoke(Target, 'method', args)` runs the target's `@Use` guards and
   returns the envelope, so a denial is asserted as `result.status === 403`.
+- `auth` is the auth binding, **required** when any booted module declares
+  `access` (the harness fails with `RAPID_AUTH_UNBOUND` otherwise, exactly
+  as the app would). `allowAll` from the same subpath grants everything for
+  a test that is not about authorization; `h.as(identity)` returns an
+  `invoke` that runs as that caller — `h.as(undefined)` invokes anonymously,
+  so `(await h.as(undefined)(Posts, 'find', ['1'])).status` is `401`.
 
 ## Templates and the UI
 

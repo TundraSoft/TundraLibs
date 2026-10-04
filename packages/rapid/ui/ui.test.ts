@@ -128,11 +128,12 @@ describe('rapid.ui.app', () => {
           : undefined,
       }),
     });
-    app.use((ctx, next) => {
-      if (
+    app.auth({
+      authenticate: (ctx) =>
         ctx.type === 'HTTP' && ctx.headers.get('authorization') === 'Bearer tok'
-      ) ctx.setAuth({ id: 'u1', role: 'admin' });
-      return next();
+          ? { id: 'u1', role: 'admin' }
+          : undefined,
+      authorize: () => true,
     });
     app.get('/spy', { template: Spy }, () => ({ content: {} }));
 
