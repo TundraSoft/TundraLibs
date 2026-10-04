@@ -72,6 +72,22 @@ running (one per tenant, say), see
 extras but can never override the generated `state`, PKCE, nonce, or
 `redirect_uri`.
 
+An `OIDC` issuer's discovery document is data, so pact checks every endpoint
+it declares. The authorization, token, userinfo and JWKS endpoints must be
+https and sit on the issuer's host or a subdomain of it; anything else fails
+the flow with `OAUTH_EXCHANGE_FAILED`. A provider that really serves an
+endpoint from another host names it in `discoveryHosts`:
+
+```ts ignore
+cognito: {
+  kind: 'OIDC',
+  issuer: 'https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_Ab12',
+  discoveryHosts: ['acme.auth.eu-west-1.amazoncognito.com'],
+  clientId: '…',
+  redirectUri: 'https://app.example.com/auth/cognito/callback',
+},
+```
+
 ## The flow
 
 ```ts ignore

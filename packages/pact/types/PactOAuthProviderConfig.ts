@@ -20,6 +20,15 @@ export type PactOAuthProviderConfig = {
    */
   issuer?: string;
   /**
+   * `OIDC` kind only: hosts besides the issuer's own (and its
+   * subdomains) that the discovery document may point an endpoint at,
+   * as lowercase hostnames — e.g. `['oauth2.googleapis.com',
+   * 'www.googleapis.com']` for Google's split hosts. A discovered
+   * authorization, token, userinfo or JWKS endpoint anywhere else fails
+   * the flow with `OAUTH_EXCHANGE_FAILED`.
+   */
+  discoveryHosts?: readonly string[];
+  /**
    * Tenant for tenant-scoped presets (`MICROSOFT`).
    * @default 'common'
    */
