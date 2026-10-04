@@ -2442,21 +2442,13 @@ export class Pact<B extends PermissionBits, M extends string>
   }
 
   /** HMAC key derived from `password.pepper`, built on first use. */
-  private __pepperKey?: Promise<CryptoKey>;
+  private __pepperKey?: Promise<JsonWebKey>;
 
   /** HMAC-SHA-256 of `password` under the pepper's derived key, as hex. */
   private async __pepper(password: string): Promise<string> {
     this.__pepperKey ??= hkdf(this._getOption('password')!.pepper!, {
       info: PEPPER_INFO,
-    }).then((raw) =>
-      crypto.subtle.importKey(
-        'raw',
-        raw as BufferSource,
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign'],
-      )
-    );
+    }).then((raw) => ({ kty: 'oct', k: encodeBase64Url(raw) }));
     return await signHMAC(password, await this.__pepperKey);
   }
 
