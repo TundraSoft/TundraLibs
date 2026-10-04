@@ -41,6 +41,17 @@ export const RAPID_ERROR_CODES = {
     message: 'Authentication unavailable',
     specific: true,
   },
+  /** A `compose` part names an action no mounted module serves — thrown at boot. */
+  RAPID_COMPOSE_UNKNOWN_ACTION: {
+    status: 500,
+    message: 'Invalid configuration',
+  },
+  /** `?parts=` is empty, repeats a name, or names a part the page does not declare. */
+  RAPID_COMPOSE_PARTS: {
+    status: 400,
+    message: 'Invalid parts selection',
+    specific: true,
+  },
   /** CSRF token missing, mismatched, or unsigned on a state-changing request. */
   RAPID_CSRF_INVALID: { status: 403, message: 'CSRF token invalid' },
   /** No route/handler matched. */

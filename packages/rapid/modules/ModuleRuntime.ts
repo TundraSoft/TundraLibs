@@ -53,6 +53,7 @@ import { Reply } from './reply.ts';
 import type {
   RapidAccessReportRow,
   RapidAuthBinding,
+  RapidDecoration,
   RapidModuleClass,
   RapidModuleContext,
   RapidModuleEventMap,
@@ -80,6 +81,8 @@ type MethodEntry = {
   routed: boolean;
   /** Whether `@Action` marks it an explicit invoke-only action. */
   action: boolean;
+  /** The method's transport decorations (what the composer reads binders and templates from). */
+  decorations: readonly RapidDecoration[] | undefined;
 };
 type Subscription = {
   fn: AnyFn;
@@ -438,13 +441,16 @@ export class ModuleRuntime {
           });
           continue;
         }
+        const decorations = level === undefined
+          ? undefined
+          : decorationsOf(level, methodName);
         methods.set(methodName, {
           fn,
           chain: middleware === undefined ? undefined : compose(middleware),
           access,
-          routed: level !== undefined &&
-            decorationsOf(level, methodName) !== undefined,
+          routed: decorations !== undefined,
           action: level !== undefined && isActionOf(level, methodName),
+          decorations,
         });
       }
       proto = Object.getPrototypeOf(proto);
@@ -657,6 +663,39 @@ export class ModuleRuntime {
    * mark and is NOT also served by a route/command/job (those appear in
    * the app's own report) — the module half of the access audit.
    */
+  /**
+   * Resolve an action address — `'namespace:Module:method'`, the same
+   * form events use — to the mounted method it names: the class to
+   * `invoke`, the method's declared `access` and its transport
+   * decorations (binders, template). `undefined` when no mounted module
+   * answers to the key or it has no such method.
+   *
+   * @internal Read by the composer when a page's parts are planned.
+   */
+  public actionOf(action: string): {
+    target: RapidModuleClass<RapidModule<RapidModuleEventMap>>;
+    method: string;
+    access: string | undefined;
+    decorations: readonly RapidDecoration[] | undefined;
+  } | undefined {
+    const last = action.lastIndexOf(':');
+    if (last <= 0) return undefined;
+    const key = action.slice(0, last);
+    const method = action.slice(last + 1);
+    for (const [ctor, mounted] of this.__mounted) {
+      if (mounted.key !== key) continue;
+      const entry = mounted.methods.get(method);
+      if (entry === undefined) return undefined;
+      return {
+        target: ctor as RapidModuleClass<RapidModule<RapidModuleEventMap>>,
+        method,
+        access: entry.access,
+        decorations: entry.decorations,
+      };
+    }
+    return undefined;
+  }
+
   public accessReport(): RapidAccessReportRow[] {
     const rows: RapidAccessReportRow[] = [];
     for (const mounted of this.__order) {

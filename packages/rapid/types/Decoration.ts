@@ -7,6 +7,7 @@
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { RapidBinder } from './Binder.ts';
+import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
 import type { RapidSOCKETMiddleware } from './SOCKETMiddleware.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
@@ -73,6 +74,8 @@ export type RapidDecoration =
     middleware?: readonly RapidHTTPMiddleware[];
     /** The `access` string the route declares (see `RapidRouteOptions.access`). */
     access?: string;
+    /** The page's parts (see `RapidRouteOptions.compose`). */
+    compose?: RapidComposeOptions;
   }
   | {
     kind: 'SOCKET';

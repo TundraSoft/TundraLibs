@@ -7,6 +7,7 @@
  */
 
 import type { Html } from '../ui/html.ts';
+import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
@@ -59,4 +60,12 @@ export type RapidRouteOptions = {
    * the boot (RAPID_AUTH_UNBOUND).
    */
   access?: string;
+  /**
+   * The parts this page is made of — other modules' resource actions,
+   * run in-process under this request (one authentication; each part
+   * judged by its own `access` for this caller) and attached to the
+   * reply as `content.parts[name]`. GET routes only; the target actions
+   * are resolved when the app boots. See {@link RapidComposeOptions}.
+   */
+  compose?: RapidComposeOptions;
 };

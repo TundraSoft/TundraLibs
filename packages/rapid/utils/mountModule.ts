@@ -92,7 +92,7 @@ type BoundMethod = (...args: unknown[]) => unknown;
  * time (see `assertBindableOnKind`), so it only ever reaches this
  * function on a SOCKET context.
  */
-async function extractBind<S extends RapidContextState>(
+export async function extractBind<S extends RapidContextState>(
   binder: RapidBinder,
   ctx: RapidContext<S>,
 ): Promise<unknown> {
@@ -408,6 +408,9 @@ function registerDecoration<S extends RapidContextState>(
                 : {}),
               ...(decoration.access !== undefined
                 ? { access: decoration.access }
+                : {}),
+              ...(decoration.compose !== undefined
+                ? { compose: decoration.compose }
                 : {}),
               // Module chain first, then the route's own — the same order a
               // plain route lists them; a universal middleware narrows to

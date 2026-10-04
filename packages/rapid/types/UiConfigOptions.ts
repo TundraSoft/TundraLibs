@@ -8,8 +8,12 @@
  * @module
  */
 
+import type { RapidUiComposeOptions } from './UiComposeOptions.ts';
+
 /** The serializable UI options — `ui:` in Application options / YAML. */
 export type RapidUiConfigOptions = {
+  /** Caps for composed pages (routes declaring `compose`). */
+  compose?: RapidUiComposeOptions;
   /**
    * The app-level UI gate. `false` means this app never emits HTML —
    * every request is the `'api'` surface: page routes (`prefer:

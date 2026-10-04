@@ -6,6 +6,7 @@
  */
 
 import type { HTTPMethod } from '@tundralibs/compat/http';
+import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidHTTPHandler } from './HTTPHandler.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
 import type { RapidContextState } from './context/State.ts';
@@ -41,4 +42,6 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
   apiOnly?: boolean;
   /** The declared `access` string, judged by the auth binding before the route's own middleware. */
   access?: string;
+  /** The declared parts of a composed page, as written; resolved to a plan at boot. */
+  compose?: RapidComposeOptions;
 };
