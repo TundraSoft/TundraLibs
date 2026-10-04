@@ -27,6 +27,13 @@ import type { Expressions } from '../expressions/Expressions.ts';
  * runtime treats any top-level `$`-prefixed key inside a filter
  * value as an operator; to exact-match a JSON document that
  * contains operator-shaped keys, wrap it explicitly in `$eq`.
+ *
+ * **Column references.** A direct value, `$eq`, `$ne` and the
+ * comparison operators also accept another column of the SAME value
+ * type, as `'@col'` — `{ '@updatedAt': { $gt: '@createdAt' } }`. The
+ * translators render an `@` string naming an in-scope column as that
+ * column on every dialect (a `$expr` on MongoDB). `$in` / `$nin` lists
+ * take literals only: MongoDB cannot express a column inside a list.
  */
 export type Operators<
   T extends ColumnTypes = ColumnTypes,
@@ -35,13 +42,14 @@ export type Operators<
 > =
   | null
   | T
+  | ColumnRefOf<FPT, T>
   | Array<NonNullable<T>>
   | {
     // `null` is intentionally excluded from $eq/$ne/$in/$nin values.
     // SQL `= NULL` and `<> NULL` are always unknown (never true);
     // for null comparisons use `$null: true` / `$null: false` instead.
-    $eq?: NonNullable<T> | Expressions<PT, FPT>;
-    $ne?: NonNullable<T> | Expressions<PT, FPT>;
+    $eq?: NonNullable<T> | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
+    $ne?: NonNullable<T> | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
     $in?: Array<NonNullable<T>>;
     $nin?: Array<NonNullable<T>>;
     $null?: boolean;
@@ -57,11 +65,34 @@ export type Operators<
           $contains?: string;
         }
         : T extends Date | number | bigint ? {
-            $gt?: T | Expressions<PT, FPT>;
-            $gte?: T | Expressions<PT, FPT>;
-            $lt?: T | Expressions<PT, FPT>;
-            $lte?: T | Expressions<PT, FPT>;
-            $between?: [T | Expressions<PT, FPT>, T | Expressions<PT, FPT>];
+            $gt?: T | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
+            $gte?: T | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
+            $lt?: T | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
+            $lte?: T | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
+            $between?: [
+              T | Expressions<PT, FPT> | ColumnRefOf<FPT, T>,
+              T | Expressions<PT, FPT> | ColumnRefOf<FPT, T>,
+            ];
           }
         : never
     );
+
+/**
+ * The `'@col'` keys of a flattened table whose value type is `T` —
+ * the columns a filter on a `T` column may compare against. Strict:
+ * no fallback to every key when none match (unlike
+ * `GetColumnByType`), and catch-all index signatures never qualify.
+ * Keys are collected by remapping (`as`) rather than `{…}[keyof FPT]`:
+ * `keyof` of a type carrying a `` `@${string}` `` index signature
+ * collapses every declared key into it (see `ConcreteColumnKeys`).
+ *
+ * @internal
+ */
+type ColumnRefOf<FPT, T> = keyof {
+  [
+    K in keyof FPT as K extends `@${string}` ? `@${string}` extends K ? never
+      : [NonNullable<FPT[K]>] extends [NonNullable<T>] ? K
+      : never
+      : never
+  ]: unknown;
+};
