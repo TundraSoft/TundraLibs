@@ -45,7 +45,12 @@ import type {
   ValidProjection,
 } from './definition/mod.ts';
 import type { FilterOf } from './definition/filter.ts';
-import { type CompiledEntity, decryptCell, type Runtime } from './compile.ts';
+import {
+  type CompiledEntity,
+  decryptCell,
+  digestOf,
+  type Runtime,
+} from './compile.ts';
 import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
@@ -976,6 +981,10 @@ export class ReadRepo<
     }
     if (typeof node !== 'object') return node;
     const out: Row = {};
+    // Migration-window clauses for keyed digests (`legacyHashes`),
+    // AND-ed onto this level after the walk so a user `$and` key cannot
+    // overwrite them.
+    const legacy: Row[] = [];
     for (const [key, value] of Object.entries(node as Row)) {
       if (!key.startsWith('@')) {
         out[key] = await this.__rewriteWhereNode(value);
@@ -994,12 +1003,79 @@ export class ReadRepo<
       }
       const ref = this.__resolveWhereRef(key.slice(1));
       if (ref.siblingKey !== undefined) {
-        out[ref.siblingKey] = await this.__hashCondition(value, ref);
+        if (ref.keyed && this._runtime.crypto.legacyHashes) {
+          legacy.push(...await this.__legacyHashClauses(value, ref));
+          continue;
+        }
+        out[ref.siblingKey] = await this.__hashCondition(
+          value,
+          ref,
+          ref.keyed,
+        );
         continue;
       }
       out[key] = await this.__rewriteWhereNode(value);
     }
+    if (legacy.length > 0) {
+      const existing = out.$and;
+      out.$and = [...(Array.isArray(existing) ? existing : []), ...legacy];
+    }
     return out;
+  }
+
+  /**
+   * `legacyHashes`: a keyed digest lookup during the migration window
+   * matches rows written before the pepper (plain digest) too. Positive
+   * conditions (equality, IN, `$null`) match EITHER form; negative ones
+   * (`$ne`, `$nin`) must exclude BOTH, so they AND.
+   */
+  private async __legacyHashClauses(
+    value: unknown,
+    ref: {
+      entityKey: string;
+      col: string;
+      siblingKey: string | undefined;
+      beforeWrite: ((v: unknown) => unknown) | undefined;
+      algorithm: HashAlgorithm;
+      plainType: string;
+    },
+  ): Promise<Row[]> {
+    const key = ref.siblingKey!;
+    const isBag = value !== null && typeof value === 'object' &&
+      !(value instanceof Date) && !Array.isArray(value) &&
+      !isExpressionValue(value) &&
+      Object.keys(value as Row).length > 0 &&
+      Object.keys(value as Row).every((k) =>
+        ['$eq', '$ne', '$in', '$nin', '$null'].includes(k)
+      );
+    let positive: unknown = value;
+    let negative: Row | undefined;
+    if (isBag) {
+      const bag = value as Row;
+      const pos: Row = {};
+      const neg: Row = {};
+      for (const [op, v] of Object.entries(bag)) {
+        (op === '$ne' || op === '$nin' ? neg : pos)[op] = v;
+      }
+      positive = Object.keys(pos).length > 0 ? pos : undefined;
+      negative = Object.keys(neg).length > 0 ? neg : undefined;
+    }
+    const clauses: Row[] = [];
+    if (positive !== undefined) {
+      clauses.push({
+        $or: [
+          { [key]: await this.__hashCondition(positive, ref, true) },
+          { [key]: await this.__hashCondition(positive, ref, false) },
+        ],
+      });
+    }
+    if (negative !== undefined) {
+      clauses.push(
+        { [key]: await this.__hashCondition(negative, ref, true) },
+        { [key]: await this.__hashCondition(negative, ref, false) },
+      );
+    }
+    return clauses;
   }
 
   /** Resolve one WHERE key ref (`col` / `Alias.@col`): plain columns
@@ -1014,6 +1090,8 @@ export class ReadRepo<
     beforeWrite: ((v: unknown) => unknown) | undefined;
     algorithm: HashAlgorithm;
     plainType: string;
+    /** The stored digest is keyed (HMAC under the pepper). */
+    keyed: boolean;
   } {
     const c = this._compiled;
     const dotIdx = stripped.indexOf('.@');
@@ -1037,6 +1115,7 @@ export class ReadRepo<
         col,
         siblingKey: undefined,
         beforeWrite: undefined,
+        keyed: false,
         algorithm: SIBLING_HASH_ALGORITHM,
         plainType: 'VARCHAR',
       };
@@ -1048,6 +1127,7 @@ export class ReadRepo<
         col,
         siblingKey: undefined,
         beforeWrite: undefined,
+        keyed: false,
         algorithm: SIBLING_HASH_ALGORITHM,
         plainType: 'VARCHAR',
       };
@@ -1063,6 +1143,7 @@ export class ReadRepo<
           ? `@${sibling}`
           : `@${alias}.@${sibling}`,
         beforeWrite: target.beforeWrite.get(col),
+        keyed: this._runtime.crypto.keyedHash !== undefined,
         algorithm: SIBLING_HASH_ALGORITHM,
         plainType: spec.type,
       };
@@ -1081,6 +1162,7 @@ export class ReadRepo<
         col,
         siblingKey: alias === undefined ? `@${col}` : `@${alias}.@${col}`,
         beforeWrite: target.beforeWrite.get(col),
+        keyed: target.keyedDigests.has(col),
         algorithm: digestAlgo,
         plainType: spec.type,
       };
@@ -1100,6 +1182,7 @@ export class ReadRepo<
       col,
       siblingKey: undefined,
       beforeWrite: undefined,
+      keyed: false,
       algorithm: SIBLING_HASH_ALGORITHM,
       plainType: spec.type,
     };
@@ -1107,7 +1190,8 @@ export class ReadRepo<
 
   /** Rewrite one condition value for a hashed column: plaintext →
    * digest (through the column's beforeWrite, like the write path).
-   * Equality-class operators only. */
+   * Equality-class operators only. `keyed` picks the HMAC (pepper) or the
+   * plain digest — the migration-window lookup calls this once for each. */
   private async __hashCondition(
     value: unknown,
     ref: {
@@ -1117,6 +1201,7 @@ export class ReadRepo<
       algorithm: HashAlgorithm;
       plainType: string;
     },
+    keyed: boolean,
   ): Promise<unknown> {
     const digest = async (v: unknown): Promise<unknown> => {
       if (v === null) return null;
@@ -1162,9 +1247,11 @@ export class ReadRepo<
       const plain = ref.beforeWrite === undefined ? v : ref.beforeWrite(v);
       // Non-string plaintext (encrypted Date/bigint/… columns)
       // canonicalizes exactly like the write path, so digests line up.
-      return await this._runtime.crypto.hash(
+      return await digestOf(
+        this._runtime.crypto,
         canonicalizePlain(plain, ref.plainType),
         ref.algorithm,
+        keyed,
       );
     };
 
@@ -3923,7 +4010,13 @@ export class Repo<
       out[name] = await crypto.encrypt(canonical, secret, crypto.algorithm);
       const hashCol = c.hashSiblings.get(name);
       if (hashCol !== undefined) {
-        out[hashCol] = await crypto.hash(canonical, SIBLING_HASH_ALGORITHM);
+        // Siblings are keyed whenever a pepper is configured.
+        out[hashCol] = await digestOf(
+          crypto,
+          canonical,
+          SIBLING_HASH_ALGORITHM,
+          crypto.keyedHash !== undefined,
+        );
       }
     }
     for (const [name, algorithm] of c.digestColumns) {
@@ -3938,7 +4031,12 @@ export class Repo<
       const canonical = canonicalizePlain(plain, specs[name]!.type);
       out[name] = algorithm === 'PBKDF2'
         ? await crypto.pbkdf2Hash(canonical)
-        : await crypto.hash(canonical, algorithm);
+        : await digestOf(
+          crypto,
+          canonical,
+          algorithm,
+          c.keyedDigests.has(name),
+        );
     }
     return out;
   }

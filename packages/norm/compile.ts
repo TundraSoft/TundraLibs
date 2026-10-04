@@ -43,6 +43,9 @@ import {
   defaultPbkdf2Hash,
   type EncryptAlgorithm,
   type HashAlgorithm,
+  type KeyDerivation,
+  keyedHash,
+  MIN_KEY_LENGTH,
   SIBLING_HASH_ALGORITHM,
   stampKeyId,
   VALID_ENCRYPT_ALGORITHMS,
@@ -210,7 +213,33 @@ export type NormCrypto = {
   ) => Promise<string>;
   /** Salted PBKDF2 password hash for `Column.password('PBKDF2')`. */
   readonly pbkdf2Hash: (plaintext: string) => Promise<string>;
+  /** How cell keys are derived for WRITES (reads follow each cell's tag). */
+  readonly keyDerivation: KeyDerivation;
+  /** HMAC digest under `hashPepper`; `undefined` when no pepper is set. */
+  readonly keyedHash:
+    | ((plaintext: string, algorithm: HashAlgorithm) => Promise<string>)
+    | undefined;
+  /** Lookups on keyed digests also match the unkeyed form (migration window). */
+  readonly legacyHashes: boolean;
 };
+
+/**
+ * The digest a write stores and a lookup compares, for one hashed
+ * target: keyed (HMAC under the pepper) when `keyed`, else the plain
+ * digest. Encrypt-siblings are keyed whenever a pepper is configured;
+ * `Column.hash(algo, { keyed: true })` columns opt in.
+ */
+export async function digestOf(
+  crypto: NormCrypto,
+  canonical: string,
+  algorithm: HashAlgorithm,
+  keyed: boolean,
+): Promise<string> {
+  if (keyed && crypto.keyedHash !== undefined) {
+    return await crypto.keyedHash(canonical, algorithm);
+  }
+  return await crypto.hash(canonical, algorithm);
+}
 
 /** One inverse relation registered on a target entity. */
 export type ReverseRelation = {
@@ -252,6 +281,9 @@ export type CompiledEntity = {
   /** One-way digest columns (`Column.hash(algo)`) → their algorithm.
    * The write path digests the validated plaintext in place. */
   readonly digestColumns: ReadonlyMap<string, DigestAlgorithm>;
+  /** Digest columns declared `Column.hash(algo, { keyed: true })` —
+   * HMAC under the instance `hashPepper` instead of a plain digest. */
+  readonly keyedDigests: ReadonlySet<string>;
   /** VIRTUAL mask columns → source + transform. NEVER sent to SQL
    * (columnNames/projectedColumns exclude them) — computed post-read
    * from the fetched source. */
@@ -461,6 +493,9 @@ export type CompileConfig = {
   readonly algorithm?: EncryptAlgorithm | undefined;
   readonly crypto?: CryptoOverrides | undefined;
   readonly onDecryptFailure?: DecryptFailurePolicy | undefined;
+  readonly keyDerivation?: KeyDerivation | undefined;
+  readonly hashPepper?: string | undefined;
+  readonly legacyHashes?: boolean | undefined;
 };
 
 /**
@@ -485,19 +520,31 @@ export function compileRuntime(
   // place — the asserts layer. use() already ran this for composed
   // registries; hand-built ones get identical validation here.
   assertRegistry(registry, { scope: 'compile()', definitions: true });
-  validateRuntimeConfig(registry, cfg.secret, algorithm, cfg.crypto);
+  const keyDerivation = cfg.keyDerivation ?? 'PBKDF2';
+  validateRuntimeConfig(registry, cfg.secret, algorithm, cfg.crypto, {
+    keyDerivation,
+    hashPepper: cfg.hashPepper,
+  });
 
+  const pepper = cfg.hashPepper;
   const crypto: NormCrypto = {
     secret: cfg.secret,
     algorithm,
     // Every write is stamped with the key's fingerprint and every read
     // verifies it, so a value can name the key that produced it — the
     // hook `rotateKey()` relies on. BYO crypto (`cfg.crypto`) is wrapped
-    // too, so custom ciphers are rotation-compatible for free.
-    encrypt: stampKeyId(cfg.crypto?.encrypt ?? defaultEncrypt),
+    // too, so custom ciphers are rotation-compatible for free. The stamp's
+    // TAG records the key derivation (`k1` PBKDF2, `k2` HKDF); reads
+    // follow each cell's tag, so a store mid-migration reads both.
+    encrypt: stampKeyId(cfg.crypto?.encrypt ?? defaultEncrypt, keyDerivation),
     decrypt: verifyKeyId(cfg.crypto?.decrypt ?? defaultDecrypt),
     hash: cfg.crypto?.hash ?? defaultHash,
     pbkdf2Hash: cfg.crypto?.pbkdf2Hash ?? defaultPbkdf2Hash,
+    keyDerivation,
+    keyedHash: pepper === undefined
+      ? undefined
+      : (plaintext, alg) => keyedHash(plaintext, alg, pepper),
+    legacyHashes: cfg.legacyHashes === true,
   };
 
   const compiled = new Map<string, CompiledEntity>();
@@ -635,6 +682,7 @@ function compileEntity(def: AnyDefinition, key: string): CompiledEntity {
   const localEncrypted = new Set<string>();
   const hashSiblings = new Map<string, string>();
   const digestColumns = new Map<string, DigestAlgorithm>();
+  const keyedDigests = new Set<string>();
   const postInsertDefaults = new Map<string, unknown>();
   const postUpdateDefaults = new Map<string, unknown>();
   const beforeWrite = new Map<string, (v: unknown) => unknown>();
@@ -652,6 +700,7 @@ function compileEntity(def: AnyDefinition, key: string): CompiledEntity {
     }
     if (spec.hashed !== undefined) {
       digestColumns.set(name, spec.hashed as DigestAlgorithm);
+      if (spec.hashKeyed === true) keyedDigests.add(name);
     }
     // Post-validation defaults: expression markers always (the
     // Guardian cannot represent them); JS defaults only when the
@@ -708,6 +757,7 @@ function compileEntity(def: AnyDefinition, key: string): CompiledEntity {
     localEncrypted,
     hashSiblings,
     digestColumns,
+    keyedDigests,
     masks,
     maskedProjected,
     joinTargets,
@@ -920,12 +970,70 @@ function validateRuntimeConfig(
   secret: string | undefined,
   algorithm: EncryptAlgorithm,
   overrides: CryptoOverrides | undefined,
+  keys: { keyDerivation: KeyDerivation; hashPepper: string | undefined },
 ): void {
   const issues: DefinitionIssue[] = [];
 
   const hasEncrypted = Object.values(registry).some((def) =>
     Object.values(def.columns).some((c) => (c as ColumnSpec).encrypt === true)
   );
+
+  // HKDF does no stretching: it is only safe for a secret that is
+  // already random, it binds a CryptoKey (GCM only — CBC/CTR stay on
+  // crypt's per-cell PBKDF2), and a BYO cipher owns its own derivation.
+  if (keys.keyDerivation === 'HKDF') {
+    if (!algorithm.endsWith('-GCM')) {
+      issues.push({
+        model: '<norm>',
+        path: 'keyDerivation',
+        message:
+          `keyDerivation 'HKDF' requires an AES-GCM algorithm (got ${algorithm}).`,
+      });
+    }
+    if (overrides?.encrypt !== undefined || overrides?.decrypt !== undefined) {
+      issues.push({
+        model: '<norm>',
+        path: 'keyDerivation',
+        message:
+          `keyDerivation 'HKDF' applies to norm's own cipher — a crypto.encrypt/decrypt override derives its own key.`,
+      });
+    }
+    if (
+      hasEncrypted && secret !== undefined && secret.length > 0 &&
+      secret.length < MIN_KEY_LENGTH
+    ) {
+      issues.push({
+        model: '<norm>',
+        path: 'secret',
+        message:
+          `keyDerivation 'HKDF' needs a high-entropy secret of at least ${MIN_KEY_LENGTH} characters (got ${secret.length}) — HKDF does not stretch a weak one.`,
+      });
+    }
+  }
+  if (
+    keys.hashPepper !== undefined && keys.hashPepper.length < MIN_KEY_LENGTH
+  ) {
+    issues.push({
+      model: '<norm>',
+      path: 'hashPepper',
+      message:
+        `hashPepper must be at least ${MIN_KEY_LENGTH} characters (got ${keys.hashPepper.length}).`,
+    });
+  }
+  if (keys.hashPepper === undefined) {
+    for (const [key, def] of Object.entries(registry)) {
+      for (const [colName, raw] of Object.entries(def.columns)) {
+        if ((raw as ColumnSpec).hashKeyed === true) {
+          issues.push({
+            model: key,
+            path: `columns.${colName}.hashed`,
+            message:
+              `declares a keyed digest but no 'hashPepper' was provided to new Norm({...})`,
+          });
+        }
+      }
+    }
+  }
   // Partial encrypt/decrypt overrides would write one format and read
   // another — insert() would store the row, then crash decrypting its
   // own RETURNING. Require the pair.

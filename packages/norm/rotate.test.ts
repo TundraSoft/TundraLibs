@@ -172,12 +172,11 @@ describe('norm.rotateKey — in-place key rotation', () => {
     asserts.assertEquals(asA.data[0]!.secret, 'alpha');
   });
 
-  it('validates its keys', async () => {
-    await asserts.assertRejects(
-      () => rotateKey(norm(KEY_A), { oldKey: KEY_A, newKey: KEY_A }),
-      Error,
-      'identical',
-    );
+  it('validates its keys; the same key on both sides moves only cells outside the current envelope', async () => {
+    // Every cell is already k1 under KEY_A — a same-key run is a no-op.
+    const same = await rotateKey(norm(KEY_A), { oldKey: KEY_A, newKey: KEY_A });
+    asserts.assertEquals(same.rotatedCells, 0);
+    asserts.assertEquals(same.skippedCells, 3);
     await asserts.assertRejects(
       () => rotateKey(norm(KEY_A), { oldKey: '', newKey: KEY_B }),
       Error,

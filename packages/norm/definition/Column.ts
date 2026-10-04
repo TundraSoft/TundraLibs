@@ -146,6 +146,10 @@ export interface ColumnSpec<
    * algorithm is definition-level data — the physical VARCHAR length
    * derives from it (64/96/128 hex chars). */
   readonly hashed?: DigestAlgorithm;
+  /** The digest is KEYED: HMAC under the instance `hashPepper` instead of
+   * a plain digest (`Column.hash(algo, { keyed: true })`). Physical type
+   * unchanged — same hex length. */
+  readonly hashKeyed?: true;
   /** `false` = excluded from default projections (RETURNING included). */
   readonly project?: false;
   /** `false` = rejected in WHERE / ORDER BY. */
@@ -1076,12 +1080,22 @@ export const Column = {
    * One-way digest column (`Column.hash('SHA-256')`, default
    * SHA-256): write and filter by plaintext, store only the digest.
    * The VARCHAR length derives from the algorithm (64/96/128).
+   *
+   * `{ keyed: true }` stores HMAC-`algo` under the instance `hashPepper`
+   * instead (same length), so the rows alone cannot be brute-forced
+   * offline. A digest column cannot be migrated to keyed — the plaintext
+   * is gone — so keyed applies to rows written from then on; see
+   * `legacyHashes` for the lookup window.
    */
-  hash: (algorithm: DigestAlgorithm = 'SHA-256'): DigestColumnBuilder =>
+  hash: (
+    algorithm: DigestAlgorithm = 'SHA-256',
+    options: { keyed?: boolean } = {},
+  ): DigestColumnBuilder =>
     new DigestColumnBuilder({
       type: 'VARCHAR',
       length: DIGEST_LENGTHS[algorithm],
       hashed: algorithm,
+      ...(options.keyed === true ? { hashKeyed: true } : {}),
       // A salted PBKDF2 hash is non-deterministic → not matchable by a
       // plaintext-equality filter; verify against the stored value instead.
       ...(algorithm === 'PBKDF2' ? { filterable: false } : {}),
