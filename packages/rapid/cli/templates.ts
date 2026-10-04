@@ -774,11 +774,18 @@ socket-typed one). \`@Module(name, { middleware })\` prepends a universal
 chain to every route and command in the class — app \`use()\` → module →
 route → handler; jobs take app-level middleware only. \`security\` documents,
 \`access\` enforces — declare both. Binders (\`bind: [...]\`, in parameter order): \`param(name,
-validate?)\`, \`payload(schemaOrValidate?)\` (a schema OBJECT also documents the
-body), \`query(validate?)\`, \`paging()\`, \`header(name)\`, \`cookie(name)\`,
-\`auth(validate?)\`, \`session()\` (decorators subpath only — the root exports
-the \`session()\` middleware), \`connection()\` (socket only), \`config('set.key')\`.
-Without a validator \`param\` is \`string\` and \`payload\` is \`unknown\`.
+schemaOrValidate?)\` (a schema OBJECT also documents the path parameter),
+\`payload(schemaOrValidate?)\` (a schema OBJECT also documents the body),
+\`query(validate?)\` (the \`$op\` grammar, for lists) or \`query(Schema, { unknown?:
+'drop' | 'reject' })\` (the query FLATTENED by \`flatQuery\` — \`?next=/users\` →
+\`{ next: '/users' }\` — parsed by a guardian; for a page's plain parameters), \`paging()\`,
+\`header(name)\`, \`cookie(name)\`, \`auth(validate?)\`, \`session()\` (decorators
+subpath only — the root exports the \`session()\` middleware), \`connection()\`
+(socket only), \`config('set.key')\`, \`state(key, validate?)\` (what a middleware
+wrote to \`ctx.state\`), \`surface()\` (\`'api'\` | \`'ui'\`), \`clientAddress()\` (the
+trusted address). Never write request facts into \`ctx.cookies\` to bind them —
+use \`state\`/\`surface\`/\`clientAddress\`. Without a validator \`param\` is
+\`string\` and \`payload\` is \`unknown\`.
 
 Modules: \`class Posts extends RapidModule<typeof EVENTS> { name = 'Posts';
 namespace = 'blog'; protected readonly events = EVENTS; … }\` with

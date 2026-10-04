@@ -156,6 +156,35 @@ describe('rapid.endpoints', () => {
     asserts.assert('RapidError' in schemas);
   });
 
+  it('a param(name, Schema) binder documents the path parameter with its toOpenAPI()', () => {
+    const Code = {
+      parse: (v: unknown) => v,
+      toOpenAPI: () => ({ type: 'string', pattern: '^[A-Z]+$' }),
+    };
+    const doc = buildOpenApi([
+      {
+        method: 'GET',
+        path: '/orgs/:code:/items/:id:',
+        middlewares: [],
+        handler: () => ({}),
+        openapi: { binds: [{ source: 'param', name: 'code', schema: Code }] },
+      },
+    ] as never, {});
+    const params = (doc.paths as Record<
+      string,
+      Record<string, { parameters: { name: string; schema: unknown }[] }>
+    >)[
+      '/orgs/{code}/items/{id}'
+    ]!.get!.parameters;
+    asserts.assertEquals(params.find((p) => p.name === 'code')!.schema, {
+      type: 'string',
+      pattern: '^[A-Z]+$',
+    });
+    asserts.assertEquals(params.find((p) => p.name === 'id')!.schema, {
+      type: 'string',
+    });
+  });
+
   it('openapi() endpoint serves the doc; expose gates by mode', async () => {
     const app = await make();
     app.get('/posts', () => ({ content: { rows: [] } }));

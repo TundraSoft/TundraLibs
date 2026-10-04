@@ -294,11 +294,14 @@ export function buildOpenApi(
     // Declared here: both the request parameters and the response
     // schema below key off it.
     const paged = meta?.paging === true;
+    // A `param(name, Schema)` binder documents the parameter's shape;
+    // anything else is the router's string.
     const parameters: Record<string, unknown>[] = params.map((name) => ({
       name,
       in: 'path',
       required: true,
-      schema: { type: 'string' },
+      schema: meta?.binds?.find((b) => b.source === 'param' && b.name === name)
+        ?.schema?.toOpenAPI?.() ?? { type: 'string' },
     }));
     for (const bind of meta?.binds ?? []) {
       if ((bind.source === 'query' || bind.source === 'header') && bind.name) {

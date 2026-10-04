@@ -30,17 +30,20 @@ export type CacheHost = {
 /** The binder sources a `cache.key` may carry (each a read channel the handler may then use). */
 const KEY_SOURCES: ReadonlyMap<RapidBinder['source'], number> = new Map([
   ['config', 0],
+  ['state', 0], // per key — matched by name, see assertRouteCache
   ['query', CTX_READ.QUERY],
   ['paging', CTX_READ.PAGING],
   ['header', CTX_READ.HEADERS],
   ['cookie', CTX_READ.COOKIES],
   ['auth', CTX_READ.AUTH],
+  ['clientAddress', CTX_READ.ADDRESS],
 ]);
 
-/** The channel a route's own binder reads (`session` loads from the cookie; `param` is in the default key). */
+/** The channel a route's own binder reads (`session` loads from the cookie; `param` and `surface` are in the default key). */
 const BIND_CHANNEL: ReadonlyMap<RapidBinder['source'], number> = new Map([
   ...KEY_SOURCES,
   ['param', 0],
+  ['surface', 0],
   ['session', CTX_READ.COOKIES],
 ]);
 
@@ -50,6 +53,7 @@ const NAMES: readonly [number, string][] = [
   [CTX_READ.PAGING, 'paging'],
   [CTX_READ.HEADERS, 'header'],
   [CTX_READ.COOKIES, 'cookie'],
+  [CTX_READ.ADDRESS, 'clientAddress'],
 ];
 
 const nameOf = (channels: number): string =>
@@ -102,6 +106,18 @@ export function assertRouteCache(
         { source: (binder as { source?: unknown })?.source },
       );
     }
+  }
+  // A bound state key is per request too — it must appear in the key by
+  // NAME (the channel mask cannot tell one key from another).
+  const keyed = new Set(
+    key.filter((b) => b.source === 'state').map((b) => b.name),
+  );
+  const unkeyed = binds.find((b) => b.source === 'state' && !keyed.has(b.name));
+  if (unkeyed !== undefined) {
+    fail(
+      `cache.key must carry state('${unkeyed.name}') — the route binds it, so the cached reply would serve one request's value to the next`,
+      { missing: `state('${unkeyed.name}')` },
+    );
   }
   const missing = binds.reduce(
     (mask, b) => mask | (BIND_CHANNEL.get(b.source) ?? 0),
