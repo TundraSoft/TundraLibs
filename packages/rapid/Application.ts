@@ -44,6 +44,9 @@ import {
   authPrelude,
   buildExporter,
   buildState,
+  COMPOSE_DEFAULTS,
+  type ComposeLimits,
+  type ComposePlan,
   currentContainer,
   djb2,
   hasDecorations,
@@ -54,6 +57,7 @@ import {
   normalizeApiSurface,
   normalizeRouteTemplate,
   normalizeStaticConfig,
+  planCompose,
   type StaticMount,
 } from './utils/mod.ts';
 import {
@@ -151,6 +155,7 @@ const UI_DATA_KEYS = new Set([
   'swapHeader',
   'swapUnless',
   'redirectHeader',
+  'compose',
 ]);
 /** RFC 9110 token — the legal shape of a header name. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -268,6 +273,11 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __auth?: RapidAuthBinding;
   /** The DEVELOPMENT access summary is logged once per boot. */
   private __accessSummarised = false;
+  /** Each composed route's resolved parts — planned at boot, read per request by the transport. */
+  private readonly __composePlans = new WeakMap<
+    RapidRouteEntry<S>,
+    ComposePlan
+  >();
   /** Registered routes (express-style paths), in registration order. */
   private readonly __routes: RapidRouteEntry<S>[] = [];
   private readonly __socketCommands: Map<string, RapidSocketEntry<S>> =
@@ -1143,7 +1153,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       opts.version === undefined && opts.openapi === undefined &&
       opts.template === undefined && opts.layout === undefined &&
       opts.apiOnly === undefined && opts.uiOnly === undefined &&
-      opts.access === undefined
+      opts.access === undefined && opts.compose === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -1179,6 +1189,26 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (opts.access !== undefined) {
       assertAccess(`${method} ${path}`, opts.access);
     }
+    if (opts.compose !== undefined) {
+      // Shape only, here — the actions resolve against the mounted modules
+      // at boot (`__planCompose`), after every module is in.
+      const compose = opts.compose as unknown;
+      const malformed = compose === null || typeof compose !== 'object' ||
+        Array.isArray(compose) ||
+        Object.values(compose as Record<string, unknown>).some((part) =>
+          typeof part !== 'string' &&
+          (part === null || typeof part !== 'object' ||
+            typeof (part as { action?: unknown }).action !== 'string')
+        );
+      if (malformed || method !== 'GET') {
+        throw new RapidError('RAPID_CONFIG', {
+          message: method !== 'GET'
+            ? `${method} ${path}: compose is for GET routes — a page is a read`
+            : `${method} ${path}: compose maps slot names to 'namespace:Module:method' strings or { action } objects`,
+          details: { method, path },
+        });
+      }
+    }
     const chain = (hasOptions ? args.slice(1) : args) as [
       ...RapidHTTPMiddleware[],
       RapidHTTPHandler<S>,
@@ -1204,6 +1234,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       ...(opts.apiOnly === true ? { apiOnly: true } : {}),
       ...(opts.uiOnly === true ? { uiOnly: true } : {}),
       ...(opts.access !== undefined ? { access: opts.access } : {}),
+      ...(opts.compose !== undefined ? { compose: opts.compose } : {}),
     });
     return this;
   }
@@ -1666,6 +1697,24 @@ export class Application<S extends RapidContextState = RapidContextState>
         message: `ui: prefer must be 'json' or 'html'`,
       });
     }
+    if (data.compose !== undefined) {
+      const caps = data.compose as Record<string, unknown> | null;
+      const bad = caps === null || typeof caps !== 'object' ||
+        Object.keys(caps).some((k) => !(k in COMPOSE_DEFAULTS)) ||
+        (['maxParts', 'concurrency'] as const).some((k) =>
+          caps[k] !== undefined &&
+          (!Number.isInteger(caps[k]) || (caps[k] as number) < 1)
+        ) ||
+        (caps.timeout !== undefined &&
+          (typeof caps.timeout !== 'number' || !(caps.timeout > 0)));
+      if (bad) {
+        throw new RapidError('RAPID_CONFIG', {
+          message:
+            'ui: compose takes { maxParts, concurrency } as positive integers and timeout as seconds > 0',
+          details: { compose: data.compose },
+        });
+      }
+    }
     if (code.assets !== undefined) {
       for (const [key, value] of Object.entries(code.assets)) {
         if (!key.startsWith('/') || typeof value !== 'string') {
@@ -1894,8 +1943,46 @@ export class Application<S extends RapidContextState = RapidContextState>
    * Boot-time invariants shared by {@link start} and {@link fetch}.
    * @throws {RapidError} RAPID_CONFIG on an unsafe option combination.
    */
+  /**
+   * The caps composed pages run under: `ui.compose` over the defaults
+   * (`maxParts` 5, `concurrency` 4, `timeout` 2s). Readable on a
+   * `ui.enabled: false` replica too — its pages still compose, as JSON.
+   */
+  public get composeLimits(): ComposeLimits {
+    return { ...COMPOSE_DEFAULTS, ...this.__ui?.compose };
+  }
+
+  /**
+   * A composed route's plan, or `undefined` for a route that declares no
+   * `compose` (and for the auto-HEAD sibling of one, which never composes).
+   *
+   * @internal Read by HTTPTransport per request.
+   */
+  public _composePlan(entry: RapidRouteEntry<S>): ComposePlan | undefined {
+    return this.__composePlans.get(entry);
+  }
+
+  /**
+   * Resolve every composed route's parts against the mounted modules —
+   * once, at boot, so an unknown action, a mutating target or an
+   * unsatisfiable param is a boot failure, never a request-time surprise.
+   */
+  private __planCompose(): void {
+    const limits = this.composeLimits;
+    for (const route of this.__routes) {
+      if (route.compose === undefined || this.__composePlans.has(route)) {
+        continue;
+      }
+      this.__composePlans.set(
+        route,
+        planCompose(route, this.__moduleRuntime, limits),
+      );
+    }
+  }
+
   private __assertBootConfig(): void {
     this.__assertAuthBound();
+    this.__planCompose();
     this.__logAccessSummary();
     if (this.option('stateMode') === 'SHARE') {
       const candidates: RapidMiddleware[] = [

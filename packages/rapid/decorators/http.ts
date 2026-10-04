@@ -161,6 +161,13 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * One method, one string: a second decoration must repeat it exactly.
    */
   access?: string;
+  /**
+   * The parts this page is made of — `{ slot: 'namespace:Module:method' }`
+   * or the long form with `params`/`defer` — run in-process under the
+   * request and attached to the reply as `content.parts`. `@GET` only;
+   * resolved when the app boots. See `RapidRouteOptions.compose`.
+   */
+  compose?: RapidRouteOptions['compose'];
 };
 
 /** The decorator signature every route factory returns. */
@@ -271,6 +278,7 @@ function route<This, A extends readonly unknown[]>(
         ? { middleware: options.middleware }
         : {}),
       ...(options.access !== undefined ? { access: options.access } : {}),
+      ...(options.compose !== undefined ? { compose: options.compose } : {}),
     });
   };
 }

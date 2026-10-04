@@ -33,7 +33,11 @@ import { djb2 } from '../utils/hash.ts';
  * default: the element itself), `data-swap` = `replace` (default) |
  * `outer` | `append` | `prepend`, `data-load` (present → the element
  * fetches its own action on DOM ready, or right after the swap that
- * inserted it — a lazy region; GET only). The `csrf` cookie is echoed as
+ * inserted it — a lazy region; GET only), `data-compose` (on a
+ * `data-load` placeholder a composed page emitted: ONE fetch per distinct
+ * action URL however many placeholders share it, and the response's
+ * top-level `[data-part]` elements each replace the placeholder of the
+ * same name instead of swapping into the loader). The `csrf` cookie is echoed as
  * `x-csrf-token` (names overridable via `data-csrf-cookie` /
  * `data-csrf-header` on `<body>`; a renamed `ui.swapHeader` /
  * `ui.redirectHeader` is followed via `data-swap-header` /
@@ -257,7 +261,27 @@ export const UI_RUNTIME: string = `(() => {
         : null;
       let swapped;
       let extras = [];
+      // A composed page's deferred fetch: the body is a list of
+      // [data-part] wrappers, each replacing the placeholder of the same
+      // name wherever the page put it (the loader itself is one of them).
+      // Parts the page did not render are dropped.
+      const distribute = () => {
+        const tpl = doc.createElement('template');
+        tpl.innerHTML = body;
+        const nodes = [];
+        for (const part of tpl.content.children) {
+          const name = part.dataset && part.dataset.part;
+          if (name === undefined) continue;
+          const slot = doc.querySelector(
+            '[data-part="' + CSS.escape(name) + '"]',
+          );
+          if (slot) nodes.push(apply(slot, 'outer', part.outerHTML).node);
+        }
+        swapped = nodes[0] || target;
+        extras = nodes.slice(1);
+      };
       const mutate = () => {
+        if (target.dataset.compose !== undefined) return distribute();
         const applied = apply(target, opts.swap, body);
         swapped = applied.node;
         extras = applied.extras;
@@ -295,7 +319,10 @@ export const UI_RUNTIME: string = `(() => {
       // (re-issuing a POST would repeat its side effects), and never
       // append/prepend (a "refresh" would re-append the fragment).
       if (method === 'GET') {
-        if (opts.swap !== 'append' && opts.swap !== 'prepend') {
+        if (
+          opts.swap !== 'append' && opts.swap !== 'prepend' &&
+          target.dataset.compose === undefined
+        ) {
           sources.set(swapped, { url, swap: opts.swap });
         }
       } else if (swapped !== target) {
@@ -325,6 +352,10 @@ export const UI_RUNTIME: string = `(() => {
       // Lazy regions the fragment brought with it — every root, and every
       // one guarded by the producing URL, or a sibling root that points
       // back at this action would refetch at round-trip rate forever.
+      // Each distributed part is its own swap for listeners.
+      if (target.dataset.compose !== undefined) {
+        for (const root of extras) emit(root, 'rapid:swapped', detail);
+      }
       loadLazy(swapped, url);
       for (const root of extras) loadLazy(root, url);
       return true;
@@ -405,6 +436,9 @@ export const UI_RUNTIME: string = `(() => {
     }
   };
   const loaded = new WeakSet();
+  // Composed placeholders sharing one action URL share ONE request: the
+  // response carries every part, so the first loader fills them all.
+  const composing = new Set();
   const loadLazy = (root, from) => {
     const scope = root instanceof Element ? root : doc;
     const found = [];
@@ -421,6 +455,14 @@ export const UI_RUNTIME: string = `(() => {
       }
       if (from !== undefined && sameAction(el.dataset.action, from)) {
         console.warn('[rapid] data-load points at the action that produced it — skipped', el);
+        continue;
+      }
+      if (el.dataset.compose !== undefined) {
+        let key;
+        try { key = new URL(el.dataset.action, location.href).href; } catch { continue; }
+        if (composing.has(key)) continue;
+        composing.add(key);
+        perform(el, null).finally(() => composing.delete(key));
         continue;
       }
       perform(el, null);

@@ -459,6 +459,49 @@ export function represent<S extends RapidContextState>(
 }
 
 /**
+ * Render one reply through a route template as a BARE fragment — a
+ * composed page's part. No layout, no core, no headers: the caller
+ * places the markup. Same diagnostics as a page render.
+ */
+export function renderFragment<S extends RapidContextState>(
+  template: RapidRouteTemplate,
+  content: unknown,
+  ctx: HTTPContext<S>,
+  paging?: RapidContextResponse['paging'],
+): Html {
+  return renderChecked(
+    template.render,
+    content,
+    buildView(ctx, paging),
+    `template '${template.render.name || 'for this part'}'`,
+  );
+}
+
+/**
+ * The error fragment for one status and its envelope payload — the same
+ * closed `errorTemplates` resolution as {@link representError}, fragment
+ * only (no core). A composed part that was denied or failed renders
+ * through here, so a 403 tile looks like every other 403 the app shows.
+ */
+export function renderErrorFragment<S extends RapidContextState>(
+  status: number,
+  payload: Record<string, unknown>,
+  ctx: HTTPContext<S>,
+  mode: 'DEVELOPMENT' | 'PRODUCTION',
+): Html {
+  const templates = uiOf(ctx)?.errorTemplates;
+  const errorTemplate = templates?.[status] ??
+    templates?.[status >= 500 ? '5xx' : '4xx'] ??
+    templates?.default ?? DefaultErrorPage;
+  return renderChecked(
+    errorTemplate,
+    { ...payload, status, mode },
+    buildView(ctx),
+    `errorTemplate '${errorTemplate.name || ''}'`,
+  );
+}
+
+/**
  * The HTML error representation (D9) — called from the post-onion
  * disclosure path, AFTER `app.onError` declined to override. Returns
  * `undefined` (JSON envelope as always) unless the representation

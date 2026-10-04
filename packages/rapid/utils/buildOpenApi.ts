@@ -398,6 +398,21 @@ export function buildOpenApi(
       // The declared `access` string, as written — what the auth binding
       // judges; a reviewer sees it beside the operation.
       ...(route.access !== undefined ? { 'x-access': route.access } : {}),
+      // The page's parts, as declared: the slot, the action behind it and
+      // whether the first paint carries it — what a `?parts=` client may ask for.
+      ...(route.compose !== undefined
+        ? {
+          'x-compose': Object.fromEntries(
+            Object.entries(route.compose).map(([slot, part]) => [
+              slot,
+              typeof part === 'string' ? { action: part } : {
+                action: part.action,
+                ...(part.defer ? { defer: true } : {}),
+              },
+            ]),
+          ),
+        }
+        : {}),
       // `[]` is meaningful: it overrides any document-level requirement and
       // marks the operation public, so it is emitted as-is.
       ...(meta?.security !== undefined

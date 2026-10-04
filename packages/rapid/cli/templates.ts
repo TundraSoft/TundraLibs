@@ -163,6 +163,10 @@ logger: # @tundralibs/slogger options behind app.log / this.log (appName is the 
 #   swapHeader: rapid-swap # a request carrying it gets the fragment
 #   swapUnless: [] # header names whose presence cancels the swap (htmx: HX-Boosted)
 #   redirectHeader: rapid-redirect # a swap reply's redirect target
+#   compose: # caps for composed pages (routes declaring \`compose\`)
+#     maxParts: 5 # a page declaring more parts fails the boot
+#     concurrency: 4 # parts run at once
+#     timeout: 2 # seconds a part may take before it answers a 504 envelope
 `;
 
 const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
@@ -800,12 +804,32 @@ layout-wrapped page — \`Accept\` is never consulted; the api surface
 nothing from \`ctx.auth\` unless the app's \`view\` projection names it. The
 factory's \`ui\` option (\`core\`, \`layout\`, \`errorTemplates\`, \`view\`, \`assets\`)
 is code; the YAML \`ui:\` block (\`enabled\`, \`prefer\`, \`live\`, \`history\`,
-header/cookie names) is data. The runtime script (\`/__rapid/ui.js\`) handles
+header/cookie names, \`compose\` caps) is data. The runtime script (\`/__rapid/ui.js\`) handles
 \`data-action\` / \`data-target\` / \`data-swap\` / \`data-load\` elements and
 \`rapid.swap()\` / \`rapid.refresh()\`, same-origin only, echoing the CSRF
 cookie; \`/__rapid/live.js\` (channels over \`/ws\`) and \`/__rapid/history.js\`
 (push-state) are opt-in. Static assets: \`server.static\` (fingerprinted
-\`?v=\` URLs via \`view.asset()\`).{{aiUi}}
+\`?v=\` URLs via \`view.asset()\`).
+
+**Composed pages.** A dashboard declares its tiles instead of fetching
+them: \`@GET('/orgs/:code:', { template: DASH, compose: { stats:
+'org:Organisations:stats', people: { action: 'org:People:list', defer: true }
+} })\`. rapid runs each part IN-PROCESS under the page's request (one
+authentication; each part judged by its own \`access\` for this caller via
+\`invoke()\`), renders it through the part's OWN route template, and hands the
+template \`d.parts.<slot>\` = \`{ status, html }\` (\`{ status, content }\` on the
+api surface / for an untemplated target). Place \`\${d.parts.stats.html}\`; a
+denied or failed part is its 403/5xx error fragment, never its content — the
+template decides what to show. \`defer: true\` parts render a placeholder and
+the runtime fetches ALL of them in ONE \`GET <page>?parts=a,b\` (the
+\`data-compose\` loader; a 504 part retries once). Actions resolve at boot
+(\`RAPID_COMPOSE_UNKNOWN_ACTION\`; mutating targets, unsatisfiable params and
+more parts than \`ui.compose.maxParts\` are \`RAPID_CONFIG\`); a part's
+\`param()\` binders take the page's path params by name, or via \`params:
+{ target: pageParam }\`. \`?parts=\` outside the declared set is 400
+\`RAPID_COMPOSE_PARTS\`. Composed replies are \`private, no-store\`; OpenAPI
+carries \`x-compose\`. Caps: \`ui.compose: { maxParts: 5, concurrency: 4,
+timeout: 2 }\`.{{aiUi}}
 `;
 
 const RAPID_PACT_AGENT_MD = `# rapid — authentication (pact)

@@ -511,7 +511,12 @@ per interaction (`data-push` / `rapid.history.push()`), no DOM cache
 `server.api` (`hosts` / `prefix`) splits an **api surface** off the same
 routes — `api.example.com/users` or `/api/users` answer JSON only (pages
 included; `uiOnly` routes are 404 there), `onlyApi()` / `onlyUi()` scope middleware per side;
-`ui.enabled: false` makes every request that surface. `htmlDocument()`, `withQuery()`, `when()` / `each()`
+`ui.enabled: false` makes every request that surface. A dashboard declares
+its tiles — `compose: { stats: 'org:Organisations:stats', people: { action:
+'org:People:list', defer: true } }` on the page route — and rapid runs them
+in-process under the one request (each judged by its own `access` for the
+caller, rendered by its own template, a denied tile its 403 fragment),
+fetching every deferred one in a single `?parts=` follow-up. `htmlDocument()`, `withQuery()`, `when()` / `each()`
 (value-truthiness branches and lists with an empty state — `0 && …` would
 render the `0`), `ctx.isSwap`, typed view projections, and `testing`'s
 `view()` / `swap: true` round out the layer. See

@@ -136,8 +136,9 @@ UI configuration is split by NATURE, typed disjoint, at
 
 - **The DATA half** — serializable, so a config-driven app sets it in
   `Application.yaml` under `ui:` (per replica): `enabled`, `runtimePath`,
-  `live`, `history`, `prefer`, `csrfCookie`, and the contract headers
-  (`swapHeader` / `swapUnless` / `redirectHeader`).
+  `live`, `history`, `prefer`, `csrfCookie`, the contract headers
+  (`swapHeader` / `swapUnless` / `redirectHeader`), and the `compose` caps
+  (`maxParts` / `concurrency` / `timeout`).
 - **The CODE half** — templates and functions YAML can never name
   (config names code, never imports it): `core`, `layout`, `view`,
   `errorTemplate`/`errorTemplates`, `assets`. Config-driven apps pass it
@@ -400,13 +401,14 @@ stylesheet caches forever.
 One delegated `click` + one `submit` listener over `data-action` elements —
 no inline handlers anywhere, so `script-src 'self'` suffices.
 
-| attribute     | meaning                                                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `data-action` | URL to fetch                                                                                                                          |
-| `data-method` | default `get`; forms default `post`. A GET form sends its fields as the query string, replacing any on the action, like a native form |
-| `data-target` | selector to swap into (default: the element itself)                                                                                   |
-| `data-swap`   | `replace` (default) \| `outer` \| `append` \| `prepend`                                                                               |
-| `data-load`   | present → fetch the action on DOM ready / when swapped in (a lazy region; GET only)                                                   |
+| attribute      | meaning                                                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `data-action`  | URL to fetch                                                                                                                                                                                                             |
+| `data-method`  | default `get`; forms default `post`. A GET form sends its fields as the query string, replacing any on the action, like a native form                                                                                    |
+| `data-target`  | selector to swap into (default: the element itself)                                                                                                                                                                      |
+| `data-swap`    | `replace` (default) \| `outer` \| `append` \| `prepend`                                                                                                                                                                  |
+| `data-load`    | present → fetch the action on DOM ready / when swapped in (a lazy region; GET only)                                                                                                                                      |
+| `data-compose` | on a composed page's placeholder: one fetch per distinct action URL, and the response's `[data-part]` elements replace the placeholders of the same name (see [Composed pages](#composed-pages--one-request-many-tiles)) |
 
 Requests carry `rapid-swap: 1` (the only header the representer reads) plus
 `Accept: text/html` as a courtesy. Forms post
@@ -507,6 +509,94 @@ that points back at its own action is skipped with a console warning — poll
 with `rapid.refresh()` on a timer instead. GET only. Without JavaScript the skeleton stays,
 so a `<noscript>` link is the honest fallback — the same route serves
 the full page. Pages never stream (see Bytes and streams).
+
+### Composed pages — one request, many tiles
+
+A dashboard is made of other resources. Lazy regions buy it N requests,
+each paying authentication again; a handler that `invoke`s five modules
+and merges by hand re-implements their access checks. `compose` declares
+the parts instead, and rapid runs them **in-process under the page's
+request**: one authentication, every part judged by its own `access` for
+this caller (`invoke()` enforces it), each rendered through **its own
+route's template**, the results attached to the reply as `content.parts`.
+The API surface keeps one resource per endpoint; the page is a view over
+them.
+
+```ts
+import { GET, param } from '@tundralibs/rapid/decorators';
+import { RapidModule } from '@tundralibs/rapid/modules';
+import { html, template } from '@tundralibs/rapid/ui';
+import type { RapidComposeSlot } from '@tundralibs/rapid';
+
+const STATS = template<{ total: number }>((d) => html`<b>${d.total}</b>`);
+const DASHBOARD = template<
+  { title: string; parts: Record<string, RapidComposeSlot> }
+>((d) =>
+  html`
+    <h1>${d.title}</h1>
+    <section>${d.parts.stats?.html}</section>
+    <section>${d.parts.people?.html}</section>
+  `
+);
+
+class Organisations extends RapidModule {
+  readonly name = 'Organisations';
+  readonly namespace = 'org';
+  protected readonly events = {};
+
+  // A resource of its own — and a tile.
+  @GET('/orgs/:code:/stats', {
+    bind: [param('code')],
+    access: 'Org:VIEW',
+    template: STATS,
+  })
+  stats(code: string) {
+    return { content: { total: code.length } };
+  }
+
+  @GET('/orgs/:code:', {
+    bind: [param('code')],
+    access: 'Org:VIEW',
+    template: DASHBOARD,
+    compose: {
+      stats: 'org:Organisations:stats', // same addressing as events
+      people: { action: 'org:People:list', defer: true },
+    },
+  })
+  dashboard(code: string) {
+    return { content: { title: `Org ${code}` } }; // rapid adds `parts`
+  }
+}
+```
+
+- **Addressing.** A part is `'namespace:Module:method'`, resolved when the
+  app boots: an unknown action is `RAPID_COMPOSE_UNKNOWN_ACTION`; a target
+  served by a non-GET route, one that binds the payload, or a set larger
+  than `ui.compose.maxParts` is `RAPID_CONFIG`. A part is a read.
+- **Params.** The target's `param()` binders take the page's path params of
+  the same name; `params: { code: 'team' }` maps one onto another, and a
+  param the page cannot supply fails the boot. Query, paging, header,
+  cookie, auth and session binders read the page's request.
+- **Slots.** `content.parts[name]` is `{ status, html }` when the page is
+  HTML (the part's template rendered, wrapped in
+  `<div data-part="name" data-status="…">`), `{ status, content }` on the
+  api surface or for an untemplated target. A denied part is its 403
+  fragment, a failed one its 5xx fragment — rendered through the app's
+  `errorTemplates`, never carrying the part's content or real error — and
+  the page template decides what to show. The page's own `access` gates
+  everything first.
+- **Deferred parts.** `defer: true` renders a placeholder; the runtime
+  fetches every deferred part in **one** request, `GET <page>?parts=a,b`,
+  and places each result by name wherever the template put the slot. The
+  selection is checked against the declared set (400 `RAPID_COMPOSE_PARTS`
+  for an unknown, repeated or empty name); any declared part may be asked
+  for, so a single tile refreshes with `?parts=stats`. Composed pages and
+  fragments are `cache-control: private, no-store`.
+- **Caps.** `ui.compose: { maxParts: 5, concurrency: 4, timeout: 2 }` in
+  the data half. A part past `timeout` seconds is a 504 fragment that
+  retries once through the deferred path, then stays an error state.
+- **Contract.** OpenAPI carries `x-compose` per page (slot → action,
+  `defer`); each part's own operation still documents its `x-access`.
 
 ## Dynamic updates — one action, many regions
 

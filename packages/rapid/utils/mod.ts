@@ -50,10 +50,22 @@ export {
   enforceAccess,
 } from './access.ts';
 export {
+  extractBind,
   hasDecorations,
   type ModuleMountTarget,
   mountModule,
 } from './mountModule.ts';
+export {
+  COMPOSE_DEFAULTS,
+  type ComposeLimits,
+  type ComposePlan,
+  type ComposePlanPart,
+  type ComposeRun,
+  partsFragment,
+  planCompose,
+  runCompose,
+  selectParts,
+} from './composer.ts';
 export {
   bodyCapFor,
   parseBody,

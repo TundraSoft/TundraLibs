@@ -17,10 +17,15 @@ import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
 import {
   compose,
+  type ComposePlan,
   isSocketOriginAllowed,
+  isSwap,
+  partsFragment,
   requestHostname,
   resolveSurface,
   resolveVersion,
+  runCompose,
+  selectParts,
   serveStaticFile,
   socketOutcome,
   stripApiPrefix,
@@ -28,6 +33,7 @@ import {
 import { isStreamBody } from '../utils/streams.ts';
 import type {
   RapidChannelOptions,
+  RapidComposeSlot,
   RapidContextResponse,
   RapidContextState,
   RapidMiddleware,
@@ -598,18 +604,37 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // runs the representer here — the innermost onion point, so every
     // middleware's post-next() view sees the final HTML (represent() is
     // synchronous, preserving the sync fast path).
+    // A composed page: the plan resolved at boot (never the auto-HEAD
+    // sibling — it carries the declaration but no plan, so it serves the
+    // handler alone).
+    const plan: ComposePlan | undefined = entry?.compose !== undefined
+      ? this._app._composePlan(entry)
+      : undefined;
     const apply = (
       returned: RapidContextResponse | void,
+      parts?: Record<string, RapidComposeSlot>,
     ): void | Promise<void> => {
       if (returned === undefined || ctx.response !== null) return;
       // A `null` return means "no body" (→ 204) on templated routes
       // too — only a real reply is represented.
       const commit = (): void => {
+        // The parts join the reply AFTER the response-contract check
+        // (which judges the handler's own data) and BEFORE representation
+        // (the template reads `content.parts`).
+        const reply = returned !== null && parts !== undefined
+          ? {
+            ...returned,
+            content: {
+              ...(returned.content as Record<string, unknown>),
+              parts,
+            },
+          }
+          : returned;
         // A templated route is represented on EITHER surface — the api
         // surface's row of the decision table is JSON, always.
-        ctx.response = returned !== null && entry?.template !== undefined
-          ? represent(returned, entry.template, ctx)
-          : returned;
+        ctx.response = reply !== null && entry?.template !== undefined
+          ? represent(reply, entry.template, ctx)
+          : reply;
       };
       // DEV-only response contract: a parse-capable declared response
       // schema (`@GET(..., { response: Schema })` / `openapi.response`)
@@ -663,16 +688,39 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     };
     const dispatch: () => void | Promise<void> = entry !== undefined
       ? () => {
+        if (plan !== undefined) {
+          // Composed pages are personal by construction (parts are judged
+          // for THIS caller) and never shared-cacheable.
+          ctx.setHeader('cache-control', 'private, no-store');
+          const select = selectParts(plan, new URL(ctx.url).searchParams);
+          // `?parts=`: the follow-up fetch — the named parts alone, no
+          // page handler.
+          if (select !== undefined) {
+            return this.__composeOnly(ctx, entry, plan, select);
+          }
+        }
         const returned = entry.handler(ctx);
         // `!= null` (not `!== undefined`): a handler that returns `null`
         // must NOT reach `.then` on it (that throws) — it falls through to
         // `apply`, which clears to a 204 just like a `void`/`0`/`''`
         // return. Only a real thenable takes the async branch.
-        if (
-          returned != null &&
+        const thenable = returned != null &&
           typeof (returned as Promise<RapidContextResponse | void>).then ===
-            'function'
-        ) {
+            'function';
+        if (plan !== undefined) {
+          const composed = (
+            reply: RapidContextResponse | void,
+          ): void | Promise<void> =>
+            this.__composable(reply, ctx)
+              ? this.__compose(ctx, entry, plan, undefined).then((parts) =>
+                apply(reply, parts)
+              )
+              : apply(reply);
+          return thenable
+            ? (returned as Promise<RapidContextResponse | void>).then(composed)
+            : composed(returned as RapidContextResponse | void);
+        }
+        if (thenable) {
           return (returned as Promise<RapidContextResponse | void>).then(apply);
         }
         return apply(returned as RapidContextResponse | void);
@@ -774,6 +822,91 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       () => this.__finalize(ctx, stamps),
       started,
     );
+  }
+
+  /**
+   * Whether a composed page's handler reply takes parts: a success with
+   * object content. A redirect or an error reply goes out as is; a
+   * success whose content is not an object cannot carry `parts` and is a
+   * server bug.
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID on a 2xx with
+   *   non-object content.
+   */
+  private __composable(
+    reply: RapidContextResponse | void,
+    ctx: HTTPContext<S>,
+  ): reply is RapidContextResponse {
+    if (reply === undefined || reply === null || ctx.response !== null) {
+      return false;
+    }
+    if (
+      reply.redirect !== undefined ||
+      (reply.status !== undefined &&
+        (reply.status < 200 || reply.status >= 300))
+    ) {
+      return false;
+    }
+    const content = reply.content;
+    if (
+      typeof content !== 'object' || content === null ||
+      Array.isArray(content) || content instanceof Uint8Array ||
+      isStreamBody(content)
+    ) {
+      throw new RapidError('RAPID_RESPONSE_INVALID', {
+        message:
+          `${ctx.action}: a composed page must reply with an object content — the parts are attached to it`,
+      });
+    }
+    return true;
+  }
+
+  /** Run a composed page's parts for this request (see `runCompose`). */
+  private __compose(
+    ctx: HTTPContext<S>,
+    entry: RapidRouteEntry<S>,
+    plan: ComposePlan,
+    select: ReadonlySet<string> | undefined,
+  ): Promise<Record<string, RapidComposeSlot>> {
+    const ui = this._app.uiOptions;
+    // The same decision the representer takes for the page: markup when
+    // the page is HTML (a swap, or `prefer: 'html'`), data otherwise. A
+    // `?parts=` fetch on the ui surface is always markup — that is what
+    // the placeholder asked for.
+    const asHtml = ctx.surface !== 'api' && entry.template !== undefined &&
+      (select !== undefined || isSwap(ctx, ui) ||
+        (entry.template.prefer ?? ui?.prefer ?? 'json') === 'html');
+    return runCompose(ctx as unknown as HTTPContext<RapidContextState>, plan, {
+      // Present by construction: the plan resolved against it at boot.
+      runtime: this._app.moduleRuntime!,
+      limits: this._app.composeLimits,
+      mode: this._app.mode,
+      asHtml,
+      ...(select !== undefined ? { select } : {}),
+    });
+  }
+
+  /** Answer `GET <page>?parts=a,b`: the selected parts, fragments on the ui surface, JSON on the api surface. */
+  private async __composeOnly(
+    ctx: HTTPContext<S>,
+    entry: RapidRouteEntry<S>,
+    plan: ComposePlan,
+    select: ReadonlySet<string>,
+  ): Promise<void> {
+    const slots = await this.__compose(ctx, entry, plan, select);
+    if (ctx.surface === 'api' || entry.template === undefined) {
+      ctx.response = { status: 200, content: { parts: slots } };
+      return;
+    }
+    const ui = this._app.uiOptions;
+    ctx.response = {
+      status: 200,
+      content: partsFragment(slots),
+      headers: {
+        'content-type': 'text/html; charset=UTF-8',
+        vary: [ui?.swapHeader ?? 'rapid-swap', 'Cookie'].join(', '),
+      },
+    };
   }
 
   /** Api-only routes do not exist on the ui surface. */
