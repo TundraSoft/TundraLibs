@@ -398,6 +398,7 @@ export function buildOpenApi(
       // The declared `access` string, as written — what the auth binding
       // judges; a reviewer sees it beside the operation.
       ...(route.access !== undefined ? { 'x-access': route.access } : {}),
+      ...(route.cache !== undefined ? { 'x-cache': route.cache.seconds } : {}),
       // The page's parts, as declared: the slot, the action behind it and
       // whether the first paint carries it — what a `?parts=` client may ask for.
       ...(route.compose !== undefined

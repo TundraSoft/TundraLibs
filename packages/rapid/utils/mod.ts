@@ -56,6 +56,14 @@ export {
   mountModule,
 } from './mountModule.ts';
 export {
+  assertRouteCache,
+  cached,
+  type CacheHost,
+  cachePrefix,
+  describeCache,
+} from './cache.ts';
+export { memoryStore } from './memoryStore.ts';
+export {
   COMPOSE_DEFAULTS,
   type ComposeLimits,
   type ComposePlan,

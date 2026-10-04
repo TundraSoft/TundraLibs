@@ -13,4 +13,6 @@ export type RapidAccessReportRow = {
   action: string;
   /** The declared string as written; absent means public (undeclared). */
   access?: string;
+  /** A cached route's policy, `'<seconds>s'` plus each key binder's source (`+query`); absent when uncached. */
+  cache?: string;
 };

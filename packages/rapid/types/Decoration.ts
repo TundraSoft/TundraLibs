@@ -9,6 +9,7 @@ import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { RapidBinder } from './Binder.ts';
 import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
+import type { RapidRouteCache } from './RouteCache.ts';
 import type { RapidSOCKETMiddleware } from './SOCKETMiddleware.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
@@ -76,6 +77,8 @@ export type RapidDecoration =
     access?: string;
     /** The page's parts (see `RapidRouteOptions.compose`). */
     compose?: RapidComposeOptions;
+    /** The reply cache (see `RapidRouteOptions.cache`). */
+    cache?: RapidRouteCache;
   }
   | {
     kind: 'SOCKET';

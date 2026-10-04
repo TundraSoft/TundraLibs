@@ -168,6 +168,13 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * resolved when the app boots. See `RapidRouteOptions.compose`.
    */
   compose?: RapidRouteOptions['compose'];
+  /**
+   * Keep this GET route's data reply in the app's cache store for
+   * `seconds`, keyed by route · surface · path params plus the `key`
+   * binders; the route's own binders must be covered by the key (checked
+   * at mount). Runs after `access`. See `RapidRouteOptions.cache`.
+   */
+  cache?: RapidRouteOptions['cache'];
 };
 
 /** The decorator signature every route factory returns. */
@@ -279,6 +286,7 @@ function route<This, A extends readonly unknown[]>(
         : {}),
       ...(options.access !== undefined ? { access: options.access } : {}),
       ...(options.compose !== undefined ? { compose: options.compose } : {}),
+      ...(options.cache !== undefined ? { cache: options.cache } : {}),
     });
   };
 }

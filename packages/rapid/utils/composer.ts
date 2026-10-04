@@ -25,10 +25,12 @@ import type {
   RapidComposeSlot,
   RapidContextResponse,
   RapidContextState,
+  RapidRouteCache,
   RapidRouteEntry,
   RapidRouteTemplate,
   RapidUiComposeOptions,
 } from '../types/mod.ts';
+import { cached, type CacheHost } from './cache.ts';
 import { extractBind } from './mountModule.ts';
 import { normalizeRouteTemplate } from './routeTemplate.ts';
 
@@ -53,6 +55,8 @@ export type ComposePlanPart = {
   /** Target param name → page path param name, fully resolved. */
   params: Readonly<Record<string, string>>;
   template: RapidRouteTemplate | undefined;
+  /** The target route's `cache`, inherited: a part and a direct visit share one entry. */
+  cache: RapidRouteCache | undefined;
   /** A route serves the target too — its reply is a `{ content }` to unwrap. */
   routed: boolean;
   defer: boolean;
@@ -199,6 +203,7 @@ export function planCompose<S extends RapidContextState>(
       binds,
       params,
       template,
+      cache: http[0]?.cache,
       routed: http.length > 0,
       defer,
     });
@@ -251,6 +256,8 @@ export type ComposeRun = {
   runtime: ModuleRuntime;
   limits: ComposeLimits;
   mode: 'DEVELOPMENT' | 'PRODUCTION';
+  /** The app, for a cached part's store (see `cached`). */
+  host: CacheHost;
   /** Render parts as markup (the page is HTML) or hand back data (JSON). */
   asHtml: boolean;
   /** The `?parts=` selection; absent on first paint (non-deferred parts run, deferred ones place a loader). */
@@ -316,12 +323,15 @@ async function runPart(
       }),
     );
   }
-  try {
-    const args = await Promise.all(part.binds.map((binder) => {
-      if (binder.source !== 'param') return extractBind(binder, ctx);
-      const raw = ctx.args.params[part.params[binder.name!]!];
-      return binder.validate ? binder.validate(raw) : raw;
-    }));
+  // A part's binder: `param` from the page's mapped path params, anything
+  // else from the page request.
+  const bind = (binder: RapidBinder): unknown | Promise<unknown> => {
+    if (binder.source !== 'param') return extractBind(binder, ctx);
+    const raw = ctx.args.params[part.params[binder.name!]!];
+    return binder.validate ? binder.validate(raw) : raw;
+  };
+  const invoke = async (): Promise<Outcome> => {
+    const args = await Promise.all(part.binds.map(bind));
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expiry = new Promise<never>((_, reject) => {
       timer = setTimeout(
@@ -361,6 +371,38 @@ async function runPart(
       content: result.content,
       ok: result.status < 400,
     };
+  };
+  try {
+    if (part.cache === undefined) return await invoke();
+    // The target route's cache, keyed by the SAME action and params a
+    // direct visit uses — one entry for both. A part never reads the
+    // page context itself (its binders did, and the key covers them), so
+    // no read check.
+    return await cached<Outcome>(
+      ctx,
+      run.host,
+      {
+        source: part.action,
+        cache: part.cache,
+        params: Object.fromEntries(
+          Object.entries(part.params).map((
+            [target, page],
+          ) => [target, ctx.args.params[page]]),
+        ),
+        bind,
+        checkReads: false,
+      },
+      invoke,
+      (out) =>
+        out.ok
+          ? {
+            status: out.status,
+            content: out.content,
+            ...(out.paging !== undefined ? { paging: out.paging } : {}),
+          }
+          : undefined,
+      (stored) => ({ ...(stored as Omit<Outcome, 'ok'>), ok: true }),
+    );
   } catch (error) {
     return failed(ctx, run.mode, part, error);
   }

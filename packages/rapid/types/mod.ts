@@ -29,6 +29,8 @@ export type { RapidClusterMember } from './cluster/Member.ts';
 export type { RapidClusterSnapshot } from './cluster/Snapshot.ts';
 export type { RapidAccessReportRow } from './AccessReportRow.ts';
 export type { RapidAccessContext, RapidAuthBinding } from './AuthBinding.ts';
+export type { RapidCacheStore } from './CacheStore.ts';
+export type { RapidRouteCache } from './RouteCache.ts';
 export type { RapidComposeOptions } from './ComposeOptions.ts';
 export type { RapidComposePart } from './ComposePart.ts';
 export type { RapidComposeSlot } from './ComposeSlot.ts';
