@@ -28,6 +28,7 @@ import type {
   PactHooks,
   PactJweEncryption,
   PactLoginResult,
+  PactMfaAttempt,
   PactOAuthProfile,
   PactOAuthProviderConfig,
   PactOAuthRedirect,
@@ -1477,13 +1478,35 @@ export class Pact<B extends PermissionBits, M extends string>
    *
    * @throws {PactError} `MISSING_HOOK` without `getUser`; `MFA_LOCKED`
    *   when the user exceeded `options.mfa.maxAttempts` in the window,
-   *   even if this code is correct.
+   *   even if this code is correct — {@link attemptMFA} returns that as
+   *   a result instead.
    */
   public async verifyMFA(userId: string, code: string): Promise<boolean> {
+    const attempt = await this.attemptMFA(userId, code);
+    if (!attempt.ok && attempt.reason === 'LOCKED') {
+      throw new PactError('MFA_LOCKED', { window: attempt.window, userId });
+    }
+    return attempt.ok;
+  }
+
+  /**
+   * {@link verifyMFA} without the throw: the same single-use check and
+   * the same attempt count, with a lockout returned as
+   * `{ ok: false, reason: 'LOCKED', window }` so a sign-in flow can
+   * answer it like any other outcome. A locked attempt still counts, and
+   * its code is not checked.
+   *
+   * @throws {PactError} `MISSING_HOOK` without `getUser`.
+   */
+  public async attemptMFA(
+    userId: string,
+    code: string,
+  ): Promise<PactMfaAttempt> {
     const getUser = this._hooks.getUser;
     if (getUser === undefined) {
       throw new PactError('MISSING_HOOK', { hook: 'getUser' });
     }
+    const invalid = { ok: false, reason: 'INVALID_CODE' } as const;
     const limit = this._getOption('mfa')!;
     const maxAttempts = limit.maxAttempts ?? 5;
     const windowMinutes = limit.window ?? 15;
@@ -1492,7 +1515,7 @@ export class Pact<B extends PermissionBits, M extends string>
         ? this.__mfaGuard.countAttempt(userId, windowMinutes * 60)
         : await this._hooks.countMfaAttempt(userId, windowMinutes * 60);
       if (count > maxAttempts) {
-        throw new PactError('MFA_LOCKED', { window: windowMinutes, userId });
+        return { ok: false, reason: 'LOCKED', window: windowMinutes };
       }
     }
     const user = await getUser({ by: 'ID', id: userId });
@@ -1500,20 +1523,20 @@ export class Pact<B extends PermissionBits, M extends string>
       user === null || user.mfaSecret === undefined ||
       !this.__activeStatusSet.has(user.status)
     ) {
-      return false;
+      return invalid;
     }
     let step: number | undefined;
     try {
       step = await this.__matchTotpStep(code, user.mfaSecret);
     } catch {
-      // A corrupt stored seed must honor the boolean contract, not 500.
-      return false;
+      // A corrupt stored seed must honor the result contract, not 500.
+      return invalid;
     }
-    if (step === undefined) return false;
+    if (step === undefined) return invalid;
     const claimed = this._hooks.claimTotpStep === undefined
       ? this.__mfaGuard.claimStep(user.id, step)
       : await this._hooks.claimTotpStep(user.id, step);
-    if (!claimed) return false;
+    if (!claimed) return invalid;
     if (maxAttempts > 0) {
       if (this._hooks.resetMfaAttempts === undefined) {
         this.__mfaGuard.resetAttempts(userId);
@@ -1521,7 +1544,7 @@ export class Pact<B extends PermissionBits, M extends string>
         await this._hooks.resetMfaAttempts(userId);
       }
     }
-    return true;
+    return { ok: true };
   }
 
   /**

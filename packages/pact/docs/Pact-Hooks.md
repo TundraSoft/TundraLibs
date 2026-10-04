@@ -38,7 +38,7 @@ immediate.
 | `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
 | Custom password hashing (not PBKDF2)       | `hashPassword` + `verifyPassword`, together — checked at construction ([Security](Pact-Security.md#password-hashing))                                                  |
 | Email verification                         | `getUser` + `saveResetToken` / `consumeResetToken` — the status change is yours (no status hook)                                                                       |
-| `verifyMFA`                                | `getUser`, plus `claimTotpStep` + `countMfaAttempt` + `resetMfaAttempts` when more than one process runs (otherwise tracked per process)                               |
+| `verifyMFA` / `attemptMFA`                 | `getUser`, plus `claimTotpStep` + `countMfaAttempt` + `resetMfaAttempts` when more than one process runs (otherwise tracked per process)                               |
 | OAuth login                                | `getUser` (+ `createUser` when `autoProvision` is on, and optionally `oauthIdentifier`)                                                                                |
 | Passkeys (all four ceremonies)             | `getPasskey` + `getPasskeys` + `savePasskey` + `updatePasskeyCounter` + `getUser` — checked at construction; `finishPasskeyLogin` additionally needs the session store |
 
