@@ -43,6 +43,7 @@ import type {
   PactStoredSession,
   PactStoredUser,
   PactVerifiedCredentials,
+  PactVerifiedOAuth,
   PermissionBits,
 } from './types/mod.ts';
 import { PACT_AUTH_FAILURE_CODES, PactError } from './errors/mod.ts';
@@ -770,29 +771,60 @@ export class Pact<B extends PermissionBits, M extends string>
   }
 
   /**
-   * Complete an OAuth login: verify the callback (state, PKCE, id_token
-   * per policy), resolve the identity to a local user via
-   * `getUser({ by: 'OAUTH' })` — auto-provisioning through `createUser`
-   * on first login when the instance enables it — and mint the same
+   * Complete an OAuth login: {@link verifyOAuth}, then mint the same
    * opaque session as {@link login}. The verified `profile` is returned
    * on EVERY login so the application can sync changed claims.
    *
-   * @throws {PactError} `UNKNOWN_PROVIDER` / `OAUTH_STATE_MISMATCH` /
-   *   `OAUTH_EXCHANGE_FAILED` / `OAUTH_PROFILE_FAILED` /
-   *   `OAUTH_IDTOKEN_INVALID` / `OAUTH_JWKS_UNAVAILABLE` from the flow;
-   *   `OAUTH_UNLINKED` when no user is linked and autoProvision is off;
-   *   `NOT_ACTIVE` / `INVALID_GRANTS` as in {@link login};
-   *   `MISSING_HOOK` without `getUser` (or `createUser` when
-   *   provisioning fires), or without any session store;
-   *   `USER_EXISTS` when provisioning would reuse an identifier;
-   *   `INVALID_OPTION` when `hooks.oauthIdentifier` returns an empty or
-   *   non-string identifier.
+   * @throws {PactError} everything {@link verifyOAuth} throws, plus
+   *   `OAUTH_UNLINKED` when no user resolved (no link, no verified-email
+   *   link, autoProvision off) and `MISSING_HOOK` without any session
+   *   store.
    */
   public async oauthLogin(
     provider: string,
     params: { code: string; state?: string },
     expected: { state: string; codeVerifier: string; nonce?: string },
   ): Promise<PactLoginResult<M> & { profile: PactOAuthProfile }> {
+    const { principal, profile } = await this.verifyOAuth(
+      provider,
+      params,
+      expected,
+    );
+    if (principal === null) {
+      this._emit('loginFailed', `${provider}:${profile.id}`, 'OAUTH_UNLINKED');
+      throw new PactError('OAUTH_UNLINKED', { provider, subject: profile.id });
+    }
+    const session = await this.__mintSession(principal.id);
+    this._emit('login', principal, provider);
+    return { principal, session, profile };
+  }
+
+  /**
+   * The identity half of {@link oauthLogin}: verify the callback (state,
+   * PKCE, id_token per policy) and resolve the identity to a local user
+   * WITHOUT minting a session. Resolution goes by the stored link
+   * (`getUser({ by: 'OAUTH' })`); on a first login, a provider with
+   * `linkVerifiedEmail` links a verified address to the account holding
+   * it (`linkOAuth` hook), then one with `autoProvision` creates the user
+   * (`createUser`). `principal` is `null` when none of that matched — the
+   * application decides what an unlinked identity may do before
+   * {@link createSession}.
+   *
+   * @throws {PactError} `UNKNOWN_PROVIDER` / `OAUTH_STATE_MISMATCH` /
+   *   `OAUTH_EXCHANGE_FAILED` / `OAUTH_PROFILE_FAILED` /
+   *   `OAUTH_IDTOKEN_INVALID` / `OAUTH_JWKS_UNAVAILABLE` from the flow;
+   *   `NOT_ACTIVE` / `INVALID_GRANTS` as in {@link login};
+   *   `MISSING_HOOK` without `getUser`, or without `linkOAuth` /
+   *   `createUser` when linking / provisioning fires;
+   *   `USER_EXISTS` when provisioning would reuse an identifier;
+   *   `INVALID_OPTION` when `hooks.oauthIdentifier` returns an empty or
+   *   non-string identifier.
+   */
+  public async verifyOAuth(
+    provider: string,
+    params: { code: string; state?: string },
+    expected: { state: string; codeVerifier: string; nonce?: string },
+  ): Promise<PactVerifiedOAuth<M, B>> {
     const getUser = this._hooks.getUser;
     if (getUser === undefined) {
       throw new PactError('MISSING_HOOK', { hook: 'getUser' });
@@ -805,54 +837,10 @@ export class Pact<B extends PermissionBits, M extends string>
       verifier: expected.codeVerifier,
       expectedNonce: expected.nonce,
     });
-    let user = await getUser({ by: 'OAUTH', provider, subject: profile.id });
-    if (user === null) {
-      if (!client.autoProvision) {
-        this._emit(
-          'loginFailed',
-          `${provider}:${profile.id}`,
-          'OAUTH_UNLINKED',
-        );
-        throw new PactError('OAUTH_UNLINKED', {
-          provider,
-          subject: profile.id,
-        });
-      }
-      const createUser = this._hooks.createUser;
-      if (createUser === undefined) {
-        throw new PactError('MISSING_HOOK', { hook: 'createUser' });
-      }
-      // The provider email becomes the identifier ONLY when the
-      // provider vouches for it — an unverified address must not be
-      // able to claim (and potentially hijack) an existing local
-      // identifier. And unlike register(), provisioning used to skip
-      // the existence check entirely: enforce it here too, so an OAuth
-      // first-login can never clobber an established account. Linking
-      // an existing account to a provider stays an explicit app flow.
-      const derived = profile.email !== undefined &&
-          profile.emailVerified === true
-        ? profile.email
-        : `${provider}:${profile.id}`;
-      const mapIdentifier = this._hooks.oauthIdentifier;
-      const identifier = mapIdentifier === undefined
-        ? derived
-        : await mapIdentifier(derived, profile);
-      if (typeof identifier !== 'string' || identifier.length === 0) {
-        throw new PactError('INVALID_OPTION', {
-          option: 'hooks.oauthIdentifier',
-          reason: 'must return a non-empty string',
-        });
-      }
-      if (await getUser({ by: 'IDENTIFIER', identifier }) !== null) {
-        throw new PactError('USER_EXISTS', { identifier });
-      }
-      user = await createUser({
-        identifier,
-        status: this.activeStatuses[0]!,
-        grants: serializeGrants({}),
-        oauth: { provider, subject: profile.id, profile },
-      });
-    }
+    const user =
+      await getUser({ by: 'OAUTH', provider, subject: profile.id }) ??
+        await this.__firstOAuthLogin(client, profile);
+    if (user === null) return { principal: null, profile, mfaRequired: false };
     if (!this.__activeStatusSet.has(user.status)) {
       this._emit('loginFailed', `${provider}:${profile.id}`, 'NOT_ACTIVE');
       throw new PactError('NOT_ACTIVE', {
@@ -861,9 +849,64 @@ export class Pact<B extends PermissionBits, M extends string>
       });
     }
     const principal = await this.__resolveUserPrincipal(user);
-    const session = await this.__mintSession(user.id);
-    this._emit('login', principal, provider);
-    return { principal, session, profile };
+    return {
+      principal: this.__bind(principal),
+      profile,
+      mfaRequired: user.mfaSecret !== undefined,
+    };
+  }
+
+  /**
+   * An identity with no stored link: link it to the account holding its
+   * verified address (`linkVerifiedEmail`), else provision it
+   * (`autoProvision`), else null.
+   */
+  private async __firstOAuthLogin(
+    client: OAuthClient,
+    profile: PactOAuthProfile,
+  ): Promise<PactStoredUser | null> {
+    if (!client.linkVerifiedEmail && !client.autoProvision) return null;
+    const getUser = this._hooks.getUser!;
+    const provider = profile.provider;
+    const verified = profile.email !== undefined &&
+      profile.emailVerified === true;
+    // The provider email becomes the identifier ONLY when the provider
+    // vouches for it — an unverified address must not be able to claim
+    // (and potentially hijack) an existing local identifier.
+    const derived = verified ? profile.email! : `${provider}:${profile.id}`;
+    const mapIdentifier = this._hooks.oauthIdentifier;
+    const identifier = mapIdentifier === undefined
+      ? derived
+      : await mapIdentifier(derived, profile);
+    if (typeof identifier !== 'string' || identifier.length === 0) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'hooks.oauthIdentifier',
+        reason: 'must return a non-empty string',
+      });
+    }
+    const existing = await getUser({ by: 'IDENTIFIER', identifier });
+    if (existing !== null && verified && client.linkVerifiedEmail) {
+      const link = this._hooks.linkOAuth;
+      if (link === undefined) {
+        throw new PactError('MISSING_HOOK', { hook: 'linkOAuth' });
+      }
+      await link(existing.id, { provider, subject: profile.id, profile });
+      return existing;
+    }
+    if (!client.autoProvision) return null;
+    const createUser = this._hooks.createUser;
+    if (createUser === undefined) {
+      throw new PactError('MISSING_HOOK', { hook: 'createUser' });
+    }
+    // Provisioning never takes over an established account; linking one
+    // is `linkVerifiedEmail`'s, or an explicit app flow.
+    if (existing !== null) throw new PactError('USER_EXISTS', { identifier });
+    return await createUser({
+      identifier,
+      status: this.activeStatuses[0]!,
+      grants: serializeGrants({}),
+      oauth: { provider, subject: profile.id, profile },
+    });
   }
 
   /**

@@ -47,6 +47,25 @@ export type PactOAuthProviderConfig = {
    */
   autoProvision?: boolean;
   /**
+   * Which of this provider's addresses count as verified: `'CLAIM'` takes
+   * the provider's own flag (Google's `email_verified`, GitHub's verified
+   * primary address), `'ALWAYS'` trusts every address it returns — only
+   * for an IdP whose users' domains you control, such as one tenant's own
+   * SSO with tenant-scoped identifiers — and `'NEVER'` trusts none. A
+   * verified address becomes the provisioned identifier and may link an
+   * existing account (`linkVerifiedEmail`).
+   * @default 'CLAIM'
+   */
+  emailTrust?: 'CLAIM' | 'ALWAYS' | 'NEVER';
+  /**
+   * On a first login whose verified address matches an existing local
+   * identifier, link the identity to that account through the `linkOAuth`
+   * hook instead of failing with `USER_EXISTS`. Safe only as far as
+   * `emailTrust` is: whoever controls a verified address gets its
+   * account.
+   */
+  linkVerifiedEmail?: boolean;
+  /**
    * Extra authorization-URL params. Cannot override the generated
    * `state`/PKCE/`nonce`/`redirect_uri`.
    */

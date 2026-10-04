@@ -494,3 +494,156 @@ describe('OIDC discovery host guard', () => {
     asserts.assert((await client.authorizationUrl()).url !== '');
   });
 });
+
+describe('verifyOAuth, email trust and verified-email linking', () => {
+  const EXPECTED = { state: 's', codeVerifier: 'v' };
+  const PARAMS = { code: 'c', state: 's' };
+
+  /**
+   * A pact over one provider whose stubbed GETs answer by path, plus the
+   * links and sessions it writes.
+   */
+  function world(
+    config: Record<string, unknown>,
+    gets: Record<string, unknown>,
+    hooks: { linkOAuth?: boolean } = {},
+  ) {
+    const users = new Map<string, PactStoredUser>([
+      ['acct', { id: 'acct', status: 'ACTIVE', grants: '{}' }],
+    ]);
+    const identifiers = new Map([['ada@example.dev', 'acct']]);
+    const linked = new Map<string, string>();
+    const p = Pact.create({
+      bits: { READ: 1n },
+      modulePermissions: { Post: ['READ'] },
+      hooks: {
+        getUser: (q) => {
+          if (q.by === 'ID') return users.get(q.id) ?? null;
+          if (q.by === 'IDENTIFIER') {
+            return users.get(identifiers.get(q.identifier) ?? '') ?? null;
+          }
+          return users.get(linked.get(`${q.provider}:${q.subject}`) ?? '') ??
+            null;
+        },
+        ...(hooks.linkOAuth === false ? {} : {
+          linkOAuth: (userId, link) => {
+            linked.set(`${link.provider}:${link.subject}`, userId);
+          },
+        }),
+      },
+      options: {
+        cache: { ttl: { session: 5 } },
+        oauth: {
+          idp: {
+            clientId: 'cid',
+            redirectUri: 'https://app.example.dev/cb',
+            ...config,
+          } as never,
+        },
+      },
+    });
+    // deno-lint-ignore no-explicit-any
+    const client = (p as any).__oauth.get('idp');
+    client._makeRequest = (opts: { method: string; path: string }) =>
+      opts.method === 'POST'
+        ? { status: 200, body: { access_token: 'at' } }
+        : { status: 200, body: gets[opts.path] };
+    return { pact: p, linked };
+  }
+
+  it('returns the identity without a session; null for an unlinked one', async () => {
+    const { pact: p, linked } = world({ kind: 'GITHUB' }, {
+      '/user': { id: 7, login: 'octo' },
+    });
+    const unlinked = await p.verifyOAuth('idp', PARAMS, EXPECTED);
+    asserts.assertStrictEquals(unlinked.principal, null);
+    asserts.assertStrictEquals(unlinked.profile.id, '7');
+    linked.set('idp:7', 'acct');
+    const known = await p.verifyOAuth('idp', PARAMS, EXPECTED);
+    asserts.assertStrictEquals(known.principal?.id, 'acct');
+    asserts.assertFalse(known.mfaRequired);
+  });
+
+  it("takes GitHub's verified primary address from /user/emails", async () => {
+    const { pact: p } = world({ kind: 'GITHUB' }, {
+      '/user': { id: 7, login: 'octo', email: 'public@example.dev' },
+      '/user/emails': [
+        { email: 'old@example.dev', primary: false, verified: true },
+        { email: 'Ada@Example.dev', primary: true, verified: true },
+      ],
+    });
+    const { profile } = await p.verifyOAuth('idp', PARAMS, EXPECTED);
+    asserts.assertStrictEquals(profile.email, 'Ada@Example.dev');
+    asserts.assert(profile.emailVerified);
+    const unverified = world({ kind: 'GITHUB' }, {
+      '/user': { id: 7, email: 'public@example.dev' },
+      '/user/emails': [
+        { email: 'public@example.dev', primary: true, verified: false },
+      ],
+    });
+    const plain = await unverified.pact.verifyOAuth('idp', PARAMS, EXPECTED);
+    asserts.assertFalse(plain.profile.emailVerified);
+  });
+
+  it('emailTrust overrides the provider claim either way', async () => {
+    const gets = {
+      '/v1/userinfo': { sub: 'g1', email: 'a@x.dev', email_verified: false },
+    };
+    const always = world({ kind: 'GOOGLE', emailTrust: 'ALWAYS' }, gets);
+    asserts.assert(
+      (await always.pact.verifyOAuth('idp', PARAMS, EXPECTED)).profile
+        .emailVerified,
+    );
+    const never = world({ kind: 'GOOGLE', emailTrust: 'NEVER' }, {
+      '/v1/userinfo': { sub: 'g1', email: 'a@x.dev', email_verified: true },
+    });
+    asserts.assertFalse(
+      (await never.pact.verifyOAuth('idp', PARAMS, EXPECTED)).profile
+        .emailVerified,
+    );
+    asserts.assertThrows(
+      () => world({ kind: 'GOOGLE', emailTrust: 'SOMETIMES' }, gets),
+      PactError,
+    );
+  });
+
+  it('linkVerifiedEmail links a verified address to its account and never an unverified one', async () => {
+    const verified = {
+      '/v1/userinfo': {
+        sub: 'g1',
+        email: 'ada@example.dev',
+        email_verified: true,
+      },
+    };
+    const { pact: p, linked } = world(
+      { kind: 'GOOGLE', linkVerifiedEmail: true },
+      verified,
+    );
+    const first = await p.oauthLogin('idp', PARAMS, EXPECTED);
+    asserts.assertStrictEquals(first.principal.id, 'acct');
+    asserts.assertEquals([...linked], [['idp:g1', 'acct']]);
+
+    const unverified = world({ kind: 'GOOGLE', linkVerifiedEmail: true }, {
+      '/v1/userinfo': {
+        sub: 'g2',
+        email: 'ada@example.dev',
+        email_verified: false,
+      },
+    });
+    await expectCode(
+      unverified.pact.oauthLogin('idp', PARAMS, EXPECTED),
+      'OAUTH_UNLINKED',
+    );
+    asserts.assertEquals(unverified.linked.size, 0);
+
+    const hookless = world(
+      { kind: 'GOOGLE', linkVerifiedEmail: true },
+      verified,
+      { linkOAuth: false },
+    );
+    await expectCode(
+      hookless.pact.verifyOAuth('idp', PARAMS, EXPECTED),
+      'MISSING_HOOK',
+    );
+  });
+});
