@@ -133,6 +133,20 @@ export type PactHooks<M extends string = string> = {
   ) => number | Promise<number>;
   /** Clear the user's MFA attempt count after a successful verification. */
   resetMfaAttempts?: (userId: string) => void | Promise<void>;
+  /**
+   * Atomically record `nonce` for the API key `keyId`, kept `ttl` seconds,
+   * and return whether it was recorded — `false` when the key already used
+   * it (a redis `SET <keyId>:<nonce> 1 NX EX <ttl>`). The HMAC middleware
+   * calls it for every signed request whose template signs `${x-nonce}`,
+   * so a captured request cannot be replayed inside the timestamp window.
+   * Without it pact remembers nonces in process memory, which protects
+   * one process only.
+   */
+  claimNonce?: (
+    keyId: string,
+    nonce: string,
+    ttl: number,
+  ) => boolean | Promise<boolean>;
   /** Persist a single-use action token — password reset or email
    * verification, told apart by `purpose` (already keyed by sha-256). */
   saveResetToken?: (record: PactStoredResetToken) => void | Promise<void>;

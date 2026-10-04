@@ -32,6 +32,7 @@ immediate.
 | `authenticate` `BEARER`                    | the session store + `getUser`/`getPrincipal`                                                                                                                           |
 | `authenticate` `BASIC`                     | `getUser`                                                                                                                                                              |
 | `authenticate` `APIKEY` / `HMAC`           | `getApiKey`                                                                                                                                                            |
+| HMAC middleware, nonce signed              | `claimNonce` when more than one process runs (otherwise tracked per process)                                                                                           |
 | `issueApiKey` / `revokeApiKey`             | `saveApiKey` / `revokeApiKey`                                                                                                                                          |
 | `logoutAll`                                | `deleteSessions`                                                                                                                                                       |
 | `setPassword` / password reset             | `setPassword` (+ `saveResetToken` / `consumeResetToken` for the reset flow)                                                                                            |
@@ -107,6 +108,11 @@ points:
   count in the live window, starting a `window`-second one when none is
   live (redis `INCR` + `EXPIRE NX`); **`resetMfaAttempts(userId)`** clears
   it after a success.
+- **`claimNonce(keyId, nonce, ttl)`** records the nonce for that key for
+  `ttl` seconds only if it is not already recorded, and returns whether it
+  did: redis `SET <keyId>:<nonce> 1 NX EX <ttl>`, true on `OK`. The HMAC
+  middleware calls it for each signed request whose template signs
+  `${x-nonce}`.
 
 Actor ids share one namespace across kinds: a user id and an API-key id
 must never collide (pact's generated `pact_ak_...` key ids make this true
