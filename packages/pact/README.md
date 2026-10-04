@@ -192,7 +192,9 @@ See [Middleware](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Middleware).
 - **Bound principals** — `authenticate` and `principalOf(id)` return a
   principal whose `hasPermission`/`assert` evaluate in memory, re-resolving
   only when stale or after a revocation call. Hand-built objects have no
-  working methods, and the capability does not survive serialization. See
+  working methods, and the capability does not survive serialization.
+  `principalsOf(ids)` resolves a list page's actors at once, through the
+  `getPrincipals` hook in one store call when it is set. See
   [Security](https://github.com/TundraSoft/TundraLibs/wiki/Pact-Security).
 - **A login seam you can compose** — `verifyCredentials` proves identity
   (and reports MFA enrollment), `createSession` mints by id; `login` is the

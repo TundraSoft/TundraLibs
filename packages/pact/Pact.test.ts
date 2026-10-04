@@ -268,6 +268,55 @@ describe('Pact authorization', () => {
     const bare = Pact.create({ ...BASE });
     await expectCode(bare.hasPermission('u1', 'Post', 'READ'), 'MISSING_HOOK');
   });
+
+  it('principalsOf resolves each distinct id once, null for the unknown', async () => {
+    const many = await pact.principalsOf(['u1', 'ghost', 'u1', ' u1']);
+    asserts.assertEquals([...many.keys()], ['u1', 'ghost', ' u1']);
+    asserts.assert(await many.get('u1')!.hasPermission('Post', 'EDIT'));
+    asserts.assertStrictEquals(many.get('ghost'), null);
+    asserts.assertStrictEquals(many.get(' u1'), null);
+  });
+
+  it('principalsOf sends cache misses to getPrincipals in one call, ignores stray rows, and still tries the rest as API keys', async () => {
+    const calls: (readonly string[])[] = [];
+    const batched = Pact.create({
+      ...BASE,
+      hooks: {
+        getPrincipal: (id) => PRINCIPALS[id] ?? null,
+        getPrincipals: (ids) => {
+          calls.push(ids);
+          // 'neg' was not asked for: its row must not replace the cache.
+          return [PRINCIPALS['u1']!, {
+            ...PRINCIPALS['neg']!,
+            grants: { Post: 3n },
+          }];
+        },
+        getApiKey: (id) =>
+          id === 'key_9'
+            ? { id, status: 'ACTIVE', secret: 's', grants: '{"Billing":"1"}' }
+            : null,
+      },
+      options: { cache: { ttl: { principal: 1 } } },
+    });
+    await batched.principalOf('neg'); // warms the cache for 'neg'
+    const many = await batched.principalsOf(['u1', 'neg', 'key_9', 'ghost']);
+    asserts.assertEquals(calls, [['u1', 'key_9', 'ghost']]);
+    asserts.assertStrictEquals(many.get('u1')?.id, 'u1');
+    asserts.assertFalse(await many.get('neg')!.hasPermission('Post', 'READ'));
+    asserts.assertFalse(await batched.hasPermission('neg', 'Post', 'READ'));
+    asserts.assertStrictEquals(many.get('key_9')?.kind, 'APIKEY');
+    asserts.assertStrictEquals(many.get('ghost'), null);
+    // What resolved is cached: a second call asks the hook for nothing.
+    await batched.principalsOf(['u1', 'key_9']);
+    asserts.assertEquals(calls.length, 1);
+  });
+
+  it('getPrincipals without getPrincipal is a construction error', () => {
+    expectThrowCode(
+      () => Pact.create({ ...BASE, hooks: { getPrincipals: () => [] } }),
+      'MISSING_HOOK',
+    );
+  });
 });
 
 describe('Pact tenant-scoped grants', () => {
