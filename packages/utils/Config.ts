@@ -18,6 +18,7 @@ import { parse as jsonParse } from '@std/jsonc';
 import { parse as tomlParse } from '@std/toml';
 import { parse as yamlParse } from '@std/yaml';
 import { envArgs } from './envArgs.ts';
+import { templatize } from './templatize.ts';
 import { variableReplacer } from './variableReplacer.ts';
 
 /**
@@ -203,7 +204,20 @@ export type LoadConfigOptions = {
    * `false` / `undefined`: no env substitution.
    */
   env?: boolean | string;
+  /**
+   * What a `${VAR}` placeholder with no value becomes.
+   * - `'literal'` (default): the `${VAR}` text stays — a downstream
+   *   validator then sees a string that looks like a value.
+   * - `'empty'`: nothing — the key reads as empty / `null`, so a
+   *   `get(path, default)` or validator can tell it was unset.
+   * - `'error'`: `loadConfig` throws, naming the file and every unresolved
+   *   variable — the right choice for a production boot.
+   */
+  placeholders?: 'literal' | 'empty' | 'error';
 };
+
+/** The `${VAR}` form `variableReplacer` substitutes — used to name the unresolved ones. */
+const PLACEHOLDER = /\$\{([^{}]+)\}/g;
 
 /**
  * Runtime type guard for {@link LoadConfigOptions} — throws `TypeError`
@@ -215,7 +229,18 @@ export const assertLoadConfigOptions = (
   if (typeof options !== 'object' || options === null) {
     throw TypeError('Invalid options: expected an object');
   }
-  const { path, include, exclude, env } = options as Record<string, unknown>;
+  const { path, include, exclude, env, placeholders } = options as Record<
+    string,
+    unknown
+  >;
+  if (
+    placeholders !== undefined && placeholders !== 'literal' &&
+    placeholders !== 'empty' && placeholders !== 'error'
+  ) {
+    throw new TypeError(
+      "Invalid options: placeholders must be 'literal', 'empty' or 'error'",
+    );
+  }
   if (typeof path !== 'string') {
     throw TypeError('Invalid options: path must be a string');
   }
@@ -314,10 +339,23 @@ const processConfigFiles = async (
       throw new Error(`Duplicate config file found: ${filePath}`);
     }
 
-    const content = variableReplacer(
-      await readTextFile(filePath),
-      env,
-    );
+    const raw = await readTextFile(filePath);
+    const mode = options.placeholders ?? 'literal';
+    if (mode !== 'literal') {
+      const unresolved = [...raw.matchAll(PLACEHOLDER)]
+        .map((m) => m[1]!)
+        .filter((name) => env[name] === undefined);
+      if (mode === 'error' && unresolved.length > 0) {
+        throw new Error(
+          `Unresolved placeholders in ${filePath}: ${
+            [...new Set(unresolved)].map((n) => `\${${n}}`).join(', ')
+          }`,
+        );
+      }
+    }
+    const content = mode === 'empty'
+      ? templatize(raw, { onMissing: 'empty' })(env as Record<string, never>)
+      : variableReplacer(raw, env);
     const parsed = parseConfigContent(content, ext, filePath);
     configs[name] = parsed;
   }
@@ -335,8 +373,8 @@ const processConfigFiles = async (
  * same basename (e.g., `db.json` and `db.yaml`) raise an error.
  *
  * @throws {@link TypeError} If `options` fails {@link assertLoadConfigOptions}.
- * @throws {Error} If the path is unreadable, files don't parse, or
- *   basenames collide.
+ * @throws {Error} If the path is unreadable, files don't parse, basenames
+ *   collide, or `placeholders: 'error'` meets an unresolved `${VAR}`.
  *
  * @example
  * ```typescript
