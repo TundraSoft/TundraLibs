@@ -3325,6 +3325,30 @@ describe('rapid.Application', () => {
 // ==========================================================================
 
 describe('rapid.Application boot-loud config', () => {
+  it('an unset ${VAR} in a config file fails the boot naming the file and the variable; placeholders: "literal" opts out', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-placeholders-' });
+    try {
+      await writeTextFile(
+        `${dir}/Application.yaml`,
+        'name: ${APP_NAME}\nserver:\n  port: 0\nlogger:\n  handlers: []\n',
+      );
+      const error = await asserts.assertRejects(
+        () => Application.initialize({ path: dir, env: false }),
+        Error,
+      );
+      asserts.assertStringIncludes(error.message, 'Application.yaml');
+      asserts.assertStringIncludes(error.message, '${APP_NAME}');
+      const literal = await Application.initialize({
+        path: dir,
+        env: false,
+        placeholders: 'literal',
+      });
+      asserts.assertEquals(literal.option('name'), '${APP_NAME}');
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+
   it("rejects an unknown ui data key at boot — a typo ('histroy') must not silently no-op", async () => {
     await asserts.assertRejects(
       () =>
