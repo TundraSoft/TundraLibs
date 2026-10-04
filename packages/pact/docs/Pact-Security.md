@@ -46,6 +46,16 @@ unknown identifier rather than throwing, so those endpoints can answer
 uniformly. The two flows share one token store, told apart by `purpose`:
 a token minted for one flow is rejected — and consumed — by the other.
 
+`requestEmailVerification(identifier, { kind: 'CODE' })` mints a six-digit
+code to type instead of a link, checked by `verifyEmailCode(identifier,
+code)`. A million codes is guessable without a budget, so a user holds one
+code at a time, a new one replaces the last, and each survives five wrong
+guesses before it is burned. A new code restores the budget, so rate-limit
+the endpoint that sends one: five sends allow 25 guesses at a million codes.
+The stored row keeps the code's sha-256 and the guess count in `code` and
+`attempts` ([Storage](Pact-Storage.md)). A short `ttl` suits a code better
+than the day-long `verification.ttl`.
+
 ## Bound principals
 
 `authenticate` and `principalOf(id)` return principals whose

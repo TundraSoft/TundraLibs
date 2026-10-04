@@ -3,6 +3,7 @@ import {
   generateBase32Secret,
   generateHexSecret,
   hkdf,
+  randomInt,
 } from '@tundralibs/crypt/generators';
 import {
   constantTimeEqual,
@@ -79,6 +80,9 @@ const TOTP_PERIOD_MS = 30_000;
  * while the cold path resolves someone else (or nobody).
  */
 const PACT_ID = /^\S(.*\S)?$/s;
+
+/** Wrong guesses a verification code survives before it is burned. */
+const CODE_ATTEMPTS = 5;
 
 /** Separates a tenant from a module in a grant key (`acme::POST`). */
 const TENANT_SEP = '::';
@@ -1204,30 +1208,104 @@ export class Pact<B extends PermissionBits, M extends string>
    * {@link verifyEmail} returns the id. Returns `null` for an unknown
    * identifier, so a "resend" endpoint can answer uniformly.
    *
+   * `kind: 'CODE'` mints a six-digit code to type instead of a link
+   * token, checked by {@link verifyEmailCode}. A user holds one code at a
+   * time — a new one replaces the last — and each code survives five
+   * wrong guesses. Every new code restores that budget, so bound how
+   * often your resend endpoint mints one. `ttl` (minutes) overrides
+   * `verification.ttl` for this token.
+   *
    * @throws {PactError} `MISSING_HOOK` without `getUser` +
-   *   `saveResetToken`.
+   *   `saveResetToken` (+ `consumeResetToken` for a code);
+   *   `INVALID_OPTION` for a `ttl` that is not a whole number of minutes
+   *   up to 30 days.
    */
   public async requestEmailVerification(
     identifier: string,
+    options: { kind?: 'LINK' | 'CODE'; ttl?: number } = {},
   ): Promise<{ token: string; expiresAt: Date } | null> {
-    const { getUser, saveResetToken } = this._hooks;
+    const { getUser, saveResetToken, consumeResetToken } = this._hooks;
     if (getUser === undefined || saveResetToken === undefined) {
       throw new PactError('MISSING_HOOK', {
         hook: 'getUser and saveResetToken',
       });
     }
+    const code = options.kind === 'CODE';
+    if (code && consumeResetToken === undefined) {
+      throw new PactError('MISSING_HOOK', { hook: 'consumeResetToken' });
+    }
+    if (options.ttl !== undefined) {
+      this.__validateTtlGroup('requestEmailVerification', options);
+    }
     const user = await getUser({ by: 'IDENTIFIER', identifier });
     if (user === null) return null;
-    const ttl = this._getOption('verification')?.ttl ?? 1440;
+    const ttl = options.ttl ?? this._getOption('verification')?.ttl ?? 1440;
     const expiresAt = new Date(Date.now() + ttl * 60_000);
-    const token = this.generateEmailVerificationToken();
+    if (!code) {
+      const token = this.generateEmailVerificationToken();
+      await saveResetToken({
+        id: await sha256(token),
+        userId: user.id,
+        purpose: 'EMAIL_VERIFICATION',
+        expiresAt,
+      });
+      return { token, expiresAt };
+    }
+    const token = String(randomInt(0, 999_999)).padStart(6, '0');
+    const id = await this.__codeRecordId(user.id);
+    // Through the single-use contract, not an upsert: the old code is
+    // consumed, then the new one stored.
+    await consumeResetToken!(id);
     await saveResetToken({
-      id: await sha256(token),
+      id,
       userId: user.id,
       purpose: 'EMAIL_VERIFICATION',
       expiresAt,
+      code: await sha256(`${user.id}:${token}`),
+      attempts: 0,
     });
     return { token, expiresAt };
+  }
+
+  /**
+   * Complete a code-kind email verification (see
+   * {@link requestEmailVerification}): the verified user's id when
+   * `code` is the live one for `identifier`, else `null` — an unknown
+   * identifier, no code, an expired code, or a wrong guess. A right code
+   * is spent; a wrong guess spends one of the code's five attempts, and
+   * the fifth burns it. As with {@link verifyEmail}, the status change is
+   * the application's write.
+   *
+   * @throws {PactError} `MISSING_HOOK` without `getUser` +
+   *   `saveResetToken` + `consumeResetToken`.
+   */
+  public async verifyEmailCode(
+    identifier: string,
+    code: string,
+  ): Promise<string | null> {
+    const { getUser, saveResetToken, consumeResetToken } = this._hooks;
+    if (
+      getUser === undefined || saveResetToken === undefined ||
+      consumeResetToken === undefined
+    ) {
+      throw new PactError('MISSING_HOOK', {
+        hook: 'getUser, saveResetToken and consumeResetToken',
+      });
+    }
+    const user = await getUser({ by: 'IDENTIFIER', identifier });
+    if (user === null) return null;
+    const record = await consumeResetToken(await this.__codeRecordId(user.id));
+    if (
+      record === null || record.purpose !== 'EMAIL_VERIFICATION' ||
+      record.code === undefined || this.__sessionExpired(record)
+    ) {
+      return null;
+    }
+    const presented = await sha256(`${user.id}:${String(code).trim()}`);
+    if (constantTimeEqual(presented, record.code)) return user.id;
+    const attempts = (record.attempts ?? 0) + 1;
+    if (attempts < CODE_ATTEMPTS) await saveResetToken({ ...record, attempts });
+    return null;
   }
 
   /**
@@ -1306,6 +1384,11 @@ export class Pact<B extends PermissionBits, M extends string>
    * its sha-256 — see {@link requestEmailVerification}). */
   public generateEmailVerificationToken(): string {
     return this._generateSecret('ev', 32);
+  }
+
+  /** The one code record a user holds: keyed by the user, not the code. */
+  private async __codeRecordId(userId: string): Promise<string> {
+    return await sha256(`email-verification-code:${userId}`);
   }
 
   /** Generate one `<prefix>_st_` opaque session token (stored by
