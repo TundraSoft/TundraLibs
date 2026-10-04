@@ -484,7 +484,7 @@ describe('utils.Config', () => {
       await writeTextFile(`${dir}/.env`, 'HOST=db.local\n');
       await writeTextFile(
         `${dir}/app.yaml`,
-        'host: ${HOST}\nport: ${PORT}\nsecret: "${SECRET}"\n',
+        '# commented: ${COMMENTED} — a comment is not a value\nhost: ${HOST}\nport: ${PORT}\nsecret: "${SECRET}"\nlist:\n  - ${PORT}\n',
       );
       try {
         const literal = await loadConfig({ path: dir, env: `${dir}/.env` });
@@ -509,6 +509,7 @@ describe('utils.Config', () => {
         asserts.assertStringIncludes(error.message, 'app.yaml');
         asserts.assertStringIncludes(error.message, '${PORT}, ${SECRET}');
         asserts.assertEquals(error.message.includes('HOST'), false);
+        asserts.assertEquals(error.message.includes('COMMENTED'), false);
         asserts.assertThrows(
           () =>
             assertLoadConfigOptions(

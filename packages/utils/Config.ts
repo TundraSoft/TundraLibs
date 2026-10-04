@@ -219,6 +219,21 @@ export type LoadConfigOptions = {
 /** The `${VAR}` form `variableReplacer` substitutes — used to name the unresolved ones. */
 const PLACEHOLDER = /\$\{([^{}]+)\}/g;
 
+/** Every placeholder name still present in a parsed config tree's string values, deduplicated, in order. */
+const unresolvedPlaceholders = (
+  value: unknown,
+  out = new Set<string>(),
+): string[] => {
+  if (typeof value === 'string') {
+    for (const m of value.matchAll(PLACEHOLDER)) out.add(m[1]!);
+  } else if (Array.isArray(value)) {
+    for (const item of value) unresolvedPlaceholders(item, out);
+  } else if (value !== null && typeof value === 'object') {
+    for (const item of Object.values(value)) unresolvedPlaceholders(item, out);
+  }
+  return [...out];
+};
+
 /**
  * Runtime type guard for {@link LoadConfigOptions} — throws `TypeError`
  * with a specific message on the first invalid field.
@@ -341,22 +356,24 @@ const processConfigFiles = async (
 
     const raw = await readTextFile(filePath);
     const mode = options.placeholders ?? 'literal';
-    if (mode !== 'literal') {
-      const unresolved = [...raw.matchAll(PLACEHOLDER)]
-        .map((m) => m[1]!)
-        .filter((name) => env[name] === undefined);
-      if (mode === 'error' && unresolved.length > 0) {
-        throw new Error(
-          `Unresolved placeholders in ${filePath}: ${
-            [...new Set(unresolved)].map((n) => `\${${n}}`).join(', ')
-          }`,
-        );
-      }
-    }
     const content = mode === 'empty'
       ? templatize(raw, { onMissing: 'empty' })(env as Record<string, never>)
       : variableReplacer(raw, env);
     const parsed = parseConfigContent(content, ext, filePath);
+    if (mode === 'error') {
+      // Judged on the PARSED values, not the file text: a `${VAR}` inside
+      // a comment (the annotated template every scaffold ships) is not a
+      // value and must not fail the boot. Every placeholder still present
+      // after substitution is, by construction, one nobody set.
+      const unresolved = unresolvedPlaceholders(parsed);
+      if (unresolved.length > 0) {
+        throw new Error(
+          `Unresolved placeholders in ${filePath}: ${
+            unresolved.map((n) => `\${${n}}`).join(', ')
+          }`,
+        );
+      }
+    }
     configs[name] = parsed;
   }
 
