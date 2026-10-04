@@ -60,6 +60,7 @@ export {
   type RapidErrorMeta,
 } from './errors/mod.ts';
 export { validated } from './utils/validated.ts';
+export { memoryStore } from './utils/memoryStore.ts';
 export {
   event,
   EventContext,
@@ -138,6 +139,7 @@ export type {
   RapidBinder,
   RapidBinderSource,
   RapidBinds,
+  RapidCacheStore,
   RapidChannelOptions,
   RapidClusterMember,
   RapidClusterSnapshot,
@@ -166,6 +168,7 @@ export type {
   RapidMiddleware,
   RapidModuleMeta,
   RapidModuleReply,
+  RapidRouteCache,
   RapidRouteEntry,
   RapidRouteOpenApi,
   RapidRouteOptions,

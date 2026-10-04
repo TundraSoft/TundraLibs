@@ -412,6 +412,17 @@ function registerDecoration<S extends RapidContextState>(
               ...(decoration.compose !== undefined
                 ? { compose: decoration.compose }
                 : {}),
+              ...(decoration.cache !== undefined
+                ? { cache: decoration.cache }
+                : {}),
+              // The action identity, when the class has one — the cache
+              // keys by it so a composed part and a direct visit share an
+              // entry.
+              ...(namespace !== undefined && doc.name !== undefined
+                ? {
+                  source: `${namespace}:${doc.name}:${decoration.methodName}`,
+                }
+                : {}),
               // Module chain first, then the route's own — the same order a
               // plain route lists them; a universal middleware narrows to
               // HTTP here by contravariance.

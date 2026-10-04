@@ -53,7 +53,7 @@ import type {
   RapidHTTPRequestBody,
   RapidRouteTemplate,
 } from '../types/mod.ts';
-import { Context } from './Context.ts';
+import { Context, CTX_READ } from './Context.ts';
 
 /** Construction data for an {@link HTTPContext}. */
 export type HTTPContextInit = {
@@ -111,6 +111,8 @@ class HTTPArgs {
     params: Readonly<Record<string, string>>,
     request: Request,
     server: RapidApplicationServerOptions,
+    /** Notes a `query`/`paging` read on the owning context (see `CTX_READ`). */
+    private readonly __onRead: (channel: number) => void,
   ) {
     this.params = Object.freeze(params);
     this.__request = request;
@@ -123,6 +125,7 @@ class HTTPArgs {
   }
 
   get query(): RapidContextQuery {
+    this.__onRead(CTX_READ.QUERY);
     if (this.__query === undefined) {
       const parsed = parseQueryFilters(this.__sp(), this.__server.query);
       this.__query = Object.freeze({
@@ -134,6 +137,7 @@ class HTTPArgs {
   }
 
   get paging(): RapidContextPaging {
+    this.__onRead(CTX_READ.PAGING);
     if (this.__paging === undefined) {
       const paging = this.__server.paging ?? {};
       this.__paging = Object.freeze(parsePaging(
@@ -277,6 +281,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
 
   /** The inbound request headers. */
   get headers(): Headers {
+    this._reads |= CTX_READ.HEADERS;
     return this.request.headers;
   }
 
@@ -404,6 +409,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       this.params,
       this.request,
       this.app.option('server')!,
+      (channel) => {
+        this._reads |= channel;
+      },
     ) as Readonly<RapidContextArgs>;
   }
 
@@ -673,6 +681,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * parsed once from the `Cookie` header on first access.
    */
   public get cookies(): Readonly<Record<string, string>> {
+    this._reads |= CTX_READ.COOKIES;
     return this.__cookies ??= parseCookies(this.request.headers.get('cookie'));
   }
 

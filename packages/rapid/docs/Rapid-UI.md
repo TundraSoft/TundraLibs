@@ -595,6 +595,10 @@ class Organisations extends RapidModule {
 - **Caps.** `ui.compose: { maxParts: 5, concurrency: 4, timeout: 2 }` in
   the data half. A part past `timeout` seconds is a 504 fragment that
   retries once through the deferred path, then stays an error state.
+- **Cache.** A part inherits its route's `cache` (the README's Route
+  cache): the entry is keyed by the action and the mapped params, so the
+  composed tile and a direct visit to the tile route share it, and
+  `app.invalidateCache('ns:Module:method')` drops both.
 - **Contract.** OpenAPI carries `x-compose` per page (slot → action,
   `defer`); each part's own operation still documents its `x-access`.
 

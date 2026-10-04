@@ -20,6 +20,19 @@ import type {
 } from '../types/mod.ts';
 
 /** Base construction data — subtypes compose it from their own inits. */
+/**
+ * The per-request channels a handler can read that a cached reply would
+ * otherwise freeze for every later caller — one bit each, noted by the
+ * getters so a cached route can be checked against its key.
+ */
+export const CTX_READ = Object.freeze({
+  AUTH: 1,
+  QUERY: 2,
+  PAGING: 4,
+  HEADERS: 8,
+  COOKIES: 16,
+});
+
 export type ContextInit = {
   /** Uniform invocation identity (route / job / command). */
   action: string;
@@ -139,7 +152,21 @@ export abstract class Context<
    * invocations, and it rides the module `invoke` seed.
    */
   public get auth(): Record<string, unknown> | undefined {
+    this._reads |= CTX_READ.AUTH;
     return this._auth;
+  }
+
+  /** The {@link CTX_READ} channels read since the last reset (see `_resetReads`). */
+  protected _reads = 0;
+
+  /** The channels read since the last reset — what a cached route checks against its key. @internal */
+  public get _readChannels(): number {
+    return this._reads;
+  }
+
+  /** Start counting reads afresh (before a cached handler runs). @internal */
+  public _resetReads(): void {
+    this._reads = 0;
   }
 
   /**

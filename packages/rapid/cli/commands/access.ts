@@ -40,7 +40,7 @@ export async function loadApp(entry: string): Promise<Reportable> {
   );
 }
 
-/** The report as an aligned table: KIND, ACTION, ACCESS (or `public`). */
+/** The report as an aligned table: KIND, ACTION, ACCESS (or `public`), and `cache …` when cached. */
 export function formatAccessReport(
   rows: readonly RapidAccessReportRow[],
 ): string {
@@ -49,7 +49,9 @@ export function formatAccessReport(
   );
   const width = Math.max(6, ...sorted.map((r) => r.action.length));
   const lines = sorted.map((r) =>
-    `${r.kind.padEnd(7)} ${r.action.padEnd(width)}  ${r.access ?? 'public'}`
+    `${r.kind.padEnd(7)} ${r.action.padEnd(width)}  ${r.access ?? 'public'}${
+      r.cache === undefined ? '' : `  cache ${r.cache}`
+    }`
   );
   const undeclared = sorted.filter((r) => r.access === undefined).length;
   lines.push(

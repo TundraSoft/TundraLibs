@@ -8,6 +8,7 @@
 import type { HTTPMethod } from '@tundralibs/compat/http';
 import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidHTTPHandler } from './HTTPHandler.ts';
+import type { RapidRouteCache } from './RouteCache.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
 import type { RapidContextState } from './context/State.ts';
 import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
@@ -44,4 +45,8 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
   access?: string;
   /** The declared parts of a composed page, as written; resolved to a plan at boot. */
   compose?: RapidComposeOptions;
+  /** The reply cache this route declares (GET only). */
+  cache?: RapidRouteCache;
+  /** The action identity (`namespace:Module:method`) a module mount recorded; the cache keys by it. */
+  source?: string;
 };

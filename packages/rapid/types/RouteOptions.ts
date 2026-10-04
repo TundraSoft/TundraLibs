@@ -8,6 +8,7 @@
 
 import type { Html } from '../ui/html.ts';
 import type { RapidComposeOptions } from './ComposeOptions.ts';
+import type { RapidRouteCache } from './RouteCache.ts';
 import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
@@ -68,4 +69,21 @@ export type RapidRouteOptions = {
    * are resolved when the app boots. See {@link RapidComposeOptions}.
    */
   compose?: RapidComposeOptions;
+  /**
+   * Keep this GET route's data reply in the app's cache store
+   * (`app.cache()`, required — RAPID_CACHE_UNBOUND at boot otherwise)
+   * for `seconds`, keyed by route · surface · path params plus the `key`
+   * binders. The lookup runs AFTER `access`: a denied caller never
+   * reaches the cache and the policy answer is not in the key. Only a
+   * 2xx data reply without cookies is stored. A composed part inherits
+   * its route's cache. See {@link RapidRouteCache}.
+   */
+  cache?: RapidRouteCache;
+  /**
+   * The action identity behind this route (`namespace:Module:method`),
+   * what the cache keys by so a composed part and a direct visit share
+   * one entry. Set by the module mount.
+   * @internal
+   */
+  source?: string;
 };

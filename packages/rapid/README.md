@@ -203,6 +203,54 @@ app.route('GET', '/report', { version: 'v2' }, () => ({
 routing). On the decorator API the same slot is set with `@GET(path, { version })`
 (and a module-wide default via `@Module({ version })`).
 
+### Route cache
+
+A GET route declares how long its **data reply** may be reused, and the app
+binds the store once — rapid builds the keys, the store holds the values:
+
+```ts
+import { Application, memoryStore } from '@tundralibs/rapid';
+import { query } from '@tundralibs/rapid/decorators';
+
+const app = await Application.initialize({ name: 'api' });
+app.cache(memoryStore()); // one process; bind @tundralibs/cacher for a shared one
+
+app.get(
+  '/orgs/:code:/stats',
+  { cache: { seconds: 30, key: [query()] } },
+  (ctx) => ({ content: { code: ctx.params.code, total: 3 } }),
+);
+app.post('/orgs/:code:/people', async (ctx) => {
+  await app.invalidateCache('GET /orgs/:code:/stats'); // every code, every key
+  return { status: 201, content: { ok: true } };
+});
+```
+
+The key is route · surface · every path param, extended (never replaced) by
+the `key` binders — `query()`, `paging()`, `header()`, `cookie()`, `auth()`,
+`config()`. The lookup runs **after** `access`, so a denied caller never
+reaches the store and the policy's answer is not in the key; only a 2xx
+data reply without cookies is stored; each request still renders its own
+representation. A route whose binders read a channel the key does not carry
+fails at mount, and a plain handler that does so at run time is served
+uncached (a warning; a throw in DEVELOPMENT). A composed tile inherits its
+route's cache, keyed by the action, so the page and a direct visit share one
+entry. `rapid access` lists every cached route's policy; OpenAPI carries
+`x-cache`. A store bound to nothing a route needs is fine; a route with
+`cache` and no `app.cache()` is `RAPID_CACHE_UNBOUND` at boot.
+
+```ts ignore
+import { Cacher } from '@tundralibs/cacher';
+
+const cacher = Cacher.create('REDIS', 'replies', { host: 'cache.internal' });
+app.cache({
+  read: (key) => cacher.get(key),
+  write: (key, value, seconds) => cacher.set(key, value, { expiry: seconds }),
+  invalidate: (target) =>
+    typeof target === 'string' ? cacher.delete(target) : cacher.clear(), // or a prefix scan
+});
+```
+
 ## Middleware
 
 `app.use(...)` registers **universal** middleware — the outer onion, in order,

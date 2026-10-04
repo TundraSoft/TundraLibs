@@ -462,6 +462,18 @@ helpers) and \`@tundralibs/rapid/cli\`.
   a guarded action is 503, an unguarded one serves anonymous.
   \`app.accessReport()\` / \`rapid access <entry>\` list every action and its
   string — the audit that keeps "public" a decision.
+- **Route cache:** \`app.cache(store)\` binds ONE \`{ read, write, invalidate }\`
+  store (\`memoryStore()\` for one process, \`@tundralibs/cacher\` shared); a GET
+  route declares \`cache: { seconds, key?: [query(), paging(), header(),
+  cookie(), auth(), config()] }\`. The key is route · surface · path params +
+  the key binders, never replaced; the lookup runs AFTER \`access\`; only a 2xx
+  data reply without cookies is stored. A decorated route's own binders must
+  be covered by the key (RAPID_CONFIG at mount); a plain handler reading
+  \`ctx.auth\`/query/paging/headers/cookies without a matching key binder is
+  served uncached (warning; a throw in DEVELOPMENT). Composed parts inherit
+  their route's cache (keyed by action). \`app.invalidateCache(action)\` drops
+  every entry of a route (\`'GET /x/:id:'\`) or method
+  (\`'ns:Module:method'\`). \`cache\` with no store = RAPID_CACHE_UNBOUND at boot.
 
 ## The context (\`ctx\`)
 

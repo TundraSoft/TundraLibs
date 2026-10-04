@@ -41,13 +41,16 @@ import type { JOBTransport } from './transports/JOBTransport.ts';
 import {
   accessGuard,
   type ApiSurface,
+  assertRouteCache,
   authPrelude,
   buildExporter,
   buildState,
+  cachePrefix,
   COMPOSE_DEFAULTS,
   type ComposeLimits,
   type ComposePlan,
   currentContainer,
+  describeCache,
   djb2,
   hasDecorations,
   ifNoneMatch,
@@ -79,6 +82,7 @@ import type {
   RapidApplicationJobMetrics,
   RapidApplicationOptions,
   RapidAuthBinding,
+  RapidCacheStore,
   RapidChannelOptions,
   RapidClusterSnapshot,
   RapidContextState,
@@ -273,6 +277,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __auth?: RapidAuthBinding;
   /** The DEVELOPMENT access summary is logged once per boot. */
   private __accessSummarised = false;
+  /** The cache store (see {@link cache}); `undefined` until bound. */
+  private __cache?: RapidCacheStore;
   /** Each composed route's resolved parts — planned at boot, read per request by the transport. */
   private readonly __composePlans = new WeakMap<
     RapidRouteEntry<S>,
@@ -777,6 +783,62 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * Bind the cache store every route declaring `cache` writes to and
+   * reads from — ONCE, before start. rapid builds the keys
+   * (`rapid:<action>:<surface>:<params>:<key values>`) and calls `read`,
+   * `write(key, value, seconds)` and `invalidate`; the store is any
+   * backend with those three (`@tundralibs/cacher`, or `memoryStore()`
+   * for one process). Boot fails (`RAPID_CACHE_UNBOUND`) when a route
+   * declares `cache` and nothing is bound.
+   *
+   * @throws {RapidError} RAPID_CONFIG when called twice, after the app
+   *   started, or with a store missing `read`/`write`/`invalidate`.
+   */
+  public cache(store: RapidCacheStore): this {
+    this.__assertRegistrable('app.cache()');
+    if (this.__cache !== undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.cache() binds once — one cache store for the app',
+      });
+    }
+    if (
+      store === null || typeof store !== 'object' ||
+      typeof store.read !== 'function' || typeof store.write !== 'function' ||
+      typeof store.invalidate !== 'function'
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.cache() takes { read, write, invalidate } functions',
+      });
+    }
+    this.__cache = store;
+    return this;
+  }
+
+  /** The bound {@link RapidCacheStore}, or `undefined` before {@link cache}. */
+  public get cacheStore(): RapidCacheStore | undefined {
+    return this.__cache;
+  }
+
+  /**
+   * Drop every cached reply of one action — a route (`'GET /orgs/:code:'`)
+   * or a module method (`'org:Organisations:stats'`), whatever params and
+   * key values it was stored under. What a write handler calls after it
+   * changed what a cached read answers.
+   *
+   * @throws {RapidError} RAPID_CACHE_UNBOUND when no store is bound.
+   */
+  public async invalidateCache(action: string): Promise<void> {
+    if (this.__cache === undefined) {
+      throw new RapidError('RAPID_CACHE_UNBOUND', {
+        message:
+          'invalidateCache() needs a cache store — call app.cache(store)',
+        details: { action },
+      });
+    }
+    await this.__cache.invalidate({ prefix: cachePrefix(action) });
+  }
+
+  /**
    * The full middleware list for one registration, in the order every
    * transport composes it: the pre-auth phase, the auth binding's
    * `authenticate` step, the app's `use()` middleware, the entry's access
@@ -815,6 +877,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         kind: 'HTTP',
         action: `${r.method} ${r.path}`,
         ...(r.access !== undefined ? { access: r.access } : {}),
+        ...(r.cache !== undefined ? { cache: describeCache(r.cache) } : {}),
       });
     }
     for (const c of this.__socketCommands.values()) {
@@ -1153,7 +1216,8 @@ export class Application<S extends RapidContextState = RapidContextState>
       opts.version === undefined && opts.openapi === undefined &&
       opts.template === undefined && opts.layout === undefined &&
       opts.apiOnly === undefined && opts.uiOnly === undefined &&
-      opts.access === undefined && opts.compose === undefined
+      opts.access === undefined && opts.compose === undefined &&
+      opts.cache === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -1209,6 +1273,17 @@ export class Application<S extends RapidContextState = RapidContextState>
         });
       }
     }
+    if (opts.cache !== undefined) {
+      // A decorated route's own binders are known here (openapi.binds):
+      // the key must cover every channel they read, or the first cached
+      // caller's query/paging/identity would answer everyone after.
+      assertRouteCache(
+        `${method} ${path}`,
+        method,
+        opts.cache,
+        opts.openapi?.binds ?? [],
+      );
+    }
     const chain = (hasOptions ? args.slice(1) : args) as [
       ...RapidHTTPMiddleware[],
       RapidHTTPHandler<S>,
@@ -1235,6 +1310,8 @@ export class Application<S extends RapidContextState = RapidContextState>
       ...(opts.uiOnly === true ? { uiOnly: true } : {}),
       ...(opts.access !== undefined ? { access: opts.access } : {}),
       ...(opts.compose !== undefined ? { compose: opts.compose } : {}),
+      ...(opts.cache !== undefined ? { cache: opts.cache } : {}),
+      ...(opts.source !== undefined ? { source: opts.source } : {}),
     });
     return this;
   }
@@ -1980,8 +2057,24 @@ export class Application<S extends RapidContextState = RapidContextState>
     }
   }
 
+  /**
+   * The cache's fail-closed rule: a route declaring `cache` with no store
+   * to hold it never boots (`RAPID_CACHE_UNBOUND` naming the first).
+   */
+  private __assertCacheBound(): void {
+    if (this.__cache !== undefined) return;
+    const declared = this.__routes.find((r) => r.cache !== undefined);
+    if (declared === undefined) return;
+    throw new RapidError('RAPID_CACHE_UNBOUND', {
+      message:
+        `${declared.method} ${declared.path} declares cache but no cache store is bound — call app.cache(store) before start()/fetch()`,
+      details: { action: `${declared.method} ${declared.path}` },
+    });
+  }
+
   private __assertBootConfig(): void {
     this.__assertAuthBound();
+    this.__assertCacheBound();
     this.__planCompose();
     this.__logAccessSummary();
     if (this.option('stateMode') === 'SHARE') {

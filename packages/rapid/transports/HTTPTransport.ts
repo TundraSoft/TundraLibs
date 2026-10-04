@@ -16,8 +16,10 @@ import type { SOCKETConnection } from '../context/mod.ts';
 import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
 import {
+  cached,
   compose,
   type ComposePlan,
+  extractBind,
   isSocketOriginAllowed,
   isSwap,
   partsFragment,
@@ -699,7 +701,12 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
             return this.__composeOnly(ctx, entry, plan, select);
           }
         }
-        const returned = entry.handler(ctx);
+        // A cached route runs its handler through the store — AFTER the
+        // chain (so after `access`), BEFORE representation (data is what
+        // is kept; each request still renders its own face).
+        const returned = entry.cache !== undefined
+          ? this.__cached(ctx, entry)
+          : entry.handler(ctx);
         // `!= null` (not `!== undefined`): a handler that returns `null`
         // must NOT reach `.then` on it (that throws) — it falls through to
         // `apply`, which clears to a 204 just like a `void`/`0`/`''`
@@ -861,6 +868,41 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     return true;
   }
 
+  /**
+   * The handler through the route cache (see `cached`): a 2xx data reply
+   * without cookies is what is stored — `status`, `content`, `paging`.
+   */
+  private __cached(
+    ctx: HTTPContext<S>,
+    entry: RapidRouteEntry<S>,
+  ): Promise<RapidContextResponse | void> {
+    return cached<RapidContextResponse | void>(
+      ctx as unknown as HTTPContext<RapidContextState>,
+      this._app,
+      {
+        source: entry.source ?? `${entry.method} ${entry.path}`,
+        cache: entry.cache!,
+        params: ctx.params,
+        bind: (binder) => extractBind(binder, ctx),
+        checkReads: true,
+      },
+      async () => await entry.handler(ctx),
+      (reply) =>
+        reply !== undefined && reply !== null && reply.redirect === undefined &&
+          reply.cookies === undefined &&
+          (reply.status === undefined ||
+            (reply.status >= 200 && reply.status < 300)) &&
+          !(reply.content instanceof Uint8Array) && !isStreamBody(reply.content)
+          ? {
+            content: reply.content,
+            ...(reply.status !== undefined ? { status: reply.status } : {}),
+            ...(reply.paging !== undefined ? { paging: reply.paging } : {}),
+          }
+          : undefined,
+      (stored) => stored as RapidContextResponse,
+    );
+  }
+
   /** Run a composed page's parts for this request (see `runCompose`). */
   private __compose(
     ctx: HTTPContext<S>,
@@ -881,6 +923,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       runtime: this._app.moduleRuntime!,
       limits: this._app.composeLimits,
       mode: this._app.mode,
+      host: this._app,
       asHtml,
       ...(select !== undefined ? { select } : {}),
     });

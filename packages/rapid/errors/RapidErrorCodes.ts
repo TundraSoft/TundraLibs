@@ -41,6 +41,8 @@ export const RAPID_ERROR_CODES = {
     message: 'Authentication unavailable',
     specific: true,
   },
+  /** A route declares `cache` but no `app.cache()` store exists — thrown at boot. */
+  RAPID_CACHE_UNBOUND: { status: 500, message: 'Invalid configuration' },
   /** A `compose` part names an action no mounted module serves — thrown at boot. */
   RAPID_COMPOSE_UNKNOWN_ACTION: {
     status: 500,
