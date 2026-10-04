@@ -31,12 +31,13 @@ Loads configuration files from a directory and returns a Config object.
 
 **Parameters:**
 
-| Parameter         | Type                | Required | Description                                                                                              |
-| ----------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `options.path`    | `string`            | Yes      | Directory path containing config files                                                                   |
-| `options.env`     | `boolean \| string` | No       | `true` loads `.env` from `options.path`; a string loads it from that path; omitted means no substitution |
-| `options.include` | `RegExp[]`          | No       | Patterns to include specific files                                                                       |
-| `options.exclude` | `RegExp[]`          | No       | Patterns to exclude specific files                                                                       |
+| Parameter              | Type                              | Required | Description                                                                                                                                |
+| ---------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `options.path`         | `string`                          | Yes      | Directory path containing config files                                                                                                     |
+| `options.env`          | `boolean \| string`               | No       | `true` loads `.env` from `options.path`; a string loads it from that path; omitted means no substitution                                   |
+| `options.include`      | `RegExp[]`                        | No       | Patterns to include specific files                                                                                                         |
+| `options.exclude`      | `RegExp[]`                        | No       | Patterns to exclude specific files                                                                                                         |
+| `options.placeholders` | `'literal' \| 'empty' \| 'error'` | No       | What an unset `${VAR}` becomes: the literal text (default), nothing (`null` / `''`), or a thrown `Error` naming the file and the variables |
 
 `env` selects a source, it is not a bag of variables — pass `true` or a
 path, never a `Record`. Substitution is **off** unless you ask for it.
@@ -189,6 +190,24 @@ const custom = await loadConfig({
 });
 
 console.log(custom.get('database.host')); // 'localhost'
+```
+
+An unset variable keeps its `${VAR}` text by default, so a validator
+downstream sees a string that looks like a value. `placeholders` changes
+that: `'empty'` leaves nothing in its place (an unquoted YAML value reads
+as `null`, a quoted one as `''`, so `get(path)` and `has(path)` tell it
+was unset); `'error'` makes `loadConfig` throw, naming the file and every
+unresolved variable — the setting for a production boot, where a missing
+secret must stop the process rather than reach a connection string.
+
+```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({
+  path: './config',
+  env: true,
+  placeholders: 'error', // Error: Unresolved placeholders in config/db.yaml: ${DB_PASSWORD}
+});
 ```
 
 ### Selective File Loading
@@ -462,6 +481,10 @@ import { loadConfig } from '@tundralibs/utils';
 // Correct - env enabled
 const config = await loadConfig({ path: './config', env: true });
 ```
+
+If the variable is set nowhere, the text stays `${VAR}` unless
+`placeholders: 'empty'` or `'error'` says otherwise (see
+[Environment Variable Substitution](#environment-variable-substitution)).
 
 ### 2. Undefined Values
 

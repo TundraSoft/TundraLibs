@@ -477,6 +477,53 @@ describe('utils.Config', () => {
         await remove('packages/utils/fixtures/config/temp');
       }
     });
+
+    it("placeholders: an unset ${VAR} stays literal by default, becomes empty under 'empty', and fails the load under 'error' naming the file and the variables", async () => {
+      const dir = 'packages/utils/fixtures/config/placeholders';
+      await makeDir(dir, { recursive: true });
+      await writeTextFile(`${dir}/.env`, 'HOST=db.local\n');
+      await writeTextFile(
+        `${dir}/app.yaml`,
+        'host: ${HOST}\nport: ${PORT}\nsecret: "${SECRET}"\n',
+      );
+      try {
+        const literal = await loadConfig({ path: dir, env: `${dir}/.env` });
+        asserts.assertEquals(literal.get('app.port'), '${PORT}');
+        const empty = await loadConfig({
+          path: dir,
+          env: `${dir}/.env`,
+          placeholders: 'empty',
+        });
+        asserts.assertEquals(empty.get('app.host'), 'db.local');
+        asserts.assertEquals(empty.get('app.port'), null); // YAML: nothing after the colon
+        asserts.assertEquals(empty.get('app.secret'), '');
+        const error = await asserts.assertRejects(
+          () =>
+            loadConfig({
+              path: dir,
+              env: `${dir}/.env`,
+              placeholders: 'error',
+            }),
+          Error,
+        );
+        asserts.assertStringIncludes(error.message, 'app.yaml');
+        asserts.assertStringIncludes(error.message, '${PORT}, ${SECRET}');
+        asserts.assertEquals(error.message.includes('HOST'), false);
+        asserts.assertThrows(
+          () =>
+            assertLoadConfigOptions(
+              {
+                path: dir,
+                placeholders: 'drop',
+              } as unknown as LoadConfigOptions,
+            ),
+          TypeError,
+          'placeholders must be',
+        );
+      } finally {
+        await remove(dir);
+      }
+    });
   });
 });
 
