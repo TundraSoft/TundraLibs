@@ -136,6 +136,57 @@ const get = (
   headers: Record<string, string> = {},
 ) => app.fetch(new Request(`http://app${path}`, { headers }));
 
+describe('rapid.middlewares.pact binding (app.auth)', () => {
+  it('identifies once per request and judges access strings by grant: anonymous 401, lacking grant 403, unknown clause denied, signed-in any identity', async () => {
+    const pact = await makePact();
+    await pact.register({
+      identifier: 'bob',
+      password: PASSWORD,
+      grants: { Posts: 1n }, // READ only
+    });
+    const { binding } = pactAuth(pact);
+    const app = await Application.initialize({
+      name: 'pact-binding',
+      logger: { handlers: [] },
+    });
+    app.auth(binding);
+    app.get('/read', { access: 'Posts:READ' }, () => ({ content: 'r' }));
+    app.get('/edit', { access: 'Posts:EDIT' }, () => ({ content: 'e' }));
+    app.get('/either', { access: 'Posts:EDIT|Admin:READ' }, () => ({
+      content: 'x',
+    }));
+    app.get('/me', { access: 'signed-in' }, (ctx) => ({
+      content: (ctx.auth as PactAuthContext).principal.id,
+    }));
+    app.get('/typo', { access: 'Posts:DELETE|Nope:READ' }, () => ({
+      content: 'never',
+    }));
+    const bearer = async (identifier: string) => ({
+      authorization: `Bearer ${
+        (await pact.login({ identifier, password: PASSWORD })).session.token
+      }`,
+    });
+    const ada = await bearer('ada');
+    const bob = await bearer('bob');
+
+    asserts.assertEquals((await get(app, '/read')).status, 401);
+    asserts.assertEquals((await get(app, '/read', bob)).status, 200);
+    asserts.assertEquals((await get(app, '/edit', bob)).status, 403);
+    asserts.assertEquals((await get(app, '/edit', ada)).status, 200);
+    asserts.assertEquals((await get(app, '/either', ada)).status, 200);
+    asserts.assertEquals((await get(app, '/either', bob)).status, 403);
+    asserts.assertEquals(await (await get(app, '/me', ada)).text(), 'u-1');
+    asserts.assertEquals((await get(app, '/me')).status, 401);
+    // A clause this instance does not know is never granted, even to ada.
+    asserts.assertEquals((await get(app, '/typo', ada)).status, 403);
+    // A presented credential that fails is a refusal — 401, never anonymous.
+    asserts.assertEquals(
+      (await get(app, '/read', { authorization: 'Bearer nope' })).status,
+      401,
+    );
+  });
+});
+
 const TEXT = new TextDecoder();
 
 /** Headers for a request signed over pact's default template. */

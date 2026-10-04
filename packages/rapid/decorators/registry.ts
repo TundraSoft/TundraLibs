@@ -56,6 +56,10 @@ type MethodRecord = {
   decorations?: RapidDecoration[];
   on?: string[];
   use?: RapidModuleInvokeMiddleware[];
+  /** The method's `access` string (route options or `@Action`), once. */
+  access?: string;
+  /** `@Action` was applied: an unrouted, invoke-only module method. */
+  action?: true;
 };
 
 /** A class's OWN records, by method name. Null-prototype: names are data. */
@@ -346,4 +350,64 @@ export function middlewareOf(
   name: PropertyKey,
 ): readonly RapidModuleInvokeMiddleware[] | undefined {
   return ownBucket(ctor)?.[name]?.use;
+}
+
+/**
+ * Decoration-time check for an `access` option: a non-empty string.
+ *
+ * @throws {RapidError} RAPID_CONFIG naming the decorator.
+ */
+export function assertAccess(where: string, access: unknown): void {
+  if (typeof access !== 'string' || access.trim() === '') {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `${where} access must be a non-empty string (the auth binding's grammar, e.g. 'Posts:READ') — omit it for a public action`,
+      details: { access },
+    });
+  }
+}
+
+/**
+ * Record a method's `access` string. One string per method: a second
+ * decoration on the same method must repeat it exactly — two routes on
+ * one method cannot be guarded differently, since `invoke()` enforces the
+ * one declaration — else RAPID_CONFIG.
+ *
+ * @throws {RapidError} RAPID_CONFIG when `context.metadata` is missing or a
+ *   different `access` was already recorded for the method.
+ */
+export function recordAccess(
+  context: ClassMethodDecoratorContext,
+  access: string,
+  decorator: string,
+): void {
+  const record = recordFor(context, decorator);
+  if (record.access !== undefined && record.access !== access) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `@${decorator} on '${
+        String(context.name)
+      }' declares access '${access}' but another decoration on the same method declares '${record.access}' — one method, one access string`,
+      details: { name: String(context.name), access, prior: record.access },
+    });
+  }
+  record.access = access;
+}
+
+/** A class method's declared `access` string, or `undefined` when none. */
+export function accessOf(ctor: object, name: PropertyKey): string | undefined {
+  return ownBucket(ctor)?.[name]?.access;
+}
+
+/**
+ * Mark a method as an explicit `@Action` (invoke-only).
+ *
+ * @throws {RapidError} RAPID_CONFIG when `context.metadata` is missing.
+ */
+export function recordAction(context: ClassMethodDecoratorContext): void {
+  recordFor(context, 'Action').action = true;
+}
+
+/** Whether `@Action` was applied to a class method. */
+export function isActionOf(ctor: object, name: PropertyKey): boolean {
+  return ownBucket(ctor)?.[name]?.action === true;
 }

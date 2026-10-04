@@ -25,7 +25,14 @@ import type { DoctorContainer } from '@tundralibs/doctor';
 import type { Slogger } from '@tundralibs/slogger';
 import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
-import { middlewareOf, onEventsOf } from '../decorators/registry.ts';
+import {
+  accessOf,
+  decorationsOf,
+  isActionOf,
+  middlewareOf,
+  onEventsOf,
+} from '../decorators/registry.ts';
+import { enforceAccess } from '../utils/access.ts';
 import { attachContainer } from '../utils/requestContainer.ts';
 import { pinHidden } from '../utils/hiddenSlot.ts';
 import { EventContext } from './EventContext.ts';
@@ -44,6 +51,8 @@ import {
 } from './RapidModule.ts';
 import { Reply } from './reply.ts';
 import type {
+  RapidAccessReportRow,
+  RapidAuthBinding,
   RapidModuleClass,
   RapidModuleContext,
   RapidModuleEventMap,
@@ -62,7 +71,16 @@ type Chain = (
   ctx: InvokeContext,
   next: () => void | Promise<void>,
 ) => void | Promise<void>;
-type MethodEntry = { fn: AnyFn; chain: Chain | undefined };
+type MethodEntry = {
+  fn: AnyFn;
+  chain: Chain | undefined;
+  /** The method's declared `access` string, enforced on every `invoke()`. */
+  access: string | undefined;
+  /** Whether a route/command/job decoration also serves this method. */
+  routed: boolean;
+  /** Whether `@Action` marks it an explicit invoke-only action. */
+  action: boolean;
+};
 type Subscription = {
   fn: AnyFn;
   events: readonly string[];
@@ -178,6 +196,10 @@ export class ModuleRuntime {
   private readonly __events: RapidEvents;
   private readonly __mode: 'DEVELOPMENT' | 'PRODUCTION';
   private readonly __ownsLog: boolean;
+  /** The auth binding that judges `access` on `invoke()` — resolved per call (an app binds late). */
+  private readonly __auth: () => RapidAuthBinding | undefined;
+  /** A standalone runtime binds auth directly, so finalize can check it; an app checks at boot. */
+  private readonly __authStandalone: boolean;
   private readonly __container?: DoctorContainer;
   private readonly __mounted = new Map<object, Mounted>();
   private readonly __order: Mounted[] = [];
@@ -211,6 +233,9 @@ export class ModuleRuntime {
     this.__ownsLog = ownsLog;
     this.__container = container;
     this.__events = new RapidEvents(context.log);
+    const auth = context.auth;
+    this.__authStandalone = typeof auth !== 'function';
+    this.__auth = typeof auth === 'function' ? auth : () => auth;
   }
 
   /** The invocation currently in flight, or `undefined` outside one. */
@@ -352,6 +377,9 @@ export class ModuleRuntime {
         const on = level === undefined
           ? undefined
           : onEventsOf(level, methodName);
+        const access = level === undefined
+          ? undefined
+          : accessOf(level, methodName);
         // Override-without-re-decorate: this derived level OWNS the method
         // (an override) yet declares no @Use/@On, while an ANCESTOR level
         // does — the ancestor's guard/subscription would be silently dropped
@@ -393,6 +421,15 @@ export class ModuleRuntime {
               details: { module: ctorName, method: methodName },
             });
           }
+          if (access !== undefined) {
+            throw new RapidError('RAPID_CONFIG', {
+              message:
+                `${ctorName}.${methodName} declares access on an @On handler — ` +
+                `an event carries no caller, so nothing could be judged; ` +
+                `put the access on an invoked method instead`,
+              details: { module: ctorName, method: methodName, access },
+            });
+          }
           subscriptions.push({
             fn,
             events: on,
@@ -404,6 +441,10 @@ export class ModuleRuntime {
         methods.set(methodName, {
           fn,
           chain: middleware === undefined ? undefined : compose(middleware),
+          access,
+          routed: level !== undefined &&
+            decorationsOf(level, methodName) !== undefined,
+          action: level !== undefined && isActionOf(level, methodName),
         });
       }
       proto = Object.getPrototypeOf(proto);
@@ -448,6 +489,21 @@ export class ModuleRuntime {
       throw this.__disposedError('finalize');
     }
     if (this.__finalized) return;
+    // The one fail-closed rule, for a runtime that binds auth itself (an
+    // app checks the same at its boot, since it may bind after mounting):
+    // a method declaring `access` with nobody to judge it never boots.
+    if (this.__authStandalone && this.__auth() === undefined) {
+      for (const mounted of this.__order) {
+        for (const [name, entry] of mounted.methods) {
+          if (entry.access === undefined) continue;
+          throw new RapidError('RAPID_AUTH_UNBOUND', {
+            message:
+              `${mounted.key}.${name} declares access '${entry.access}' but no auth binding is registered — pass \`auth\` to initModules()/harness()`,
+            details: { action: `${mounted.key}.${name}`, access: entry.access },
+          });
+        }
+      }
+    }
     for (const mounted of this.__order) {
       for (const subscription of mounted.subscriptions) {
         for (const event of subscription.events) {
@@ -555,7 +611,7 @@ export class ModuleRuntime {
         (parent?.type === 'INVOKE' ? parent.auth : undefined),
     });
     const holder: Holder = { pending: undefined, settled: false };
-    const dispatch = (): void | Promise<void> => {
+    const run = (): void | Promise<void> => {
       const out = entry.fn.apply(mounted.instance, args);
       if (isThenable(out)) {
         holder.pending = out.then(
@@ -576,6 +632,16 @@ export class ModuleRuntime {
       }
       ctx.response = toReply(out);
     };
+    // The declared `access` is judged BEFORE the @Use chain and the method,
+    // against the CALLER's identity — the same rule the transport applies
+    // to a request, so an in-process call cannot skip it. A refusal throws
+    // inside the cycle and is disclosed as the 401/403 envelope.
+    const access = entry.access;
+    const dispatch = access === undefined
+      ? run
+      : (): Promise<void> =>
+        enforceAccess(ctx, access, this.__auth(), `${mounted.key}.${method}`)
+          .then(run);
     const result = this.__run(
       ctx,
       entry.chain,
@@ -584,6 +650,28 @@ export class ModuleRuntime {
       () => (ctx.response ?? NO_CONTENT) as Result,
     );
     return isThenable(result) ? result : Promise.resolve(result);
+  }
+
+  /**
+   * Every mounted method that carries an `access` string or an `@Action`
+   * mark and is NOT also served by a route/command/job (those appear in
+   * the app's own report) — the module half of the access audit.
+   */
+  public accessReport(): RapidAccessReportRow[] {
+    const rows: RapidAccessReportRow[] = [];
+    for (const mounted of this.__order) {
+      for (const [name, entry] of mounted.methods) {
+        if (entry.routed || (entry.access === undefined && !entry.action)) {
+          continue;
+        }
+        rows.push({
+          kind: 'ACTION',
+          action: `${mounted.key}.${name}`,
+          ...(entry.access !== undefined ? { access: entry.access } : {}),
+        });
+      }
+    }
+    return rows;
   }
 
   /**

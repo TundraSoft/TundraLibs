@@ -124,7 +124,10 @@ export function buildModuleContext(
         [{ name: 'console', type: 'ConsoleHandler', level }],
       contextProvider: () => ({ ...ambient.get() }),
     }),
-  };
+    // A standalone runtime binds auth directly (or not at all — then a
+    // module declaring `access` fails finalize); the app passes a resolver.
+    ...(options.auth !== undefined ? { auth: options.auth } : {}),
+  } as Required<RapidModuleContext>;
 }
 
 const isContext = (

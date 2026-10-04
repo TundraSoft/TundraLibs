@@ -22,6 +22,9 @@ export {
   type SOCKETContextInit,
 } from './context/mod.ts';
 export {
+  accessOf,
+  Action,
+  type ActionDecoratorOptions,
   auth,
   config,
   connection,
@@ -113,7 +116,9 @@ export {
   timeout,
 } from './middlewares/mod.ts';
 export type {
+  RapidAccessContext,
   RapidAccessLogOptions,
+  RapidAccessReportRow,
   RapidApplicationEvents,
   RapidApplicationExporterConfig,
   RapidApplicationFactoryOptions,
@@ -129,6 +134,7 @@ export type {
   RapidApplicationStaticConfig,
   RapidApplicationStaticEntry,
   RapidApplicationUploadOptions,
+  RapidAuthBinding,
   RapidBinder,
   RapidBinderSource,
   RapidBinds,

@@ -12,8 +12,10 @@ import type {
   RapidSOCKETMiddleware,
 } from '../types/mod.ts';
 import {
+  assertAccess,
   assertMethodContext,
   assertMiddlewareList,
+  recordAccess,
   recordDecoration,
 } from './registry.ts';
 
@@ -32,6 +34,8 @@ export type SocketDecoratorOptions<A extends readonly unknown[]> = {
    * @default []
    */
   middleware?: readonly RapidSOCKETMiddleware[];
+  /** Who may send this command — see `RouteDecoratorOptions.access`. */
+  access?: string;
 };
 
 /** The decorator signature the factory returns. */
@@ -70,12 +74,16 @@ export const SOCKET: {
   options: SocketDecoratorOptions<readonly unknown[]> = {},
   // deno-lint-ignore no-explicit-any
 ): any => {
+  if (options.access !== undefined) assertAccess('@SOCKET', options.access);
   return (
     _target: object,
     context: ClassMethodDecoratorContext,
   ): void => {
     assertMethodContext(context, 'SOCKET');
     assertMiddlewareList('@SOCKET', options.middleware);
+    if (options.access !== undefined) {
+      recordAccess(context, options.access, 'SOCKET');
+    }
     recordDecoration(context, {
       kind: 'SOCKET',
       command,
@@ -84,6 +92,7 @@ export const SOCKET: {
       ...(options.middleware !== undefined
         ? { middleware: options.middleware }
         : {}),
+      ...(options.access !== undefined ? { access: options.access } : {}),
     });
   };
 };

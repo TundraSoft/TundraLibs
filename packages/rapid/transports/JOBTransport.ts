@@ -25,10 +25,13 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
    * reused for every firing — there is no per-job chain (see `__run`),
    * so one composition serves every job on this transport.
    */
-  private __composedChain?: (
-    ctx: JOBContext<S>,
-    next: () => void | Promise<void>,
-  ) => void | Promise<void>;
+  private readonly __chains = new Map<
+    RapidJobEntry<S>,
+    (
+      ctx: JOBContext<S>,
+      next: () => void | Promise<void>,
+    ) => void | Promise<void>
+  >();
   /**
    * Firings still running — scheduled AND triggered — what {@link stop}
    * waits on (bounded), so the module dispose that follows a SIGTERM
@@ -190,19 +193,24 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
     });
     let handlerRan = false;
     const startedAt = performance.now();
-    this.__composedChain ??= compose<S, JOBContext<S>>(
-      // The universal onion runs on job firings too — same chain, same
-      // order as HTTP and sockets. Base-typed middleware fit the
-      // S-typed context (same object at runtime); the cast bridges the
-      // generic.
-      this._app.middlewares as unknown as readonly ((
-        ctx: JOBContext<S>,
-        next: () => void | Promise<void>,
-      ) => void | Promise<void>)[],
-    );
+    // The universal onion runs on job firings too — same chain, same
+    // order as HTTP and sockets, plus this job's access guard when it
+    // declares one; composed once per job. Base-typed middleware fit the
+    // S-typed context (same object at runtime); the cast bridges the
+    // generic.
+    let chain = this.__chains.get(job);
+    if (chain === undefined) {
+      chain = compose<S, JOBContext<S>>(
+        this._app._chainFor([], job.access, job.name) as unknown as readonly ((
+          ctx: JOBContext<S>,
+          next: () => void | Promise<void>,
+        ) => void | Promise<void>)[],
+      );
+      this.__chains.set(job, chain);
+    }
     await this._invoke<JOBContext<S>>(
       ctx,
-      this.__composedChain,
+      chain,
       async () => {
         handlerRan = true;
         const returned = await job.handler(ctx);

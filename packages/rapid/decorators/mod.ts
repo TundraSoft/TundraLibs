@@ -20,6 +20,7 @@ export {
   query,
   session,
 } from './binders.ts';
+export { Action, type ActionDecoratorOptions } from './action.ts';
 export {
   DELETE,
   GET,
@@ -37,8 +38,10 @@ export {
 export { On } from './on.ts';
 export { Use } from './use.ts';
 export {
+  accessOf,
   decoratedNamesOf,
   decorationsOf,
+  isActionOf,
   moduleMetaOf,
   recordDecoration,
   recordModule,

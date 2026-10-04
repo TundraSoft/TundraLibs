@@ -1,70 +1,123 @@
 # Authentication & authorization
 
-Rapid owns one thing here: the auth bag. `ctx.auth` is `undefined` until an
-authentication middleware calls `ctx.setAuth(identity)` — once per request,
-any transport — and every guard downstream reads it. The `@tundralibs/pact`
-adapter is the shipped way to fill it; any other identity system is a short
-middleware over the same seam.
+Rapid owns two things here: the auth bag and the `access` string. An
+application **binds** an auth platform once — `app.auth({ authenticate,
+authorize })` — and rapid runs `authenticate` once per request, job run or
+module `invoke()`, sets `ctx.auth` from the answer, and hands every `access`
+string a route, socket command, job or module method declares to
+`authorize`. Rapid never parses an identity or an access string: both belong
+to the binding. The `@tundralibs/pact` adapter ships one; any other identity
+system is two functions.
 
 ---
 
 ## TL;DR
 
-- **Using pact** — `@tundralibs/rapid/middlewares/pact`: one factory over your
-  instance, `const { authenticate, authorize } = pactAuth(pact, options)`;
-  `authorize('Module', 'PERMISSION')` is typed by that instance. pact is a
-  real dependency of this subpath only — importing
-  `@tundralibs/rapid/middlewares` never pulls it in.
-- **Anything else** — write the middleware: read your credential, verify it,
-  `ctx.setAuth(...)`; guard with a middleware that throws
-  `RAPID_UNAUTHENTICATED` / `RAPID_ACCESS_DENIED`. See
-  [Bring your own auth](#bring-your-own-auth).
+- **Declare, don't guard.** `access: 'Posts:READ'` on the route (or `@GET`
+  option, `@SOCKET`, `@JOB`, `@Action`) is the whole authorization. No
+  `access` means **public** — by decision, and `rapid access <entry.ts>`
+  lists every action with its string so that decision is reviewed, not
+  guessed (`--fail-on-undeclared` for a CI gate).
+- **Using pact** — `@tundralibs/rapid/middlewares/pact`:
+  `app.auth(pactAuth(pact, options).binding)`. Its grammar is
+  `Module:PERMISSION`, `signed-in`, and `|` for any-of; a clause the pact
+  catalog does not know is denied. pact is a real dependency of this
+  subpath only — importing `@tundralibs/rapid/middlewares` never pulls it in.
+- **Anything else** — write the binding: identify from the request, judge the
+  string against the identity. See [Bind an auth platform](#bind-an-auth-platform).
+- **Declared but unbound fails boot** (`RAPID_AUTH_UNBOUND`): `fetch()`,
+  `start()`, `triggerJob()`, `app.modules()` and the test `harness()` all
+  refuse while any action declares `access` and no binding exists.
 
 ---
 
-## Bring your own auth
-
-The seam is the context, not a helper. An identifying middleware never
-rejects (anonymous requests flow through so public routes keep working), skips
-jobs (no client), and reads the upgrade request on a socket frame; a guard
-throws rapid's own codes so the error pipeline (JSON envelope, HTML on the UI
-surface, logs) handles the rest:
+## Bind an auth platform
 
 ```ts
-import {
-  Application,
-  RapidError,
-  type RapidMiddleware,
-} from '@tundralibs/rapid';
+import { Application, type RapidAuthBinding } from '@tundralibs/rapid';
 
 declare function verify(
   token: string,
-): Promise<{ id: string; role: string } | null>;
+): Promise<{ id: string; roles: string[] } | null>;
 
-const identify: RapidMiddleware = async (ctx, next) => {
-  if (ctx.type !== 'JOB') {
+const binding: RapidAuthBinding = {
+  async authenticate(ctx) {
+    if (ctx.type === 'JOB') return { id: 'cron', roles: ['system'] };
     const headers = ctx.type === 'HTTP' ? ctx.headers : ctx.connection.headers;
     const token = headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-    const identity = token ? await verify(token) : null;
-    if (identity !== null) ctx.setAuth(identity);
-  }
-  return next();
-};
-
-const admins: RapidMiddleware = (ctx, next) => {
-  const auth = ctx.auth as { role: string } | undefined;
-  if (auth === undefined) throw new RapidError('RAPID_UNAUTHENTICATED');
-  if (auth.role !== 'admin') throw new RapidError('RAPID_ACCESS_DENIED');
-  return next();
+    return token ? (await verify(token)) ?? undefined : undefined;
+  },
+  authorize(ctx, access) {
+    const auth = ctx.auth as { roles: string[] } | undefined;
+    return auth !== undefined && auth.roles.includes(access);
+  },
 };
 
 const app = await Application.initialize({ name: 'demo' });
-app.use(identify);
-app.get('/admin', admins, (ctx) => ({ content: { auth: ctx.auth } }));
+app.auth(binding);
+app.get('/', () => ({ content: 'public' })); // no access: public
+app.get('/admin', { access: 'admin' }, (ctx) => ({
+  content: { auth: ctx.auth },
+}));
+app.job('purge', '0 3 * * *', () => ({ content: 'ok' }), { access: 'system' });
 ```
 
-`setAuth` is write-once (a second call is `RAPID_CONFIG`), so two identity
-middlewares cannot silently overwrite each other.
+What rapid does with it, in chain order:
+
+1. **`app.preAuth(...middleware)`** runs first — the phase for request ids,
+   body-size caps and IP rate limits, everything that must not depend on
+   who the caller is.
+2. **`authenticate(ctx)`** runs once. Its return becomes `ctx.auth`;
+   `undefined` leaves the request anonymous. A thrown `RapidError` with a
+   4xx status is a **refusal** — a presented credential that fails — and is
+   answered as thrown, on a public route too. Any other throw (a session
+   store down) marks `ctx.authFailed`: a declared action answers 503
+   `RAPID_AUTH_UNAVAILABLE`, an undeclared one serves anonymous. Never
+   downgrade a failure to anonymous yourself.
+3. **`app.use(...)`** middleware runs with `ctx.auth` already set, so a
+   per-user rate limit reads it.
+4. **`authorize(ctx, access)`** runs when the action declares `access`.
+   `false` is a 401 for an anonymous caller and a 403 for an identified
+   one; `onDenied` observes both. The string reaches `authorize` as
+   written — any-of, tenants, system identities are the binding's grammar.
+5. The action's own middleware and handler run.
+6. **`finish(ctx)`** runs after a chain that completed — the hook a scheme
+   uses to sign or encrypt the response.
+
+A job has no client: `authenticate` sees `ctx.type === 'JOB'` and returns
+either `undefined` (so a declared job is 401 — useful to keep a job declared
+but disabled) or a system identity the policy recognises.
+
+### Modules
+
+The same string on a decorated method guards both the request **and**
+module-to-module `invoke()`: an `invoke` of a method declaring `access` is
+judged for the **caller's** identity, and a denial is the 401/403 envelope,
+not a throw. `@Action({ access })` declares an invoke-only method — one no
+transport serves. Details in [Modules](./Rapid-Modules.md#access-on-decorated-methods);
+the test harness takes an `auth` binding, an `allowAll` stub and `h.as(identity)`
+([Testing](./Rapid-Testing.md#harness--the-module-system-with-fakes)).
+
+### The audit
+
+`app.accessReport()` returns every routed action and every `@Action` with
+its declared string; the CLI prints it:
+
+```ts ignore
+rapid access ./main.ts                       # entry exports the app as `default` or `app`
+rapid access ./main.ts --fail-on-undeclared  # exit 1 when any action is public
+rapid access ./main.ts --json
+```
+
+OpenAPI carries the string as `x-access` on each operation, so the
+published contract states what a call needs.
+
+### Without a binding
+
+`ctx.setAuth(identity)` from your own middleware still works for an
+application that declares no `access` at all, and remains write-once. It is
+**deprecated**, and refused (`RAPID_CONFIG`) once a binding exists: with a
+binding, nothing downstream can elevate a request.
 
 ---
 
@@ -85,12 +138,40 @@ export const pact = Pact.create({
   hooks, // getUser / getApiKey / saveSession / … — your storage
 });
 
-export const { authenticate, authorize } = pactAuth(pact, {
+export const { binding, authenticate, authorize } = pactAuth(pact, {
   schemes: ['BEARER', 'APIKEY'], // default: BEARER, BASIC, APIKEY
   bearer: { cookie: 'session' }, // browser UIs: the cookie login({ cookie }) set
   apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
 });
 ```
+
+### The binding — `access` strings
+
+`app.auth(binding)` is the whole wiring. The grammar `authorize` judges:
+
+| `access`                 | Passes when                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `Posts:READ`             | the principal holds that grant (`principal.hasPermission`), no store round-trip |
+| `signed-in`              | any authenticated principal                                                     |
+| `Posts:EDIT\|Admin:READ` | any one clause passes                                                           |
+| anything else            | never — a module or permission outside the instance's catalog is denied         |
+
+```ts ignore
+import { binding } from './auth.ts';
+
+app.auth(binding);
+app.get('/posts', { access: 'Posts:READ' }, list);
+app.post('/posts', { access: 'Posts:EDIT' }, create);
+```
+
+`binding.authenticate` is the same identification the `authenticate`
+middleware does (every carrier below, the stale-cookie rule, one 401 for a
+credential that fails); `binding.finish` signs or encrypts the reply when
+`hmac` / `encryption` are configured. Tenant-scoped grants
+(`acme::Posts`) take a per-request tenant, so they stay a handler check —
+see [Tenant-scoped permissions](#tenant-scoped-permissions).
+
+### The middlewares — without a binding
 
 The options are pact's own `PactMiddlewareOptions` — every carrier (header
 and scheme prefix) defaults to its standard and is overridable, plus `hmac`,
@@ -101,8 +182,10 @@ Middleware guide; rapid's
 adapter is glue over the same neutral core as pact's express/fastify/oak/hono
 adapters, so a client written for one works against all of them.
 
-Then wire them wherever routes are registered — `authenticate` once (global,
-or `onlyApi(authenticate)` on a split surface), `authorize` per route:
+An application that binds nothing can wire the two middlewares instead —
+`authenticate` once (global, or `onlyApi(authenticate)` on a split surface),
+`authorize` per route. The two styles do not mix: `authenticate` calls
+`ctx.setAuth`, which a binding refuses.
 
 ```ts ignore
 import { authenticate, authorize } from './auth.ts';

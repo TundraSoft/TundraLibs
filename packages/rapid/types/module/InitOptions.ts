@@ -7,9 +7,13 @@
  */
 
 import type { RapidApplicationOptions } from '../mod.ts';
+import type { RapidAuthBinding } from '../AuthBinding.ts';
 
-/** `name` is required (slogger's appName); `mode`/`logger` as on the app. */
-export type RapidModuleInitOptions = Pick<
-  RapidApplicationOptions,
-  'name' | 'mode' | 'logger'
->;
+/**
+ * `name` is required (slogger's appName); `mode`/`logger` as on the app;
+ * `auth` is the binding that judges `access` strings on `invoke()` —
+ * required when a mounted module declares any (RAPID_AUTH_UNBOUND).
+ */
+export type RapidModuleInitOptions =
+  & Pick<RapidApplicationOptions, 'name' | 'mode' | 'logger'>
+  & { auth?: RapidAuthBinding };

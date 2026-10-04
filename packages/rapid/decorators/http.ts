@@ -32,8 +32,10 @@ import type {
 } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
+  assertAccess,
   assertMethodContext,
   assertMiddlewareList,
+  recordAccess,
   recordDecoration,
 } from './registry.ts';
 
@@ -149,6 +151,16 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * @default [] — the module's `middleware` alone, if any
    */
   middleware?: readonly RapidHTTPMiddleware[];
+  /**
+   * Who may call this route, in the app's auth binding's grammar
+   * (`'Posts:READ'`, `'signed-in'`, `'a|b'` — rapid passes the string as
+   * written). Judged by the binding's `authorize` on EVERY path to the
+   * method: the HTTP request, an in-process `invoke()`, a composed part.
+   * Absent: public — no check runs. Boot fails when any method declares
+   * `access` and no `app.auth()` binding exists (RAPID_AUTH_UNBOUND).
+   * One method, one string: a second decoration must repeat it exactly.
+   */
+  access?: string;
 };
 
 /** The decorator signature every route factory returns. */
@@ -226,9 +238,13 @@ function route<This, A extends readonly unknown[]>(
   // list below — an empty array fails at import, not as a route that
   // silently never appears.
   const paths = normalisePaths(method, path);
+  if (options.access !== undefined) assertAccess(`@${method}`, options.access);
   return (_target, context): void => {
     assertMethodContext(context, method);
     assertMiddlewareList(`@${method}`, options.middleware);
+    if (options.access !== undefined) {
+      recordAccess(context, options.access, method);
+    }
     recordDecoration(context, {
       kind: 'HTTP',
       method,
@@ -254,6 +270,7 @@ function route<This, A extends readonly unknown[]>(
       ...(options.middleware !== undefined
         ? { middleware: options.middleware }
         : {}),
+      ...(options.access !== undefined ? { access: options.access } : {}),
     });
   };
 }

@@ -66,14 +66,15 @@ other's classes, and a second `import()` of the same file is a cache hit.
 
 ### Decorators
 
-| Decorator                                        | Records                                                                                                                                                                                  |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)` | An HTTP route. `options`: `bind`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `paging`, `apiOnly`, `uiOnly`, `template`, `layout`, `middleware`. |
-| `@SOCKET(command, { bind?, middleware? })`       | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                                                       |
-| `@JOB(name, schedule, { bind?, args? })`         | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.                                            |
-| `@Module(name?, options?)`                       | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.                                        |
-| `@On(...events)`                                 | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                                                         |
-| `@Use(...middleware)`                            | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                                                |
+| Decorator                                           | Records                                                                                                                                                                                            |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@GET/@POST/@PUT/@PATCH/@DELETE(path, options?)`    | An HTTP route. `options`: `bind`, `access`, `version`, `summary`, `description`, `tags`, `operationId`, `security`, `response`, `paging`, `apiOnly`, `uiOnly`, `template`, `layout`, `middleware`. |
+| `@SOCKET(command, { bind?, access?, middleware? })` | A websocket command. The name is joined with the module `namespace`: `ns.command`.                                                                                                                 |
+| `@JOB(name, schedule, { bind?, access?, args? })`   | A cron job (5-field schedule, validated at decoration). Name joined as `ns.name`; `args` are the registration defaults for `ctx.args.params`.                                                      |
+| `@Action({ access? })`                              | An invoke-only method: reachable through `invoke()`, served by no transport, listed by the access audit.                                                                                           |
+| `@Module(name?, options?)`                          | Class metadata: `prefix` (HTTP paths only), `namespace` (sockets and jobs), `version`, `description`, `tags`, `security`, `layout`, `middleware`.                                                  |
+| `@On(...events)`                                    | Subscribe a method to declared events (`'ns:Module:Event'`), `RapidModule` only.                                                                                                                   |
+| `@Use(...middleware)`                               | Guard module-to-module `invoke()` of this method, `RapidModule` only. Never runs for a transport request.                                                                                          |
 
 Decorators stack: one method may be `@GET` and `@JOB` at once. Ordering of
 rapid decorators relative to third-party wrapping decorators does not
@@ -129,7 +130,60 @@ on `@Module` — a universal middleware (every catalog middleware, anything
 from `pactAuth`) fits all three. Jobs are
 not covered: `@JOB` has no per-registration chain, only the app-wide
 `use()` scoped with `onlyJOB`. Middleware here is behaviour; the OpenAPI
-`security` option is documentation — declare both.
+`security` option is documentation — declare both. For authorization itself,
+prefer `access` (next section): one string, enforced on every transport and
+on `invoke()`, and documented as `x-access` without a second declaration.
+
+#### Access on decorated methods
+
+With an auth platform bound (`app.auth(binding)`, see
+[Authentication & authorization](./Rapid-Auth.md)), a method declares what
+a caller needs as one opaque string; rapid passes it to the binding's
+`authorize` and never reads it. No `access` means public.
+
+```ts
+import { Action, GET, JOB, Module, param } from '@tundralibs/rapid/decorators';
+import { RapidModule } from '@tundralibs/rapid/modules';
+
+@Module('Posts', { prefix: '/posts', namespace: 'blog' })
+export class Posts extends RapidModule {
+  readonly name = 'Posts';
+  readonly namespace = 'blog';
+  protected readonly events = {};
+
+  @GET('/') // public
+  list() {
+    return { content: [] };
+  }
+
+  @GET('/:id:', { bind: [param('id')], access: 'Posts:READ' })
+  find(id: string) {
+    return { content: { id } };
+  }
+
+  @JOB('purge', '0 3 * * *', { access: 'system' })
+  purge() {
+    return { content: 'purged' };
+  }
+
+  @Action({ access: 'Posts:EDIT' }) // invoke() only — no route, no job
+  archive(id: string) {
+    return { content: { id, archived: true } };
+  }
+}
+```
+
+- The string is enforced on the request **and** on `invoke()`: a public page
+  that invokes `find` is judged for the page's caller, and a denial comes
+  back as the 401/403 envelope.
+- A method stacking `@GET` and `@JOB` declares `access` once — two different
+  strings on one method are `RAPID_CONFIG` at decoration.
+- `@On` handlers cannot declare `access` (an event carries no authority).
+- Declaring `access` anywhere without a binding fails `app.modules()` and
+  the test harness with `RAPID_AUTH_UNBOUND`.
+- `app.accessReport()` / `rapid access` list every method above with its
+  string; `accessOf(Class, 'method')` and `isActionOf(Class, 'method')`
+  read the declarations.
 
 ### Binders
 
@@ -234,10 +288,10 @@ export class Audit extends RapidModule {
   or the other subscribers. Subscribers get correlation only (`requestId`,
   `action`, `event`) — no state and no auth (an event carries no authority).
 - **`invoke(Target, 'method', args)`** calls another module through the
-  runtime: the target's `@Use` guards run, a copy of the caller's state and
-  the caller's auth flow, and the outcome is an envelope — a denied guard is
-  a 403 reply, not a throw. Prefer events; reach for `invoke` when you need
-  an answer.
+  runtime: the target's `access` is judged for the caller, its `@Use` guards
+  run, a copy of the caller's state and the caller's auth flow, and the
+  outcome is an envelope — a denial is a 401/403 reply, not a throw. Prefer
+  events; reach for `invoke` when you need an answer.
 - **`reply(status, content)`** is the explicit envelope. A plain return is
   200 with that value as content; `undefined` is 204; a domain object that
   happens to have a `content` key stays content — the runtime never guesses.
@@ -351,6 +405,8 @@ see [OpenAPI and the API reference](./Rapid-OpenAPI.md).
   to deny.
 - **Harness config is empty.** Under `harness()` a module's `this.config`
   is an empty `Config` — stub the dependency that needs configuration instead.
+- **`access` without a binding** fails the boot, in the app and in the
+  harness. Pass `auth: allowAll` to a test that is not about authorization.
 
 ---
 

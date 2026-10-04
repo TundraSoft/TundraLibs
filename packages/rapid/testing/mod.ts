@@ -19,9 +19,11 @@ import {
 } from '@tundralibs/doctor';
 import { initModules } from '../modules/mod.ts';
 import type {
+  RapidAuthBinding,
   RapidModuleEventMap,
   RapidModuleInitOptions,
   RapidModuleInitResult,
+  RapidModuleInvokeSeed,
   RapidModuleSources,
   RapidView,
 } from '../types/mod.ts';
@@ -75,6 +77,14 @@ export type HarnessOptions<
    * @default a fresh child of the global `Doctor`
    */
   container?: DoctorContainer;
+  /**
+   * The auth binding that judges `access` strings on `invoke()` — the
+   * app's real one (so a test sees exactly the denials production would)
+   * or {@link allowAll} to opt out deliberately. REQUIRED when a booted
+   * module declares any `access`: the harness fails to start otherwise
+   * (RAPID_AUTH_UNBOUND), the same rule the app applies at boot.
+   */
+  auth?: RapidAuthBinding;
 };
 
 /** What {@link harness} returns — the booted modules plus test conveniences. */
@@ -84,9 +94,25 @@ export type Harness<
 > = RapidModuleInitResult<M, I> & {
   /** `runtime.invoke`, bound. */
   invoke: ModuleRuntime['invoke'];
+  /**
+   * `invoke` as `identity` — the top-level seed every call from the
+   * returned function carries as `ctx.auth`, so `access` strings are
+   * judged for that caller. `as(undefined)` invokes anonymously.
+   */
+  as(identity: Record<string, unknown> | undefined): ModuleRuntime['invoke'];
   /** Dispose the runtime and revoke every stub. */
   dispose(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
+};
+
+/**
+ * An auth binding that identifies every caller as `{ subject: 'test' }`
+ * and allows every `access` string — for a test that deliberately wants
+ * no enforcement. Explicit by design: a harness never defaults to it.
+ */
+export const allowAll: RapidAuthBinding = {
+  authenticate: () => ({ subject: 'test' }),
+  authorize: () => true,
 };
 
 /**
@@ -117,7 +143,11 @@ export async function harness<
   let result: RapidModuleInitResult<M, I>;
   try {
     result = await initModules(
-      options.context ?? { name: 'rapid-test', logger: { handlers: [] } },
+      {
+        ...(options.context ??
+          { name: 'rapid-test', logger: { handlers: [] } }),
+        ...(options.auth !== undefined ? { auth: options.auth } : {}),
+      },
       {
         modules: options.modules,
         ...(options.instances ? { instances: options.instances } : {}),
@@ -135,9 +165,16 @@ export async function harness<
     await result.runtime.dispose();
     for (const token of stubbed) container.revoke(token);
   };
+  const runtime = result.runtime;
   return {
     ...result,
-    invoke: result.runtime.invoke.bind(result.runtime),
+    invoke: runtime.invoke.bind(runtime),
+    as: (identity) =>
+      ((target, method, args, seed?: RapidModuleInvokeSeed) =>
+        runtime.invoke(target, method, args, {
+          ...seed,
+          ...(identity !== undefined ? { auth: identity } : {}),
+        })) as ModuleRuntime['invoke'],
     dispose,
     [Symbol.asyncDispose]: dispose,
   };

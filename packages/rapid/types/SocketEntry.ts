@@ -17,4 +17,6 @@ export type RapidSocketEntry<S extends RapidContextState = RapidContextState> =
     /** Command-scoped middleware, run AFTER the universal chain. */
     middlewares: RapidSOCKETMiddleware[];
     handler: RapidSOCKETHandler<S>;
+    /** The declared `access` string, judged by the auth binding before the command's own middleware. */
+    access?: string;
   };

@@ -14,6 +14,7 @@ import { initCommand } from './commands/init.ts';
 import { upgradeCommand } from './commands/upgrade.ts';
 import { modulesCommand } from './commands/modules.ts';
 import { healthCommand } from './commands/health.ts';
+import { accessCommand } from './commands/access.ts';
 
 const HELP = `rapid <command>
 
@@ -33,6 +34,11 @@ const HELP = `rapid <command>
         an existing hand-written mod.ts is refused unless --force
   health [url] [--path /healthz]
         hit a running app's health path; exit 0 on 2xx
+  access <entry.ts> [--fail-on-undeclared] [--json]
+        the access audit: every route, socket command, job and @Action
+        with the \`access\` it declares; an action with none is PUBLIC.
+        The entry exports the Application (or a factory) as default/app.
+        --fail-on-undeclared exits 1 when any action is public
 `;
 
 /** Parse args and dispatch. Returns the exit code. */
@@ -54,6 +60,17 @@ export function run(args: ParsedArgs = argv()): Promise<number> {
         (rest._[0] as string | undefined) ?? 'http://localhost:3000',
         { path: rest.path as string | undefined },
       );
+    case 'access': {
+      const entry = rest._[0] as string | undefined;
+      if (entry === undefined) {
+        console.error(`access needs the app's entry module\n\n${HELP}`);
+        return Promise.resolve(1);
+      }
+      return accessCommand(entry, {
+        failOnUndeclared: rest['fail-on-undeclared'] === true,
+        json: rest.json === true,
+      });
+    }
     case undefined:
     case 'help':
     case '--help':

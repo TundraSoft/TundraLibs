@@ -10,7 +10,12 @@
 import { parseSchedule } from '@tundralibs/cronus';
 import { RapidError } from '../errors/mod.ts';
 import type { RapidBinds, RapidModuleReply } from '../types/mod.ts';
-import { assertMethodContext, recordDecoration } from './registry.ts';
+import {
+  assertAccess,
+  assertMethodContext,
+  recordAccess,
+  recordDecoration,
+} from './registry.ts';
 
 /** The decorator signature the factory returns. */
 type JobDecorator<This, A extends readonly unknown[]> = (
@@ -33,6 +38,12 @@ export type JobDecoratorOptions<A extends readonly unknown[]> = {
    * from these; `triggerJob(name, args)` overrides merge on top.
    */
   args?: Readonly<Record<string, unknown>>;
+  /**
+   * Who may run this job — see `RouteDecoratorOptions.access`. A scheduled
+   * firing has whatever identity the auth binding's `authenticate` gives a
+   * JOB context (none, or a system identity the policy recognises).
+   */
+  access?: string;
 };
 
 /**
@@ -72,8 +83,12 @@ export const JOB: {
       cause: cause instanceof Error ? cause : undefined,
     });
   }
+  if (options.access !== undefined) assertAccess('@JOB', options.access);
   return (_target: object, context: ClassMethodDecoratorContext): void => {
     assertMethodContext(context, 'JOB');
+    if (options.access !== undefined) {
+      recordAccess(context, options.access, 'JOB');
+    }
     recordDecoration(context, {
       kind: 'JOB',
       name,
@@ -81,6 +96,7 @@ export const JOB: {
       args: options.args,
       binds: options.bind ?? [],
       methodName: String(context.name),
+      ...(options.access !== undefined ? { access: options.access } : {}),
     });
   };
 };

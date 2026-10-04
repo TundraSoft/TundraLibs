@@ -31,6 +31,7 @@ import {
   setContainerProvider,
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
+import { assertAccess } from './decorators/registry.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport } from './transports/HTTPTransport.ts';
 // TYPE-ONLY: the cron scheduler is loaded when jobs actually start — a
@@ -38,7 +39,9 @@ import { HTTPTransport } from './transports/HTTPTransport.ts';
 // bundle it.
 import type { JOBTransport } from './transports/JOBTransport.ts';
 import {
+  accessGuard,
   type ApiSurface,
+  authPrelude,
   buildExporter,
   buildState,
   currentContainer,
@@ -65,11 +68,13 @@ import {
 } from './modules/mod.ts';
 import type {
   RapidAccessLogOptions,
+  RapidAccessReportRow,
   RapidApplicationEvents,
   RapidApplicationFactoryOptions,
   RapidApplicationFetchInfo,
   RapidApplicationJobMetrics,
   RapidApplicationOptions,
+  RapidAuthBinding,
   RapidChannelOptions,
   RapidClusterSnapshot,
   RapidContextState,
@@ -257,6 +262,12 @@ export class Application<S extends RapidContextState = RapidContextState>
 
   /** App-level UNIVERSAL middleware, in registration order. */
   private readonly __middleware: RapidMiddleware[] = [];
+  /** Middleware that runs BEFORE the auth binding's `authenticate` (see {@link preAuth}). */
+  private readonly __preAuth: RapidMiddleware[] = [];
+  /** The auth binding (see {@link auth}); `undefined` until bound. */
+  private __auth?: RapidAuthBinding;
+  /** The DEVELOPMENT access summary is logged once per boot. */
+  private __accessSummarised = false;
   /** Registered routes (express-style paths), in registration order. */
   private readonly __routes: RapidRouteEntry<S>[] = [];
   private readonly __socketCommands: Map<string, RapidSocketEntry<S>> =
@@ -698,6 +709,158 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * Register UNIVERSAL middleware that runs BEFORE the auth binding's
+   * `authenticate` — the pre-auth phase: address-keyed rate limits and
+   * body caps, which protect the credential-verification step itself
+   * (the thing an attacker amplifies) and so cannot run after it.
+   * Identity-keyed limits belong in {@link use}, which runs after. Same
+   * contract as `use()` otherwise; order within the phase is registration
+   * order.
+   */
+  public preAuth(...middleware: RapidMiddleware[]): this {
+    this.__assertRegistrable('app.preAuth()');
+    this.__preAuth.push(...middleware);
+    return this;
+  }
+
+  /**
+   * Bind the application's authentication and authorization — ONCE, from
+   * whatever platform the app uses (`pactAuth(pact).binding`, two
+   * functions over a JWT, a test stub). From then on every invocation
+   * runs `authenticate` first (after {@link preAuth}) and its answer is
+   * `ctx.auth`; every action that declares an `access` string is judged by
+   * `authorize` on every path to it — the transport request, a module
+   * `invoke()`, a composed part. rapid interprets neither the identity nor
+   * the string. See {@link RapidAuthBinding}.
+   *
+   * Boot fails (`RAPID_AUTH_UNBOUND`) when any action declares `access`
+   * and nothing is bound. An action WITHOUT `access` is public; the
+   * `rapid access` audit lists them.
+   *
+   * @throws {RapidError} RAPID_CONFIG when called twice, after the app
+   *   started, or with a binding missing `authenticate`/`authorize`.
+   */
+  public auth(binding: RapidAuthBinding): this {
+    this.__assertRegistrable('app.auth()');
+    if (this.__auth !== undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'app.auth() binds once — one authentication for the app',
+      });
+    }
+    if (
+      binding === null || typeof binding !== 'object' ||
+      typeof binding.authenticate !== 'function' ||
+      typeof binding.authorize !== 'function'
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'app.auth() takes { authenticate, authorize } functions (plus optional finish and onDenied)',
+      });
+    }
+    this.__auth = binding;
+    return this;
+  }
+
+  /** The bound {@link RapidAuthBinding}, or `undefined` before {@link auth}. */
+  public get authBinding(): RapidAuthBinding | undefined {
+    return this.__auth;
+  }
+
+  /**
+   * The full middleware list for one registration, in the order every
+   * transport composes it: the pre-auth phase, the auth binding's
+   * `authenticate` step, the app's `use()` middleware, the entry's access
+   * guard (when it declares `access`), then the entry's own middleware.
+   * Base-typed: a transport casts to its context type.
+   *
+   * @internal The transports' one source of chain order.
+   */
+  public _chainFor(
+    own: readonly RapidMiddleware[],
+    access: string | undefined,
+    action: string,
+  ): readonly RapidMiddleware[] {
+    // Composed at prepare, after every registration closed, so the binding
+    // is final here: without one there is no authenticate step at all (the
+    // bare sync handler keeps its promise-free hot path).
+    return [
+      ...this.__preAuth,
+      ...(this.__auth === undefined ? [] : [authPrelude(this)]),
+      ...this.__middleware,
+      ...(access === undefined ? [] : [accessGuard(this, access, action)]),
+      ...own,
+    ];
+  }
+
+  /**
+   * Every action the app serves and the `access` it declares — routes,
+   * socket commands, jobs and the module runtime's unrouted `@Action`s.
+   * What the `rapid access` audit prints; an absent `access` is a public
+   * action.
+   */
+  public accessReport(): RapidAccessReportRow[] {
+    const rows: RapidAccessReportRow[] = [];
+    for (const r of this.__routes) {
+      rows.push({
+        kind: 'HTTP',
+        action: `${r.method} ${r.path}`,
+        ...(r.access !== undefined ? { access: r.access } : {}),
+      });
+    }
+    for (const c of this.__socketCommands.values()) {
+      rows.push({
+        kind: 'SOCKET',
+        action: c.command,
+        ...(c.access !== undefined ? { access: c.access } : {}),
+      });
+    }
+    for (const j of this.__jobs.values()) {
+      rows.push({
+        kind: 'JOB',
+        action: j.name,
+        ...(j.access !== undefined ? { access: j.access } : {}),
+      });
+    }
+    rows.push(...(this.__moduleRuntime?.accessReport() ?? []));
+    return rows;
+  }
+
+  /**
+   * The one fail-closed rule: an `access` string with nobody bound to
+   * judge it. Checked at `start()`, the first `fetch()` and `triggerJob()`.
+   *
+   * @throws {RapidError} RAPID_AUTH_UNBOUND naming the first offender.
+   */
+  private __assertAuthBound(): void {
+    if (this.__auth !== undefined) return;
+    const declared = this.accessReport().find((r) => r.access !== undefined);
+    if (declared === undefined) return;
+    throw new RapidError('RAPID_AUTH_UNBOUND', {
+      message:
+        `${declared.action} declares access '${declared.access}' but no auth binding is registered — call app.auth({ authenticate, authorize }) before start()/fetch()`,
+      details: { action: declared.action, access: declared.access },
+    });
+  }
+
+  /** DEVELOPMENT only, once: how many actions there are and how many are public. */
+  private __logAccessSummary(): void {
+    if (this.__accessSummarised || this.mode !== 'DEVELOPMENT') return;
+    this.__accessSummarised = true;
+    const rows = this.accessReport();
+    const undeclared = rows.filter((r) => r.access === undefined).length;
+    this.log.info(
+      `access: ${rows.length} actions, ${undeclared} public (no access declared)${
+        this.__auth === undefined ? ', no auth binding' : ''
+      }`,
+      {
+        actions: rows.length,
+        public: undeclared,
+        bound: this.__auth !== undefined,
+      },
+    );
+  }
+
+  /**
    * Loud gate for every registration surface — a late registration would
    * "succeed" yet never serve, the silent half-applied state
    * {@link __configureUi} already forbids. Two deadlines, per surface:
@@ -866,7 +1029,14 @@ export class Application<S extends RapidContextState = RapidContextState>
   public socket(
     command: string,
     ...chain: [...RapidSOCKETMiddleware[], RapidSOCKETHandler<S>]
-  ): this {
+  ): this;
+  /** With a leading options object — `{ access }` — before the chain. */
+  public socket(
+    command: string,
+    options: { access?: string },
+    ...chain: [...RapidSOCKETMiddleware[], RapidSOCKETHandler<S>]
+  ): this;
+  public socket(command: string, ...args: unknown[]): this {
     this.__assertRegistrable('socket()', false);
     if (command.trim() === '') {
       throw new RapidError('RAPID_CONFIG', {
@@ -879,7 +1049,19 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { command },
       });
     }
-    if (chain.length === 0) {
+    const hasOptions = args.length > 0 && typeof args[0] === 'object' &&
+      args[0] !== null;
+    const opts = hasOptions ? (args[0] as { access?: string }) : {};
+    if (opts.access !== undefined) {
+      assertAccess(`socket '${command}'`, opts.access);
+    }
+    const chain = (hasOptions ? args.slice(1) : args) as [
+      ...RapidSOCKETMiddleware[],
+      RapidSOCKETHandler<S>,
+    ];
+    if (
+      chain.length === 0 || typeof chain[chain.length - 1] !== 'function'
+    ) {
       throw new RapidError('RAPID_CONFIG', {
         message: 'socket command needs a handler',
         details: { command },
@@ -889,6 +1071,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       command,
       middlewares: chain.slice(0, -1) as RapidSOCKETMiddleware[],
       handler: chain[chain.length - 1] as RapidSOCKETHandler<S>,
+      ...(opts.access !== undefined ? { access: opts.access } : {}),
     });
     return this;
   }
@@ -959,7 +1142,8 @@ export class Application<S extends RapidContextState = RapidContextState>
       hasOptions && Object.keys(opts).length > 0 &&
       opts.version === undefined && opts.openapi === undefined &&
       opts.template === undefined && opts.layout === undefined &&
-      opts.apiOnly === undefined && opts.uiOnly === undefined
+      opts.apiOnly === undefined && opts.uiOnly === undefined &&
+      opts.access === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -992,6 +1176,9 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { method, path },
       });
     }
+    if (opts.access !== undefined) {
+      assertAccess(`${method} ${path}`, opts.access);
+    }
     const chain = (hasOptions ? args.slice(1) : args) as [
       ...RapidHTTPMiddleware[],
       RapidHTTPHandler<S>,
@@ -1016,6 +1203,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       ...(template !== undefined ? { template } : {}),
       ...(opts.apiOnly === true ? { apiOnly: true } : {}),
       ...(opts.uiOnly === true ? { uiOnly: true } : {}),
+      ...(opts.access !== undefined ? { access: opts.access } : {}),
     });
     return this;
   }
@@ -1122,7 +1310,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     name: string,
     schedule: RapidJobEntry<S>['schedule'],
     handler: RapidJobEntry<S>['handler'],
-    options: { args?: Readonly<Record<string, unknown>> } = {},
+    options: { args?: Readonly<Record<string, unknown>>; access?: string } = {},
   ): this {
     this.__assertRegistrable('job()', false);
     if (this.__jobs.has(name)) {
@@ -1130,6 +1318,9 @@ export class Application<S extends RapidContextState = RapidContextState>
         message: `job '${name}' is already registered`,
         details: { name },
       });
+    }
+    if (options.access !== undefined) {
+      assertAccess(`job '${name}'`, options.access);
     }
     try {
       parseSchedule(schedule);
@@ -1140,7 +1331,13 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { name, schedule, reason },
       });
     }
-    this.__jobs.set(name, { name, schedule, handler, args: options.args });
+    this.__jobs.set(name, {
+      name,
+      schedule,
+      handler,
+      args: options.args,
+      ...(options.access !== undefined ? { access: options.access } : {}),
+    });
     return this;
   }
 
@@ -1199,7 +1396,13 @@ export class Application<S extends RapidContextState = RapidContextState>
       });
     }
     const result = await initModules(
-      { log: this.log, config: this.config, mode: this.mode },
+      {
+        log: this.log,
+        config: this.config,
+        mode: this.mode,
+        // A resolver, not the binding: app.auth() may come before or after.
+        auth: () => this.__auth,
+      },
       sources,
       this.__container,
     );
@@ -1692,6 +1895,8 @@ export class Application<S extends RapidContextState = RapidContextState>
    * @throws {RapidError} RAPID_CONFIG on an unsafe option combination.
    */
   private __assertBootConfig(): void {
+    this.__assertAuthBound();
+    this.__logAccessSummary();
     if (this.option('stateMode') === 'SHARE') {
       const candidates: RapidMiddleware[] = [
         ...this.__middleware,
@@ -1959,6 +2164,9 @@ export class Application<S extends RapidContextState = RapidContextState>
     name: string,
     args?: Readonly<Record<string, unknown>>,
   ): Promise<{ status: number; content: unknown; handlerRan: boolean }> {
+    // A one-shot trigger on a never-started app still answers to the one
+    // fail-closed rule: a guarded job with nobody bound to judge it.
+    this.__assertAuthBound();
     const transport = this.__jobTransport ??
       new (await import('./transports/JOBTransport.ts')).JOBTransport(this);
     return await transport.triggerNow(name, args);

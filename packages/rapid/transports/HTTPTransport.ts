@@ -30,6 +30,7 @@ import type {
   RapidChannelOptions,
   RapidContextResponse,
   RapidContextState,
+  RapidMiddleware,
   RapidRouteEntry,
 } from '../types/mod.ts';
 import { Transport } from './Transport.ts';
@@ -163,10 +164,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         this.__composedRoutes.set(
           entry,
           compose<S, HTTPContext<S>>(
-            [
-              ...this._app.middlewares,
-              ...entry.middlewares,
-            ] as unknown as readonly ComposedHTTPChain<S>[],
+            this._app._chainFor(
+              entry.middlewares as unknown as readonly RapidMiddleware[],
+              entry.access,
+              `${entry.method} ${entry.path}`,
+            ) as unknown as readonly ComposedHTTPChain<S>[],
           ),
         );
       } catch (cause) {
@@ -206,7 +208,13 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       }
     }
     this.__composedNoMatch = compose<S, HTTPContext<S>>(
-      [...this._app.middlewares] as unknown as readonly ComposedHTTPChain<S>[],
+      this._app._chainFor(
+        [],
+        undefined,
+        '',
+      ) as unknown as readonly ComposedHTTPChain<
+        S
+      >[],
     );
     this.__prepared = true;
   }
@@ -294,10 +302,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       // as HTTP's route chains; base-typed, cast bridges S) — but the
       // list itself never changes between frames on the same command.
       const chain = compose<S, SOCKETContext<S>>(
-        [
-          ...this._app.middlewares,
-          ...entry.middlewares,
-        ] as unknown as readonly ComposedSocketChain<S>[],
+        this._app._chainFor(
+          entry.middlewares as unknown as readonly RapidMiddleware[],
+          entry.access,
+          entry.command,
+        ) as unknown as readonly ComposedSocketChain<S>[],
       );
       rpc.command(entry.command, undefined, async (c) => {
         const data = c.ws.data;
