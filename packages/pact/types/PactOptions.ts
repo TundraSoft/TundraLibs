@@ -56,9 +56,17 @@ export type PactOptions = {
    * existing logins. Cloudflare Workers refuses more than 100 000
    * iterations, so a Workers deployment sets `iterations: 100_000`. Not
    * allowed together with the `hashPassword` / `verifyPassword` hooks.
+   *
+   * `pepper` is a server-side secret of at least 32 characters, kept out
+   * of the database: new hashes are PBKDF2 over an HMAC of the password
+   * under a key derived from it, stored with a `pepper$` prefix, so a
+   * stolen table cannot be brute-forced without it. Hashes made before
+   * the pepper still verify, and a login against one rewrites it
+   * peppered through the `setPassword` hook when that hook exists.
+   * Changing the pepper invalidates every peppered hash.
    * @default crypt's `pbkdf2Hash` defaults: 600 000 iterations of SHA-256
    */
-  password?: { iterations?: number; hash?: PBKDF2Hash };
+  password?: { iterations?: number; hash?: PBKDF2Hash; pepper?: string };
   /**
    * Password-reset behavior; `ttl` is the reset-token validity window
    * in minutes.

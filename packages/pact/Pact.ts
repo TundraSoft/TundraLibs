@@ -74,6 +74,15 @@ const TOTP_PERIOD_MS = 30_000;
 /** Separates a tenant from a module in a grant key (`acme::POST`). */
 const TENANT_SEP = '::';
 
+/** Marks a stored hash whose PBKDF2 input was the peppered password. */
+const PEPPER_PREFIX = 'pepper$';
+
+/** HKDF label for the pepper's HMAC key. */
+const PEPPER_INFO = 'pact-password-pepper';
+
+/** Shortest accepted pepper: 32 characters, a 256-bit HMAC key's worth. */
+const MIN_PEPPER_LENGTH = 32;
+
 /** Digests crypt's `pbkdf2Hash` accepts. */
 const PBKDF2_HASHES: ReadonlySet<string> = new Set([
   'SHA-256',
@@ -2146,7 +2155,8 @@ export class Pact<B extends PermissionBits, M extends string>
     // Truthiness deliberately: an EMPTY stored hash must also burn the
     // dummy pbkdf2, or those accounts fail measurably faster.
     const hash = user?.passwordHash || await this.__getDummyHash();
-    const verify = this._hooks.verifyPassword ?? pbkdf2Verify;
+    const verify = this._hooks.verifyPassword ??
+      ((plain: string, stored: string) => this.__verifyStored(plain, stored));
     const verified = await verify(password, hash);
     if (user === null || user.passwordHash === undefined || !verified) {
       throw new PactError('INVALID_CREDENTIALS');
@@ -2157,7 +2167,60 @@ export class Pact<B extends PermissionBits, M extends string>
         userId: user.id,
       });
     }
+    await this.__upgradeToPepper(user.id, password, hash);
     return user;
+  }
+
+  /**
+   * Check `password` against a hash pact made: a `pepper$` hash through
+   * the pepper, any other through plain PBKDF2.
+   *
+   * @throws {PactError} `INVALID_OPTION` for a peppered hash when no
+   *   `password.pepper` is configured — a deployment fault, not a wrong
+   *   password.
+   */
+  private async __verifyStored(
+    password: string,
+    stored: string,
+  ): Promise<boolean> {
+    if (!stored.startsWith(PEPPER_PREFIX)) {
+      return await pbkdf2Verify(password, stored);
+    }
+    if (this._getOption('password')?.pepper === undefined) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'password.pepper',
+        reason: 'a stored password hash is peppered but no pepper is set',
+      });
+    }
+    return await pbkdf2Verify(
+      await this.__pepper(password),
+      stored.slice(PEPPER_PREFIX.length),
+    );
+  }
+
+  /**
+   * After a verified login, store an unpeppered hash again under the
+   * pepper through `setPassword`, when a pepper and that hook exist. A
+   * failed write leaves the old hash, which still verifies; the next
+   * login tries again.
+   */
+  private async __upgradeToPepper(
+    userId: string,
+    password: string,
+    stored: string,
+  ): Promise<void> {
+    const setPassword = this._hooks.setPassword;
+    if (
+      setPassword === undefined || stored.startsWith(PEPPER_PREFIX) ||
+      this._getOption('password')?.pepper === undefined
+    ) {
+      return;
+    }
+    try {
+      await setPassword(userId, await this.__hashPassword(password));
+    } catch {
+      // best-effort — the login already succeeded on the old hash
+    }
   }
 
   /**
@@ -2386,11 +2449,28 @@ export class Pact<B extends PermissionBits, M extends string>
   }
 
   /** The `hashPassword` hook, else crypt's PBKDF2 under the `password`
-   * option. */
+   * option — over the peppered password, marked `pepper$`, when a pepper
+   * is set. */
   private async __hashPassword(password: string): Promise<string> {
     const hook = this._hooks.hashPassword;
     if (hook !== undefined) return await hook(password);
-    return await pbkdf2Hash(password, this._getOption('password'));
+    const { iterations, hash, pepper } = this._getOption('password') ?? {};
+    if (pepper === undefined) {
+      return await pbkdf2Hash(password, { iterations, hash });
+    }
+    return PEPPER_PREFIX +
+      await pbkdf2Hash(await this.__pepper(password), { iterations, hash });
+  }
+
+  /** HMAC key derived from `password.pepper`, built on first use. */
+  private __pepperKey?: Promise<JsonWebKey>;
+
+  /** HMAC-SHA-256 of `password` under the pepper's derived key, as hex. */
+  private async __pepper(password: string): Promise<string> {
+    this.__pepperKey ??= hkdf(this._getOption('password')!.pepper!, {
+      info: PEPPER_INFO,
+    }).then((raw) => ({ kty: 'oct', k: encodeBase64Url(raw) }));
+    return await signHMAC(password, await this.__pepperKey);
   }
 
   /**
@@ -2585,7 +2665,16 @@ export class Pact<B extends PermissionBits, M extends string>
           'set the hash settings inside the hooks instead',
       });
     }
-    const { iterations, hash } = value;
+    const { iterations, hash, pepper } = value;
+    if (
+      pepper !== undefined &&
+      (typeof pepper !== 'string' || pepper.length < MIN_PEPPER_LENGTH)
+    ) {
+      throw new PactError('INVALID_OPTION', {
+        option: 'password.pepper',
+        reason: `must be a string of at least ${MIN_PEPPER_LENGTH} characters`,
+      });
+    }
     if (
       iterations !== undefined &&
       (!Number.isInteger(iterations) || iterations < 1)

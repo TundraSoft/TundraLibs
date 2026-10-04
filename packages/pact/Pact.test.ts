@@ -8,7 +8,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Cacher } from '@tundralibs/cacher';
-import { pbkdf2Hash, sha256 } from '@tundralibs/crypt/digest';
+import { pbkdf2Hash, pbkdf2Verify, sha256 } from '@tundralibs/crypt/digest';
 import { generateTOTP } from '@tundralibs/crypt/OTP';
 import { signHMAC } from '@tundralibs/crypt/sign';
 import { Pact } from './mod.ts';
@@ -1928,6 +1928,59 @@ describe('Pact password hashing', () => {
     await pact.login({ identifier: 'a@x.dev', password: 'pw2' });
   });
 
+  it('a pepper hashes an HMAC of the password, marked pepper$, and only the same pepper verifies it', async () => {
+    const { store, hooks } = storeWithCreate();
+    const pepper = 'p'.repeat(32);
+    const password = { iterations: 1000, pepper };
+    const pact = Pact.create({ ...BASE, hooks, options: { password } });
+    const user = await pact.register({ identifier: 'p@x.dev', password: 'pw' });
+    const stored = user.passwordHash!;
+    asserts.assert(stored.startsWith('pepper$pbkdf2-sha256$1000$'), stored);
+    // The PBKDF2 input is not the password itself.
+    asserts.assertFalse(
+      await pbkdf2Verify('pw', stored.slice('pepper$'.length)),
+    );
+    await pact.login({ identifier: 'p@x.dev', password: 'pw' });
+    await expectCode(
+      pact.login({ identifier: 'p@x.dev', password: 'nope' }),
+      'INVALID_CREDENTIALS',
+    );
+    const other = Pact.create({
+      ...BASE,
+      hooks,
+      options: { password: { ...password, pepper: 'q'.repeat(32) } },
+    });
+    await expectCode(
+      other.login({ identifier: 'p@x.dev', password: 'pw' }),
+      'INVALID_CREDENTIALS',
+    );
+    // A peppered hash with no pepper configured is a deployment fault.
+    const unpeppered = Pact.create({ ...BASE, hooks });
+    await expectCode(
+      unpeppered.login({ identifier: 'p@x.dev', password: 'pw' }),
+      'INVALID_OPTION',
+    );
+    asserts.assertStrictEquals(store.lastSetPassword, undefined);
+  });
+
+  it('a login against a hash made before the pepper verifies and rewrites it peppered', async () => {
+    const store = makeStore();
+    store.seed('old1', 'o@x.dev', {
+      passwordHash: await pbkdf2Hash('pw', { iterations: 1000 }),
+    });
+    const pact = Pact.create({
+      ...BASE,
+      hooks: store.hooks,
+      options: { password: { iterations: 1000, pepper: 'p'.repeat(32) } },
+    });
+    await pact.login({ identifier: 'o@x.dev', password: 'pw' });
+    asserts.assertStrictEquals(store.lastSetPassword?.userId, 'old1');
+    asserts.assert(store.lastSetPassword?.hash.startsWith('pepper$'));
+    store.lastSetPassword = undefined;
+    await pact.login({ identifier: 'o@x.dev', password: 'pw' });
+    asserts.assertStrictEquals(store.lastSetPassword, undefined);
+  });
+
   it('hooks replace hashing everywhere, including the dummy hash for unknown users', async () => {
     const { store, hooks } = storeWithCreate();
     const hashed: string[] = [];
@@ -2021,6 +2074,7 @@ describe('Pact password hashing', () => {
         { iterations: 0 },
         { iterations: 1.5 },
         { hash: 'MD5' },
+        { pepper: 'short' },
         'fast',
       ]
     ) {

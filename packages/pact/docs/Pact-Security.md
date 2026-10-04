@@ -137,8 +137,35 @@ Hashes written at a higher count cannot be checked on Workers. crypt throws a
 `DigestError` for them rather than reporting a wrong password, so they surface
 as a 500, not `INVALID_CREDENTIALS`. Those users need a password reset.
 
-For anything else, such as a pepper (an HMAC under a server-side key before
-hashing), supply the `hashPassword` and `verifyPassword` hooks. pact then
+A lower count costs brute-force resistance; a pepper buys it back. Set
+`password.pepper` to a server-side secret of at least 32 characters, kept in
+the environment and never in the database:
+
+```ts
+import { Pact } from '@tundralibs/pact';
+
+const pact = Pact.create({
+  bits: { READ: 1n },
+  modulePermissions: { Post: ['READ'] },
+  options: {
+    password: {
+      iterations: 100_000,
+      pepper: 'a-32-character-or-longer-secret!',
+    },
+  },
+});
+```
+
+New hashes are then PBKDF2 over an HMAC-SHA-256 of the password, under a key
+HKDF-derived from the pepper, stored as `pepper$pbkdf2-…`. A stolen table
+alone cannot be brute-forced. Hashes made before the pepper still verify, and
+a successful login against one rewrites it peppered through the
+`setPassword` hook when that hook exists. A peppered hash read by an instance
+with no pepper fails as `INVALID_OPTION`, a deployment fault rather than a
+wrong password. Changing the pepper invalidates every peppered hash, so treat
+it like a database encryption key.
+
+For any other scheme, supply the `hashPassword` and `verifyPassword` hooks. pact then
 uses them everywhere it hashes, including the dummy hash. They must be
 configured together, and the `password` option is refused alongside them.
 `verifyPassword` returns `false` for a wrong password and throws only for a
