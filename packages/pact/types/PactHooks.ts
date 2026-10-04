@@ -68,6 +68,20 @@ export type PactHooks<M extends string = string> = {
     identifier: string,
     profile: PactOAuthProfile,
   ) => string | Promise<string>;
+  /**
+   * Persist a provider/subject link for an existing user — what makes
+   * their next `getUser({ by: 'OAUTH' })` resolve. Called on a first
+   * login under a provider with `linkVerifiedEmail`, when its verified
+   * address matches the user's identifier.
+   */
+  linkOAuth?: (
+    userId: string,
+    link: {
+      readonly provider: string;
+      readonly subject: string;
+      readonly profile: PactOAuthProfile;
+    },
+  ) => void | Promise<void>;
   /** Persist a freshly issued API key — encrypt `secret` at rest. */
   saveApiKey?: (key: PactStoredApiKey) => void | Promise<void>;
   /** Revoke a key: delete it or flip its status to a non-active one. */

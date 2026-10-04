@@ -26,4 +26,10 @@ export type PactOAuthProviderPreset = {
   /** Whether the provider understands the OIDC `nonce` param. */
   oidc?: boolean;
   profile: PactOAuthProfileNormalizer;
+  /**
+   * An address-list endpoint (GitHub's `/user/emails`) read with the
+   * access token when the profile carries no verified address; its
+   * primary verified entry becomes the profile's email.
+   */
+  emails?: string;
 };

@@ -7,8 +7,11 @@
  *
  * Provider quirks handled here:
  * - **GITHUB** speaks form-encoded by default — the client sends
- *   `Accept: application/json` on token exchange for everyone, and the
- *   primary email may be `null` without extra scope.
+ *   `Accept: application/json` on token exchange for everyone. `/user`
+ *   carries no verified flag, so the verified primary address comes from
+ *   `/user/emails` (the `user:email` scope).
+ * - **MICROSOFT** userinfo carries no verification claim: its addresses
+ *   are never verified under the default `emailTrust`.
  * - **MICROSOFT** endpoints are tenant-scoped (`{tenant}`, default
  *   `common`).
  * - **APPLE** has no userinfo endpoint — identity comes from the
@@ -73,6 +76,7 @@ export const PROVIDERS: Record<
     authorization: 'https://github.com/login/oauth/authorize',
     token: 'https://github.com/login/oauth/access_token',
     userinfo: 'https://api.github.com/user',
+    emails: 'https://api.github.com/user/emails',
     scopes: ['read:user', 'user:email'],
     profile: (raw) => ({
       id: subject(raw.id),

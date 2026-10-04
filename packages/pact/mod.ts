@@ -44,5 +44,6 @@ export type {
   PactTokenPurpose,
   PactUserQuery,
   PactVerifiedCredentials,
+  PactVerifiedOAuth,
   PermissionBits,
 } from './types/mod.ts';

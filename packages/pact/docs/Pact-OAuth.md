@@ -120,19 +120,34 @@ to end against real Google/GitHub apps.
 ## Provisioning and linking
 
 `oauthLogin` resolves the user by the link (`getUser({ by: 'OAUTH',
-provider, subject })`). When no link exists:
+provider, subject })`). When no link exists, the identifier is the
+provider's email if it is verified, else `provider:subject`, and the
+`oauthIdentifier` hook can rewrite it first, to give each tenant its own
+account ([Tenants](Pact-Tenants.md#one-account-per-tenant)). Then:
 
-- Without `autoProvision`: `OAUTH_UNLINKED`. Linking a provider to an
-  existing signed-in account is an explicit app flow, not a login side
-  effect.
+- With `linkVerifiedEmail` and a verified email that matches an existing
+  identifier: the `linkOAuth` hook stores the link on that account, and the
+  login proceeds as that user.
 - With `autoProvision`: `createUser` runs with the link and normalized
-  profile. The provider email becomes the identifier only when the
-  provider vouches for it (`email_verified`); otherwise the identifier is
-  `provider:subject`. Either way an existing user with that identifier
-  makes provisioning throw `USER_EXISTS` — a first OAuth login can never
-  claim an established local account. The `oauthIdentifier` hook can
-  rewrite the identifier first, to give each tenant its own account
-  ([Tenants](Pact-Tenants.md#one-account-per-tenant)).
+  profile. An existing user with that identifier makes provisioning throw
+  `USER_EXISTS`, so a first OAuth login never claims an established account
+  without `linkVerifiedEmail`.
+- Otherwise: `OAUTH_UNLINKED`.
+
+Which addresses count as verified is the provider's `emailTrust`.
+`'CLAIM'`, the default, takes the provider's own flag: Google's, Apple's,
+Discord's and a generic OIDC issuer's `email_verified`, and GitHub's
+verified primary address from `/user/emails`. Microsoft's userinfo carries
+no such claim, so its addresses are not verified. `'ALWAYS'` trusts every
+address a provider returns and `'NEVER'` trusts none. Use `'ALWAYS'` only
+for an IdP whose users' domains you control, such as one tenant's own SSO
+with tenant-scoped identifiers: with `linkVerifiedEmail`, whoever an
+`'ALWAYS'` provider vouches for gets that account.
+
+`verifyOAuth` is the same resolution without the session: it returns the
+`profile`, the bound `principal` or `null` for an unlinked identity, and
+`mfaRequired`, so a flow can apply its own rules (an invitation, a second
+factor, linking to the signed-in account) before `createSession`.
 
 JIT-provisioned users get empty grants in the `createUser` input; seeding
 defaults is the hook's decision.

@@ -36,6 +36,9 @@ import type {
 /** A bare lowercase hostname, as `URL.hostname` renders one. */
 const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/;
 
+/** The `emailTrust` policies. */
+const EMAIL_TRUST: ReadonlySet<string> = new Set(['CLAIM', 'ALWAYS', 'NEVER']);
+
 /** OIDC discovery-document cache lifetime — one hour. */
 const DISCOVERY_TTL_MS = 3_600_000;
 
@@ -61,6 +64,8 @@ const PROVIDER_CONFIG_SCHEMA = Guardian.object({
   tenant: Guardian.string().notEmpty().optional(),
   idToken: Guardian.string().optional(),
   autoProvision: Guardian.boolean().optional(),
+  emailTrust: Guardian.string().optional(),
+  linkVerifiedEmail: Guardian.boolean().optional(),
   authParams: Guardian.object().optional(),
 });
 
@@ -134,6 +139,15 @@ function resolveAnchor(name: string, config: PactOAuthProviderConfig): string {
       option: `oauth.${name}`,
       reason: 'provider config failed schema validation',
     }, cause as Error);
+  }
+  if (
+    config.emailTrust !== undefined &&
+    !EMAIL_TRUST.has(config.emailTrust)
+  ) {
+    throw new PactError('INVALID_OPTION', {
+      option: `oauth.${name}.emailTrust`,
+      reason: "must be 'CLAIM', 'ALWAYS' or 'NEVER'",
+    });
   }
   const preset = PROVIDERS[config.kind];
   if (preset === undefined) {
@@ -236,6 +250,11 @@ export class OAuthClient extends RESTler {
     return this.__config.autoProvision === true;
   }
 
+  /** Whether a verified address may link an existing account. */
+  get linkVerifiedEmail(): boolean {
+    return this.__config.linkVerifiedEmail === true;
+  }
+
   /**
    * Build the authorization redirect URL plus the `state` (CSRF token),
    * PKCE `verifier`, and OIDC `nonce` the consumer must hold until the
@@ -313,7 +332,7 @@ export class OAuthClient extends RESTler {
     const raw = this.__preset.identity === 'id_token'
       ? await this.__idTokenIdentity(tokens, params)
       : await this.__userinfo(tokens, params);
-    const profile = this.__preset.profile(raw);
+    let profile = this.__preset.profile(raw);
     // Fail closed on a subject-less profile: minting a principal from a
     // fabricated '<provider>:undefined' id would silently merge
     // distinct users into one account.
@@ -324,7 +343,56 @@ export class OAuthClient extends RESTler {
         reason: 'profile is missing a subject identifier',
       });
     }
-    return { provider: this.__name, ...profile, id, raw, tokens };
+    const trust = this.__config.emailTrust ?? 'CLAIM';
+    if (
+      trust === 'CLAIM' && this.__preset.emails !== undefined &&
+      profile.emailVerified !== true
+    ) {
+      const email = await this.__verifiedEmail(this.__preset.emails, tokens);
+      if (email !== undefined) {
+        profile = { ...profile, email, emailVerified: true };
+      }
+    }
+    const emailVerified = trust === 'CLAIM'
+      ? profile.emailVerified === true
+      : trust === 'ALWAYS' && profile.email !== undefined;
+    return {
+      provider: this.__name,
+      ...profile,
+      id,
+      emailVerified,
+      raw,
+      tokens,
+    };
+  }
+
+  /**
+   * The primary verified address from an address-list endpoint, or
+   * undefined — also when the list cannot be read (a scope the app
+   * dropped), which leaves the profile unverified, never wrongly
+   * verified.
+   */
+  private async __verifiedEmail(
+    url: string,
+    tokens: PactOAuthTokens,
+  ): Promise<string | undefined> {
+    let list: unknown;
+    try {
+      list = await this.__getJson(
+        url,
+        'address list',
+        { Authorization: `Bearer ${tokens.accessToken}` },
+        'OAUTH_PROFILE_FAILED',
+      );
+    } catch {
+      return undefined;
+    }
+    if (!Array.isArray(list)) return undefined;
+    const entry = list.find((e) =>
+      e !== null && typeof e === 'object' && e.primary === true &&
+      e.verified === true && typeof e.email === 'string' && e.email !== ''
+    );
+    return entry?.email;
   }
 
   // ── internals ─────────────────────────────────────────────────────
