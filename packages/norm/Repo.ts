@@ -667,8 +667,10 @@ export class ReadRepo<
     this._parseJoinJson(rows, plan);
 
     // 5b. Decode raw DATE_TYPES columns SQLite returned as ISO strings
-    //     back to `Date` (Postgres/MariaDB/Mongo already return one).
+    //     back to `Date` (Postgres/MariaDB/Mongo already return one), and
+    //     JSON columns it returned as their stored TEXT.
     this._decodeDateColumns(rows);
+    this._decodeJsonColumns(rows);
 
     // 6. Decrypt encrypted result columns — top-level and inside
     //    relation values.
@@ -1862,6 +1864,37 @@ export class ReadRepo<
             ? `${v.replace(' ', 'T')}Z`
             : v,
         );
+      }
+    }
+  }
+
+  /** Parse every top-level `JSON` / `JSONB` column that came back as its
+   * stored TEXT — SQLite (and its wire-compatible aliases, Turso and D1)
+   * has no JSON storage class and returns what norm wrote, while
+   * Postgres/Mongo return the parsed value. Gated on the sqlite dialect:
+   * elsewhere a string IS the value (a JSON column holding `"abc"` comes
+   * back as `abc` from Postgres), and parsing it again would be wrong.
+   * Encrypted columns are skipped for the same reason as dates — their
+   * type is restored by `decryptCell`. A value that does not parse is left
+   * as stored rather than failing the read. */
+  protected _decodeJsonColumns(rows: Row[]): void {
+    if (rows.length === 0) return;
+    if (this._executor.capabilities.dialect !== 'sqlite') return;
+    const c = this._compiled;
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    for (const [key, spec] of Object.entries(specs)) {
+      if (
+        (spec.type !== 'JSON' && spec.type !== 'JSONB') ||
+        c.localEncrypted.has(key)
+      ) continue;
+      for (const row of rows) {
+        const v = row[key];
+        if (typeof v !== 'string') continue;
+        try {
+          row[key] = JSON.parse(v);
+        } catch {
+          // Not JSON text (written outside norm) — keep the stored value.
+        }
       }
     }
   }
@@ -3921,6 +3954,7 @@ export class Repo<
   ): Promise<ReadRowOf<D>[]> {
     const c = this._compiled;
     this._decodeDateColumns(rows);
+    this._decodeJsonColumns(rows);
     if (decrypt) rows = await this._decryptRows(rows);
     this._applyEntityMasks(c, rows, decrypt);
     if (c.returningStrip !== undefined) {

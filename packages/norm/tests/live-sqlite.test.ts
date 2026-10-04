@@ -6,7 +6,8 @@
  * live here:
  *
  * - Dialect normalizers: SQLite returns TIMESTAMP columns as stored
- *   strings, JSON as its stored TEXT, and INTEGER as number within
+ *   strings (norm decodes them to Date), JSON as its stored TEXT (norm
+ *   parses it on read), and INTEGER as number within
  *   2^53−1 / bigint beyond.
  *
  * Replicating for Postgres/Maria = one new fixture file like this.
@@ -35,6 +36,6 @@ runLiveSuite({
   dialect: {
     asTime: (v) => new Date(v as string | Date).getTime(),
     asBig: (v) => BigInt(String(v)),
-    asJson: (v) => (typeof v === 'string' ? JSON.parse(v) : v),
+    asJson: (v) => v, // norm parses JSON TEXT on read — no normaliser
   },
 });
