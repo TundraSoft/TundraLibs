@@ -17,10 +17,12 @@ never change.
 - [Column encryption — `.encrypt()`](#column-encryption--encrypt)
   - [The plaintext codec](#the-plaintext-codec)
   - [Per-cell cost](#per-cell-cost)
+  - [Key derivation — PBKDF2 or HKDF](#key-derivation--pbkdf2-or-hkdf)
 - [Digest siblings — `.encrypt().hash()`](#digest-siblings--encrypthash)
   - [Why ciphertext can't be filtered](#why-ciphertext-cant-be-filtered)
   - [Filtering, uniqueness, and upsert keys](#filtering-uniqueness-and-upsert-keys)
 - [One-way digest columns — `Column.hash()`](#one-way-digest-columns--columnhash)
+- [Peppered digests — `hashPepper`](#peppered-digests--hashpepper)
 - [Password columns — `Column.password()`](#password-columns--columnpassword)
 - [Virtual masks — `Column.mask()`](#virtual-masks--columnmask)
 - [Hidden columns — `.hidden()`](#hidden-columns--hidden)
@@ -81,12 +83,15 @@ const norm = new Norm({
 const db = norm.use(/* ...schemas */);
 ```
 
-| Option             | Type                  | Default                              | Notes                                                                                                                           |
-| ------------------ | --------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `secret`           | `string`              | —                                    | Symmetric key material. Keep it out of source; load from an env var or secret store.                                            |
-| `algorithm`        | `EncryptAlgorithm`    | `'AES-256-GCM'`                      | Bound per instance, applied to every encrypted column.                                                                          |
-| `crypto`           | `CryptoOverrides`     | AES + SHA (from `@tundralibs/crypt`) | Swap the encrypt / decrypt / hash callbacks; see [Crypto overrides](#crypto-overrides).                                         |
-| `onDecryptFailure` | `'null'` \| `'throw'` | `'null'`                             | What a read does when a cell will not decrypt; see [Read-path decrypt failures](#read-path-decrypt-failures--ondecryptfailure). |
+| Option             | Type                   | Default                              | Notes                                                                                                                                      |
+| ------------------ | ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `secret`           | `string`               | —                                    | Symmetric key material. Keep it out of source; load from an env var or secret store.                                                       |
+| `algorithm`        | `EncryptAlgorithm`     | `'AES-256-GCM'`                      | Bound per instance, applied to every encrypted column.                                                                                     |
+| `crypto`           | `CryptoOverrides`      | AES + SHA (from `@tundralibs/crypt`) | Swap the encrypt / decrypt / hash callbacks; see [Crypto overrides](#crypto-overrides).                                                    |
+| `onDecryptFailure` | `'null'` \| `'throw'`  | `'null'`                             | What a read does when a cell will not decrypt; see [Read-path decrypt failures](#read-path-decrypt-failures--ondecryptfailure).            |
+| `keyDerivation`    | `'PBKDF2'` \| `'HKDF'` | `'PBKDF2'`                           | How the cell key is derived for writes. `'HKDF'` is the Cloudflare Workers setting; see [Key derivation](#key-derivation--pbkdf2-or-hkdf). |
+| `hashPepper`       | `string`               | —                                    | Keys the searchable digests (HMAC); held privately like `secret`. See [Peppered digests](#peppered-digests--hashpepper).                   |
+| `legacyHashes`     | `boolean`              | `false`                              | Migration window for `hashPepper`: keyed lookups also match the plain digest.                                                              |
 
 `EncryptAlgorithm` is any AES key length crossed with a mode:
 `AES-{128,192,256}-{GCM,CBC,CTR}`. GCM is authenticated natively; CBC
@@ -109,9 +114,10 @@ const plain = await db.decrypt(cipher); // → 'ada@example.dev'
 const digest = await db.hash('ada@example.dev'); // SHA-256 by default — matches siblings
 ```
 
-`db.hash(plaintext, algorithm?)` defaults to SHA-256 so its output
-matches sibling digests; pass an algorithm to match a
-`Column.hash(algo)` column instead.
+`db.hash(plaintext)` digests the way siblings are written: SHA-256,
+keyed under the `hashPepper` when one is set. Pass an algorithm to match
+a `Column.hash(algo)` column instead, plus `{ keyed: true }` when that
+column is declared keyed.
 
 ## Column encryption — `.encrypt()`
 
@@ -189,6 +195,45 @@ also upgrades them to the fast envelope.
 If you need different key handling entirely, the
 [crypto override seam](#crypto-overrides) lets you supply your own KDF
 or delegate to a KMS.
+
+### Key derivation — PBKDF2 or HKDF
+
+PBKDF2 stretching is right for a secret a person chose, but Cloudflare
+Workers refuses PBKDF2 above 100,000 iterations, so the default
+derivation cannot run there and no encrypted column can be read or
+written. `keyDerivation: 'HKDF'` derives the same kind of per-process
+AES-GCM key in one HKDF step instead: no iteration count, nothing
+Workers refuses. HKDF does not stretch, so it is only safe for a secret
+that is already random, and norm refuses it with a `secret` shorter than
+32 characters, with a CBC/CTR `algorithm`, or alongside a
+`crypto.encrypt`/`decrypt` override (which derives its own key).
+
+```typescript
+import '@tundralibs/norm/engines/d1';
+import { Norm } from '@tundralibs/norm/core';
+
+declare const env: Record<string, string>;
+
+const norm = new Norm({
+  database: {
+    dialect: 'd1',
+    accountId: env.CF_ACCOUNT_ID,
+    databaseId: env.D1_DATABASE_ID,
+    apiToken: env.CF_API_TOKEN,
+  },
+  secret: env.NORM_SECRET, // 32+ random characters
+  keyDerivation: 'HKDF',
+});
+```
+
+Cells written under HKDF are stamped `k2.<fp>.<body>` instead of
+`k1.…`, and a read follows each cell's tag, whatever the instance
+writes with. A store holding both reads correctly anywhere PBKDF2 is
+allowed. Before serving from Workers, move the existing `k1` cells with
+a same-key rotation from Deno, Node or Bun:
+`rotateKey(db, { oldKey: secret, newKey: secret })` on an instance
+configured with `keyDerivation: 'HKDF'` (see
+[Key rotation](#key-rotation--rotatekey)).
 
 ## Digest siblings — `.encrypt().hash()`
 
@@ -318,6 +363,40 @@ digest rewrites only the value and keeps the `@pin` key, because the
 column itself already stores the digest. Both are transparent to the
 caller. A `.guard()` on a digest column constrains the plaintext — your
 password policy — not the digest.
+
+## Peppered digests — `hashPepper`
+
+A plain SHA-256 of a low-entropy value (a phone number, an email, a
+4-digit PIN) can be brute-forced offline by anyone holding the rows.
+`hashPepper` keys the digests: with it set, `.encrypt().hash()` siblings
+store HMAC-SHA-256 under the pepper, and digest columns declared
+`Column.hash(algo, { keyed: true })` store HMAC-`algo`. The hex length is
+unchanged, so no migration is needed, and filters, uniqueness and
+`db.hash()` follow automatically. The pepper is at least 32 characters
+and is held privately, like `secret`; a keyed column with no pepper is a
+`NormDefinitionError` at composition, and `Column.hash('PBKDF2', { keyed:
+true })` is refused (PBKDF2 is salted per value already).
+
+```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
+const Devices = Entity('devices', {
+  id: Column.integer(),
+  phone: Column.varchar(32).encrypt().hash(), // sibling keyed when hashPepper is set
+  pairingCode: Column.hash('SHA-256', { keyed: true }), // HMAC-SHA-256 under the pepper
+}, { pk: ['id'] });
+```
+
+**Adopting a pepper on existing data.** Siblings can be migrated: their
+plaintext is in the encrypted cell, so
+`rotateKey(db, { oldKey: secret, newKey: secret, rehash: true })`
+re-digests every one. A standalone `Column.hash()` cannot — only the
+digest was stored — so keyed applies to rows written from then on.
+Between the switch and the end of the rehash, set `legacyHashes: true`:
+a keyed lookup then also matches the plain digest (equality and `$in`
+match either form; `$ne` and `$nin` exclude both). Uniqueness on a
+sibling is not enforced across the two forms while it is on, so turn it
+off once `rotateKey` reports the rehash complete.
 
 ## Password columns — `Column.password()`
 
@@ -640,13 +719,23 @@ console.log(
 ```
 
 **Resumable and idempotent.** Every ciphertext is stamped with a short
-fingerprint of the key that produced it (`k1.<fp>.<body>`). Rotation
-reads that fingerprint to classify each cell: already under `newKey`
-(skip), under `oldKey` or legacy and un-stamped (rotate), or under some
-third key (leave, and count under `unknownCells`). A crashed run
-therefore resumes safely: re-running skips whatever already moved, and
-a mistyped `oldKey` surfaces as "0 rotated, everything unknown" rather
-than silent corruption.
+fingerprint of the key that produced it (`k1.<fp>.<body>`, or `k2.…`
+under HKDF). Rotation reads the stamp to classify each cell: already
+under `newKey` in the envelope this instance writes (skip), under
+`oldKey`, legacy and un-stamped, or in the other envelope (rotate), or
+under some third key (leave, and count under `unknownCells`). A crashed
+run therefore resumes safely: re-running skips whatever already moved,
+and a mistyped `oldKey` surfaces as "0 rotated, everything unknown"
+rather than silent corruption.
+
+**The same key on both sides** moves cells into the current envelope:
+legacy cells, and `k1` cells once the instance writes with
+`keyDerivation: 'HKDF'`. It is a no-op when everything is current.
+
+**`rehash: true`** also re-digests every `.encrypt().hash()` sibling with
+the instance's current hash — the migration onto a `hashPepper` (see
+[Peppered digests](#peppered-digests--hashpepper)). It decrypts every
+hashed cell, so it is a full pass; the report counts `rehashedCells`.
 
 ```typescript ignore
 // Preview the job first — classifies + counts, writes nothing:
@@ -656,11 +745,12 @@ console.log(`${preview.rotatedCells} cells would rotate`);
 
 **Searchable hashes survive rotation.** `.encrypt().hash()` sibling
 digests are derived from plaintext, not ciphertext, so rotation never
-touches them; hashed-equality filters keep working across a rotation
-with no reindex.
+touches them unless `rehash` asks it to; hashed-equality filters keep
+working across a rotation with no reindex.
 
 Rotation reports a tally per entity (`rows`, `rotatedRows`,
-`rotatedCells`, `skippedCells`, `unknownCells`) plus grand totals. It
+`rotatedCells`, `skippedCells`, `unknownCells`, `rehashedCells`) plus
+grand totals. It
 throws a `NormCryptoError` naming the entity, column, and pk if a cell
 will not decrypt with `oldKey`, having written nothing for that row.
 

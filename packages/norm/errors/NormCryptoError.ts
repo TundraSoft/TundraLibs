@@ -30,8 +30,9 @@ export type CryptoErrorMeta = {
    * wrong key; `decode` = decrypted but the canonical plaintext was
    * malformed; `missing-secret` = no `secret` configured. */
   reason: 'decrypt' | 'decode' | 'missing-secret';
-  /** For `missing-secret`: the operation that needed the key. */
-  operation?: 'encrypt' | 'decrypt';
+  /** For `missing-secret`: the operation that needed the key (`hash` =
+   * a keyed digest, which needs the `hashPepper`). */
+  operation?: 'encrypt' | 'decrypt' | 'hash';
   /** Stable machine-readable code — read it as `error.code`. */
   code?: NormErrorCode;
 } & Record<string, unknown>;
@@ -41,8 +42,9 @@ function cryptoMessage(meta: CryptoErrorMeta): string {
   if (meta.reason === 'missing-secret') {
     const op = meta.operation ?? 'decrypt';
     const on = meta.entity !== undefined ? ` on entity '${meta.entity}'` : '';
-    return `Cannot ${op}${on}: no 'secret' was supplied to ` +
-      `new Norm({ secret }).`;
+    const key = op === 'hash' ? 'hashPepper' : 'secret';
+    return `Cannot ${op}${on}: no '${key}' was supplied to ` +
+      `new Norm({ ${key} }).`;
   }
   const where = meta.pk !== undefined ? ` (pk ${JSON.stringify(meta.pk)})` : '';
   return `${meta.entity}.${meta.column}${where}: failed to ${

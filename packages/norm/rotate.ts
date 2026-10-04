@@ -35,7 +35,16 @@
  * ## Searchable hashes are rotation-invariant
  * `.hash()` sibling digests are derived from PLAINTEXT, not ciphertext —
  * rotation never touches them, and hashed-equality filters keep working
- * across a rotation with no reindex.
+ * across a rotation with no reindex. `rehash: true` is the exception:
+ * it re-digests every sibling with the instance's current hash — the
+ * migration onto a `hashPepper`.
+ *
+ * ## Same key: move cells into the current envelope
+ * `oldKey === newKey` re-encrypts every cell that is not already in the
+ * instance's current envelope — legacy (un-stamped) cells, and `k1`
+ * (PBKDF2) cells once the instance writes with `keyDerivation: 'HKDF'`
+ * (`k2`). That is the migration a Cloudflare Workers deployment runs,
+ * from a runtime that still allows PBKDF2, before serving from Workers.
  *
  * @example
  * ```ts ignore
@@ -55,7 +64,13 @@
 
 import type { Query } from '@tundralibs/oql/types';
 import { runtimeOf } from './Norm.ts';
-import { keyFingerprint, readKeyId } from './crypto.ts';
+import { digestOf } from './compile.ts';
+import {
+  envelopeTagOf,
+  keyFingerprint,
+  readEnvelope,
+  SIBLING_HASH_ALGORITHM,
+} from './crypto.ts';
 import { NormCryptoError, NormError } from './errors/mod.ts';
 
 /** Options for {@linkcode rotateKey}. */
@@ -76,6 +91,10 @@ export type RotateKeyOptions = {
   /** Called after each chunk and once when an entity finishes, for
    * progress reporting. May be async — it is awaited. */
   readonly onProgress?: (p: RotateKeyProgress) => void | Promise<void>;
+  /** Also re-digest every `.encrypt().hash()` sibling with the instance's
+   * current hash (keyed under its `hashPepper` when set). Decrypts every
+   * hashed cell, so it is a full pass; idempotent. Default `false`. */
+  readonly rehash?: boolean;
 };
 
 /** A progress tick from {@linkcode rotateKey}. */
@@ -107,6 +126,8 @@ export type RotateKeyEntityReport = {
   /** Cells under neither key — left untouched. `> 0` means data under an
    * unexpected key: investigate (often a mistyped `oldKey`). */
   readonly unknownCells: number;
+  /** Sibling digests rewritten (`rehash: true`), or that would be. */
+  readonly rehashedCells: number;
 };
 
 /** What {@linkcode rotateKey} did (or, for `dryRun`, would do). */
@@ -117,10 +138,12 @@ export type RotateKeyReport = {
   readonly entities: readonly RotateKeyEntityReport[];
   /** Total cells re-encrypted across all entities. */
   readonly rotatedCells: number;
-  /** Total cells already under `newKey`. */
+  /** Total cells already under `newKey` in the current envelope. */
   readonly skippedCells: number;
   /** Total cells under an unexpected key. */
   readonly unknownCells: number;
+  /** Total sibling digests rewritten (`rehash: true`). */
+  readonly rehashedCells: number;
 };
 
 /**
@@ -130,8 +153,9 @@ export type RotateKeyReport = {
  * @param db The handle from `norm.use(...)`.
  * @param opts Old/new keys plus chunking, dry-run, and progress.
  * @returns A tally of what was rotated, skipped, and left untouched.
- * @throws {NormError} `oldKey`/`newKey` missing or identical, or an
- *   encrypted entity has no primary key to address rows by.
+ * @throws {NormError} `oldKey`/`newKey` missing, or an encrypted entity
+ *   has no primary key to address rows by. (Identical keys are allowed:
+ *   they move cells into the current envelope.)
  * @throws {NormCryptoError} A cell would not decrypt with `oldKey`
  *   (wrong key on legacy data, corruption, or tampering) — names the
  *   entity, column, and pk. Nothing was left half-written for that row.
@@ -140,19 +164,20 @@ export async function rotateKey(
   db: object,
   opts: RotateKeyOptions,
 ): Promise<RotateKeyReport> {
-  const { oldKey, newKey, chunkSize = 500, dryRun = false, onProgress } = opts;
+  const {
+    oldKey,
+    newKey,
+    chunkSize = 500,
+    dryRun = false,
+    onProgress,
+    rehash = false,
+  } = opts;
   if (
     typeof oldKey !== 'string' || oldKey.length === 0 ||
     typeof newKey !== 'string' || newKey.length === 0
   ) {
     throw new NormError(
       'rotateKey(): both oldKey and newKey are required.',
-      {},
-    );
-  }
-  if (oldKey === newKey) {
-    throw new NormError(
-      'rotateKey(): oldKey and newKey are identical — nothing to rotate.',
       {},
     );
   }
@@ -172,11 +197,16 @@ export async function rotateKey(
   const crypto = runtime.crypto;
   const fpOld = await keyFingerprint(oldKey);
   const fpNew = await keyFingerprint(newKey);
+  // A cell is CURRENT when it is under newKey AND in the envelope this
+  // instance writes (k1 PBKDF2 / k2 HKDF) — so switching keyDerivation
+  // makes same-key cells due for re-encryption.
+  const targetTag = envelopeTagOf(crypto.keyDerivation);
 
   const entities: RotateKeyEntityReport[] = [];
   let rotatedCells = 0;
   let skippedCells = 0;
   let unknownCells = 0;
+  let rehashedCells = 0;
 
   for (const [key, ce] of runtime.compiled) {
     const def = ce.def as {
@@ -215,6 +245,7 @@ export async function rotateKey(
     let entRotated = 0;
     let entSkipped = 0;
     let entUnknown = 0;
+    let entRehashed = 0;
 
     for (let offset = 0;; offset += chunkSize) {
       const res = await ex.execute<Record<string, unknown>>({
@@ -237,38 +268,56 @@ export async function rotateKey(
         for (const col of encCols) {
           const v = row[col];
           if (v === null || v === undefined || typeof v !== 'string') continue;
-          const id = readKeyId(v);
-          if (id === fpNew) {
-            entSkipped++;
-            continue; // already under newKey
-          }
-          if (id !== null && id !== fpOld) {
+          const envelope = readEnvelope(v);
+          const id = envelope?.keyId ?? null;
+          const sibling = rehash ? ce.hashSiblings.get(col) : undefined;
+          if (id !== null && id !== fpNew && id !== fpOld) {
             entUnknown++;
             continue; // under a third key — leave it
           }
-          // Stamped with oldKey, or legacy (un-stamped → old key).
-          rowRotations++;
-          entRotated++;
-          if (!dryRun) {
-            let canonical: string;
-            try {
-              canonical = await crypto.decrypt(v, oldKey, crypto.algorithm);
-            } catch (cause) {
-              throw new NormCryptoError(
-                {
-                  norm: runtime.name,
-                  entity: key,
-                  column: col,
-                  pk: pkOf(row, pkCols),
-                  reason: 'decrypt',
-                },
-                cause as Error,
-              );
-            }
+          const current = id === fpNew && envelope!.tag === targetTag;
+          if (current) entSkipped++;
+          if (current && sibling === undefined) continue;
+          if (!current) {
+            rowRotations++;
+            entRotated++;
+          }
+          if (sibling !== undefined) {
+            rowRotations++;
+            entRehashed++;
+          }
+          if (dryRun) continue;
+          // Decrypt with the key the cell is ACTUALLY under: newKey for a
+          // same-key envelope move, oldKey for a stamped-old or legacy cell.
+          const under = id === fpNew ? newKey : oldKey;
+          let canonical: string;
+          try {
+            canonical = await crypto.decrypt(v, under, crypto.algorithm);
+          } catch (cause) {
+            throw new NormCryptoError(
+              {
+                norm: runtime.name,
+                entity: key,
+                column: col,
+                pk: pkOf(row, pkCols),
+                reason: 'decrypt',
+              },
+              cause as Error,
+            );
+          }
+          if (!current) {
             changed[col] = await crypto.encrypt(
               canonical,
               newKey,
               crypto.algorithm,
+            );
+          }
+          if (sibling !== undefined) {
+            changed[sibling] = await digestOf(
+              crypto,
+              canonical,
+              SIBLING_HASH_ALGORITHM,
+              crypto.keyedHash !== undefined,
             );
           }
         }
@@ -303,6 +352,7 @@ export async function rotateKey(
     rotatedCells += entRotated;
     skippedCells += entSkipped;
     unknownCells += entUnknown;
+    rehashedCells += entRehashed;
     entities.push({
       entity: key,
       table: def.name,
@@ -311,6 +361,7 @@ export async function rotateKey(
       rotatedCells: entRotated,
       skippedCells: entSkipped,
       unknownCells: entUnknown,
+      rehashedCells: entRehashed,
     });
     if (onProgress) {
       await onProgress({
@@ -322,7 +373,14 @@ export async function rotateKey(
     }
   }
 
-  return { dryRun, entities, rotatedCells, skippedCells, unknownCells };
+  return {
+    dryRun,
+    entities,
+    rotatedCells,
+    skippedCells,
+    unknownCells,
+    rehashedCells,
+  };
 }
 
 /** Extract a row's primary key for error context (scalar for a single

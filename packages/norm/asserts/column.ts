@@ -59,6 +59,13 @@ export function columnSpecIssues(
           `declare encrypt/hash.`,
       );
     }
+    if (spec.hashKeyed === true && spec.hashed === 'PBKDF2') {
+      at(
+        `columns.${colName}.hashed`,
+        `a PBKDF2 digest is salted per value already — keyed applies to ` +
+          `SHA-256/384/512 digests only.`,
+      );
+    }
     if (
       isExpressionValue(spec.default?.insert) ||
       isExpressionValue(spec.default?.update)

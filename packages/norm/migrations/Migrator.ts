@@ -30,7 +30,7 @@ import {
 } from '@tundralibs/compat/file';
 import type { Query } from '@tundralibs/oql/types';
 import { runtimeOf } from '../Norm.ts';
-import type { Runtime } from '../compile.ts';
+import { digestOf, type Runtime } from '../compile.ts';
 import { NormAdvisoryLockError, NormMigrationError } from '../errors/mod.ts';
 import { hashSourceOf } from '../definition/mod.ts';
 import { coerceCount } from '../result.ts';
@@ -891,9 +891,12 @@ export class Migrator {
         }
         for (const [sibling, source] of siblings) {
           const canonical = plain.get(source);
-          target[sibling] = canonical === undefined
-            ? null
-            : await crypto.hash(canonical, SIBLING_HASH_ALGORITHM);
+          target[sibling] = canonical === undefined ? null : await digestOf(
+            crypto,
+            canonical,
+            SIBLING_HASH_ALGORITHM,
+            crypto.keyedHash !== undefined,
+          );
         }
         out.push(target);
       }

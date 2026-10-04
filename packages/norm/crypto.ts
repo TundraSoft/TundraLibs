@@ -22,13 +22,14 @@ import {
   decryptAES,
   encryptAES,
 } from '@tundralibs/crypt/encrypt';
-import { derivePBKDF2Key } from '@tundralibs/crypt/generators';
+import { deriveHKDFKey, derivePBKDF2Key } from '@tundralibs/crypt/generators';
 import {
   digest,
   type DigestAlgorithms,
   pbkdf2Hash as cryptPbkdf2Hash,
   pbkdf2Verify,
 } from '@tundralibs/crypt/digest';
+import { signHMAC } from '@tundralibs/crypt/sign';
 
 /**
  * Verify a plaintext against a stored `Column.password('PBKDF2')` hash
@@ -97,6 +98,22 @@ export const VALID_HASH_ALGORITHMS: ReadonlySet<HashAlgorithm> = new Set(
 );
 
 /** BYO crypto callbacks (default: AES + SHA digest from crypt). */
+/**
+ * How the AES cell key is derived from the instance `secret`.
+ *
+ * - `'PBKDF2'` (default) stretches the secret with 210 000 rounds — right
+ *   for a secret a person chose, and refused by Cloudflare Workers, which
+ *   caps PBKDF2 at 100 000.
+ * - `'HKDF'` derives the key in one step with no stretching — fast and
+ *   Workers-safe, but only for a high-entropy secret (32+ random
+ *   characters; checked at construction). Cells it writes are stamped
+ *   `k2.` so a read knows which derivation to use.
+ */
+export type KeyDerivation = 'PBKDF2' | 'HKDF';
+
+/** The minimum `secret` / `hashPepper` length the keyed paths accept. */
+export const MIN_KEY_LENGTH = 32;
+
 export type CryptoOverrides = {
   encrypt?: (
     plaintext: string,
@@ -150,11 +167,18 @@ const CELL_KEY_CACHE_MAX = 32;
 function cellKey(
   secret: string,
   keyLength: AESKeyLength,
+  kdf: KeyDerivation,
 ): Promise<CryptoKey> {
-  const id = `${keyLength}\u0000${secret}`;
+  const id = `${kdf}\u0000${keyLength}\u0000${secret}`;
   const hit = CELL_KEY_CACHE.get(id);
   if (hit !== undefined) return hit;
   const derived = (async () => {
+    // HKDF: one extract-and-expand step, no iteration count — the
+    // derivation Workers can run. Domain-separated by `info`; no salt is
+    // needed for a secret that is already random.
+    if (kdf === 'HKDF') {
+      return await deriveHKDFKey(secret, { info: 'norm-cell-key', keyLength });
+    }
     const salt = new Uint8Array(
       await crypto.subtle.digest(
         'SHA-256',
@@ -179,13 +203,15 @@ export async function defaultEncrypt(
   plaintext: string,
   secret: string,
   algorithm: EncryptAlgorithm,
+  kdf: KeyDerivation = 'PBKDF2',
 ): Promise<string> {
   const { mode, keyLength } = parseAlgorithm(algorithm);
   if (mode === 'GCM') {
-    return await encryptAES(plaintext, await cellKey(secret, keyLength));
+    return await encryptAES(plaintext, await cellKey(secret, keyLength, kdf));
   }
   // CBC needs encrypt-then-MAC keyed off the string secret — crypt
-  // restricts CryptoKey secrets to GCM, so this stays per-cell PBKDF2.
+  // restricts CryptoKey secrets to GCM, so this stays per-cell PBKDF2
+  // (and HKDF is refused with CBC/CTR at construction).
   return await encryptAES(plaintext, secret, { mode, keyLength });
 }
 
@@ -193,12 +219,16 @@ export async function defaultDecrypt(
   ciphertext: string,
   secret: string,
   algorithm: EncryptAlgorithm,
+  kdf: KeyDerivation = 'PBKDF2',
 ): Promise<string> {
   const { mode, keyLength } = parseAlgorithm(algorithm);
   // 2-part = key-based envelope; 3-part = legacy per-message-salt cell
   // written before the fast path existed (still decrypted per-cell).
   if (mode === 'GCM' && ciphertext.split(':').length === 2) {
-    return await decryptAES(ciphertext, await cellKey(secret, keyLength));
+    return await decryptAES(
+      ciphertext,
+      await cellKey(secret, keyLength, kdf),
+    );
   }
   return await decryptAES(ciphertext, secret, { mode, keyLength });
 }
@@ -208,6 +238,23 @@ export async function defaultHash(
   algorithm: HashAlgorithm,
 ): Promise<string> {
   return await digest(plaintext, { algorithm: algorithm as DigestAlgorithms });
+}
+
+/**
+ * Keyed digest: HMAC-`algorithm` of the plaintext under the instance
+ * `hashPepper`, as hex. Same length as the plain digest of the same
+ * algorithm (64/96/128), so a sibling or digest column needs no schema
+ * change. Without the pepper an attacker holding the rows cannot
+ * brute-force low-entropy values (phone numbers, emails) offline.
+ */
+export async function keyedHash(
+  plaintext: string,
+  algorithm: HashAlgorithm,
+  pepper: string,
+): Promise<string> {
+  return await signHMAC(plaintext, pepper, {
+    hashAlgorithm: algorithm as DigestAlgorithms,
+  });
 }
 
 // ─── Key-id envelope (rotation support) ──────────────────────────────
@@ -229,6 +276,30 @@ export async function defaultHash(
 
 /** Envelope scheme version. Bump only on a breaking format change. */
 export const KEY_ENVELOPE_TAG = 'k1';
+/** Envelope tag for a cell whose key was derived with HKDF (same body
+ * format as `k1`; only the derivation differs, so the tag must say). */
+export const HKDF_ENVELOPE_TAG = 'k2';
+
+/** The envelope tag a write under `kdf` stamps. */
+export const envelopeTagOf = (kdf: KeyDerivation): string =>
+  kdf === 'HKDF' ? HKDF_ENVELOPE_TAG : KEY_ENVELOPE_TAG;
+
+/** Split a stamped ciphertext into tag, key-id and body; `null` for a
+ * legacy (un-stamped) value or a malformed prefix. */
+export function readEnvelope(
+  ciphertext: string,
+): { tag: string; keyId: string; body: string } | null {
+  for (const tag of [KEY_ENVELOPE_TAG, HKDF_ENVELOPE_TAG]) {
+    const prefix = `${tag}.`;
+    if (!ciphertext.startsWith(prefix)) continue;
+    const rest = ciphertext.slice(prefix.length);
+    const dot = rest.indexOf('.');
+    return dot > 0
+      ? { tag, keyId: rest.slice(0, dot), body: rest.slice(dot + 1) }
+      : null;
+  }
+  return null;
+}
 
 /** Short, stable, one-way fingerprint of a secret — the public key-id
  * stamped on ciphertext. Domain-separated so it can't be correlated with
@@ -246,65 +317,70 @@ export async function keyFingerprint(secret: string): Promise<string> {
  * (un-stamped) value. Pure and total — a malformed prefix reads as
  * legacy and surfaces later at the real decrypt, never here. */
 export function readKeyId(ciphertext: string): string | null {
-  const prefix = `${KEY_ENVELOPE_TAG}.`;
-  if (!ciphertext.startsWith(prefix)) return null;
-  const rest = ciphertext.slice(prefix.length);
-  const dot = rest.indexOf('.');
-  return dot > 0 ? rest.slice(0, dot) : null;
+  return readEnvelope(ciphertext)?.keyId ?? null;
 }
 
-/** Wrap an encrypt fn so its output is stamped `k1.<fp>.<body>` with the
- * fingerprint of the key that produced it. */
+/** A cipher callback; the default ones take the key derivation as a
+ * fourth argument (BYO overrides ignore it). */
+type CipherFn = (
+  text: string,
+  secret: string,
+  algorithm: EncryptAlgorithm,
+  kdf?: KeyDerivation,
+) => Promise<string>;
+
+/** Wrap an encrypt fn so its output is stamped `<tag>.<fp>.<body>` with
+ * the fingerprint of the key that produced it — `k1` for PBKDF2 (and BYO
+ * ciphers), `k2` for HKDF. */
 export function stampKeyId(
-  enc: (
-    plaintext: string,
-    secret: string,
-    algorithm: EncryptAlgorithm,
-  ) => Promise<string>,
+  enc: CipherFn,
+  kdf: KeyDerivation = 'PBKDF2',
 ): (
   plaintext: string,
   secret: string,
   algorithm: EncryptAlgorithm,
 ) => Promise<string> {
+  const tag = envelopeTagOf(kdf);
   return async (plaintext, secret, algorithm) => {
-    const body = await enc(plaintext, secret, algorithm);
-    return `${KEY_ENVELOPE_TAG}.${await keyFingerprint(secret)}.${body}`;
+    const body = await enc(plaintext, secret, algorithm, kdf);
+    return `${tag}.${await keyFingerprint(secret)}.${body}`;
   };
 }
 
 /** Wrap a decrypt fn to understand the key-id envelope: if the value is
  * stamped, the stamped fingerprint MUST match `secret` (else the cell is
- * under a different key — throw, so the read-path policy handles it);
- * legacy (un-stamped) values decrypt with `secret` directly. */
+ * under a different key — throw, so the read-path policy handles it) and
+ * the TAG picks the key derivation (`k1` PBKDF2, `k2` HKDF), whatever the
+ * instance writes with — so a store mid-migration reads both. Legacy
+ * (un-stamped) values decrypt with `secret` directly under PBKDF2. */
 export function verifyKeyId(
-  dec: (
-    ciphertext: string,
-    secret: string,
-    algorithm: EncryptAlgorithm,
-  ) => Promise<string>,
+  dec: CipherFn,
 ): (
   ciphertext: string,
   secret: string,
   algorithm: EncryptAlgorithm,
 ) => Promise<string> {
-  const prefix = `${KEY_ENVELOPE_TAG}.`;
   return async (ciphertext, secret, algorithm) => {
-    if (!ciphertext.startsWith(prefix)) {
+    const stamped = readEnvelope(ciphertext);
+    if (stamped === null) {
+      if (
+        ciphertext.startsWith(`${KEY_ENVELOPE_TAG}.`) ||
+        ciphertext.startsWith(`${HKDF_ENVELOPE_TAG}.`)
+      ) {
+        throw new Error('malformed key-id envelope: no fingerprint delimiter');
+      }
       return await dec(ciphertext, secret, algorithm); // legacy, un-stamped
     }
-    const rest = ciphertext.slice(prefix.length);
-    const dot = rest.indexOf('.');
-    if (dot <= 0) {
-      throw new Error('malformed key-id envelope: no fingerprint delimiter');
-    }
-    const keyId = rest.slice(0, dot);
     const fp = await keyFingerprint(secret);
-    if (keyId !== fp) {
+    if (stamped.keyId !== fp) {
       throw new Error(
-        `ciphertext is under key '${keyId}', not the supplied key '${fp}'`,
+        `ciphertext is under key '${stamped.keyId}', not the supplied key '${fp}'`,
       );
     }
-    return await dec(rest.slice(dot + 1), secret, algorithm);
+    const kdf: KeyDerivation = stamped.tag === HKDF_ENVELOPE_TAG
+      ? 'HKDF'
+      : 'PBKDF2';
+    return await dec(stamped.body, secret, algorithm, kdf);
   };
 }
 

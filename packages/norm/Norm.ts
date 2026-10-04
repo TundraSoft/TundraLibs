@@ -60,6 +60,7 @@ import {
   compileRuntime,
   decryptCell,
   type DecryptFailurePolicy,
+  digestOf,
   type NormEvents,
   type Runtime,
   type Witness,
@@ -69,6 +70,7 @@ import {
   type CryptoOverrides,
   type EncryptAlgorithm,
   type HashAlgorithm,
+  type KeyDerivation,
   SIBLING_HASH_ALGORITHM,
 } from './crypto.ts';
 import {
@@ -137,6 +139,35 @@ export type NormConfig = {
   secret?: string;
   algorithm?: EncryptAlgorithm;
   crypto?: CryptoOverrides;
+  /**
+   * How the AES cell key is derived from `secret` for WRITES — see
+   * {@link KeyDerivation}. `'HKDF'` is the Cloudflare Workers setting
+   * (PBKDF2 at 210 000 rounds is refused there); it needs a 32+ character
+   * random `secret` and an AES-GCM `algorithm`. Reads follow each cell's
+   * envelope tag, so existing `k1` (PBKDF2) cells still read on a
+   * runtime that allows PBKDF2; run `rotateKey()` with the same key to
+   * re-encrypt them as `k2` before serving from Workers.
+   * @default 'PBKDF2'
+   */
+  keyDerivation?: KeyDerivation;
+  /**
+   * Pepper for searchable digests (32+ characters, held privately like
+   * `secret`). When set, `.encrypt().hash()` siblings store
+   * HMAC-SHA-256 under it instead of a plain SHA-256, and
+   * `Column.hash(algo, { keyed: true })` columns store HMAC-`algo`; the
+   * rows alone can then not be brute-forced offline. Existing siblings
+   * are re-digested by `rotateKey(db, { …, rehash: true })`.
+   */
+  hashPepper?: string;
+  /**
+   * Migration window for {@link hashPepper}: a lookup on a keyed digest
+   * also matches the plain digest, so rows written before the pepper
+   * still match until `rotateKey({ rehash: true })` finishes. Turn off
+   * once it has. Uniqueness on a sibling is not enforced across the two
+   * forms while this is on.
+   * @default false
+   */
+  legacyHashes?: boolean;
   /** What the read path does when an encrypted cell won't decrypt.
    * `'null'` (default) degrades the cell to `null` and emits a
    * `decryptError` event; `'throw'` raises a `NormCryptoError`. */
@@ -206,6 +237,9 @@ export class Norm extends Options<NormConfig, NormEvents> {
     algorithm: EncryptAlgorithm | undefined;
     crypto: CryptoOverrides | undefined;
     onDecryptFailure: DecryptFailurePolicy | undefined;
+    keyDerivation: KeyDerivation | undefined;
+    hashPepper: string | undefined;
+    legacyHashes: boolean | undefined;
   };
 
   /**
@@ -226,6 +260,7 @@ export class Norm extends Options<NormConfig, NormEvents> {
       database: _database,
       crypto: _crypto,
       secret: _secret,
+      hashPepper: _hashPepper,
       witness: _witness,
       cache: _cache,
       ...storable
@@ -245,6 +280,9 @@ export class Norm extends Options<NormConfig, NormEvents> {
       algorithm: cfg.algorithm,
       crypto: cfg.crypto,
       onDecryptFailure: cfg.onDecryptFailure,
+      keyDerivation: cfg.keyDerivation,
+      hashPepper: cfg.hashPepper,
+      legacyHashes: cfg.legacyHashes,
     };
   }
 
@@ -811,14 +849,36 @@ export class NormDb<R, Scope extends string = never> {
     );
   }
 
-  /** Hash a plaintext (no secret). Defaults to SHA-256 — the pinned
-   * sibling algorithm — so `db.hash(v)` matches sibling digests; pass
-   * the algorithm to match a `Column.hash(algo)` column instead. */
+  /** Digest a plaintext the way the write path does. With no algorithm
+   * it matches `.encrypt().hash()` siblings — SHA-256, keyed under the
+   * `hashPepper` when one is configured. Pass the algorithm to match a
+   * `Column.hash(algo)` column instead, and `{ keyed: true }` when that
+   * column is declared keyed.
+   *
+   * @throws {NormCryptoError} `{ keyed: true }` with no `hashPepper`. */
   public async hash(
     plaintext: string,
-    algorithm: HashAlgorithm = SIBLING_HASH_ALGORITHM,
+    algorithm?: HashAlgorithm,
+    options: { keyed?: boolean } = {},
   ): Promise<string> {
-    return await this.__runtime.crypto.hash(plaintext, algorithm);
+    const crypto = this.__runtime.crypto;
+    const keyed = algorithm === undefined
+      ? crypto.keyedHash !== undefined
+      : options.keyed === true;
+    if (keyed && crypto.keyedHash === undefined) {
+      throw new NormCryptoError({
+        reason: 'missing-secret',
+        operation: 'hash',
+        code: 'MISSING_SECRET',
+        norm: this.__runtime.name,
+      });
+    }
+    return await digestOf(
+      crypto,
+      plaintext,
+      algorithm ?? SIBLING_HASH_ALGORITHM,
+      keyed,
+    );
   }
 
   /**
