@@ -413,6 +413,36 @@ where: {
 }
 ```
 
+**Column references compare two columns.** A direct value, `$eq`,
+`$ne`, `$gt`/`$gte`/`$lt`/`$lte` and either `$between` bound accept
+another column of the **same value type** as `'@col'`; a column of a
+different type is a compile error. The translators render it as that
+column on every dialect (a `$expr` on MongoDB). `$in`/`$nin` lists take
+literals only, since MongoDB cannot express a column inside a list.
+
+```typescript
+import type { QueryFilter } from '@tundralibs/oql';
+
+type Link = {
+  id: number;
+  clicks: number;
+  cap: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const overCap: QueryFilter<Link> = { '@clicks': { $gt: '@cap' } };
+const edited: QueryFilter<Link> = { '@updatedAt': { $gt: '@createdAt' } };
+// const bad: QueryFilter<Link> = { '@createdAt': { $gt: '@clicks' } };
+// ❌ a Date column cannot compare against a number column
+
+console.log(overCap, edited);
+```
+
+At runtime an `@` string is a column reference only when it names a
+column in scope; otherwise it binds as a literal, so user data that
+starts with `@` cannot reach an identifier position.
+
 **Pre-declared expression aliases work in WHERE.** Expressions
 declared in the SELECT/UPDATE/DELETE/COUNT `expressions:` block are
 referenceable by their `@key` alias in WHERE filters — the translator

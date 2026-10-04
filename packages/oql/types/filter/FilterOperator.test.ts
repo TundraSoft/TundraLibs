@@ -75,6 +75,52 @@ describe('oql.types.FilterOperator', () => {
     asserts.assertEquals(params, { p_0: 42 });
   });
 
+  it('accepts a same-typed column reference as the value of =, <>, comparisons and BETWEEN — and rejects a mismatched type or an $in list of refs', () => {
+    type Event = {
+      id: number;
+      createdAt: Date;
+      updatedAt: Date;
+      clicks: number;
+      cap: number;
+      label: string;
+    };
+    const query = {
+      type: 'SELECT',
+      table: 'events',
+      columns: ['id', 'createdAt', 'updatedAt', 'clicks', 'cap', 'label'],
+      projection: { '@id': true },
+      where: {
+        '@updatedAt': { $gt: '@createdAt' },
+        '@clicks': { $between: [0, '@cap'] },
+        '@cap': { $ne: '@clicks' },
+        '@id': '@clicks',
+      },
+    } satisfies Query<'SELECT', Event>;
+    const { sql } = translate(query);
+    asserts.assertStringIncludes(sql, '"updatedAt" > "createdAt"');
+    asserts.assertStringIncludes(sql, '"clicks" BETWEEN :p_0: AND "cap"');
+    asserts.assertStringIncludes(sql, '"cap" <> "clicks"');
+    asserts.assertStringIncludes(sql, '"id" = "clicks"');
+
+    const mismatched = {
+      type: 'SELECT',
+      table: 'events',
+      columns: ['id', 'createdAt', 'clicks'],
+      projection: { '@id': true },
+      // @ts-expect-error a Date column cannot compare against a number column
+      where: { '@createdAt': { $gt: '@clicks' } },
+    } satisfies Query<'SELECT', Event>;
+    const listOfRefs = {
+      type: 'SELECT',
+      table: 'events',
+      columns: ['id', 'clicks', 'cap'],
+      projection: { '@id': true },
+      // @ts-expect-error $in takes literals only (MongoDB cannot list columns)
+      where: { '@clicks': { $in: ['@cap'] } },
+    } satisfies Query<'SELECT', Event>;
+    asserts.assert(mismatched && listOfRefs);
+  });
+
   it('still accepts operator objects on a query with no declared schema', () => {
     // Regression guard for the catch-all fallback: a query built
     // against the defaulted `TableType` has no concrete column keys,
