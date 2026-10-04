@@ -18,7 +18,7 @@ comment lists the curl calls and what to try on the page.
    (boot order: open the database → mount endpoints → `app.modules()`),
    then `modules/Posts.ts` (routes + a job + events), `auth.ts` (a pact
    instance with two demo accounts, `pactAuth(pact)` →
-   `authenticate`/`authorize`, `/login` over `pact.login()`) and
+   `binding`/`authorize`, `/login` over `pact.login()`) and
    `schemas.ts` (guardian schemas bound with `payload(Schema)`). The
    `configs/` directory is the config-driven `Application.initialize`
    shape — compare it with the annotated file `rapid init` writes.

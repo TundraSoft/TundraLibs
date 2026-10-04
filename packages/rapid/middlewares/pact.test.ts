@@ -96,15 +96,15 @@ async function makePact(
 
 type TestPact = Awaited<ReturnType<typeof makePact>>;
 
-/** An app with `authenticate` global and guarded + echoing routes. */
+/** An app with the pact binding bound and guarded + echoing routes. */
 async function makeApp(pact: TestPact, options: PactAuthOptions = {}) {
-  const { authenticate, authorize } = pactAuth(pact, options);
+  const { binding, authorize } = pactAuth(pact, options);
   const app = await Application.initialize({
     name: 'pact-adapter',
     server: { port: 0, hostname: '127.0.0.1' },
     logger: { handlers: [] },
   });
-  app.use(authenticate);
+  app.auth(binding);
   app.get('/whoami', (ctx) => {
     const auth = ctx.auth as PactAuthContext | undefined;
     return {
@@ -468,15 +468,15 @@ describe('rapid.middlewares.pactAuth()', () => {
     void secret;
   });
 
-  it('a job passes through authenticate (no client) but authorize fails CLOSED there', async () => {
+  it('a job is anonymous to the binding (no client) and a guard on it fails CLOSED', async () => {
     const pact = await makePact();
-    const { authenticate, authorize } = pactAuth(pact);
+    const { binding, authorize } = pactAuth(pact);
     const open = await Application.initialize({
       name: 'pact-jobs-open',
       server: { enabled: false },
       logger: { handlers: [] },
     });
-    open.use(authenticate);
+    open.auth(binding);
     open.job('j', '0 6 * * *', () => ({ content: 'ran' }));
     asserts.assertEquals((await open.triggerJob('j')).status, 200);
     const guarded = await Application.initialize({
@@ -484,7 +484,8 @@ describe('rapid.middlewares.pactAuth()', () => {
       server: { enabled: false },
       logger: { handlers: [] },
     });
-    guarded.use(authenticate, authorize('Admin', 'READ'));
+    guarded.auth(binding);
+    guarded.use(authorize('Admin', 'READ'));
     guarded.job('j', '0 6 * * *', () => ({ content: 'ran' }));
     const outcome = await guarded.triggerJob('j');
     asserts.assertEquals(outcome.status, 401);
@@ -493,7 +494,7 @@ describe('rapid.middlewares.pactAuth()', () => {
 
   it('login() / me() / logout(): one cookie name, one 401 for every failure, a minimal principal, idempotent logout', async () => {
     const pact = await makePact();
-    const { authenticate, login, logout, me } = pactAuth(pact, {
+    const { binding, login, logout, me } = pactAuth(pact, {
       bearer: { cookie: 'session' },
       session: { cookie: { secure: false } },
     });
@@ -502,7 +503,7 @@ describe('rapid.middlewares.pactAuth()', () => {
       server: { port: 0, hostname: '127.0.0.1' },
       logger: { handlers: [] },
     });
-    app.use(authenticate);
+    app.auth(binding);
     app.post('/login', login());
     app.post('/logout', logout());
     app.get('/me', me());
@@ -817,47 +818,39 @@ describe('rapid.middlewares.pactAuth() — the SOCKET branch', () => {
       logger: { handlers: [] },
     });
     try {
-      const { authenticate } = pactAuth(pact, { bearer: { cookie: 'sid' } });
-      const bearer = await run(
-        authenticate,
-        frame(app, { authorization: `Bearer ${session.token}` }),
-      );
-      asserts.assertEquals(bearer.reached, true);
-      const ctxBearer = frame(app, {
-        authorization: `Bearer ${session.token}`,
-      });
-      await authenticate(ctxBearer, () => Promise.resolve());
+      const { binding } = pactAuth(pact, { bearer: { cookie: 'sid' } });
+      const identify = (headers: Record<string, string>) =>
+        binding.authenticate(frame(app, headers)) as Promise<
+          PactAuthContext | undefined
+        >;
       asserts.assertEquals(
-        (ctxBearer.auth as PactAuthContext | undefined)?.via,
+        (await identify({ authorization: `Bearer ${session.token}` }))?.via,
         'SESSION',
       );
-
-      const basic = frame(app, {
-        authorization: `Basic ${btoa(`ada:${PASSWORD}`)}`,
-      });
-      await authenticate(basic, () => Promise.resolve());
-      asserts.assertEquals((basic.auth as PactAuthContext).via, 'BASIC');
-
-      // The bearer COOKIE on the upgrade request works too (a browser tab).
-      const viaCookie = frame(app, { cookie: `sid=${session.token}` });
-      await authenticate(viaCookie, () => Promise.resolve());
-      asserts.assertEquals((viaCookie.auth as PactAuthContext).via, 'SESSION');
-
-      const bad = await run(
-        authenticate,
-        frame(app, { authorization: 'Bearer nope' }),
+      asserts.assertEquals(
+        (await identify({
+          authorization: `Basic ${btoa(`ada:${PASSWORD}`)}`,
+        }))?.via,
+        'BASIC',
       );
-      asserts.assertEquals(bad.reached, false);
-      asserts.assertEquals(bad.error?.code, 'RAPID_UNAUTHENTICATED');
+      // The bearer COOKIE on the upgrade request works too (a browser tab).
+      asserts.assertEquals(
+        (await identify({ cookie: `sid=${session.token}` }))?.via,
+        'SESSION',
+      );
+      const bad = await asserts.assertRejects(
+        () => identify({ authorization: 'Bearer nope' }),
+        RapidError,
+      );
+      asserts.assertEquals(bad.code, 'RAPID_UNAUTHENTICATED');
+      asserts.assertEquals(await identify({}), undefined);
 
-      const anonymous = frame(app, {});
-      await authenticate(anonymous, () => Promise.resolve());
-      asserts.assertEquals(anonymous.auth, undefined);
-
-      const { authenticate: required } = pactAuth(pact, { optional: false });
-      const refused = await run(required, frame(app, {}));
-      asserts.assertEquals(refused.reached, false);
-      asserts.assertEquals(refused.error?.code, 'RAPID_UNAUTHENTICATED');
+      const required = pactAuth(pact, { optional: false }).binding;
+      const refused = await asserts.assertRejects(
+        () => Promise.resolve(required.authenticate(frame(app, {}))),
+        RapidError,
+      );
+      asserts.assertEquals(refused.code, 'RAPID_UNAUTHENTICATED');
     } finally {
       await app.stop();
     }
@@ -875,19 +868,20 @@ describe('rapid.middlewares.pactAuth() — the SOCKET branch', () => {
       logger: { handlers: [] },
     });
     try {
-      const { authenticate, authorize } = pactAuth(pact, {
+      const { binding, authorize } = pactAuth(pact, {
         apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
         hmac: {},
       });
       // Valid HMAC material for HTTP is just absent headers to the socket core.
       const signedHeaders = await signed(secret, key, 'GET', '/', null);
       const hmac = frame(app, signedHeaders);
-      await authenticate(hmac, () => Promise.resolve());
-      asserts.assertEquals(hmac.auth, undefined);
+      asserts.assertEquals(await binding.authenticate(hmac), undefined);
 
       const apiKey = frame(app, { 'x-api-key': key, 'x-api-secret': secret });
-      await authenticate(apiKey, () => Promise.resolve());
-      asserts.assertEquals((apiKey.auth as PactAuthContext).via, 'APIKEY');
+      const identity = await binding.authenticate(apiKey) as PactAuthContext;
+      asserts.assertEquals(identity.via, 'APIKEY');
+      // What the transport's prelude does with the answer, for the guard below.
+      apiKey._setAuth(identity as unknown as Record<string, unknown>);
       const read = await run(authorize('Posts', 'READ'), apiKey);
       asserts.assertEquals(read.reached, true);
       const edit = await run(authorize('Posts', 'EDIT'), apiKey);

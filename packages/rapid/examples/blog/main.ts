@@ -15,13 +15,13 @@
  *   modules/Audit.ts   event-only module — subscribes, logs, no transport
  *   modules/mod.ts     the static barrel app.modules() boots from
  *   schemas.ts         guardian request schemas (validated() bridges 400s)
- *   auth.ts            the @tundralibs/pact instance + authenticate/authorize
+ *   auth.ts            the @tundralibs/pact instance + its auth binding/authorize
  *   types.ts           domain types
  *   main.ts            boot: open db → mount endpoints + modules
  *
  * Beyond the modules it also mounts the `./endpoints` catalog —
  * `health`, `metrics` (metro-man), `openapi` (the assembled 3.0.3 doc),
- * — plus pact's `authenticate`/`authorize` middleware on a
+ * — plus pact's binding (`app.auth`) and `authorize` guard on a
  * protected `/admin/summary` route. See the curl block below.
  *
  * The modules take NO constructor args — `BlogModule` pulls `Norm` with an
@@ -105,8 +105,8 @@ import type { PactAuthContext } from '@tundralibs/rapid/middlewares/pact';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
 import {
-  authenticate,
   authorize,
+  binding,
   DEMO_ACCOUNTS,
   isAuthor,
   issueDemoApiKey,
@@ -165,16 +165,13 @@ const app = await Application.initialize({
   },
 }, {});
 
-app.use(
-  secureHeaders(),
-  cors(),
-  // IDENTIFICATION only, app-wide (gating stays per-route via
-  // authorize): a bearer token or API key on the headers, else the
-  // `session` cookie the /login route set — the cookie is what lets a BROWSER be
-  // signed in, so the projection above can vary the nav per caller on
-  // ordinary page loads. Anonymous requests flow through.
-  authenticate,
-);
+app.use(secureHeaders(), cors());
+// IDENTIFICATION, once per request, before any middleware (gating stays
+// per-route via authorize): a bearer token or API key on the headers, else
+// the `session` cookie the /login route set — the cookie is what lets a
+// BROWSER be signed in, so the projection above can vary the nav per caller
+// on ordinary page loads. Anonymous requests flow through.
+app.auth(binding);
 // Static serving is CONFIG now — see configs/Application.yaml's
 // `server.static` (`/public` → ../public): served framework-side on
 // route miss, so routes always win and secureHeaders/cors still apply.
@@ -235,7 +232,7 @@ docs(app, {
 });
 
 // Auth: the pact adapter's session handlers — POST /login returns the
-// session token and sets the HttpOnly `session` cookie authenticate reads
+// session token and sets the HttpOnly `session` cookie the binding reads
 // (one cookie name, declared once in auth.ts); /me echoes the projected
 // principal; POST /logout ends the session and clears the cookie.
 app.post('/login', login());
@@ -293,7 +290,7 @@ app.get(
   },
 );
 // The API twin: a session (bearer or cookie) or the demo API key — the
-// app-wide `authenticate` accepted either; `authorize` is typed by the
+// bound pact binding accepted either; `authorize` is typed by the
 // blog's own catalog. grants are BigInt masks, so pick the fields JSON
 // can carry rather than serializing ctx.auth whole.
 const demoApiKey = await issueDemoApiKey();

@@ -2875,11 +2875,12 @@ describe('rapid.Application', () => {
       asserts.assertEquals((await r2.json()).theme, null);
     });
 
-    it('auth() binds the ctx.auth bag set by an upstream middleware', async () => {
+    it('auth() binds the ctx.auth bag the auth binding answered', async () => {
       const app = await make();
-      app.use((ctx, next) => {
-        if (ctx.type === 'HTTP') ctx.setAuth({ userId: 'u1' });
-        return next();
+      app.auth({
+        authenticate: (ctx) =>
+          ctx.type === 'HTTP' ? { userId: 'u1' } : undefined,
+        authorize: () => true,
       });
       app.module(new Binders());
       const r = await app.fetch(new Request('http://app/auth'));

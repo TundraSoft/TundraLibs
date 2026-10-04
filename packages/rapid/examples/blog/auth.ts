@@ -96,12 +96,13 @@ await pact.register({
 
 /**
  * Sessions as a bearer token or the `session` cookie `login()` sets;
- * API keys as the `x-api-key` / `x-api-secret` pair. `authenticate` runs
- * app-wide, `authorize('Admin', 'READ')` gates the admin routes, and the
- * session handlers back /login, /logout and /me. `secure: false` only
- * because the demo is plain http on localhost.
+ * API keys as the `x-api-key` / `x-api-secret` pair. `binding` is bound
+ * with `app.auth()` and identifies every request, `authorize('Admin',
+ * 'READ')` gates the admin routes, and the session handlers back /login,
+ * /logout and /me. `secure: false` only because the demo is plain http on
+ * localhost.
  */
-export const { authenticate, authorize, login, logout, me } = pactAuth(pact, {
+export const { binding, authorize, login, logout, me } = pactAuth(pact, {
   bearer: { cookie: 'session' },
   apiKey: { keyHeader: 'x-api-key', secretHeader: 'x-api-secret' },
   session: {

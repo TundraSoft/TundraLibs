@@ -179,19 +179,6 @@ describe('rapid.access: authenticate() failure modes', () => {
       { auth: null, failed: 'session store down' },
     );
   });
-
-  it('ctx.setAuth() is refused once a binding exists — nothing later can elevate', async () => {
-    const app = await Application.initialize({ name: 'acc7', ...QUIET });
-    app.auth(binding);
-    app.use(async (ctx, next) => {
-      ctx.setAuth({ subject: 'admin' });
-      await next();
-    });
-    app.get('/edit', { access: 'Posts:EDIT' }, () => ({ content: 'edit' }));
-    const res = await get(app, '/edit');
-    asserts.assertEquals(res.status, 500);
-    asserts.assertEquals(await codeOf(res), 'RAPID_CONFIG');
-  });
 });
 
 describe('rapid.access: the one boot failure — access declared, nothing bound', () => {

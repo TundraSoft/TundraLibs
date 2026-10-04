@@ -144,8 +144,9 @@ export abstract class Context<
 
   /**
    * Set the auth bag — once; the framework's own path (the `app.auth()`
-   * binding's `authenticate` answer). A second call throws, so nothing
-   * later in the chain can silently replace the identity.
+   * binding's `authenticate` answer). There is no public setter: the
+   * identity is the binding's answer alone, so nothing later in the chain
+   * can elevate a request. A second call throws.
    *
    * @internal
    * @throws {RapidError} RAPID_CONFIG when auth is already set.
@@ -157,28 +158,6 @@ export abstract class Context<
       });
     }
     this._auth = auth;
-  }
-
-  /**
-   * Set the auth bag from a middleware — the pre-binding way to carry an
-   * identity, kept for apps that verify a credential themselves and have
-   * no `app.auth()` binding. Once a binding exists the identity is ITS
-   * answer alone, and this throws: a later middleware cannot elevate a
-   * request the binding left anonymous.
-   *
-   * @deprecated Bind `app.auth({ authenticate, authorize })` instead;
-   *   `authenticate`'s answer becomes `ctx.auth`.
-   * @throws {RapidError} RAPID_CONFIG when the app has an auth binding, or
-   *   when auth is already set.
-   */
-  public setAuth(auth: Record<string, unknown>): void {
-    if (this.app.authBinding !== undefined) {
-      throw new RapidError('RAPID_CONFIG', {
-        message:
-          "ctx.setAuth() is refused: this app binds auth with app.auth(), so ctx.auth is the binding's authenticate() answer alone — remove the setAuth() call",
-      });
-    }
-    this._setAuth(auth);
   }
 
   /**
