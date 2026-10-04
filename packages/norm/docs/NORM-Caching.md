@@ -87,7 +87,9 @@ Not cached:
 
 Any write to a table (`insert`, `update`, `delete`, `upsert`,
 `truncate`) prunes that table's cache: the whole namespace, since the
-cache is keyed by query, not by row.
+cache is keyed by query, not by row. An `update` or `delete` whose filter
+matched no rows changed nothing and prunes nothing — a shared engine is
+spared the write (an engine that reports no affected count still prunes).
 
 ```typescript ignore
 await db.repo('Users').find(); // miss → database, then cached
