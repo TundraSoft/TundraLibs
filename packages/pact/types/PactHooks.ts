@@ -30,6 +30,17 @@ export type PactHooks<M extends string = string> = {
     id: string,
   ) => PactPrincipal<M> | null | Promise<PactPrincipal<M> | null>;
   /**
+   * {@link getPrincipal} for many ids in one store round trip (`WHERE id
+   * IN (...)`): return the principals that exist and may authorize, in any
+   * order, and leave the rest out. `principalsOf` calls it with the ids
+   * the principal cache did not hold; ids it leaves out are still tried as
+   * API keys. Requires `getPrincipal`, so single and batch lookups resolve
+   * alike.
+   */
+  getPrincipals?: (
+    ids: readonly string[],
+  ) => readonly PactPrincipal<M>[] | Promise<readonly PactPrincipal<M>[]>;
+  /**
    * Fetch a stored user by the discriminated query. Return `null` for
    * no match — never throw for absence. When configured, id-based
    * principal resolution derives from this hook (a `getPrincipal` hook,

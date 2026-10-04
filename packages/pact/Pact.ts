@@ -72,6 +72,13 @@ let instanceSeq = 0;
 /** TOTP step length: crypt's default period, 30 seconds. */
 const TOTP_PERIOD_MS = 30_000;
 
+/**
+ * A usable actor id: non-empty, no surrounding whitespace. cacher trims
+ * keys, so a padded id like ' admin' would hit admin's warm cache entry
+ * while the cold path resolves someone else (or nobody).
+ */
+const PACT_ID = /^\S(.*\S)?$/s;
+
 /** Separates a tenant from a module in a grant key (`acme::POST`). */
 const TENANT_SEP = '::';
 
@@ -352,6 +359,16 @@ export class Pact<B extends PermissionBits, M extends string>
         }
       }
     }
+    // A batch that resolves differently from the single lookup would make
+    // a list page disagree with the request that checks the same actor.
+    if (
+      this._hooks.getPrincipals !== undefined &&
+      this._hooks.getPrincipal === undefined
+    ) {
+      throw new PactError('MISSING_HOOK', {
+        hook: 'getPrincipal (required with getPrincipals)',
+      });
+    }
     // A hash written by one scheme cannot be checked by the other.
     const { hashPassword, verifyPassword } = this._hooks;
     if ((hashPassword === undefined) !== (verifyPassword === undefined)) {
@@ -456,6 +473,65 @@ export class Pact<B extends PermissionBits, M extends string>
   ): Promise<PactBoundPrincipal<M, B> | null> {
     const principal = await this._resolvePrincipal(id);
     return principal === null ? null : this.__bind(principal);
+  }
+
+  /**
+   * {@link principalOf} for many ids at once — a list page naming the
+   * actors on its rows. Cached principals are served first; the rest go
+   * to the `getPrincipals` hook in one call when it exists, else one
+   * lookup each. An id the user side does not return is still tried as
+   * an API key. Every distinct requested id is a key of the result,
+   * `null` when it does not resolve.
+   *
+   * @throws {PactError} `MISSING_HOOK` as in {@link hasPermission}.
+   */
+  public async principalsOf(
+    ids: readonly string[],
+  ): Promise<Map<string, PactBoundPrincipal<M, B> | null>> {
+    const unique = [...new Set(ids)];
+    const resolved = this._hooks.getPrincipals === undefined
+      ? await Promise.all(unique.map((id) => this._resolvePrincipal(id)))
+      : await this.__resolveBatch(unique);
+    return new Map(unique.map((id, i) => {
+      const principal = resolved[i] ?? null;
+      return [id, principal === null ? null : this.__bind(principal)];
+    }));
+  }
+
+  /**
+   * The `getPrincipals` path of {@link principalsOf}, in `ids` order:
+   * cache first, one hook call for the misses, the API-key fallback for
+   * the ids it left out, then the cache filled with what resolved.
+   */
+  private async __resolveBatch(
+    ids: readonly string[],
+  ): Promise<(PactPrincipal<M> | null)[]> {
+    const cached = await Promise.all(
+      ids.map((id) =>
+        PACT_ID.test(id)
+          ? this._cacheGet<PactPrincipal<M>>('principal', id)
+          : null
+      ),
+    );
+    const misses = ids.filter((_, i) => cached[i] === undefined);
+    const found = new Map<string, PactPrincipal<M>>();
+    if (misses.length > 0) {
+      const wanted = new Set(misses);
+      for (const principal of await this._hooks.getPrincipals!(misses)) {
+        // Only what was asked, once: a stray row must not resolve an id.
+        if (wanted.delete(principal.id)) found.set(principal.id, principal);
+      }
+      await Promise.all([...wanted].map(async (id) => {
+        const key = await this.__resolveKeyActor(id);
+        if (key !== null) found.set(id, key);
+      }));
+      await Promise.all(
+        [...found].map(([id, principal]) =>
+          this._cacheSet('principal', id, principal)
+        ),
+      );
+    }
+    return ids.map((id, i) => cached[i] ?? found.get(id) ?? null);
   }
 
   /**
@@ -1803,12 +1879,8 @@ export class Pact<B extends PermissionBits, M extends string>
   protected async _resolvePrincipal(
     id: string,
   ): Promise<PactPrincipal<M> | null> {
-    // Fail closed on junk ids: cacher normalizes keys by trimming, so a
-    // padded id like ' admin' would otherwise hit admin's warm cache
-    // entry while the cold path resolves someone else (or nobody).
-    if (typeof id !== 'string' || id.length === 0 || id !== id.trim()) {
-      return null;
-    }
+    // Fail closed on junk ids — see PACT_ID.
+    if (typeof id !== 'string' || !PACT_ID.test(id)) return null;
     const { getApiKey, getPrincipal, getUser } = this._hooks;
     if (
       getPrincipal === undefined && getUser === undefined &&
@@ -1820,29 +1892,37 @@ export class Pact<B extends PermissionBits, M extends string>
     }
     const cached = await this._cacheGet<PactPrincipal<M>>('principal', id);
     if (cached !== undefined) return cached;
-    let principal = await this.__resolveUserActor(id);
     // Actor ids share one namespace, so an id that is not a user may be
     // an API key — without this fallback, id-based authz would silently
     // be user-only and every key-authenticated request would 403.
-    if (principal === null && getApiKey !== undefined) {
-      const key = await this.__getApiKey(id);
-      if (key !== null) {
-        principal = this.__keyToPrincipal(key);
-        // Owner linkage: a key owned by a user who can no longer
-        // authorize must not authorize either. Resolved WITHOUT the key
-        // fallback, so a crafted userId-points-at-a-key cycle fails
-        // closed instead of recursing.
-        if (
-          principal !== null && key.userId !== undefined &&
-          (getPrincipal !== undefined || getUser !== undefined) &&
-          await this.__ownerPrincipal(key.userId) === null
-        ) {
-          principal = null;
-        }
-      }
-    }
+    const principal = await this.__resolveUserActor(id) ??
+      await this.__resolveKeyActor(id);
     if (principal === null) return null;
     await this._cacheSet('principal', id, principal);
+    return principal;
+  }
+
+  /**
+   * API-key resolution — no cache read. Owner linkage: a key owned by a
+   * user who can no longer authorize must not authorize either. The
+   * owner is resolved WITHOUT the key fallback, so a crafted
+   * userId-points-at-a-key cycle fails closed instead of recursing.
+   */
+  private async __resolveKeyActor(
+    id: string,
+  ): Promise<PactPrincipal<M> | null> {
+    const { getApiKey, getPrincipal, getUser } = this._hooks;
+    if (getApiKey === undefined) return null;
+    const key = await this.__getApiKey(id);
+    if (key === null) return null;
+    const principal = this.__keyToPrincipal(key);
+    if (
+      principal !== null && key.userId !== undefined &&
+      (getPrincipal !== undefined || getUser !== undefined) &&
+      await this.__ownerPrincipal(key.userId) === null
+    ) {
+      return null;
+    }
     return principal;
   }
 

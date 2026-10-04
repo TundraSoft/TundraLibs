@@ -26,6 +26,7 @@ immediate.
 | Feature                                    | Hooks required                                                                                                                                                         |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hasPermission` / `assert` / `principalOf` | `getPrincipal`, or `getUser`, or `getApiKey`                                                                                                                           |
+| `principalsOf`                             | as `principalOf`; `getPrincipals` (with `getPrincipal`) resolves the cache misses in one call instead of one lookup each                                               |
 | `register`                                 | `getUser` + `createUser`                                                                                                                                               |
 | `login` / `verifyCredentials`              | `getUser`, plus a session store (below)                                                                                                                                |
 | Session store                              | `saveSession` + `getSession` + `deleteSession` — or a `session` cache TTL (cache-only mode)                                                                            |
