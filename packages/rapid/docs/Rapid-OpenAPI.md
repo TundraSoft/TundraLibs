@@ -11,6 +11,7 @@ generated credential box, try-it forms, and two ways to make it yours.
 - The document is **assembled from the routes** you register — nothing is
   written by hand. `app.get('/openapi.json', openapi())` serves it (JSON,
   cached per version, DEVELOPMENT only unless `expose` says otherwise).
+  `filter: 'access'` cuts it per viewer through the auth binding.
 - **Security schemes are yours to declare.** `openapi({ securitySchemes })`
   takes the precise OpenAPI 3.0 shapes (`http`, `apiKey`, `oauth2`,
   `openIdConnect`), validated at mount; routes reference them by name in
@@ -94,12 +95,19 @@ app.get(
 );
 ```
 
-| Option            | Default                                       | Notes                                                                                                         |
-| ----------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `info`            | `title` = the app `name`, `version` = `1.0.0` | Merged over the defaults.                                                                                     |
-| `servers`         | omitted                                       | `{ url, description? }[]` — never auto-generated (a surface or proxy decides the public origin, not the app). |
-| `securitySchemes` | none (`bearerAuth` once a route is secured)   | See the next section. Validated when `openapi()` is called.                                                   |
-| `expose`          | `'DEVELOPMENT'`                               | `'PRODUCTION'` or `'ALL'` to serve elsewhere; a non-matching mode answers a plain `RAPID_NOT_FOUND` 404.      |
+| Option            | Default                                       | Notes                                                                                                                                                                                                                                   |
+| ----------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `info`            | `title` = the app `name`, `version` = `1.0.0` | Merged over the defaults.                                                                                                                                                                                                               |
+| `servers`         | omitted                                       | `{ url, description? }[]` — never auto-generated (a surface or proxy decides the public origin, not the app).                                                                                                                           |
+| `securitySchemes` | none (`bearerAuth` once a route is secured)   | See the next section. Validated when `openapi()` is called.                                                                                                                                                                             |
+| `expose`          | `'DEVELOPMENT'`                               | `'PRODUCTION'` or `'ALL'` to serve elsewhere; a non-matching mode answers a plain `RAPID_NOT_FOUND` 404.                                                                                                                                |
+| `filter`          | none                                          | `'access'` cuts the document per viewer through `app.auth()`'s `authorize` (public operations always stay; `RAPID_CONFIG` with no binding), or `(operation, ctx) => boolean` of your own. Applied per request over the cached document. |
+
+A per-viewer reference is `openapi({ expose: 'ALL', filter: 'access' })`:
+every operation carries its route's `x-access`, the binding judges it for
+the requesting caller, and what a viewer reads is exactly what they may
+call — a public spec no longer publishes the permission catalogue, and the
+app stops cutting the document by hand.
 
 Things the assembler decides for you:
 
@@ -210,6 +218,7 @@ lists itself.
 | `render`                               | the default page      | `(doc, view, opts) => Html` — compose your own body from the parts (rapid viewer only).                                                                                        |
 | `tryIt`                                | `false`               | `true` renders the credential box and try-it forms; `{ login: { path, fields? } }` adds a sign-in form posting JSON to `path` (`fields` defaults to `identifier`, `password`). |
 | `expose`                               | `'DEVELOPMENT'`       | As `openapi()`.                                                                                                                                                                |
+| `filter`                               | none                  | As `openapi()` — the page lists only the operations the viewer may call.                                                                                                       |
 | `guards`                               | none                  | Route middleware run before the page — an `authorize()` for a production reference.                                                                                            |
 | `info` · `servers` · `securitySchemes` | as `openapi()`        | The page builds the document itself, so give it the same options you gave `openapi()` (a shared constant keeps them in step).                                                  |
 

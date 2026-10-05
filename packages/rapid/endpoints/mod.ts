@@ -24,6 +24,8 @@ export { metrics, type MetricsOptions } from './metrics.ts';
 export {
   openapi,
   type OpenApiDocumentOptions,
+  type OpenApiOperationFilter,
+  type OpenApiOperationRef,
   type OpenApiOptions,
 } from './openapi.ts';
 export { ready, type ReadyOptions } from './ready.ts';

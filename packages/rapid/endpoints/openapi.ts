@@ -10,6 +10,7 @@
  * @module
  */
 import type { Application } from '../Application.ts';
+import type { HTTPContext } from '../context/HTTPContext.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
   assertSecuritySchemes,
@@ -24,8 +25,41 @@ import type {
   RapidRouteEntry,
 } from '../types/mod.ts';
 
+/** One operation as a per-viewer filter sees it. */
+export type OpenApiOperationRef = {
+  method: string;
+  /** The OpenAPI path (`/posts/{id}`). */
+  path: string;
+  operationId?: string;
+  /** The route's declared `access` string, when it has one. */
+  access?: string;
+};
+
+/**
+ * Per-viewer operation filter: `'access'` keeps an operation when the
+ * app's auth binding lets THIS caller run it (public operations always
+ * stay); a function decides itself. Applied per request over the cached
+ * document, so what a viewer sees is what they may call.
+ */
+export type OpenApiOperationFilter =
+  | 'access'
+  | ((
+    operation: OpenApiOperationRef,
+    ctx: HTTPContext<RapidContextState>,
+  ) => boolean | Promise<boolean>);
+
 /** The document-shaping options `openapi()` and `docs()` share. */
 export type OpenApiDocumentOptions = {
+  /**
+   * Cut the document per viewer: `'access'` judges every operation's
+   * `x-access` through `app.auth()`'s `authorize` for the requesting
+   * caller (RAPID_CONFIG when no binding is bound), or a function of
+   * your own. Operations that fail are removed, empty paths with them;
+   * the cached document is never modified. Pair with `expose: 'ALL'`
+   * to serve a signed-in reference in production.
+   * @default none — every viewer sees the whole document
+   */
+  filter?: OpenApiOperationFilter;
   /**
    * The document's `info` block.
    * @default title = the app `name`, version = '1.0.0'
@@ -91,6 +125,80 @@ export function assembleOpenApi<S extends RapidContextState>(
   return doc;
 }
 
+const HTTP_METHODS = new Set([
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+]);
+
+/**
+ * The document cut for one viewer: every operation `filter` declines is
+ * dropped, a path left with no operations goes with it. A COPY — the
+ * cached document is shared by every request. Shared by `openapi()` and
+ * `docs()`.
+ *
+ * @throws {RapidError} RAPID_CONFIG for `'access'` on an app with no
+ *   auth binding.
+ */
+export async function filterOpenApi<S extends RapidContextState>(
+  doc: Record<string, unknown>,
+  ctx: HTTPContext<S>,
+  filter: OpenApiOperationFilter,
+): Promise<Record<string, unknown>> {
+  let keep: (
+    op: OpenApiOperationRef,
+  ) => boolean | Promise<boolean>;
+  if (filter === 'access') {
+    const binding = ctx.app.authBinding;
+    if (binding === undefined) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          "openapi/docs filter: 'access' needs an auth binding — call app.auth({ authenticate, authorize })",
+      });
+    }
+    keep = (op) =>
+      op.access === undefined ? true : binding.authorize(
+        ctx as unknown as HTTPContext<RapidContextState>,
+        op.access,
+      );
+  } else {
+    keep = (op) => filter(op, ctx as unknown as HTTPContext<RapidContextState>);
+  }
+  const paths: Record<string, Record<string, unknown>> = {};
+  for (
+    const [path, item] of Object.entries(
+      doc.paths as Record<string, Record<string, unknown>>,
+    )
+  ) {
+    const kept: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(item)) {
+      if (!HTTP_METHODS.has(key)) {
+        kept[key] = value; // parameters, summary — path-level fields
+        continue;
+      }
+      const op = value as Record<string, unknown>;
+      const ref: OpenApiOperationRef = {
+        method: key.toUpperCase(),
+        path,
+        ...(typeof op.operationId === 'string'
+          ? { operationId: op.operationId }
+          : {}),
+        ...(typeof op['x-access'] === 'string'
+          ? { access: op['x-access'] }
+          : {}),
+      };
+      if (await keep(ref)) kept[key] = value;
+    }
+    if (Object.keys(kept).some((k) => HTTP_METHODS.has(k))) paths[path] = kept;
+  }
+  return { ...doc, paths };
+}
+
 /**
  * An endpoint handler serving the assembled OpenAPI document.
  *
@@ -109,6 +217,10 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
       throw new RapidError('RAPID_NOT_FOUND');
     }
     const version = new URL(ctx.request.url).searchParams.get('version') ?? '';
-    return { content: assembleOpenApi(ctx.app, options, cache, version) };
+    const doc = assembleOpenApi(ctx.app, options, cache, version);
+    if (options.filter === undefined) return { content: doc };
+    return filterOpenApi(doc, ctx, options.filter).then((content) => ({
+      content,
+    }));
   };
 }
