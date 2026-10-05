@@ -8,11 +8,11 @@
  * @module
  */
 
-import type { Html } from '../ui/html.ts';
 import type { RapidContext } from './Context.ts';
 import type { RapidCoreData } from './CoreData.ts';
 import type { RapidErrorTemplates } from './ErrorTemplates.ts';
 import type { RapidTemplate } from './Template.ts';
+import type { RapidLayoutData } from './LayoutData.ts';
 
 /** The code-valued UI options — templates and functions only. */
 export type RapidUiTemplateOptions = {
@@ -32,7 +32,7 @@ export type RapidUiTemplateOptions = {
    * core is configured. A route/module `layout: false` opts out to
    * "straight into the core".
    */
-  layout?: RapidTemplate<{ body: Html; title?: string }>;
+  layout?: RapidTemplate<RapidLayoutData>;
   /**
    * The OPT-IN identity projection: whatever this returns is merged over
    * the default view bag and handed frozen to every template. Without

@@ -24,7 +24,8 @@ export const isTemplate = (value: unknown): value is RapidTemplate<unknown> =>
  * wrong import or a typo'd shape throws NOW, never at first request.
  *
  * @throws {RapidError} RAPID_CONFIG on a non-template `template`/
- *   `layout`, or a `prefer` outside `'json' | 'html'`.
+ *   `layout`, a `meta`/`layoutData` that is neither a record nor a
+ *   function, or a `prefer` outside `'json' | 'html'`.
  */
 export function normalizeRouteTemplate(
   template: NonNullable<RapidRouteOptions['template']>,
@@ -42,6 +43,9 @@ export function normalizeRouteTemplate(
       : {},
     ...(given?.title !== undefined ? { title: given.title } : {}),
     ...(given?.meta !== undefined ? { meta: given.meta } : {}),
+    ...(given?.layoutData !== undefined
+      ? { layoutData: given.layoutData }
+      : {}),
     ...(given?.prefer !== undefined ? { prefer: given.prefer } : {}),
   };
   if (
@@ -73,6 +77,16 @@ export function normalizeRouteTemplate(
   ) {
     throw new RapidError('RAPID_CONFIG', {
       message: `route '${label}': meta must be a record or (data) => record`,
+    });
+  }
+  if (
+    config.layoutData !== undefined &&
+    typeof config.layoutData !== 'function' &&
+    (typeof config.layoutData !== 'object' || config.layoutData === null)
+  ) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        `route '${label}': layoutData must be a record or (data) => record`,
     });
   }
   if (

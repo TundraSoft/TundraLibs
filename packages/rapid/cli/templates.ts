@@ -825,6 +825,10 @@ layout-wrapped page — \`Accept\` is never consulted; the api surface
 (\`raw()\` is the only opt-out); \`template(fn, name)\` builds a view; the frozen
 \`view\` bag exposes \`requestId\`, \`path\`, \`query\`, \`asset()\`, \`csrfToken\` and
 nothing from \`ctx.auth\` unless the app's \`view\` projection names it. The
+object form of \`template\` adds \`title\` (both tiers), \`meta\` (the core
+only) and \`layoutData\` (a record or a function of the content, handed to the
+module layout as \`page\` — a breadcrumb, a back link); a layout is a
+\`RapidTemplate<RapidLayoutData>\` (\`{ body, title?, page? }\`). The
 factory's \`ui\` option (\`core\`, \`layout\`, \`errorTemplates\`, \`view\`, \`assets\`)
 is code; the YAML \`ui:\` block (\`enabled\`, \`prefer\`, \`live\`, \`history\`,
 header/cookie names, \`compose\` caps) is data. The runtime script (\`/__rapid/ui.js\`) handles
@@ -1082,15 +1086,15 @@ export const CoreShell = template<RapidCoreData>((d, view) =>
 `;
 
 const VIEWS_LAYOUT =
-  `import { type Html, html, template } from '@tundralibs/rapid/ui';
+  `import { html, type RapidLayoutData, template } from '@tundralibs/rapid/ui';
 
 /**
  * The default MODULE-tier layout — the page shape (header + content
  * slot) nesting inside the core. A module brings its own with
  * \`@Module({ layout })\`; \`layout: false\` on a route goes straight
- * into the core.
+ * into the core. \`d.page\` is the route's \`layoutData\`.
  */
-export const PageShape = template<{ body: Html; title?: string }>((d) =>
+export const PageShape = template<RapidLayoutData>((d) =>
   html\`
     <header class="site"><a href="/">{{name}}</a></header>
     <main>\${d.title ? html\`<h1>\${d.title}</h1>\` : ''}\${d.body}</main>

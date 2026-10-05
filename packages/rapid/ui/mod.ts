@@ -22,6 +22,7 @@ export type {
   RapidErrorTemplates,
   RapidFormError,
   RapidFormResult,
+  RapidLayoutData,
   RapidRouteTemplate,
   RapidTemplate,
   RapidUiConfigOptions,
