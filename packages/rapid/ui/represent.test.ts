@@ -11,7 +11,11 @@ import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import { GET } from '../decorators/mod.ts';
 import { Module } from '../decorators/mod.ts';
-import type { RapidContextResponse, RapidTemplate } from '../types/mod.ts';
+import type {
+  RapidContextResponse,
+  RapidLayoutData,
+  RapidTemplate,
+} from '../types/mod.ts';
 import { html, template } from './html.ts';
 
 const make = () =>
@@ -371,6 +375,54 @@ describe('rapid.ui.tiers', () => {
       'meta="{&quot;description&quot;:&quot;count 2&quot;}"',
     );
     asserts.assertStringIncludes(out, '<shape title="n=2">');
+    await app.stop();
+  });
+
+  it('layoutData (record or fn-of-data) reaches the LAYOUT only, as page', async () => {
+    const Framed = template<RapidLayoutData>(
+      (d) =>
+        html`<frame crumbs="${
+          JSON.stringify(d.page ?? null)
+        }">${d.body}</frame>`,
+      'Framed',
+    );
+    const app = await Application.initialize({
+      name: 'tiers-page',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      ui: { prefer: 'html', core: Core, layout: Framed },
+    });
+    app.get('/d', {
+      template: {
+        render: UserList,
+        layoutData: (d) => ({ up: (d as { items: string[] }).items[0] }),
+      },
+    }, () => ({ content: { items: ['links'] } }));
+    app.get('/r', {
+      template: { render: UserList, layoutData: { up: 'home' } },
+    }, () => ({ content: { items: [] } }));
+    const dynamic = await (await app.fetch(new Request('http://app/d'))).text();
+    asserts.assertStringIncludes(
+      dynamic,
+      '<frame crumbs="{&quot;up&quot;:&quot;links&quot;}">',
+    );
+    asserts.assertStringIncludes(dynamic, 'meta="{}"');
+    const fixed = await (await app.fetch(new Request('http://app/r'))).text();
+    asserts.assertStringIncludes(
+      fixed,
+      'crumbs="{&quot;up&quot;:&quot;home&quot;}"',
+    );
+    const swap = await app.fetch(
+      new Request('http://app/d', { headers: { 'rapid-swap': '1' } }),
+    );
+    asserts.assertEquals(await swap.text(), '<ul><li>links</li></ul>');
+    asserts.assertThrows(
+      () =>
+        app.get('/bad', {
+          template: { render: UserList, layoutData: 'up' as never },
+        }, () => ({ content: {} })),
+      RapidError,
+    );
     await app.stop();
   });
 

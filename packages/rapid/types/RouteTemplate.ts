@@ -5,8 +5,8 @@
  * @module
  */
 
-import type { Html } from '../ui/html.ts';
 import type { RapidTemplate } from './Template.ts';
+import type { RapidLayoutData } from './LayoutData.ts';
 
 /**
  * A route's template configuration — the object form of the `template`
@@ -25,7 +25,7 @@ export type RapidRouteTemplate = {
    * whole tier — "straight into the core" — even when a module/app
    * default exists (the print/embed page inside a chrome-heavy module).
    */
-  readonly layout?: RapidTemplate<{ body: Html; title?: string }> | false;
+  readonly layout?: RapidTemplate<RapidLayoutData> | false;
   /**
    * The page `title` on a non-swap page — a string, or a function of
    * the handler's `content` for data-driven titles. Handed to BOTH
@@ -44,6 +44,16 @@ export type RapidRouteTemplate = {
   readonly meta?:
     | Readonly<Record<string, string>>
     | ((data: unknown) => Readonly<Record<string, string>>);
+  /**
+   * Per-page data for the MODULE layout on a non-swap page — a record, or
+   * a function of the handler's `content`, handed to the layout as
+   * `page` beside `body` and `title`: a breadcrumb, a back link, anything
+   * else the frame shows for this page. The core never receives it, and a
+   * swap never renders the layout, so swaps are unchanged.
+   */
+  readonly layoutData?:
+    | Readonly<Record<string, unknown>>
+    | ((data: unknown) => Readonly<Record<string, unknown>>);
   /**
    * What a NON-swap request gets: `'json'` (default) sends the reply
    * unchanged — an API-first route that also renders fragments;

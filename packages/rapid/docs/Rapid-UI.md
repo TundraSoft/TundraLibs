@@ -113,7 +113,7 @@ A wrong import or shape throws `RAPID_CONFIG` at registration/mount, never at
 first request. `template` is HTTP-only — ignored on `@SOCKET`/`@JOB`, the
 same documented rule as the reply envelope's `cookies`/`redirect`.
 
-**Layouts** (`RapidTemplate<{ body, title? }>`) wrap pages, never
+**Layouts** (`RapidTemplate<RapidLayoutData>`: `{ body, title?, page? }`) wrap pages, never
 fragments — see [The three tiers](#the-three-tiers): resolution is route
 (`layout` either form, `false` to opt out) → `@Module({ layout })` → the
 app default → none (straight into the core). The CORE — not a layout —
@@ -278,7 +278,11 @@ Pages compose from exactly three tiers — no deeper chaining exists:
    `layout` → the `@Module`'s → the app default → none (straight into
    the core). `layout: false` at route or module level opts out of the
    tier even when a default exists (the print/embed page inside a
-   chrome-heavy module).
+   chrome-heavy module). Its per-page data slots are `title` and `page`,
+   the route's `layoutData`: a record, or a function of the handler's
+   content, for whatever else the frame shows on this page (a breadcrumb,
+   a back link). The core never sees `page`, and a swap never renders the
+   layout.
 3. **The content** — the route's fragment, composed from view
    components: plain typed functions (`Card({ title, body })`), no
    mechanism. Change the component, every consumer follows.
@@ -293,14 +297,25 @@ const CoreShell = template<RapidCoreData>((d, view) =>
   })
 );
 
-const PageShape = template<{ body: Html; title?: string }>((d, view) =>
+const PageShape = template<RapidLayoutData>((d, view) =>
   html`
     <header>
       <nav>…</nav>
+      ${d.page?.up
+        ? html`<a href="${(d.page.up as { href: string }).href}">Back</a>`
+        : ''}
     </header>
     <main>${d.body}</main>
   `
 );
+
+app.get('/links/:id:', {
+  template: {
+    render: LinkView,
+    prefer: 'html',
+    layoutData: { up: { href: '/links' } },
+  },
+}, showLink);
 ```
 
 `title` (a string or `(data) => string` on the route's template options)

@@ -230,7 +230,7 @@ function templateRenderError(
 }
 
 /**
- * Run a route's `title`/`meta` CALLBACK under the same diagnostics as a
+ * Run a route's `title`/`meta`/`layoutData` CALLBACK under the same diagnostics as a
  * template render — these run in the render layer and a throw would
  * otherwise escape as a bare 500 without the template-layer label.
  */
@@ -398,14 +398,26 @@ export function represent<S extends RapidContextState>(
     // fragment). Module tier: route → @Module → app default, `false`
     // opting out; its output nests inside the CORE (the document tier,
     // app-level, never overridden below) when one is configured. `title`
-    // is handed to BOTH tiers; `meta` reaches only the core.
+    // is handed to BOTH tiers; `meta` reaches only the core, `layoutData`
+    // only the layout (as `page`).
     const layout = template.layout === false
       ? undefined
       : template.layout ?? appUi?.layout;
     if (layout !== undefined) {
+      const pageOf = template.layoutData;
+      const page = typeof pageOf === 'function'
+        ? callChecked(
+          () => pageOf(returned.content),
+          'the route layoutData callback',
+        )
+        : pageOf;
       markup = renderChecked(
         layout,
-        { body: markup, ...(title !== undefined ? { title } : {}) },
+        {
+          body: markup,
+          ...(title !== undefined ? { title } : {}),
+          ...(page !== undefined ? { page } : {}),
+        },
         view,
         `layout '${layout.name || 'for this route'}'`,
       );

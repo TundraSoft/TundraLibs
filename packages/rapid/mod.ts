@@ -169,6 +169,7 @@ export type {
   RapidHTTPRequestBody,
   RapidJobEntry,
   RapidJOBHandler,
+  RapidLayoutData,
   RapidMiddleware,
   RapidModuleMeta,
   RapidModuleReply,

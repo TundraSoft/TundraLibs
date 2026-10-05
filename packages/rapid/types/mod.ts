@@ -52,6 +52,7 @@ export type { RapidContextSurface } from './context/Surface.ts';
 export type { RapidContextType } from './context/Type.ts';
 export type { RapidContext } from './Context.ts';
 export type { RapidCoreData } from './CoreData.ts';
+export type { RapidLayoutData } from './LayoutData.ts';
 export type { RapidErrorTemplates } from './ErrorTemplates.ts';
 export type { RapidFormError } from './FormError.ts';
 export type { RapidFormResult } from './FormResult.ts';

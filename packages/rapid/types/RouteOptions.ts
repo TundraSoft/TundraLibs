@@ -6,12 +6,12 @@
  * @module
  */
 
-import type { Html } from '../ui/html.ts';
 import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidRouteCache } from './RouteCache.ts';
 import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
+import type { RapidLayoutData } from './LayoutData.ts';
 
 /** Options accepted ahead of the chain by `route()` and the verb helpers. */
 export type RapidRouteOptions = {
@@ -52,7 +52,7 @@ export type RapidRouteOptions = {
    * the object form wins when both are given. `false` opts this route
    * out of the module tier entirely (straight into the core).
    */
-  layout?: RapidTemplate<{ body: Html; title?: string }> | false;
+  layout?: RapidTemplate<RapidLayoutData> | false;
   /**
    * Who may call this route, in the app's auth binding's grammar — rapid
    * passes the string as written to the binding's `authorize`, on the HTTP

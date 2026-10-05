@@ -6,9 +6,9 @@
  * @module
  */
 
-import type { Html } from '../ui/html.ts';
 import type { RapidMiddleware } from './Middleware.ts';
 import type { RapidTemplate } from './Template.ts';
+import type { RapidLayoutData } from './LayoutData.ts';
 
 /**
  * Metadata recorded by `@Module` against a class constructor. Only
@@ -74,7 +74,7 @@ export type RapidModuleMeta = {
    * out of the tier (every page straight into the core) even when an
    * app default exists.
    */
-  layout?: RapidTemplate<{ body: Html; title?: string }> | false;
+  layout?: RapidTemplate<RapidLayoutData> | false;
   /**
    * Middleware every HTTP route and socket command in the class runs,
    * before the route's own `middleware` — one `authorize()` for a whole
