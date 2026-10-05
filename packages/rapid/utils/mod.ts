@@ -64,6 +64,7 @@ export {
 } from './cache.ts';
 export { memoryStore } from './memoryStore.ts';
 export {
+  chosenParts,
   COMPOSE_DEFAULTS,
   type ComposeLimits,
   type ComposePlan,

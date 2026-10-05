@@ -212,6 +212,37 @@ export function planCompose<S extends RapidContextState>(
 }
 
 /**
+ * Read a handler's `reply.compose`: `undefined` when it chose nothing
+ * (every declared part), else the set it named.
+ *
+ * @throws {RapidError} RAPID_RESPONSE_INVALID — not an array of strings,
+ *   or a name the page does not declare: a reply only narrows the
+ *   declared set, it never adds to it.
+ */
+export function chosenParts(
+  plan: ComposePlan,
+  compose: unknown,
+  action: string,
+): ReadonlySet<string> | undefined {
+  if (compose === undefined) return undefined;
+  const invalid = (detail: Record<string, unknown>): never => {
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message: `${action}: reply.compose must name parts this page declares (${
+        [...plan.byName.keys()].join(', ')
+      })`,
+      details: detail,
+    });
+  };
+  if (!Array.isArray(compose)) invalid({ compose: typeof compose });
+  for (const name of compose as unknown[]) {
+    if (typeof name !== 'string' || !plan.byName.has(name)) {
+      invalid({ part: String(name) });
+    }
+  }
+  return new Set(compose as string[]);
+}
+
+/**
  * Read a `?parts=` selection: `undefined` when the query carries none
  * (a first paint), else the validated set of part names.
  *
@@ -262,6 +293,8 @@ export type ComposeRun = {
   asHtml: boolean;
   /** The `?parts=` selection; absent on first paint (non-deferred parts run, deferred ones place a loader). */
   select?: ReadonlySet<string>;
+  /** First paint only: the parts the handler chose (`reply.compose`); absent = all declared. */
+  chosen?: ReadonlySet<string>;
 };
 
 /** A `{ content }` reply — what a routed module method returns. */
@@ -366,6 +399,26 @@ async function runPart(
         ok: true,
       };
     }
+    if (result.status >= 400 && result.status < 500) {
+      // A refusal (403, a reach 404) comes back as a reply, not a throw:
+      // the runtime logs it as a debug breadcrumb, so the page keeps the
+      // audit line — which part, which action, which code — at warn.
+      const envelope = result.content as
+        | { code?: unknown; message?: unknown }
+        | null;
+      ctx.app.log.warn(
+        `compose part '${part.name}' (${part.action}) refused: ${
+          String(envelope?.message ?? result.status)
+        }`,
+        {
+          code: envelope?.code,
+          status: result.status,
+          requestId: ctx.requestId,
+          action: ctx.action,
+          part: part.name,
+        },
+      );
+    }
     return {
       status: result.status,
       content: result.content,
@@ -427,7 +480,8 @@ const wrap = (
  * Run a page's parts for this request. On first paint (`select` absent)
  * the non-deferred parts run, up to `concurrency` at once, each within
  * `timeout`; deferred parts become placeholders carrying ONE follow-up
- * URL. With `select`, exactly those parts run. A part the caller may not
+ * URL — both narrowed to `chosen` when the handler named parts. With
+ * `select`, exactly those parts run. A part the caller may not
  * reach, or that failed, is its error envelope — rendered through the
  * app's error templates when `asHtml` — never its content. A part that
  * timed out (504) carries a one-shot retry loader unless this request IS
@@ -438,8 +492,11 @@ export async function runCompose(
   plan: ComposePlan,
   run: ComposeRun,
 ): Promise<Record<string, RapidComposeSlot>> {
+  // A part the handler did not choose runs nothing and gets no slot —
+  // not an error slot, which would name an action the page did not show.
+  const chosen = (p: ComposePlanPart) => run.chosen?.has(p.name) ?? true;
   const active = run.select === undefined
-    ? plan.parts.filter((p) => !p.defer)
+    ? plan.parts.filter((p) => !p.defer && chosen(p))
     : plan.parts.filter((p) => run.select!.has(p.name));
   if (run.asHtml && run.select !== undefined) {
     const untemplated = active.find((p) => p.template === undefined);
@@ -506,7 +563,7 @@ export async function runCompose(
     };
   });
   if (run.select === undefined) {
-    const deferred = plan.parts.filter((p) => p.defer);
+    const deferred = plan.parts.filter((p) => p.defer && chosen(p));
     const loader = deferred.length === 0
       ? undefined
       : partsUrl(ctx, deferred.map((p) => p.name));

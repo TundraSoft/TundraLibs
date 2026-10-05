@@ -855,7 +855,10 @@ the runtime fetches ALL of them in ONE \`GET <page>?parts=a,b\` (the
 more parts than \`ui.compose.maxParts\` are \`RAPID_CONFIG\`); a part's
 \`param()\` binders take the page's path params by name, or via \`params:
 { target: pageParam }\`. \`?parts=\` outside the declared set is 400
-\`RAPID_COMPOSE_PARTS\`. Composed replies are \`private, no-store\`; OpenAPI
+\`RAPID_COMPOSE_PARTS\`. A handler narrows the parts for this request with
+\`return { content, compose: ['stats'] }\` (declared names only; parts left
+out get no slot; each chosen part still runs its own \`access\` — choosing is
+never permission). Composed replies are \`private, no-store\`; OpenAPI
 carries \`x-compose\`. Caps: \`ui.compose: { maxParts: 5, concurrency: 4,
 timeout: 2 }\`.{{aiUi}}
 `;

@@ -60,6 +60,17 @@ export type RapidContextResponse = {
     /** Total matching rows across all pages. Omitted when not counted. */
     total?: number;
   };
+  /**
+   * A composed page's handler narrowing which of the route's declared
+   * `compose` parts run for THIS request — a page serving two audiences
+   * names the tiles of the one it is drawing. Only narrows: every name
+   * must be a declared part (else RAPID_RESPONSE_INVALID), a part left
+   * out runs nothing and gets no slot, and a part named here still runs
+   * its own `access` — choosing is never permission. Deferred parts load
+   * only when named. A `?parts=` fetch does not run the handler, so it
+   * is judged part by part as before. Read only on a composed page.
+   */
+  compose?: readonly string[];
   /** HTTP status / JOB outcome / SOCKET ok-error. */
   status?: StatusCode;
   /** Consumed by HTTP (merged per-key); ignored elsewhere. */
