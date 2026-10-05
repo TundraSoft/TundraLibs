@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.11.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.10.0...norm-v1.11.0) (2026-10-05)
+
+
+### Features
+
+* **norm:** HKDF cell keys for Workers, and peppered searchable digests ([#767](https://github.com/TundraSoft/TundraLibs/issues/767)) ([47179ef](https://github.com/TundraSoft/TundraLibs/commit/47179efe4fd796edc2075dafc2ba4af3e661bd20))
+
+
+### Bug Fixes
+
+* **norm:** parse JSON columns SQLite returns as their stored TEXT ([#766](https://github.com/TundraSoft/TundraLibs/issues/766)) ([49c29d8](https://github.com/TundraSoft/TundraLibs/commit/49c29d890fce8b993c9d4378ae0344e3f9e41a0d))
+* **norm:** skip the cache prune when an update or delete matched no rows ([#760](https://github.com/TundraSoft/TundraLibs/issues/760)) ([380eaea](https://github.com/TundraSoft/TundraLibs/commit/380eaea2f8cbb49bb3a5de4174d6f3c490c95cd5))
+
 ## [1.10.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.9.6...norm-v1.10.0) (2026-09-27)
 
 

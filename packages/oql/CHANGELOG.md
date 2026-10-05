@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.3.0...oql-v1.4.0) (2026-10-05)
+
+
+### Features
+
+* **oql:** type a same-typed column reference as a filter value ([#768](https://github.com/TundraSoft/TundraLibs/issues/768)) ([887ed28](https://github.com/TundraSoft/TundraLibs/commit/887ed2874dbe5be77266d3f85209fce40414cc08))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.2.2...oql-v1.3.0) (2026-09-27)
 
 
