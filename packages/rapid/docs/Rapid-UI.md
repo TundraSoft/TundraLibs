@@ -605,7 +605,9 @@ class Organisations extends RapidModule {
   api surface or for an untemplated target. A denied part is its 403
   fragment, a failed one its 5xx fragment — rendered through the app's
   `errorTemplates`, never carrying the part's content or real error — and
-  the page template decides what to show. The page's own `access` gates
+  the page template decides what to show. The error template's data then
+  carries `part`, the slot name, so it can render a compact notice
+  instead of a page heading; the built-in `DefaultErrorPage` does. The page's own `access` gates
   everything first.
 - **Deferred parts.** `defer: true` renders a placeholder; the runtime
   fetches every deferred part in **one** request, `GET <page>?parts=a,b`,
@@ -969,7 +971,8 @@ const ErrorPage = template<Record<string, unknown>>((e, view) =>
 
 Every entry receives exactly the disclosure payload the JSON envelope
 would carry (PRODUCTION collapses 5xx, never `debug`) plus `requestId`,
-`status`, and `mode`, and renders only when the representation resolves
+`status`, and `mode` (and `part`, the slot name, inside a composed
+part), and renders only when the representation resolves
 to HTML: a swap, a route/app `prefer: 'html'`, or — with
 `errorTemplates` configured — an UNMATCHED request whose `Accept`
 explicitly prefers `text/html`, so the commonest error of all (a browser

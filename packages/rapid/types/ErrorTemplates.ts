@@ -12,7 +12,8 @@ import type { RapidTemplate } from './Template.ts';
  * class (`'4xx'` / `'5xx'`), or `'default'`; nothing else is ever a key
  * (boot-validated). Resolution is fixed: exact → class → `default` →
  * the built-in `DefaultErrorPage`. Every entry renders inside the core
- * with the disclosure payload plus `status`/`mode` as data; dispatch
+ * with the disclosure payload plus `status`/`mode` as data — and `part`,
+ * the slot name, when it renders a composed part's error; dispatch
  * beyond this grammar is a typed branch inside one template (see the
  * docs' error recipes).
  */

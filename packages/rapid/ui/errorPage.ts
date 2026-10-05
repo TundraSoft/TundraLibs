@@ -21,6 +21,8 @@ type ErrorData = Record<string, unknown> & {
   mode?: string;
   details?: Record<string, unknown>;
   debug?: Record<string, unknown>;
+  /** Set when the error renders inside a composed part, not as a page. */
+  part?: string;
 };
 
 const heading = (status: number): string =>
@@ -46,11 +48,24 @@ const rows = (record: Record<string, unknown>): Html[] =>
  * configured `errorTemplates` key; pass your own `default` (or
  * `errorTemplate`) to replace it. DEVELOPMENT payloads carry `details`/
  * `debug`, so the page shows them; PRODUCTION payloads arrived
- * collapsed, so it cannot.
+ * collapsed, so it cannot. Inside a composed part (`part` in the data)
+ * it renders a one-line notice instead of a page.
  */
 export const DefaultErrorPage: RapidTemplate<Record<string, unknown>> =
   template<ErrorData>((e) => {
     const status = typeof e.status === 'number' ? e.status : 500;
+    if (typeof e.part === 'string') {
+      // Inside a dashboard tile: a notice, not a second page heading.
+      return html`
+        <p class="rapid-error" role="status">
+          <strong>${heading(status)}</strong>${e.message
+            ? html`
+              — ${e.message}
+            `
+            : ''}
+        </p>
+      `;
+    }
     return html`
       <main class="rapid-error"
         style="max-width:36rem;margin:15vh auto 0;padding:0 1.5rem;font:16px/1.5 system-ui,sans-serif">
