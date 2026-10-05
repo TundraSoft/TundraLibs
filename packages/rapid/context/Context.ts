@@ -31,6 +31,7 @@ export const CTX_READ = Object.freeze({
   PAGING: 4,
   HEADERS: 8,
   COOKIES: 16,
+  ADDRESS: 32,
 });
 
 export type ContextInit = {

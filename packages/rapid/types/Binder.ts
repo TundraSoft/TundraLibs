@@ -19,7 +19,10 @@ export type RapidBinderSource =
   | 'auth'
   | 'session'
   | 'connection'
-  | 'config';
+  | 'config'
+  | 'state'
+  | 'surface'
+  | 'clientAddress';
 
 /**
  * One argument-binding descriptor, produced by the binder factories

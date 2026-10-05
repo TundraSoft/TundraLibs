@@ -26,11 +26,13 @@ export {
   Action,
   type ActionDecoratorOptions,
   auth,
+  clientAddress,
   config,
   connection,
   cookie,
   decorationsOf,
   DELETE,
+  flatQuery,
   GET,
   header,
   JOB,
@@ -50,6 +52,8 @@ export {
   type RouteDecoratorOptions,
   SOCKET,
   type SocketDecoratorOptions,
+  state,
+  surface,
   Use,
 } from './decorators/mod.ts';
 export {

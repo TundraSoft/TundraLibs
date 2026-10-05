@@ -352,7 +352,7 @@ path both accept a LIST, and the two multiply — `@Module('Users', { prefix: ['
 '/:orgCode:'] })` serves every route in the class both tenant-scoped and
 unscoped from one declaration. Argument binders
 (`param`, `query`, `payload`, `paging`, `header`, `cookie`, `auth`, `session`,
-`connection`, `config`) type the method signature via the decorator's `bind`
+`connection`, `config`, `state`, `surface`, `clientAddress`) type the method signature via the decorator's `bind`
 tuple (all from `@tundralibs/rapid/decorators`; the root re-exports them too,
 except the `session` binder — the root's `session` is the middleware). `config('auth.hmac.maxSkew')` binds a value from the loaded config sets
 on any transport (the set is the file basename lowercased — `Auth.yaml` →

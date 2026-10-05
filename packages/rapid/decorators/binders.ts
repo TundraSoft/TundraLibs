@@ -17,10 +17,42 @@ import type {
   RapidBinder,
   RapidContextPaging,
   RapidContextQuery,
+  RapidContextSurface,
   RapidSchema,
 } from '../types/mod.ts';
 import type { SOCKETConnection } from '../context/mod.ts';
+import { RapidError } from '../errors/mod.ts';
 import type { RapidSession } from '../middlewares/session.ts';
+
+/** A schema object (anything with `.parse`) as opposed to a bare validator function. */
+const isSchema = (arg: unknown): arg is RapidSchema =>
+  typeof arg === 'object' && arg !== null &&
+  typeof (arg as RapidSchema).parse === 'function';
+
+/**
+ * The parsed query as a PLAIN object — what a page reads, as opposed to
+ * the `$op` grammar a list filters by. Every filter is a single-operator
+ * object, so the value is its one operand: `?next=/users` → `{ next:
+ * '/users' }`, `?tag=a,b` → `{ tag: ['a', 'b'] }`, `?deleted=null` →
+ * `{ deleted: true }`. Sorting is not carried — a list keeps `query()`.
+ */
+export function flatQuery(query: RapidContextQuery): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, filter] of Object.entries(query.filters)) {
+    out[key] = Object.values(filter)[0];
+  }
+  return out;
+}
+
+/** The property names a schema documents, when it can describe itself. */
+const keysOf = (schema: RapidSchema): ReadonlySet<string> | undefined => {
+  const doc = (schema.toJSONSchema?.() ?? schema.toOpenAPI?.()) as
+    | { properties?: Record<string, unknown> }
+    | undefined;
+  return doc?.properties === undefined
+    ? undefined
+    : new Set(Object.keys(doc.properties));
+};
 
 /**
  * Bind one invocation param (`ctx.args.params[name]`): a route param
@@ -42,11 +74,24 @@ export function param<T>(
   name: string,
   validate: (value: unknown) => T | Promise<T>,
 ): RapidBinder<T>;
+/**
+ * With a schema OBJECT (`param('id', Id)`, anything with `.parse` — a
+ * guardian): `parse` is called as a method, and `buildOpenApi` documents
+ * the path parameter with the schema's `toOpenAPI()` instead of a bare
+ * string.
+ */
+export function param<T>(name: string, schema: RapidSchema<T>): RapidBinder<T>;
 export function param(
   name: string,
-  validate?: (value: unknown) => unknown,
+  arg?: ((value: unknown) => unknown) | RapidSchema,
 ): RapidBinder<unknown> {
-  return { source: 'param', name, validate };
+  if (!isSchema(arg)) return { source: 'param', name, validate: arg };
+  return {
+    source: 'param',
+    name,
+    validate: (value) => arg.parse(value),
+    schema: arg,
+  };
 }
 
 /**
@@ -103,10 +148,52 @@ export function query(): RapidBinder<RapidContextQuery>;
 export function query<T>(
   validate: (value: unknown) => T | Promise<T>,
 ): RapidBinder<T>;
+/**
+ * With a schema OBJECT: the query is FLATTENED first ({@link flatQuery} —
+ * `?next=/users` is `{ next: '/users' }`, not `{ next: { $eq: … } }`) and
+ * the schema parses the plain object, so a page declares its parameters
+ * as a guardian object. `unknown` decides keys the schema does not
+ * describe: `'drop'` removes them before parsing (a stale link still
+ * renders), `'reject'` answers 400 naming them. Either needs a schema that
+ * can list its keys (`toJSONSchema()` / `toOpenAPI()` with `properties`);
+ * a guardian object already strips unknown keys on its own.
+ *
+ * @throws {RapidError} RAPID_CONFIG when `unknown` is given and the schema
+ *   cannot describe its keys.
+ */
+export function query<T>(
+  schema: RapidSchema<T>,
+  options?: { unknown?: 'drop' | 'reject' },
+): RapidBinder<T>;
 export function query(
-  validate?: (value: unknown) => unknown,
+  arg?: ((value: unknown) => unknown) | RapidSchema,
+  options: { unknown?: 'drop' | 'reject' } = {},
 ): RapidBinder<unknown> {
-  return { source: 'query', validate };
+  if (!isSchema(arg)) return { source: 'query', validate: arg };
+  const known = options.unknown === undefined ? undefined : keysOf(arg);
+  if (options.unknown !== undefined && known === undefined) {
+    throw new RapidError('RAPID_CONFIG', {
+      message:
+        'query(schema, { unknown }) needs a schema that lists its keys (toJSONSchema()/toOpenAPI() with `properties`)',
+    });
+  }
+  return {
+    source: 'query',
+    validate: (value) => {
+      const flat = flatQuery(value as RapidContextQuery);
+      if (known !== undefined) {
+        const extra = Object.keys(flat).filter((k) => !known.has(k));
+        if (extra.length > 0 && options.unknown === 'reject') {
+          throw new RapidError('RAPID_VALIDATION_FAILED', {
+            message: `unknown query parameter(s): ${extra.join(', ')}`,
+            details: { unknown: extra },
+          });
+        }
+        for (const k of extra) delete flat[k];
+      }
+      return arg.parse(flat);
+    },
+  };
 }
 
 /** Bind the resolved paging window (`ctx.args.paging` — always valid). */
@@ -186,6 +273,45 @@ export function session(): RapidBinder<RapidSession | undefined> {
  */
 export function connection(): RapidBinder<SOCKETConnection> {
   return { source: 'connection' };
+}
+
+/**
+ * Bind one key of the invocation state (`ctx.state[key]`) — the value a
+ * middleware wrote for this request (a resolved tenant, a feature flag),
+ * on any transport. Without a validator the parameter is PINNED to
+ * `unknown`; pass one to narrow or require it. A cached route that binds
+ * `state(key)` must carry the same `state(key)` in its `cache.key`.
+ */
+export function state(key: string): RapidBinder<unknown>;
+/** With a validator — the parameter takes the validator's return type. */
+export function state<T>(
+  key: string,
+  validate: (value: unknown) => T | Promise<T>,
+): RapidBinder<T>;
+export function state(
+  key: string,
+  validate?: (value: unknown) => unknown,
+): RapidBinder<unknown> {
+  return { source: 'state', name: key, validate };
+}
+
+/**
+ * Bind the surface the request came on (`ctx.surface`: `'api'` under the
+ * api surface, else `'ui'`); `undefined` off-HTTP. For a method that
+ * answers the API differently from its page.
+ */
+export function surface(): RapidBinder<RapidContextSurface | undefined> {
+  return { source: 'surface' };
+}
+
+/**
+ * Bind the TRUSTED client address (`ctx.remoteAddress`: the socket peer,
+ * or the proxy hop `server.trustProxy` vouches for; `''` when none is
+ * trustworthy); `undefined` off-HTTP. A cached route that binds it must
+ * key on it too (`cache.key: [clientAddress()]`).
+ */
+export function clientAddress(): RapidBinder<string | undefined> {
+  return { source: 'clientAddress' };
 }
 
 /**

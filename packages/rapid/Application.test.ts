@@ -40,6 +40,7 @@ import { session as sessionMw } from './middlewares/session.ts';
 import type { RapidSession } from './middlewares/session.ts';
 import {
   auth,
+  clientAddress,
   config,
   connection,
   cookie,
@@ -55,6 +56,8 @@ import {
   query,
   session,
   SOCKET,
+  state,
+  surface,
   Use,
 } from './decorators/mod.ts';
 import { event, type EventContext, RapidModule } from './modules/mod.ts';
@@ -2852,6 +2855,17 @@ describe('rapid.Application', () => {
       if (s) s.set('seen', (s.get<number>('seen') ?? 0) + 1);
       return { content: { seen: s?.get<number>('seen') ?? null } };
     }
+
+    @GET('/request', {
+      bind: [state('tenant'), surface(), clientAddress()],
+    })
+    readRequest(
+      tenant: unknown,
+      where: 'api' | 'ui' | undefined,
+      address: string | undefined,
+    ): RapidContextResponse {
+      return { content: { tenant: tenant ?? null, where, address } };
+    }
   }
 
   const make = () =>
@@ -2893,6 +2907,25 @@ describe('rapid.Application', () => {
       app.module(new Binders());
       const r = await app.fetch(new Request('http://app/session'));
       asserts.assertEquals((await r.json()).seen, 1);
+    });
+
+    it('state(key) binds what a middleware wrote; surface() and clientAddress() bind the request facts', async () => {
+      const app = await Application.initialize({
+        name: 'binders-request',
+        server: { port: 0, hostname: '127.0.0.1', api: { prefix: '/api' } },
+        logger: { handlers: [] },
+      });
+      app.use((ctx, next) => {
+        (ctx.state as Record<string, unknown>).tenant = 'acme';
+        return next();
+      });
+      app.module(new Binders());
+      const ui = await (await app.fetch(new Request('http://app/request')))
+        .json();
+      asserts.assertEquals(ui, { tenant: 'acme', where: 'ui', address: '' });
+      const api = await (await app.fetch(new Request('http://app/api/request')))
+        .json();
+      asserts.assertEquals(api.where, 'api');
     });
   });
 }

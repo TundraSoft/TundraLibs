@@ -372,6 +372,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * from ONE cached call — most handlers never read either.
    */
   get remoteAddress(): string {
+    this._reads |= CTX_READ.ADDRESS;
     return this.__resolveAddress().address;
   }
 

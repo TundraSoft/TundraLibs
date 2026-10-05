@@ -10,15 +10,19 @@
 
 export {
   auth,
+  clientAddress,
   config,
   connection,
   cookie,
+  flatQuery,
   header,
   paging,
   param,
   payload,
   query,
   session,
+  state,
+  surface,
 } from './binders.ts';
 export { Action, type ActionDecoratorOptions } from './action.ts';
 export {

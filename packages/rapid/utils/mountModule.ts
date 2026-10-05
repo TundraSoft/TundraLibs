@@ -149,6 +149,15 @@ export async function extractBind<S extends RapidContextState>(
       // (if any) decides whether absence is an error.
       raw = ctx.app.config.get<unknown>(binder.name!, undefined);
       break;
+    case 'state':
+      raw = (ctx.state as Record<string, unknown>)[binder.name!];
+      break;
+    case 'surface':
+      raw = ctx.type === 'HTTP' ? ctx.surface : undefined;
+      break;
+    case 'clientAddress':
+      raw = ctx.type === 'HTTP' ? ctx.remoteAddress : undefined;
+      break;
   }
   return binder.validate ? await binder.validate(raw) : raw;
 }
