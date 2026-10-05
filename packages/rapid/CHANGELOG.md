@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.11.0...rapid-v0.12.0) (2026-10-05)
+
+
+### Features
+
+* **rapid:** composed pages choose their parts, and the route cache checks ctx.state reads ([#785](https://github.com/TundraSoft/TundraLibs/issues/785)) ([b5e9ab5](https://github.com/TundraSoft/TundraLibs/commit/b5e9ab5e1674cd786b68b017629b86137853288e))
+
 ## [0.11.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.10.0...rapid-v0.11.0) (2026-10-05)
 
 
