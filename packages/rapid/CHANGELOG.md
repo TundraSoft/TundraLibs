@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.10.0...rapid-v0.11.0) (2026-10-05)
+
+
+### Features
+
+* **rapid:** a composed part's error tells its template it is a part ([#782](https://github.com/TundraSoft/TundraLibs/issues/782)) ([6b6fb7f](https://github.com/TundraSoft/TundraLibs/commit/6b6fb7fc83291ab1484c0e280ae0b01d78cbd11b))
+
 ## [0.10.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.9.0...rapid-v0.10.0) (2026-10-05)
 
 
