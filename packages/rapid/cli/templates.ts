@@ -870,10 +870,11 @@ sealed by \`finish\`. \`authorize('Module', 'PERMISSION')\` is the per-route
 middleware for an extra check, typed by the pact instance
 and checked against its catalog when called. Tenant-scoped grants use
 \`tenant::Module\` keys (a bare \`Module\` grant applies in every tenant):
-check them in the handler with
-\`await ctx.auth.principal.hasPermission(org + '::Posts', 'EDIT')\` and throw
-\`RapidError('RAPID_ACCESS_DENIED')\` when false, then use that same \`org\`
-for every query. Options are pact's own
+the \`tenant: (ctx) => code | null\` option makes \`access\` and
+\`authorize\` check \`<code>::Module\` (read the code from \`ctx.params\`, or
+from \`ctx.state\` for composed parts and \`invoke()\`), then use that same
+code for every query. \`surfaces: { api: { cookie: false, schemes } }\`
+narrows what one surface accepts. Options are pact's own
 middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
 signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
 authenticate from the upgrade request's headers/cookies. A stale bearer
