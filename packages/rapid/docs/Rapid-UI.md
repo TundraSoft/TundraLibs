@@ -626,10 +626,9 @@ class Organisations extends RapidModule {
   handler and is judged part by part, so it is the parts' own `access`
   and reach checks, not the choice, that keep a viewer out. A cached page
   keeps its choice, so a page that chooses by viewer must key its cache
-  by viewer: bind `auth()` or `state(key)` and put the same binder in
-  `cache.key` (a missing one fails at mount; a handler reading `ctx.auth`
-  without an `auth()` key is served uncached). A raw `ctx.state` read is
-  not tracked: choose through a `state()` binder, not `ctx.state`.
+  by viewer: put `auth()` or `state(key)` in `cache.key`. A missing binder
+  fails at mount, and a handler that reads `ctx.auth`, or a `ctx.state`
+  key this request set, without one is served uncached.
 - **Refusals in the log.** A part refused by its own `access` or reach
   check (a 4xx) is one warn line naming the part, the action and the code,
   with no stack; a part that broke (a 5xx) is an error with its stack.

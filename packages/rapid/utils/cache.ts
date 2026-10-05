@@ -201,18 +201,36 @@ export async function cached<T>(
   }
   if (hit !== undefined) return fromStore(hit);
   ctx._resetReads();
-  const value = await work();
+  let value: T;
+  let stateReads: string[];
+  try {
+    value = await work();
+  } finally {
+    stateReads = ctx._takeStateReads();
+  }
   const projection = storable(value);
   if (projection === undefined) return value;
   const uncovered = spec.checkReads ? ctx._readChannels & ~covered(key) : 0;
-  if (uncovered !== 0) {
-    const message = `${spec.source} is cached but its handler read ctx ${
-      nameOf(uncovered)
-    } with no matching cache.key binder — served uncached; add the binder to the key`;
+  // A request-scoped state key (one this request's middleware set — a
+  // tenant, the rows it loaded) is per caller like ctx.auth: read raw, it
+  // must be in the key by NAME, or one caller's reply serves the next.
+  const keyedState = new Set(
+    key.filter((b) => b.source === 'state').map((b) => b.name),
+  );
+  const unkeyedState = spec.checkReads
+    ? stateReads.filter((k) => !keyedState.has(k))
+    : [];
+  if (uncovered !== 0 || unkeyedState.length > 0) {
+    const read = [
+      ...(uncovered !== 0 ? [nameOf(uncovered)] : []),
+      ...unkeyedState.map((k) => `state('${k}')`),
+    ].join(', ');
+    const message =
+      `${spec.source} is cached but its handler read ctx ${read} with no matching cache.key binder — served uncached; add the binder to the key`;
     if (host.mode === 'DEVELOPMENT') {
       throw new RapidError('RAPID_CONFIG', {
         message,
-        details: { action: spec.source, read: nameOf(uncovered) },
+        details: { action: spec.source, read },
       });
     }
     if (!warned.has(spec.source)) {

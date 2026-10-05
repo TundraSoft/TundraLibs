@@ -52,8 +52,29 @@ export abstract class Context<
 > {
   /** The owning application — config, publish, and the id factory flow through it. */
   public readonly app: Application<S>;
+  /** Backing slot for {@link state}. */
+  private __state!: S;
+  /**
+   * `state` as the invocation began — what tells a REQUEST-scoped key (set
+   * by this invocation's middleware) from an app-wide one (a shared
+   * handle in the default state).
+   */
+  private __stateBase: Readonly<Record<string, unknown>> = {};
+  /** The keys read through {@link state} while a cached handler runs. */
+  private __stateReads?: Set<string>;
+  /** The recording view handed out while {@link __stateReads} is live. */
+  private __stateView?: S;
+
   /** The invocation's state bag, loaded from {@link Application.state}. */
-  public state: S;
+  public get state(): S {
+    return this.__stateView ?? this.__state;
+  }
+
+  public set state(value: S) {
+    this.__state = value;
+    this.__stateBase = { ...(value as Record<string, unknown>) };
+    this.__stateView = undefined;
+  }
   /**
    * The invocation's correlation id — a ULID by default (sortable in
    * logs); transports MAY adopt a validated inbound value instead (HTTP
@@ -165,9 +186,51 @@ export abstract class Context<
     return this._reads;
   }
 
-  /** Start counting reads afresh (before a cached handler runs). @internal */
+  /**
+   * Start counting reads afresh (before a cached handler runs) — the
+   * channels, and the `state` keys read through a recording view. @internal
+   */
   public _resetReads(): void {
     this._reads = 0;
+    const reads = new Set<string>();
+    const record = (key: string | symbol) => {
+      if (typeof key === 'string') reads.add(key);
+    };
+    this.__stateReads = reads;
+    this.__stateView = new Proxy(this.__state as Record<string, unknown>, {
+      get(target, key) {
+        record(key);
+        return Reflect.get(target, key);
+      },
+      has(target, key) {
+        record(key);
+        return Reflect.has(target, key);
+      },
+      ownKeys(target) {
+        const keys = Reflect.ownKeys(target);
+        keys.forEach(record);
+        return keys;
+      },
+      set(target, key, value) {
+        return Reflect.set(target, key, value);
+      },
+    }) as S;
+  }
+
+  /**
+   * The REQUEST-scoped `state` keys read since {@link _resetReads} — read
+   * through the view, and added or replaced since the invocation began, so
+   * a shared app-wide value is never one — and stop recording. @internal
+   */
+  public _takeStateReads(): string[] {
+    const reads = this.__stateReads ?? new Set<string>();
+    this.__stateReads = undefined;
+    this.__stateView = undefined;
+    const now = this.__state as Record<string, unknown>;
+    return [...reads].filter((key) =>
+      key in now && (!(key in this.__stateBase) ||
+        this.__stateBase[key] !== now[key])
+    );
   }
 
   /**

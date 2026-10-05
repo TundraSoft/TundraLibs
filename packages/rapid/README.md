@@ -233,7 +233,10 @@ reaches the store and the policy's answer is not in the key; only a 2xx
 data reply without cookies is stored; each request still renders its own
 representation. A route whose binders read a channel the key does not carry
 fails at mount, and a plain handler that does so at run time is served
-uncached (a warning; a throw in DEVELOPMENT). A composed tile inherits its
+uncached (a warning; a throw in DEVELOPMENT). That includes a `ctx.state` key
+this request's middleware set, such as a tenant or the rows it loaded: put
+`state('key')` in the key. A value already in the app's default state is
+shared, not per request, and needs no key. A composed tile inherits its
 route's cache, keyed by the action, so the page and a direct visit share one
 entry. `rapid access` lists every cached route's policy; OpenAPI carries
 `x-cache`. A store bound to nothing a route needs is fine; a route with
