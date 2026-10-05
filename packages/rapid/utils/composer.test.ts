@@ -27,6 +27,7 @@ import type {
 } from '../types/mod.ts';
 import { html, template } from '../ui/html.ts';
 import { UI_RUNTIME } from '../ui/ui.ts';
+import { memoryStore } from './memoryStore.ts';
 import { buildOpenApi } from './buildOpenApi.ts';
 
 const QUIET = { logger: { handlers: [] as never[] } };
@@ -589,5 +590,122 @@ describe('rapid.compose — part state', () => {
     await res.body?.cancel();
     asserts.assertEquals(loaders.length, 1);
     asserts.assertEquals([...loaders[0]!.reads].sort(), ['a', 'b']);
+  });
+});
+
+describe('rapid.compose — the handler chooses its parts', () => {
+  /** A page whose handler names the parts it draws from `x-pick`. */
+  const PICK = {
+    stats: 'org:Organisations:stats',
+    billing: 'org:Billing:subscription',
+    people: { action: 'org:People:list', defer: true },
+    slow: { action: 'org:People:slow', defer: true },
+  };
+  const picking = (app: Application) =>
+    app.get('/pick/:code:', {
+      access: 'Org:VIEW',
+      template: DASH,
+      compose: PICK,
+    }, (ctx) => {
+      const pick = ctx.headers.get('x-pick');
+      return {
+        content: { title: 'pick' },
+        ...(pick === null ? {} : { compose: pick.split(',') }),
+      };
+    });
+  const fetchAs = (app: Application, path: string, pick?: string) =>
+    app.fetch(
+      new Request(`http://app${path}`, {
+        headers: {
+          'x-user': 'admin',
+          ...(pick === undefined ? {} : { 'x-pick': pick }),
+        },
+      }),
+    );
+
+  it('a part left out runs nothing and gets no slot; only the chosen deferred parts reach the follow-up URL', async () => {
+    const app = await boot({ prefer: 'html' }, picking);
+    const only = await (await fetchAs(app, '/pick/acme', 'stats')).text();
+    asserts.assertStringIncludes(only, '<b>acme:3</b>');
+    for (const absent of ['billing', 'people', 'slow']) {
+      asserts.assertEquals(only.includes(`data-part="${absent}"`), false);
+    }
+    asserts.assertEquals(only.includes('data-compose'), false);
+
+    const some = await (await fetchAs(app, '/pick/acme', 'stats,people'))
+      .text();
+    asserts.assertStringIncludes(some, 'parts=people"');
+    asserts.assertEquals(some.includes('slow'), false);
+
+    // Without a choice, every declared part is drawn, as before.
+    const all = await (await fetchAs(app, '/pick/acme')).text();
+    asserts.assertStringIncludes(all, 'data-part="billing"');
+    asserts.assertStringIncludes(all, 'parts=people%2Cslow');
+  });
+
+  it('a choice only narrows: an undeclared name is RAPID_RESPONSE_INVALID, and ?parts= stays judged part by part', async () => {
+    const app = await boot({ prefer: 'html' }, picking);
+    const bad = await fetchAs(app, '/pick/acme', 'stats,admin');
+    asserts.assertEquals(bad.status, 500);
+    asserts.assertStringIncludes(await bad.text(), 'RAPID_RESPONSE_INVALID');
+    // The follow-up fetch runs no handler: a part the page did not choose
+    // still answers, under its own access.
+    const fetched = await app.fetch(
+      new Request('http://app/pick/acme?parts=billing', {
+        headers: { 'x-user': 'member' },
+      }),
+    );
+    asserts.assertStringIncludes(
+      await fetched.text(),
+      '<div data-part="billing" data-status="403">',
+    );
+  });
+
+  it("a cached page keeps its handler's choice on a hit", async () => {
+    let calls = 0;
+    const app = await boot({ prefer: 'html' }, (a) => {
+      a.cache(memoryStore());
+      a.get('/kept/:code:', {
+        template: DASH,
+        compose: PICK,
+        cache: { seconds: 60 },
+      }, () => {
+        calls++;
+        return { content: { title: 'kept' }, compose: ['stats'] };
+      });
+    });
+    for (let i = 0; i < 2; i++) {
+      const body = await (await fetchAs(app, '/kept/acme')).text();
+      asserts.assertEquals(
+        body.includes('data-part="billing"'),
+        false,
+        `request ${i}`,
+      );
+    }
+    asserts.assertEquals(calls, 1);
+  });
+
+  it('a refused part is a warn naming the part — never an error line with a stack', async () => {
+    const app = await boot();
+    const lines: {
+      level: string;
+      msg: string;
+      meta: Record<string, unknown>;
+    }[] = [];
+    for (const log of [app.log, app.moduleRuntime!.log]) {
+      for (const level of ['debug', 'info', 'warn', 'error'] as const) {
+        (log as unknown as Record<string, unknown>)[level] = (
+          msg: string,
+          meta: Record<string, unknown> = {},
+        ) => lines.push({ level, msg, meta });
+      }
+    }
+    await (await get(app, '/orgs/acme', 'member')).body?.cancel();
+    asserts.assertEquals(lines.filter((l) => l.level === 'error'), []);
+    const refusal = lines.find((l) =>
+      l.level === 'warn' && l.msg.includes("compose part 'billing'")
+    );
+    asserts.assertEquals(refusal?.meta['code'], 'RAPID_ACCESS_DENIED');
+    asserts.assertEquals('stack' in (refusal?.meta ?? {}), false);
   });
 });

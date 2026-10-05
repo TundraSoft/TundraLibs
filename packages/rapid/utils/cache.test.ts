@@ -9,7 +9,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { auth, GET, paging, param, query } from '../decorators/mod.ts';
+import { auth, GET, paging, param, query, state } from '../decorators/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { RapidModule } from '../modules/mod.ts';
 import type {
@@ -161,6 +161,65 @@ describe('rapid.cache: a cached route', () => {
     const res = await get(dev, '/page');
     asserts.assertEquals(res.status, 500);
     asserts.assertEquals((await res.json()).code, 'RAPID_CONFIG');
+  });
+
+  it('a raw read of a state key this request set needs state(key) in the key — an app-wide state value does not', async () => {
+    const shared = { region: 'eu' };
+    const tenantApp = async (
+      mode: 'DEVELOPMENT' | 'PRODUCTION',
+      key: readonly ReturnType<typeof state>[] = [],
+    ) => {
+      const app = await Application.initialize(
+        { name: 'cache-state', mode, ...QUIET },
+        { shared, org: null as string | null },
+      );
+      app.cache(memoryStore());
+      // A reach middleware: the tenant comes from the request.
+      app.use((ctx, next) => {
+        if (ctx.type === 'HTTP') ctx.state.org = ctx.headers.get('x-org');
+        return next();
+      });
+      let runs = 0;
+      app.get('/rows', { cache: { seconds: 60, key } }, (ctx) => {
+        runs++;
+        return {
+          content: {
+            org: ctx.state.org,
+            region: ctx.state.shared.region,
+            runs,
+          },
+        };
+      });
+      const as = async (org: string) =>
+        await (await app.fetch(
+          new Request('http://app/rows', { headers: { 'x-org': org } }),
+        )).json();
+      return { app, as };
+    };
+
+    // Unkeyed: never one tenant's rows for another — uncached in PRODUCTION.
+    const prod = await tenantApp('PRODUCTION');
+    asserts.assertEquals((await prod.as('acme')).org, 'acme');
+    asserts.assertEquals((await prod.as('globex')).org, 'globex');
+    const dev = await tenantApp('DEVELOPMENT');
+    const refused = await dev.app.fetch(
+      new Request('http://app/rows', { headers: { 'x-org': 'acme' } }),
+    );
+    asserts.assertEquals(refused.status, 500);
+    asserts.assertStringIncludes(
+      (await refused.json()).message,
+      "state('org')",
+    );
+
+    // Keyed by the tenant: cached per tenant, and the shared value is fine.
+    const keyed = await tenantApp('DEVELOPMENT', [state('org')]);
+    asserts.assertEquals(await keyed.as('acme'), {
+      org: 'acme',
+      region: 'eu',
+      runs: 1,
+    });
+    asserts.assertEquals((await keyed.as('globex')).runs, 2);
+    asserts.assertEquals((await keyed.as('acme')).runs, 1);
   });
 
   it('only a 2xx data reply without cookies is stored', async () => {

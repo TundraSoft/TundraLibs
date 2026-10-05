@@ -616,6 +616,22 @@ class Organisations extends RapidModule {
   for an unknown, repeated or empty name); any declared part may be asked
   for, so a single tile refreshes with `?parts=stats`. Composed pages and
   fragments are `cache-control: private, no-store`.
+- **Choosing parts.** A page that serves several audiences declares every
+  tile and lets its handler pick: `return { content, compose: ['stats',
+  'people'] }`. Parts left out run nothing and get no slot — not an
+  error slot — and only the chosen deferred parts go into the follow-up
+  URL. The choice only narrows: a name the page does not declare is a
+  500 `RAPID_RESPONSE_INVALID`, and a chosen part still runs its own
+  `access`, so choosing is never permission. A `?parts=` fetch runs no
+  handler and is judged part by part, so it is the parts' own `access`
+  and reach checks, not the choice, that keep a viewer out. A cached page
+  keeps its choice, so a page that chooses by viewer must key its cache
+  by viewer: put `auth()` or `state(key)` in `cache.key`. A missing binder
+  fails at mount, and a handler that reads `ctx.auth`, or a `ctx.state`
+  key this request set, without one is served uncached.
+- **Refusals in the log.** A part refused by its own `access` or reach
+  check (a 4xx) is one warn line naming the part, the action and the code,
+  with no stack; a part that broke (a 5xx) is an error with its stack.
 - **Caps.** `ui.compose: { maxParts: 5, concurrency: 4, timeout: 2 }` in
   the data half. A part past `timeout` seconds is a 504 fragment that
   retries once through the deferred path, then stays an error state.

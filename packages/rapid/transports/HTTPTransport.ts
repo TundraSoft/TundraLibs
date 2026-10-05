@@ -17,6 +17,7 @@ import { asValidationError, RapidError } from '../errors/mod.ts';
 import { represent } from '../ui/represent.ts';
 import {
   cached,
+  chosenParts,
   compose,
   type ComposePlan,
   extractBind,
@@ -719,9 +720,13 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
             reply: RapidContextResponse | void,
           ): void | Promise<void> =>
             this.__composable(reply, ctx)
-              ? this.__compose(ctx, entry, plan, undefined).then((parts) =>
-                apply(reply, parts)
-              )
+              ? this.__compose(
+                ctx,
+                entry,
+                plan,
+                undefined,
+                chosenParts(plan, reply.compose, ctx.action),
+              ).then((parts) => apply(reply, parts))
               : apply(reply);
           return thenable
             ? (returned as Promise<RapidContextResponse | void>).then(composed)
@@ -897,6 +902,8 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
             content: reply.content,
             ...(reply.status !== undefined ? { status: reply.status } : {}),
             ...(reply.paging !== undefined ? { paging: reply.paging } : {}),
+            // A cached page keeps its handler's choice of parts.
+            ...(reply.compose !== undefined ? { compose: reply.compose } : {}),
           }
           : undefined,
       (stored) => stored as RapidContextResponse,
@@ -909,6 +916,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     entry: RapidRouteEntry<S>,
     plan: ComposePlan,
     select: ReadonlySet<string> | undefined,
+    chosen?: ReadonlySet<string>,
   ): Promise<Record<string, RapidComposeSlot>> {
     const ui = this._app.uiOptions;
     // The same decision the representer takes for the page: markup when
@@ -926,6 +934,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       host: this._app,
       asHtml,
       ...(select !== undefined ? { select } : {}),
+      ...(chosen !== undefined ? { chosen } : {}),
     });
   }
 

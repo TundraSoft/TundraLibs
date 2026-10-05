@@ -895,13 +895,26 @@ export class ModuleRuntime {
   private __disclose(ctx: Ctx, error: unknown): void {
     const err = RapidError.from(error);
     const message = error instanceof Error ? error.message : err.message;
-    this.log.error(message, {
-      code: err.code,
-      requestId: ctx.requestId,
-      action: ctx.action,
-      stack: err.stack,
-      ...err.context.debug,
-    });
+    // The transport's rule: a 5xx is the server's bug report (error level,
+    // stack, debug context); a 4xx — a refusal, a not-found — is the
+    // caller's outcome, a debug breadcrumb with no stack. Whoever invoked
+    // records it where it matters (a composed part logs its refusal at
+    // warn, naming the part).
+    if (err.status >= 500) {
+      this.log.error(message, {
+        code: err.code,
+        requestId: ctx.requestId,
+        action: ctx.action,
+        stack: err.stack,
+        ...err.context.debug,
+      });
+    } else {
+      this.log.debug(message, {
+        code: err.code,
+        requestId: ctx.requestId,
+        action: ctx.action,
+      });
+    }
     if (ctx.type === 'INVOKE') {
       const payload = err.payload(this.__mode);
       ctx.response = new Reply(
