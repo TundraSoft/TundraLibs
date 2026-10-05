@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.9.0...rapid-v0.10.0) (2026-10-05)
+
+
+### Features
+
+* **rapid:** docs() takes an access string ([#779](https://github.com/TundraSoft/TundraLibs/issues/779)) ([ab8af67](https://github.com/TundraSoft/TundraLibs/commit/ab8af679bae95f6192c59f2bc4ddb4abe2aa1890))
+
+
+### Documentation
+
+* **rapid:** composed parts share the page's request state ([#780](https://github.com/TundraSoft/TundraLibs/issues/780)) ([4fa0edf](https://github.com/TundraSoft/TundraLibs/commit/4fa0edf7a69716895023c10b74f0618677c4d343))
+
 ## [0.9.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.4...rapid-v0.9.0) (2026-10-05)
 
 
