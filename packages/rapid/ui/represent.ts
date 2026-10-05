@@ -493,7 +493,9 @@ export function renderFragment<S extends RapidContextState>(
  * The error fragment for one status and its envelope payload — the same
  * closed `errorTemplates` resolution as {@link representError}, fragment
  * only (no core). A composed part that was denied or failed renders
- * through here, so a 403 tile looks like every other 403 the app shows.
+ * through here, so a 403 tile looks like every other 403 the app shows;
+ * its payload carries `part` (the slot name) so a template can render a
+ * compact notice instead of a page.
  */
 export function renderErrorFragment<S extends RapidContextState>(
   status: number,

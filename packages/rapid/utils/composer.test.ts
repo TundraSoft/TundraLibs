@@ -243,6 +243,27 @@ describe('rapid.compose: first paint', () => {
     asserts.assertEquals((await get(app, '/orgs/acme')).status, 401);
   });
 
+  it('a part error tells its template it is a part: data.part is the slot name, and the default page renders a notice, not a page', async () => {
+    const plain = await boot();
+    const body = await (await get(plain, '/orgs/acme', 'member')).text();
+    const billing = body.slice(body.indexOf('<div data-part="billing"'));
+    asserts.assertStringIncludes(billing, 'class="rapid-error" role="status"');
+    asserts.assertEquals(billing.includes('<h1'), false);
+
+    const seen: unknown[] = [];
+    const custom = await boot({
+      prefer: 'html',
+      errorTemplates: {
+        default: template<Record<string, unknown>>((e) => {
+          seen.push(e.part);
+          return html`<em>${e.status}</em>`;
+        }),
+      },
+    });
+    await (await get(custom, '/orgs/acme', 'member')).body?.cancel();
+    asserts.assertEquals(seen, ['billing']);
+  });
+
   it('the JSON face carries the data envelopes: content for a reachable part, the error envelope for a denied one, 202 for a deferred one', async () => {
     const app = await boot({ prefer: 'json' });
     const body = await (await get(app, '/orgs/acme', 'member')).json() as Dash;

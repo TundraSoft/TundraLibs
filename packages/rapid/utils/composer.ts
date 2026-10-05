@@ -496,7 +496,8 @@ export async function runCompose(
         out.status,
         renderErrorFragment(
           out.status,
-          out.content as Record<string, unknown>,
+          // `part` tells the template it renders inside a tile, not a page.
+          { ...out.content as Record<string, unknown>, part: part.name },
           ctx,
           run.mode,
         ),
