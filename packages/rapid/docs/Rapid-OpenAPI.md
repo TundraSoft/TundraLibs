@@ -220,6 +220,7 @@ lists itself.
 | `expose`                               | `'DEVELOPMENT'`       | As `openapi()`.                                                                                                                                                                |
 | `filter`                               | none                  | As `openapi()` — the page lists only the operations the viewer may call.                                                                                                       |
 | `guards`                               | none                  | Route middleware run before the page — an `authorize()` for a production reference.                                                                                            |
+| `access`                               | none                  | The page route's `access` string, judged by `app.auth()` and listed by the `rapid access` audit. Declared only in the modes `expose` serves; elsewhere the page stays a 404.   |
 | `info` · `servers` · `securitySchemes` | as `openapi()`        | The page builds the document itself, so give it the same options you gave `openapi()` (a shared constant keeps them in step).                                                  |
 
 What the default page renders, top to bottom: the title, version, a link to
@@ -387,7 +388,10 @@ stylesheet) — with `secureHeaders()`, extend its `contentSecurityPolicy`.
   `securitySchemes` or the page and the JSON disagree.
 - **`expose` is per mount.** A PRODUCTION reference needs `expose: 'ALL'` (or
   `'PRODUCTION'`) on `docs()` _and_ on the `openapi()` a third-party viewer
-  fetches — and a `guards: [authorize(...)]` if the inventory is not public.
+  fetches — and an `access` string if the inventory is not public:
+  `docs(app, { access: 'signed-in' })`, and on the JSON route
+  `app.get('/openapi.json', { access: 'signed-in' }, openapi())`. Unlike
+  `guards`, an `access` string shows in the `rapid access` audit.
 - **The document knows nothing about your middleware.** An
   `authorize()`-guarded route without `security` on its declaration documents
   no requirement. Declare it.
