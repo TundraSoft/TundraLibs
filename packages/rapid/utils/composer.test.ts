@@ -8,7 +8,15 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { Action, GET, Module, paging, param, POST } from '../decorators/mod.ts';
+import {
+  Action,
+  GET,
+  Module,
+  paging,
+  param,
+  POST,
+  state,
+} from '../decorators/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { RapidModule } from '../modules/mod.ts';
 import type {
@@ -503,5 +511,62 @@ describe('rapid.compose: what the contract publishes', () => {
     });
     asserts.assertStringIncludes(UI_RUNTIME, 'dataset.compose');
     asserts.assertStringIncludes(UI_RUNTIME, '[data-part="');
+  });
+});
+
+describe('rapid.compose — part state', () => {
+  /** A per-request loader the page's middleware builds once. */
+  type Loader = { reads: string[] };
+  const loaderOf = (value: unknown): Loader => value as Loader;
+  const TILE = template<{ seen: number }>((d) => html`<p>${d.seen}</p>`);
+  const BOARD = template<{ parts: Record<string, RapidComposeSlot> }>((d) =>
+    html`${d.parts.a?.html}${d.parts.b?.html}`
+  );
+
+  class Tiles extends RapidModule<typeof EVENTS> {
+    readonly name = 'Tiles';
+    readonly namespace = 'st';
+    protected readonly events = EVENTS;
+
+    @GET('/tiles/a', { bind: [state('loader', loaderOf)], template: TILE })
+    a(loader: Loader) {
+      loader.reads.push('a');
+      return { content: { seen: loader.reads.length } };
+    }
+
+    @GET('/tiles/b', { bind: [state('loader', loaderOf)], template: TILE })
+    b(loader: Loader) {
+      loader.reads.push('b');
+      return { content: { seen: loader.reads.length } };
+    }
+
+    @GET('/board', {
+      template: BOARD,
+      compose: { a: 'st:Tiles:a', b: 'st:Tiles:b' },
+    })
+    board() {
+      return { content: {} };
+    }
+  }
+
+  it('every part sees the SAME objects the page put in ctx.state — one loader per request, shared by its tiles', async () => {
+    const loaders: Loader[] = [];
+    const app = await Application.initialize({
+      name: 'compose-state',
+      ...QUIET,
+      ui: { prefer: 'html' },
+    });
+    app.use((ctx, next) => {
+      const loader: Loader = { reads: [] };
+      loaders.push(loader);
+      ctx.state.loader = loader;
+      return next();
+    });
+    await app.modules({ modules: [{ Tiles }] });
+    const res = await get(app, '/board');
+    asserts.assertEquals(res.status, 200);
+    await res.body?.cancel();
+    asserts.assertEquals(loaders.length, 1);
+    asserts.assertEquals([...loaders[0]!.reads].sort(), ['a', 'b']);
   });
 });

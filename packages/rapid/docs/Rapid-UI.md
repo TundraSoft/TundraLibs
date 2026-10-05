@@ -537,6 +537,13 @@ route's template**, the results attached to the reply as `content.parts`.
 The API surface keeps one resource per endpoint; the page is a view over
 them.
 
+Parts share the page's request state. A part's binders read the page's
+`ctx.state`, so `state('org')` gets the very object the page's middleware
+stored: load the organisation, the plan or a per-request loader once in a
+middleware and every tile reuses it. The state a part's method runs under
+is a shallow copy, as for any `invoke()`, so a key a part adds stays in
+that part, while the objects behind the page's keys are shared.
+
 ```ts
 import { GET, param } from '@tundralibs/rapid/decorators';
 import { RapidModule } from '@tundralibs/rapid/modules';
