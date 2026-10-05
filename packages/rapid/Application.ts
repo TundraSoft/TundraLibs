@@ -446,7 +446,14 @@ export class Application<S extends RapidContextState = RapidContextState>
         typeof source === 'string' ? { path: source, env: true } : source;
       const { applicationSet = 'Application', ui: uiCode, ...loadOptions } =
         factoryOptions;
-      const loaded = await loadConfig(loadOptions);
+      // A `${VAR}` nobody set is a configuration bug in every mode: it
+      // fails the boot naming the file and the variable, instead of
+      // reaching a connection string as literal text. The factory option
+      // `placeholders` overrides.
+      const loaded = await loadConfig({
+        placeholders: 'error',
+        ...loadOptions,
+      });
       // loadConfig lowercases set names (Application.yaml → 'application').
       const setName = applicationSet.toLowerCase();
       const fromFile = loaded.has(setName)

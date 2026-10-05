@@ -50,9 +50,12 @@ const app = await Application.initialize({
   config set named by its **lowercased basename**; two files with the same
   basename fail the load. Keys inside a set are case-sensitive.
 - `${VAR}` placeholders are replaced from the environment before parsing.
-  **An unset placeholder is left as literal text** — `secret: ${APP_SECRET}`
-  with no `APP_SECRET` is the 13-character string `${APP_SECRET}` and fails
-  the 32-character check. Keep it commented until the variable exists.
+  **An unset placeholder fails the boot**, in every mode, with an error
+  naming the file and the variable — `secret: ${APP_SECRET}` with no
+  `APP_SECRET` never reaches the app as the literal string `${APP_SECRET}`.
+  Keep a placeholder commented until the variable exists, or pass
+  `placeholders: 'literal' | 'empty'` in the factory options to opt out
+  (utils' `loadConfig` option; `'empty'` reads as `null`).
 - The `ui:` key of the application set is split off before the options are
   built — it is the UI's data half (see [UI](#ui)); code (templates, the
   `view` projection) can only come from the factory's `ui` option.
