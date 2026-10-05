@@ -22,6 +22,8 @@ import {
   type Pact,
   PACT_AUTH_FAILURE_CODES,
   type PactAuthContext,
+  type PactCredential,
+  type PactGrantKey,
   type PactLoginResult,
   type PactPrincipal,
   type PermissionBits,
@@ -42,6 +44,7 @@ import type {
   RapidContext,
   RapidContextResponse,
   RapidContextState,
+  RapidContextSurface,
   RapidHTTPHandler,
   RapidMiddleware,
 } from '../types/mod.ts';
@@ -75,6 +78,35 @@ export type PactAuthOptions = Omit<PactMiddlewareOptions, 'bearer'> & {
      */
     cookie?: string;
   };
+  /**
+   * The tenant an access check runs under, for grants keyed per tenant
+   * (pact's `acme::Posts`). Return the tenant code — from a route param,
+   * a subdomain, a header, or what a middleware put in `ctx.state` (the
+   * only request detail an in-process `invoke()` carries) — or `null`
+   * for none. With a tenant, `'Posts:READ'` and `authorize('Posts',
+   * 'READ')` check `<tenant>::Posts`, where pact also counts the
+   * principal's global `Posts` grant. Absent or `null`, the check is the
+   * global one.
+   * @default none — global grants only
+   */
+  tenant?: (
+    ctx: RapidAccessContext,
+  ) => string | null | undefined | Promise<string | null | undefined>;
+  /**
+   * Narrow what one surface accepts. `schemes` is a subset of `schemes`
+   * for requests on that surface — a credential of any other scheme is
+   * treated as absent there. `cookie: false` stops reading `bearer.cookie`
+   * on that surface, so a browser session cannot drive the API surface
+   * (no cookie-borne requests there means no CSRF there). Sockets and
+   * jobs have no surface and use the top-level settings.
+   * @default both surfaces accept everything the top level does
+   */
+  surfaces?: Partial<
+    Record<RapidContextSurface, {
+      schemes?: readonly PactCredential['scheme'][];
+      cookie?: boolean;
+    }>
+  >;
   /**
    * The session handlers (`login` / `logout` / `refresh` / `me`). The
    * cookie they set and clear is `bearer.cookie` — declared once, so the
@@ -180,6 +212,47 @@ export type PactAuthMiddlewares<B extends PermissionBits, M extends string> = {
 const JOSE = 'application/jose';
 
 /**
+ * The signed-exchange refusals that are the client's own mistake, not an
+ * account fact — named on the wire so a client can fix its signer.
+ */
+const SIGNING_FAILURES: Readonly<Record<string, string>> = {
+  STALE_TIMESTAMP: 'signature timestamp missing or outside the accepted window',
+  INVALID_NONCE: 'signature nonce missing or longer than 128 characters',
+  NONCE_REUSED: 'signature nonce already used within the accepted window',
+};
+
+/**
+ * Refuse a `surfaces` option that names an unknown surface, a scheme the
+ * top level does not accept, or a cookie there is none of.
+ *
+ * @throws {RapidError} RAPID_CONFIG naming the offending key.
+ */
+function checkSurfaces(
+  surfaces: PactAuthOptions['surfaces'],
+  hasCookie: boolean,
+  accepted: ReadonlySet<PactCredential['scheme']>,
+): void {
+  const fail = (message: string): never => {
+    throw new RapidError('RAPID_CONFIG', { message: `pactAuth(): ${message}` });
+  };
+  for (const [surface, narrowed] of Object.entries(surfaces ?? {})) {
+    if (surface !== 'ui' && surface !== 'api') {
+      fail(`surfaces.${surface}: the surfaces are 'ui' and 'api'`);
+    }
+    if (narrowed?.cookie === true && !hasCookie) {
+      fail(`surfaces.${surface}.cookie: there is no bearer.cookie to read`);
+    }
+    const foreign = (narrowed?.schemes ?? []).filter((s) => !accepted.has(s));
+    if (foreign.length > 0) {
+      fail(
+        `surfaces.${surface}.schemes: ${foreign.join(', ')} not in the ` +
+          `accepted schemes (${[...accepted].join(', ')})`,
+      );
+    }
+  }
+}
+
+/**
  * Build the auth binding, the `authorize` guard and the session handlers
  * over one instance and one options bag. Create the instance and call
  * this at module load (an `auth.ts`) — the returned values are plain
@@ -208,7 +281,7 @@ export function pactAuth<B extends PermissionBits, M extends string>(
   pact: Pact<B, M>,
   options: PactAuthOptions = {},
 ): PactAuthMiddlewares<B, M> {
-  const { bearer, optional, ...rest } = options;
+  const { bearer, optional, tenant, surfaces, ...rest } = options;
   const { cookie, ...bearerCarrier } = bearer ?? {};
   const coreOptions: PactMiddlewareOptions = {
     ...rest,
@@ -227,6 +300,19 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     });
   }
   const core = createPactMiddleware(pact, coreOptions);
+  checkSurfaces(surfaces, cookie !== undefined, config.schemes);
+  // One core per surface that narrows its schemes; the rest use `core`.
+  const surfaceCores = new Map<RapidContextSurface, typeof core>();
+  for (const [surface, narrowed] of Object.entries(surfaces ?? {})) {
+    if (narrowed?.schemes === undefined) continue;
+    surfaceCores.set(
+      surface as RapidContextSurface,
+      createPactMiddleware(pact, { ...coreOptions, schemes: narrowed.schemes }),
+    );
+  }
+  /** Whether `bearer.cookie` is read on `surface`. */
+  const cookieOn = (surface: RapidContextSurface): boolean =>
+    cookie !== undefined && surfaces?.[surface]?.cookie !== false;
   // A socket frame authenticates from its upgrade request: header-only
   // schemes, no body, no per-frame HMAC freshness, nothing to seal.
   const socketCore = createPactMiddleware(pact, {
@@ -262,16 +348,19 @@ export function pactAuth<B extends PermissionBits, M extends string>(
   };
 
   /** Header lookup with the bearer cookie standing in for a missing bearer header. */
-  const headerOf =
-    (headers: Headers): PactMiddlewareRequest['header'] => (name) => {
-      const value = headers.get(name);
-      if (value !== null || cookie === undefined) return value;
-      if (name.toLowerCase() !== config.bearer.header) return null;
-      if (otherCarrierPresent(headers)) return null;
-      const token = parseCookies(headers.get('cookie'))[cookie];
-      if (token === undefined || token === '') return null;
-      return bearerPrefix === '' ? token : `${bearerPrefix} ${token}`;
-    };
+  const headerOf = (
+    headers: Headers,
+    withCookie: boolean = cookie !== undefined,
+  ): PactMiddlewareRequest['header'] =>
+  (name) => {
+    const value = headers.get(name);
+    if (value !== null || !withCookie || cookie === undefined) return value;
+    if (name.toLowerCase() !== config.bearer.header) return null;
+    if (otherCarrierPresent(headers)) return null;
+    const token = parseCookies(headers.get('cookie'))[cookie];
+    if (token === undefined || token === '') return null;
+    return bearerPrefix === '' ? token : `${bearerPrefix} ${token}`;
+  };
 
   /** The 401 for one denial code — one answer on the wire, the code in the log. */
   const unauthenticated = (
@@ -280,9 +369,12 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     details: Record<string, unknown> | undefined,
   ): RapidError => {
     if (code === 'NO_CREDENTIALS') {
+      const schemes = ctx.type === 'HTTP'
+        ? surfaces?.[ctx.surface]?.schemes ?? [...config.schemes]
+        : [...config.schemes];
       return new RapidError('RAPID_UNAUTHENTICATED', {
         message: 'no credential presented',
-        details: { schemes: [...config.schemes], ...details },
+        details: { schemes, ...details },
       });
     }
     // Which of "no such key" / "wrong password" / "disabled" it was is an
@@ -291,9 +383,10 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       requestId: ctx.requestId,
       code,
     });
-    if (code === 'STALE_TIMESTAMP') {
+    const signing = SIGNING_FAILURES[code];
+    if (signing !== undefined) {
       return new RapidError('RAPID_UNAUTHENTICATED', {
-        message: 'signature timestamp missing or outside the accepted window',
+        message: signing,
         details: { reason: code, ...details },
       });
     }
@@ -349,7 +442,7 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       query: url.search,
       authority: url.host,
       scheme: url.protocol.replace(/:$/, ''),
-      header: headerOf(ctx.headers),
+      header: headerOf(ctx.headers, cookieOn(ctx.surface)),
       body: () => ctx.rawPayload,
     };
   };
@@ -433,7 +526,9 @@ export function pactAuth<B extends PermissionBits, M extends string>(
         auth: verdict.auth as unknown as Record<string, unknown> | undefined,
       };
     }
-    const verdict = await core.authenticate(viewOf(ctx));
+    const verdict = await (surfaceCores.get(ctx.surface) ?? core).authenticate(
+      viewOf(ctx),
+    );
     if (!verdict.ok) {
       // A STALE BEARER COOKIE is the one credential a browser keeps
       // presenting after the session ended (logout elsewhere, expiry): a
@@ -443,15 +538,15 @@ export function pactAuth<B extends PermissionBits, M extends string>(
       // Only when the COOKIE was the credential that failed — a rejected
       // API key or HMAC signature on the same request stays a 401.
       if (
-        cookie !== undefined && verdict.denial.status === 401 &&
+        cookieOn(ctx.surface) && verdict.denial.status === 401 &&
         ctx.headers.get(config.bearer.header) === null &&
         !otherCarrierPresent(ctx.headers) &&
-        ctx.cookies[cookie] !== undefined
+        ctx.cookies[cookie!] !== undefined
       ) {
         ctx.app.log.info('stale session cookie cleared', {
           requestId: ctx.requestId,
         });
-        ctx.deleteCookie(cookie, {
+        ctx.deleteCookie(cookie!, {
           path: options.session?.cookie?.path ?? '/',
         });
         if (optional === false) {
@@ -481,6 +576,42 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     string,
     ReturnType<typeof core.authorize>
   >();
+  /** The tenant `ctx`'s checks run under, or null for global grants. */
+  const tenantOf = async (ctx: RapidAccessContext): Promise<string | null> => {
+    if (tenant === undefined) return null;
+    const code = await tenant(ctx);
+    return typeof code === 'string' && code !== '' ? code : null;
+  };
+  /** The grant key a check reads: `<tenant>::<module>`, or the module. */
+  const keyOf = (module: M, scope: string | null): PactGrantKey<M> =>
+    (scope === null ? module : `${scope}::${module}`) as PactGrantKey<M>;
+  /**
+   * Whether `auth` holds a `Module:PERMISSION` clause — under `scope`
+   * when a tenant applies. An unknown module or permission is never
+   * granted: the audit lists every clause in use, so a typo is a visible
+   * denial.
+   */
+  const holds = async (
+    auth: PactAuthContext<M, B> | undefined,
+    clause: string,
+    scope: string | null,
+  ): Promise<boolean> => {
+    const colon = clause.indexOf(':');
+    if (colon <= 0 || colon === clause.length - 1) return false;
+    const module = clause.slice(0, colon);
+    const permission = clause.slice(colon + 1) as keyof B & string;
+    if (!known(module, permission)) return false;
+    if (scope !== null) {
+      return auth !== undefined &&
+        await auth.principal.hasPermission(keyOf(module, scope), permission);
+    }
+    let guard = guards.get(clause);
+    if (guard === undefined) {
+      guard = core.authorize(module, permission);
+      guards.set(clause, guard);
+    }
+    return (await guard(auth)) === undefined;
+  };
   /** Whether `clause` names a module and permission this instance knows. */
   const known = (
     module: string,
@@ -496,25 +627,15 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     },
     authorize: async (ctx: RapidAccessContext, access: string) => {
       const auth = ctx.auth as PactAuthContext<M, B> | undefined;
+      let scope: string | null | undefined;
       for (const raw of access.split('|')) {
         const clause = raw.trim();
         if (clause === 'signed-in') {
           if (auth !== undefined) return true;
           continue;
         }
-        const colon = clause.indexOf(':');
-        if (colon <= 0 || colon === clause.length - 1) continue;
-        const module = clause.slice(0, colon);
-        const permission = clause.slice(colon + 1);
-        // An unknown module or permission is never granted: the audit
-        // lists every clause in use, so a typo is a visible denial.
-        if (!known(module, permission)) continue;
-        let guard = guards.get(clause);
-        if (guard === undefined) {
-          guard = core.authorize(module, permission as keyof B & string);
-          guards.set(clause, guard);
-        }
-        if ((await guard(auth)) === undefined) return true;
+        scope ??= await tenantOf(ctx);
+        if (await holds(auth, clause, scope)) return true;
       }
       return false;
     },
@@ -554,9 +675,19 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     }
     const guard = core.authorize(module, permission);
     return async (ctx, next) => {
-      const denial = await guard(ctx.auth as PactAuthContext<M, B> | undefined);
-      if (denial !== undefined) {
-        throw denied(ctx, denial, { module, permission });
+      const auth = ctx.auth as PactAuthContext<M, B> | undefined;
+      const scope = auth === undefined ? null : await tenantOf(ctx);
+      if (scope === null) {
+        const denial = await guard(auth);
+        if (denial !== undefined) {
+          throw denied(ctx, denial, { module, permission });
+        }
+      } else if (
+        !(await auth!.principal.hasPermission(keyOf(module, scope), permission))
+      ) {
+        throw new RapidError('RAPID_ACCESS_DENIED', {
+          details: { module, permission, tenant: scope },
+        });
       }
       return await next();
     };
@@ -644,7 +775,9 @@ export function pactAuth<B extends PermissionBits, M extends string>(
   };
   /** The presented bearer token — header (prefix stripped) or the cookie. */
   const presentedToken = (ctx: HTTPContext): string | undefined => {
-    const raw = headerOf(ctx.headers)(config.bearer.header);
+    const raw = headerOf(ctx.headers, cookieOn(ctx.surface))(
+      config.bearer.header,
+    );
     if (raw === null) return undefined;
     if (bearerPrefix === '') return raw;
     return raw.toLowerCase().startsWith(`${bearerPrefix.toLowerCase()} `)

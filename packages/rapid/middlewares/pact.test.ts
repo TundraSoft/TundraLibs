@@ -187,6 +187,105 @@ describe('rapid.middlewares.pact binding (app.auth)', () => {
   });
 });
 
+describe('rapid.middlewares.pact binding — tenant and surfaces', () => {
+  it('a tenant resolver scopes access strings and authorize() to <tenant>::<Module>, global grants still counting', async () => {
+    const pact = await makePact();
+    await pact.register({
+      identifier: 'tina',
+      password: PASSWORD,
+      grants: { 'acme::Posts': 2n }, // EDIT in acme only
+    });
+    const { binding, authorize } = pactAuth(pact, {
+      tenant: (ctx) => ctx.type === 'HTTP' ? ctx.params['org'] ?? null : null,
+    });
+    const app = await Application.initialize({
+      name: 'pact-tenant',
+      logger: { handlers: [] },
+    });
+    app.auth(binding);
+    app.get('/:org:/edit', { access: 'Posts:EDIT' }, () => ({ content: 'e' }));
+    app.get('/edit', { access: 'Posts:EDIT' }, () => ({ content: 'e' }));
+    app.get(
+      '/:org:/guarded',
+      authorize('Posts', 'EDIT'),
+      () => ({ content: 'g' }),
+    );
+    const bearer = async (identifier: string) => ({
+      authorization: `Bearer ${
+        (await pact.login({ identifier, password: PASSWORD })).session.token
+      }`,
+    });
+    const tina = await bearer('tina');
+    const ada = await bearer('ada'); // global Posts: READ + EDIT
+
+    asserts.assertEquals((await get(app, '/acme/edit', tina)).status, 200);
+    asserts.assertEquals((await get(app, '/other/edit', tina)).status, 403);
+    asserts.assertEquals((await get(app, '/edit', tina)).status, 403);
+    asserts.assertEquals((await get(app, '/other/edit', ada)).status, 200);
+    asserts.assertEquals((await get(app, '/acme/guarded', tina)).status, 200);
+    asserts.assertEquals((await get(app, '/other/guarded', tina)).status, 403);
+    asserts.assertEquals((await get(app, '/acme/guarded')).status, 401);
+  });
+
+  it('surfaces narrow the schemes and the session cookie per surface', async () => {
+    const pact = await makePact();
+    const { key, secret } = await pact.issueApiKey({ grants: { Posts: 1n } });
+    const { binding } = pactAuth(pact, {
+      bearer: { cookie: 'sid' },
+      surfaces: { api: { cookie: false, schemes: ['BEARER', 'APIKEY'] } },
+    });
+    const app = await Application.initialize({
+      name: 'pact-surfaces',
+      server: { api: { prefix: '/api' } },
+      logger: { handlers: [] },
+    });
+    app.auth(binding);
+    app.get('/read', { access: 'Posts:READ' }, () => ({ content: 'r' }));
+    const { session } = await pact.login({
+      identifier: 'ada',
+      password: PASSWORD,
+    });
+    const cookie = { cookie: `sid=${session.token}` };
+    asserts.assertEquals((await get(app, '/read', cookie)).status, 200);
+    asserts.assertEquals((await get(app, '/api/read', cookie)).status, 401);
+    asserts.assertEquals(
+      (await get(app, '/api/read', {
+        authorization: `Bearer ${session.token}`,
+      })).status,
+      200,
+    );
+    asserts.assertEquals(
+      (await get(app, '/api/read', {
+        authorization: `ApiKey ${key}:${secret}`,
+      })).status,
+      200,
+    );
+    // BASIC is accepted on the ui surface only.
+    const basic = {
+      authorization: `Basic ${btoa(`ada:${PASSWORD}`)}`,
+    };
+    asserts.assertEquals((await get(app, '/read', basic)).status, 200);
+    asserts.assertEquals((await get(app, '/api/read', basic)).status, 401);
+  });
+
+  it('refuses a surfaces option naming an unknown surface, a scheme the top level lacks, or a cookie there is none of', async () => {
+    const pact = await makePact();
+    for (
+      const surfaces of [
+        { admin: {} },
+        { api: { schemes: ['HMAC'] } },
+        { ui: { cookie: true } },
+      ]
+    ) {
+      const error = asserts.assertThrows(
+        () => pactAuth(pact, { surfaces: surfaces as never }),
+        RapidError,
+      );
+      asserts.assertEquals(error.code, 'RAPID_CONFIG');
+    }
+  });
+});
+
 const TEXT = new TextDecoder();
 
 /** Headers for a request signed over pact's default template. */
@@ -356,6 +455,36 @@ describe('rapid.middlewares.pactAuth()', () => {
       /sid=;.*(Max-Age=0|Expires=)/,
     );
     await app.stop();
+  });
+
+  it('HMAC: a replayed signed nonce is a 401 that names the reason', async () => {
+    const pact = await makePact();
+    const { key, secret } = await pact.issueApiKey({
+      userId: 'u-1',
+      grants: { Posts: 1n },
+    });
+    const { app } = await makeApp(pact, {
+      hmac: {
+        template:
+          '${@method}\n${@path}${@query}\n${x-timestamp}\n${x-nonce}\n${content-digest}',
+      },
+    });
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const payload = `GET\n/whoami\n${timestamp}\nn-1\n${await contentDigest(
+      null,
+    )}`;
+    const headers = {
+      'x-key-id': key,
+      'x-signature': await signHMAC(payload, secret),
+      'x-timestamp': timestamp,
+      'x-nonce': 'n-1',
+    };
+    asserts.assertEquals((await get(app, '/whoami', headers)).status, 200);
+    const replay = await get(app, '/whoami', headers);
+    asserts.assertEquals(replay.status, 401);
+    asserts.assertEquals((await replay.json()).details, {
+      reason: 'NONCE_REUSED',
+    });
   });
 
   it('HMAC: verifies the default template over the raw body, rejects a stale timestamp, and signs the JSON response', async () => {

@@ -162,8 +162,8 @@ app.post('/posts', { access: 'Posts:EDIT' }, create);
 ```
 
 `binding.finish` signs or encrypts the reply when `hmac` / `encryption` are
-configured. Tenant-scoped grants (`acme::Posts`) take a per-request tenant,
-so they stay a handler check — see
+configured. Tenant-scoped grants (`acme::Posts`) need the request's tenant,
+which the `tenant` option supplies — see
 [Tenant-scoped permissions](#tenant-scoped-permissions). `authorize(module,
 permission)` remains as a route middleware for an extra check on top of
 `access`.
@@ -172,8 +172,26 @@ permission)` remains as a route middleware for an extra check on top of
 
 The options are pact's own `PactMiddlewareOptions` — every carrier (header
 and scheme prefix) defaults to its standard and is overridable, plus `hmac`,
-`encryption`, `challenge` and `realm` — with rapid's additions, `bearer.cookie`
-and `session` (below), and one changed default: `optional` is `true` here. The full option and
+`encryption`, `challenge` and `realm` — with rapid's additions, `bearer.cookie`,
+`tenant`, `surfaces` and `session` (below), and one changed default: `optional`
+is `true` here.
+
+`surfaces` narrows what one surface accepts. Its `schemes` is a subset of the
+top-level `schemes` for requests on that surface, and a credential of any
+other scheme is treated as absent there. `cookie: false` stops reading
+`bearer.cookie` on that surface, so a browser session cannot drive the API
+surface, and the API surface needs no CSRF defence:
+
+```ts ignore
+pactAuth(pact, {
+  schemes: ['BEARER', 'APIKEY', 'HMAC'],
+  bearer: { cookie: 'session' },
+  hmac: {},
+  surfaces: { api: { cookie: false }, ui: { schemes: ['BEARER'] } },
+});
+```
+
+Sockets and jobs have no surface and use the top-level settings. The full option and
 wire contract lives in [`@tundralibs/pact`](https://jsr.io/@tundralibs/pact)'s
 Middleware guide; rapid's
 adapter is glue over the same neutral core as pact's express/fastify/oak/hono
@@ -197,8 +215,10 @@ API key with `basic.credential: 'apiKey'`), `Authorization: ApiKey
 - **A credential that fails → 401, never anonymous.** A wrong password, an
   unknown key and a disabled account are ONE answer on the wire (the
   distinction is in the server log): `RAPID_UNAUTHENTICATED`, "invalid
-  credential". A stale HMAC timestamp says so (`details.reason:
-  'STALE_TIMESTAMP'`) — the caller's own clock is not a secret.
+  credential". A signing mistake says so in `details.reason` — a stale
+  timestamp (`STALE_TIMESTAMP`), and with a template that signs the nonce, a
+  missing or oversized nonce (`INVALID_NONCE`) or a replayed one
+  (`NONCE_REUSED`): the caller's own clock and nonces are not secrets.
   The one exception is a **stale bearer cookie**: a browser keeps sending it
   after the session ended, and a 401 would lock the user out of `/login`
   itself — so it is cleared (`Set-Cookie` with `Max-Age=0`) and the request
@@ -231,9 +251,24 @@ call site, not on the first request.
 
 pact grants can be scoped to a tenant (`acme::Posts`), with a bare `Posts`
 grant applying in every tenant; see
-[Pact-Tenants](../../pact/docs/Pact-Tenants.md).
-`authorize(module, permission)` is fixed per route, and the tenant comes
-from each request, so check a tenant-scoped key in the handler. Throw
+[Pact-Tenants](../../pact/docs/Pact-Tenants.md). The `tenant` option says
+which tenant a request runs under. With one, `access: 'Posts:EDIT'` and
+`authorize('Posts', 'EDIT')` check `<tenant>::Posts`; without one, or when it
+returns `null`, they check the global grant as before:
+
+```ts ignore
+pactAuth(pact, {
+  tenant: (ctx) => ctx.type === 'HTTP' ? ctx.params.org ?? null : null,
+});
+app.post('/orgs/:org:/posts', { access: 'Posts:EDIT' }, create);
+```
+
+The resolver sees the access context: a transport request, or an in-process
+`invoke()`, which carries no params. For composed parts and `invoke()`, have a
+middleware put the tenant in `ctx.state` and read it from there. Query and
+write with the tenant just checked, never a second tenant id from the body.
+
+A check the option cannot express stays a handler check. Throw
 `RAPID_ACCESS_DENIED` for the 403: an uncaught pact error in a handler is a
 500.
 
@@ -352,8 +387,11 @@ is a 401 before the body is even hashed. After the handler, rapid signs the
 response over `${@status}\n${x-timestamp}\n${content-digest}` with the same
 key: a JSON reply is serialized by the adapter so the signed bytes are the
 sent bytes; a streamed body (`ctx.serve`, SSE) goes out unsigned, and so
-does an error response. Templates, header names, the algorithm and the
-frozen RFC 9421 key set are pact's — see its Middleware guide.
+does an error response. A template that signs `${x-nonce}` makes each
+request single-use: pact refuses a missing nonce and a key's second use of
+one inside the window (pact's `claimNonce` hook shares that memory across
+replicas). Templates, header names, the algorithm and the frozen RFC 9421 key
+set are pact's — see its Middleware guide.
 
 ### Encrypted payloads
 
@@ -373,11 +411,12 @@ a 400 `RAPID_VALIDATION_FAILED` with `details.reason: 'ENCRYPTION_INVALID'`.
 Workers refuses PBKDF2 above 100 000 iterations, and pact hashes passwords at
 600 000 by default, so `register`, `login` and password reset fail there. A
 Workers deployment passes `options: { password: { iterations: 100_000 } }` to
-`Pact.create`. For a different scheme, such as a pepper, pass the
-`hashPassword` / `verifyPassword` hooks. Hashes already stored at a higher
-count cannot be checked on Workers and need a password reset. See the
-Password hashing section of [`@tundralibs/pact`](https://jsr.io/@tundralibs/pact)'s
-Security guide (pact 0.13+).
+`Pact.create`, and adds `pepper`, a server-side secret, to make up the lower
+count (pact 0.14+). For a different scheme, pass the `hashPassword` /
+`verifyPassword` hooks. Hashes already stored at a higher count cannot be
+checked on Workers and need a password reset. See the Password hashing
+section of [`@tundralibs/pact`](https://jsr.io/@tundralibs/pact)'s Security
+guide.
 
 ## Norm + pact
 
