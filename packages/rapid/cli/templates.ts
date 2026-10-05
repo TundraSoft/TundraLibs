@@ -581,8 +581,9 @@ always declared; \`filter: 'access'\` cuts the document PER VIEWER through the
 auth binding — each operation's \`x-access\` judged for the caller, public ones
 kept — or \`(operation, ctx) => boolean\`; pair with \`expose: 'ALL'\` for a
 signed-in production reference; never cut the document by hand).
-\`docs(app, { path, viewer, spec, tryIt, render, layout, guards, expose,
-filter, info, servers, securitySchemes })\` mounts the API reference PAGE itself:
+\`docs(app, { path, viewer, spec, tryIt, render, layout, guards, access,
+expose, filter, info, servers, securitySchemes })\` mounts the API reference PAGE
+itself (\`access\` guards it through the binding and shows in the audit):
 rendered server-side from rapid's templates inside the app's core/layout (no
 CDN; \`layout: false\` opts out), a credential box generated from the declared
 schemes plus an optional sign-in form (\`tryIt: { login: { path, fields } }\`),

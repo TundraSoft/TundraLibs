@@ -108,6 +108,13 @@ export type DocsOptions = OpenApiDocumentOptions & {
   expose?: 'DEVELOPMENT' | 'PRODUCTION' | 'ALL';
   /** Route middleware run before the page (an `authorize()`). */
   guards?: readonly RapidHTTPMiddleware[];
+  /**
+   * Who may open the page, in the auth binding's grammar — the route's
+   * `access`, so the `rapid access` audit lists it like any other route.
+   * Declared only in the modes `expose` serves: elsewhere the page stays
+   * an unguarded 404, indistinguishable from an unrouted path.
+   */
+  access?: string;
 };
 
 /** Pinned third-party viewers (jsDelivr, SRI sha384). */
@@ -311,6 +318,11 @@ export function docs<S extends RapidContextState = RapidContextState>(
       // UI infrastructure, like the runtime scripts: the reference must
       // not list itself, and it is a page of the ui surface only.
       uiOnly: true,
+      // Only where the page exists: a 401 where it is hidden would reveal it.
+      ...(options.access !== undefined &&
+          (expose === 'ALL' || expose === app.mode)
+        ? { access: options.access }
+        : {}),
       template: {
         render,
         prefer: 'html',

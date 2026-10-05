@@ -550,6 +550,37 @@ describe('rapid.endpoints.docs', () => {
     await app.stop();
   });
 
+  it('access guards the page and reaches the audit; where expose hides the page it stays a 404', async () => {
+    const signIn = (app: Application) =>
+      app.auth({
+        authenticate: (ctx) =>
+          ctx.type === 'HTTP' && ctx.headers.get('x-user') === 'ada'
+            ? { id: 'ada' }
+            : undefined,
+        authorize: (ctx) => ctx.auth !== undefined,
+      });
+    const app = await secured();
+    signIn(app);
+    docs(app, { access: 'signed-in' });
+    asserts.assertEquals((await page(app)).status, 401);
+    const signed = await app.fetch(
+      new Request('http://app/docs', { headers: { 'x-user': 'ada' } }),
+    );
+    asserts.assertEquals(signed.status, 200);
+    await signed.body?.cancel();
+    asserts.assertEquals(
+      app.accessReport().find((r) => r.action === 'GET /docs')?.access,
+      'signed-in',
+    );
+    await app.stop();
+
+    const hidden = await secured();
+    signIn(hidden);
+    docs(hidden, { access: 'signed-in', expose: 'PRODUCTION' });
+    asserts.assertEquals((await page(hidden)).status, 404);
+    await hidden.stop();
+  });
+
   it('expose gates like openapi(); pages do not exist on an api-only app', async () => {
     const app = await secured();
     docs(app, { expose: 'PRODUCTION' });
