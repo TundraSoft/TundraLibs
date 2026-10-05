@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.4.0...utils-v1.5.0) (2026-10-05)
+
+
+### Features
+
+* **utils:** `placeholders` option for an unset `${VAR}` in loadConfig ([#759](https://github.com/TundraSoft/TundraLibs/issues/759)) ([9f2cca7](https://github.com/TundraSoft/TundraLibs/commit/9f2cca7afac0e8c97f0a5f80a9e80ab122595abd))
+
+
+### Bug Fixes
+
+* **utils:** judge `placeholders: 'error'` on parsed values, not file text ([#764](https://github.com/TundraSoft/TundraLibs/issues/764)) ([31eb794](https://github.com/TundraSoft/TundraLibs/commit/31eb794c04f7ed9598d3d705e04a8e11342b35d8))
+
 ## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.3.1...utils-v1.4.0) (2026-09-22)
 
 

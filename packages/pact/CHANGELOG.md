@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.14.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.13.0...pact-v0.14.0) (2026-10-05)
+
+
+### Features
+
+* **pact:** attemptMFA returns an MFA lockout instead of throwing ([#772](https://github.com/TundraSoft/TundraLibs/issues/772)) ([ec8de67](https://github.com/TundraSoft/TundraLibs/commit/ec8de6776818b1c2115d48e8be5baa795c6a3cb0))
+* **pact:** password pepper for PBKDF2 hashes ([#771](https://github.com/TundraSoft/TundraLibs/issues/771)) ([9dae25f](https://github.com/TundraSoft/TundraLibs/commit/9dae25f6080cf040509ad5dbb772a0e69d51ef9a))
+* **pact:** per-session ttl on createSession, and verifyPasskeyLogin ([#774](https://github.com/TundraSoft/TundraLibs/issues/774)) ([b9211aa](https://github.com/TundraSoft/TundraLibs/commit/b9211aa1fe7d671c6f5dfb447a04601212c2710b))
+* **pact:** principalsOf resolves many actors, with a getPrincipals batch hook ([#773](https://github.com/TundraSoft/TundraLibs/issues/773)) ([813c54d](https://github.com/TundraSoft/TundraLibs/commit/813c54d7f8214c62c276ad11a5bdba6316518a30))
+* **pact:** six-digit email verification codes with a guess budget ([#776](https://github.com/TundraSoft/TundraLibs/issues/776)) ([97a3250](https://github.com/TundraSoft/TundraLibs/commit/97a325068f433c749334d75fa3a2e7e0cbf49e6f))
+* **pact:** verifyOAuth, per-provider emailTrust, and verified-email account linking ([#775](https://github.com/TundraSoft/TundraLibs/issues/775)) ([1b74804](https://github.com/TundraSoft/TundraLibs/commit/1b74804e99e07011dbee9c4ae4affec24dc15367))
+
+
+### Bug Fixes
+
+* **pact:** enforce single-use HMAC nonces when the template signs one ([#769](https://github.com/TundraSoft/TundraLibs/issues/769)) ([803251b](https://github.com/TundraSoft/TundraLibs/commit/803251b47fba2405051832f8d43936aefd72fc04))
+* **pact:** refuse OIDC discovery endpoints off the issuer's host ([#770](https://github.com/TundraSoft/TundraLibs/issues/770)) ([4b95f78](https://github.com/TundraSoft/TundraLibs/commit/4b95f78cba05e87107b0c9969a1b14fcafa3f459))
+
 ## [0.13.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.12.1...pact-v0.13.0) (2026-10-01)
 
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.4...rapid-v0.9.0) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **rapid:** `Application.initialize` loads config files with `placeholders: 'error'`, so a `${VAR}` that is not set fails the boot naming the file and the variable instead of staying literal text. Pass `placeholders: 'literal'` in the factory options for the old behaviour.
+* **rapid:** `ctx.setAuth` and the pact adapter's `authenticate` middleware are removed. Identity comes only from the binding passed to `app.auth`, which `pactAuth` returns as `binding`; declare `access` strings on routes instead of permission middleware.
+
+### Features
+
+* **rapid:** `compose` — a page's parts run in-process under one request ([#757](https://github.com/TundraSoft/TundraLibs/issues/757)) ([a1d58b4](https://github.com/TundraSoft/TundraLibs/commit/a1d58b46b5de0fff8ec77ffc8b9d6de53c5e362f))
+* **rapid:** `state()`, `surface()`, `clientAddress()` binders; schemas on `param()` and `query()` ([#761](https://github.com/TundraSoft/TundraLibs/issues/761)) ([2f62b2c](https://github.com/TundraSoft/TundraLibs/commit/2f62b2ccb925ad3bb6b4dc147a30eb0a886ee15d))
+* **rapid:** an unset `${VAR}` in a config file fails the boot ([8e3e30d](https://github.com/TundraSoft/TundraLibs/commit/8e3e30dc686d0deec43e04b0f94fe7d1f8a335ba))
+* **rapid:** auth binding, `access` strings and the access audit ([24f1847](https://github.com/TundraSoft/TundraLibs/commit/24f1847bc30709f2eb32842e2dcc30396d1f57f3))
+* **rapid:** layoutData — a route hands per-page data to the module layout ([#778](https://github.com/TundraSoft/TundraLibs/issues/778)) ([67bfd79](https://github.com/TundraSoft/TundraLibs/commit/67bfd79c62f93cc74698d3f7979e9fd5ebf241ef))
+* **rapid:** per-viewer OpenAPI `filter` on openapi() and docs() ([#762](https://github.com/TundraSoft/TundraLibs/issues/762)) ([08dd28e](https://github.com/TundraSoft/TundraLibs/commit/08dd28ecce9cd708c757e806ff7f63215bb677a9))
+* **rapid:** route `cache` option and the `app.cache()` store binding ([#758](https://github.com/TundraSoft/TundraLibs/issues/758)) ([c580a30](https://github.com/TundraSoft/TundraLibs/commit/c580a304db1227ade39a6c0658ac9df9c75a8202))
+* **rapid:** tenant resolver and per-surface schemes on the pact binding ([#777](https://github.com/TundraSoft/TundraLibs/issues/777)) ([b940a74](https://github.com/TundraSoft/TundraLibs/commit/b940a741dd53c20894ebf149b264b29326fa4431))
+
 ## [0.8.4](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.8.3...rapid-v0.8.4) (2026-10-01)
 
 
