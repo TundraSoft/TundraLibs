@@ -67,8 +67,10 @@ export type RapidContextResponse = {
    * must be a declared part (else RAPID_RESPONSE_INVALID), a part left
    * out runs nothing and gets no slot, and a part named here still runs
    * its own `access` — choosing is never permission. Deferred parts load
-   * only when named. A `?parts=` fetch does not run the handler, so it
-   * is judged part by part as before. Read only on a composed page.
+   * only when named. An empty list composes nothing: no part runs and no
+   * `content.parts` is attached, so the route answers its plain resource.
+   * A `?parts=` fetch does not run the handler, so it is judged part by
+   * part as before. Read only on a composed page.
    */
   compose?: readonly string[];
   /** HTTP status / JOB outcome / SOCKET ok-error. */
