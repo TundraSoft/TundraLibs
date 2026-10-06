@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.12.0...rapid-v0.12.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **rapid:** a composed page that chooses no parts attaches none ([#787](https://github.com/TundraSoft/TundraLibs/issues/787)) ([0180552](https://github.com/TundraSoft/TundraLibs/commit/01805525732589825e64d62704bf9e7ff35876a3))
+
 ## [0.12.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.11.0...rapid-v0.12.0) (2026-10-05)
 
 
