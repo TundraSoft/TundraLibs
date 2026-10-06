@@ -718,16 +718,20 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         if (plan !== undefined) {
           const composed = (
             reply: RapidContextResponse | void,
-          ): void | Promise<void> =>
-            this.__composable(reply, ctx)
-              ? this.__compose(
-                ctx,
-                entry,
-                plan,
-                undefined,
-                chosenParts(plan, reply.compose, ctx.action),
-              ).then((parts) => apply(reply, parts))
+          ): void | Promise<void> => {
+            const chosen = reply === undefined || reply === null
+              ? undefined
+              : chosenParts(plan, reply.compose, ctx.action);
+            // Chose none: the reply is not a composition this time — no
+            // parts run and no `content.parts` is attached, so the page's
+            // route can answer its plain resource (an API read).
+            if (chosen?.size === 0) return apply(reply);
+            return this.__composable(reply, ctx)
+              ? this.__compose(ctx, entry, plan, undefined, chosen).then((
+                parts,
+              ) => apply(reply, parts))
               : apply(reply);
+          };
           return thenable
             ? (returned as Promise<RapidContextResponse | void>).then(composed)
             : composed(returned as RapidContextResponse | void);

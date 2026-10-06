@@ -620,7 +620,9 @@ class Organisations extends RapidModule {
   tile and lets its handler pick: `return { content, compose: ['stats',
   'people'] }`. Parts left out run nothing and get no slot — not an
   error slot — and only the chosen deferred parts go into the follow-up
-  URL. The choice only narrows: a name the page does not declare is a
+  URL. `compose: []` composes nothing: no part runs and the reply gets no
+  `content.parts`, so a page route can answer its plain resource (an API
+  read, an empty state). The choice only narrows: a name the page does not declare is a
   500 `RAPID_RESPONSE_INVALID`, and a chosen part still runs its own
   `access`, so choosing is never permission. A `?parts=` fetch runs no
   handler and is judged part by part, so it is the parts' own `access`

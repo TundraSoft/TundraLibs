@@ -610,7 +610,9 @@ describe('rapid.compose — the handler chooses its parts', () => {
       const pick = ctx.headers.get('x-pick');
       return {
         content: { title: 'pick' },
-        ...(pick === null ? {} : { compose: pick.split(',') }),
+        ...(pick === null
+          ? {}
+          : { compose: pick === '' ? [] : pick.split(',') }),
       };
     });
   const fetchAs = (app: Application, path: string, pick?: string) =>
@@ -641,6 +643,20 @@ describe('rapid.compose — the handler chooses its parts', () => {
     const all = await (await fetchAs(app, '/pick/acme')).text();
     asserts.assertStringIncludes(all, 'data-part="billing"');
     asserts.assertStringIncludes(all, 'parts=people%2Cslow');
+  });
+
+  it('choosing none composes nothing: the reply is the plain resource, with no parts key', async () => {
+    const app = await boot({ prefer: 'json' }, picking);
+    asserts.assertEquals(await (await fetchAs(app, '/pick/acme', '')).json(), {
+      title: 'pick',
+    });
+    // Choosing some still attaches them.
+    asserts.assertEquals(
+      Object.keys(
+        (await (await fetchAs(app, '/pick/acme', 'stats')).json()).parts,
+      ),
+      ['stats'],
+    );
   });
 
   it('a choice only narrows: an undeclared name is RAPID_RESPONSE_INVALID, and ?parts= stays judged part by part', async () => {
