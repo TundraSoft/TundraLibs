@@ -27,6 +27,7 @@ import type {
   TableHooks,
 } from './definition/mod.ts';
 import { type DigestAlgorithm, hashSiblingOf } from './definition/Column.ts';
+import { isComposedRegistry } from './definition/schema.ts';
 import {
   buildWriteGuardians,
   isExpressionValue,
@@ -517,9 +518,12 @@ export function compileRuntime(
   const algorithm = cfg.algorithm ?? DEFAULT_ENCRYPT_ALGORITHM;
 
   // Structural rules (per-definition AND cross-entity) live in ONE
-  // place — the asserts layer. use() already ran this for composed
-  // registries; hand-built ones get identical validation here.
-  assertRegistry(registry, { scope: 'compile()', definitions: true });
+  // place — the asserts layer. A registry from use() is already fully
+  // validated (Entity() checked each definition, use() the graph), so
+  // only hand-built ones are validated here.
+  if (!isComposedRegistry(registry)) {
+    assertRegistry(registry, { scope: 'compile()', definitions: true });
+  }
   const keyDerivation = cfg.keyDerivation ?? 'PBKDF2';
   validateRuntimeConfig(registry, cfg.secret, algorithm, cfg.crypto, {
     keyDerivation,
@@ -549,7 +553,7 @@ export function compileRuntime(
 
   const compiled = new Map<string, CompiledEntity>();
   for (const [key, def] of Object.entries(registry)) {
-    compiled.set(key, compileEntity(def, key));
+    compiled.set(key, sharedCompiledEntity(def, key));
   }
 
   const encryptedFqn = new Map<string, string>();
@@ -655,6 +659,34 @@ export function compileRuntime(
     eager,
     cache,
   };
+}
+
+/**
+ * Compiled entities by definition object, then registry key. A compiled
+ * entity is a pure function of those two — no executor, crypto or cache
+ * config reaches it — and is never mutated after, so every runtime over
+ * the same definitions shares one: composing a registry again (a Norm per
+ * request on an edge runtime) costs neither the Guardian build nor its
+ * memory twice. Weakly held: an unreferenced definition drops its entry.
+ */
+const COMPILED = new WeakMap<AnyDefinition, Map<string, CompiledEntity>>();
+
+/** The shared {@link CompiledEntity} for `def` under `key`, built once. */
+function sharedCompiledEntity(
+  def: AnyDefinition,
+  key: string,
+): CompiledEntity {
+  let byKey = COMPILED.get(def);
+  if (byKey === undefined) {
+    byKey = new Map();
+    COMPILED.set(def, byKey);
+  }
+  let entity = byKey.get(key);
+  if (entity === undefined) {
+    entity = compileEntity(def, key);
+    byKey.set(key, entity);
+  }
+  return entity;
 }
 
 /** Derive one entity's cached metadata + generated Guardians. */
