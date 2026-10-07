@@ -12,12 +12,19 @@ import {
   AlloyDBEngine,
   CitusEngine,
   CockroachEngine,
+  D1Engine,
   MariaEngine,
+  MemcachedEngine,
+  MongoEngine,
+  NeonHttpEngine,
   PlanetScaleEngine,
   PostgresEngine,
+  RedisEngine,
   SQLiteEngine,
+  TursoEngine,
   YugabyteEngine,
 } from './mod.ts';
+import { EngineError } from '../errors/mod.ts';
 
 const PG = { host: 'h', database: 'd', username: 'u' } as const;
 const MY = { host: 'h', database: 'd', username: 'u' } as const;
@@ -101,5 +108,59 @@ describe('drivers.aliases (capability declarations, no connection)', () => {
     asserts.assertEquals(ps.Engine, 'PLANETSCALE');
     asserts.assertEquals(ps.Capabilities.advisoryLock, false);
     asserts.assertEquals(ps.Capabilities.referentialActions, false);
+  });
+});
+
+describe('drivers pool.maxIdle (accepted on socket-pooled engines only)', () => {
+  const closeEach = { min: 0, max: 4, maxIdle: 0 };
+  const refused = (make: () => unknown) => {
+    const error = asserts.assertThrows(make, EngineError);
+    asserts.assertEquals(error.code, 'INVALID_CONFIG_VALUE');
+  };
+
+  it('the socket-pooled engines take maxIdle: 0 (a connection per acquire)', () => {
+    new PostgresEngine('pg-idle', { ...PG, pool: closeEach });
+    new CockroachEngine('crdb-idle', { ...PG, pool: closeEach });
+    new MariaEngine('my-idle', { ...MY, pool: closeEach });
+    new RedisEngine('redis-idle', { host: 'h', pool: closeEach });
+    new MemcachedEngine('mc-idle', { host: 'h', pool: closeEach });
+  });
+
+  it('SQLite refuses it: its pool is pinned to one handle (min 1 > maxIdle 0)', () => {
+    refused(() =>
+      new SQLiteEngine('lite-idle', { path: ':memory:', pool: { maxIdle: 0 } })
+    );
+  });
+
+  it('engines without the socket pool refuse it rather than ignore it', () => {
+    refused(() =>
+      new MongoEngine('mongo-idle', {
+        host: 'h',
+        database: 'd',
+        pool: closeEach,
+      })
+    );
+    refused(() =>
+      new NeonHttpEngine('neon-idle', {
+        host: 'h',
+        database: 'd',
+        username: 'u',
+        pool: closeEach,
+      })
+    );
+    refused(() =>
+      new D1Engine('d1-idle', {
+        accountId: 'a',
+        databaseId: 'd',
+        apiToken: 't',
+        pool: closeEach,
+      })
+    );
+    refused(() =>
+      new TursoEngine('turso-idle', {
+        url: 'libsql://db.example.turso.io',
+        pool: closeEach,
+      })
+    );
   });
 });

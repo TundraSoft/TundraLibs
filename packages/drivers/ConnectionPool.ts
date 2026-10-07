@@ -35,6 +35,7 @@ import type { EnginePoolOptions, EnginePoolStats } from './types/mod.ts';
 const SINGLE_CONNECTION_POOL = {
   min: 1,
   max: 1,
+  maxIdle: 1,
   idleTimeoutMs: 0, // never evict
   acquireTimeoutMs: 30_000,
 } as const;
@@ -51,6 +52,8 @@ const MULTI_CONNECTION_DEFAULTS = {
 export type ResolvedPoolConfig = {
   min: number;
   max: number;
+  /** Most resources kept idle; a release beyond it closes the resource. */
+  maxIdle: number;
   idleTimeoutMs: number;
   acquireTimeoutMs: number;
 };
@@ -58,6 +61,12 @@ export type ResolvedPoolConfig = {
 /** A queued acquirer waiting for a connection to become available. */
 export type Waiter<T> = {
   resolve: (resource: T) => void;
+  /**
+   * Wake the acquirer WITHOUT a resource: it retries on its own, so a
+   * resource it then creates belongs to its own call — what `maxIdle: 0`
+   * needs, where a resource never passes from one acquirer to another.
+   */
+  wake: () => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout> | null;
   /**
@@ -142,6 +151,7 @@ export class ConnectionPool<T> {
 
   private readonly __min: number;
   private readonly __max: number;
+  private readonly __maxIdle: number;
   private readonly __idleTimeoutMs: number;
   private readonly __acquireTimeoutMs: number;
   private readonly __instanceId: () => string;
@@ -156,6 +166,7 @@ export class ConnectionPool<T> {
   constructor(options: ConnectionPoolOptions<T>) {
     this.__min = options.min;
     this.__max = options.max;
+    this.__maxIdle = options.maxIdle;
     this.__idleTimeoutMs = options.idleTimeoutMs;
     this.__acquireTimeoutMs = options.acquireTimeoutMs;
     this.__instanceId = options.instanceId;
@@ -175,9 +186,12 @@ export class ConnectionPool<T> {
   static resolveOptions(
     opt: EnginePoolOptions | undefined,
   ): ResolvedPoolConfig {
-    return opt === undefined ? { ...SINGLE_CONNECTION_POOL } : {
+    if (opt === undefined) return { ...SINGLE_CONNECTION_POOL };
+    const max = opt.max ?? MULTI_CONNECTION_DEFAULTS.max;
+    return {
       min: opt.min ?? MULTI_CONNECTION_DEFAULTS.min,
-      max: opt.max ?? MULTI_CONNECTION_DEFAULTS.max,
+      max,
+      maxIdle: opt.maxIdle ?? max,
       idleTimeoutMs: (opt.idleTimeoutSeconds ?? 180) * 1000,
       acquireTimeoutMs: (opt.acquireTimeoutSeconds ?? 30) * 1000,
     };
@@ -309,10 +323,12 @@ export class ConnectionPool<T> {
     }
 
     // Otherwise queue.
-    return await new Promise<T>((resolve, reject) => {
-      const timeout = timeoutMs ?? this.__acquireTimeoutMs;
+    const timeout = timeoutMs ?? this.__acquireTimeoutMs;
+    const deadline = Date.now() + timeout;
+    const got = await new Promise<T | undefined>((resolve, reject) => {
       const waiter: Waiter<T> = {
         resolve,
+        wake: () => resolve(undefined),
         reject,
         timer: null,
         settled: false,
@@ -340,13 +356,21 @@ export class ConnectionPool<T> {
       }
       this.__waiters.push(waiter);
     });
+    if (got !== undefined) return got;
+    // Woken without a resource (`maxIdle: 0`): a slot freed up, so acquire
+    // again — from this caller — within what is left of the timeout.
+    return await this.acquire(
+      timeout > 0 ? Math.max(1, deadline - Date.now()) : 0,
+    );
   }
 
   /**
    * Return a resource to the pool. If a queued acquirer is waiting, the
-   * resource is validated and then handed to it. Otherwise it goes back to
-   * the idle list with an idle-eviction timer (unless that would drop pool
-   * size below `min` or eviction is disabled).
+   * resource is validated and then handed to it — or, under `maxIdle: 0`,
+   * closed while the waiter is woken to open its own. Otherwise it goes
+   * back to the idle list with an idle-eviction timer (unless that would
+   * drop pool size below `min`, eviction is disabled, or `maxIdle`
+   * resources already sit idle).
    *
    * Calling `release` with a resource not owned by this pool is a no-op.
    */
@@ -364,8 +388,16 @@ export class ConnectionPool<T> {
     // next `acquire`, so a resource that died while checked out is caught
     // there before it can be reused.
     if (!this.__hasLiveWaiter()) {
-      this.__idle.push(resource);
-      this.__scheduleIdleTimer(resource);
+      this.__park(resource);
+      return;
+    }
+
+    // `maxIdle: 0` — a resource per acquire: never hand this one to another
+    // acquirer (on Cloudflare Workers a socket belongs to the request that
+    // opened it). Close it and wake one waiter to open its own.
+    if (this.__maxIdle === 0) {
+      void this.__safeDestroyResource(resource);
+      this.__wakeWaiters(1);
       return;
     }
 
@@ -413,10 +445,7 @@ export class ConnectionPool<T> {
       // synchronously, so drop the hand-off claim first to avoid
       // double-counting it.
       this.__handoff.delete(resource);
-      if (!this.__resolveWaiter(resource)) {
-        this.__idle.push(resource);
-        this.__scheduleIdleTimer(resource);
-      }
+      if (!this.__resolveWaiter(resource)) this.__park(resource);
       return;
     }
 
@@ -469,6 +498,15 @@ export class ConnectionPool<T> {
     return false;
   }
 
+  /** Wake up to `count` live waiters, each to acquire again on its own. */
+  private __wakeWaiters(count: number): void {
+    for (let i = 0; i < count; i++) {
+      const waiter = this.__shiftLiveWaiter();
+      if (waiter === undefined) return;
+      waiter.wake();
+    }
+  }
+
   /** Pop and settle the first live waiter (without giving it a resource). */
   private __shiftLiveWaiter(): Waiter<T> | undefined {
     while (this.__waiters.length > 0) {
@@ -491,6 +529,12 @@ export class ConnectionPool<T> {
     let live = 0;
     for (const waiter of this.__waiters) {
       if (!waiter.settled) live++;
+    }
+    // `maxIdle: 0`: a resource created here would belong to whichever
+    // caller freed the slot — wake the waiters to create their own instead.
+    if (this.__maxIdle === 0) {
+      this.__wakeWaiters(Math.min(live, this.__max - this.size()));
+      return;
     }
     while (live > 0 && this.size() < this.__max) {
       live--;
@@ -525,10 +569,7 @@ export class ConnectionPool<T> {
       await this.__safeDestroyResource(resource);
       return;
     }
-    if (!this.__resolveWaiter(resource)) {
-      this.__idle.push(resource);
-      this.__scheduleIdleTimer(resource);
-    }
+    if (!this.__resolveWaiter(resource)) this.__park(resource);
   }
 
   //#endregion Connection acquisition
@@ -564,6 +605,19 @@ export class ConnectionPool<T> {
     // server session. Destroy it instead of stranding it in a drained pool.
     if (this.__draining) {
       await this.__safeDestroyResource(resource);
+      return;
+    }
+    this.__park(resource);
+  }
+
+  /**
+   * Put a resource on the idle list with its eviction timer — or close it
+   * when `maxIdle` resources already sit idle (`maxIdle: 0` closes every
+   * one: a connection per acquire).
+   */
+  private __park(resource: T): void {
+    if (this.__idle.length >= this.__maxIdle) {
+      void this.__safeDestroyResource(resource);
       return;
     }
     this.__idle.push(resource);
@@ -677,8 +731,8 @@ export class ConnectionPool<T> {
 
 /**
  * Construction-time shape check for the `pool` option. Verifies field
- * types and the `min ≤ max` / `max ≥ 1` invariants; called by the engine's
- * option processing.
+ * types and the `min ≤ max`, `max ≥ 1` and `min ≤ maxIdle ≤ max`
+ * invariants; called by the engine's option processing.
  */
 export function validatePoolOptions(
   value: unknown,
@@ -707,6 +761,20 @@ export function validatePoolOptions(
       ? (pool.max as number)
       : MULTI_CONNECTION_DEFAULTS.max;
     if (pool.min > effectiveMax) return false;
+  }
+  if (pool.maxIdle !== undefined) {
+    // `min ≤ maxIdle ≤ max`: a warm floor above the idle cap would open
+    // connections only to close them, and a cap above `max` caps nothing.
+    if (!nonNegativeInt(pool.maxIdle)) return false;
+    const max = pool.max !== undefined
+      ? (pool.max as number)
+      : MULTI_CONNECTION_DEFAULTS.max;
+    const min = typeof pool.min === 'number'
+      ? pool.min
+      : MULTI_CONNECTION_DEFAULTS.min;
+    if ((pool.maxIdle as number) > max || min > (pool.maxIdle as number)) {
+      return false;
+    }
   }
   if (
     pool.idleTimeoutSeconds !== undefined &&

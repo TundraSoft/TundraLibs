@@ -959,3 +959,26 @@ describe({
     });
   },
 });
+
+describe({
+  name: 'drivers.MariaEngine pool.maxIdle',
+  ignore: !mariaAvailable,
+  fn: () => {
+    it('maxIdle 0 closes each connection on release and still serves the next query', async () => {
+      const engine = new MariaEngine('maria-max-idle', {
+        ...TEST_CONFIG,
+        pool: { min: 0, max: 2, maxIdle: 0 },
+      });
+      await engine.connect();
+      try {
+        for (let i = 0; i < 2; i++) {
+          const r = await engine.execute({ sql: 'SELECT 1 AS v' });
+          asserts.assertEquals(r.data.length, 1);
+          asserts.assertEquals(engine.poolStats.total, 0);
+        }
+      } finally {
+        await engine.disconnect();
+      }
+    });
+  },
+});
