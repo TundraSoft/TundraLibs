@@ -93,19 +93,19 @@ before adopting is tooling rather than new query power.
 - **User-facing prepared statements.** Every call recompiles IR to SQL.
 - **A connection pinned per request (edge).** Parked. On Cloudflare
   Workers a socket cannot outlive its request, so a deployment either
-  builds a `Norm` per request (composition costs CPU and memory each
-  time) or shares one with `pool: { maxIdle: 0 }` (drivers 1.5.0), which
-  reconnects for every query outside a transaction. A UAT on Hyperdrive
-  (2026-10-07) measured the shared `maxIdle: 0` Norm slower than a Norm
-  per request for requests making 1–3 queries: CPU p50 5.65 vs 3.32 ms,
-  wall p50 250 vs 169 ms. The fix would be one shared compiled schema
-  plus one connection per request, reserved lazily on the first query
-  and released when the request ends. That needs a driver reserve
-  without `BEGIN` and a request-scoped norm handle: two public APIs
-  whose gain over a Norm per request is memory (about 16–22 MB per
-  isolate in that UAT), not CPU. Revisit when a consumer hits memory
-  limits that trace back to per-request Norms, or another case needs
-  one connection per request.
+  builds a `Norm` per request or shares one with `pool: { maxIdle: 0 }`
+  (drivers 1.5.0), which reconnects for every query outside a
+  transaction. A UAT on Hyperdrive (2026-10-07) measured the shared
+  `maxIdle: 0` Norm slower than a Norm per request for requests making
+  1–3 queries: CPU p50 5.65 vs 3.32 ms, wall p50 250 vs 169 ms. A Norm
+  per request is also cheap now that compiled entities are shared
+  across instances: about 0.3 ms and 32 KB per `use()` for a 54-table
+  registry. The remaining gain of one shared Norm plus one connection
+  per request, reserved lazily on the first query and released when the
+  request ends, is small, and it needs a driver reserve without `BEGIN`
+  and a request-scoped norm handle: two public APIs. Revisit when a
+  consumer measures a cost that a Norm per request still carries, or
+  another case needs one connection per request.
 
 ### Tooling / maintainability
 
