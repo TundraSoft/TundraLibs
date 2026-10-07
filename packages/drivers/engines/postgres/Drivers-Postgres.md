@@ -117,8 +117,18 @@ const pg = new PostgresEngine('app', {
   password: hyperdrive.password,
   database: hyperdrive.database,
   allowMd5Password: true,
+  // A connection per acquire: no socket outlives its request.
+  pool: { min: 0, max: 4, maxIdle: 0 },
 });
 ```
+
+Build that engine once per isolate and reuse it across requests. Workers
+refuses to let one request use a socket another request opened, so the pool
+must never keep or pass on a connection: `maxIdle: 0` closes each one on
+release and lets a waiting request open its own. Hyperdrive pools the real
+database connections on its side, so a fresh socket per acquire is cheap.
+Without `maxIdle: 0`, a shared engine fails every other request with
+`Cannot perform I/O on behalf of a different request`.
 
 ## Quick Start
 

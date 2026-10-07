@@ -1512,6 +1512,11 @@ export abstract class SQLEngine<
   O extends SQLEngineOptions = SQLEngineOptions,
   E extends SQLEngineEvents = SQLEngineEvents,
 > extends SQLConnectionEngine<T, O, E> {
+  /** Runs on the built-in socket pool. @internal */
+  protected override _hasSocketPool(): boolean {
+    return true;
+  }
+
   //#region Pool
 
   /**

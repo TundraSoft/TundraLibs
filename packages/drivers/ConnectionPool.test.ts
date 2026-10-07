@@ -31,6 +31,8 @@ function makePool(
   const pool = new ConnectionPool<Res>({
     min: 0,
     max: 2,
+    // As `resolveOptions` does: the idle cap defaults to `max`.
+    maxIdle: overrides.max ?? 2,
     idleTimeoutMs: 0,
     acquireTimeoutMs: 1000,
     instanceId: () => 'FAKE::pool',
@@ -50,12 +52,85 @@ function makePool(
   return { pool, state };
 }
 
+describe('drivers.ConnectionPool — maxIdle', () => {
+  it('keeps at most maxIdle resources idle and closes the rest on release', async () => {
+    const { pool, state } = makePool({ max: 3, maxIdle: 1 });
+    const a = await pool.acquire();
+    const b = await pool.acquire();
+    pool.release(a);
+    pool.release(b);
+    await Promise.resolve();
+    asserts.assertEquals(pool.stats().idle, 1);
+    asserts.assertEquals(state.destroyed, 1);
+    asserts.assert(b.closed && !a.closed);
+  });
+
+  it('maxIdle 0: every release closes, the pool still serves, and a waiter opens its own resource — never a released one', async () => {
+    const { pool, state } = makePool({ max: 1, maxIdle: 0 });
+    const first = await pool.acquire();
+    pool.release(first);
+    await Promise.resolve();
+    asserts.assert(first.closed);
+    asserts.assertEquals(pool.stats().idle, 0);
+    // Still connected: the next acquire opens a fresh resource.
+    const second = await pool.acquire();
+    asserts.assertEquals(second.id, 2);
+    // Saturated with a waiter queued: the release closes, and the waiter
+    // creates its own (on Workers a socket belongs to its opener).
+    const waiting = pool.acquire();
+    pool.release(second);
+    const third = await waiting;
+    asserts.assert(second.closed);
+    asserts.assertEquals(third.id, 3);
+    asserts.assertEquals(state.created, 3);
+    pool.release(third);
+  });
+
+  it('maxIdle 0: a destroyed resource wakes a waiter to open its own', async () => {
+    const { pool } = makePool({ max: 1, maxIdle: 0 });
+    const held = await pool.acquire();
+    const waiting = pool.acquire();
+    await pool.destroy(held);
+    const fresh = await waiting;
+    asserts.assertEquals(fresh.id, 2);
+    pool.release(fresh);
+  });
+
+  it('maxIdle 0: a woken waiter keeps what is left of its timeout', async () => {
+    const { pool } = makePool({ max: 1, maxIdle: 0 });
+    const held = await pool.acquire();
+    const started = Date.now();
+    const waiting = pool.acquire(200);
+    await new Promise((r) => setTimeout(r, 150));
+    // Another caller takes the freed slot first: the woken waiter queues
+    // again with ~50ms left — not a fresh 200ms.
+    pool.release(held);
+    const thief = await pool.acquire();
+    await asserts.assertRejects(() => waiting, EngineError);
+    const elapsed = Date.now() - started;
+    asserts.assert(elapsed < 300, `waited ${elapsed}ms`);
+    pool.release(thief);
+  });
+
+  it('validates min ≤ maxIdle ≤ max', () => {
+    asserts.assert(validatePoolOptions({ max: 4, maxIdle: 0 }));
+    asserts.assert(validatePoolOptions({ min: 1, max: 4, maxIdle: 1 }));
+    asserts.assertFalse(validatePoolOptions({ min: 1, maxIdle: 0 }));
+    asserts.assertFalse(validatePoolOptions({ max: 2, maxIdle: 3 }));
+    asserts.assertFalse(validatePoolOptions({ maxIdle: -1 }));
+    asserts.assertFalse(validatePoolOptions({ maxIdle: 1.5 }));
+    // The implicit max (10) bounds it too.
+    asserts.assertFalse(validatePoolOptions({ maxIdle: 11 }));
+  });
+});
+
 describe('drivers.ConnectionPool', () => {
   describe('resolveOptions', () => {
     it('should default to single-connection when no pool option is given', () => {
       asserts.assertEquals(ConnectionPool.resolveOptions(undefined), {
         min: 1,
         max: 1,
+        maxIdle: 1,
         idleTimeoutMs: 0,
         acquireTimeoutMs: 30_000,
       });
@@ -65,6 +140,7 @@ describe('drivers.ConnectionPool', () => {
       asserts.assertEquals(ConnectionPool.resolveOptions({ max: 5 }), {
         min: 0,
         max: 5,
+        maxIdle: 5,
         idleTimeoutMs: 180_000,
         acquireTimeoutMs: 30_000,
       });

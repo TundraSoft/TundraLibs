@@ -158,7 +158,9 @@ of the four works the same as on Deno/Bun/Node, as long as the target is
 reachable from them. The Edge-safe column tracks _fetch-only_ portability
 across every edge runtime, including Vercel Edge, which has no socket
 primitive at all; Workers and Deno Deploy are the two edge targets where the
-TCP engines also happen to work.
+TCP engines also happen to work. On Workers, an engine reused across requests
+must not keep connections between them: configure `pool.maxIdle: 0` (see the
+pool semantics in [BaseEngine](./Drivers-BaseEngine.md#pool-semantics)).
 
 Still **planned** (see [`ROADMAP.md`](../ROADMAP.md) → _Planned / deferred_), a
 thin transport swap over its existing translator:

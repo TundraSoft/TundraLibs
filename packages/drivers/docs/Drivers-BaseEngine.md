@@ -158,7 +158,7 @@ class MyEngine extends BaseEngine<MyConnection, MyOptions> {
 | `username`    | `string`                                                                               | —                   | Optional.                                                                                                                                                                                                                     |
 | `password`    | `string`                                                                               | —                   | Optional.                                                                                                                                                                                                                     |
 | `database`    | `string \| number`                                                                     | —                   | Most engines use string DB name; Redis uses numeric index.                                                                                                                                                                    |
-| `pool`        | `{ min, max, idleTimeoutSeconds, acquireTimeoutSeconds }`                              | unset → single-conn | See [Pool semantics](#pool-semantics).                                                                                                                                                                                        |
+| `pool`        | `{ min, max, maxIdle, idleTimeoutSeconds, acquireTimeoutSeconds }`                     | unset → single-conn | See [Pool semantics](#pool-semantics).                                                                                                                                                                                        |
 | `ssl`         | `boolean \| { ca, cert, key, certFile, keyFile, caFile, rejectUnauthorized, enforce }` | —                   | `compat` `TLSOptions` plus engine-only `enforce` (default `true`). Inline PEM via `cert`/`key`/`ca` (`ca` is `string[]`) or paths via `certFile`/`keyFile`/`caFile`. `enforce: false` falls back to plaintext on TLS failure. |
 | `idGenerator` | `(prefix?: string) => string`                                                          | ULID with prefix    | Used for query / transaction ids.                                                                                                                                                                                             |
 
@@ -225,6 +225,19 @@ The pool lives inline on the engine. Two modes:
 - Destroying a connection (`_destroy`, or a failed validation) frees a
   pool slot, so a queued waiter is backfilled with a new connection rather
   than left to time out
+- `pool.maxIdle` (default `max`, between `min` and `max`) caps the idle
+  list: a connection released while that many sit idle is closed instead.
+  `maxIdle: 0` is a **connection per acquire** — every release closes, and
+  a freed slot wakes a queued waiter to open its OWN connection rather than
+  handing it one. That is what Cloudflare Workers needs: a socket belongs to
+  the request that opened it, so one engine per isolate is safe only when
+  no connection outlives its request (see
+  [Postgres → Hyperdrive](../engines/postgres/Drivers-Postgres.md#md5)). On
+  a long-running server it costs a connect per query; to close connections
+  after a quiet spell there, use `idleTimeoutSeconds` instead. Accepted only
+  by the socket-pooled engines (Postgres and its aliases, MariaDB, Redis,
+  Memcached); SQLite pins one handle and the pool-free engines (Mongo, Neon,
+  Turso, D1) refuse it with `INVALID_CONFIG_VALUE`
 
 ```typescript
 import type { EngineOptions } from '@tundralibs/drivers/types';

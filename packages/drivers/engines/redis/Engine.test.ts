@@ -1222,3 +1222,27 @@ describe('drivers.RedisEngine - transport-reject poisoning (offline)', () => {
     await engine.disconnect();
   });
 });
+
+describe({
+  name: 'drivers.RedisEngine pool.maxIdle',
+  ignore: !redisAvailable,
+  fn: () => {
+    it('maxIdle 0 closes each connection on release and still serves the next call', async () => {
+      const engine = new RedisEngine('redis-max-idle', {
+        ...TEST_CONFIG,
+        pool: { min: 0, max: 2, maxIdle: 0 },
+      });
+      await engine.connect();
+      const key = `tundra-max-idle-${Date.now()}`;
+      try {
+        await engine.set(key, 'v', { ex: 60 });
+        asserts.assertEquals(engine.poolStats.total, 0);
+        asserts.assertEquals(await engine.get(key), 'v');
+        asserts.assertEquals(engine.poolStats.total, 0);
+      } finally {
+        await engine.del(key).catch(() => 0);
+        await engine.disconnect();
+      }
+    });
+  },
+});

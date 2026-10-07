@@ -416,6 +416,17 @@ export abstract class ConnectionEngine<
    *
    * @internal
    */
+  /**
+   * Whether this engine runs on the built-in socket pool — what the
+   * `pool.maxIdle` option caps. False on the pool-free roots; the pooled
+   * bases override it.
+   *
+   * @internal
+   */
+  protected _hasSocketPool(): boolean {
+    return false;
+  }
+
   protected override _processOption<K extends keyof O>(
     key: K,
     value: O[K],
@@ -490,7 +501,21 @@ export abstract class ConnectionEngine<
             instanceId: this.instanceId,
             option: optionKey,
             reason:
-              'must be an object with optional positive integer "min", "max" (min ≤ max), idleTimeoutSeconds, acquireTimeoutSeconds',
+              'must be an object with optional non-negative integer "min", "max", "maxIdle" (min ≤ maxIdle ≤ max, max ≥ 1), idleTimeoutSeconds, acquireTimeoutSeconds',
+          });
+        }
+        // A driver without the socket pool (a fetch-based edge driver, or
+        // one whose client pools internally) has nothing `maxIdle` could
+        // cap: refuse it rather than accept a setting that does nothing.
+        if (
+          (value as { maxIdle?: unknown } | undefined)?.maxIdle !==
+            undefined && !this._hasSocketPool()
+        ) {
+          throw new EngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: optionKey,
+            reason:
+              'maxIdle needs the driver socket pool, and this driver has none (it is fetch-based or its client pools internally)',
           });
         }
         break;
@@ -535,6 +560,11 @@ export abstract class PooledConnectionEngine<
   O extends EngineOptions = EngineOptions,
   E extends EngineEvents = EngineEvents,
 > extends ConnectionEngine<T, O, E> {
+  /** Runs on the built-in socket pool. @internal */
+  protected override _hasSocketPool(): boolean {
+    return true;
+  }
+
   //#region Pool
 
   /**
