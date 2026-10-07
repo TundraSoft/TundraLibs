@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.4.1...drivers-v1.5.0) (2026-10-07)
+
+
+### Features
+
+* **drivers:** pool.maxIdle — at most maxIdle idle connections; 0 is a connection per acquire ([#789](https://github.com/TundraSoft/TundraLibs/issues/789)) ([63f77ea](https://github.com/TundraSoft/TundraLibs/commit/63f77ea07c4e2742850c790c852ed986ce641a55))
+
 ## [1.4.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.4.0...drivers-v1.4.1) (2026-10-01)
 
 
