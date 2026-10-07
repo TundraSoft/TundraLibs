@@ -40,12 +40,18 @@ function run(
   res: PactExpressResponse;
   sent: Sent;
   sentHeaders: Map<string, string>;
+  /** Settles when `res.send` runs — after the adapter sealed the body. */
+  whenSent: Promise<void>;
   nextCalls: () => number;
   nextError: () => unknown;
   next: (error?: unknown) => void;
 } {
   const sent: Sent = {};
   const sentHeaders = new Map<string, string>();
+  let markSent!: () => void;
+  const whenSent = new Promise<void>((resolve) => {
+    markSent = resolve;
+  });
   let calls = 0;
   let caught: unknown;
   const res: PactExpressResponse = {
@@ -60,6 +66,7 @@ function run(
     },
     send: (body) => {
       sent.body = body;
+      markSent();
     },
     setHeader: (name, value) => sentHeaders.set(name, value),
   };
@@ -68,6 +75,7 @@ function run(
     res,
     sent,
     sentHeaders,
+    whenSent,
     nextCalls: () => calls,
     nextError: () => caught,
     next: (error?: unknown) => {
@@ -166,7 +174,9 @@ describe('expressPact().authenticate', () => {
     asserts.assertStrictEquals(m.nextCalls(), 1);
     asserts.assertStrictEquals(m.req.pact?.via, 'HMAC');
     m.res.status(201).json({ ok: true });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // The adapter seals asynchronously (HMAC over WebCrypto): wait for the
+    // send itself, not a fixed delay a loaded runner can outlast.
+    await m.whenSent;
     asserts.assertStrictEquals(m.sent.body, '{"ok":true}');
     asserts.assertStrictEquals(
       m.sentHeaders.get('content-type'),
@@ -224,7 +234,7 @@ describe('expressPact().authenticate', () => {
       '{"a":1}',
     );
     m.res.json!({ b: 2 });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await m.whenSent;
     asserts.assertStrictEquals(
       m.sentHeaders.get('content-type'),
       'application/jose',
