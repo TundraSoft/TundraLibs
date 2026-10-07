@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.11.0...norm-v1.11.1) (2026-10-07)
+
+
+### Performance
+
+* **norm:** share compiled entities across Norm instances ([#793](https://github.com/TundraSoft/TundraLibs/issues/793)) ([1d233cd](https://github.com/TundraSoft/TundraLibs/commit/1d233cd081c3f22910aa2fc3e369f38481797893))
+
+
+### Documentation
+
+* **norm:** park the per-request pinned connection on the roadmap ([#792](https://github.com/TundraSoft/TundraLibs/issues/792)) ([01ce534](https://github.com/TundraSoft/TundraLibs/commit/01ce534d5afd286427bd66e1fb0cb4e904d12988))
+
 ## [1.11.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.10.0...norm-v1.11.0) (2026-10-05)
 
 
