@@ -105,6 +105,36 @@ describe('norm.compile (reverse naming + crypto validation + scope defaults)', (
     asserts.assertStringIncludes(err.message, 'collides with column');
   });
 
+  it('runtimes over the same definitions share one compiled entity — the Guardians are built once', () => {
+    const Post = Entity('posts', {
+      id: Column.integer(),
+      title: Column.varchar(40),
+    }, { pk: ['id'] });
+    const first = compile(use(Schema('S', { Post })));
+    const again = compile(use(Schema('S', { Post })));
+    const entity = first.compiled.get('Post');
+    asserts.assertExists(entity?.guardians);
+    asserts.assertStrictEquals(again.compiled.get('Post'), entity);
+    // A different definition object compiles on its own.
+    const Copy = Entity('posts', {
+      id: Column.integer(),
+      title: Column.varchar(40),
+    }, { pk: ['id'] });
+    const other = compile(use(Schema('S', { Post: Copy })));
+    asserts.assertNotStrictEquals(other.compiled.get('Post'), entity);
+  });
+
+  it('a hand-built registry is still validated at compile time', () => {
+    const Orphan = Entity('orphans', {
+      id: Column.integer(),
+      mid: Column.integer(),
+    }, {
+      pk: ['id'],
+      fk: { M: { model: 'Missing', on: { mid: 'id' } } },
+    });
+    asserts.assertThrows(() => compile({ Orphan }), NormDefinitionError);
+  });
+
   it('reverseAs colliding with a TARGET FK ALIAS is a definition error', () => {
     const Other = Entity('others', { id: Column.integer() }, { pk: ['id'] });
     const WithFk = Entity('withfks', {

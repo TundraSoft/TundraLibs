@@ -174,6 +174,18 @@ function injectAuditReplicas(
  * ../asserts/registry.ts (single source; also run by compile for
  * hand-built registries).
  */
+/**
+ * Registries {@link use} built — every definition validated by `Entity()`
+ * and the cross-entity rules checked here — so `compileRuntime` need not
+ * re-validate them.
+ */
+const COMPOSED = new WeakSet<object>();
+
+/** Whether `registry` came from {@link use} (fully validated). @internal */
+export function isComposedRegistry(registry: object): boolean {
+  return COMPOSED.has(registry);
+}
+
 function validateRegistry(
   scope: string,
   entities: Record<string, AnyDefinition>,
@@ -258,6 +270,7 @@ export function use<const S extends readonly SchemaValue[]>(
   }
 
   validateRegistry('use()', merged, false);
+  COMPOSED.add(merged);
 
   return merged as ComposedSchema<S>;
 }
