@@ -46,8 +46,6 @@ export type LiveEngine = AnySQLEngine | MongoEngine;
 export type LiveDialect = {
   /** TIMESTAMP readback → epoch millis. */
   asTime(v: unknown): number;
-  /** BIGINT readback → bigint. */
-  asBig(v: unknown): bigint;
   /** JSON readback → parsed value. */
   asJson(v: unknown): unknown;
 };
@@ -81,7 +79,7 @@ function appRegistry() {
 
 /** Register the 20-step Shortly suite against the given fixture. */
 export function runLiveSuite(fixture: LiveFixture): void {
-  const { asTime, asBig, asJson } = fixture.dialect;
+  const { asTime, asJson } = fixture.dialect;
 
   let norm: Norm;
   let db: NormDb<ReturnType<typeof appRegistry>>;
@@ -665,11 +663,13 @@ export function runLiveSuite(fixture: LiveFixture): void {
 
     // ── 11-12 Dialect edges: bigint, JSON ─────────────────────────────
 
-    step('11 bigint survives beyond Number.MAX_SAFE_INTEGER', async () => {
-      const big = 1152921504606846976n; // 2^60
-      await db.repo('Links').update({ clicks: big }, { '@id': 1 });
-      const back = await db.repo('Links').getByPK({ id: 1 });
-      asserts.assertEquals(asBig(back.data?.clicks), big);
+    step('11 bigint reads back as bigint, safe and beyond 2^53', async () => {
+      // Small values too: SQLite returns a safe INTEGER as `number`.
+      for (const big of [1n, 2n ** 60n]) {
+        await db.repo('Links').update({ clicks: big }, { '@id': 1 });
+        const back = await db.repo('Links').getByPK({ id: 1 });
+        asserts.assertStrictEquals(back.data?.clicks, big);
+      }
     });
 
     step(

@@ -35,7 +35,6 @@ runLiveSuite({
   },
   dialect: {
     asTime: (v) => new Date(v as string | Date).getTime(),
-    asBig: (v) => BigInt(String(v)),
     asJson: (v) => v, // norm parses JSON TEXT on read — no normaliser
   },
 });
