@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.12.1...rapid-v0.13.0) (2026-10-19)
+
+
+### Features
+
+* **rapid:** type the test client body and expose the raw text ([#800](https://github.com/TundraSoft/TundraLibs/issues/800)) ([f266ea8](https://github.com/TundraSoft/TundraLibs/commit/f266ea8bfda5e14ba035eb90d9cd7e89b72237e2)), closes [#799](https://github.com/TundraSoft/TundraLibs/issues/799)
+
+
+### Bug Fixes
+
+* **rapid:** load the agent guides and cover what agents re-implement ([#810](https://github.com/TundraSoft/TundraLibs/issues/810)) ([395370c](https://github.com/TundraSoft/TundraLibs/commit/395370cf1707ccd2e732c8754b5553642f5fb294))
+
 ## [0.12.1](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.12.0...rapid-v0.12.1) (2026-10-06)
 
 

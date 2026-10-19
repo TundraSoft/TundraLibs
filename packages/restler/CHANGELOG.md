@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.3.1...restler-v1.3.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **restler:** join URL paths with the POSIX join on every platform ([#805](https://github.com/TundraSoft/TundraLibs/issues/805)) ([291e4da](https://github.com/TundraSoft/TundraLibs/commit/291e4da5204db1cccc02387551921dee091da9e9))
+
 ## [1.3.1](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.3.0...restler-v1.3.1) (2026-09-24)
 
 

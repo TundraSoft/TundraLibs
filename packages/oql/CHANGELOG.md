@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.4.0...oql-v1.5.0) (2026-10-19)
+
+
+### Features
+
+* **oql:** add the TO_STRING expression ([#801](https://github.com/TundraSoft/TundraLibs/issues/801)) ([41447d3](https://github.com/TundraSoft/TundraLibs/commit/41447d38e1baf6c40787f2d36693eaf429730565))
+
 ## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.3.0...oql-v1.4.0) (2026-10-05)
 
 
