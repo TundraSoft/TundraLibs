@@ -82,6 +82,30 @@ describe('rapid/testing client', () => {
     await app.stop();
   });
 
+  it('types body by the generic and keeps the raw text', async () => {
+    const app = await Application.initialize({
+      name: 'client-text-test',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+      uploads: { path: '/tmp/rapid-client-test' },
+    });
+    app.get('/echo/:name:', (ctx) => ({
+      content: { hi: ctx.args.params.name },
+    }));
+    app.get('/page', () => ({
+      headers: { 'content-type': 'text/html' },
+      content: '<h1>Pricing</h1>',
+    }));
+    const api = client(app);
+    const json = await api.get<{ hi: string }>('/echo/ada');
+    const hi: string = json.body.hi; // compiles only through the generic
+    asserts.assertEquals(hi, 'ada');
+    asserts.assertEquals(JSON.parse(json.text), { hi: 'ada' });
+    const page = await api.get('/page');
+    asserts.assertEquals(page.text, '<h1>Pricing</h1>');
+    await app.stop();
+  });
+
   it('view() hands a frozen bag with defaults; overrides and extras merge', () => {
     const bag = view();
     asserts.assert(Object.isFrozen(bag));
