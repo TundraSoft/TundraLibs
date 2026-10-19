@@ -1131,6 +1131,73 @@ export const isDecryptExpression: (
 };
 
 /**
+ * Asserts that a value is a valid TO_STRING expression — the text form of
+ * one column or scalar literal.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If `args` is missing or not a column, string, number, bigint, or boolean
+ *
+ * @example
+ * ```ts
+ * assertToStringExpression({ $$_expression: 'TO_STRING', args: '@id' }, ['id']);
+ * ```
+ */
+export const assertToStringExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { $$_expression: 'TO_STRING' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { $$_expression: 'TO_STRING' }> => {
+  assertBaseExpression(x, 'TO_STRING');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for TO_STRING expression`,
+    );
+  }
+  if (isColumnIdentifier(x.args, columnList)) return;
+  if (
+    typeof x.args !== 'string' &&
+    typeof x.args !== 'number' &&
+    typeof x.args !== 'bigint' &&
+    typeof x.args !== 'boolean'
+  ) {
+    throw new TypeError(
+      `Invalid Expression definition: args must be a string, number, bigint, boolean, or column identifier in TO_STRING expression, got ${typeof x
+        .args}`,
+    );
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid TO_STRING expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid TO_STRING expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * isToStringExpression({ $$_expression: 'TO_STRING', args: '@id' }); // true
+ * ```
+ */
+export const isToStringExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { $$_expression: 'TO_STRING' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { $$_expression: 'TO_STRING' }> => {
+  try {
+    assertToStringExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Asserts that a value is a valid HASH expression.
  *
  * HASH creates a cryptographic hash of the provided data.
@@ -1236,6 +1303,7 @@ export const isHashExpression: (
  * - ENCRYPT: Symmetric encryption
  * - DECRYPT: Symmetric decryption
  * - HASH: Cryptographic hashing
+ * - TO_STRING: Text form of a value
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -1296,6 +1364,8 @@ export const assertStringExpression: (
     assertDecryptExpression(x, columnList);
   } else if (x.$$_expression === 'HASH') {
     assertHashExpression(x, columnList);
+  } else if (x.$$_expression === 'TO_STRING') {
+    assertToStringExpression(x, columnList);
   } else {
     throw new TypeError(
       `Invalid Expression type: Expected a String expression type, got '${x.$$_expression}'`,

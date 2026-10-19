@@ -55,6 +55,7 @@ const STRING_TYPES = new Set<string>([
   'ENCRYPT',
   'DECRYPT',
   'HASH',
+  'TO_STRING',
 ]);
 
 const DATE_TYPES = new Set<string>([

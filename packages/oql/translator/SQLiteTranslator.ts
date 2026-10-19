@@ -169,6 +169,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     ],
     ['CONCAT', (a) => a.join(' || ')],
     ['LENGTH', (a) => `LENGTH(${a[0]})`],
+    ['TO_STRING', (a) => `CAST(${a[0]} AS TEXT)`],
     ['LOWER', (a) => `LOWER(${a[0]})`],
     ['UPPER', (a) => `UPPER(${a[0]})`],
     ['TRIM', (a) => `TRIM(${a[0]})`],
