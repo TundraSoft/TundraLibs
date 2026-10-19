@@ -673,9 +673,11 @@ export class ReadRepo<
 
     // 5b. Decode raw DATE_TYPES columns SQLite returned as ISO strings
     //     back to `Date` (Postgres/MariaDB/Mongo already return one), and
-    //     JSON columns it returned as their stored TEXT.
+    //     JSON columns it returned as their stored TEXT, and BIGINT
+    //     columns a driver returned as a safe `number`.
     this._decodeDateColumns(rows);
     this._decodeJsonColumns(rows);
+    this._decodeBigintColumns(rows);
 
     // 6. Decrypt encrypted result columns — top-level and inside
     //    relation values.
@@ -1981,6 +1983,34 @@ export class ReadRepo<
           row[key] = JSON.parse(v);
         } catch {
           // Not JSON text (written outside norm) — keep the stored value.
+        }
+      }
+    }
+  }
+
+  /** Restore `bigint` for every top-level `BIGINT` column (incl.
+   * `simpleId` / bigint enums) the driver returned as something else:
+   * SQLite reads integers within ±(2^53 − 1) as `number`, Mongo
+   * promotes int64 to `number` when safe and hands back a BSON `Long`
+   * beyond, and a string of digits is a BIGINT from a driver without
+   * native bigint. Postgres/MariaDB already return `bigint` (no-op).
+   * Encrypted columns are skipped — `decryptCell` restores them. */
+  protected _decodeBigintColumns(rows: Row[]): void {
+    if (rows.length === 0) return;
+    const c = this._compiled;
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    for (const [key, spec] of Object.entries(specs)) {
+      if (spec.type !== 'BIGINT' || c.localEncrypted.has(key)) continue;
+      for (const row of rows) {
+        const v = row[key];
+        if (typeof v === 'number' && Number.isInteger(v)) {
+          row[key] = BigInt(v);
+        } else if (typeof v === 'string' && /^-?\d+$/.test(v)) {
+          row[key] = BigInt(v);
+        } else if (
+          typeof (v as { toBigInt?: unknown } | null)?.toBigInt === 'function'
+        ) {
+          row[key] = (v as { toBigInt(): bigint }).toBigInt();
         }
       }
     }
@@ -4053,6 +4083,7 @@ export class Repo<
     const c = this._compiled;
     this._decodeDateColumns(rows);
     this._decodeJsonColumns(rows);
+    this._decodeBigintColumns(rows);
     if (decrypt) rows = await this._decryptRows(rows);
     this._applyEntityMasks(c, rows, decrypt);
     if (c.returningStrip !== undefined) {

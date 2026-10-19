@@ -105,7 +105,6 @@ if (!available) {
     },
     dialect: {
       asTime: (v) => new Date(v as string | Date).getTime(),
-      asBig: (v) => BigInt(String(v)),
       asJson: (v) => (typeof v === 'string' ? JSON.parse(v) : v),
     },
   });
