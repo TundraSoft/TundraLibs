@@ -683,6 +683,60 @@ export function runLiveSuite(fixture: LiveFixture): void {
       },
     );
 
+    step(
+      '12r relation values decode bigint, dates and JSON by column type',
+      async () => {
+        const big = 2n ** 60n + 1n; // odd: a float round-trip loses it
+        const when = new Date('2030-01-02T03:04:05.000Z');
+        const meta = { tags: ['launch', 'hero'], campaign: 'q3' };
+        await db.repo('Links').update(
+          { clicks: big, expiresAt: when },
+          { '@id': 1 },
+        );
+        type L = { id?: number; clicks: unknown; expiresAt: unknown };
+
+        // to-one, explicit sub-projection
+        const sub = await db.repo('Visits').findOne({ '@id': 1 }, {
+          project: {
+            '@id': true,
+            '@Link': { '@clicks': true, '@expiresAt': 'at', '@meta': true },
+          },
+        });
+        const link = sub.data?.Link as { clicks: unknown; at: unknown };
+        asserts.assertStrictEquals(link.clicks, big);
+        asserts.assertEquals(link.at, when);
+        asserts.assertEquals((link as { meta?: unknown }).meta, meta);
+
+        // to-one, whole relation (the target's default projection)
+        const whole = await db.repo('Visits').findOne({ '@id': 1 }, {
+          project: { '@id': true, '@Link': true },
+        });
+        const wl = whole.data?.Link as L & { meta: unknown };
+        asserts.assertStrictEquals(wl.clicks, big);
+        asserts.assertEquals(wl.expiresAt, when);
+        asserts.assertEquals(wl.meta, meta);
+
+        // to-many
+        const owner = await db.repo('Users').findOne({ '@id': ada }, {
+          project: {
+            '@id': true,
+            '@Links': { '@id': true, '@clicks': true, '@expiresAt': true },
+          },
+        });
+        const links = owner.data?.Links as L[];
+        asserts.assertStrictEquals(links.find((l) => l.id === 1)!.clicks, big);
+        asserts.assert(links.every((l) => typeof l.clicks === 'bigint'));
+        asserts.assertEquals(links.find((l) => l.id === 1)!.expiresAt, when);
+        // Unset: null on SQL; Mongo leaves the field out of the document.
+        asserts.assertStrictEquals(
+          links.find((l) => l.id === 3)!.expiresAt ?? null,
+          null,
+        );
+
+        await db.repo('Links').update({ expiresAt: null }, { '@id': 1 });
+      },
+    );
+
     // ── 13 M2M through the junction ───────────────────────────────────
 
     step(

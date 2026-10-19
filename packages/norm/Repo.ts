@@ -101,6 +101,43 @@ const TEMPORAL_SKEW_MS = 1000;
 const SQLITE_ZONELESS_DATETIME =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
+/** A zone-less datetime — SQLite's `datetime()`, or a Postgres
+ * `timestamp` / MariaDB `DATETIME` rendered into relation JSON. */
+const ZONELESS_DATETIME =
+  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(\.\d{1,3})?\d*$/;
+
+/** A BIGINT value a driver returned as something else, as `bigint`: a
+ * safe `number` (SQLite, Mongo, JSON), a digit string (a `TO_STRING`
+ * relation value), or a BSON `Long` (Mongo past 2^53). */
+function toBigint(v: unknown): unknown {
+  if (typeof v === 'number' && Number.isInteger(v)) return BigInt(v);
+  if (typeof v === 'string' && /^-?\d+$/.test(v)) return BigInt(v);
+  if (typeof (v as { toBigInt?: unknown } | null)?.toBigInt === 'function') {
+    return (v as { toBigInt(): bigint }).toBigInt();
+  }
+  return v;
+}
+
+/** A date inside relation JSON — always a string there. A zone-less
+ * one is read in `zone`: `'Z'` where the engine stores UTC, `''`
+ * (local time) on MariaDB, whose driver writes and reads `Date`s in the
+ * host's time zone. */
+function jsonDate(v: unknown, zone: 'Z' | ''): unknown {
+  if (typeof v !== 'string') return v;
+  const m = ZONELESS_DATETIME.exec(v);
+  return new Date(m ? `${m[1]}T${m[2]}${m[3] ?? ''}${zone}` : v);
+}
+
+/** A JSON column's stored TEXT, parsed; anything else as it came. */
+function jsonText(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v; // not JSON text (written outside norm)
+  }
+}
+
 /** Loose structural bound shared by the repo generics. */
 type AnyDef = { readonly columns: Record<string, ColumnSpec> };
 type AnyTableDef = AnyDef & { readonly primaryKeys: readonly string[] };
@@ -668,8 +705,10 @@ export class ReadRepo<
       );
     }
 
-    // 5. JSON-parse relation values (SQLite returns aggregates as text).
+    // 5. JSON-parse relation values (SQLite returns aggregates as text),
+    //    then decode the BIGINT / date / JSON columns inside them.
     this._parseJoinJson(rows, plan);
+    this._decodeRelationColumns(rows, plan);
 
     // 5b. Decode raw DATE_TYPES columns SQLite returned as ISO strings
     //     back to `Date` (Postgres/MariaDB/Mongo already return one), and
@@ -1436,6 +1475,22 @@ export class ReadRepo<
 
     const myFqn = (col: string): string => `${compiled.key}.${col}`;
     const columns = compiled.def.columns as Record<string, ColumnSpec>;
+    // A relation value is JSON the SQL engine builds, and a BIGINT in it
+    // is a JSON number the client parse rounds past 2^53 — read those as
+    // text (decoded back to bigint on read). Mongo's $lookup keeps BSON.
+    const textBigints = this._executor.capabilities.dialect !== 'mongo';
+    const relCol = (
+      alias: string,
+      target: CompiledEntity,
+      col: string,
+    ): string | Row => {
+      const ref = `@${alias}.@${col}`;
+      const spec = (target.def.columns as Record<string, ColumnSpec>)[col];
+      return textBigints && spec?.type === 'BIGINT' &&
+          !target.localEncrypted.has(col)
+        ? { $$_expression: 'TO_STRING', args: ref }
+        : ref;
+    };
 
     const fks = (compiled.def as { foreignKeys?: Record<string, unknown> })
       .foreignKeys as Record<string, EmittedForeignKey> | undefined ?? {};
@@ -1513,9 +1568,9 @@ export class ReadRepo<
         // `columns` array, leaking hidden() columns whenever a
         // filter/orderBy adds one to the same join.
         addCols(name, target.projectedColumns);
-        const aggCols: Record<string, string> = {};
+        const aggCols: Record<string, string | Row> = {};
         for (const col of target.projectedColumns) {
-          aggCols[col] = `@${name}.@${col}`;
+          aggCols[col] = relCol(name, target, col);
           colFqns[col] = `${targetKey}.${col}`;
         }
         // Mask SOURCES ride along (hidden ones included) so relation
@@ -1524,13 +1579,13 @@ export class ReadRepo<
           const src = target.masks.get(m)!.source;
           if (aggCols[src] !== undefined) continue;
           addCols(name, [src]);
-          aggCols[src] = `@${name}.@${src}`;
+          aggCols[src] = relCol(name, target, src);
           colFqns[src] = `${targetKey}.${src}`;
         }
         oqlAggregates[name] = { $$_aggregate: 'JSON_ROW', columns: aggCols };
         oqlProjection[`@${name}`] = value === true ? true : (value as string);
       } else {
-        const aggCols: Record<string, string> = {};
+        const aggCols: Record<string, string | Row> = {};
         const need: string[] = [];
         const targetColumns = target.def.columns as Record<string, unknown>;
         for (const [subKey, subVal] of Object.entries(subProj)) {
@@ -1570,7 +1625,7 @@ export class ReadRepo<
             );
           }
           const outName = typeof subVal === 'string' ? subVal : subCol;
-          aggCols[outName] = `@${name}.@${subCol}`;
+          aggCols[outName] = relCol(name, target, subCol);
           colFqns[outName] = `${targetKey}.${subCol}`;
           need.push(subCol);
         }
@@ -1925,6 +1980,50 @@ export class ReadRepo<
     }
   }
 
+  /** Decode the BIGINT, date and JSON columns inside relation values by
+   * the target column's type. The engine built each value as JSON, so a
+   * date is a string there on every SQL dialect, a BIGINT is the digit
+   * string `TO_STRING` rendered (a number on Mongo), and on SQLite a
+   * JSON column is its stored TEXT. Encrypted columns are skipped —
+   * `decryptCell` restores them. */
+  protected _decodeRelationColumns(rows: Row[], plan: ProjectionPlan): void {
+    if (rows.length === 0) return;
+    const dialect = this._executor.capabilities.dialect;
+    const zone = dialect === 'maria' ? '' : 'Z';
+    const date = (v: unknown): unknown => jsonDate(v, zone);
+    for (const rel of plan.relations) {
+      const target = this._runtime.compiled.get(rel.targetKey)!;
+      const specs = target.def.columns as Record<string, ColumnSpec>;
+      const prefix = `${rel.targetKey}.`;
+      const decoders: Array<[string, (v: unknown) => unknown]> = [];
+      for (const [key, fqn] of Object.entries(rel.columnFqns)) {
+        const col = fqn.slice(prefix.length);
+        const type = specs[col]?.type;
+        if (type === undefined || target.localEncrypted.has(col)) continue;
+        if (type === 'BIGINT') decoders.push([key, toBigint]);
+        else if (DATE_TYPES.has(type)) decoders.push([key, date]);
+        else if (
+          dialect === 'sqlite' && (type === 'JSON' || type === 'JSONB')
+        ) {
+          decoders.push([key, jsonText]);
+        }
+      }
+      if (decoders.length === 0) continue;
+      for (const row of rows) {
+        const val = row[rel.outputKey];
+        for (const item of Array.isArray(val) ? val : [val]) {
+          if (item === null || typeof item !== 'object') continue;
+          const obj = item as Row;
+          for (const [key, decode] of decoders) {
+            if (obj[key] !== null && obj[key] !== undefined) {
+              obj[key] = decode(obj[key]);
+            }
+          }
+        }
+      }
+    }
+  }
+
   /** Decode a raw driver value back to `Date` for every top-level
    * DATE_TYPES column that came back as a string — SQLite has no
    * native date/time storage class, so it returns the ISO string norm
@@ -1934,8 +2033,8 @@ export class ReadRepo<
    * in crypto.ts, which is why encrypted columns are skipped here —
    * running this first would try to parse ciphertext as a date, and
    * with `decrypt: false` the ciphertext must survive untouched). Only
-   * top-level row columns; a date column nested inside a joined
-   * relation value is not decoded here. On SQLite, a zone-less
+   * top-level row columns; relation values are decoded by
+   * {@linkcode _decodeRelationColumns}. On SQLite, a zone-less
    * `YYYY-MM-DD HH:MM:SS` value is read as UTC, which is what SQLite's
    * date functions produce. */
   protected _decodeDateColumns(rows: Row[]): void {
@@ -2001,18 +2100,7 @@ export class ReadRepo<
     const specs = c.def.columns as Record<string, ColumnSpec>;
     for (const [key, spec] of Object.entries(specs)) {
       if (spec.type !== 'BIGINT' || c.localEncrypted.has(key)) continue;
-      for (const row of rows) {
-        const v = row[key];
-        if (typeof v === 'number' && Number.isInteger(v)) {
-          row[key] = BigInt(v);
-        } else if (typeof v === 'string' && /^-?\d+$/.test(v)) {
-          row[key] = BigInt(v);
-        } else if (
-          typeof (v as { toBigInt?: unknown } | null)?.toBigInt === 'function'
-        ) {
-          row[key] = (v as { toBigInt(): bigint }).toBigInt();
-        }
-      }
+      for (const row of rows) row[key] = toBigint(row[key]);
     }
   }
 
