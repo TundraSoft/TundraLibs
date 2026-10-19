@@ -21,13 +21,6 @@
  * @since 1.0.0
  */
 
-import {
-  ensureDir,
-  pathExists,
-  readDir,
-  readTextFile,
-  writeTextFile,
-} from '@tundralibs/compat/file';
 import type { Query } from '@tundralibs/oql/types';
 import { runtimeOf } from '../Norm.ts';
 import { digestOf, type Runtime } from '../compile.ts';
@@ -47,7 +40,6 @@ import {
   decodePlain,
   SIBLING_HASH_ALGORITHM,
 } from '../crypto.ts';
-import { formatVersionFilename, parseVersion } from './version.ts';
 import {
   planFilename,
   renderPlan,
@@ -56,6 +48,9 @@ import {
   storedPlanHash,
 } from './plans.ts';
 import { DEFAULT_STALE_MS, FileLock } from './FileLock.ts';
+import { TableLock } from './TableLock.ts';
+import { dirSource } from './dirSource.ts';
+import type { MigrationSource, WritableMigrationSource } from './source.ts';
 import {
   HISTORY_TABLE_NAME,
   historyCreateQuery,
@@ -71,10 +66,38 @@ const ADVISORY_LOCK_KEY = 'norm:migrator';
 /** Rows per page/INSERT during a crypto-transforming rebuild copy. */
 const REBUILD_CHUNK = 500;
 
+/** Serializes migrators against one database across processes —
+ * {@link FileLock}, {@link TableLock}, or your own. */
+export type MigrationLock = {
+  /** Take the lock, waiting up to `timeoutMs`; throws `LOCK_TIMEOUT`. */
+  acquire(timeoutMs?: number): Promise<void>;
+  /** Refresh a held lock so a long step is not reclaimed as stale. */
+  touch(): Promise<void>;
+  /** Release a held lock; idempotent. */
+  release(): Promise<void>;
+};
+
+/** Where a {@link Migrator} reads snapshots from, and how it locks. */
+export type MigratorSourceOptions =
+  | {
+    /** Migrations directory (versioned snapshots + migrator.lock),
+     * locked with a {@link FileLock} in it. */
+    dir: string;
+    source?: never;
+    lock?: never;
+  }
+  | {
+    dir?: never;
+    /** Snapshots from anywhere — e.g. {@link memorySource}. */
+    source: MigrationSource;
+    /** Process lock. Default: a {@link TableLock} on SQLite; none
+     * elsewhere, where Postgres/MariaDB still take their server-side
+     * advisory lock — pass one on MongoDB. */
+    lock?: MigrationLock;
+  };
+
 /** Options for {@link Migrator}. */
-export type MigratorOptions = {
-  /** Migrations directory (versioned snapshots + migrator.lock). */
-  dir: string;
+export type MigratorOptions = MigratorSourceOptions & {
   /** Rows per page/INSERT during crypto-transforming rebuild copies
    * (default 500). Lower = less memory per batch; NOTE each encrypted
    * cell costs a full PBKDF2 derivation either way. A non-positive
@@ -88,8 +111,9 @@ export type MigratorOptions = {
    * review gate). Generate the SQL from the JSON on demand at any time
    * with {@linkcode Migrator.renderPlans}. */
   renderSql?: boolean;
-  /** Age at which an untouched `migrator.lock` is treated as abandoned
-   * and reclaimed (default 15 min). A live apply re-stamps the file
+  /** Age at which an untouched `migrator.lock` (or default
+   * {@link TableLock} row) is treated as abandoned and reclaimed
+   * (default 15 min). A live apply re-stamps the file
    * between versions AND at mid-step checkpoints (per action / per
    * rebuild chunk), so this only has to outlast the slowest single
    * uninterruptible operation. `Infinity` disables stale reclaim. */
@@ -181,38 +205,48 @@ export type ApplyResult = {
  */
 export class Migrator {
   private readonly __runtime: Runtime;
-  private readonly __dir: string;
+  private readonly __source: MigrationSource;
+  /** A fresh lock per apply()/rollback(), or none. */
+  private readonly __newLock: () => MigrationLock | undefined;
   private readonly __chunk: number;
   private readonly __renderSql: boolean;
   private readonly __lockStaleMs: number;
   /** Per-version transaction timeout in SECONDS (0 = disarmed). */
   private readonly __txTimeoutSec: number;
-  /** The FileLock held by the in-flight apply()/rollback(), so long
+  /** The lock held by the in-flight apply()/rollback(), so long
    * single steps can re-stamp it mid-run (see __touchLock). */
-  private __activeLock: FileLock | undefined;
+  private __activeLock: MigrationLock | undefined;
   private __historyEnsured = false;
   private __progressEnsured = false;
   /** Parsed snapshots by version — files are write-once per version, so
    * one apply()'s status/plan/verify passes read each at most once. */
   private readonly __snapshotCache = new Map<number, MigrationSnapshot>();
-  /** Memoized `readDir` version scan; invalidated whenever `snapshot()`
-   * writes a new version file. */
+  /** Memoized source version scan; invalidated whenever `snapshot()`
+   * writes a new version. */
   private __versionsCache: number[] | undefined;
 
   /**
-   * Bind a migrator to a `norm.use(...)` handle and migrations directory.
+   * Bind a migrator to a `norm.use(...)` handle and a migrations
+   * directory or {@link MigrationSource}.
    *
    * @param db The handle returned by `norm.use(...)`.
    */
   constructor(db: object, options: MigratorOptions) {
     this.__runtime = runtimeOf(db);
-    // Trailing slashes are trimmed by scanning back from the end rather than
-    // with `/\/+$/`: that pattern re-tries from every position and re-scans the
-    // run each time, so a path of many slashes costs O(n^2). This is O(n) with
-    // a single allocation.
-    let dirEnd = options.dir.length;
-    while (dirEnd > 0 && options.dir[dirEnd - 1] === '/') dirEnd--;
-    this.__dir = options.dir.slice(0, dirEnd);
+    this.__lockStaleMs = options.lockStaleMs ?? DEFAULT_STALE_MS;
+    const staleMs = this.__lockStaleMs;
+    if (options.dir !== undefined) {
+      const source = dirSource(options.dir);
+      this.__source = source;
+      this.__newLock = () => new FileLock(source.location, staleMs);
+    } else {
+      this.__source = options.source;
+      const lock = options.lock ??
+        (this.__runtime.executor.capabilities.dialect === 'sqlite'
+          ? new TableLock(db, staleMs)
+          : undefined);
+      this.__newLock = () => lock;
+    }
     // A non-positive chunk is nonsense for the rebuild pager: `limit: 0`
     // means UNBOUNDED downstream and `offset += 0` never advances, so the
     // copy loop would re-read the same page forever. Floor at one row.
@@ -221,7 +255,6 @@ export class Migrator {
       ? REBUILD_CHUNK
       : Math.max(1, Math.floor(chunk));
     this.__renderSql = options.renderSql ?? false;
-    this.__lockStaleMs = options.lockStaleMs ?? DEFAULT_STALE_MS;
     // 0 (the default, and any non-positive value) DISARMS the driver's
     // request-scale auto-rollback timer; a positive ms value re-imposes a
     // ceiling (rounded up to whole seconds, the driver's unit; never
@@ -248,9 +281,12 @@ export class Migrator {
   // ─── Snapshot ──────────────────────────────────────────────────────
 
   /** Write the next versioned snapshot — unless the schema is
-   * hash-identical to the current head. */
+   * hash-identical to the current head.
+   *
+   * @throws {NormMigrationError} `READ_ONLY_SOURCE` when the source
+   *   cannot be written (e.g. a {@link memorySource}). */
   async snapshot(): Promise<SnapshotResult> {
-    await ensureDir(this.__dir);
+    const source = this.__writable('snapshot');
     const current = buildSnapshot(
       this.__runtime.registry,
       new Date().toISOString(),
@@ -262,32 +298,36 @@ export class Migrator {
       if (headSnap.hash === current.hash) {
         return {
           version: head,
-          path: `${this.__dir}/${formatVersionFilename(head)}`,
+          path: source.snapshotPath(head),
           written: false,
         };
       }
     }
     const version = (head ?? 0) + 1;
-    const path = `${this.__dir}/${formatVersionFilename(version)}`;
-    await writeTextFile(path, JSON.stringify(current, null, 2));
-    this.__versionsCache = undefined; // a new version file now exists
+    const path = source.snapshotPath(version);
+    await source.writeSnapshot(version, current);
+    this.__versionsCache = undefined; // a new version now exists
     // Reviewable `.sql` plan artifacts are opt-in (`renderSql`) — the JSON
     // snapshot is always the source of truth. When enabled they ride along
     // here and apply() hash-verifies them; otherwise generate them on demand
     // with renderPlans(), and apply() runs the freshly-computed plan.
     if (this.__renderSql) {
       const prev = head !== undefined ? await this.__readSnapshot(head) : null;
-      await this.__writePlanArtifacts(version, prev, current);
+      await this.__writePlanArtifacts(source, version, prev, current);
     }
     return { version, path, written: true };
   }
 
   /** (Re)render the `000N.<dialect>.sql` plan artifacts for every
    * snapshot on disk — use after hand-editing definitions or when an
-   * artifact went missing. Returns the files written. */
+   * artifact went missing. Returns the files written.
+   *
+   * @throws {NormMigrationError} `READ_ONLY_SOURCE` when the source
+   *   cannot be written. */
   async renderPlans(): Promise<
     ReadonlyArray<{ version: number; files: ReadonlyArray<string> }>
   > {
+    const source = this.__writable('renderPlans');
     const versions = await this.__fsVersions();
     const out: Array<{ version: number; files: string[] }> = [];
     for (const version of versions) {
@@ -296,7 +336,12 @@ export class Migrator {
         ? null
         : await this.__readSnapshot(prevVersion);
       const curr = await this.__readSnapshot(version);
-      const files = await this.__writePlanArtifacts(version, prev, curr);
+      const files = await this.__writePlanArtifacts(
+        source,
+        version,
+        prev,
+        curr,
+      );
       out.push({ version, files });
     }
     return out;
@@ -336,12 +381,12 @@ export class Migrator {
     const dbVersion = await this.__dbHeadVersion();
     if (dbVersion > 0 && !versions.includes(dbVersion)) {
       throw new NormMigrationError(
-        `Applied snapshot ${dbVersion} is missing from ${this.__dir} — ` +
+        `Applied snapshot ${dbVersion} is missing from ${this.__source.location} — ` +
           `pending diffs would baseline against the wrong version. ` +
           `Restore the file.`,
         {
           norm: this.__runtime.name,
-          dir: this.__dir,
+          dir: this.__source.location,
           version: dbVersion,
           code: 'MISSING_SNAPSHOT',
         },
@@ -414,8 +459,8 @@ export class Migrator {
     // Status + plan are computed INSIDE the lock: a plan computed
     // before waiting on a concurrent apply would be stale by the time
     // it runs.
-    const lock = new FileLock(this.__dir, this.__lockStaleMs);
-    await lock.acquire(opts.lockTimeoutMs);
+    const lock = this.__newLock();
+    await lock?.acquire(opts.lockTimeoutMs);
     this.__activeLock = lock;
     const applied: number[] = [];
     const warnings: string[] = [];
@@ -441,7 +486,7 @@ export class Migrator {
               `renamedFrom hints if these are renames.`,
             {
               norm: this.__runtime.name,
-              dir: this.__dir,
+              dir: this.__source.location,
               code: 'BLOCKED_DROPS',
             },
           );
@@ -453,14 +498,14 @@ export class Migrator {
           warnings.push(...step.warnings);
           await this.__applyStep(step, opts.appliedBy, warnings);
           applied.push(step.version);
-          // Keep the file lock fresh so a long multi-version apply is
-          // never mistaken for an abandoned one.
-          await lock.touch();
+          // Keep the lock fresh so a long multi-version apply is never
+          // mistaken for an abandoned one.
+          await lock?.touch();
         }
       });
     } finally {
       this.__activeLock = undefined;
-      await lock.release();
+      await lock?.release();
     }
     return { applied, durationMs: Date.now() - started, warnings };
   }
@@ -557,15 +602,15 @@ export class Migrator {
           `${dbVersion}.`,
         {
           norm: this.__runtime.name,
-          dir: this.__dir,
+          dir: this.__source.location,
           version: target,
           code: 'INVALID_ROLLBACK',
         },
       );
     }
     const versions = await this.__fsVersions();
-    const lock = new FileLock(this.__dir, this.__lockStaleMs);
-    await lock.acquire(opts.lockTimeoutMs);
+    const lock = this.__newLock();
+    await lock?.acquire(opts.lockTimeoutMs);
     this.__activeLock = lock;
     const reverted: number[] = [];
     try {
@@ -578,7 +623,7 @@ export class Migrator {
               `Cannot roll back version ${v}: its snapshot file is missing.`,
               {
                 norm: this.__runtime.name,
-                dir: this.__dir,
+                dir: this.__source.location,
                 version: v,
                 code: 'MISSING_SNAPSHOT',
               },
@@ -598,12 +643,12 @@ export class Migrator {
           });
           await this.__revertStep(v, diff.actions);
           reverted.push(v);
-          await lock.touch();
+          await lock?.touch();
         }
       });
     } finally {
       this.__activeLock = undefined;
-      await lock.release();
+      await lock?.release();
     }
     return { reverted, durationMs: Date.now() - started };
   }
@@ -701,7 +746,7 @@ export class Migrator {
               `('${ADVISORY_LOCK_KEY}') — is a deploy running elsewhere?`,
             {
               norm: this.__runtime.name,
-              dir: this.__dir,
+              dir: this.__source.location,
               code: 'LOCK_TIMEOUT',
             },
             cause,
@@ -926,6 +971,7 @@ export class Migrator {
   /** Render + write `000N.<dialect>.sql` for every SQL dialect.
    * Always `allowDrop: true` — reviewers must SEE implied drops. */
   private async __writePlanArtifacts(
+    source: WritableMigrationSource,
     version: number,
     prev: MigrationSnapshot | null,
     curr: MigrationSnapshot,
@@ -938,9 +984,8 @@ export class Migrator {
         dialect,
       });
       const rendered = renderPlan(version, dialect, diff.actions);
-      const file = `${this.__dir}/${planFilename(version, dialect)}`;
-      await writeTextFile(file, rendered.text);
-      files.push(file);
+      await source.writePlan(version, dialect, rendered.text);
+      files.push(source.planPath(version, dialect));
     }
     return files;
   }
@@ -956,17 +1001,12 @@ export class Migrator {
     const caps = this.__runtime.executor.capabilities;
     if (caps.dialect === 'mongo') return;
     const dialect = caps.dialect as SqlDialect;
-    const file = `${this.__dir}/${planFilename(version, dialect)}`;
-    let stored: string;
-    try {
-      stored = await readTextFile(file);
-    } catch {
-      // SQL plans are opt-in (`renderSql` / `renderPlans()`). With no stored
-      // artifact there is nothing to review against, so apply() executes the
-      // freshly-computed plan directly — the review gate is active only when
-      // the `.sql` artifacts exist.
-      return;
-    }
+    const stored = await this.__source.plan?.(version, dialect);
+    // SQL plans are opt-in (`renderSql` / `renderPlans()`). With no stored
+    // artifact there is nothing to review against, so apply() executes the
+    // freshly-computed plan directly — the review gate is active only when
+    // the `.sql` artifacts exist.
+    if (stored === undefined) return;
     // Render the plan apply() will ACTUALLY execute (already diffed in
     // plan() as `actions`) instead of re-reading snapshots and
     // re-diffing — same inPlaceAlter, so the same hash.
@@ -981,7 +1021,7 @@ export class Migrator {
           `then apply.`,
         {
           norm: this.__runtime.name,
-          dir: this.__dir,
+          dir: this.__source.location,
           version,
           code: 'PLAN_HASH_MISMATCH',
         },
@@ -993,38 +1033,52 @@ export class Migrator {
     throw new NormMigrationError(
       `Applied snapshot ${version} no longer matches its recorded ` +
         `hash — was the file edited (or deleted) after application?`,
-      { norm: this.__runtime.name, dir: this.__dir, version, code: 'DRIFT' },
+      {
+        norm: this.__runtime.name,
+        dir: this.__source.location,
+        version,
+        code: 'DRIFT',
+      },
     );
   }
 
-  /** Versioned snapshot files on disk (sorted). Memoized for the run —
-   * only `snapshot()` adds files, and it clears the memo when it does —
-   * so status/plan share ONE readDir scan per apply(). */
+  /** The source's snapshot versions (sorted). Memoized for the run —
+   * only `snapshot()` adds versions, and it clears the memo when it does
+   * — so status/plan share ONE scan per apply(). */
   private async __fsVersions(): Promise<number[]> {
-    if (this.__versionsCache !== undefined) return this.__versionsCache;
-    if (!(await pathExists(this.__dir))) return (this.__versionsCache = []);
-    const versions: number[] = [];
-    for await (const entry of readDir(this.__dir)) {
-      const v = parseVersion(entry.name);
-      if (v !== null) versions.push(v);
+    return this.__versionsCache ??= await this.__source.versions();
+  }
+
+  /** The source as writable, for the authoring calls. */
+  private __writable(call: string): WritableMigrationSource {
+    const source = this.__source as Partial<WritableMigrationSource>;
+    if (typeof source.writeSnapshot === 'function') {
+      return source as WritableMigrationSource;
     }
-    return (this.__versionsCache = versions.sort((a, b) => a - b));
+    throw new NormMigrationError(
+      `${call}() needs a writable migration source; ` +
+        `'${this.__source.location}' is read-only.`,
+      {
+        norm: this.__runtime.name,
+        dir: this.__source.location,
+        code: 'READ_ONLY_SOURCE',
+      },
+    );
   }
 
   private async __readSnapshot(version: number): Promise<MigrationSnapshot> {
     const cached = this.__snapshotCache.get(version);
     if (cached !== undefined) return cached;
-    const path = `${this.__dir}/${formatVersionFilename(version)}`;
     try {
-      const snap = JSON.parse(await readTextFile(path)) as MigrationSnapshot;
+      const snap = await this.__source.snapshot(version);
       this.__snapshotCache.set(version, snap);
       return snap;
     } catch (cause) {
       throw new NormMigrationError(
-        `Cannot read snapshot ${path}.`,
+        `Cannot read snapshot ${version} from ${this.__source.location}.`,
         {
           norm: this.__runtime.name,
-          dir: this.__dir,
+          dir: this.__source.location,
           version,
           code: 'MISSING_SNAPSHOT',
         },
@@ -1148,7 +1202,7 @@ export class Migrator {
           `by hand, then delete the row from ${PROGRESS_TABLE_NAME}.`,
         {
           norm: this.__runtime.name,
-          dir: this.__dir,
+          dir: this.__source.location,
           version,
           code: 'PLAN_CHANGED',
         },

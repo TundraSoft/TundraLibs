@@ -21,6 +21,7 @@ drift detection, a table-rebuild engine, and drop guards.
   - [`rollback()`](#rollback)
   - [`history()`](#history)
   - [`renderPlans()`](#renderplans)
+- [Migration sources](#migration-sources)
 - [Reviewable stored plans](#reviewable-stored-plans)
 - [Safety gates](#safety-gates)
 - [Renames](#renames)
@@ -371,6 +372,37 @@ const out = await mig.renderPlans();
 // [{ version: 1, files: ['…/0001.sqlite.sql', '…/0001.postgres.sql', '…/0001.maria.sql'] }, …]
 ```
 
+## Migration sources
+
+`{ dir }` reads snapshots from a directory. Pass `source` instead to
+read them from anywhere — `memorySource` serves snapshots a bundler
+inlined, for a runtime with no filesystem (an embedded engine, a
+worker). Nothing on that path touches `@tundralibs/compat/file`.
+
+```typescript ignore
+import { memorySource, Migrator } from '@tundralibs/norm/migrations';
+import v1 from './migrations/0001.json' with { type: 'json' };
+import v2 from './migrations/0002.json' with { type: 'json' };
+
+const mig = new Migrator(db, {
+  source: memorySource({ snapshots: { 1: v1, 2: v2 } }),
+});
+await mig.apply();
+```
+
+A source is `{ location, versions(), snapshot(v), plan?(v, dialect) }`;
+`plan()` returns a reviewed `.sql` artifact or `undefined` (no review
+gate). `memorySource` takes those as `plans: { 1: { sqlite: '…' } }`.
+It is read-only: `snapshot()` and `renderPlans()` throw
+`READ_ONLY_SOURCE` — author snapshots with `{ dir }`, ship them inlined.
+
+Without a directory there is no `migrator.lock`, so `source` takes a
+`lock` (`{ acquire(timeoutMs?), touch(), release() }`). On SQLite it
+defaults to a `TableLock`: one row of `_norm_migration_lock` claimed by
+primary-key insert, with the same token and stale-reclaim behaviour as
+the file lock. Elsewhere the default is none — PostgreSQL and MariaDB
+still take their server-side advisory lock; on MongoDB pass a lock.
+
 ## Reviewable stored plans
 
 With `renderSql: true`, every `snapshot()` writes one
@@ -511,7 +543,8 @@ concurrently:
 
 1. A file lock, `migrator.lock` in the migrations directory (gitignore
    it), serializes two processes on the same host. On SQLite, where the
-   database is a local file, this is the whole story.
+   database is a local file, this is the whole story. A Migrator built
+   from a [`source`](#migration-sources) uses its `lock` instead.
 2. A server-side advisory lock, `pg_advisory_lock` on PostgreSQL and
    `GET_LOCK` on MariaDB/MySQL, serializes across machines, so two CI
    runners deploying from different replicas cannot migrate at once.
@@ -757,11 +790,14 @@ does).
 ## API reference
 
 ```typescript ignore
-new Migrator(db: object, options: {
-  dir: string;              // migrations directory (snapshots + lock)
+new Migrator(db: object, options: (
+  | { dir: string }         // migrations directory (snapshots + lock)
+  | { source: MigrationSource; lock?: MigrationLock } // see Migration sources
+) & {
   rebuildChunkSize?: number; // rows per page in a crypto rebuild (500)
   renderSql?: boolean;      // write reviewable .sql artifacts (false)
-  lockStaleMs?: number;     // abandoned-lock reclaim age (900_000)
+  lockStaleMs?: number;     // abandoned lock reclaim age, file or
+                            // default TableLock (900_000)
   transactionTimeoutMs?: number; // per-version tx cap, Postgres/SQLite
                                  // (0 = disarmed, the default)
 });
