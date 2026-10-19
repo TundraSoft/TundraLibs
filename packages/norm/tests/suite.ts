@@ -673,6 +673,37 @@ export function runLiveSuite(fixture: LiveFixture): void {
     });
 
     step(
+      '11b booleans read back as boolean, top-level and in relations',
+      async () => {
+        // SQLite and MariaDB store BOOLEAN as an integer (0/1).
+        await db.repo('Links').update({ verified: true }, { '@id': 1 });
+        await db.repo('Links').update({ verified: false }, { '@id': 2 });
+        const expected = [true, false, null]; // link 3 stays unset
+        const top = await db.repo('Links').find({ '@id': { $in: [1, 2, 3] } }, {
+          project: { '@id': true, '@isActive': true, '@verified': true },
+          orderBy: { '@id': 'ASC' },
+        });
+        for (const [i, want] of expected.entries()) {
+          const row = top.data[i]!;
+          asserts.assertStrictEquals(row.isActive, true);
+          // Unset: null on SQL; Mongo leaves the field out of the document.
+          asserts.assertStrictEquals(row.verified ?? null, want);
+        }
+        for (const [i, want] of expected.entries()) {
+          const visit = await db.repo('Visits').findOne({ '@id': i + 1 }, {
+            project: {
+              '@id': true,
+              '@Link': { '@isActive': true, '@verified': true },
+            },
+          });
+          const link = visit.data?.Link as Record<string, unknown>;
+          asserts.assertStrictEquals(link.isActive, true);
+          asserts.assertStrictEquals(link.verified ?? null, want);
+        }
+      },
+    );
+
+    step(
       '12 JSON column round-trips (stored TEXT, parsed on read)',
       async () => {
         const back = await db.repo('Links').getByPK({ id: 1 });

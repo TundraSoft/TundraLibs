@@ -118,6 +118,15 @@ function toBigint(v: unknown): unknown {
   return v;
 }
 
+/** A BOOLEAN value a driver returned as its storage integer — SQLite
+ * (INTEGER 0/1) and MariaDB (TINYINT(1)), top-level and in relation
+ * JSON — as `boolean`. */
+function toBoolean(v: unknown): unknown {
+  if (v === 0 || v === 0n) return false;
+  if (v === 1 || v === 1n) return true;
+  return v;
+}
+
 /** A date inside relation JSON — always a string there. A zone-less
  * one is read in `zone`: `'Z'` where the engine stores UTC, `''`
  * (local time) on MariaDB, whose driver writes and reads `Date`s in the
@@ -712,11 +721,11 @@ export class ReadRepo<
 
     // 5b. Decode raw DATE_TYPES columns SQLite returned as ISO strings
     //     back to `Date` (Postgres/MariaDB/Mongo already return one), and
-    //     JSON columns it returned as their stored TEXT, and BIGINT
-    //     columns a driver returned as a safe `number`.
+    //     JSON columns it returned as their stored TEXT, and BIGINT / BOOLEAN
+    //     columns a driver returned as an integer.
     this._decodeDateColumns(rows);
     this._decodeJsonColumns(rows);
-    this._decodeBigintColumns(rows);
+    this._decodeScalarColumns(rows);
 
     // 6. Decrypt encrypted result columns — top-level and inside
     //    relation values.
@@ -1983,8 +1992,9 @@ export class ReadRepo<
   /** Decode the BIGINT, date and JSON columns inside relation values by
    * the target column's type. The engine built each value as JSON, so a
    * date is a string there on every SQL dialect, a BIGINT is the digit
-   * string `TO_STRING` rendered (a number on Mongo), and on SQLite a
-   * JSON column is its stored TEXT. Encrypted columns are skipped —
+   * string `TO_STRING` rendered (a number on Mongo), a BOOLEAN is `0`/`1`
+   * on SQLite and MariaDB, and on SQLite a JSON column is its stored
+   * TEXT. Encrypted columns are skipped —
    * `decryptCell` restores them. */
   protected _decodeRelationColumns(rows: Row[], plan: ProjectionPlan): void {
     if (rows.length === 0) return;
@@ -2001,6 +2011,7 @@ export class ReadRepo<
         const type = specs[col]?.type;
         if (type === undefined || target.localEncrypted.has(col)) continue;
         if (type === 'BIGINT') decoders.push([key, toBigint]);
+        else if (type === 'BOOLEAN') decoders.push([key, toBoolean]);
         else if (DATE_TYPES.has(type)) decoders.push([key, date]);
         else if (
           dialect === 'sqlite' && (type === 'JSON' || type === 'JSONB')
@@ -2087,20 +2098,28 @@ export class ReadRepo<
     }
   }
 
-  /** Restore `bigint` for every top-level `BIGINT` column (incl.
-   * `simpleId` / bigint enums) the driver returned as something else:
-   * SQLite reads integers within ±(2^53 − 1) as `number`, Mongo
-   * promotes int64 to `number` when safe and hands back a BSON `Long`
-   * beyond, and a string of digits is a BIGINT from a driver without
-   * native bigint. Postgres/MariaDB already return `bigint` (no-op).
-   * Encrypted columns are skipped — `decryptCell` restores them. */
-  protected _decodeBigintColumns(rows: Row[]): void {
+  /** Restore the declared JS type of every top-level `BIGINT` and
+   * `BOOLEAN` column the driver returned as something else. BIGINT
+   * (incl. `simpleId` / bigint enums): SQLite reads integers within
+   * ±(2^53 − 1) as `number`, Mongo promotes int64 to `number` when safe
+   * and hands back a BSON `Long` beyond, and a string of digits is a
+   * BIGINT from a driver without native bigint. BOOLEAN: SQLite and
+   * MariaDB store it as an integer and return `0`/`1`. Postgres and
+   * Mongo already return the declared type (no-op). Encrypted columns
+   * are skipped — `decryptCell` restores them. */
+  protected _decodeScalarColumns(rows: Row[]): void {
     if (rows.length === 0) return;
     const c = this._compiled;
     const specs = c.def.columns as Record<string, ColumnSpec>;
     for (const [key, spec] of Object.entries(specs)) {
-      if (spec.type !== 'BIGINT' || c.localEncrypted.has(key)) continue;
-      for (const row of rows) row[key] = toBigint(row[key]);
+      if (c.localEncrypted.has(key)) continue;
+      const decode = spec.type === 'BIGINT'
+        ? toBigint
+        : spec.type === 'BOOLEAN'
+        ? toBoolean
+        : undefined;
+      if (decode === undefined) continue;
+      for (const row of rows) row[key] = decode(row[key]);
     }
   }
 
@@ -4171,7 +4190,7 @@ export class Repo<
     const c = this._compiled;
     this._decodeDateColumns(rows);
     this._decodeJsonColumns(rows);
-    this._decodeBigintColumns(rows);
+    this._decodeScalarColumns(rows);
     if (decrypt) rows = await this._decryptRows(rows);
     this._applyEntityMasks(c, rows, decrypt);
     if (c.returningStrip !== undefined) {
