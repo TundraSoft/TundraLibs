@@ -727,8 +727,9 @@ export function runLiveSuite(fixture: LiveFixture): void {
         asserts.assertStrictEquals(links.find((l) => l.id === 1)!.clicks, big);
         asserts.assert(links.every((l) => typeof l.clicks === 'bigint'));
         asserts.assertEquals(links.find((l) => l.id === 1)!.expiresAt, when);
+        // Unset: null on SQL; Mongo leaves the field out of the document.
         asserts.assertStrictEquals(
-          links.find((l) => l.id === 3)!.expiresAt,
+          links.find((l) => l.id === 3)!.expiresAt ?? null,
           null,
         );
 
