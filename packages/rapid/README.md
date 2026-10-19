@@ -77,11 +77,14 @@ dialect-agnostic `db.ts` — the dialect itself is DATA, not code: it lives in
 at a time) next to `configs/Application.yaml`, loaded the same way. `db.ts`
 never changes when you switch dialects.
 
-Every scaffold also writes the project's AI guide: one entry point, `AGENTS.md`, with `CLAUDE.md` (which imports it with `@AGENTS.md`) and
-`.github/copilot-instructions.md` pointing at it, plus the generated
-reference files it links — `rapid.agent.md` and `rapid-pact.agent.md`
-always, and `rapid-modules.agent.md` / `rapid-ui.agent.md` /
-`norm.agent.md` for the layers you chose. The guide is rendered for _this_
+Every scaffold also writes the project's AI guide: one entry point,
+`AGENTS.md` (with a checklist of what rapid already provides, for agents
+that read only that file), `.github/copilot-instructions.md` pointing at
+it, and the generated reference files — `rapid.agent.md`,
+`rapid-pact.agent.md` and `rapid-modules.agent.md` always, plus
+`rapid-ui.agent.md` / `norm.agent.md` for the layers you chose.
+`CLAUDE.md` `@`-imports `AGENTS.md` and every one of those files, so
+Claude Code loads them all rather than a link it may not follow. The guide is rendered for _this_
 project and _this_ rapid version: its module layout if you chose `--module`,
 the context API, the middleware catalog and the error registry (generated
 from the code), doc links pinned to the installed version, rapid's actual API
