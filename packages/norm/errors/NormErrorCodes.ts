@@ -101,6 +101,9 @@ export type NormErrorCode =
   | 'MISSING_ARTIFACT'
   /** A versioned snapshot file is missing or unreadable. */
   | 'MISSING_SNAPSHOT'
+  /** `snapshot()` / `renderPlans()` on a Migrator whose source cannot
+   * be written (e.g. a `memorySource`). */
+  | 'READ_ONLY_SOURCE'
   /** A migration lock (file or server-side advisory) could not be
    * acquired within the timeout. */
   | 'LOCK_TIMEOUT'

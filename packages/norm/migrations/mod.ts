@@ -12,12 +12,21 @@
 export {
   type ApplyOptions,
   type ApplyResult,
+  type MigrationLock,
   Migrator,
   type MigratorOptions,
+  type MigratorSourceOptions,
   type MigratorStatus,
   type PlannedStep,
   type SnapshotResult,
 } from './Migrator.ts';
+export {
+  memorySource,
+  type MemorySourceInput,
+  type MigrationSource,
+  type WritableMigrationSource,
+} from './source.ts';
+export { dirSource } from './dirSource.ts';
 export {
   type DiffOptions,
   type DiffResult,
@@ -62,3 +71,4 @@ export {
   type ProgressRow,
 } from './progress.ts';
 export { DEFAULT_STALE_MS, FileLock } from './FileLock.ts';
+export { LOCK_TABLE_NAME, TableLock } from './TableLock.ts';
