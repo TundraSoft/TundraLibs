@@ -586,6 +586,10 @@ type Expressions<
     $$_expression: 'CONCAT';
     args: Array<GetColumnByType<FT, string> | string>;
   }
+  | {
+    $$_expression: 'TO_STRING';
+    args: keyof FT | string | number | bigint | boolean;
+  }
   | { $$_expression: 'LOWER'; args: GetColumnByType<FT, string> | string }
   | { $$_expression: 'UPPER'; args: GetColumnByType<FT, string> | string }
   | { $$_expression: 'TRIM'; args: GetColumnByType<FT, string> | string }
@@ -677,6 +681,7 @@ type NumericExpressions =
 // Expression names that produce a string value.
 type StringExpressions =
   | 'CONCAT'
+  | 'TO_STRING'
   | 'LOWER'
   | 'UPPER'
   | 'TRIM'
@@ -715,8 +720,12 @@ array of numeric operands; `POWER` takes `{ base, exponent }`.
 
 ### String expressions
 
-String operations returning a string: `CONCAT`, `LOWER`, `UPPER`,
-`TRIM`, `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
+String operations returning a string: `CONCAT`, `TO_STRING`, `LOWER`,
+`UPPER`, `TRIM`, `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
+
+- `TO_STRING` — `args`: one column or value; its text form. A BIGINT read
+  through it keeps every digit inside a JSON aggregate, where a number
+  past 2^53 would round.
 
 - `SUBSTR` — `args: { string; start; length? }`. `start` is **1-based**
   (SQL-native); both `start` and `length` accept a number **or** a column

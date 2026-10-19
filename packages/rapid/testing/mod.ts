@@ -180,11 +180,16 @@ export async function harness<
   };
 }
 
-/** A parsed response: `status`, the auto-decoded `body`, and `headers`. */
-export type TestResponse = {
+/**
+ * A parsed response: `status`, `headers`, the auto-decoded `body` (typed
+ * by the call's generic, `unknown` by default) and the raw `text`.
+ */
+export type TestResponse<B = unknown> = {
   status: number;
   headers: Headers;
-  body: unknown;
+  body: B;
+  /** The raw response body — the page an HTML route rendered. */
+  text: string;
 };
 
 /** Per-call options for a {@link client} request. */
@@ -211,10 +216,10 @@ export type ClientOptions = {
   host?: string;
 };
 
-type ClientMethod = (
+type ClientMethod = <B = unknown>(
   path: string,
   options?: ClientOptions,
-) => Promise<TestResponse>;
+) => Promise<TestResponse<B>>;
 
 /**
  * A frozen {@link RapidView} for template unit tests — the same shape
@@ -244,7 +249,11 @@ export function client(app: Application): Record<
   'get' | 'post' | 'put' | 'patch' | 'delete',
   ClientMethod
 > {
-  const call = (method: string): ClientMethod => async (path, options = {}) => {
+  const call = (method: string): ClientMethod =>
+  async <B>(
+    path: string,
+    options: ClientOptions = {},
+  ): Promise<TestResponse<B>> => {
     const url = new URL(path, `http://${options.host ?? 'rapid.test'}`);
     for (const [k, v] of Object.entries(options.query ?? {})) {
       url.searchParams.set(k, v);
@@ -266,8 +275,9 @@ export function client(app: Application): Record<
     init.headers = headers;
     const res = await app.fetch(new Request(url, init));
     const ct = res.headers.get('content-type') ?? '';
-    const body = ct.includes('json') ? await res.json() : await res.text();
-    return { status: res.status, headers: res.headers, body };
+    const text = await res.text();
+    const body = ct.includes('json') ? JSON.parse(text) : text;
+    return { status: res.status, headers: res.headers, body, text };
   };
   return {
     get: call('GET'),

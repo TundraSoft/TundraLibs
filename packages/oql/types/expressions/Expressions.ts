@@ -207,6 +207,13 @@ export type Expressions<
   $$_expression: 'CONCAT';
   args: Array<GetColumnByType<FT, string> | string>;
 } | {
+  /**
+   * Text form of a value — a BIGINT read this way survives JSON (a
+   * relation's `JSON_ROW`) without float rounding past 2^53.
+   */
+  $$_expression: 'TO_STRING';
+  args: keyof FT | string | number | bigint | boolean;
+} | {
   /** Lowercase. */
   $$_expression: 'LOWER';
   args: GetColumnByType<FT, string> | string;
