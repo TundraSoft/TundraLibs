@@ -51,7 +51,12 @@ import type {
   SQLEngineCapabilities,
   SQLEngineEvents,
 } from '../../types/mod.ts';
-import { openDatabase, type SqliteDb, type SqliteStmt } from './adapter.ts';
+import {
+  openDatabase,
+  type OpenOptions,
+  type SqliteDb,
+  type SqliteStmt,
+} from './adapter.ts';
 import { parseSqliteErrorMeta, sqliteErrorToCode } from './errorCodes.ts';
 import type { SQLiteEngineOptions } from './types/mod.ts';
 
@@ -200,7 +205,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
    */
   protected _openDatabase(
     path: string,
-    options: { readonly?: boolean; create?: boolean },
+    options: OpenOptions,
   ): Promise<SqliteDb> {
     return openDatabase(path, options);
   }
@@ -216,6 +221,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
       return await this._openDatabase(':memory:', {
         readonly: this._getOption('readonly'),
         create: this._getOption('create'),
+        busyTimeoutMs: this._getOption('busyTimeoutMs'),
       });
     }
 
@@ -229,6 +235,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     return await this._openDatabase(mainDb, {
       readonly: this._getOption('readonly'),
       create: this._getOption('create'),
+      busyTimeoutMs: this._getOption('busyTimeoutMs'),
     });
   }
 

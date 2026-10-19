@@ -62,11 +62,12 @@ await db.disconnect();
 
 Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 
-| Option     | Type      | Default | Notes                                            |
-| ---------- | --------- | ------- | ------------------------------------------------ |
-| `path`     | `string`  | —       | Required. Directory path (or `:memory:`).        |
-| `readonly` | `boolean` | `false` | Open in read-only mode.                          |
-| `create`   | `boolean` | `true`  | Create file if missing (ignored for `:memory:`). |
+| Option          | Type      | Default | Notes                                                                                                     |
+| --------------- | --------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `path`          | `string`  | —       | Required. Directory path (or `:memory:`).                                                                 |
+| `readonly`      | `boolean` | `false` | Open in read-only mode.                                                                                   |
+| `create`        | `boolean` | `true`  | Create file if missing (ignored for `:memory:`).                                                          |
+| `busyTimeoutMs` | `number`  | `0`     | Wait this long for another process's lock (`PRAGMA busy_timeout`). Blocking — no help within one process. |
 
 ## Storage layout
 

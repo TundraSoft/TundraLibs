@@ -29,4 +29,11 @@ export type SQLiteEngineOptions = SQLEngineOptions & {
    * effect in `':memory:'` mode.
    */
   create?: boolean;
+  /**
+   * How long a statement waits for another PROCESS's lock on the file
+   * before failing with `database is locked` (`PRAGMA busy_timeout`), in
+   * ms. Default: 0 — fail at once. The wait blocks the thread, so it only
+   * helps across processes; two engines in one process gain nothing.
+   */
+  busyTimeoutMs?: number;
 };
