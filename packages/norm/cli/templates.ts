@@ -137,21 +137,34 @@ change dialect / host / credentials (defaults to a local SQLite file under
 `;
 
 /**
- * The short pointer merged into `CLAUDE.md` / `AGENTS.md` — the CONTENT
- * lives in the dedicated `norm.agent.md` file (see {@link AI_GUIDE_SECTION}),
- * so a user's own notes elsewhere in those files survive every `upgrade`.
- * Reused as-is by rapid's CLI when scaffolding a `--norm` project, so the
- * link text is identical regardless of which tool wrote it.
+ * The short pointer merged into `AGENTS.md` — the CONTENT lives in the
+ * dedicated `norm.agent.md` file (see {@link AI_GUIDE_SECTION}), so a
+ * user's own notes elsewhere survive every `upgrade`. Agents that read
+ * `AGENTS.md` (Cursor, Codex) do not follow links on their own, so it
+ * also carries the never-hand-roll checklist. Reused as-is by rapid's CLI
+ * when scaffolding a `--norm` project.
  */
 export const AI_GUIDE_LINK =
-  `See [norm.agent.md](./norm.agent.md) for norm's AI guide — Column
-builders, Entity/Schema, migrations, querying, transactions, scoping,
-at-rest encryption, read caching, events, errors, connections.`;
+  `Read [norm.agent.md](./norm.agent.md) before writing data-layer code.
+norm already provides — never hand-roll: migrations (\`Migrator\`, no hand
+SQL DDL), pagination with \`total\`, aggregates/GROUP BY, request
+validators (\`repo.guardians\`), temporal and audit history tables,
+at-rest encryption with searchable hashes, PBKDF2 password columns, key
+rotation, tenant scoping, read caching, transactions.`;
+
+/** The `CLAUDE.md` section: an `@` import, so Claude Code loads the whole
+ * guide into context rather than only seeing a link it may not follow. */
+export const AI_GUIDE_IMPORT = `@norm.agent.md`;
 
 /** The full guide — written wholesale to \`norm.agent.md\` by \`norm init\`/
  * \`upgrade\` (and by rapid's \`--norm\` scaffold, imported rather than
  * copied). Regenerated in full every time; never hand-edit this file. */
 export const AI_GUIDE_SECTION = `# norm
+
+norm is a full ORM. Before writing data-layer code, check this guide — the
+features below already exist, and re-implementing them by hand (a migration
+script, a history table, a hand-written request schema, a SHA-256 password
+column) is the most common mistake.
 
 ## Schema
 
@@ -169,24 +182,42 @@ const Profiles = Entity('profiles', {
 }, {
   pk: ['userId'],
   // Relations are FKs referencing the target's REGISTRY KEY (its key in
-  // Schema(...)), never a table name.
+  // Schema(...)), never a table name. Optional: onDelete/onUpdate,
+  // project: true (eager-load on default reads), reverseProject,
+  // reverseCardinality: 'hasOne' | 'hasMany'.
   fk: { User: { model: 'Users', on: { userId: 'id' }, reverseAs: 'Profile' } },
 });
 \`\`\`
 
 Column builders: \`varchar(n)\`, \`integer\`, \`bigint\`, \`decimal(p, s)\`,
-\`float\`, \`double\`, \`real\`, \`boolean\`, \`json<T>()\`, \`date\`, \`time\`,
-\`datetime\`, \`timestamp\`, \`uuid\`, \`text\`, \`blob\`, \`hash('SHA-256')\` (a
-one-way digest column, e.g. for passwords), \`mask(source, fn)\` (a virtual
-column computed after decryption — never stored, never sent to SQL).
+\`float\`, \`double\`, \`real\`, \`boolean\`, \`json<T>()\` (or
+\`json(Guardian.object(...))\` to infer the shape), \`date\`, \`time\`,
+\`datetime\`, \`timestamp\`, \`timestamptz\`, \`uuid\`, \`text\`, \`blob\`.
+ID factories that generate their own value: \`ulid()\`, \`cuid()\`, \`cuid2()\`,
+\`nanoId()\`, \`objectId()\`, \`simpleId()\` (a BIGINT).
+\`password('PBKDF2')\` is the column for passwords (salted; verify with
+\`pbkdf2Verify(candidate, row.password)\`, exported by norm) — add
+\`.hidden()\` so it stays out of default reads. \`hash('SHA-256')\` is a
+plain one-way digest (tokens, lookups) — never use it for passwords.
+\`mask(source, fn)\` is a virtual column computed after decryption — never
+stored, never sent to SQL.
+
 Chainable on (most of) these: \`.nullable()\`, \`.guard(g)\` (an already-built
 \`@tundralibs/guardian\` instance — validators AND transforms, in your own
 order; pinned to the column's own concrete guardian class), \`.beforeWrite(fn)\`/
-\`.afterRead(fn)\`, \`.default(v)\`, \`.hidden()\`/\`.unfilterable()\`,
-\`.insertOnly()\` (set once at insert: \`update()\` rejects it and an upsert
-conflict never changes it, e.g. \`CreatedBy\`), \`.comment(text)\`.
-\`Column.enum([...])\` is its own factory (not chained) —
-narrows the TS type to the literal union, no \`as const\` needed.
+\`.afterRead(fn)\`, \`.default(v)\` and \`.defaultOnUpdate(v)\` (a value, a
+function such as \`() => new Date()\`, or \`{ $$_expression: 'NOW' | 'UUID' }\`),
+\`.hidden()\`/\`.unfilterable()\`, \`.insertOnly()\` (set once at insert:
+\`update()\` rejects it and an upsert conflict never changes it, e.g.
+\`CreatedBy\`), \`.renamedFrom('old')\` (a rename hint for migrations — data
+survives instead of drop + add), \`.comment(text)\`.
+\`Column.enum([...])\` is its own factory (not chained) — narrows the TS
+type to the literal union, no \`as const\` needed.
+
+Read-back types match the declared TS type on every dialect: a \`bigint\`
+column (incl. \`simpleId\`) is always a \`bigint\`, a date column a \`Date\`, a
+JSON column the parsed value — top-level AND inside relation values.
+\`JSON.stringify\` throws on a \`bigint\`, so convert at the API edge.
 
 ## Entity kinds
 
@@ -197,6 +228,21 @@ a stored OQL \`SELECT\`; can be joined against, optionally
 terminal — it cannot be joined or built upon, and cannot declare \`fk\`.
 Both read-only kinds take \`afterRead\` only (no write hooks); \`index\`/
 \`unique\`/\`insert\`/\`update\` are TABLE-only.
+
+## History: temporal and audit entities
+
+Never hand-build a history or audit table — declare it:
+
+\`\`\`ts
+// Temporal: every insert supersedes the current version (EffectiveFrom/
+// EffectiveTo are injected). update/upsert/delete/truncate all throw.
+const Fees = Entity('fees', cols, { pk: ['Id'], temporal: { key: ['Name'] } });
+// Audit: a read-only replica written on every insert/update/delete.
+const Users = Entity('users', cols, { pk: ['id'], audit: { name: 'UserAudit' } });
+
+await db.repo('Fees').find({ '@Name': 'Gold', '@AsOf': new Date('2026-04-01') });
+await db.repo('UserAudit').find({ '@id': id });
+\`\`\`
 
 ## Hooks
 
@@ -226,24 +272,37 @@ that operation (a "request schema" — everything else becomes norm-owned
 for it); norm-maintained behavior (hash siblings, \`defaultOnUpdate\`)
 always runs regardless of the list.
 
+## Request validation
+
+Every TABLE repo exposes the validators norm derives from its columns —
+use them at the API boundary instead of re-declaring the rules:
+
+\`\`\`ts
+const body = db.repo('Users').guardians.insert.parse(json); // .update for PATCH
+\`\`\`
+
 ## Querying
 
 Read/write through \`db\` (exported from \`db.ts\`) via \`db.repo(entityKey)\`
-— never a raw query unless norm's typed layer genuinely can't express it
-(escape hatches: \`db.query(...)\`/\`db.raw(...)\`, both skip decrypt/scope/
-validation and \`raw()\` emits a \`warning\` event every call):
+— never a raw query unless norm's typed layer genuinely can't express it.
+Every call returns a result envelope, never bare rows: \`findOne\`/\`getByPK\`
+give \`{ data: row | null }\`, \`find\` gives \`{ data: rows, count }\`,
+\`insert\`/\`upsert\` return the written rows, \`update\`/\`delete\` return only
+\`{ count }\`.
 
 \`\`\`ts
-await db.repo('Users').insert({ email: 'a@b.com' });
-await db.repo('Users').findOne({ '@email': 'a@b.com' });
+await db.repo('Users').insert({ email: 'a@b.com' }); // or an array: a batch
+const { data: user } = await db.repo('Users').findOne({ '@email': 'a@b.com' });
 await db.repo('Users').getByPK({ id });
 await db.repo('Users').count({ '@role': 'admin' });
-await db.repo('Users').find({ '@role': 'admin' }, {
+const page = await db.repo('Users').find({ '@role': 'admin' }, {
   orderBy: { '@displayName': 'ASC' },
   limit: 20,
-  project: { '@id': true, '@displayName': true, '@Profile': { '@bio': true } },
+  offset: 40,
+  total: true, // page.total = all matching rows; page.count = this page
+  project: { '@id': true, '@displayName': 'name', '@Profile': { '@bio': true } },
 });
-await db.repo('Users').update({ role: 'admin' }, { '@id': id });
+const { count } = await db.repo('Users').update({ role: 'admin' }, { '@id': id });
 // On conflict: only the columns you passed (never keys, insert-only or
 // insert-default-only ones) plus defaultOnUpdate; \`update: {...}\` sets
 // exactly that instead (counters), \`updateOnConflict: []\` leaves the row.
@@ -252,11 +311,37 @@ await db.repo('Users').delete({ '@id': id }); // delete({}) = all rows
 await db.repo('Users').truncate(); // refused on a temporal or scoped entity
 \`\`\`
 
+\`find()\` with no \`limit\` returns \`defaultPageSize\` rows (default 10 — set
+it per entity), NOT everything; pass \`limit: 0\` for all rows (it emits a
+warning). Projection: \`'@col': true\` keeps a column, \`'@col': 'alias'\`
+renames it, \`'@Relation': true\` loads the whole related row (an array for
+to-many), \`'@Relation': { '@col': true }\` picks its columns.
+
+Aggregates: the projected columns are the GROUP BY; results come back as
+\`number | string | bigint\` depending on the dialect, so coerce:
+
+\`\`\`ts
+const perCountry = await db.repo('Visits').find(undefined, {
+  project: { '@country': true },
+  aggregates: { visits: { fn: 'COUNT', column: '@id' } }, // SUM/AVG/MIN/MAX
+  limit: 0,
+});
+Number(perCountry.data[0]!.visits);
+\`\`\`
+
 Filters are the OQL filter language typed to your columns (\`$eq\`, \`$ne\`,
-\`$in\`, \`$like\`, \`$between\`, \`$null\`, \`$or\`/\`$and\`, nested relation refs
-like \`'@Profile.@bio'\`). A filter through an unprojected to-many relation
-becomes a correlated \`EXISTS\` — it never fans out rows (not on MongoDB,
-which has no correlated-subquery form — see the dialect note below).
+\`$gt\`/\`$gte\`/\`$lt\`/\`$lte\`, \`$in\`/\`$nin\`, \`$like\`/\`$ilike\`,
+\`$startsWith\`/\`$contains\`, \`$between\`, \`$null\`, \`$or\`/\`$and\`, nested
+relation refs like \`'@Profile.@bio'\`). A filter through an unprojected
+to-many relation becomes a correlated \`EXISTS\` — it never fans out rows
+(not on MongoDB, which has no correlated-subquery form — see the dialect
+note below).
+
+Escape hatches: \`db.query<Row>(ir, { entity })\` runs OQL IR and still
+decrypts and runs \`afterRead\` for that entity; \`db.raw(sql, params)\` runs
+hand-written SQL with \`:name:\` params and skips decrypt/scope/validation
+(it emits a \`warning\` event every call). \`db.encrypt\`/\`db.decrypt\`/\`db.hash\`
+build values for hand-written filters.
 
 ## Transactions
 
@@ -285,13 +370,40 @@ unscoped, so one handle can span a mixed registry.
 ## At-rest encryption
 
 \`.encrypt()\` any column — it keeps its declared TS type, only storage is
-ciphertext. Add \`.hash()\` to keep it equality-searchable (e.g.
-\`Column.varchar(255).encrypt().hash()\` for email) — norm derives a
-\`<col>_hash\` sibling and rewrites \`{ '@email': ... }\` filters (and
-uniqueness/upsert conflict keys) against it automatically. An entity with
-any encrypted column may only use read caching on the in-process
-\`MEMORY\` cache engine (decrypted rows on Redis/Memcached would leak
-plaintext) — \`use()\` throws at compose time otherwise.
+ciphertext. It needs \`new Norm({ secret })\` (use \`keyDerivation: 'HKDF'\`
+on Cloudflare Workers); \`use()\` throws without one. Add \`.hash()\` to keep
+it equality-searchable (e.g. \`Column.varchar(255).encrypt().hash()\` for
+email) — norm derives a \`<col>_hash\` sibling and rewrites \`{ '@email': ... }\`
+filters against it automatically. Uniqueness and upsert conflicts are NOT
+automatic: declare \`unique: { email: ['email_hash'] }\` and pass
+\`conflictKeys: ['email_hash']\` (an encrypted conflict key is rejected).
+Rotate the key with \`rotateKey(db, { oldKey, newKey, dryRun })\`.
+An entity with any encrypted column may only use read caching on the
+in-process \`MEMORY\` cache engine (decrypted rows on Redis/Memcached would
+leak plaintext) — \`use()\` throws at compose time otherwise.
+
+## Migrations
+
+There is no \`migrate\` CLI command and you never write CREATE/ALTER by
+hand — the \`Migrator\` (\`@tundralibs/norm/migrations\`) diffs versioned
+JSON snapshots of your schema:
+
+\`\`\`ts
+import { Migrator } from '@tundralibs/norm/migrations';
+
+const mig = new Migrator(db, { dir: './migrations' });
+await mig.snapshot(); // writes 000N.json only when the schema changed
+const steps = await mig.plan(); // review: steps[i].queries, .blockedDrops
+await mig.apply(); // drops are refused unless apply({ allowDrop: true })
+await mig.rollback({ to: 1 });
+\`\`\`
+
+Use \`.renamedFrom('old')\` on a column (or the table's \`renamedFrom\`
+option) so a rename keeps its data instead of becoming drop + add. In a
+runtime with no filesystem, apply snapshots a bundler inlined:
+\`new Migrator(db, { source: memorySource({ snapshots: { 1: v1, 2: v2 } }) })\`
+(on SQLite it then locks with a database-row \`TableLock\`). Tests can run
+the same \`Migrator\` against a temp-dir SQLite database.
 
 ## Read caching (off by default)
 
@@ -315,15 +427,16 @@ nested spans instead of flat events, configure a \`witness\` (see
 
 ## Errors
 
-Every thrown error extends \`NormError\` (\`@tundralibs/norm/errors\`) and
-exposes \`.code\` and \`.norm\` (the raising instance's \`name\`) getters —
-branch on \`instanceof\`, not string-matching the message. The subclasses
-that matter day to day: \`NormQueryError\` (bad filter/projection/upsert
-before any engine call), \`NormValidationError\` (an insert/update/upsert
-payload failed the column-derived Guardian — detail on \`context.issues\`),
-\`NormHookError\` (a hook threw — \`context.model\`/\`context.hook\` identify
-it), and \`NormUnsupportedError\` (the configured engine or the entity's
-own shape forbids the call, e.g. \`update()\` on a temporal entity).
+norm's own errors extend \`NormError\` (\`@tundralibs/norm/errors\`) and expose
+\`.code\` and \`.norm\` (the raising instance's \`name\`) getters — branch on
+\`instanceof\`, not string-matching the message: \`NormQueryError\` (bad
+filter/projection/upsert before any engine call), \`NormValidationError\`
+(a payload failed the column-derived Guardian — detail on
+\`context.issues\`), \`NormHookError\` (\`context.model\`/\`context.hook\`),
+\`NormUnsupportedError\` (the engine or the entity's shape forbids the
+call), \`NormDefinitionError\`, \`NormCryptoError\`, \`NormMigrationError\`.
+Database errors (\`DUPLICATE_KEY\`, \`FOREIGN_KEY_VIOLATION\`, ...) arrive as
+the drivers' \`EngineError\` with that \`code\`, not as a \`NormError\`.
 
 ## Connection
 
@@ -332,14 +445,18 @@ The database connection is DATA, not code: edit \`configs/Norm.yaml\` (the
 active at a time) to change dialect, host or credentials. Use
 \`\${VAR}\` placeholders and a local \`.env\` for secrets — never hand-edit
 them into source control. \`db.ts\` never changes when the dialect does.
+On Cloudflare Workers, import \`@tundralibs/norm/core\` plus exactly one
+\`@tundralibs/norm/engines/<dialect>\` (the native SQLite engine cannot be
+bundled there).
 
 Not every dialect supports everything: MongoDB has no transactions and
 no raw SQL (\`db.query()\` with OQL IR only); Neon/Turso/D1 have no
-transactions either (fetch-only, one request per statement) and migrate
-without an advisory lock.
+transactions either (fetch-only, one request per statement), and only
+Postgres/MariaDB take a server-side migration lock.
 
-Full reference (relations, migrations, aggregates, pagination, crypto
-overrides): https://jsr.io/@tundralibs/norm.
+CLI: \`norm ping\` checks the connection; \`norm upgrade\` bumps norm and
+regenerates this guide. Full reference (relations, migrations, aggregates,
+pagination, crypto overrides): https://jsr.io/@tundralibs/norm.
 `;
 
 export const DENO_JSON = `{
