@@ -8,7 +8,8 @@ and how to keep a suite green on Deno, Bun and Node at once.
 ## TL;DR
 
 - `client(app)` drives routes through `app.fetch()` — no port, no network,
-  the whole middleware onion. `{ status, headers, body }` back, JSON decoded.
+  the whole middleware onion. `{ status, headers, body, text }` back, JSON
+  decoded.
 - `harness({ modules, stub })` boots the module system with fakes stocked
   into a **fresh child** DI container, so tests cannot leak into each other.
 - `view(overrides)` builds the frozen view bag a template receives, for
@@ -63,8 +64,11 @@ the router, the representer and disclosure run exactly as in production.
 | `swap`    | `true` sends the app's **resolved** swap header, so a UI test never hardcodes a header a later htmx config would silently miss. |
 | `host`    | The hostname (default `rapid.test`) — for `server.api.hosts` tests. An absolute `path` overrides it.                            |
 
-The response is `{ status, headers, body }`; `body` is `res.json()` when the
-content type includes `json`, else the text. For streams, byte bodies or
+The response is `{ status, headers, body, text }`. `text` is the raw body
+(`(await api.get('/pricing')).text` for a rendered page); `body` is that text
+JSON-parsed when the content type includes `json`, else the text itself. Type
+`body` with the call's generic — `api.get<{ ok: boolean }>('/health')` — it
+defaults to `unknown`. For streams, byte bodies or
 manual control call `app.fetch(new Request(...))` directly — it is the same
 path.
 
