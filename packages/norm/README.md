@@ -155,15 +155,16 @@ existing project to add a `models/` schema layer (and `configs/Norm.yaml` +
 Existing files are always merged into or left alone, never clobbered —
 re-running `init` is safe.
 
-`init` also writes `norm.agent.md`: entity kinds (TABLE/VIEW/QUERY), hooks,
-the full repo method set (`insert`/`find`/`update`/`upsert`/`delete`/
-`truncate`), transaction/cache dialect caveats, the events/witness
-observability surface, and the `NormError` hierarchy — the same guide this
-README documents, not a shorter summary. `CLAUDE.md`/`AGENTS.md` get (or
-merge in) only a short pointer to it, so anything you write elsewhere in
-those two files survives every future `upgrade`. `upgrade` refreshes
-`norm.agent.md` in full and re-syncs that pointer — never anything outside
-the delimited section it owns.
+`init` also writes `norm.agent.md`, the guide coding agents read: what norm
+already does (so an agent does not hand-roll migrations, history tables,
+request validators or password hashing), entity kinds, hooks, the repo
+method set and result shapes, migrations, encryption, transactions and
+caching caveats, events, and errors. `CLAUDE.md` gets an `@norm.agent.md`
+import (Claude Code loads the whole guide) and `AGENTS.md` a short pointer
+plus a never-hand-roll checklist, each in a delimited section, so anything
+you write elsewhere in those files survives every future `upgrade`.
+`upgrade` refreshes `norm.agent.md` in full and re-syncs both sections —
+never anything outside them.
 
 ## Choosing an entry point
 

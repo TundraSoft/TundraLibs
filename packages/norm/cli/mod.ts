@@ -17,7 +17,11 @@ import { upgradeCommand } from './commands/upgrade.ts';
 // Re-exported so other CLIs (rapid's `--norm` scaffold) can use norm's own
 // AI guide content directly instead of hand-copying it — one source of
 // truth, never two prose blocks drifting apart.
-export { AI_GUIDE_LINK, AI_GUIDE_SECTION } from './templates.ts';
+export {
+  AI_GUIDE_IMPORT,
+  AI_GUIDE_LINK,
+  AI_GUIDE_SECTION,
+} from './templates.ts';
 
 const HELP = `norm <command>
 
