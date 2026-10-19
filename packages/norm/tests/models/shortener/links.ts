@@ -18,6 +18,7 @@ export const Links = Entity('links', {
   createdById: Column.uuid(),
   clicks: Column.bigint().guard(Guardian.bigint().min(0n)).default(0n),
   isActive: Column.boolean().default(true),
+  verified: Column.boolean().nullable(),
   meta: Column.json<{ tags: string[]; campaign?: string }>().nullable(),
   expiresAt: Column.timestamp().nullable(),
 }, {

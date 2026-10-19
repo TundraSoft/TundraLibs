@@ -336,8 +336,22 @@ describe('rapid.cli init scaffold', () => {
       f['.github/copilot-instructions.md']!,
       '/AGENTS.md',
     );
-    // Claude Code loads the guide itself through the import line.
-    asserts.assertStringIncludes(f['CLAUDE.md']!, '\n@AGENTS.md\n');
+    // Claude Code loads AGENTS.md AND every guide through import lines — it
+    // does not follow the markdown links AGENTS.md carries.
+    for (
+      const g of [
+        'AGENTS.md',
+        'rapid.agent.md',
+        'rapid-pact.agent.md',
+        'rapid-modules.agent.md',
+        'rapid-ui.agent.md',
+        'norm.agent.md',
+      ]
+    ) {
+      asserts.assertStringIncludes(f['CLAUDE.md']!, `\n@${g}\n`);
+    }
+    // Agents that only read AGENTS.md get the never-hand-roll checklist.
+    asserts.assertStringIncludes(agents, 'never hand-roll');
     asserts.assertStringIncludes(agents, '# aiapp');
     asserts.assertStringIncludes(agents, '## Modules');
     asserts.assertStringIncludes(agents, 'modules/Greeter.ts');
@@ -390,16 +404,17 @@ describe('rapid.cli init scaffold', () => {
       'shapes must lead with the job, not the bare package name',
     );
 
-    // No module system / no --ui / no --norm → no matching guide file or link.
+    // No --ui / no --norm → no matching guide file, link or import. The
+    // decorators guide is unconditional: `app.module(new X())` uses it
+    // without the module system.
     const plain = scaffold({ name: 'p', module: false, norm: false }, '1.0.0');
     asserts.assert(!plain['AGENTS.md']!.includes('## Modules'));
-    asserts.assert(!('rapid-modules.agent.md' in plain));
+    asserts.assert('rapid-modules.agent.md' in plain);
     asserts.assert(!('rapid-ui.agent.md' in plain));
     asserts.assert(!('norm.agent.md' in plain));
-    asserts.assert(
-      !plain['AGENTS.md']!.includes('rapid-modules.agent.md'),
-    );
     asserts.assert(!plain['AGENTS.md']!.includes('norm.agent.md'));
+    asserts.assert(!plain['CLAUDE.md']!.includes('@norm.agent.md'));
+    asserts.assert(!plain['CLAUDE.md']!.includes('@rapid-ui.agent.md'));
     // rapid-pact.agent.md is unconditional — no flag gates the auth adapter.
     asserts.assert('rapid-pact.agent.md' in plain);
     // Doc links are pinned to the scaffolded version; offline (null) falls

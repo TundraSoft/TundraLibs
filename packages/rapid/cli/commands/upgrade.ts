@@ -15,7 +15,7 @@ import {
 } from '@tundralibs/compat/file';
 import { latestVersion } from '../latestVersion.ts';
 import { ensureSection } from '../markdown.ts';
-import { agentDocs, CLAUDE_BODY, COPILOT_BODY } from '../templates.ts';
+import { agentDocs, COPILOT_BODY } from '../templates.ts';
 
 // Matches a @tundralibs/<pkg> version in either manifest's dep strings:
 //   "jsr:@tundralibs/rapid@^1.2.3"  or  "npm:@jsr/tundralibs__rapid@^1.2.3"
@@ -61,7 +61,7 @@ export async function upgradeCommand(dir = '.'): Promise<number> {
     pathExists(`${dir}/configs/Norm.yaml`),
     latestVersion('rapid'),
   ]);
-  const { files, reference } = agentDocs(rapidVersion, {
+  const { files, reference, claude } = agentDocs(rapidVersion, {
     module: hasModules,
     ui: hasUi,
     norm: hasNorm,
@@ -70,7 +70,7 @@ export async function upgradeCommand(dir = '.'): Promise<number> {
     await writeTextFile(`${dir}/${rel}`, content);
   }
   await ensureSection(`${dir}/AGENTS.md`, reference);
-  await ensureSection(`${dir}/CLAUDE.md`, CLAUDE_BODY);
+  await ensureSection(`${dir}/CLAUDE.md`, claude);
   await ensureSection(
     `${dir}/.github/copilot-instructions.md`,
     COPILOT_BODY,
