@@ -6,6 +6,7 @@ protocol), so each runtime ships its own bindings:
 | Runtime  | Backend                             | Notes                               |
 | -------- | ----------------------------------- | ----------------------------------- |
 | Deno     | `jsr:@db/sqlite` (FFI to libsqlite) | Auto-installed                      |
+| Deno     | `node:sqlite` (built-in)            | When drivers is installed from npm  |
 | Bun      | `bun:sqlite` (built-in)             | Zero dependency                     |
 | Node 22+ | `node:sqlite` (built-in)            | Preferred                           |
 | Node     | `npm:better-sqlite3`                | Fallback when `node:sqlite` missing |

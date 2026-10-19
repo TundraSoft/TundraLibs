@@ -7,7 +7,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { isDeno } from '@tundralibs/compat';
 import { makeTempDir, remove } from '@tundralibs/compat/file';
-import { _rewriteBunPlaceholders, openDatabase } from './adapter.ts';
+import { _openDeno, _rewriteBunPlaceholders, openDatabase } from './adapter.ts';
 
 // =============================================================================
 // Test Suites
@@ -125,6 +125,43 @@ describe({
         it('should be tested only when isDeno is true', () => {
           // This validates the current runtime detection
           asserts.assertStrictEquals(isDeno, true);
+        });
+      },
+    });
+
+    // Installed from npm, Deno cannot resolve the `$sqlite_deno` alias inside
+    // node_modules (ERR_MODULE_NOT_FOUND) — the adapter must fall back to
+    // Deno's built-in node:sqlite with the same INTEGER read contract.
+    describe({
+      name: '_openDeno() - $sqlite_deno unresolvable (npm install)',
+      deno: true,
+      bun: false,
+      node: false,
+      fn: () => {
+        const unresolved = () =>
+          Promise.reject(
+            Object.assign(new TypeError("Could not find '$sqlite_deno'"), {
+              code: 'ERR_MODULE_NOT_FOUND',
+            }),
+          );
+
+        it('falls back to node:sqlite', async () => {
+          const db = await _openDeno(':memory:', {}, unresolved);
+          try {
+            const rows = db.prepare('SELECT 1 AS a, 9007199254740993 AS b')
+              .all([]);
+            asserts.assertEquals(rows[0], { a: 1, b: 9007199254740993n });
+          } finally {
+            db.close();
+          }
+        });
+
+        it('rethrows any other load failure', async () => {
+          const denied = new Error('ffi permission denied');
+          const err = await asserts.assertRejects(() =>
+            _openDeno(':memory:', {}, () => Promise.reject(denied))
+          );
+          asserts.assertStrictEquals(err, denied);
         });
       },
     });
