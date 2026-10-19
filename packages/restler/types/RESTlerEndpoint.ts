@@ -18,7 +18,8 @@ export type RESTlerEndpoint<M extends RESTlerMethod = RESTlerMethod> = {
    * The path part of the URL (e.g., "/users/{id}").
    * Can include {version} placeholder that will be replaced with the version.
    *
-   * NORMALIZED via `path.join` against the base URL's pathname: a literal
+   * NORMALIZED by a POSIX path join against the base URL's pathname (the
+   * same on every platform): a literal
    * `//` collapses and `.`/`..` segments resolve, the same as joining
    * filesystem paths. Fine — desirable, even — for ordinary hierarchical
    * paths, but a hazard if a segment embeds an opaque, caller-controlled

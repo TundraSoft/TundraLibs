@@ -1,6 +1,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { makeTempFile, removeSync } from '@tundralibs/compat';
+import { isDeno, makeTempFile, removeSync } from '@tundralibs/compat';
+import { join } from '@tundralibs/compat/path';
 import { RESTler } from '../mod.ts';
 import {
   RESTlerConfigError,
@@ -4188,3 +4189,52 @@ describe('RESTler — rate-limit retry on a streamed request', () => {
     asserts.assertEquals(sleptWhenCancelled, 0, 'cancelled before the wait');
   });
 });
+
+// A browser on Windows: `@std/path` (compat's path in a web runtime)
+// switches to Windows rules when `navigator.platform` starts with "Win".
+// A URL path must build the same on every platform, so each child
+// process deletes the runtime globals — Win32-stubbed or not — before
+// importing, the only way to reach that import-time branch. Deno-gated:
+// it spawns the children with `Deno.Command`.
+if (isDeno) {
+  describe('RESTler URL paths (Windows browser)', () => {
+    it('build the same URL when navigator.platform is Win32', async () => {
+      const script = `// deno-lint-ignore-file no-explicit-any
+const g = globalThis as any;
+const win = Deno.args[0] === 'win';
+for (const k of ['process', 'Buffer', 'global', 'setImmediate', 'clearImmediate', 'Deno']) delete g[k];
+if (win) Object.defineProperty(g.navigator, 'platform', { value: 'Win32' });
+const { RESTler } = await import('../../mod.ts');
+class C extends RESTler {
+  constructor() { super({ baseURL: 'https://api.example.com/v1' }); }
+  url(path: string) { return this._processEndpoint({ path, method: 'GET' }).then((r) => r.url); }
+}
+const c = new C();
+const paths = ['/a/b', '/files:batchGet', '/a/../b', '\\\\\\\\srv\\\\share'];
+console.log(JSON.stringify(await Promise.all(paths.map((p) => c.url(p)))));
+`;
+      const scriptPath = join(import.meta.dirname!, 'fixtures', 'win-url.ts');
+      await Deno.writeTextFile(scriptPath, script);
+      const run = async (platform: string) => {
+        const out = await new Deno.Command(Deno.execPath(), {
+          args: ['run', '--allow-read', scriptPath, platform],
+          stdout: 'piped',
+          stderr: 'piped',
+        }).output();
+        asserts.assertEquals(
+          out.code,
+          0,
+          new TextDecoder().decode(out.stderr),
+        );
+        return JSON.parse(new TextDecoder().decode(out.stdout)) as string[];
+      };
+      try {
+        const posix = await run('posix');
+        asserts.assertEquals(posix[0], 'https://api.example.com/v1/a/b');
+        asserts.assertEquals(await run('win'), posix);
+      } finally {
+        await Deno.remove(scriptPath);
+      }
+    });
+  });
+}
