@@ -44,6 +44,8 @@ export type SqliteStmt = {
 export type OpenOptions = {
   readonly?: boolean;
   create?: boolean;
+  /** `PRAGMA busy_timeout` in ms (default 0 — fail at once). */
+  busyTimeoutMs?: number;
 };
 
 /**
@@ -80,6 +82,13 @@ export async function openDatabase(
   path: string,
   options: OpenOptions = {},
 ): Promise<SqliteDb> {
+  const busyTimeoutMs = options.busyTimeoutMs ?? 0;
+  if (!Number.isInteger(busyTimeoutMs) || busyTimeoutMs < 0) {
+    throw new DriverError(
+      `busyTimeoutMs must be a non-negative integer, got ${busyTimeoutMs}`,
+      { runtime: isDeno ? 'deno' : isBun ? 'bun' : 'node' },
+    );
+  }
   const db = isDeno
     ? await _openDeno(path, options)
     : isBun
@@ -99,6 +108,10 @@ export async function openDatabase(
   // CASCADE were silently unenforced on Bun. It is a per-connection
   // setting; readonly connections accept it (no file write).
   db.exec('PRAGMA foreign_keys = ON');
+  // Set UNIFORMLY too: the bindings disagree (better-sqlite3 waits 5s,
+  // the others fail at once). The wait is synchronous, so it only helps
+  // against ANOTHER process — in-process it blocks the holder as well.
+  db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
   return db;
 }
 
