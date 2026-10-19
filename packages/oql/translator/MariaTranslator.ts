@@ -175,6 +175,7 @@ export class MariaTranslator extends AbstractTranslator {
     ],
     ['CONCAT', (a) => `CONCAT(${a.join(', ')})`],
     ['LENGTH', (a) => `CHAR_LENGTH(${a[0]})`],
+    ['TO_STRING', (a) => `CAST(${a[0]} AS CHAR)`],
     ['LOWER', (a) => `LOWER(${a[0]})`],
     ['UPPER', (a) => `UPPER(${a[0]})`],
     ['TRIM', (a) => `TRIM(${a[0]})`],

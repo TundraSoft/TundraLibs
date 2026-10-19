@@ -61,7 +61,9 @@ jobs:
           --health-cmd "healthcheck.sh --connect --innodb_initialized"
           --health-interval 5s --health-timeout 5s --health-retries 10
       mongo:
-        image: mongo:8
+        # mongo:8 refuses to start on the runners' Linux 6.19+ kernel
+        # (SERVER-121912, tcmalloc rseq); return to 8 once a fixed release ships.
+        image: mongo:7
         env:
           MONGO_INITDB_ROOT_USERNAME: mongo
           MONGO_INITDB_ROOT_PASSWORD: mongo

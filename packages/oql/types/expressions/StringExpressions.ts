@@ -1,6 +1,7 @@
 /** Expression names that produce a string value. */
 export type StringExpressions =
   | 'CONCAT'
+  | 'TO_STRING'
   | 'LOWER'
   | 'UPPER'
   | 'TRIM'

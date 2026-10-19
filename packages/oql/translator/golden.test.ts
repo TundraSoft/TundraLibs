@@ -414,6 +414,26 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT TO_STRING casts to the dialect text type',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      expressions: { idText: { $$_expression: 'TO_STRING', args: '@id' } },
+      projection: { '@idText': 'idText' },
+    },
+    expected: {
+      sqlite: {
+        sql: 'SELECT CAST("id" AS TEXT) AS "idText" FROM "users"',
+      },
+      postgres: {
+        sql: 'SELECT CAST("id" AS TEXT) AS "idText" FROM "users"',
+      },
+      maria: { sql: 'SELECT CAST(`id` AS CHAR) AS `idText` FROM `users`' },
+    },
+  },
+  {
     // Decision: OQL `SUBSTR` `start` is 1-based on every dialect. The SQL
     // dialects are natively 1-based, so `start: 1` passes straight through
     // and selects from the first character. (The Mongo golden pins the

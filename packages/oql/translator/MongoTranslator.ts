@@ -2105,6 +2105,8 @@ export class MongoTranslator {
         return { $concat: (args as unknown[]).map(r) };
       case 'LENGTH':
         return { $strLenCP: r(args) };
+      case 'TO_STRING':
+        return { $toString: r(args) };
       case 'LOWER':
         return { $toLower: r(args) };
       case 'UPPER':
