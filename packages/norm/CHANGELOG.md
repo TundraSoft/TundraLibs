@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.12.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.11.1...norm-v1.12.0) (2026-10-19)
+
+
+### Features
+
+* **norm:** pluggable migration sources and a database lock ([#804](https://github.com/TundraSoft/TundraLibs/issues/804)) ([a8c2d12](https://github.com/TundraSoft/TundraLibs/commit/a8c2d126814050a3f33682a0e44593349e439c7f))
+
+
+### Bug Fixes
+
+* **norm:** decode bigint, dates and JSON inside relation values ([#802](https://github.com/TundraSoft/TundraLibs/issues/802)) ([c2d30bb](https://github.com/TundraSoft/TundraLibs/commit/c2d30bb907f7434658767d48e0f24c554d9aab52))
+* **norm:** read BIGINT columns back as bigint on every dialect ([#796](https://github.com/TundraSoft/TundraLibs/issues/796)) ([ecceaf6](https://github.com/TundraSoft/TundraLibs/commit/ecceaf60541d4a94d9d0c1756a7e24afe0d11b52))
+* **norm:** read BOOLEAN columns back as boolean on every dialect ([#809](https://github.com/TundraSoft/TundraLibs/issues/809)) ([f8f3613](https://github.com/TundraSoft/TundraLibs/commit/f8f3613ffc6bd762c8e4bcaee49ab3bb729333c8))
+
+
+### Documentation
+
+* **norm:** load the agent guide and cover what agents re-implement ([#808](https://github.com/TundraSoft/TundraLibs/issues/808)) ([be898f1](https://github.com/TundraSoft/TundraLibs/commit/be898f16d9b765951747e240a571b30bd1fe4641))
+
 ## [1.11.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.11.0...norm-v1.11.1) (2026-10-07)
 
 

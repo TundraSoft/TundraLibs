@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.5.0...drivers-v1.6.0) (2026-10-19)
+
+
+### Features
+
+* **drivers:** add a SQLite busyTimeoutMs option ([#807](https://github.com/TundraSoft/TundraLibs/issues/807)) ([b77826d](https://github.com/TundraSoft/TundraLibs/commit/b77826d9cffd027e113a25b35bfa1765bb8b5066))
+
+
+### Bug Fixes
+
+* **drivers:** open SQLite on Deno when drivers is installed from npm ([#797](https://github.com/TundraSoft/TundraLibs/issues/797)) ([da94bc8](https://github.com/TundraSoft/TundraLibs/commit/da94bc85268ee9a16dd3ec0816ab1aa9cebdb561))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.4.1...drivers-v1.5.0) (2026-10-07)
 
 
