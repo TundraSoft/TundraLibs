@@ -3,7 +3,8 @@
  *
  * SQLite is an embedded library (no wire protocol), so each runtime ships
  * its own bindings:
- * - **Deno**: `jsr:@db/sqlite` (FFI to libsqlite)
+ * - **Deno**: `jsr:@db/sqlite` (FFI to libsqlite), or the built-in
+ *   `node:sqlite` when drivers was installed from npm
  * - **Bun**: `bun:sqlite` (built-in, zero deps)
  * - **Node.js**: `npm:better-sqlite3` (native module)
  *
@@ -103,13 +104,30 @@ export async function openDatabase(
 
 //#region Deno backend (jsr:@db/sqlite)
 
-async function _openDeno(
+/**
+ * Open on Deno. `load` is injectable so tests can simulate the npm
+ * install, where the `$sqlite_deno` alias does not resolve.
+ */
+export async function _openDeno(
   path: string,
   options: OpenOptions,
-): Promise<SqliteDb> {
   // The `as string` cast keeps non-Deno runtimes from trying to statically
   // resolve this specifier.
-  const mod = await import('$sqlite_deno' as string);
+  load: () => Promise<unknown> = () => import('$sqlite_deno' as string),
+): Promise<SqliteDb> {
+  // deno-lint-ignore no-explicit-any
+  let mod: any;
+  try {
+    mod = await load();
+  } catch (e) {
+    // Installed from npm (`@jsr/tundralibs__drivers` in node_modules), the
+    // alias is unresolvable: Deno applies no import map inside node_modules
+    // and rejects a `jsr:` specifier there. Deno ships `node:sqlite`.
+    if ((e as { code?: unknown }).code !== 'ERR_MODULE_NOT_FOUND') throw e;
+    const db = await _openNodeSqlite(path, options, 'deno');
+    if (db === undefined) throw e;
+    return db;
+  }
   // jsr:@db/sqlite exports `Database` (default-style class).
   const Database = mod.Database ?? mod.default;
   const db = new Database(path, {
@@ -392,30 +410,10 @@ async function _openNode(
   path: string,
   options: OpenOptions,
 ): Promise<SqliteDb> {
-  // 1. Try the built-in. The cast keeps non-Node runtimes from resolving.
+  // 1. Try the built-in.
   try {
-    const mod = await import('node:sqlite' as string);
-    const Database = mod.DatabaseSync ?? mod.default?.DatabaseSync;
-    if (Database) {
-      // `node:sqlite` always creates if the file is missing — there's no
-      // built-in `fileMustExist` toggle. Honor `options.create === false`
-      // by checking existence ourselves first.
-      if (
-        options.create === false && path !== ':memory:' &&
-        !path.startsWith('file::memory:')
-      ) {
-        if (!pathExistsSync(path)) {
-          throw new DriverError(
-            `SQLite file not found: ${path}`,
-            { runtime: 'node', path },
-          );
-        }
-      }
-      const db = new Database(path, {
-        readOnly: options.readonly ?? false,
-      });
-      return _wrapNodeStmt(db);
-    }
+    const db = await _openNodeSqlite(path, options, 'node');
+    if (db !== undefined) return db;
   } catch (e) {
     // node:sqlite unavailable (pre-22.5 or 22.x without --experimental-sqlite),
     // OR our `create: false` precheck rejected the open. Surface the latter
@@ -444,6 +442,43 @@ async function _openNode(
       { runtime: 'node' },
     );
   }
+}
+
+/**
+ * Open through the built-in `node:sqlite` (Node, and Deno's npm-install
+ * path). Resolves `undefined` when the module is unavailable.
+ */
+async function _openNodeSqlite(
+  path: string,
+  options: OpenOptions,
+  runtime: 'node' | 'deno',
+): Promise<SqliteDb | undefined> {
+  // The cast keeps non-Node runtimes from resolving statically.
+  // deno-lint-ignore no-explicit-any
+  let mod: any;
+  try {
+    mod = await import('node:sqlite' as string);
+  } catch {
+    return undefined;
+  }
+  const Database = mod.DatabaseSync ?? mod.default?.DatabaseSync;
+  if (!Database) return undefined;
+  // `node:sqlite` always creates if the file is missing — there's no
+  // built-in `fileMustExist` toggle. Honor `options.create === false`
+  // by checking existence ourselves first.
+  if (
+    options.create === false && path !== ':memory:' &&
+    !path.startsWith('file::memory:')
+  ) {
+    if (!pathExistsSync(path)) {
+      throw new DriverError(
+        `SQLite file not found: ${path}`,
+        { runtime, path },
+      );
+    }
+  }
+  const db = new Database(path, { readOnly: options.readonly ?? false });
+  return _wrapNodeStmt(db);
 }
 
 /**
