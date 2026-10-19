@@ -10,7 +10,7 @@ import { fetch } from '@tundralibs/compat/fetch';
 import { statSync } from '@tundralibs/compat/file';
 import { STATUS_TEXT, type StatusCode } from '@tundralibs/compat/http';
 import { type TLSOptions, validateTLS } from '@tundralibs/compat/common';
-import * as path from '@tundralibs/compat/path';
+import { join as joinUrlPath } from '@std/path/posix/join';
 import type {
   ResponseBody,
   RESTlerContentType,
@@ -1732,9 +1732,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * or query params written by {@link _authInjector} do not persist on it or
    * bleed into later requests that reuse the same object.
    *
-   * `endpoint.path` is joined onto the base URL's pathname via `path.join`,
-   * which normalizes it — see {@link RESTlerEndpoint.path} for what that
-   * means for a caller-controlled path segment.
+   * `endpoint.path` is joined onto the base URL's pathname with the POSIX
+   * join — never the platform one, which follows Windows rules in a
+   * browser on Windows — and normalized: see {@link RESTlerEndpoint.path}
+   * for what that means for a caller-controlled path segment.
    *
    * @param endpoint - Endpoint configuration to process (not mutated)
    * @param options - `skipAuth` skips the {@link _authInjector} call for
@@ -1826,7 +1827,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       Object.assign(headers, endpoint.headers);
     }
     const url = new URL(this._replaceVersion(baseURL, version));
-    url.pathname = path.join(
+    url.pathname = joinUrlPath(
       url.pathname,
       this._replaceVersion(endpoint.path, version),
     );

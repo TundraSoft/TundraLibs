@@ -468,6 +468,27 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT TO_STRING → $toString',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      expressions: { idText: { $$_expression: 'TO_STRING', args: '@id' } },
+      projection: { '@idText': 'idText' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          { $addFields: { idText: { $toString: '$id' } } },
+          { $project: { idText: '$idText', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT with aggregates → aggregate pipeline',
     method: 'select',
     query: {

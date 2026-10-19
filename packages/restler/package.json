@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "$xml": "npm:@jsr/libs__xml@^8.0.0",
+    "@std/path": "npm:@jsr/std__path@^1.1.6",
     "@tundralibs/compat": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   }
