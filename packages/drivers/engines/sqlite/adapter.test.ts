@@ -7,6 +7,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { isDeno } from '@tundralibs/compat';
 import { makeTempDir, remove } from '@tundralibs/compat/file';
+import { join } from '@tundralibs/compat/path';
 import { _openDeno, _rewriteBunPlaceholders, openDatabase } from './adapter.ts';
 
 // =============================================================================
@@ -167,6 +168,90 @@ describe({
     });
   },
 });
+
+// busy_timeout only matters against ANOTHER process (the bindings are
+// synchronous, so an in-process wait blocks the holder too). A child
+// holds `BEGIN IMMEDIATE` on a shared file; the parent's write must fail
+// at once by default and wait the lock out with `busyTimeoutMs`.
+// Deno-gated: it spawns the child with `Deno.Command`.
+if (isDeno) {
+  describe({
+    name: 'drivers.sqlite.adapter busyTimeoutMs (across processes)',
+    sanitizeResources: false,
+    fn: () => {
+      it('0 fails at once; a timeout waits out the other writer', async () => {
+        const dir = await makeTempDir({ prefix: 'sqlite-busy-' });
+        const file = join(dir, 'main.db');
+        const script = join(import.meta.dirname!, 'fixtures', 'hold.ts');
+        await Deno.writeTextFile(
+          script,
+          `const { openDatabase } = await import('../adapter.ts');
+const db = await openDatabase(Deno.args[0]);
+db.exec('BEGIN IMMEDIATE');
+console.log('locked');
+await new Promise((r) => setTimeout(r, Number(Deno.args[1])));
+db.exec('COMMIT');
+db.close();
+`,
+        );
+        /** Spawn the holder; resolve once it holds the write lock. */
+        const hold = async (ms: number) => {
+          const child = new Deno.Command(Deno.execPath(), {
+            args: ['run', '-A', script, file, String(ms)],
+            stdout: 'piped',
+            stderr: 'inherit',
+          }).spawn();
+          const reader = child.stdout.getReader();
+          let seen = '';
+          while (!seen.includes('locked')) {
+            const { value, done } = await reader.read();
+            if (done) throw new Error('holder exited before locking');
+            seen += new TextDecoder().decode(value);
+          }
+          reader.releaseLock();
+          await child.stdout.cancel();
+          return child;
+        };
+        try {
+          const setup = await openDatabase(file);
+          setup.exec('CREATE TABLE t (n INTEGER)');
+          setup.close();
+
+          let holder = await hold(1500);
+          const eager = await openDatabase(file);
+          asserts.assertThrows(
+            () => eager.exec('INSERT INTO t VALUES (1)'),
+            Error,
+            'locked',
+          );
+          eager.close();
+          await holder.status;
+
+          holder = await hold(300);
+          const patient = await openDatabase(file, { busyTimeoutMs: 10_000 });
+          patient.exec('INSERT INTO t VALUES (2)'); // blocks until COMMIT
+          asserts.assertEquals(
+            patient.prepare('SELECT n FROM t').all([]),
+            [{ n: 2 }],
+          );
+          patient.close();
+          await holder.status;
+        } finally {
+          await Deno.remove(script);
+          await remove(dir);
+        }
+      });
+
+      it('rejects a negative or fractional busyTimeoutMs', async () => {
+        for (const busyTimeoutMs of [-1, 1.5]) {
+          await asserts.assertRejects(() =>
+            openDatabase(':memory:', { busyTimeoutMs })
+          );
+        }
+      });
+    },
+  });
+}
 
 // Regression (round-3 finding #11): the Bun placeholder rewrite `:name` →
 // `$name` must be string/comment-aware. A naive `replaceAll(/:name/)` also
