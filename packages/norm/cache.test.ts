@@ -409,6 +409,29 @@ describe('norm read cache', () => {
     }
   });
 
+  describe('projections', () => {
+    it('adds no unprojected BIGINT/BOOLEAN keys, on a miss or a hit', async () => {
+      const Links = Entity('links', {
+        id: Column.integer(),
+        slug: Column.varchar(40),
+        clicks: Column.bigint(),
+        active: Column.boolean(),
+      }, { pk: ['id'], cache: 5 });
+      const { db, exec } = setup({ Links }, { engine: 'MEMORY' });
+      exec.selectRows = [{ id: 1, slug: 'a' }]; // what the projection selects
+      const read = () =>
+        db.repo('Links').findOne({ '@id': 1 }, {
+          project: { '@id': true, '@slug': true },
+        });
+      const miss = await read();
+      const hit = await read();
+      asserts.assertEquals(exec.selects(), 1, 'second read is a cache hit');
+      for (const r of [miss, hit]) {
+        asserts.assertEquals(Object.keys(r.data!).sort(), ['id', 'slug']);
+      }
+    });
+  });
+
   describe('never cached', () => {
     const Items = Entity('items', {
       id: Column.integer(),
