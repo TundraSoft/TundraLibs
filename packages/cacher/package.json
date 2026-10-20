@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/cacher",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "Cross-runtime caching with a unified API over Memory, Redis, Memcached and Cloudflare Workers KV engines",
   "keywords": [

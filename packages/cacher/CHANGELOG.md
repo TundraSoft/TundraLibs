@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.2.0...cacher-v1.2.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **cacher:** connect RedisCacher when the db option is omitted ([#812](https://github.com/TundraSoft/TundraLibs/issues/812)) ([6bf7bd2](https://github.com/TundraSoft/TundraLibs/commit/6bf7bd2a4fbbf7855776eec540666fdd7d7b8182))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.1.1...cacher-v1.2.0) (2026-09-26)
 
 

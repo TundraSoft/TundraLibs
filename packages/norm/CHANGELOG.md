@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.12.0...norm-v1.12.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **norm:** do not add unprojected BIGINT/BOOLEAN keys on read ([#813](https://github.com/TundraSoft/TundraLibs/issues/813)) ([636f756](https://github.com/TundraSoft/TundraLibs/commit/636f756029e25b74b8b1cd0b71b052f4c096299c))
+
 ## [1.12.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.11.1...norm-v1.12.0) (2026-10-19)
 
 
