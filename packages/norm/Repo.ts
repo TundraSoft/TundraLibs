@@ -2119,7 +2119,11 @@ export class ReadRepo<
         ? toBoolean
         : undefined;
       if (decode === undefined) continue;
-      for (const row of rows) row[key] = decode(row[key]);
+      // Only keys the row carries — a projection that left the column out
+      // must not grow a `key: undefined` entry.
+      for (const row of rows) {
+        if (Object.hasOwn(row, key)) row[key] = decode(row[key]);
+      }
     }
   }
 
