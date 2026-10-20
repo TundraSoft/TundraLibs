@@ -92,6 +92,10 @@ jobs:
         github.event_name == 'workflow_dispatch'
       )
     runs-on: ubuntu-latest
+    # JSR's publish queue has run an hour behind (2026-10-19); this covers
+    # the dependency wait plus `deno publish` blocking on JSR's processing,
+    # and fails loudly instead of hanging for GitHub's 6-hour default.
+    timeout-minutes: 180
     permissions:
       contents: read
       id-token: write # JSR tokenless OIDC publish
@@ -108,20 +112,25 @@ jobs:
         with:
           deno-version: v2.x
 
+      # The matrix publishes in parallel, but packages depend on each other
+      # in-repo (rapid on norm, norm on oql and drivers, ...) and JSR
+      # resolves each `jsr:` dependency when it PROCESSES the upload. Hold
+      # this publish until every in-repo dependency, at the version this
+      # commit declares, is live on JSR; a dependency outside this release
+      # already is, so this passes at once for it and for a manual publish.
+      - name: Wait for in-repo dependencies on JSR
+        run: deno run --allow-read --allow-net .github/scripts/publish-wait.ts ${{ matrix.path }} --timeout-min 150
+
       - name: Publish package
         working-directory: ${{ matrix.path }}
-        # Packages in this matrix publish in parallel with no ordering, but
-        # several depend on each other in-repo (e.g. doctor/tracer on
-        # utils). If a dependency is still mid-publish, `deno publish` fails
-        # with "unresolvable 'jsr:' dependency" -- retry with a short
-        # backoff instead of a hard failure, giving the dependency time to
-        # land rather than requiring a manual rerun.
+        # Retry a transient failure (network, a JSR hiccup) with a short
+        # backoff instead of requiring a manual rerun.
         run: |
           for attempt in 1 2 3 4 5; do
             if deno publish; then
               exit 0
             fi
-            echo "Publish attempt ${attempt} failed (possibly an in-repo dependency not live yet) -- retrying in 30s..."
+            echo "Publish attempt ${attempt} failed -- retrying in 30s..."
             sleep 30
           done
           echo "::error::deno publish failed after 5 attempts"
