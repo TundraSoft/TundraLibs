@@ -2,7 +2,7 @@ import * as asserts from '@std/asserts';
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { RedisCacher, type RedisCacherOptions } from './mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';
-import { envArgs } from '@tundralibs/utils';
+import { envArgs, getFreePort } from '@tundralibs/utils';
 
 // Wave-note: emission/option accessors are protected now — tests reach
 // them through deliberate casts.
@@ -111,6 +111,20 @@ describe('cacher.engines.redis', () => {
 
       asserts.assertEquals(readOption(cacher, 'port'), 6379);
       asserts.assertEquals(readOptions(cacher).port, 6379);
+    });
+
+    it('omitting db reaches the connection, not a database-option error', async () => {
+      // `db` is optional: unset, init() must not hand the driver an
+      // explicit `database: undefined`, which it rejects. A closed port
+      // makes the connection itself fail, so the reason shows which.
+      const port = await getFreePort();
+      const c = new RedisCacher('no-db', { host: '127.0.0.1', port });
+      const err = await asserts.assertRejects(
+        () => c.init(),
+        CacherEngineError,
+      );
+      asserts.assertEquals(err.code, 'CONNECTION_FAILED');
+      asserts.assertNotMatch(err.message, /database/);
     });
 
     it('Should throw on invalid config', () => {
@@ -278,6 +292,22 @@ describe('cacher.engines.redis', () => {
       });
 
       {
+        it('works with the db option omitted (logical database 0)', async () => {
+          const noDb = new RedisCacher('redis-no-db', {
+            host: env.get('REDIS_HOST') || 'localhost',
+            port: Number.parseInt(env.get('REDIS_PORT') || '6379'),
+            username: env.get('REDIS_USERNAME'),
+            password: env.get('REDIS_PASSWORD'),
+          });
+          try {
+            await noDb.set('no-db-key', 'v');
+            asserts.assertEquals(await noDb.get('no-db-key'), 'v');
+            await noDb.delete('no-db-key');
+          } finally {
+            await noDb.finalize();
+          }
+        });
+
         it('should set and get string data', async () => {
           const key = 'test-string';
           const value = 'test-value';

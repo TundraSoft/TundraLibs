@@ -79,12 +79,15 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     if (this._client !== undefined) return;
     try {
       const ssl = this._getOption('ssl');
+      const db = this._getOption('db');
       this._client = new RedisEngine(this.name, {
         host: this._getOption('host'),
         port: this._getOption('port'),
         username: this._getOption('username'),
         password: this._getOption('password'),
-        database: this._getOption('db'),
+        // Omitted when unset: the driver defaults to database 0 but
+        // rejects an explicit `undefined`.
+        ...(db === undefined ? {} : { database: db }),
         ...(ssl === undefined ? {} : { ssl }),
       });
       await this._client.connect();
