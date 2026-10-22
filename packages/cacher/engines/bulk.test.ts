@@ -152,6 +152,28 @@ for (const [name, open, { minExpiry }] of engines) {
         });
       }
 
+      if (name === 'MEMCACHED') {
+        it('getMany is one multi-key get, not one get per key', async () => {
+          const keys = Array.from({ length: 30 }, (_, i) => k(`mc-${i}`));
+          await cache.setMany(keys.map((key, i): [string, number] => [key, i]));
+          // deno-lint-ignore no-explicit-any
+          const client = (cache as any)._client;
+          const calls = { get: 0, getMany: 0 };
+          const { get, getMany } = client;
+          client.get = (...a: unknown[]) => (calls.get++, get.apply(client, a));
+          client.getMany = (...a: unknown[]) => (
+            calls.getMany++, getMany.apply(client, a)
+          );
+          try {
+            asserts.assertEquals((await cache.getMany(keys)).size, 30);
+          } finally {
+            client.get = get;
+            client.getMany = getMany;
+          }
+          asserts.assertEquals(calls, { get: 0, getMany: 1 });
+        });
+      }
+
       if (name === 'REDIS' || name === 'MEMCACHED') {
         it('finalize', async () => {
           await cache.finalize();

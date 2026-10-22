@@ -301,6 +301,38 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
   }
 
   /**
+   * Bulk read: the driver's multi-key `get` (one round trip per 100 keys),
+   * then a `touch` for each window-mode entry found.
+   * @protected
+   * @override
+   */
+  protected override async _getMany(
+    keys: string[],
+  ): Promise<(CacheValue | undefined)[]> {
+    try {
+      const wire = await Promise.all(keys.map((k) => this.__versionedKey(k)));
+      const found = await this._client!.getMany(wire);
+      const values = wire.map((w) => {
+        const raw = found.get(w);
+        return raw === undefined ? undefined : this._parseStored(raw);
+      });
+      await Promise.all(
+        values.map((v, i) =>
+          v?.window && v.expiry ? this._client!.touch(wire[i]!, v.expiry) : null
+        ),
+      );
+      return values;
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'GET_MANY',
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
    * Atomic set-if-absent: Memcached `add`.
    * @protected
    * @override
