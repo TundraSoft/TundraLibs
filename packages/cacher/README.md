@@ -394,7 +394,7 @@ await cache.deleteMany(['page:home', 'page:about']);
 | ----------------- | --------------------------------------------------------------- |
 | Memory            | in-process                                                      |
 | Redis             | one `MGET` / one `MULTI` of `SET … EX` / one multi-key `DEL`    |
-| Memcached         | parallel single calls (the driver has no multi-get yet)         |
+| Memcached         | one multi-key `get` per 100 keys; parallel writes and deletes   |
 | Workers KV `http` | REST bulk endpoints — one request per 100 reads / 10 000 writes |
 | Workers KV        | parallel single calls through the binding                       |
 
