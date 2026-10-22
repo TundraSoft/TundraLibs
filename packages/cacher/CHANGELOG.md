@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.3.0...cacher-v1.4.0) (2026-10-22)
+
+
+### Features
+
+* **cacher:** read Memcached getMany in one multi-key get ([#822](https://github.com/TundraSoft/TundraLibs/issues/822)) ([8973855](https://github.com/TundraSoft/TundraLibs/commit/8973855ef2b0291615332ff1d8051dece1367239))
+
 ## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.2.1...cacher-v1.3.0) (2026-10-22)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.6.0...drivers-v1.7.0) (2026-10-22)
+
+
+### Features
+
+* **drivers:** multi-key getMany on the Memcached engine ([#821](https://github.com/TundraSoft/TundraLibs/issues/821)) ([bf71693](https://github.com/TundraSoft/TundraLibs/commit/bf71693b31f0b256f4a4b0c4cd7a3bbaa56f2426))
+* **drivers:** verify a TLS server by ssl.servername ([#827](https://github.com/TundraSoft/TundraLibs/issues/827)) ([73db002](https://github.com/TundraSoft/TundraLibs/commit/73db002ddc06df4b0aa03f432f69c29c42bad521))
+
 ## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.5.0...drivers-v1.6.0) (2026-10-19)
 
 

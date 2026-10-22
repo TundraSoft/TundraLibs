@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.8.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.5...compat-v2.8.0) (2026-10-22)
+
+
+### Features
+
+* **compat:** verify a TLS server by a name other than the host dialed ([#826](https://github.com/TundraSoft/TundraLibs/issues/826)) ([5125a01](https://github.com/TundraSoft/TundraLibs/commit/5125a011f81973216911bfaba817b65f176cb37e))
+
+
+### Bug Fixes
+
+* **compat:** restore a PEM whose line breaks became spaces ([#824](https://github.com/TundraSoft/TundraLibs/issues/824)) ([b975143](https://github.com/TundraSoft/TundraLibs/commit/b975143c69d4ec4d97a8741c9c3619f0f93bcd81))
+* **compat:** upgradeTls to a host given as an IP on Bun and Node ([#825](https://github.com/TundraSoft/TundraLibs/issues/825)) ([d0eebec](https://github.com/TundraSoft/TundraLibs/commit/d0eebecd82a8a8865e508e1face9a5ab8789d9da))
+
 ## [2.7.5](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.4...compat-v2.7.5) (2026-09-26)
 
 
