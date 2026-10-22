@@ -367,6 +367,37 @@ Returns `true` if the key exists and has not expired.
 
 Removes a single entry from the cache.
 
+### `cache.getMany(keys)` / `cache.setMany(entries, options?)` / `cache.deleteMany(keys)`
+
+Many keys in one call. `getMany` returns a `Map` holding only the keys
+found (missing and expired ones are absent); `setMany` takes `{ key: value }`
+or `[key, value]` pairs and applies the same `expiry` / `window` to every
+entry, validating them all before writing any. Bulk calls save round trips
+but are **not atomic**: a failure part-way can leave some entries written.
+
+```ts
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('pages', {});
+await cache.setMany({
+  'page:home': { title: 'Home' },
+  'page:about': { title: 'About' },
+}, {
+  expiry: 600,
+});
+const pages = await cache.getMany<{ title: string }>(['page:home', 'page:faq']);
+pages.get('page:home'); // { title: 'Home' }; 'page:faq' is not in the Map
+await cache.deleteMany(['page:home', 'page:about']);
+```
+
+| Engine            | Bulk calls                                                      |
+| ----------------- | --------------------------------------------------------------- |
+| Memory            | in-process                                                      |
+| Redis             | one `MGET` / one `MULTI` of `SET … EX` / one multi-key `DEL`    |
+| Memcached         | parallel single calls (the driver has no multi-get yet)         |
+| Workers KV `http` | REST bulk endpoints — one request per 100 reads / 10 000 writes |
+| Workers KV        | parallel single calls through the binding                       |
+
 ### `cache.add(key, value, options?)` / `cache.increment(key, by?, options?)`
 
 Atomic primitives for state every server copy shares — rate limits,
