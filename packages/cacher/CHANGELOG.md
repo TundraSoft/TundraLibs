@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.2.1...cacher-v1.3.0) (2026-10-22)
+
+
+### Features
+
+* **cacher:** atomic add and increment ([#817](https://github.com/TundraSoft/TundraLibs/issues/817)) ([9fe97be](https://github.com/TundraSoft/TundraLibs/commit/9fe97be9dd0c49d7ac1a0ded0225cb3912e3e1b8))
+* **cacher:** bulk getMany, setMany and deleteMany ([#820](https://github.com/TundraSoft/TundraLibs/issues/820)) ([59f477d](https://github.com/TundraSoft/TundraLibs/commit/59f477df97e24ade7e2a9ef79359aa74988bc1ae))
+* **cacher:** reach Workers KV over the REST API outside a Worker ([#818](https://github.com/TundraSoft/TundraLibs/issues/818)) ([271fd33](https://github.com/TundraSoft/TundraLibs/commit/271fd33f7ba73549bcd7b3bb028b10d9df705a7c))
+
 ## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.2.0...cacher-v1.2.1) (2026-10-20)
 
 
