@@ -141,7 +141,7 @@ type ConnectOptions =
     /** The hostname to connect to (default: "127.0.0.1") */
     hostname?: string;
     /** TLS configuration for secure connections */
-    tls?: boolean | TLSOptions;
+    tls?: boolean | ClientTLSOptions;
     /** Connection timeout in milliseconds */
     timeout?: number;
     /** AbortSignal to cancel the connection attempt */
@@ -161,7 +161,7 @@ type ConnectOptions =
 
 - `port` - The port number to connect to (required)
 - `hostname` - The hostname to connect to (optional, defaults to `"127.0.0.1"`)
-- `tls` - TLS configuration (optional). Use `true` for system trust roots with no client cert, or a [`TLSOptions`](Compat-Common.md#tlsoptions) object for custom CA or mTLS.
+- `tls` - TLS configuration (optional). Use `true` for system trust roots with no client cert, or a [`ClientTLSOptions`](#clienttlsoptions) object for custom CA, mTLS, or a server name to verify.
 - `timeout` - Connection timeout in milliseconds (optional)
 - `signal` - AbortSignal for manual cancellation (optional)
 
@@ -235,6 +235,28 @@ type Connection = {
 - `localAddr` - Information about the local endpoint (hostname and port). Same UNIX-socket caveat as `remoteAddr`.
 - `_raw` - The underlying runtime-specific socket handle. Used internally by `upgradeTls()` to perform in-place TLS negotiation (e.g. Postgres `SSLRequest`, SMTP `STARTTLS`). Treat as opaque — do not call methods on this object directly.
 
+#### `ClientTLSOptions`
+
+A [`TLSOptions`](Compat-Common.md#tlsoptions) plus `servername`, for the
+client side of `connect()` and `upgradeTls()`.
+
+```typescript ignore
+type ClientTLSOptions = TLSOptions & {
+  /** DNS name to send as SNI and verify the certificate against. */
+  servername?: string;
+};
+```
+
+- `servername` - The name to verify the server as, when its certificate
+  names something other than the host dialed — e.g. a database reached by
+  private IP whose certificate names its instance. Defaults to the dialed
+  hostname. It must be a DNS name: an empty value or an IP throws
+  `FetchTLSError` (to verify by IP, dial the IP). On Workers it must equal
+  the dialed hostname, since workerd takes no override.
+
+A host dialed by IP with no `servername` is verified against the
+certificate's IP SANs, and no SNI is sent (RFC 6066 forbids an IP there).
+
 #### `UpgradeTlsOptions`
 
 Options for upgrading a plain TCP connection to TLS.
@@ -245,9 +267,10 @@ type UpgradeTlsOptions = {
   hostname: string;
   /**
    * TLS configuration. Same shape as ConnectOptions.tls.
-   * Use `true` for system trust roots, or TLSOptions for custom CA / mTLS.
+   * Use `true` for system trust roots, or ClientTLSOptions for custom CA,
+   * mTLS, or a server name to verify.
    */
-  tls?: boolean | TLSOptions;
+  tls?: boolean | ClientTLSOptions;
 };
 ```
 
@@ -432,7 +455,8 @@ async function connect(options: ConnectOptions): Promise<Connection>;
   or supply `tls.ca`/`tls.caFile` instead. Bun and Node honor the flag.
 - `ConnectionTimeoutError` - If the connection times out (when `timeout` is specified)
 - `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
-  file-path (`certFile`/`keyFile`/`caFile`) styles
+  file-path (`certFile`/`keyFile`/`caFile`) styles, or `tls.servername`
+  is empty or an IP
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format
@@ -443,6 +467,8 @@ async function connect(options: ConnectOptions): Promise<Connection>;
 **Runtime Implementation:**
 
 - **Deno**: Uses `Deno.connect()` for TCP/Unix, `Deno.connectTls()` for TLS
+  (`Deno.connect()` + `Deno.startTls()` when `tls.servername` is set, since
+  `connectTls` verifies the name it dials)
 - **Bun**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
 - **Node.js**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
 - **Cloudflare Workers**: Uses `cloudflare:sockets`' `connect()` — the
@@ -456,7 +482,8 @@ async function connect(options: ConnectOptions): Promise<Connection>;
     throw, as does `rejectUnauthorized: false`. workerd's `SocketOptions`
     has nowhere to put certificates and verifies the peer against its own
     trust store with no bypass, so the server needs a publicly-trusted
-    certificate. For a private CA, route through Hyperdrive.
+    certificate. For a private CA, route through Hyperdrive. A
+    `tls.servername` other than the dialed hostname throws too.
   - **`timeout` / `signal`** are honoured, but by racing the abort against
     the socket opening and closing it — `cloudflare:sockets` has no
     signal parameter of its own.
@@ -692,8 +719,8 @@ async function upgradeTls(
 **Parameters:**
 
 - `conn` - The plain TCP connection to upgrade. Must have been created by `connect()` (not user-constructed), as it requires the `_raw` socket handle.
-- `options.hostname` - Hostname for SNI and server certificate SAN verification (required).
-- `options.tls` - TLS configuration (optional). Same as `ConnectOptions.tls`.
+- `options.hostname` - Hostname for SNI and server certificate SAN verification (required). An IP is verified against the certificate's IP SANs, with no SNI sent.
+- `options.tls` - TLS configuration (optional). Same as `ConnectOptions.tls`; `tls.servername`, when set, is verified instead of `hostname`.
 
 **Returns:** A new TLS-wrapped `Connection`.
 
@@ -702,14 +729,15 @@ async function upgradeTls(
 - `Error` - If `conn._raw` is missing (connection was not created by `connect()`).
 - `Error` - On Deno, if `rejectUnauthorized: false` is requested (not supported — use `--unsafely-ignore-certificate-errors` instead).
 - `FetchTLSError` - If `tls` mixes the inline (`cert`/`key`/`ca`) and
-  file-path (`certFile`/`keyFile`/`caFile`) styles.
+  file-path (`certFile`/`keyFile`/`caFile`) styles, or `tls.servername`
+  is empty or an IP.
 - `FetchPathTraversalError` - If TLS file paths contain traversal sequences.
 - `FetchFileNotFoundError` - If TLS certificate/key files don't exist.
 - `FetchInvalidPEMError` - If TLS certificates are not valid PEM format.
 - `UnsupportedRuntimeError` - On an unrecognized runtime, and on
   Workers when the socket didn't come from `connect()`, when `hostname`
-  differs from the one `connect()` dialed, or for TLS material workerd
-  can't honour.
+  or `tls.servername` differs from the one `connect()` dialed, or for TLS
+  material workerd can't honour.
 
 **Runtime Implementation:**
 
@@ -786,6 +814,19 @@ if (reply && new TextDecoder().decode(reply).startsWith('220')) {
   await tlsConn.write('EHLO client.example.com\r\n');
   tlsConn.close();
 }
+```
+
+**Example — server dialed by IP, certificate names the instance:**
+
+```typescript
+import { type Connection, upgradeTls } from '@tundralibs/compat/net';
+
+declare const conn: Connection; // connect({ hostname: '10.10.11.2', port: 5432 })
+
+const tlsConn = await upgradeTls(conn, {
+  hostname: '10.10.11.2',
+  tls: { caFile: '/etc/ssl/db-ca.crt', servername: 'db.internal' },
+});
 ```
 
 **Example — mTLS upgrade:**

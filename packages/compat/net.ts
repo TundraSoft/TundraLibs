@@ -25,7 +25,7 @@ import { loadBuiltin } from './_runtime-globals.ts';
 import { assertBuiltin } from './_guards.ts';
 import { ConnectionTimeoutError, UnsupportedRuntimeError } from './Error.ts';
 import type { TLSOptions, ValidatedTLS } from './common.ts';
-import { combineSignals, validateTLS } from './common.ts';
+import { combineSignals, FetchTLSError, validateTLS } from './common.ts';
 
 // Local aliases for Deno-only types — see _runtime-globals.ts header.
 // `any` typing avoids the consumer-side clash between our declarations
@@ -116,6 +116,24 @@ export type ListenOptions =
   };
 
 /**
+ * Client-side TLS configuration: a {@link TLSOptions} plus the name to
+ * verify the server as.
+ *
+ * @since 2.8.0
+ */
+export type ClientTLSOptions = TLSOptions & {
+  /**
+   * The DNS name to send as SNI and to verify the server's certificate
+   * against, when it differs from the host dialed — e.g. a database
+   * reached by private IP whose certificate names its instance. Must be a
+   * DNS name: to verify a server by IP, dial the IP. Defaults to the
+   * dialed hostname. On Workers it must equal that hostname, since
+   * workerd verifies the name it dialed and takes no override.
+   */
+  servername?: string;
+};
+
+/**
  * Options for creating a TCP connection.
  */
 export type ConnectOptions =
@@ -136,9 +154,10 @@ export type ConnectOptions =
      * When provided, creates a TLS/SSL encrypted connection.
      *
      * - Provide `true` for TLS without client certificates
-     * - Provide TLSOptions object for client certificate authentication
+     * - Provide a {@link ClientTLSOptions} object for a private CA, client
+     *   certificate authentication, or a server name to verify
      */
-    tls?: boolean | TLSOptions;
+    tls?: boolean | ClientTLSOptions;
 
     /**
      * Connection timeout in milliseconds.
@@ -461,7 +480,8 @@ const WORKERS_UNSUPPORTED_TLS_FIELDS = [
  */
 function _assertWorkersTlsSupported(
   operation: string,
-  tls: TLSOptions,
+  tls: ClientTLSOptions,
+  hostname: string,
 ): void {
   const supplied = WORKERS_UNSUPPORTED_TLS_FIELDS.filter((field) => {
     const value = (tls as Record<string, unknown>)[field];
@@ -486,6 +506,42 @@ function _assertWorkersTlsSupported(
         'always verifies the peer certificate and exposes no bypass',
     );
   }
+  if (tls.servername !== undefined && tls.servername !== hostname) {
+    throw new UnsupportedRuntimeError(
+      operation,
+      'WORKERS',
+      `cannot verify the peer as '${tls.servername}' — workerd checks the ` +
+        `certificate against '${hostname}', the hostname dialed, and accepts ` +
+        'no override',
+    );
+  }
+}
+
+/**
+ * The `servername` a {@link ClientTLSOptions} asks to verify, if any.
+ * An IP literal is refused: RFC 6066 forbids one in SNI, and node:tls
+ * throws on it.
+ *
+ * @throws {@link FetchTLSError} When `servername` is empty or an IP.
+ */
+function _serverName(
+  tls: boolean | ClientTLSOptions | undefined,
+): string | undefined {
+  if (typeof tls !== 'object' || tls.servername === undefined) {
+    return undefined;
+  }
+  const name = tls.servername;
+  if (
+    typeof name !== 'string' || name.trim() === '' || name.includes(':') ||
+    /^[\d.]+$/.test(name)
+  ) {
+    throw new FetchTLSError(
+      `TLS servername must be a DNS name, got '${name}'. To verify a ` +
+        'server by IP, dial the IP as `hostname` and leave servername unset.',
+      'servername',
+    );
+  }
+  return name;
 }
 
 /**
@@ -1213,7 +1269,7 @@ async function _connectWorkers(options: ConnectOptions): Promise<Connection> {
 
   const { port, hostname = '127.0.0.1', tls } = options;
   const tlsOptions = tls === true ? {} : tls;
-  if (tlsOptions) _assertWorkersTlsSupported('connect', tlsOptions);
+  if (tlsOptions) _assertWorkersTlsSupported('connect', tlsOptions, hostname);
 
   const { connect: cloudflareConnect } = await _loadCloudflareSockets(
     'connect',
@@ -1274,6 +1330,7 @@ async function _connectWorkers(options: ConnectOptions): Promise<Connection> {
  *
  * @throws {@link ConnectionTimeoutError} When `timeout` elapses or
  *   `signal` aborts.
+ * @throws {@link FetchTLSError} When `tls.servername` is empty or an IP.
  * @throws {@link FetchPathTraversalError} When a TLS file path contains `../`.
  * @throws {@link FetchFileNotFoundError} When a TLS certificate or key
  *   file is missing.
@@ -1301,6 +1358,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
   let tlsKey: string | undefined;
   let tlsCa: string[] | undefined;
   let tlsRejectUnauthorized: boolean | undefined;
+  let tlsServername: string | undefined;
 
   // Validate TLS options if provided (not for Unix sockets)
   if ('port' in options && options.tls && typeof options.tls === 'object') {
@@ -1309,6 +1367,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
     tlsKey = validated.key;
     tlsCa = validated.ca;
     tlsRejectUnauthorized = validated.rejectUnauthorized;
+    tlsServername = _serverName(options.tls);
   }
 
   // Combine timeout and signal
@@ -1404,6 +1463,23 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
 
     // TCP or TLS connection
     const { port, hostname = '127.0.0.1', tls } = options;
+
+    // `Deno.connectTls` verifies the name it dials. To verify another, dial
+    // in the clear and upgrade as that name.
+    if (tls && tlsServername !== undefined) {
+      const tcp = await connect({
+        port,
+        hostname,
+        timeout: options.timeout,
+        signal: options.signal,
+      });
+      try {
+        return await upgradeTls(tcp, { hostname, tls });
+      } catch (err) {
+        tcp.close();
+        throw err;
+      }
+    }
 
     if (tls) {
       // TLS connection — server-only, mTLS, or no-cert depending on
@@ -1640,6 +1716,9 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
         if (tlsRejectUnauthorized !== undefined) {
           tlsOptions.rejectUnauthorized = tlsRejectUnauthorized;
         }
+        if (tlsServername !== undefined) {
+          tlsOptions.servername = tlsServername;
+        }
 
         const socket = nodeTls.connect(
           tlsOptions as unknown as Parameters<typeof nodeTls.connect>[0],
@@ -1687,7 +1766,8 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
 /**
  * Options for {@link upgradeTls}. The `hostname` is required so the
  * TLS layer can verify the server's certificate against the expected
- * SAN; `tls` carries the optional certs / verification policy.
+ * SAN — `tls.servername`, when set, is verified instead; `tls` carries
+ * the optional certs / verification policy.
  */
 export type UpgradeTlsOptions = {
   /** Hostname for SAN / SNI verification. */
@@ -1695,9 +1775,9 @@ export type UpgradeTlsOptions = {
   /**
    * TLS configuration. Same shape as {@link ConnectOptions}'s `tls`
    * — pass `true` for "use system trust roots, no client cert", or
-   * a {@link TLSOptions} object for finer control.
+   * a {@link ClientTLSOptions} object for finer control.
    */
-  tls?: boolean | TLSOptions;
+  tls?: boolean | ClientTLSOptions;
 };
 
 /**
@@ -1726,12 +1806,14 @@ export type UpgradeTlsOptions = {
  *
  * @returns A new TLS-wrapped {@link Connection}.
  *
+ * @throws {@link FetchTLSError} When `tls.servername` is empty or an IP.
  * @throws {Error} If the connection has no underlying raw socket
  *   (e.g. it was constructed by user code, not via {@link connect}),
  *   or if the runtime can't perform an in-place TLS upgrade.
  * @throws {@link UnsupportedRuntimeError} On Workers, when the socket
- *   didn't come from {@link connect}, when `hostname` differs from the
- *   one it dialed, or for TLS material workerd can't honour.
+ *   didn't come from {@link connect}, when `hostname` or
+ *   `tls.servername` differs from the one it dialed, or for TLS material
+ *   workerd can't honour.
  */
 export async function upgradeTls(
   conn: Connection,
@@ -1751,7 +1833,9 @@ export async function upgradeTls(
   if (isWorkers) {
     // Ahead of `_validateTlsOptions` for the same reason as `connect` —
     // it would try to read `*File` paths off a filesystem that isn't there.
-    if (tlsOpt) _assertWorkersTlsSupported('upgradeTls', tlsOpt);
+    if (tlsOpt) {
+      _assertWorkersTlsSupported('upgradeTls', tlsOpt, options.hostname);
+    }
     const socket = raw as CloudflareSocket;
     const state = cloudflareSocketState.get(socket);
     if (!state) {
@@ -1788,13 +1872,14 @@ export async function upgradeTls(
   const validated = tlsOpt && typeof tlsOpt === 'object'
     ? _validateTlsOptions(tlsOpt)
     : { rejectUnauthorized: undefined };
+  const name = _serverName(tlsOpt) ?? options.hostname;
 
   /* c8 ignore start */
   if (isDeno) {
     const startTlsOpts:
       & DenoStartTlsOptions
       & Partial<DenoTlsCertifiedKeyPem> = {
-        hostname: options.hostname,
+        hostname: name,
       };
     if (validated.cert && validated.key) {
       startTlsOpts.cert = validated.cert;
@@ -1857,9 +1942,7 @@ export async function upgradeTls(
       // which is what tls.connect does when it dials an IP itself.
       const tlsOptions: Record<string, unknown> = {
         socket: raw,
-        ...(nodeNet.isIP(options.hostname)
-          ? { host: options.hostname }
-          : { servername: options.hostname }),
+        ...(nodeNet.isIP(name) ? { host: name } : { servername: name }),
       };
       if (validated.cert && validated.key) {
         tlsOptions.cert = validated.cert;

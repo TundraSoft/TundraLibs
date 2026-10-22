@@ -2,12 +2,14 @@ import { describe, it } from './test.ts';
 import * as asserts from '@std/asserts';
 import {
   connect,
+  type Connection,
   hostname,
   listen,
   type Listener,
   type ListenOptions,
   upgradeTls,
 } from './net.ts';
+import { FetchTLSError } from './common.ts';
 import { ConnectionTimeoutError } from './Error.ts';
 import { RUNTIME } from './runtime.ts';
 import { join } from './path.ts';
@@ -1028,17 +1030,30 @@ describe('compat.net', () => {
       return listener;
     };
 
+    /** Write one message over `tls` and return the echo. */
+    const echo = async (tls: Connection) => {
+      try {
+        await tls.write('ping');
+        return new TextDecoder().decode((await tls.read()) ?? undefined);
+      } finally {
+        tls.close();
+      }
+    };
+
     /** Dial 127.0.0.1 in the clear, upgrade as `hostname`, echo one write. */
-    const upgradeAndEcho = async (port: number, hostname: string) => {
+    const upgradeAndEcho = async (
+      port: number,
+      hostname: string,
+      servername?: string,
+    ) => {
       const tcp = await connect({ port, hostname: '127.0.0.1' });
       try {
-        const tls = await upgradeTls(tcp, { hostname, tls: { ca: [TEST_CA] } });
-        try {
-          await tls.write('ping');
-          return new TextDecoder().decode((await tls.read()) ?? undefined);
-        } finally {
-          tls.close();
-        }
+        return await echo(
+          await upgradeTls(tcp, {
+            hostname,
+            tls: { ca: [TEST_CA], servername },
+          }),
+        );
       } finally {
         tcp.close();
       }
@@ -1052,6 +1067,67 @@ describe('compat.net', () => {
         await asserts.assertRejects(() => upgradeAndEcho(9940, '127.0.0.2'));
       } finally {
         listener.close();
+      }
+    });
+
+    it('verifies the peer as tls.servername, not the host dialed', async () => {
+      const listener = await echoServer(9941);
+      const connectAs = (servername: string) =>
+        connect({
+          port: 9941,
+          hostname: '127.0.0.1',
+          tls: { ca: [TEST_CA], servername },
+        }).then(echo);
+      try {
+        asserts.assertEquals(
+          await upgradeAndEcho(9941, '127.0.0.1', 'db.internal'),
+          'ping',
+        );
+        asserts.assertEquals(await connectAs('db.internal'), 'ping');
+        // The certificate names db.internal, so any other name fails —
+        // even though the dialed IP is in the certificate.
+        await asserts.assertRejects(() =>
+          upgradeAndEcho(9941, '127.0.0.1', 'other.internal')
+        );
+        await asserts.assertRejects(() => connectAs('other.internal'));
+      } finally {
+        listener.close();
+      }
+    });
+
+    it({
+      name: 'on Deno, servername still refuses rejectUnauthorized: false',
+      bun: false,
+      node: false,
+      fn: async () => {
+        // The servername path dials in the clear and then upgrades; the
+        // refusal comes from the upgrade, so the dialed socket must close.
+        const listener = await echoServer(9943);
+        try {
+          await asserts.assertRejects(
+            () =>
+              connect({
+                port: 9943,
+                hostname: '127.0.0.1',
+                tls: { servername: 'db.internal', rejectUnauthorized: false },
+              }),
+            Error,
+            'rejectUnauthorized',
+          );
+        } finally {
+          listener.close();
+        }
+      },
+    });
+
+    it('refuses a tls.servername that is empty or an IP', async () => {
+      for (const servername of ['', '10.10.11.2', '::1']) {
+        const err = await asserts.assertRejects(
+          () =>
+            connect({ port: 9942, hostname: '127.0.0.1', tls: { servername } }),
+          FetchTLSError,
+        );
+        asserts.assertEquals(err.source, 'servername');
       }
     });
   });
@@ -1475,8 +1551,12 @@ await record('caFile', () =>
 await record('insecure', () =>
   connect({ ...target, tls: { rejectUnauthorized: false } }));
 await record('unix', () => connect({ path: '/tmp/nope.sock' }));
+await record('servername', () =>
+  connect({ ...target, tls: { servername: 'db.internal' } }));
 `);
-        for (const key of ['mtls', 'caFile', 'insecure', 'unix']) {
+        for (
+          const key of ['mtls', 'caFile', 'insecure', 'unix', 'servername']
+        ) {
           asserts.assertEquals(
             result[key].ok,
             false,
@@ -1497,6 +1577,7 @@ await record('unix', () => connect({ path: '/tmp/nope.sock' }));
           'rejectUnauthorized',
         );
         asserts.assertStringIncludes(result.unix.message, 'UNIX');
+        asserts.assertStringIncludes(result.servername.message, 'db.internal');
       },
     });
 
