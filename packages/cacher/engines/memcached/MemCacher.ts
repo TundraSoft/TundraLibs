@@ -120,6 +120,10 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
    */
   private __nsVersionReadAt = 0;
 
+  /** The in-flight version read, shared so concurrent callers (a bulk
+   * call on a cold instance) issue one request, not one each. */
+  private __nsVersionRead: Promise<number> | undefined;
+
   /**
    * Memoized wire-safe form of {@link name}. Computed once (it is a pure,
    * deterministic function of the immutable instance name) and reused for every
@@ -493,15 +497,19 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
     ) {
       return this.__nsVersion;
     }
-    const raw = await this._client!.get(await this.__versionKey());
-    if (raw === null || raw === undefined) {
-      this.__nsVersion = 1;
-    } else {
-      const parsed = Number.parseInt(raw, 10);
-      this.__nsVersion = Number.isNaN(parsed) ? 1 : parsed;
-    }
-    this.__nsVersionReadAt = Date.now();
-    return this.__nsVersion;
+    this.__nsVersionRead ??= (async () => {
+      try {
+        const raw = await this._client!.get(await this.__versionKey());
+        const parsed = raw == null ? Number.NaN : Number.parseInt(raw, 10);
+        const version = Number.isNaN(parsed) ? 1 : parsed;
+        this.__nsVersion = version;
+        this.__nsVersionReadAt = Date.now();
+        return version;
+      } finally {
+        this.__nsVersionRead = undefined;
+      }
+    })();
+    return await this.__nsVersionRead;
   }
 
   /**

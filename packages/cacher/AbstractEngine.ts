@@ -236,6 +236,98 @@ export abstract class AbstractEngine<
     return await this._increment(this._normalizeKey(key), by, expiry);
   }
 
+  /**
+   * Retrieves many values in one call — one round trip on engines with a
+   * native bulk read (Redis `MGET`, Workers KV over `http`), parallel
+   * single reads elsewhere.
+   *
+   * @template T - The expected type of the cached values
+   * @param keys - The keys to read (duplicates are read once)
+   * @returns A `Map` of each key found to its value; missing and expired
+   *   keys are absent from it
+   * @throws {@link CacherEngineError} `OPERATION_FAILED` if the engine fails
+   * @example
+   * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cache = new MemoryCacher('demo', {});
+   * const found = await cache.getMany<{ name: string }>(['user:1', 'user:2']);
+   * found.get('user:1'); // the value, or undefined when not cached
+   * ```
+   */
+  public async getMany<T>(keys: readonly string[]): Promise<Map<string, T>> {
+    await this.init();
+    const unique = [...new Set(keys)];
+    const out = new Map<string, T>();
+    if (unique.length === 0) return out;
+    const values = await this._getMany(
+      unique.map((k) => this._normalizeKey(k)),
+    );
+    unique.forEach((k, i) => {
+      const v = values[i];
+      if (v !== undefined) out.set(k, JSON.parse(v.data) as T);
+    });
+    return out;
+  }
+
+  /**
+   * Stores many values with the same options in one call — one round trip
+   * on engines with a native bulk write. Not atomic: a failure can leave
+   * some entries written. Every entry is validated before any is written.
+   *
+   * @template T - The type of the values being cached
+   * @param entries - `{ key: value }`, or `[key, value]` pairs
+   * @param opt - `expiry` / `window` for every entry, as for {@link set}
+   * @throws {@link CacherEngineError} `OPERATION_INVALID_PARAMS` for a bad
+   *   expiry or value (nothing is written); `OPERATION_FAILED` if the
+   *   engine fails
+   * @example
+   * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cache = new MemoryCacher('demo', {});
+   * await cache.setMany({ 'user:1': { name: 'A' }, 'user:2': { name: 'B' } }, {
+   *   expiry: 600,
+   * });
+   * ```
+   */
+  public async setMany<T>(
+    entries: Readonly<Record<string, T>> | ReadonlyArray<readonly [string, T]>,
+    opt: CacheValueOptions = {},
+  ): Promise<void> {
+    await this.init();
+    const pairs: ReadonlyArray<readonly [string, T]> = Array.isArray(entries)
+      ? entries
+      : Object.entries(entries as Record<string, T>);
+    const prepared = pairs.map(([key, value]): [string, CacheValue] => [
+      this._normalizeKey(key),
+      this.__entry('SET', key, value, opt.expiry, opt.window ?? false),
+    ]);
+    if (prepared.length > 0) await this._setMany(prepared);
+  }
+
+  /**
+   * Deletes many keys in one call — one round trip on engines with a
+   * native bulk delete. Missing keys are ignored.
+   *
+   * @param keys - The keys to delete
+   * @throws {@link CacherEngineError} `OPERATION_FAILED` if the engine fails
+   * @example
+   * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cache = new MemoryCacher('demo', {});
+   * await cache.deleteMany(['user:1', 'user:2']);
+   * ```
+   */
+  public async deleteMany(keys: readonly string[]): Promise<void> {
+    await this.init();
+    const unique = [...new Set(keys)];
+    if (unique.length > 0) {
+      await this._deleteMany(unique.map((k) => this._normalizeKey(k)));
+    }
+  }
+
   /** `expiry` (or the default), validated for `operation`. */
   private __expiry(
     operation: string,
@@ -542,6 +634,42 @@ export abstract class AbstractEngine<
     _expiry: number,
   ): number | Promise<number> {
     throw this._unsupported('INCREMENT', key);
+  }
+
+  /**
+   * Read many entries. Defaults to parallel {@link _get}s; engines with a
+   * native bulk read override it.
+   *
+   * @param keys - Normalized keys, without duplicates
+   * @returns One entry (or `undefined`) per key, in order
+   * @protected
+   */
+  protected _getMany(
+    keys: string[],
+  ): Promise<(CacheValue | undefined)[]> {
+    return Promise.all(keys.map((k) => this._get(k)));
+  }
+
+  /**
+   * Write many entries. Defaults to parallel {@link _set}s; engines with a
+   * native bulk write override it.
+   *
+   * @param entries - `[normalizedKey, entry]` pairs
+   * @protected
+   */
+  protected async _setMany(entries: [string, CacheValue][]): Promise<void> {
+    await Promise.all(entries.map(([k, v]) => this._set(k, v)));
+  }
+
+  /**
+   * Delete many keys. Defaults to parallel {@link _delete}s; engines with a
+   * native bulk delete override it.
+   *
+   * @param keys - Normalized keys, without duplicates
+   * @protected
+   */
+  protected async _deleteMany(keys: string[]): Promise<void> {
+    await Promise.all(keys.map((k) => this._delete(k)));
   }
 
   /**

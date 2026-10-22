@@ -242,6 +242,85 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
   }
 
   /**
+   * Bulk read: one `MGET`, then one `MULTI` of `EXPIRE`s for any
+   * window-mode entries found.
+   * @protected
+   * @override
+   */
+  protected override async _getMany(
+    keys: string[],
+  ): Promise<(CacheValue | undefined)[]> {
+    try {
+      const raw = await this._client!.mget(...keys);
+      const values = raw.map((r) =>
+        r === null ? undefined : this._parseStored(r)
+      );
+      const refresh = values.flatMap((v, i) =>
+        v?.window && v.expiry > 0
+          ? [['EXPIRE', keys[i]!, Math.ceil(v.expiry)]]
+          : []
+      );
+      if (refresh.length > 0) await this._client!.multi(refresh);
+      return values;
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'GET_MANY',
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Bulk write: one `MULTI` of `SET ... [EX ttl]` (plain `MSET` cannot set
+   * a TTL).
+   * @protected
+   * @override
+   */
+  protected override async _setMany(
+    entries: [string, CacheValue][],
+  ): Promise<void> {
+    try {
+      const replies = await this._client!.multi(
+        entries.map(([key, value]) => {
+          const ex = Math.ceil(value.expiry);
+          return ex > 0
+            ? ['SET', key, JSON.stringify(value), 'EX', ex]
+            : ['SET', key, JSON.stringify(value)];
+        }),
+      );
+      const failed = replies.find((r) => r.kind === 'error');
+      if (failed?.kind === 'error') throw new Error(failed.value.message);
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'SET_MANY',
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Bulk delete: one multi-key `DEL`.
+   * @protected
+   * @override
+   */
+  protected override async _deleteMany(keys: string[]): Promise<void> {
+    try {
+      await this._client!.del(...keys);
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'DELETE_MANY',
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
    * Deletes a key from Redis.
    */
   protected async _delete(key: string): Promise<void> {

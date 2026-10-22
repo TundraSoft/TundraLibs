@@ -146,8 +146,13 @@ const cache = new WorkersKVCacher('flags', {
 await cache.set('beta', true, { expiry: 3600 });
 ```
 
-Every call goes to Cloudflare's API: it counts against the account-wide API
-rate limit and pays a round trip, so use `http` for low-volume or
+`getMany` / `setMany` / `deleteMany` use Cloudflare's bulk endpoints over
+`http` — one request per 100 keys read or 10 000 written or deleted — so batch
+where you can: each bulk request counts once against the rate limit. (With a
+binding they run as parallel single calls.)
+
+Every other call goes to Cloudflare's API one by one: it counts against the
+account-wide API rate limit and pays a round trip, so use `http` for low-volume or
 administrative access — a server sharing flags or config with your Workers, a
 CLI, a cron job — not as a hot-path cache. KV's consistency, expiry and
 one-write-per-second rules apply exactly as with a binding. Choosing `http`

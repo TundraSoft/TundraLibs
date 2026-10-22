@@ -148,6 +148,22 @@ const cache = new MemoryCacher('demo', {});
 await cache.delete('user:1');
 ```
 
+### `getMany<T>(keys)` / `setMany<T>(entries, options?)` / `deleteMany(keys)`
+
+Many keys in one call — one round trip where the engine has a native bulk
+operation, parallel single calls elsewhere. `getMany` returns a `Map` of the
+keys found. Not atomic. See the
+[README](../README.md#cachegetmanykeys--cachesetmanyentries-options--cachedeletemanykeys).
+
+```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+await cache.setMany({ a: 1, b: 2 }, { expiry: 60 });
+const found = await cache.getMany<number>(['a', 'b', 'c']); // Map { a → 1, b → 2 }
+await cache.deleteMany(['a', 'b']);
+```
+
 ### `add<T>(key, value, options?)` / `increment(key, by?, options?)`
 
 Atomic set-if-absent (`true` for exactly one of any concurrent callers) and

@@ -77,10 +77,35 @@ describe('cacher.engines.workers-kv kvHttpBinding', () => {
   });
 });
 
+describe('cacher.engines.workers-kv kvHttpBinding (bulk)', () => {
+  it('rejects a bulk write that reports unsuccessful keys', async () => {
+    const kv = kvHttpBinding(
+      HTTP,
+      fakeFetch(() =>
+        Response.json({
+          success: true,
+          result: { successful_key_count: 1, unsuccessful_keys: ['b'] },
+        })
+      ).fetcher,
+    );
+    const err = await asserts.assertRejects(() =>
+      kv.putMany([{ key: 'a', value: '1' }, { key: 'b', value: '2' }])
+    );
+    asserts.assertStringIncludes(
+      (err as Error).message,
+      'failed for 1 key(s): b',
+    );
+  });
+});
+
 describe('cacher.engines.WorkersKVCacher over http', () => {
   // A local stand-in for Cloudflare's KV REST API (one namespace).
   const store = new Map<string, string>();
   const ttls: number[] = [];
+  /** Requests per bulk endpoint, to prove one call per chunk. */
+  const bulkCalls = new Map<string, number>();
+  const ok = (result: unknown = {}) =>
+    Response.json({ success: true, errors: [], result });
   let server: WebServer;
   let baseURL = '';
 
@@ -95,6 +120,39 @@ describe('cacher.engines.WorkersKVCacher over http', () => {
           return cfError(403, 'Authentication error');
         }
         const url = new URL(req.url);
+        const bulkPath = /\/bulk(\/get|\/delete)?$/.exec(url.pathname)?.[0];
+        if (bulkPath !== undefined) {
+          bulkCalls.set(bulkPath, (bulkCalls.get(bulkPath) ?? 0) + 1);
+          const body = await req.json();
+          if (bulkPath === '/bulk/get') {
+            return ok({
+              values: Object.fromEntries(
+                (body.keys as string[]).map((k) => [k, store.get(k) ?? null]),
+              ),
+            });
+          }
+          if (bulkPath === '/bulk') {
+            for (
+              const item of body as {
+                key: string;
+                value: string;
+                expiration_ttl?: number;
+              }[]
+            ) {
+              store.set(item.key, item.value);
+              if (item.expiration_ttl) ttls.push(item.expiration_ttl);
+            }
+            return ok({
+              successful_key_count: body.length,
+              unsuccessful_keys: [],
+            });
+          }
+          for (const k of body as string[]) store.delete(k);
+          return ok({
+            successful_key_count: body.length,
+            unsuccessful_keys: [],
+          });
+        }
         const key = decodeURIComponent(url.pathname.split('/values/')[1]!);
         if (req.method === 'GET') {
           const v = store.get(key);
@@ -133,6 +191,28 @@ describe('cacher.engines.WorkersKVCacher over http', () => {
     await cache.set('user:2', 2);
     await cache.clear();
     asserts.assertEquals(await cache.get('user:2'), undefined);
+  });
+
+  it('bulk calls use the REST bulk endpoints: one request per chunk', async () => {
+    const cache = new WorkersKVCacher('bulky', {
+      http: { ...HTTP, baseURL },
+      defaultExpiry: 600,
+    });
+    const keys = Array.from({ length: 150 }, (_, i) => `k${i}`);
+    bulkCalls.clear();
+    await cache.setMany(keys.map((k, i): [string, number] => [k, i]));
+    const found = await cache.getMany([...keys, 'absent']);
+    asserts.assertEquals(found.size, 150);
+    asserts.assertEquals(found.get('k149'), 149);
+    asserts.assertEquals(found.has('absent'), false);
+    await cache.deleteMany(keys.slice(0, 10));
+    asserts.assertEquals((await cache.getMany(keys)).size, 140);
+    asserts.assertEquals(
+      Object.fromEntries(bulkCalls),
+      // 151 then 150 keys read 100 at a time; one write; one delete.
+      { '/bulk': 1, '/bulk/get': 4, '/bulk/delete': 1 },
+    );
+    asserts.assert(ttls.includes(600));
   });
 
   it('a rejected token is OPERATION_FAILED with the API error', async () => {

@@ -5,7 +5,7 @@ import type {
   WorkersKVCacherOptions,
   WorkersKVNamespace,
 } from './types/mod.ts';
-import { kvHttpBinding } from './kvHttpBinding.ts';
+import { kvHttpBinding, type WorkersKVBulk } from './kvHttpBinding.ts';
 
 /**
  * Suffix of the namespace version key, `${name}:${NS_VERSION_KEY_SUFFIX}`.
@@ -80,6 +80,10 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
   /** Epoch ms of the last {@link __nsVersion} read or write. */
   private __nsVersionReadAt = 0;
 
+  /** The in-flight version read, shared so concurrent callers (a bulk
+   * call on a cold instance) issue one request, not one each. */
+  private __nsVersionRead: Promise<string> | undefined;
+
   /** Memoized key prefix derived from {@link name}; see {@link __wireName}. */
   private __wireNameCache: string | undefined = undefined;
 
@@ -115,7 +119,7 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
   }
 
   /** The REST binding built from `http`, once. */
-  private __http: WorkersKVNamespace | undefined;
+  private __http: (WorkersKVNamespace & WorkersKVBulk) | undefined;
 
   /**
    * Drops the cached namespace version, so the next operation re-reads it.
@@ -156,23 +160,7 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
    * @override
    */
   protected async _set(key: string, value: CacheValue): Promise<void> {
-    let reason: string | undefined;
-    if (value.window) {
-      reason =
-        'window mode is not supported: Workers KV cannot extend a TTL without rewriting the value';
-    } else if (value.expiry > 0 && value.expiry < KV_MIN_EXPIRY_SECONDS) {
-      reason =
-        `expiry must be 0 or at least ${KV_MIN_EXPIRY_SECONDS} seconds on Workers KV`;
-    }
-    if (reason !== undefined) {
-      throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
-        name: this.name,
-        engine: this.Engine,
-        operation: 'SET',
-        key: this.__userKey(key),
-        reason,
-      });
-    }
+    this.__assertStorable(key, value);
     try {
       await this.__binding().put(
         await this.__versionedKey(key),
@@ -192,6 +180,94 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
    * @protected
    * @override
    */
+  /**
+   * Bulk read: over `http`, one `bulk/get` request per 100 keys; with a
+   * Worker binding, parallel reads.
+   * @protected
+   * @override
+   */
+  protected override async _getMany(
+    keys: string[],
+  ): Promise<(CacheValue | undefined)[]> {
+    const bulk = this.__bulk();
+    if (bulk === undefined) return await super._getMany(keys);
+    try {
+      const wire = await Promise.all(keys.map((k) => this.__versionedKey(k)));
+      const found = await bulk.getMany(wire);
+      return wire.map((w) => {
+        const raw = found.get(w);
+        return raw == null ? undefined : JSON.parse(raw) as CacheValue;
+      });
+    } catch (e) {
+      throw this.__operationError('GET_MANY', e);
+    }
+  }
+
+  /**
+   * Bulk write: over `http`, one `bulk` request per 10 000 entries; with a
+   * Worker binding, parallel writes. KV's expiry and window rules are
+   * checked for every entry before any is written.
+   * @protected
+   * @override
+   */
+  protected override async _setMany(
+    entries: [string, CacheValue][],
+  ): Promise<void> {
+    for (const [key, value] of entries) this.__assertStorable(key, value);
+    const bulk = this.__bulk();
+    if (bulk === undefined) return await super._setMany(entries);
+    try {
+      await bulk.putMany(
+        await Promise.all(entries.map(async ([key, value]) => ({
+          key: await this.__versionedKey(key),
+          value: JSON.stringify(value),
+          ...(value.expiry > 0 ? { expirationTtl: value.expiry } : {}),
+        }))),
+      );
+    } catch (e) {
+      throw this.__operationError('SET_MANY', e);
+    }
+  }
+
+  /**
+   * Bulk delete: over `http`, one `bulk/delete` request per 10 000 keys;
+   * with a Worker binding, parallel deletes.
+   * @protected
+   * @override
+   */
+  protected override async _deleteMany(keys: string[]): Promise<void> {
+    const bulk = this.__bulk();
+    if (bulk === undefined) return await super._deleteMany(keys);
+    try {
+      await bulk.deleteMany(
+        await Promise.all(keys.map((k) => this.__versionedKey(k))),
+      );
+    } catch (e) {
+      throw this.__operationError('DELETE_MANY', e);
+    }
+  }
+
+  /** KV cannot store window mode or an expiry of 1-59 seconds. */
+  private __assertStorable(key: string, value: CacheValue): void {
+    let reason: string | undefined;
+    if (value.window) {
+      reason =
+        'window mode is not supported: Workers KV cannot extend a TTL without rewriting the value';
+    } else if (value.expiry > 0 && value.expiry < KV_MIN_EXPIRY_SECONDS) {
+      reason =
+        `expiry must be 0 or at least ${KV_MIN_EXPIRY_SECONDS} seconds on Workers KV`;
+    }
+    if (reason !== undefined) {
+      throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'SET',
+        key: this.__userKey(key),
+        reason,
+      });
+    }
+  }
+
   protected async _delete(key: string): Promise<void> {
     try {
       await this.__binding().delete(await this.__versionedKey(key));
@@ -245,8 +321,13 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
   //#region Version keying
   /** The configured binding, or the REST one built from `http`. */
   private __binding(): WorkersKVNamespace {
-    return this._getOption('binding') ??
-      (this.__http ??= kvHttpBinding(this._getOption('http')!));
+    return this._getOption('binding') ?? this.__bulk()!;
+  }
+
+  /** The REST binding when using `http` — the one with bulk calls. */
+  private __bulk(): (WorkersKVNamespace & WorkersKVBulk) | undefined {
+    if (this._getOption('binding') !== undefined) return undefined;
+    return this.__http ??= kvHttpBinding(this._getOption('http')!);
   }
 
   /** The namespace's version key. */
@@ -265,10 +346,18 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
     ) {
       return this.__nsVersion;
     }
-    this.__nsVersion = await this.__binding().get(await this.__versionKey()) ??
-      '0';
-    this.__nsVersionReadAt = Date.now();
-    return this.__nsVersion;
+    this.__nsVersionRead ??= (async () => {
+      try {
+        const version = await this.__binding().get(await this.__versionKey()) ??
+          '0';
+        this.__nsVersion = version;
+        this.__nsVersionReadAt = Date.now();
+        return version;
+      } finally {
+        this.__nsVersionRead = undefined;
+      }
+    })();
+    return await this.__nsVersionRead;
   }
 
   /**
