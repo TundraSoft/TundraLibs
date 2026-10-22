@@ -312,6 +312,52 @@ describe('createPactMiddleware — HMAC', () => {
     asserts.assert((await echoing.authenticate(await signed(unsigned))).ok);
   });
 
+  it("nonce: 'optional' verifies a request without one and still claims one that is sent", async () => {
+    const claims: string[] = [];
+    const hooked = Pact.create({
+      bits: { READ: 1n },
+      modulePermissions: { Post: ['READ'] },
+      hooks: {
+        getApiKey: (id) =>
+          id === 'k1'
+            ? { id, status: 'ACTIVE', secret: 's1', grants: '{}' }
+            : null,
+        claimNonce: (_keyId, nonce) => {
+          if (claims.includes(nonce)) return false;
+          claims.push(nonce);
+          return true;
+        },
+      },
+    });
+    const core = createPactMiddleware(hooked, {
+      hmac: { template: NONCE_TEMPLATE, nonce: 'optional' },
+    });
+    // No header: `${x-nonce}` signs as '' and nothing is claimed — the
+    // timestamp window is the only replay guard.
+    const bare = await core.authenticate(await signed({ signNonce: true }));
+    asserts.assert(bare.ok && bare.respond !== undefined);
+    const bareReply = await bare.respond({ status: 200, body: 'ok' });
+    asserts.assertStrictEquals(bareReply.headers['x-nonce'], undefined);
+    asserts.assertEquals(claims, []);
+    // Sent: validated, claimed once, echoed.
+    const once = { nonce: 'n-1', signNonce: true };
+    const first = await core.authenticate(await signed(once));
+    asserts.assert(first.ok && first.respond !== undefined);
+    const reply = await first.respond({ status: 200, body: 'ok' });
+    asserts.assertStrictEquals(reply.headers['x-nonce'], 'n-1');
+    const replay = await core.authenticate(await signed(once));
+    asserts.assert(!replay.ok);
+    asserts.assertEquals(replay.denial.body, { error: 'NONCE_REUSED' });
+    asserts.assertEquals(claims, ['n-1']);
+    for (const nonce of ['', 'n'.repeat(129)]) {
+      const verdict = await core.authenticate(
+        await signed({ nonce, signNonce: true }),
+      );
+      asserts.assert(!verdict.ok);
+      asserts.assertEquals(verdict.denial.body, { error: 'INVALID_NONCE' });
+    }
+  });
+
   it('claims nonces through the claimNonce hook for the whole timestamp window', async () => {
     const claims: [string, string, number][] = [];
     const hooked = Pact.create({

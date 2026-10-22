@@ -28,6 +28,7 @@ export type PactMiddlewareConfig = {
     signatureHeader: string;
     timestampHeader: string;
     nonceHeader: string;
+    nonce: 'required' | 'optional';
     template: SignatureTemplate;
     response: SignatureTemplate | null;
     algorithm: PactHmacAlgorithm;

@@ -240,6 +240,12 @@ describe('resolveOptions', () => {
       const [options, reason] of [
         [{ bearer: { header: 'bad header' } }, 'bearer.header'],
         [{ hmac: { maxSkew: 0 } }, "'hmac.maxSkew': 0 is not a positive"],
+        [
+          { hmac: { nonce: 'sometimes' as 'optional' } },
+          "'sometimes' is not 'required' or 'optional'",
+        ],
+        // The default template signs no nonce, so 'optional' would do nothing.
+        [{ hmac: { nonce: 'optional' } }, "'optional' has no effect"],
         [{ hmac: { template: '${@path}' } }, 'hmac.template'],
         [{ bearer: { prefix: 'Bearer ' } }, "'Bearer ' contains whitespace"],
         [{ bearer: { prefix: '' } }, 'would shadow the BASIC carrier'],

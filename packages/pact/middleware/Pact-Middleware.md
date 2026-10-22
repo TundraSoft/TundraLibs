@@ -307,6 +307,14 @@ the `claimNonce` hook over a shared store (see
 [Hooks](../docs/Pact-Hooks.md)). An unsigned nonce is only echoed: whoever
 replays the request could rewrite it.
 
+To accept clients with and without a nonce on one template, set
+`hmac: { nonce: 'optional' }` (default `'required'`). A request without
+the nonce header then signs `${x-nonce}` as the empty string and claims
+nothing: only the timestamp window guards it, so it can be replayed within
+`maxSkew`. A request that sends one is still checked (1-128 characters),
+claimed once and echoed, exactly as above. `'optional'` on a template that
+does not sign `${x-nonce}` throws `INVALID_OPTION` at boot.
+
 ## Encrypted payloads (JWE)
 
 `encryption: {}` lets a key-authenticated caller (API key or HMAC — a

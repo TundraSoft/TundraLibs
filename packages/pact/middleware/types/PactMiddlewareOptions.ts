@@ -107,11 +107,23 @@ export type PactMiddlewareOptions = {
      * `${x-nonce}`, every request must carry one (1-128 characters, else
      * 401 `INVALID_NONCE`) and each key may use it once within the
      * timestamp window (else 401 `NONCE_REUSED`) — see the `claimNonce`
-     * hook. An unsigned nonce is only echoed.
+     * hook. An unsigned nonce is only echoed. See {@link nonce} to make it
+     * optional.
      *
      * @default 'x-nonce'
      */
     readonly nonceHeader?: string;
+    /**
+     * Whether a signed `${x-nonce}` must be present. `'optional'` accepts
+     * a request WITHOUT the nonce header too: it signs `${x-nonce}` as the
+     * empty string and is protected by the timestamp window alone (it can
+     * be replayed within `maxSkew`). A request that carries one is still
+     * validated and claimed once. Requires `template` to sign
+     * `${x-nonce}`.
+     *
+     * @default 'required'
+     */
+    readonly nonce?: 'required' | 'optional';
     /**
      * What the client signs. Mandatory keys: `${@method}`, `${@path}`,
      * `${x-timestamp}`, `${content-digest}`.

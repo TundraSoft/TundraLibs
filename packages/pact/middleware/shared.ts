@@ -91,6 +91,10 @@ export function resolveOptions(
     return value;
   };
   const hmac = options.hmac ?? {};
+  const nonce = hmac.nonce ?? 'required';
+  if (nonce !== 'required' && nonce !== 'optional') {
+    invalid('hmac.nonce', `'${String(nonce)}' is not 'required' or 'optional'`);
+  }
   const maxSkew = hmac.maxSkew ?? 300;
   if (!Number.isFinite(maxSkew) || maxSkew <= 0) {
     invalid(
@@ -138,6 +142,7 @@ export function resolveOptions(
         hmac.timestampHeader ?? 'x-timestamp',
       ),
       nonceHeader: header('hmac.nonceHeader', hmac.nonceHeader ?? 'x-nonce'),
+      nonce,
       template: compileTemplate(hmac.template ?? REQUEST_TEMPLATE, 'request'),
       response: hmac.response === false
         ? null
@@ -150,6 +155,12 @@ export function resolveOptions(
       required: options.encryption.required ?? false,
     },
   };
+  if (nonce === 'optional' && !config.hmac.template.keys.includes('x-nonce')) {
+    invalid(
+      'hmac.nonce',
+      `'optional' has no effect: the template does not sign \${x-nonce}`,
+    );
+  }
   rejectShadowingPrefix(config);
   return config;
 }

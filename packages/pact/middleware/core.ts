@@ -251,9 +251,16 @@ export function createPactMiddleware<
       }
       // A signed nonce makes each request single-use; an unsigned one
       // could be rewritten by whoever replays it, so it is only echoed.
-      const nonce = carrier.kind === 'hmac' && signsNonce
-        ? req.header(config.hmac.nonceHeader) ?? ''
+      // Under `nonce: 'optional'` a request without the header claims
+      // nothing (timestamp window only); a present one is still checked.
+      const sent = carrier.kind === 'hmac' && signsNonce
+        ? req.header(config.hmac.nonceHeader)
         : null;
+      const nonce = sent ??
+        (carrier.kind === 'hmac' && signsNonce &&
+            config.hmac.nonce === 'required'
+          ? ''
+          : null);
       if (nonce !== null && (nonce === '' || nonce.length > MAX_NONCE_LENGTH)) {
         return { ok: false, denial: deny(401, 'INVALID_NONCE') };
       }
