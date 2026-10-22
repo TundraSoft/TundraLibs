@@ -196,15 +196,20 @@ Uses a Memcached server as the cache backend.
 
 ### Workers KV (`WORKERS_KV`)
 
-Uses a Cloudflare Workers KV namespace as the cache backend. KV is eventually
-consistent: a delete or `clear()` can take 60 seconds to reach other data
+Uses a Cloudflare Workers KV namespace as the cache backend — through a
+Worker's `binding`, or from anywhere else over the REST API with `http`
+(low-volume use: it counts against Cloudflare's API rate limit). KV is
+eventually consistent: a delete or `clear()` can take 60 seconds to reach other data
 centres. The engine rejects `window` mode and any `expiry` between 1 and 59
 seconds. See [Cacher-WorkersKV](https://github.com/TundraSoft/TundraLibs/wiki/Cacher-WorkersKV).
 
-| Option          | Type                 | Default  | Description                                           |
-| --------------- | -------------------- | -------- | ----------------------------------------------------- |
-| `binding`       | `WorkersKVNamespace` | required | The KV namespace from the Worker's `env`              |
-| `defaultExpiry` | `number`             | `300`    | Default TTL in seconds: `0` (no expiry) or 60–2592000 |
+| Option          | Type                   | Default | Description                                                 |
+| --------------- | ---------------------- | ------- | ----------------------------------------------------------- |
+| `binding`       | `WorkersKVNamespace`   | —       | The KV namespace from the Worker's `env`                    |
+| `http`          | `WorkersKVHttpOptions` | —       | `{ accountId, namespaceId, apiToken, baseURL? }` — REST API |
+| `defaultExpiry` | `number`               | `300`   | Default TTL in seconds: `0` (no expiry) or 60–2592000       |
+
+Pass exactly one of `binding` or `http`.
 
 ## API Reference
 

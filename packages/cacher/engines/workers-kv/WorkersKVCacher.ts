@@ -1,7 +1,11 @@
 import { AbstractEngine } from '../../AbstractEngine.ts';
 import type { CacheValue } from '../../types/mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';
-import type { WorkersKVCacherOptions } from './types/mod.ts';
+import type {
+  WorkersKVCacherOptions,
+  WorkersKVNamespace,
+} from './types/mod.ts';
+import { kvHttpBinding } from './kvHttpBinding.ts';
 
 /**
  * Suffix of the namespace version key, `${name}:${NS_VERSION_KEY_SUFFIX}`.
@@ -30,7 +34,8 @@ const WIRE_NAME_MAX_BYTES = 300;
 const KV_MIN_EXPIRY_SECONDS = 60;
 
 /**
- * Cacher engine backed by a Cloudflare Workers KV namespace binding.
+ * Cacher engine backed by a Cloudflare Workers KV namespace — through a
+ * Worker's binding, or over Cloudflare's REST API (`http`) elsewhere.
  *
  * KV is eventually consistent. A write or delete is visible at once in the
  * data centre that made it, and can take 60 seconds or more to reach others.
@@ -48,8 +53,10 @@ const KV_MIN_EXPIRY_SECONDS = 60;
  * - Writing the same key more than once per second fails with
  *   `OPERATION_FAILED`, carrying KV's rate-limit error as `cause`.
  *
- * The engine only calls the binding it is given, so it runs wherever a
- * binding exists: in a Worker, or under Miniflare in tests.
+ * The engine only calls the binding it is given (or the REST one `http`
+ * builds), so it runs in a Worker, under Miniflare in tests, or — over
+ * `http` — on any runtime with `fetch`. `http` counts against Cloudflare's
+ * API rate limit: low-volume use only.
  *
  * @extends AbstractEngine<WorkersKVCacherOptions>
  * @example
@@ -80,21 +87,35 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
    * Creates a Workers KV cacher.
    *
    * @param name - A unique name for this cacher instance.
-   * @param options - Configuration, including the KV `binding`.
-   * @throws {@link CacherEngineError} `CONFIG_MISSING` without a `binding`;
-   *   `CONFIG_INVALID` if `binding` lacks `get`/`put`/`delete` or
+   * @param options - Configuration: a KV `binding`, or `http` access.
+   * @throws {@link CacherEngineError} `CONFIG_MISSING` with neither
+   *   `binding` nor `http`; `CONFIG_INVALID` with both, if `binding` lacks
+   *   `get`/`put`/`delete`, if an `http` field is missing or empty, or if
    *   `defaultExpiry` is between 1 and 59.
    */
   constructor(name: string, options: WorkersKVCacherOptions) {
     super(name, options);
-    if (this._hasOption('binding') === false) {
+    const hasBinding = this._hasOption('binding');
+    const hasHttp = this._hasOption('http');
+    if (!hasBinding && !hasHttp) {
       throw new CacherEngineError('CONFIG_MISSING', {
         name: this.name,
         engine: this.Engine,
         configKey: 'binding',
       });
     }
+    if (hasBinding && hasHttp) {
+      throw new CacherEngineError('CONFIG_INVALID', {
+        name: this.name,
+        engine: this.Engine,
+        configKey: 'http',
+        reason: 'pass a binding or http access, not both',
+      });
+    }
   }
+
+  /** The REST binding built from `http`, once. */
+  private __http: WorkersKVNamespace | undefined;
 
   /**
    * Drops the cached namespace version, so the next operation re-reads it.
@@ -222,9 +243,10 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
   //#endregion Abstract method implementations
 
   //#region Version keying
-  /** The configured binding. */
-  private __binding() {
-    return this._getOption('binding');
+  /** The configured binding, or the REST one built from `http`. */
+  private __binding(): WorkersKVNamespace {
+    return this._getOption('binding') ??
+      (this.__http ??= kvHttpBinding(this._getOption('http')!));
   }
 
   /** The namespace's version key. */
@@ -334,7 +356,19 @@ export class WorkersKVCacher extends AbstractEngine<WorkersKVCacherOptions> {
         configKey: key,
         reason,
       });
-    if (key === 'binding') {
+    if (key === 'http' && value !== undefined) {
+      const h = value as Record<string, unknown> | null;
+      for (const field of ['accountId', 'namespaceId', 'apiToken']) {
+        const v = h?.[field];
+        if (typeof v !== 'string' || v.trim() === '') {
+          throw invalid(`http.${field} must be a non-empty string`);
+        }
+      }
+      if (h!.baseURL !== undefined && typeof h!.baseURL !== 'string') {
+        throw invalid('http.baseURL must be a string');
+      }
+    }
+    if (key === 'binding' && value !== undefined) {
       const b = value as Record<string, unknown> | null | undefined;
       if (
         typeof b?.get !== 'function' || typeof b.put !== 'function' ||
