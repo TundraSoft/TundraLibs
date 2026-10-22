@@ -372,6 +372,42 @@ describe('compat.common', () => {
         FetchInvalidPEMError,
       );
     });
+
+    // An env var set through a web form turns every line break into a space.
+    const flat = (pem: string) => pem.replaceAll('\n', ' ');
+
+    it('restores a PEM whose line breaks became spaces', () => {
+      const result = validateTLSContent(flat(VALID_CERT), flat(VALID_KEY), [
+        `${flat(VALID_CERT)} ${flat(VALID_CERT)}`,
+      ]);
+      asserts.assertStrictEquals(result.cert, VALID_CERT);
+      asserts.assertStrictEquals(result.key, VALID_KEY);
+      asserts.assertStrictEquals(result.ca![0], `${VALID_CERT}\n${VALID_CERT}`);
+      asserts.assertThrows(
+        () => validateTLSContent(flat(VALID_CERT).slice(0, -30), VALID_KEY),
+        FetchInvalidPEMError,
+      );
+    });
+
+    it('returns a multi-line PEM untouched, whatever its line width', () => {
+      const [begin, ...rest] = VALID_CERT.split('\n');
+      const end = rest.pop()!;
+      const wide = [begin, ...rest.join('').match(/.{1,76}/g)!, end].join(
+        '\n',
+      );
+      asserts.assertStrictEquals(
+        validateTLSContent(wide, VALID_KEY).cert,
+        wide,
+      );
+    });
+
+    it('leaves a flattened block with headers as it came', () => {
+      const key = flat(VALID_KEY).replace(
+        'KEY----- ',
+        'KEY----- Proc-Type: 4,ENCRYPTED  ',
+      );
+      asserts.assertStrictEquals(validateTLSContent(VALID_CERT, key).key, key);
+    });
   });
 
   // ===========================================================================
