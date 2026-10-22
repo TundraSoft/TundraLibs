@@ -926,6 +926,15 @@ describe('drivers.BaseEngine', () => {
       );
     });
 
+    it('should reject SSL with non-string servername', () => {
+      asserts.assertThrows(
+        () =>
+          // deno-lint-ignore no-explicit-any
+          new FakeEngine('ssl3s', { ssl: { servername: 1 as any } }),
+        EngineError,
+      );
+    });
+
     it('should reject SSL with non-boolean enforce', () => {
       asserts.assertThrows(
         () =>

@@ -793,6 +793,9 @@ function _validateSslOptions(value: unknown): value is EngineOptions['ssl'] {
     return false;
   }
   if (ssl.caFile !== undefined && typeof ssl.caFile !== 'string') return false;
+  if (ssl.servername !== undefined && typeof ssl.servername !== 'string') {
+    return false;
+  }
   // Boolean knobs.
   if (
     ssl.rejectUnauthorized !== undefined &&

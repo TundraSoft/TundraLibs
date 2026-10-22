@@ -108,6 +108,19 @@ describe('drivers.MariaEngine', () => {
         'username',
       );
     });
+
+    it('passes ssl.servername to mariadb, and only when set', () => {
+      // deno-lint-ignore no-explicit-any
+      const mariaSsl = (ssl: unknown): any =>
+        // deno-lint-ignore no-explicit-any
+        (new MariaEngine('cfg-ssl', { ...TEST_CONFIG, ssl } as any) as any)
+          .__buildMariaSsl();
+      asserts.assertEquals(
+        mariaSsl({ servername: 'db.internal' }).servername,
+        'db.internal',
+      );
+      asserts.assertEquals('servername' in mariaSsl({}), false);
+    });
   });
 });
 

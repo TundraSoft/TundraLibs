@@ -4,16 +4,16 @@
  * @module
  */
 
-import type { TLSOptions } from '@tundralibs/compat/common';
+import type { ClientTLSOptions } from '@tundralibs/compat/net';
 
 /**
  * SSL / TLS configuration for the connection.
  *
  * - `boolean`: enable / disable SSL with default settings (system trust
  *   roots, no client cert).
- * - `object`: a {@link compat.TLSOptions} (inline PEM via `cert` /
+ * - `object`: a {@link compat.ClientTLSOptions} (inline PEM via `cert` /
  *   `key` / `ca`, or paths via `certFile` / `keyFile` / `caFile`, plus
- *   `rejectUnauthorized`) extended with one engine-only field,
+ *   `rejectUnauthorized` and `servername`) extended with one engine-only field,
  *   `enforce`. We deliberately mirror compat's shape so engines can
  *   pass the option straight through to `compat.connect` without a
  *   reshape step.
@@ -46,5 +46,9 @@ import type { TLSOptions } from '@tundralibs/compat/common';
  * rejects on TLS failure with no retry shim. Mongo's transport is
  * abstracted by `npm:mongodb`; configure TLS at the URI level. SQLite
  * is in-process — `ssl` has no meaning there.
+ *
+ * `servername` (Postgres, MariaDB, Redis, Memcached) verifies the server
+ * as that DNS name instead of `host` — for a database reached by an
+ * address its certificate doesn't name, such as a private IP. @since 1.7.0
  */
-export type EngineSSLOptions = TLSOptions & { enforce?: boolean };
+export type EngineSSLOptions = ClientTLSOptions & { enforce?: boolean };

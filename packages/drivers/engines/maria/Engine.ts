@@ -166,7 +166,8 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
    * paths. `compat`'s {@link validateTLS} normalises either presentation
    * — inline PEM (`cert` / `key` / `ca`) or file paths (`certFile` /
    * `keyFile` / `caFile`), which are mutually exclusive — to PEM content,
-   * which we combine with `rejectUnauthorized` and hand to mariadb. The
+   * which we combine with `rejectUnauthorized` and `servername` (mariadb
+   * sends it as SNI and verifies the server as it) and hand to mariadb. The
    * engine-only `enforce` flag is dropped — mariadb has no auto
    * fallback path.
    */
@@ -178,6 +179,7 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
       cert?: string;
       key?: string;
       ca?: string[];
+      servername?: string;
     } {
     const ssl = this._getOption('ssl');
     if (!ssl) return undefined;
@@ -189,6 +191,7 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
       cert: validated.cert,
       key: validated.key,
       ca: validated.ca,
+      ...(ssl.servername !== undefined && { servername: ssl.servername }),
     };
   }
 

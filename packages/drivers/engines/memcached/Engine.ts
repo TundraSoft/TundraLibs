@@ -33,7 +33,7 @@
  * ```
  */
 
-import type { TLSOptions as CompatTLSOptions } from '@tundralibs/compat/common';
+import type { ClientTLSOptions } from '@tundralibs/compat/net';
 import { connect, type Connection } from '@tundralibs/compat/net';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { BaseEngine } from '../../BaseEngine.ts';
@@ -232,14 +232,14 @@ export class MemcachedEngine extends BaseEngine<
   }
 
   /**
-   * Map the engine-level `ssl` option to a `compat.TLSOptions`. Compat
+   * Map the engine-level `ssl` option to a `compat.ClientTLSOptions`. Compat
    * reads files (`*File` paths) and validates PEM content itself, so
    * we just strip the engine-only `enforce` flag and pass the rest
    * through.
    */
   private __buildTlsOptions(
     ssl: NonNullable<MemcachedEngineOptions['ssl']>,
-  ): true | CompatTLSOptions {
+  ): true | ClientTLSOptions {
     if (ssl === true || ssl === false) return true;
     const { enforce: _enforce, ...rest } = ssl;
     return rest;
