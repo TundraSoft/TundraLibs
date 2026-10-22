@@ -29,7 +29,7 @@
  * ```
  */
 
-import type { TLSOptions as CompatTLSOptions } from '@tundralibs/compat/common';
+import type { ClientTLSOptions } from '@tundralibs/compat/net';
 import { connect } from '@tundralibs/compat/net';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { BaseEngine } from '../../BaseEngine.ts';
@@ -193,14 +193,14 @@ export class RedisEngine
   }
 
   /**
-   * Engine-level `ssl` is a `compat.TLSOptions` plus the engine-only
+   * Engine-level `ssl` is a `compat.ClientTLSOptions` plus the engine-only
    * `enforce` flag. Compat reads files (`*File` paths) and validates
    * PEM content itself, so we just strip `enforce` and pass the rest
    * through unchanged.
    */
   private __buildTlsOptions(
     ssl: NonNullable<RedisEngineOptions['ssl']>,
-  ): true | CompatTLSOptions {
+  ): true | ClientTLSOptions {
     if (ssl === true || ssl === false) return true;
     const { enforce: _enforce, ...rest } = ssl;
     return rest;

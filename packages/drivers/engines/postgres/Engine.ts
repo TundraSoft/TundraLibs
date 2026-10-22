@@ -43,8 +43,12 @@
  * ```
  */
 
-import type { TLSOptions } from '@tundralibs/compat/common';
-import { connect, type Connection, upgradeTls } from '@tundralibs/compat/net';
+import {
+  type ClientTLSOptions,
+  connect,
+  type Connection,
+  upgradeTls,
+} from '@tundralibs/compat/net';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from '../../SQLEngine.ts';
@@ -306,14 +310,14 @@ export class PostgresEngine
   }
 
   /**
-   * Engine-level `ssl` is a `compat.TLSOptions` plus the engine-only
+   * Engine-level `ssl` is a `compat.ClientTLSOptions` plus the engine-only
    * `enforce` flag. Compat reads files (`*File` paths) and validates
    * PEM content itself, so we just strip `enforce` and pass the rest
    * through unchanged.
    */
   private __buildTlsOptions(
     ssl: NonNullable<PostgresEngineOptions['ssl']>,
-  ): true | TLSOptions {
+  ): true | ClientTLSOptions {
     if (ssl === true || ssl === false) return true;
     const { enforce: _enforce, ...rest } = ssl;
     return rest;

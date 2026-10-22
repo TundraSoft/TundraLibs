@@ -89,6 +89,18 @@ describe('drivers.PostgresEngine', () => {
         );
       }
     });
+
+    it('hands ssl.servername to upgradeTls with the rest of ssl', () => {
+      const engine = new PostgresEngine('cfg-ssl', {
+        ...TEST_CONFIG,
+        ssl: { ca: [], servername: 'db.internal', enforce: true },
+      });
+      asserts.assertEquals(
+        // deno-lint-ignore no-explicit-any
+        (engine as any).__buildTlsOptions(readOption(engine, 'ssl')),
+        { ca: [], servername: 'db.internal' },
+      );
+    });
   });
 });
 
