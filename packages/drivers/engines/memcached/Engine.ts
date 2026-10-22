@@ -49,6 +49,9 @@ import type { MemcachedEngineOptions } from './types/mod.ts';
 /**
  * Default configuration values for Memcached connections.
  */
+/** Keys per multi-key `get` request, keeping each command line modest. */
+const MULTI_GET_KEYS = 100;
+
 const MEMCACHED_DEFAULTS: Partial<MemcachedEngineOptions> = {
   port: 11211,
   maxBufferSize: 2,
@@ -337,6 +340,42 @@ export class MemcachedEngine extends BaseEngine<
       const hit = await this.__readValue(conn, `gets ${key}\r\n`, true);
       if (!hit?.cas) return null;
       return { value: hit.value, cas: hit.cas };
+    } finally {
+      await this.__release(conn);
+    }
+  }
+
+  /**
+   * Retrieve many keys in one round trip per 100 keys (Memcached's
+   * multi-key `get`).
+   *
+   * @param keys - The keys to read; duplicates are read once.
+   * @returns The stored value of each key found; a missing or expired key
+   *   is absent from the `Map`.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if a key is not
+   *   protocol-safe, or `OPERATION_FAILED` on a malformed / oversized server
+   *   reply.
+   */
+  public async getMany(
+    keys: readonly string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(keys)];
+    for (const key of unique) this.__validateKey(key);
+    const out = new Map<string, string>();
+    if (unique.length === 0) return out;
+    await this.connect();
+    const conn = await this._acquire();
+    try {
+      for (let i = 0; i < unique.length; i += MULTI_GET_KEYS) {
+        const slice = unique.slice(i, i + MULTI_GET_KEYS);
+        const hits = await this.__readValues(
+          conn,
+          `get ${slice.join(' ')}\r\n`,
+          false,
+        );
+        for (const [key, hit] of hits) out.set(key, hit.value);
+      }
+      return out;
     } finally {
       await this.__release(conn);
     }
@@ -966,6 +1005,22 @@ export class MemcachedEngine extends BaseEngine<
     command: string,
     withCas: boolean,
   ): Promise<{ value: string; cas?: string } | null> {
+    const hits = await this.__readValues(conn, command, withCas);
+    return hits.values().next().value ?? null;
+  }
+
+  /**
+   * Send a retrieval `command` and read every `VALUE` block up to the
+   * closing `END` — one for a single-key `get`, zero or more for a
+   * multi-key one.
+   *
+   * @returns The hits by key; a miss is simply absent.
+   */
+  private async __readValues(
+    conn: Connection,
+    command: string,
+    withCas: boolean,
+  ): Promise<Map<string, { value: string; cas?: string }>> {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
     const maxBytes = this._getOption('maxBufferSize')! * 1024 * 1024;
@@ -1010,87 +1065,90 @@ export class MemcachedEngine extends BaseEngine<
       return -1;
     };
 
-    // 1. Read the header line.
-    let headerEnd = findCrlf(0);
-    while (headerEnd < 0) {
-      await readMore();
-      headerEnd = findCrlf(0);
-    }
-    const header = decoder.decode(buf.subarray(0, headerEnd));
+    const hits = new Map<string, { value: string; cas?: string }>();
+    let at = 0; // start of the next unread line in `buf`
+    for (;;) {
+      // 1. Read the next header line.
+      let headerEnd = findCrlf(at);
+      while (headerEnd < 0) {
+        await readMore();
+        headerEnd = findCrlf(at);
+      }
+      const header = decoder.decode(buf.subarray(at, headerEnd));
 
-    // Error replies surface here too — they're terminal on their own
-    // line, no value follows.
-    if (header === 'ERROR') {
-      throw new EngineError('OPERATION_FAILED', {
-        instanceId: this.instanceId,
-        operation: op,
-        reason: header,
-      });
-    }
-    if (
-      header.startsWith('CLIENT_ERROR ') || header.startsWith('SERVER_ERROR ')
-    ) {
-      throw new EngineError('OPERATION_FAILED', {
-        instanceId: this.instanceId,
-        operation: op,
-        reason: header,
-      });
-    }
+      // Error replies surface here too — they're terminal on their own
+      // line, no value follows.
+      if (header === 'ERROR') {
+        throw new EngineError('OPERATION_FAILED', {
+          instanceId: this.instanceId,
+          operation: op,
+          reason: header,
+        });
+      }
+      if (
+        header.startsWith('CLIENT_ERROR ') || header.startsWith('SERVER_ERROR ')
+      ) {
+        throw new EngineError('OPERATION_FAILED', {
+          instanceId: this.instanceId,
+          operation: op,
+          reason: header,
+        });
+      }
 
-    // Cache miss — single-line `END\r\n` response.
-    if (header === 'END') {
-      this.__emitQuery(command, performance.now() - start);
-      return null;
-    }
+      // End of the reply: every requested key that was found came before.
+      if (header === 'END') {
+        this.__emitQuery(command, performance.now() - start);
+        return hits;
+      }
 
-    if (!header.startsWith('VALUE ')) {
-      // Unrecognized header — we can't know how many bytes (if any) follow,
-      // so the framing is now uncertain. Don't hand this socket back.
-      this.__poison(conn);
-      throw new EngineError('OPERATION_FAILED', {
-        instanceId: this.instanceId,
-        operation: op,
-        reason: `Unexpected reply: ${header}`,
-      });
-    }
+      if (!header.startsWith('VALUE ')) {
+        // Unrecognized header — we can't know how many bytes (if any) follow,
+        // so the framing is now uncertain. Don't hand this socket back.
+        this.__poison(conn);
+        throw new EngineError('OPERATION_FAILED', {
+          instanceId: this.instanceId,
+          operation: op,
+          reason: `Unexpected reply: ${header}`,
+        });
+      }
 
-    // 2. Parse the header: `VALUE <key> <flags> <bytes> [<cas>]`
-    const parts = header.split(' ');
-    const bytesLen = Number.parseInt(parts[3] ?? '', 10);
-    if (!Number.isFinite(bytesLen) || bytesLen < 0) {
-      // Can't determine the data length — the value bytes that follow desync
-      // the stream. Poison the connection.
-      this.__poison(conn);
-      throw new EngineError('OPERATION_FAILED', {
-        instanceId: this.instanceId,
-        operation: op,
-        reason: `Malformed VALUE header: ${header}`,
-      });
-    }
-    const cas = withCas ? parts[4] : undefined;
+      // 2. Parse the header: `VALUE <key> <flags> <bytes> [<cas>]`
+      const parts = header.split(' ');
+      const bytesLen = Number.parseInt(parts[3] ?? '', 10);
+      if (!Number.isFinite(bytesLen) || bytesLen < 0) {
+        // Can't determine the data length — the value bytes that follow desync
+        // the stream. Poison the connection.
+        this.__poison(conn);
+        throw new EngineError('OPERATION_FAILED', {
+          instanceId: this.instanceId,
+          operation: op,
+          reason: `Malformed VALUE header: ${header}`,
+        });
+      }
+      const cas = withCas ? parts[4] : undefined;
 
-    // 3. Read exactly `bytesLen` bytes of data, then `\r\nEND\r\n` (7 bytes).
-    const dataStart = headerEnd + 2;
-    const dataEnd = dataStart + bytesLen;
-    const trailerEnd = dataEnd + 7; // length of "\r\nEND\r\n"
-    while (buf.length < trailerEnd) {
-      await readMore();
-    }
-    const value = decoder.decode(buf.subarray(dataStart, dataEnd));
-    const trailer = decoder.decode(buf.subarray(dataEnd, trailerEnd));
-    if (trailer !== '\r\nEND\r\n') {
-      // The declared byte count didn't line up with the framing — the stream
-      // is desynced. Poison the connection rather than reuse it.
-      this.__poison(conn);
-      throw new EngineError('OPERATION_FAILED', {
-        instanceId: this.instanceId,
-        operation: op,
-        reason:
-          `Malformed VALUE trailer (expected '\\r\\nEND\\r\\n', got '${trailer}')`,
+      // 3. Read exactly `bytesLen` bytes of data, then the `\r\n` closing it.
+      const dataStart = headerEnd + 2;
+      const dataEnd = dataStart + bytesLen;
+      while (buf.length < dataEnd + 2) {
+        await readMore();
+      }
+      if (buf[dataEnd] !== 0x0d || buf[dataEnd + 1] !== 0x0a) {
+        // The declared byte count didn't line up with the framing — the stream
+        // is desynced. Poison the connection rather than reuse it.
+        this.__poison(conn);
+        throw new EngineError('OPERATION_FAILED', {
+          instanceId: this.instanceId,
+          operation: op,
+          reason: `Malformed VALUE block: no CRLF after ${bytesLen} bytes`,
+        });
+      }
+      hits.set(parts[1]!, {
+        value: decoder.decode(buf.subarray(dataStart, dataEnd)),
+        cas,
       });
+      at = dataEnd + 2;
     }
-    this.__emitQuery(command, performance.now() - start);
-    return { value, cas };
   }
 
   /**

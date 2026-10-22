@@ -155,6 +155,23 @@ if (value !== null) {
 }
 ```
 
+#### `getMany(keys: readonly string[]): Promise<Map<string, string>>`
+
+Retrieve many keys with Memcached's multi-key `get`: one round trip per 100
+keys, on one connection. Duplicate keys are read once.
+
+**Returns:** A `Map` of each key found to its raw value; a missing or expired
+key is absent.
+
+```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+
+const found = await cache.getMany(['user:1', 'user:2', 'user:3']);
+const user1 = found.get('user:1'); // raw string, or undefined if missing
+```
+
 #### `gets(key: string): Promise<{ value: string; cas: string } | null>`
 
 Retrieve the value at `key` along with its CAS (compare-and-swap) token. Use
