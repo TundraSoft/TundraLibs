@@ -175,6 +175,38 @@ const isValidPEM = (pem: string, type?: string): boolean => {
   return true;
 };
 
+/** One PEM block: its label and everything between the markers. */
+const PEM_BLOCK = /-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/g;
+
+/**
+ * Restore a PEM whose line breaks became spaces — what an environment
+ * variable set through a web form (e.g. Cloud Run's) delivers. The runtimes
+ * cannot read that form: Deno refuses it, and Node/Bun silently drop it (a
+ * CA then fails as "self-signed certificate"). Only text with no line break
+ * at all is touched, so a multi-line PEM comes back byte-for-byte; each
+ * block is rebuilt with its markers on their own lines and its base64
+ * wrapped at 64 columns. A block carrying headers (`Proc-Type:`), whose
+ * blank line cannot be recovered, is left as it came.
+ *
+ * @param pem - The PEM text as supplied.
+ * @returns The restored PEM, or `pem` unchanged.
+ */
+const restoreFlattenedPEM = (pem: string): string => {
+  const text = pem.trim();
+  if (text.includes('\n') || text.length > MAX_PEM_SIZE) return pem;
+  const blocks = [...text.matchAll(PEM_BLOCK)];
+  if (blocks.length === 0 || blocks.some((b) => b[2]!.includes(':'))) {
+    return pem;
+  }
+  return blocks.map(([, label, body]) =>
+    [
+      `-----BEGIN ${label}-----`,
+      ...(body!.replace(/\s+/g, '').match(/.{1,64}/g) ?? []),
+      `-----END ${label}-----`,
+    ].join('\n')
+  ).join('\n');
+};
+
 /** TLS config after validation — every field optional. @internal */
 export type ValidatedTLS = {
   cert?: string;
@@ -187,7 +219,9 @@ export type ValidatedTLS = {
  * Validate inline PEM content. Cert (`CERTIFICATE`), key (any
  * `* PRIVATE KEY` flavour), and CA certs (`CERTIFICATE`) are all
  * optional, but supplying one of `cert`/`key` without the other is
- * rejected (a half-mTLS config would fail at the runtime layer).
+ * rejected (a half-mTLS config would fail at the runtime layer). A PEM
+ * whose line breaks became spaces is restored first, and the restored
+ * text is what is returned.
  *
  * @throws {@link FetchInvalidPEMError} On mistyped or malformed PEM.
  * @internal
@@ -197,6 +231,9 @@ export const validateTLSContent = (
   key?: string,
   ca?: string[],
 ): ValidatedTLS => {
+  if (cert) cert = restoreFlattenedPEM(cert);
+  if (key) key = restoreFlattenedPEM(key);
+  if (ca) ca = ca.map((c) => c ? restoreFlattenedPEM(c) : c);
   // cert + key must come as a pair — half a client cert is never useful.
   if ((cert && !key) || (!cert && key)) {
     throw new FetchInvalidPEMError(
