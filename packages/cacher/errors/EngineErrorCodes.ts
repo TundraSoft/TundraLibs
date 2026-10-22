@@ -117,9 +117,9 @@ export const CacherEngineErrorCodes = {
 
   //#region Operation Errors
   /**
-   * The engine has no implementation for the requested operation.
-   * Provided for custom engines that support only part of the cacher
-   * surface; **no built-in engine raises it**.
+   * The engine has no implementation for the requested operation. Workers
+   * KV raises it for `ADD` and `INCREMENT`, which it cannot do atomically;
+   * a custom engine without `_add` / `_increment` raises it too.
    *
    * Variables: `operation` (the unsupported operation name).
    */
@@ -128,8 +128,9 @@ export const CacherEngineErrorCodes = {
   /**
    * A cache operation failed at runtime. The catch-all the Redis and
    * Memcached engines use when the underlying driver throws during
-   * `GET` / `SET` / `DELETE` / `HAS` / `CLEAR`; the driver's error is
-   * attached as `cause`.
+   * `GET` / `SET` / `ADD` / `INCREMENT` / `DELETE` / `HAS` / `CLEAR`; the
+   * driver's error is attached as `cause`. `INCREMENT` also raises it for a
+   * key holding a non-integer value.
    *
    * Variables: `operation` (the operation that failed), `reason` (the
    * underlying message). The meta also carries `key` for keyed
@@ -145,8 +146,8 @@ export const CacherEngineErrorCodes = {
    * which KV cannot store. A caller bug: fix the arguments rather than
    * retry.
    *
-   * Variables: `operation` (always `'SET'` today), `reason` (which
-   * argument is wrong). The meta also carries `key`.
+   * Variables: `operation` (`'SET'`, `'ADD'` or `'INCREMENT'`), `reason`
+   * (which argument is wrong — also a non-positive or fractional `by`). The meta also carries `key`.
    */
   OPERATION_INVALID_PARAMS:
     'Invalid parameters for operation ${operation}: ${reason}',

@@ -133,6 +133,9 @@ await cache.set('session:abc', { userId: 42 }, { expiry: 3600 });
   rejects `expiry` between 1 and 59 rather than rounding it.
 - **No window mode.** KV cannot extend a TTL without rewriting the value, so a
   sliding expiry would turn every read into a write.
+- **No `add` / `increment`.** Both throw `OPERATION_NOT_SUPPORTED`: KV is
+  eventually consistent, so neither can be atomic. Keep shared counters,
+  nonces and locks on Redis/Valkey or Memcached.
 - **One write per second per key.** KV rate-limits a key written more often
   than that. The failure surfaces as `OPERATION_FAILED`, with KV's error as
   `cause`.

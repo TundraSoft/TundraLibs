@@ -243,7 +243,8 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
       if (res === null || res === undefined) {
         return undefined;
       } else {
-        const data = JSON.parse(res) as CacheValue;
+        // A counter written by `increment` is a bare integer, not an entry.
+        const data = this._parseStored(res);
         if (data.window && data.expiry) {
           // Refresh the sliding-window TTL with `touch` (TTL-only) instead of
           // re-writing the whole value with `set`. A get-then-set refresh is a
@@ -289,6 +290,67 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
         name: this.name,
         engine: this.Engine,
         operation: 'SET',
+        key: key.slice(this.name.length + 1),
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Atomic set-if-absent: Memcached `add`.
+   * @protected
+   * @override
+   */
+  protected override async _add(
+    key: string,
+    value: CacheValue,
+  ): Promise<boolean> {
+    try {
+      const vKey = await this.__versionedKey(key);
+      return await this._client!.add(vKey, JSON.stringify(value), value.expiry);
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'ADD',
+        key: key.slice(this.name.length + 1),
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Atomic increment: Memcached `incr` (which keeps the item's exptime).
+   * When the counter is absent, `add` creates it at `by` with `expiry`; if
+   * a concurrent call created it first, `incr` again.
+   * @protected
+   * @override
+   */
+  protected override async _increment(
+    key: string,
+    by: number,
+    expiry: number,
+  ): Promise<number> {
+    try {
+      const vKey = await this.__versionedKey(key);
+      try {
+        return await this._client!.incr(vKey, by);
+      } catch (missing) {
+        // Absent (or expired): create it. Losing that race to a concurrent
+        // call means it now exists, so increment it; a key holding a
+        // non-integer fails both and surfaces the incr error.
+        if (await this._client!.add(vKey, String(by), expiry)) return by;
+        try {
+          return await this._client!.incr(vKey, by);
+        } catch {
+          throw missing;
+        }
+      }
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'INCREMENT',
         key: key.slice(this.name.length + 1),
         reason: (e as Error).message,
       }, e as Error);

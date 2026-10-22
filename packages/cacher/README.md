@@ -362,6 +362,39 @@ Returns `true` if the key exists and has not expired.
 
 Removes a single entry from the cache.
 
+### `cache.add(key, value, options?)` / `cache.increment(key, by?, options?)`
+
+Atomic primitives for state every server copy shares — rate limits,
+single-use tokens and nonces, locks. Never build these from `get` + `set`:
+two copies can both read the old value.
+
+```ts
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const shared = new MemoryCacher('limits', {});
+// Set only if absent: true for exactly one of any concurrent callers.
+if (!await shared.add('nonce:n-42', true, { expiry: 600 })) {
+  throw new Error('nonce reused');
+}
+// Atomic counter, created at `by` with `expiry` when absent.
+const hits = await shared.increment('ip:203.0.113.7', 1, { expiry: 60 });
+await shared.get<number>('ip:203.0.113.7'); // the count, as a number
+```
+
+`expiry` defaults to `defaultExpiry`; on `increment` it applies when the
+counter is created. `by` must be a positive integer, and incrementing a key
+that holds a non-integer value fails with `OPERATION_FAILED`.
+
+| Engine     | `add`         | `increment`                                         |
+| ---------- | ------------- | --------------------------------------------------- |
+| Memory     | one sync step | one sync step                                       |
+| Redis      | `SET NX EX`   | `INCRBY` + `EXPIRE NX` in MULTI (Redis 7+ / Valkey) |
+| Memcached  | `add`         | `incr`, creating with `add` when absent             |
+| Workers KV | refused       | refused                                             |
+
+Workers KV throws `OPERATION_NOT_SUPPORTED` for both: it is eventually
+consistent, so neither can be atomic, and cacher never emulates them.
+
 ### `cache.clear()`
 
 Removes all entries in this cache instance's namespace, leaving other
