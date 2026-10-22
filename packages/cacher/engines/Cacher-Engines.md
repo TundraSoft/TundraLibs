@@ -148,6 +148,22 @@ const cache = new MemoryCacher('demo', {});
 await cache.delete('user:1');
 ```
 
+### `add<T>(key, value, options?)` / `increment(key, by?, options?)`
+
+Atomic set-if-absent (`true` for exactly one of any concurrent callers) and
+atomic integer increment (creates the counter at `by`, with `expiry`, when
+absent). For shared rate limits, nonces and locks. Workers KV throws
+`OPERATION_NOT_SUPPORTED` for both. See the
+[README](../README.md#cacheaddkey-value-options--cacheincrementkey-by-options).
+
+```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+const claimed = await cache.add('lock:job-7', 'worker-a', { expiry: 30 });
+const n = await cache.increment('hits:/home', 1, { expiry: 60 });
+```
+
 ### `clear()`
 
 Removes all entries in this instance's namespace. The mechanism is
@@ -200,8 +216,11 @@ await cache.finalize();
 | Sliding (window) expiry  |   ✅   |  ✅   |    ✅     |     ❌     |
 | Per-entry custom TTL     |   ✅   |  ✅   |    ✅     |    ✅\*    |
 | Namespace isolation      |   ✅   |  ✅   |    ✅     |     ✅     |
+| Atomic add / increment   |   ✅   |  ✅†  |    ✅     |     ❌     |
 
 \* Workers KV accepts `0` (no expiry) or at least 60 seconds.
+
+† `increment` with an expiry needs Redis 7+ (or Valkey) for `EXPIRE NX`.
 
 ## Detailed Documentation
 

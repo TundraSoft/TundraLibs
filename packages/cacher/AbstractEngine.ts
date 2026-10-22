@@ -153,16 +153,117 @@ export abstract class AbstractEngine<
     opt: CacheValueOptions = {},
   ): Promise<void> {
     await this.init();
-    const expiry = opt.expiry ?? this._getOption('defaultExpiry')!;
-    if (this._validateExpiry(expiry) === false) {
+    await this._set(
+      this._normalizeKey(key),
+      this.__entry('SET', key, value, opt.expiry, opt.window ?? false),
+    );
+  }
+
+  /**
+   * Stores `value` only if `key` is absent (or expired), atomically: of any
+   * number of concurrent `add`s on one key, exactly one sets it. The
+   * building block for single-use tokens, nonces and locks. Read it back
+   * with {@link get}.
+   *
+   * @param key - The key to claim
+   * @param value - The value to store (JSON-serialisable, as for `set`)
+   * @param opt - `expiry` in seconds (defaults to the cacher's `defaultExpiry`)
+   * @returns `true` when this call stored the value, `false` when the key
+   *   was already there
+   * @throws {@link CacherEngineError} `OPERATION_INVALID_PARAMS` for a bad
+   *   expiry or value; `OPERATION_NOT_SUPPORTED` on an engine that cannot
+   *   do it atomically (Workers KV); `OPERATION_FAILED` if the engine fails
+   * @example
+   * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const nonces = new MemoryCacher('nonces', {});
+   * const fresh = await nonces.add('k1:n-42', true, { expiry: 600 });
+   * if (!fresh) throw new Error('nonce already used');
+   * ```
+   */
+  public async add<T>(
+    key: string,
+    value: T,
+    opt: { expiry?: number } = {},
+  ): Promise<boolean> {
+    await this.init();
+    return await this._add(
+      this._normalizeKey(key),
+      this.__entry('ADD', key, value, opt.expiry, false),
+    );
+  }
+
+  /**
+   * Adds `by` to the integer at `key`, atomically, creating it at `by`
+   * (with `expiry`) when absent or expired. Concurrent increments never
+   * lose an update. {@link get} reads the counter back as a number.
+   *
+   * @param key - The counter's key
+   * @param by - A positive integer (default 1)
+   * @param opt - `expiry` in seconds, applied when the counter is created
+   *   (defaults to the cacher's `defaultExpiry`; `0` = never expires)
+   * @returns The counter's value after this increment
+   * @throws {@link CacherEngineError} `OPERATION_INVALID_PARAMS` for a bad
+   *   `by` or expiry; `OPERATION_NOT_SUPPORTED` on an engine that cannot do
+   *   it atomically (Workers KV); `OPERATION_FAILED` if the engine fails,
+   *   including when `key` holds a non-integer value
+   * @example
+   * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const hits = new MemoryCacher('rate', {});
+   * const n = await hits.increment('ip:203.0.113.7', 1, { expiry: 60 });
+   * if (n > 100) throw new Error('rate limited');
+   * ```
+   */
+  public async increment(
+    key: string,
+    by = 1,
+    opt: { expiry?: number } = {},
+  ): Promise<number> {
+    await this.init();
+    if (!Number.isSafeInteger(by) || by < 1) {
       throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
         name: this.name,
         engine: this.Engine,
-        operation: 'SET',
+        operation: 'INCREMENT',
+        key: key,
+        reason: 'by must be a positive integer',
+      });
+    }
+    const expiry = this.__expiry('INCREMENT', key, opt.expiry);
+    return await this._increment(this._normalizeKey(key), by, expiry);
+  }
+
+  /** `expiry` (or the default), validated for `operation`. */
+  private __expiry(
+    operation: string,
+    key: string,
+    expiry: number | undefined,
+  ): number {
+    const value = expiry ?? this._getOption('defaultExpiry')!;
+    if (this._validateExpiry(value) === false) {
+      throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
+        name: this.name,
+        engine: this.Engine,
+        operation,
         key: key,
         reason: 'expiry must be a number between 0 and 2592000 (30 days)',
       });
     }
+    return value;
+  }
+
+  /** The stored entry for `value`, validated for `operation`. */
+  private __entry<T>(
+    operation: string,
+    key: string,
+    value: T,
+    expiryOpt: number | undefined,
+    window: boolean,
+  ): CacheValue {
+    const expiry = this.__expiry(operation, key, expiryOpt);
     // `JSON.stringify` returns the value `undefined` (not a string) for values
     // that have no JSON representation — top-level `undefined`, a function, or a
     // symbol. Storing that would set `CacheValue.data` (typed `string`) to
@@ -176,18 +277,13 @@ export abstract class AbstractEngine<
       throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
         name: this.name,
         engine: this.Engine,
-        operation: 'SET',
+        operation,
         key: key,
         reason:
           'value must be JSON-serialisable (received undefined, a function, or a symbol)',
       });
     }
-    const cacheValue: CacheValue = {
-      data: data,
-      expiry: expiry,
-      window: opt.window ?? false,
-    };
-    await this._set(this._normalizeKey(key), cacheValue);
+    return { data, expiry, window };
   }
 
   /**
@@ -408,4 +504,76 @@ export abstract class AbstractEngine<
    */
   protected abstract _clear(): void | Promise<void>;
   //#endregion Abstract methods
+
+  //#region Optional engine methods
+  /**
+   * Store `value` under `key` only if it is absent, atomically. Engines
+   * that cannot do this atomically keep this default, which throws — it
+   * must never be emulated with a read then a write.
+   *
+   * @param key - The normalized key
+   * @param _value - The entry to store
+   * @returns `true` if stored, `false` if the key was already present
+   * @throws {@link CacherEngineError} `OPERATION_NOT_SUPPORTED`
+   * @protected
+   */
+  protected _add(
+    key: string,
+    _value: CacheValue,
+  ): boolean | Promise<boolean> {
+    throw this._unsupported('ADD', key);
+  }
+
+  /**
+   * Add `by` to the integer at `key` atomically, creating it at `by` with
+   * `expiry` when absent. Engines that cannot do this atomically keep this
+   * default, which throws.
+   *
+   * @param key - The normalized key
+   * @param _by - A positive integer
+   * @param _expiry - Seconds, applied on creation (`0` = never)
+   * @returns The new value
+   * @throws {@link CacherEngineError} `OPERATION_NOT_SUPPORTED`
+   * @protected
+   */
+  protected _increment(
+    key: string,
+    _by: number,
+    _expiry: number,
+  ): number | Promise<number> {
+    throw this._unsupported('INCREMENT', key);
+  }
+
+  /**
+   * The `OPERATION_NOT_SUPPORTED` error for `operation` on this engine.
+   *
+   * @param operation - The operation name
+   * @param key - The normalized key
+   * @returns The error to throw
+   * @protected
+   */
+  protected _unsupported(operation: string, key: string): CacherEngineError {
+    return new CacherEngineError('OPERATION_NOT_SUPPORTED', {
+      name: this.name,
+      engine: this.Engine,
+      operation,
+      key: key.slice(this.name.length + 1),
+    });
+  }
+
+  /**
+   * Read a stored entry that may be a bare integer — the form `increment`
+   * leaves on engines with a native counter — as a {@link CacheValue}.
+   *
+   * @param raw - The stored string
+   * @returns The entry, its `data` the JSON of the stored value
+   * @protected
+   */
+  protected _parseStored(raw: string): CacheValue {
+    const parsed = JSON.parse(raw) as CacheValue | number;
+    return typeof parsed === 'number'
+      ? { data: String(parsed), expiry: 0, window: false }
+      : parsed;
+  }
+  //#endregion Optional engine methods
 }

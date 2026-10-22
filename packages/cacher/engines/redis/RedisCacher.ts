@@ -128,7 +128,8 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     try {
       const res = await this._client!.get(key);
       if (res === null) return undefined;
-      const data = JSON.parse(res) as CacheValue;
+      // A counter written by `increment` is a bare integer, not an entry.
+      const data = this._parseStored(res);
       if (data.window && data.expiry > 0) {
         // Redis EXPIRE takes whole seconds; round a fractional TTL up so
         // it stays a positive lifetime (see _set for the rationale).
@@ -168,6 +169,72 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         name: this.name,
         engine: this.Engine,
         operation: 'SET',
+        key: key.slice(this.name.length + 1),
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Atomic set-if-absent: `SET key value NX [EX ttl]`.
+   * @protected
+   * @override
+   */
+  protected override async _add(
+    key: string,
+    value: CacheValue,
+  ): Promise<boolean> {
+    try {
+      const ex = Math.ceil(value.expiry);
+      const reply = await this._client!.set(key, JSON.stringify(value), {
+        nx: true,
+        ...(ex > 0 ? { ex } : {}),
+      });
+      return reply !== null;
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'ADD',
+        key: key.slice(this.name.length + 1),
+        reason: (e as Error).message,
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Atomic increment: `INCRBY` and, when `expiry` is set, `EXPIRE ... NX`
+   * (a TTL only on a counter that has none — i.e. the one just created) in
+   * one MULTI/EXEC. `EXPIRE NX` needs Redis 7+ / Valkey.
+   * @protected
+   * @override
+   */
+  protected override async _increment(
+    key: string,
+    by: number,
+    expiry: number,
+  ): Promise<number> {
+    try {
+      const ex = Math.ceil(expiry);
+      const replies = await this._client!.multi([
+        ['INCRBY', key, by],
+        ...(ex > 0 ? [['EXPIRE', key, ex, 'NX']] : []),
+      ]);
+      // EXEC answers each command in place; a command error (INCRBY on a
+      // non-integer, EXPIRE NX before Redis 7) is an element, not a throw.
+      for (const reply of replies) {
+        if (reply.kind === 'error') throw new Error(reply.value.message);
+      }
+      const counter = replies[0];
+      if (counter?.kind !== 'integer') {
+        throw new Error(`INCRBY replied ${counter?.kind ?? 'nothing'}`);
+      }
+      return Number(counter.value);
+    } catch (e) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'INCREMENT',
         key: key.slice(this.name.length + 1),
         reason: (e as Error).message,
       }, e as Error);

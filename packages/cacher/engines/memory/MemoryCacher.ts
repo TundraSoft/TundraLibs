@@ -1,6 +1,7 @@
 import { unrefTimer } from '@tundralibs/compat/runtime';
 import { type PrivateObject, privateObject } from '@tundralibs/utils';
 import { AbstractEngine } from '../../AbstractEngine.ts';
+import { CacherEngineError } from '../../errors/mod.ts';
 import type { CacheValue } from '../../types/mod.ts';
 import type { MemoryCacherOptions } from './types/mod.ts';
 
@@ -166,6 +167,52 @@ export class MemoryCacher extends AbstractEngine<MemoryCacherOptions> {
    * @protected
    * @override
    */
+  /**
+   * Atomic set-if-absent: the presence check and the write run in one
+   * synchronous step, so no other call can interleave.
+   * @protected
+   * @override
+   */
+  protected override _add(key: string, value: CacheValue): boolean {
+    if (this._has(key)) return false;
+    this._set(key, value);
+    return true;
+  }
+
+  /**
+   * Atomic increment in one synchronous step. An existing counter keeps
+   * its deadline; a new one gets `expiry`.
+   *
+   * @throws {@link CacherEngineError} `OPERATION_FAILED` if the key holds
+   *   a non-integer value.
+   * @protected
+   * @override
+   */
+  protected override _increment(
+    key: string,
+    by: number,
+    expiry: number,
+  ): number {
+    if (!this._has(key)) {
+      this._set(key, { data: String(by), expiry, window: false });
+      return by;
+    }
+    const current = this._cache.get(key)!;
+    const n = JSON.parse(current.data) as unknown;
+    if (!Number.isSafeInteger(n)) {
+      throw new CacherEngineError('OPERATION_FAILED', {
+        name: this.name,
+        engine: this.Engine,
+        operation: 'INCREMENT',
+        key: key.slice(this.name.length + 1),
+        reason: 'the key holds a non-integer value',
+      });
+    }
+    const next = (n as number) + by;
+    this._cache.set(key, { ...current, data: String(next) });
+    return next;
+  }
+
   protected _delete(key: string): void {
     // Implementation for deleting a key from memory
     clearTimeout(this._expiryTimers.get(key));
