@@ -219,6 +219,7 @@ export {
   type WritableLike,
 } from './cli/mod.ts';
 export {
+  type ClientTLSOptions,
   connect,
   type Connection,
   type ConnectOptions,
