@@ -967,7 +967,10 @@ from \`ctx.state\` for composed parts and \`invoke()\`), then use that same
 code for every query. \`surfaces: { api: { cookie: false, schemes } }\`
 narrows what one surface accepts. Options are pact's own
 middleware options: carriers per scheme, \`hmac: {}\` (RFC 9421 template
-signing, requests AND responses), \`encryption: {}\` (JWE payloads). Sockets
+signing, requests AND responses; a template signing \`\${x-nonce}\` makes
+each request single-use through the \`claimNonce\` hook, and \`nonce:
+'optional'\` also accepts requests without one, guarded by the timestamp
+window only), \`encryption: {}\` (JWE payloads). Sockets
 authenticate from the upgrade request's headers/cookies. A stale bearer
 COOKIE is cleared and treated as anonymous (a browser keeps sending it; a 401
 would lock the user out of /login). The session handlers wrap the instance:
