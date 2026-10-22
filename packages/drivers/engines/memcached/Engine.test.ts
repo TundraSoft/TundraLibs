@@ -272,6 +272,25 @@ describe({
       });
     });
 
+    describe('getMany', () => {
+      it('reads many keys in one call: hits by key, misses absent', async () => {
+        const engine = new MemcachedEngine('getmany-1', TEST_CONFIG);
+        await engine.connect();
+        const [a, b, c] = [k('gm-a'), k('gm-b'), k('gm-missing')];
+        await engine.set(a, 'αβγ — 1', 60);
+        await engine.set(b, 'two\r\nEND\r\nlines', 60);
+        const found = await engine.getMany([a, c, b, a]);
+        asserts.assertEquals(
+          found,
+          new Map([[a, 'αβγ — 1'], [b, 'two\r\nEND\r\nlines']]),
+        );
+        asserts.assertEquals((await engine.getMany([])).size, 0);
+        await engine.delete(a);
+        await engine.delete(b);
+        await engine.disconnect();
+      });
+    });
+
     describe('gets / cas', () => {
       it('gets should return value and a cas token for an existing key', async () => {
         const engine = new MemcachedEngine('cas-1', TEST_CONFIG);
@@ -1252,4 +1271,79 @@ describe({
       }
     });
   },
+});
+
+describe('drivers.MemcachedEngine - getMany (offline)', () => {
+  const enc = new TextEncoder();
+
+  it('sends one multi-key get and parses every VALUE block before END', async () => {
+    const commands: string[] = [];
+    const engine = new StubMemcachedEngine('mc-getmany', { host: 'x' }, [
+      (cmd) => {
+        commands.push(cmd);
+        return enc.encode(
+          'VALUE a 0 1\r\n1\r\nVALUE c 0 3\r\nccc\r\nEND\r\n',
+        );
+      },
+    ]);
+    await engine.connect();
+    asserts.assertEquals(
+      await engine.getMany(['a', 'b', 'c', 'a']),
+      new Map([['a', '1'], ['c', 'ccc']]),
+    );
+    asserts.assertEquals(commands, ['get a b c\r\n']);
+    await engine.disconnect();
+  });
+
+  it('splits a large read into gets of at most 100 keys', async () => {
+    const commands: string[] = [];
+    const engine = new StubMemcachedEngine('mc-getmany-chunks', { host: 'x' }, [
+      (cmd) => {
+        commands.push(cmd);
+        return enc.encode('END\r\n');
+      },
+    ]);
+    await engine.connect();
+    const keys = Array.from({ length: 150 }, (_, i) => `k${i}`);
+    asserts.assertEquals((await engine.getMany(keys)).size, 0);
+    asserts.assertEquals(
+      commands.map((c) => c.trim().split(' ').length - 1),
+      [100, 50],
+    );
+    await engine.disconnect();
+  });
+
+  it('rejects a desynced VALUE block and destroys the connection', async () => {
+    const engine = new StubMemcachedEngine(
+      'mc-getmany-desync',
+      { host: 'x', pool: { max: 1 } },
+      [(_cmd) => enc.encode('VALUE a 0 1\r\n123\r\nEND\r\n')],
+    );
+    await engine.connect();
+    const err = await asserts.assertRejects(
+      () => engine.getMany(['a']),
+      EngineError,
+    );
+    asserts.assertEquals(err.code, 'OPERATION_FAILED');
+    asserts.assertStrictEquals(engine.conns[0]!.closed, true);
+    await engine.disconnect();
+  });
+
+  it('refuses an unsafe key before sending anything', async () => {
+    const commands: string[] = [];
+    const engine = new StubMemcachedEngine('mc-getmany-key', { host: 'x' }, [
+      (cmd) => {
+        commands.push(cmd);
+        return enc.encode('END\r\n');
+      },
+    ]);
+    await engine.connect();
+    const err = await asserts.assertRejects(
+      () => engine.getMany(['ok', 'bad key\r\nflush_all']),
+      EngineError,
+    );
+    asserts.assertEquals(err.code, 'INVALID_CONFIG_VALUE');
+    asserts.assertEquals(commands, []);
+    await engine.disconnect();
+  });
 });
