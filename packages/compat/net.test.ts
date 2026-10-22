@@ -1095,6 +1095,31 @@ describe('compat.net', () => {
       }
     });
 
+    it({
+      name: 'on Deno, servername still refuses rejectUnauthorized: false',
+      bun: false,
+      node: false,
+      fn: async () => {
+        // The servername path dials in the clear and then upgrades; the
+        // refusal comes from the upgrade, so the dialed socket must close.
+        const listener = await echoServer(9943);
+        try {
+          await asserts.assertRejects(
+            () =>
+              connect({
+                port: 9943,
+                hostname: '127.0.0.1',
+                tls: { servername: 'db.internal', rejectUnauthorized: false },
+              }),
+            Error,
+            'rejectUnauthorized',
+          );
+        } finally {
+          listener.close();
+        }
+      },
+    });
+
     it('refuses a tls.servername that is empty or an IP', async () => {
       for (const servername of ['', '10.10.11.2', '::1']) {
         const err = await asserts.assertRejects(
