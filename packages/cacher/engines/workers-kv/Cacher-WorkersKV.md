@@ -11,9 +11,12 @@ Cache engine backed by a Cloudflare Workers KV namespace.
 
 ## Overview
 
-`WorkersKVCacher` stores entries in the KV namespace bound to your Worker. It
-is shared by every isolate and data centre, needs no server of its own, and
-serves reads from Cloudflare's edge cache.
+`WorkersKVCacher` stores entries in a Workers KV namespace: through the
+namespace bound to your Worker, or — from a server, CLI or cron job outside
+Cloudflare — over the KV REST API with `http` (see
+[Outside a Worker](#outside-a-worker-rest-api)). It is shared by every isolate
+and data centre, needs no server of its own, and serves Worker reads from
+Cloudflare's edge cache.
 
 KV is eventually consistent. A write or delete is visible at once in the data
 centre that made it, and can take 60 seconds or more to reach the others.
@@ -64,10 +67,13 @@ Bind a KV namespace to the Worker in `wrangler.jsonc`:
 
 ### `WorkersKVCacherOptions`
 
-| Option          | Type                 | Default  | Description                                           |
-| --------------- | -------------------- | -------- | ----------------------------------------------------- |
-| `binding`       | `WorkersKVNamespace` | required | The KV namespace from the Worker's `env`              |
-| `defaultExpiry` | `number`             | `300`    | Default TTL in seconds: `0` (no expiry) or 60–2592000 |
+| Option          | Type                   | Default | Description                                                 |
+| --------------- | ---------------------- | ------- | ----------------------------------------------------------- |
+| `binding`       | `WorkersKVNamespace`   | —       | The KV namespace from the Worker's `env`                    |
+| `http`          | `WorkersKVHttpOptions` | —       | `{ accountId, namespaceId, apiToken, baseURL? }` — REST API |
+| `defaultExpiry` | `number`               | `300`   | Default TTL in seconds: `0` (no expiry) or 60–2592000       |
+
+Pass exactly one of `binding` or `http`.
 
 `WorkersKVNamespace` is the part of Cloudflare's `KVNamespace` the engine
 calls: `get`, `put` and `delete`. The binding on `env` satisfies it, so cacher
@@ -77,9 +83,10 @@ needs no dependency on `@cloudflare/workers-types`.
 
 Throws `CacherEngineError`:
 
-- `CONFIG_MISSING` without a `binding`.
-- `CONFIG_INVALID` if `binding` lacks `get`, `put` or `delete`, or
-  `defaultExpiry` is between 1 and 59.
+- `CONFIG_MISSING` with neither `binding` nor `http`.
+- `CONFIG_INVALID` with both, if `binding` lacks `get`, `put` or `delete`, if
+  an `http` field is missing or empty, or if `defaultExpiry` is between 1 and
+  59.
 
 ### Methods
 
@@ -123,6 +130,28 @@ declare const env: { CACHE: WorkersKVNamespace };
 const cache = new WorkersKVCacher('sessions', { binding: env.CACHE });
 await cache.set('session:abc', { userId: 42 }, { expiry: 3600 });
 ```
+
+### Outside a Worker (REST API)
+
+```typescript
+import { WorkersKVCacher } from '@tundralibs/cacher/engines';
+
+const cache = new WorkersKVCacher('flags', {
+  http: {
+    accountId: 'your-account-id',
+    namespaceId: 'your-namespace-id',
+    apiToken: 'a-scoped-api-token', // Workers KV Storage: Edit — a secret
+  },
+});
+await cache.set('beta', true, { expiry: 3600 });
+```
+
+Every call goes to Cloudflare's API: it counts against the account-wide API
+rate limit and pays a round trip, so use `http` for low-volume or
+administrative access — a server sharing flags or config with your Workers, a
+CLI, a cron job — not as a hot-path cache. KV's consistency, expiry and
+one-write-per-second rules apply exactly as with a binding. Choosing `http`
+is explicit: the engine never falls back from one transport to the other.
 
 ## Notes
 

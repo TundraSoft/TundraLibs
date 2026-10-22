@@ -1,11 +1,14 @@
 import type { CacherOptions } from '../../../types/mod.ts';
+import type { WorkersKVHttpOptions } from './WorkersKVHttpOptions.ts';
 import type { WorkersKVNamespace } from './WorkersKVNamespace.ts';
 
 /**
  * Configuration options for the Workers KV cacher.
  *
- * `binding` is required. `defaultExpiry` follows KV's own floor: `0` (no
- * expiry) or at least 60 seconds.
+ * Exactly one of `binding` (inside a Worker) or `http` (anywhere else,
+ * over Cloudflare's REST API — see {@link WorkersKVHttpOptions} for its
+ * limits). `defaultExpiry` follows KV's own floor: `0` (no expiry) or at
+ * least 60 seconds.
  *
  * @extends CacherOptions
  * @see {@link WorkersKVCacher} The class that uses these options
@@ -16,9 +19,23 @@ import type { WorkersKVNamespace } from './WorkersKVNamespace.ts';
  *   binding: env.CACHE,
  *   defaultExpiry: 600,
  * };
+ * // Outside a Worker, over the REST API.
+ * const remote: WorkersKVCacherOptions = {
+ *   http: { accountId, namespaceId, apiToken: env.CF_KV_TOKEN },
+ * };
  * ```
  */
-export type WorkersKVCacherOptions = CacherOptions & {
-  /** The KV namespace binding from the Worker's `env`. Required. */
-  binding: WorkersKVNamespace;
-};
+export type WorkersKVCacherOptions =
+  & CacherOptions
+  & (
+    | {
+      /** The KV namespace binding from the Worker's `env`. */
+      binding: WorkersKVNamespace;
+      http?: never;
+    }
+    | {
+      binding?: never;
+      /** Reach the namespace over Cloudflare's REST API instead. */
+      http: WorkersKVHttpOptions;
+    }
+  );
