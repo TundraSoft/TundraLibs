@@ -1852,9 +1852,14 @@ export async function upgradeTls(
     assertBuiltin(nodeTls, 'node:tls', 'upgradeTls');
     // deno-coverage-ignore-stop
     return await new Promise((resolve, reject) => {
+      // node:tls refuses an IP literal as `servername` (RFC 6066 forbids an
+      // IP in SNI). For an IP, send no SNI and verify the peer as `host`,
+      // which is what tls.connect does when it dials an IP itself.
       const tlsOptions: Record<string, unknown> = {
         socket: raw,
-        servername: options.hostname,
+        ...(nodeNet.isIP(options.hostname)
+          ? { host: options.hostname }
+          : { servername: options.hostname }),
       };
       if (validated.cert && validated.key) {
         tlsOptions.cert = validated.cert;

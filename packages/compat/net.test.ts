@@ -12,6 +12,37 @@ import { ConnectionTimeoutError } from './Error.ts';
 import { RUNTIME } from './runtime.ts';
 import { join } from './path.ts';
 
+// A throwaway CA and a server certificate it signed, valid until 2126, with
+// SANs `DNS:db.internal` and `IP:127.0.0.1`. Test material only.
+const TEST_CA = `-----BEGIN CERTIFICATE-----
+MIIBmTCCAT+gAwIBAgIUbWm4g72LxFM/RZMVEwFtAuGvcjUwCgYIKoZIzj0EAwIw
+GTEXMBUGA1UEAwwOY29tcGF0IHRlc3QgQ0EwIBcNMjYxMDIyMjEyMTQ5WhgPMjEy
+NjA5MjgyMTIxNDlaMBkxFzAVBgNVBAMMDmNvbXBhdCB0ZXN0IENBMFkwEwYHKoZI
+zj0CAQYIKoZIzj0DAQcDQgAEnEQFYNyGhDOD+SAok0Y65i1MG36kR3lYzAeSofOm
+gGGDbZdSJqW6ihpypxx+csycLH8aD8iAI7EfIfxoTe8jsaNjMGEwHQYDVR0OBBYE
+FGlCbZfYJWvTz05r6z5sAhxXZxeMMB8GA1UdIwQYMBaAFGlCbZfYJWvTz05r6z5s
+AhxXZxeMMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgIEMAoGCCqGSM49
+BAMCA0gAMEUCIQClbnhljjkeajucWqLLdszA9ziogn90QT5cSwabr2YcUwIgSF01
+w0aA+vt/uTGIF0mPnTfHrhpjG/Xetr79npjo3U4=
+-----END CERTIFICATE-----`;
+const TEST_SERVER_CERT = `-----BEGIN CERTIFICATE-----
+MIIBtDCCAVqgAwIBAgIUZDiD+mn9YwVrN+xBUr3Mj229xGUwCgYIKoZIzj0EAwIw
+GTEXMBUGA1UEAwwOY29tcGF0IHRlc3QgQ0EwIBcNMjYxMDIyMjEyMTQ5WhgPMjEy
+NjA5MjgyMTIxNDlaMBYxFDASBgNVBAMMC2RiLmludGVybmFsMFkwEwYHKoZIzj0C
+AQYIKoZIzj0DAQcDQgAEJLS5ZcnigPUSKfxQdAPveu5qsXr+atYBnQbURigAhTEj
+ApweDHoVeLHb/05UGqEPNJ5FZpFAOnyJkwKhy/UyBaOBgDB+MBwGA1UdEQQVMBOC
+C2RiLmludGVybmFshwR/AAABMAkGA1UdEwQCMAAwEwYDVR0lBAwwCgYIKwYBBQUH
+AwEwHQYDVR0OBBYEFEsd9lCJPbJSBIhspIYnT8Bw1FXOMB8GA1UdIwQYMBaAFGlC
+bZfYJWvTz05r6z5sAhxXZxeMMAoGCCqGSM49BAMCA0gAMEUCIQDzJ1rqd2iLeooQ
+pLF9Ra5zStTPM/QTzHD3LnB5ikCWZAIgAXW4EiN5WDoP0j7DxGjfhbxodAFjAJEV
+t6r3NAu50Ck=
+-----END CERTIFICATE-----`;
+const TEST_SERVER_KEY = `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgldBhTCn27jZ7LWbB
+mvrljgTEqedl1zPJNf9YVdG4LFuhRANCAAQktLllyeKA9RIp/FB0A+967mqxev5q
+1gGdBtRGKACFMSMCnB4MehV4sdv/TlQaoQ80nkVmkUA6fImTAqHL9TIF
+-----END PRIVATE KEY-----`;
+
 describe('compat.net', () => {
   describe('listen', () => {
     it('should create a listener on the specified port', async () => {
@@ -970,6 +1001,58 @@ describe('compat.net', () => {
           listener.close();
         }
       },
+    });
+  });
+
+  describe('upgradeTls against a TLS peer', () => {
+    /** A TLS listener on `port` that echoes one read back, then closes. */
+    const echoServer = async (port: number) => {
+      const listener = await listen({
+        port,
+        hostname: '127.0.0.1',
+        tls: { cert: TEST_SERVER_CERT, key: TEST_SERVER_KEY },
+      });
+      (async () => {
+        for (;;) {
+          const conn = await listener.accept().catch(() => null);
+          if (!conn) return;
+          conn.read().then(
+            async (data) => {
+              if (data) await conn.write(data).catch(() => {});
+              conn.close();
+            },
+            () => conn.close(),
+          );
+        }
+      })();
+      return listener;
+    };
+
+    /** Dial 127.0.0.1 in the clear, upgrade as `hostname`, echo one write. */
+    const upgradeAndEcho = async (port: number, hostname: string) => {
+      const tcp = await connect({ port, hostname: '127.0.0.1' });
+      try {
+        const tls = await upgradeTls(tcp, { hostname, tls: { ca: [TEST_CA] } });
+        try {
+          await tls.write('ping');
+          return new TextDecoder().decode((await tls.read()) ?? undefined);
+        } finally {
+          tls.close();
+        }
+      } finally {
+        tcp.close();
+      }
+    };
+
+    it('verifies a peer dialed by IP against the certificate IP', async () => {
+      const listener = await echoServer(9940);
+      try {
+        asserts.assertEquals(await upgradeAndEcho(9940, '127.0.0.1'), 'ping');
+        // Verification is not skipped: an IP the certificate lacks fails.
+        await asserts.assertRejects(() => upgradeAndEcho(9940, '127.0.0.2'));
+      } finally {
+        listener.close();
+      }
     });
   });
 
