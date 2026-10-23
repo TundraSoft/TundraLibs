@@ -31,13 +31,13 @@ Loads configuration files from a directory and returns a Config object.
 
 **Parameters:**
 
-| Parameter              | Type                              | Required | Description                                                                                                                                |
-| ---------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `options.path`         | `string`                          | Yes      | Directory path containing config files                                                                                                     |
-| `options.env`          | `boolean \| string`               | No       | `true` loads `.env` from `options.path`; a string loads it from that path; omitted means no substitution                                   |
-| `options.include`      | `RegExp[]`                        | No       | Patterns to include specific files                                                                                                         |
-| `options.exclude`      | `RegExp[]`                        | No       | Patterns to exclude specific files                                                                                                         |
-| `options.placeholders` | `'literal' \| 'empty' \| 'error'` | No       | What an unset `${VAR}` becomes: the literal text (default), nothing (`null` / `''`), or a thrown `Error` naming the file and the variables |
+| Parameter              | Type                              | Required | Description                                                                                                                                                                          |
+| ---------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `options.path`         | `string`                          | Yes      | Directory path containing config files                                                                                                                                               |
+| `options.env`          | `boolean \| string`               | No       | `true` loads `.env` from `options.path`; a string loads it from that path; omitted means no substitution                                                                             |
+| `options.include`      | `RegExp[]`                        | No       | Patterns to include specific files                                                                                                                                                   |
+| `options.exclude`      | `RegExp[]`                        | No       | Patterns to exclude specific files                                                                                                                                                   |
+| `options.placeholders` | `'literal' \| 'empty' \| 'error'` | No       | What an unset `${VAR}` becomes: the literal text (default), nothing (`null` / `''`), or a thrown `Error` naming the file and the variables. `${VAR?}` and `${VAR:-text}` never throw |
 
 `env` selects a source, it is not a bag of variables — pass `true` or a
 path, never a `Record`. Substitution is **off** unless you ask for it.
@@ -208,6 +208,27 @@ const config = await loadConfig({
   env: true,
   placeholders: 'error', // Error: Unresolved placeholders in config/db.yaml: ${DB_PASSWORD}
 });
+```
+
+A trailing `?` marks a placeholder optional: `${VAR?}` resolves exactly
+like `${VAR}`, except that under `'error'` an unset one becomes empty
+instead of failing the load. One file can then carry every variant —
+a `sqlite` block and a `postgres` block — while an environment sets only
+the active one's variables. Read an emptied value as `null` (unquoted) or
+`''` (quoted); `get(path, default)` returns a stored `null` as-is, so
+fall back with `??` — or give the default in the file: `${VAR:-text}`
+takes `VAR`'s value, or `text` when `VAR` is unset or blank, in every mode,
+and never fails `'error'` (`text` cannot contain `{` or `}`).
+
+```yaml ignore
+# config/database.yaml
+dialect: ${DB_DIALECT} # still required under 'error'
+sqlite:
+  path: ${SQLITE_PATH?}
+postgres:
+  host: ${PG_HOST?}
+  port: ${PG_PORT:-5432}
+  password: ${PG_PASSWORD?}
 ```
 
 ### Selective File Loading

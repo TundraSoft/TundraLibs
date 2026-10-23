@@ -212,6 +212,12 @@ export type LoadConfigOptions = {
    *   `get(path, default)` or validator can tell it was unset.
    * - `'error'`: `loadConfig` throws, naming the file and every unresolved
    *   variable — the right choice for a production boot.
+   *
+   * Two forms are never unresolved, so never fail `'error'`:
+   * - `${VAR:-text}`: `VAR`'s value, or `text` when `VAR` is unset or
+   *   blank — in every mode. `text` cannot contain `{` or `}`.
+   * - `${VAR?}`: resolves exactly like `${VAR}`, except that under
+   *   `'error'` an unset one becomes empty instead of failing the load.
    */
   placeholders?: 'literal' | 'empty' | 'error';
 };
@@ -356,9 +362,28 @@ const processConfigFiles = async (
 
     const raw = await readTextFile(filePath);
     const mode = options.placeholders ?? 'literal';
+    // `${VAR:-text}` and `${VAR?}` are looked up by their whole token text
+    // as a flat key, so they resolve in the same single pass as `${VAR}`.
+    // An unset `${VAR?}` is left out — 'literal' keeps the text, 'empty'
+    // blanks it — except under 'error', where it is ''.
+    const values: Record<string, string> = { ...env };
+    for (const [, token] of raw.matchAll(PLACEHOLDER)) {
+      const sep = token!.indexOf(':-');
+      if (sep > 0) {
+        const name = token!.slice(0, sep);
+        const value = Object.hasOwn(env, name) ? env[name] : undefined;
+        values[token!] = value === undefined || value === ''
+          ? token!.slice(sep + 2)
+          : value;
+      } else if (token!.length > 1 && token!.endsWith('?')) {
+        const name = token!.slice(0, -1);
+        if (Object.hasOwn(env, name)) values[token!] = env[name]!;
+        else if (mode === 'error') values[token!] = '';
+      }
+    }
     const content = mode === 'empty'
-      ? templatize(raw, { onMissing: 'empty' })(env as Record<string, never>)
-      : variableReplacer(raw, env);
+      ? templatize(raw, { onMissing: 'empty' })(values as Record<string, never>)
+      : variableReplacer(raw, values);
     const parsed = parseConfigContent(content, ext, filePath);
     if (mode === 'error') {
       // Judged on the PARSED values, not the file text: a `${VAR}` inside
@@ -391,7 +416,8 @@ const processConfigFiles = async (
  *
  * @throws {@link TypeError} If `options` fails {@link assertLoadConfigOptions}.
  * @throws {Error} If the path is unreadable, files don't parse, basenames
- *   collide, or `placeholders: 'error'` meets an unresolved `${VAR}`.
+ *   collide, or `placeholders: 'error'` meets an unresolved `${VAR}`
+ *   (`${VAR?}` and `${VAR:-text}` never count).
  *
  * @example
  * ```typescript
