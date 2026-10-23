@@ -200,6 +200,29 @@ describe({
       });
     });
 
+    it('reports the engine name as application_name unless applicationName is set', async () => {
+      const appName = async (options: Record<string, unknown>) => {
+        const engine = new PostgresEngine('app-pg', {
+          ...TEST_CONFIG,
+          ...options,
+        });
+        await engine.connect();
+        try {
+          const r = await engine.execute<{ name: string }>({
+            sql: `SELECT current_setting('application_name') AS name`,
+          });
+          return r.data[0]!.name;
+        } finally {
+          await engine.disconnect();
+        }
+      };
+      asserts.assertEquals(await appName({}), 'app-pg');
+      asserts.assertEquals(
+        await appName({ applicationName: 'brevily-api' }),
+        'brevily-api',
+      );
+    });
+
     describe('Postgres-specific type decoding', () => {
       it('decodes int8 (BIGINT), float8, jsonb, timestamp, bool, null', async () => {
         const engine = new PostgresEngine('types-pg', TEST_CONFIG);

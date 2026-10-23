@@ -9,4 +9,11 @@ import type { SQLEngineOptions } from '../../../types/mod.ts';
  *
  * @extends SQLEngineOptions
  */
-export type MariaEngineOptions = SQLEngineOptions;
+export type MariaEngineOptions = SQLEngineOptions & {
+  /**
+   * Application name sent as the `program_name` connect attribute (visible
+   * in `performance_schema.session_connect_attrs`). Defaults to the
+   * engine's `Name`.
+   */
+  applicationName?: string;
+};

@@ -101,22 +101,8 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
 
   /** Open one fresh `mariadb` connection. */
   protected async _createResource(): Promise<Connection> {
-    // The `mariadb` package accepts more options than its type definitions
-    // declare (e.g. `supportBigInt`, `decimalAsNumber`). Pass through as a
-    // typed-loose record.
-    const config: Record<string, unknown> = {
-      host: this._getOption('host'),
-      port: this._getOption('port'),
-      database: String(this._getOption('database')),
-      user: this._getOption('username'),
-      password: this._getOption('password'),
-      ssl: this.__buildMariaSsl(),
-      namedPlaceholders: true,
-      supportBigInt: true,
-      decimalAsNumber: true,
-    };
     const conn = await createConnection(
-      config as Parameters<typeof createConnection>[0],
+      this.__buildMariaConfig() as Parameters<typeof createConnection>[0],
     );
     return conn;
   }
@@ -157,6 +143,32 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Build the config passed to `mariadb`'s `createConnection`. The package
+   * accepts more options than its type definitions declare (e.g.
+   * `supportBigInt`, `decimalAsNumber`), hence the typed-loose record.
+   *
+   * `program_name` joins the connect attributes the connector already sends
+   * on every handshake, so the server shows it in
+   * `performance_schema.session_connect_attrs`.
+   */
+  private __buildMariaConfig(): Record<string, unknown> {
+    return {
+      host: this._getOption('host'),
+      port: this._getOption('port'),
+      database: String(this._getOption('database')),
+      user: this._getOption('username'),
+      password: this._getOption('password'),
+      ssl: this.__buildMariaSsl(),
+      connectAttributes: {
+        program_name: this._getOption('applicationName') ?? this.Name,
+      },
+      namedPlaceholders: true,
+      supportBigInt: true,
+      decimalAsNumber: true,
+    };
   }
 
   /**

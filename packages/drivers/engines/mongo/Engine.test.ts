@@ -3,6 +3,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { MongoEngine } from './Engine.ts';
 import { EngineError } from '../../errors/mod.ts';
+import type { MongoEngineOptions } from './types/mod.ts';
 
 // Wave-note: emission/option accessors are protected now — tests reach
 // them through deliberate casts.
@@ -359,6 +360,37 @@ describe('drivers.MongoEngine.__buildUri', () => {
     asserts.assertEquals(
       buildUri(engine),
       'mongodb+srv://user:pass@cluster.example.com/db?retryWrites=true',
+    );
+  });
+});
+
+// Runs without a live Mongo — the options handed to `MongoClient.connect`.
+describe('drivers.MongoEngine.__clientOptions', () => {
+  const appName = (options: MongoEngineOptions): unknown =>
+    (new MongoEngine('app-mongo', options) as unknown as {
+      __clientOptions(): Record<string, unknown>;
+    }).__clientOptions().appName;
+
+  it('defaults appName to the engine name, or applicationName when set', () => {
+    asserts.assertEquals(appName({ host: 'db' }), 'app-mongo');
+    asserts.assertEquals(
+      appName({ host: 'db', applicationName: 'brevily-api' }),
+      'brevily-api',
+    );
+  });
+
+  it('leaves an appName in the uri alone, and lets driverOptions.appName win', () => {
+    asserts.assertEquals(
+      appName({ uri: 'mongodb://db/app?retryWrites=true&APPNAME=from-uri' }),
+      undefined,
+    );
+    asserts.assertEquals(
+      appName({
+        host: 'db',
+        applicationName: 'brevily-api',
+        driverOptions: { appName: 'explicit' },
+      }),
+      'explicit',
     );
   });
 });

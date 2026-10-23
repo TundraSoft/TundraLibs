@@ -207,9 +207,24 @@ export class MongoEngine
    * the connect-race behaviour can be unit-tested without a live server.
    */
   protected _connectClient(): Promise<MongoClient> {
-    return MongoClient.connect(this.__buildUri(), {
-      ...(this._getOption('driverOptions') ?? {}),
-    });
+    return MongoClient.connect(this.__buildUri(), this.__clientOptions());
+  }
+
+  /**
+   * The options passed to `MongoClient.connect`: `driverOptions`, with
+   * `appName` defaulted to `applicationName`, else the engine's `Name`.
+   * Options override the connection string, so the `Name` default is
+   * skipped when `uri` already carries an `appName`.
+   */
+  private __clientOptions(): Record<string, unknown> {
+    const driverOptions = this._getOption('driverOptions') ?? {};
+    const appName = this._getOption('applicationName') ??
+      (/[?&]appname=/i.test(this._getOption('uri') ?? '')
+        ? undefined
+        : this.Name);
+    return appName === undefined
+      ? { ...driverOptions }
+      : { appName, ...driverOptions };
   }
 
   /**

@@ -42,14 +42,15 @@ await engine.disconnect();
 
 Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 
-| Option     | Type     | Default | Notes                                                          |
-| ---------- | -------- | ------- | -------------------------------------------------------------- |
-| `host`     | `string` | —       | Required.                                                      |
-| `port`     | `number` | `3306`  |                                                                |
-| `database` | `string` | —       | Required.                                                      |
-| `username` | `string` | —       | Required.                                                      |
-| `password` | `string` | —       | Optional.                                                      |
-| `ssl`      | various  | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration). |
+| Option            | Type     | Default | Notes                                                                                      |
+| ----------------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
+| `host`            | `string` | —       | Required.                                                                                  |
+| `port`            | `number` | `3306`  |                                                                                            |
+| `database`        | `string` | —       | Required.                                                                                  |
+| `username`        | `string` | —       | Required.                                                                                  |
+| `password`        | `string` | —       | Optional.                                                                                  |
+| `ssl`             | various  | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration).                             |
+| `applicationName` | `string` | `Name`  | Sent as the `program_name` connect attribute (`performance_schema.session_connect_attrs`). |
 
 ## Type round-trips
 
