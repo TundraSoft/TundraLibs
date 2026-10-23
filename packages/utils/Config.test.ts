@@ -525,6 +525,81 @@ describe('utils.Config', () => {
         await remove(dir);
       }
     });
+
+    it("placeholders: an unset ${VAR?} is optional — empty under 'error' while a required ${VAR} still fails, and resolved like ${VAR} otherwise", async () => {
+      const dir = 'packages/utils/fixtures/config/optional';
+      await makeDir(dir, { recursive: true });
+      await writeTextFile(`${dir}/.env`, 'PATH_DB=/data/app.db\nHOST=pg\n');
+      await writeTextFile(
+        `${dir}/db.yaml`,
+        'path: ${PATH_DB?}\nhost: ${HOST?}\nport: ${PORT?}\nca: "${CA?}"\nurl: "https://x/?q=1"\n',
+      );
+      await writeTextFile(`${dir}/app.yaml`, 'secret: ${SECRET}\n');
+      const load = (placeholders: LoadConfigOptions['placeholders']) =>
+        loadConfig({ path: dir, env: `${dir}/.env`, placeholders });
+      try {
+        // Only the required `${SECRET}` is reported; no optional is.
+        const error = await asserts.assertRejects(
+          () => load('error'),
+          Error,
+          'app.yaml: ${SECRET}',
+        );
+        asserts.assertEquals(error.message.includes('PORT'), false);
+
+        const strict = await loadConfig({
+          path: dir,
+          env: `${dir}/.env`,
+          placeholders: 'error',
+          include: [/db\.yaml$/],
+        });
+        asserts.assertEquals(strict.get('db.path'), '/data/app.db');
+        asserts.assertEquals(strict.get('db.host'), 'pg');
+        asserts.assertEquals(strict.get('db.port'), null); // unquoted YAML: nothing after the colon
+        asserts.assertEquals(strict.get('db.ca'), '');
+        asserts.assertEquals(strict.get('db.url'), 'https://x/?q=1');
+
+        const literal = await load('literal');
+        asserts.assertEquals(literal.get('db.host'), 'pg');
+        asserts.assertEquals(literal.get('db.port'), '${PORT?}');
+
+        const empty = await load('empty');
+        asserts.assertEquals(empty.get('db.host'), 'pg');
+        asserts.assertEquals(empty.get('db.port'), null);
+        asserts.assertEquals(empty.get('app.secret'), null);
+      } finally {
+        await remove(dir);
+      }
+    });
+
+    it('placeholders: ${VAR:-text} takes the value when set and the text when unset or blank, in every mode, and never fails the load', async () => {
+      const dir = 'packages/utils/fixtures/config/defaults';
+      await makeDir(dir, { recursive: true });
+      await writeTextFile(`${dir}/.env`, 'DFLT_SET=pg\nDFLT_BLANK=\n');
+      await writeTextFile(
+        `${dir}/db.yaml`,
+        'host: ${DFLT_SET:-localhost}\nname: ${DFLT_UNSET:-app}\nuser: ${DFLT_BLANK:-root}\nport: ${DFLT_UNSET:-5432}\nfqdn: ${DFLT_UNSET:-db.local}\nask: ${DFLT_UNSET:-why?}\nnone: "${DFLT_UNSET:-}"\n',
+      );
+      try {
+        for (const placeholders of ['literal', 'empty', 'error'] as const) {
+          const conf = await loadConfig({
+            path: dir,
+            env: `${dir}/.env`,
+            placeholders,
+          });
+          asserts.assertEquals(conf.get('db'), {
+            host: 'pg',
+            name: 'app',
+            user: 'root',
+            port: 5432,
+            fqdn: 'db.local',
+            ask: 'why?',
+            none: '',
+          });
+        }
+      } finally {
+        await remove(dir);
+      }
+    });
   });
 });
 
