@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.5.0...utils-v1.6.0) (2026-10-23)
+
+
+### Features
+
+* **utils:** optional and defaulted config placeholders ([#828](https://github.com/TundraSoft/TundraLibs/issues/828)) ([6d8a31a](https://github.com/TundraSoft/TundraLibs/commit/6d8a31a1ce847c6e1b73dfdd37fbf057b484a23b))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.4.0...utils-v1.5.0) (2026-10-05)
 
 
