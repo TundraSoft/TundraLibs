@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.7.0...drivers-v1.8.0) (2026-10-23)
+
+
+### Features
+
+* **drivers:** report the engine name to MariaDB and Mongo ([#830](https://github.com/TundraSoft/TundraLibs/issues/830)) ([145125e](https://github.com/TundraSoft/TundraLibs/commit/145125e0cfa8a7c9a2fb741248a288058ea24943))
+
 ## [1.7.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.6.0...drivers-v1.7.0) (2026-10-22)
 
 
