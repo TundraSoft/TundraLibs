@@ -18,6 +18,13 @@ export type MongoEngineOptions = EngineOptions & {
    * event (in addition to `query`). Defaults to `0.5`.
    */
   slowQueryThreshold?: number;
+  /**
+   * Application name sent as the client's `appName` (visible in
+   * `db.currentOp()` and the server log). Defaults to the engine's `Name`,
+   * unless `uri` already sets `appName`; `driverOptions.appName` wins over
+   * both.
+   */
+  applicationName?: string;
   /** Full MongoDB connection URI (overrides individual fields). */
   uri?: string;
   /** Replica set name. */

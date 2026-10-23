@@ -121,6 +121,19 @@ describe('drivers.MariaEngine', () => {
       );
       asserts.assertEquals('servername' in mariaSsl({}), false);
     });
+
+    it('sends the engine name as the program_name connect attribute unless applicationName is set', () => {
+      // deno-lint-ignore no-explicit-any
+      const programName = (options: object): any =>
+        // deno-lint-ignore no-explicit-any
+        (new MariaEngine('cfg-app', { ...TEST_CONFIG, ...options }) as any)
+          .__buildMariaConfig().connectAttributes.program_name;
+      asserts.assertEquals(programName({}), 'cfg-app');
+      asserts.assertEquals(
+        programName({ applicationName: 'brevily-api' }),
+        'brevily-api',
+      );
+    });
   });
 });
 

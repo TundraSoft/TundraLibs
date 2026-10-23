@@ -46,17 +46,18 @@ await m.disconnect();
 
 Extends [`EngineOptions`](../../docs/Drivers-BaseEngine.md#configuration).
 
-| Option          | Type     | Default                       | Notes                                                                                                                                                                       |
-| --------------- | -------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `host`          | `string` | —                             | One of `host` or `uri` is required. Must be a bare hostname, IPv4, or bracketed IPv6 address — `mongodb+srv://` and multi-host (replica-set) forms are rejected; use `uri`. |
-| `port`          | `number` | `27017`                       |                                                                                                                                                                             |
-| `database`      | `string` | —                             | Default DB for `db()` / `collection()` calls.                                                                                                                               |
-| `username`      | `string` | —                             | Optional.                                                                                                                                                                   |
-| `password`      | `string` | —                             | Optional.                                                                                                                                                                   |
-| `replicaSet`    | `string` | —                             | Replica set name. Built into the connection URI query string (`?replicaSet=...`) when `host` is used.                                                                       |
-| `authSource`    | `string` | `admin` (when `username` set) | Authentication database. Added to the URI query string (`?authSource=...`) when `host` is used.                                                                             |
-| `uri`           | `string` | —                             | Full connection string (`mongodb://...` or `mongodb+srv://...`). When set, takes precedence over all host fields.                                                           |
-| `driverOptions` | object   | —                             | Pass-through to `MongoClient.connect()` (e.g. `tls`, `maxPoolSize`).                                                                                                        |
+| Option            | Type     | Default                       | Notes                                                                                                                                                                       |
+| ----------------- | -------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`            | `string` | —                             | One of `host` or `uri` is required. Must be a bare hostname, IPv4, or bracketed IPv6 address — `mongodb+srv://` and multi-host (replica-set) forms are rejected; use `uri`. |
+| `port`            | `number` | `27017`                       |                                                                                                                                                                             |
+| `database`        | `string` | —                             | Default DB for `db()` / `collection()` calls.                                                                                                                               |
+| `username`        | `string` | —                             | Optional.                                                                                                                                                                   |
+| `password`        | `string` | —                             | Optional.                                                                                                                                                                   |
+| `replicaSet`      | `string` | —                             | Replica set name. Built into the connection URI query string (`?replicaSet=...`) when `host` is used.                                                                       |
+| `authSource`      | `string` | `admin` (when `username` set) | Authentication database. Added to the URI query string (`?authSource=...`) when `host` is used.                                                                             |
+| `uri`             | `string` | —                             | Full connection string (`mongodb://...` or `mongodb+srv://...`). When set, takes precedence over all host fields.                                                           |
+| `applicationName` | `string` | `Name`                        | Sent as the client `appName` (`db.currentOp()`, server log). Not defaulted when `uri` already sets `appName`; `driverOptions.appName` wins.                                 |
+| `driverOptions`   | object   | —                             | Pass-through to `MongoClient.connect()` (e.g. `tls`, `maxPoolSize`).                                                                                                        |
 
 ## Pool
 
