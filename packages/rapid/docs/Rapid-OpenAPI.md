@@ -62,6 +62,10 @@ the array yourself. The documented schema is then exactly the one
 DEVELOPMENT validates the reply against, and an envelope route simply
 leaves the marker unset and declares its own object.
 
+A per-surface `response: { api, ui }` documents its `api` schema, the
+same way; with no `api` entry the operation documents as if none were
+declared.
+
 The marker is independent of the runtime `paging` reply key, which is
 what actually sets the headers. A marked route whose reply never sets
 the key warns in DEVELOPMENT — the document promises headers that will

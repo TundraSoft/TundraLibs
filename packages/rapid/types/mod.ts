@@ -69,6 +69,7 @@ export type { RapidSOCKETHandler } from './SOCKETHandler.ts';
 export type { RapidSOCKETMiddleware } from './SOCKETMiddleware.ts';
 export type { RapidRouteEntry } from './RouteEntry.ts';
 export type { RapidRouteOpenApi } from './RouteOpenApi.ts';
+export type { RapidRouteResponse } from './RouteResponse.ts';
 export type { RapidRouteOptions } from './RouteOptions.ts';
 export type { RapidRouteTemplate } from './RouteTemplate.ts';
 export type { RapidSchema } from './Schema.ts';

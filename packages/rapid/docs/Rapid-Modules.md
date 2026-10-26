@@ -88,6 +88,34 @@ DEVELOPMENT mode **enforces** it — a success reply whose `content` fails the
 declared shape is a loud `RAPID_RESPONSE_INVALID` instead of a response the
 docs lie about. PRODUCTION never runs the check.
 
+A route that answers its API with a resource and its page with the
+template's data declares one schema per surface: `response: { api, ui }`.
+The reply is checked against the schema of the surface it answers on, a
+surface with none is not checked, and the OpenAPI document shows the `api`
+schema. Any other shape is a `RAPID_CONFIG` at registration.
+
+One strict body schema can serve both surfaces the same way: a page form
+carries keys the resource does not (`_csrf`), so drop them on `ui` and
+reject them on `api`.
+
+```ts
+import { payload, POST } from '@tundralibs/rapid/decorators';
+import type { RapidSchema } from '@tundralibs/rapid';
+
+declare const Link: RapidSchema<{ url: string }>;
+declare const LinkPage: RapidSchema<unknown>;
+
+class Links {
+  @POST('/links', {
+    bind: [payload(Link, { unknown: { api: 'reject', ui: 'drop' } })],
+    response: { api: Link, ui: LinkPage },
+  })
+  create(link: { url: string }) {
+    return { content: link, status: 201 };
+  }
+}
+```
+
 #### Route middleware on decorated routes
 
 A decorated route takes the same route-scoped chain a plain
@@ -190,22 +218,23 @@ export class Posts extends RapidModule {
 `bind` is a tuple in method-parameter order; its element types become the
 parameter types.
 
-| Binder                           | Yields                                                                                                | Notes                                                                                                                                                                                 |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `param(name, schemaOrValidate?)` | `ctx.args.params[name]` — `string` without a validator                                                | A present, non-string value with no validator is a 400 at invocation. A schema **object** (a guardian) also documents the path parameter's shape in OpenAPI.                          |
-| `payload(schemaOrValidate?)`     | `await ctx.payload` — `unknown` without a validator                                                   | A schema **object** (anything with `.parse`) also documents the request body in OpenAPI.                                                                                              |
-| `query(validate?)`               | `ctx.args.query` (`{ filters, sorting }`)                                                             | Untrusted as-is; the validator is where the allow-list lives. Not emitted into OpenAPI.                                                                                               |
-| `query(Schema, { unknown? })`    | the query **flattened** (`flatQuery`: `?next=/users` → `{ next: '/users' }`) and parsed by the schema | For a page's plain parameters. `unknown: 'drop'` removes keys the schema does not list before parsing; `'reject'` answers 400 naming them; either needs a schema that lists its keys. |
-| `state(key, validate?)`          | `ctx.state[key]` — what a middleware wrote for this request                                           | `unknown` without a validator. A cached route must carry the same `state(key)` in `cache.key`.                                                                                        |
-| `surface()`                      | `ctx.surface` on HTTP (`'api'` / `'ui'`), else `undefined`                                            | For a method that answers the API differently from its page.                                                                                                                          |
-| `clientAddress()`                | `ctx.remoteAddress` on HTTP (the trusted address), else `undefined`                                   | A cached route must carry `clientAddress()` in `cache.key`.                                                                                                                           |
-| `paging()`                       | `ctx.args.paging`                                                                                     | Always valid (clamped).                                                                                                                                                               |
-| `header(name, validate?)`        | the header on HTTP, the upgrade header on SOCKET, `null` on JOB                                       | Emitted as an optional header parameter in OpenAPI.                                                                                                                                   |
-| `cookie(name, validate?)`        | the cookie on HTTP, `null` elsewhere                                                                  |                                                                                                                                                                                       |
-| `auth(validate?)`                | `ctx.auth`                                                                                            | `undefined` until an auth middleware set it.                                                                                                                                          |
-| `session()`                      | `await getSession(ctx)` — HTTP with `session()` installed, else `undefined`                           | Exported from `@tundralibs/rapid/decorators` only (the root's `session` is the middleware).                                                                                           |
-| `connection()`                   | `ctx.connection`                                                                                      | `@SOCKET` methods only — anything else is `RAPID_CONFIG` at mount.                                                                                                                    |
-| `config('set.key')`              | `ctx.config.get(path)` on any transport                                                               | Set = lowercased file name, keys case-sensitive; a missing path binds `undefined`.                                                                                                    |
+| Binder                           | Yields                                                                                                | Notes                                                                                                                                                                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `param(name, schemaOrValidate?)` | `ctx.args.params[name]` — `string` without a validator                                                | A present, non-string value with no validator is a 400 at invocation. A schema **object** (a guardian) also documents the path parameter's shape in OpenAPI.                                                                 |
+| `payload(schemaOrValidate?)`     | `await ctx.payload` — `unknown` without a validator                                                   | A schema **object** (anything with `.parse`) also documents the request body in OpenAPI.                                                                                                                                     |
+| `payload(Schema, { unknown })`   | the body parsed by the schema, after its undeclared keys are handled                                  | `unknown: 'drop'` removes top-level keys the schema does not list; `'reject'` answers 400 with a field error per key; `{ api, ui }` decides per surface (a socket frame always rejects). Needs a schema that lists its keys. |
+| `query(validate?)`               | `ctx.args.query` (`{ filters, sorting }`)                                                             | Untrusted as-is; the validator is where the allow-list lives. Not emitted into OpenAPI.                                                                                                                                      |
+| `query(Schema, { unknown? })`    | the query **flattened** (`flatQuery`: `?next=/users` → `{ next: '/users' }`) and parsed by the schema | For a page's plain parameters. `unknown: 'drop'` removes keys the schema does not list before parsing; `'reject'` answers 400 naming them; either needs a schema that lists its keys.                                        |
+| `state(key, validate?)`          | `ctx.state[key]` — what a middleware wrote for this request                                           | `unknown` without a validator. A cached route must carry the same `state(key)` in `cache.key`.                                                                                                                               |
+| `surface()`                      | `ctx.surface` on HTTP (`'api'` / `'ui'`), else `undefined`                                            | For a method that answers the API differently from its page.                                                                                                                                                                 |
+| `clientAddress()`                | `ctx.remoteAddress` on HTTP (the trusted address), else `undefined`                                   | A cached route must carry `clientAddress()` in `cache.key`.                                                                                                                                                                  |
+| `paging()`                       | `ctx.args.paging`                                                                                     | Always valid (clamped).                                                                                                                                                                                                      |
+| `header(name, validate?)`        | the header on HTTP, the upgrade header on SOCKET, `null` on JOB                                       | Emitted as an optional header parameter in OpenAPI.                                                                                                                                                                          |
+| `cookie(name, validate?)`        | the cookie on HTTP, `null` elsewhere                                                                  |                                                                                                                                                                                                                              |
+| `auth(validate?)`                | `ctx.auth`                                                                                            | `undefined` until an auth middleware set it.                                                                                                                                                                                 |
+| `session()`                      | `await getSession(ctx)` — HTTP with `session()` installed, else `undefined`                           | Exported from `@tundralibs/rapid/decorators` only (the root's `session` is the middleware).                                                                                                                                  |
+| `connection()`                   | `ctx.connection`                                                                                      | `@SOCKET` methods only — anything else is `RAPID_CONFIG` at mount.                                                                                                                                                           |
+| `config('set.key')`              | `ctx.config.get(path)` on any transport                                                               | Set = lowercased file name, keys case-sensitive; a missing path binds `undefined`.                                                                                                                                           |
 
 Validation rule: a `@tundralibs/guardian` failure is automatically a 400
 with per-field messages; any other validator's throw is a 500 unless wrapped

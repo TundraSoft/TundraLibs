@@ -63,6 +63,7 @@ import {
   planCompose,
   type StaticMount,
 } from './utils/mod.ts';
+import { assertRouteResponse } from './utils/routeResponse.ts';
 import {
   isAbsolute as _pathIsAbsolute,
   join as joinPath,
@@ -1259,6 +1260,9 @@ export class Application<S extends RapidContextState = RapidContextState>
     }
     if (opts.access !== undefined) {
       assertAccess(`${method} ${path}`, opts.access);
+    }
+    if (opts.openapi?.response !== undefined) {
+      assertRouteResponse(`${method} ${path}`, opts.openapi.response);
     }
     if (opts.compose !== undefined) {
       // Shape only, here — the actions resolve against the mounted modules

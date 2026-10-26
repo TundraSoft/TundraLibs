@@ -29,6 +29,7 @@ import type {
   RapidHTTPMiddleware,
   RapidModuleReply,
   RapidRouteOptions,
+  RapidRouteResponse,
 } from '../types/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
@@ -96,11 +97,7 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * The request side is `bind: [payload(Schema)]` (a schema OBJECT —
    * validates and documents the body at once).
    */
-  response?: {
-    parse?: (value: unknown) => unknown;
-    toOpenAPI?: () => unknown;
-    toJSONSchema?: () => unknown;
-  };
+  response?: RapidRouteResponse;
   /**
    * This route answers with a COLLECTION. Documentation only: with no
    * `response` the documented body becomes an array of object instead

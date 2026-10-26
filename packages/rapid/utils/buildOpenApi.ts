@@ -13,6 +13,7 @@
 
 import { RAPID_ERROR_CODES, RapidError } from '../errors/mod.ts';
 import type { RapidRouteEntry } from '../types/mod.ts';
+import { responseFor } from './routeResponse.ts';
 
 /** Document metadata + servers. */
 export type OpenApiInfo = {
@@ -354,8 +355,9 @@ export function buildOpenApi(
     // documented schema is exactly what DEVELOPMENT validates the reply
     // against. Undeclared, the shape is a guess, and the only honest
     // guess comes from the collection marker.
-    const responseSchema = meta?.response?.toOpenAPI?.() ??
-      meta?.response?.toJSONSchema?.() ??
+    const declared = responseFor(meta?.response, 'api');
+    const responseSchema = declared?.toOpenAPI?.() ??
+      declared?.toJSONSchema?.() ??
       (paged
         ? { type: 'array', items: { type: 'object' } }
         : { type: 'object' });

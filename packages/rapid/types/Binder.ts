@@ -51,4 +51,15 @@ export type RapidBinder<T = unknown> = {
    * `connection`, …) are not part of the request contract and never document.
    */
   schema?: Pick<RapidSchema, 'toOpenAPI' | 'toJSONSchema'>;
+  /**
+   * Keys of an object body the schema does not declare, and what each
+   * surface does with them — set by `payload(Schema, { unknown })`.
+   * Applied to the body before `validate`; off-HTTP (no surface) a key
+   * the schema does not declare is always rejected.
+   */
+  unknownKeys?: {
+    known: ReadonlySet<string>;
+    api: 'drop' | 'reject';
+    ui: 'drop' | 'reject';
+  };
 };

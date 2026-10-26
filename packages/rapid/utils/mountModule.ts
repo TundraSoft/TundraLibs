@@ -117,6 +117,13 @@ export async function extractBind<S extends RapidContextState>(
       break;
     case 'payload':
       raw = await ctx.payload;
+      if (binder.unknownKeys !== undefined) {
+        raw = screenUnknownKeys(
+          raw,
+          binder.unknownKeys,
+          ctx.type === 'HTTP' ? ctx.surface : undefined,
+        );
+      }
       break;
     case 'query':
       raw = ctx.args.query;
@@ -160,6 +167,40 @@ export async function extractBind<S extends RapidContextState>(
       break;
   }
   return binder.validate ? await binder.validate(raw) : raw;
+}
+
+/**
+ * Apply a `payload(schema, { unknown })` policy to an object body: the
+ * keys the schema does not declare are rejected (one field error each)
+ * or dropped from a COPY — the parsed body is shared through
+ * `ctx.payload`, so it is never mutated. Off-HTTP there is no surface,
+ * and such a key is rejected. A non-object body passes through for the
+ * schema to judge.
+ *
+ * @throws {RapidError} RAPID_VALIDATION_FAILED (400) for a key the
+ *   policy rejects.
+ */
+function screenUnknownKeys(
+  body: unknown,
+  policy: NonNullable<RapidBinder['unknownKeys']>,
+  surface: 'api' | 'ui' | undefined,
+): unknown {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return body;
+  }
+  const extra = Object.keys(body).filter((k) => !policy.known.has(k));
+  if (extra.length === 0) return body;
+  if ((surface === undefined ? 'reject' : policy[surface]) === 'reject') {
+    throw new RapidError('RAPID_VALIDATION_FAILED', {
+      message: `unknown payload key(s): ${extra.join(', ')}`,
+      details: {
+        fields: Object.fromEntries(extra.map((k) => [k, 'Unknown property'])),
+      },
+    });
+  }
+  const kept = { ...body } as Record<string, unknown>;
+  for (const k of extra) delete kept[k];
+  return kept;
 }
 
 /**

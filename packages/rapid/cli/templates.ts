@@ -829,14 +829,16 @@ handler. Route options: \`bind\`, \`version\`, \`paging\`, \`apiOnly\`, \`uiOnly
 \`compose\`, \`cache\`, \`summary\`, \`description\`, \`tags\`, \`operationId\`,
 \`security\`, \`access\` (the auth binding's string — ENFORCED on the request
 AND on \`invoke()\`; one method, one string; emitted as \`x-access\` in
-OpenAPI), \`response\` (a schema; ENFORCED in DEVELOPMENT), \`template\`,
+OpenAPI), \`response\` (a schema, or \`{ api, ui }\` per surface; ENFORCED in DEVELOPMENT), \`template\`,
 \`layout\`, \`middleware\` (route-scoped chain, HTTP-typed; \`@SOCKET\` takes a
 socket-typed one). \`@Module(name, { middleware })\` prepends a universal
 chain to every route and command in the class — app \`use()\` → module →
 route → handler; jobs take app-level middleware only. \`security\` documents,
 \`access\` enforces — declare both. Binders (\`bind: [...]\`, in parameter order): \`param(name,
 schemaOrValidate?)\` (a schema OBJECT also documents the path parameter),
-\`payload(schemaOrValidate?)\` (a schema OBJECT also documents the body),
+\`payload(schemaOrValidate?)\` (a schema OBJECT also documents the body;
+\`payload(Schema, { unknown: 'drop' | 'reject' | { api, ui } })\` handles keys the
+schema does not list — drop a page form's \`_csrf\` on ui, reject extras on api),
 \`query(validate?)\` (the \`$op\` grammar, for lists) or \`query(Schema, { unknown?:
 'drop' | 'reject' })\` (the query FLATTENED by \`flatQuery\` — \`?next=/users\` →
 \`{ next: '/users' }\` — parsed by a guardian; for a page's plain parameters), \`paging()\`,
