@@ -10,6 +10,7 @@ import type { RapidBinder } from './Binder.ts';
 import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidHTTPMiddleware } from './HTTPMiddleware.ts';
 import type { RapidRouteCache } from './RouteCache.ts';
+import type { RapidRouteResponse } from './RouteResponse.ts';
 import type { RapidSOCKETMiddleware } from './SOCKETMiddleware.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
@@ -56,11 +57,7 @@ export type RapidDecoration =
      * schema, and when it can `parse`, DEVELOPMENT enforces it against the
      * reply (see `RapidRouteOpenApi.response`).
      */
-    response?: {
-      parse?: (value: unknown) => unknown;
-      toOpenAPI?: () => unknown;
-      toJSONSchema?: () => unknown;
-    };
+    response?: RapidRouteResponse;
     /** Route answers with a COLLECTION — documentation shape only. */
     paging?: boolean;
     /** Serve on the `api` surface only (see `RapidRouteOptions.apiOnly`). */

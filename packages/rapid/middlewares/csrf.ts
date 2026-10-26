@@ -53,6 +53,13 @@ export type CsrfOptions = {
   /** Form field checked when the header is absent. @default '_csrf' */
   field?: string;
   /**
+   * Remove the {@link field} from the parsed body once its token verified,
+   * so `ctx.payload` (and `payload(Schema)`) see only the form's own keys.
+   * A token sent in the header leaves the body as it is; `ctx.rawPayload`
+   * keeps the bytes as sent either way. @default false
+   */
+  consume?: boolean;
+  /**
    * `SameSite` of the token cookie. `'None'` requires `secure` (browsers
    * drop a non-Secure SameSite=None cookie). @default 'Lax'
    */
@@ -201,11 +208,15 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
     // Enforce on state-changing methods only.
     if (!SAFE.has(ctx.method)) {
       let sent = ctx.headers.get(headerName) ?? undefined;
+      let form: Record<string, unknown> | undefined;
       if (sent === undefined) {
         const body = await ctx.payload;
         if (body !== null && typeof body === 'object') {
           const v = (body as Record<string, unknown>)[fieldName];
-          if (typeof v === 'string') sent = v;
+          if (typeof v === 'string') {
+            sent = v;
+            form = body as Record<string, unknown>;
+          }
         }
       }
       // A form field or meta tag carries the per-response MASKED form
@@ -221,6 +232,10 @@ export function csrf(options: CsrfOptions = {}): RapidMiddleware {
         throw new RapidError('RAPID_CSRF_INVALID', {
           message: 'CSRF token missing or invalid',
         });
+      }
+      // The parsed body is the object every later `ctx.payload` read shares.
+      if (options.consume === true && form !== undefined) {
+        delete form[fieldName];
       }
     }
 

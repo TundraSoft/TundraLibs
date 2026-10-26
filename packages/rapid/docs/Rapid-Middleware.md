@@ -321,15 +321,16 @@ Stateless CSRF protection: a **signed, session-bound double-submit** token in
 a JS-readable cookie that the client echoes in a header (or a form field) on
 state-changing methods. No store. HTTP only. Signed with the app `secret`.
 
-| Option     | Type                          | Default          | Meaning                                                           |
-| ---------- | ----------------------------- | ---------------- | ----------------------------------------------------------------- |
-| `cookie`   | cookie-name token             | `'csrf'`         | the token cookie (not HttpOnly — the app's JS must read it)       |
-| `header`   | header-name token             | `'x-csrf-token'` | where the client echoes the token                                 |
-| `field`    | non-empty string              | `'_csrf'`        | form field checked when the header is absent                      |
-| `session`  | cookie-name token             | `'sid'`          | the session cookie the token is bound to (`session()`'s `cookie`) |
-| `sameSite` | `'Strict' \| 'Lax' \| 'None'` | `'Lax'`          | `'None'` requires `secure`                                        |
-| `secure`   | `boolean`                     | `true`           |                                                                   |
-| `path`     | absolute path                 | `'/'`            |                                                                   |
+| Option     | Type                          | Default          | Meaning                                                                           |
+| ---------- | ----------------------------- | ---------------- | --------------------------------------------------------------------------------- |
+| `cookie`   | cookie-name token             | `'csrf'`         | the token cookie (not HttpOnly — the app's JS must read it)                       |
+| `header`   | header-name token             | `'x-csrf-token'` | where the client echoes the token                                                 |
+| `field`    | non-empty string              | `'_csrf'`        | form field checked when the header is absent                                      |
+| `session`  | cookie-name token             | `'sid'`          | the session cookie the token is bound to (`session()`'s `cookie`)                 |
+| `consume`  | `boolean`                     | `false`          | remove a verified `field` token from `ctx.payload` (`rawPayload` keeps the bytes) |
+| `sameSite` | `'Strict' \| 'Lax' \| 'None'` | `'Lax'`          | `'None'` requires `secure`                                                        |
+| `secure`   | `boolean`                     | `true`           |                                                                                   |
+| `path`     | absolute path                 | `'/'`            |                                                                                   |
 
 **Validated at build:** names are tokens; `path` is absolute;
 `sameSite: 'None'` with `secure: false` is refused (browsers drop such a

@@ -297,6 +297,55 @@ describe('rapid csrf() — cookie attributes', () => {
   });
 });
 
+describe('rapid csrf({ consume })', () => {
+  it('removes a verified form-field token from ctx.payload — not one sent in the header, not without the option; rawPayload keeps the bytes', async () => {
+    const post = async (consume: boolean, viaHeader: boolean) => {
+      const app = await Application.initialize({
+        name: 'csrf-consume',
+        secret: 'test-secret-0123456789-abcdefghijklmnop',
+        server: { port: 0, hostname: '127.0.0.1' },
+        logger: { handlers: [] },
+      });
+      app.use(csrf({ secure: false, consume }));
+      app.get('/form', () => ({ content: {} }));
+      app.post('/submit', async (ctx) => ({
+        content: {
+          payload: await ctx.payload,
+          raw: new TextDecoder().decode((await ctx.rawPayload)!),
+        },
+      }));
+      const token = tokenFrom(await app.fetch(new Request('http://app/form')))!;
+      const res = await app.fetch(
+        new Request('http://app/submit', {
+          method: 'POST',
+          headers: {
+            cookie: `csrf=${token}`,
+            'content-type': 'application/x-www-form-urlencoded',
+            ...(viaHeader ? { 'x-csrf-token': token } : {}),
+          },
+          body: new URLSearchParams({ title: 'hi', _csrf: token }).toString(),
+        }),
+      );
+      asserts.assertEquals(res.status, 200);
+      return await res.json() as {
+        payload: Record<string, unknown>;
+        raw: string;
+      };
+    };
+    const consumed = await post(true, false);
+    asserts.assertEquals(consumed.payload, { title: 'hi' });
+    asserts.assertStringIncludes(consumed.raw, '_csrf=');
+    asserts.assertEquals(Object.keys((await post(true, true)).payload), [
+      'title',
+      '_csrf',
+    ]);
+    asserts.assertEquals(Object.keys((await post(false, false)).payload), [
+      'title',
+      '_csrf',
+    ]);
+  });
+});
+
 describe('rapid csrf() — masked tokens (BREACH)', () => {
   it('two renders mask differently, both echo back valid in the header and in the form field; a tampered mask is 403; the bare cookie still works', async () => {
     const app = await Application.initialize({

@@ -44,6 +44,9 @@ export function flatQuery(query: RapidContextQuery): Record<string, unknown> {
   return out;
 }
 
+/** The unknown-key policies `payload(schema, { unknown })` accepts. */
+const POLICIES: ReadonlySet<string> = new Set(['drop', 'reject']);
+
 /** The property names a schema documents, when it can describe itself. */
 const keysOf = (schema: RapidSchema): ReadonlySet<string> | undefined => {
   const doc = (schema.toJSONSchema?.() ?? schema.toOpenAPI?.()) as
@@ -119,17 +122,72 @@ export function payload<T>(
  * value with a schema; context-derived binders never appear in OpenAPI.
  */
 export function payload<T>(schema: RapidSchema<T>): RapidBinder<T>;
+/**
+ * With a schema OBJECT and an `unknown` policy: what happens to a key of
+ * an object body that the schema does not declare, before it parses —
+ * `'reject'` answers RAPID_VALIDATION_FAILED (400) with one field error
+ * per such key, `'drop'` removes it. Pass `{ api, ui }` to decide per
+ * surface: one strict schema for a route whose page form also carries
+ * page-only keys (`_csrf`) can drop them on `ui` and reject them on
+ * `api`. Off-HTTP (a socket frame, no surface) such a key is always
+ * rejected. Only top-level keys are screened, and the schema must list
+ * them (`toJSONSchema()` / `toOpenAPI()` with `properties`); the request
+ * body documents as the schema alone. Without `unknown` the schema
+ * decides, as with `payload(Schema)`.
+ *
+ * @throws {RapidError} RAPID_CONFIG when the schema cannot describe its
+ *   keys, or `unknown` names no policy.
+ */
+export function payload<T>(
+  schema: RapidSchema<T>,
+  options: {
+    unknown: 'drop' | 'reject' | {
+      api: 'drop' | 'reject';
+      ui: 'drop' | 'reject';
+    };
+  },
+): RapidBinder<T>;
 export function payload(
   arg?: ((value: unknown) => unknown) | RapidSchema,
+  options?: {
+    unknown: 'drop' | 'reject' | {
+      api: 'drop' | 'reject';
+      ui: 'drop' | 'reject';
+    };
+  },
 ): RapidBinder<unknown> {
   if (arg === undefined || typeof arg === 'function') {
     return { source: 'payload', validate: arg };
   }
   // Called as a method so a schema whose `parse` reads `this` keeps working.
-  return {
+  const binder: RapidBinder<unknown> = {
     source: 'payload',
     validate: (value) => arg.parse(value),
     schema: arg,
+  };
+  if (options === undefined) return binder;
+  const { unknown } = options;
+  const policy = typeof unknown === 'string'
+    ? { api: unknown, ui: unknown }
+    : { api: unknown?.api, ui: unknown?.ui };
+  const known = keysOf(arg);
+  if (
+    known === undefined ||
+    !POLICIES.has(policy.api as string) || !POLICIES.has(policy.ui as string)
+  ) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: known === undefined
+        ? 'payload(schema, { unknown }) needs a schema that lists its keys (toJSONSchema()/toOpenAPI() with `properties`)'
+        : "payload(schema, { unknown }) takes 'drop', 'reject' or { api, ui } of those",
+    });
+  }
+  return {
+    ...binder,
+    unknownKeys: {
+      known,
+      api: policy.api as 'drop' | 'reject',
+      ui: policy.ui as 'drop' | 'reject',
+    },
   };
 }
 

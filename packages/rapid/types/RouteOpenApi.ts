@@ -8,6 +8,7 @@
  */
 
 import type { RapidBinder } from './Binder.ts';
+import type { RapidRouteResponse } from './RouteResponse.ts';
 
 /** OpenAPI metadata attached to a registered route. */
 export type RapidRouteOpenApi = {
@@ -47,11 +48,7 @@ export type RapidRouteOpenApi = {
    * schema), DEVELOPMENT mode enforces it against the actual reply — see
    * the decorator option's doc for the exact scope.
    */
-  response?: {
-    parse?: (value: unknown) => unknown;
-    toOpenAPI?: () => unknown;
-    toJSONSchema?: () => unknown;
-  };
+  response?: RapidRouteResponse;
   /**
    * This route answers with a COLLECTION — it declares the body's
    * shape, nothing more. Two things follow, both documentation:

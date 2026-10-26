@@ -8,7 +8,15 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
-import { GET, JOB, Module, param, POST, SOCKET } from '../decorators/mod.ts';
+import {
+  GET,
+  JOB,
+  Module,
+  param,
+  payload,
+  POST,
+  SOCKET,
+} from '../decorators/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
   RapidContextResponse,
@@ -20,6 +28,7 @@ import {
   type RapidModuleInvokeMiddleware,
   Use,
 } from '../modules/mod.ts';
+import { extractBind } from './mountModule.ts';
 
 const EVENTS = {};
 
@@ -331,6 +340,111 @@ describe('rapid.utils.mountModule — binders off HTTP', () => {
       'RAPID_VALIDATION_FAILED',
     );
     await app.stop();
+  });
+});
+
+describe('rapid.utils.mountModule — payload(Schema, { unknown })', () => {
+  const Note = {
+    parse: (v: unknown) => v as { title: string },
+    toOpenAPI: () => ({
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    }),
+  };
+
+  it("per surface: the page form's extra keys are dropped, the API's are rejected by name", async () => {
+    @Module('Notes', { prefix: '/notes' })
+    class Notes {
+      @POST('/', {
+        bind: [payload(Note, { unknown: { api: 'reject', ui: 'drop' } })],
+      })
+      create(body: { title: string }): RapidContextResponse {
+        return { content: body, status: 201 };
+      }
+    }
+    const app = await Application.initialize({
+      name: 'payload-unknown',
+      server: { port: 0, api: { prefix: '/api' } },
+      logger: { handlers: [] },
+    });
+    app.module(new Notes());
+    const ui = await app.fetch(
+      new Request('http://app/notes/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'title=hi&_csrf=t&extra=1',
+      }),
+    );
+    asserts.assertEquals(ui.status, 201);
+    asserts.assertEquals(await ui.json(), { title: 'hi' });
+    const api = await app.fetch(
+      new Request('http://app/api/notes/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'hi', _csrf: 't', extra: 1 }),
+      }),
+    );
+    asserts.assertEquals(api.status, 400);
+    const error = await api.json();
+    asserts.assertEquals(error.code, 'RAPID_VALIDATION_FAILED');
+    asserts.assertEquals(error.details.fields, {
+      _csrf: 'Unknown property',
+      extra: 'Unknown property',
+    });
+    const clean = await app.fetch(
+      new Request('http://app/api/notes/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'hi' }),
+      }),
+    );
+    asserts.assertEquals(clean.status, 201);
+    await clean.body?.cancel();
+    await app.stop();
+  });
+
+  it('drops from a copy — ctx.payload keeps every key; off-HTTP an unknown key is rejected', async () => {
+    const body = { title: 'hi', extra: 1 };
+    const http = {
+      type: 'HTTP',
+      surface: 'ui',
+      payload: Promise.resolve(body),
+    };
+    const dropped = await extractBind(
+      payload(Note, { unknown: 'drop' }),
+      http as never,
+    );
+    asserts.assertEquals(dropped, { title: 'hi' });
+    asserts.assertEquals(body, { title: 'hi', extra: 1 });
+    const socket = { type: 'SOCKET', payload: body };
+    const error = await asserts.assertRejects(
+      () =>
+        extractBind(
+          payload(Note, { unknown: { api: 'drop', ui: 'drop' } }),
+          socket as never,
+        ),
+      RapidError,
+    );
+    asserts.assertEquals(error.code, 'RAPID_VALIDATION_FAILED');
+  });
+
+  it('a schema that cannot list its keys, or an unknown policy, is a RAPID_CONFIG', () => {
+    asserts.assertThrows(
+      () => payload({ parse: (v: unknown) => v }, { unknown: 'drop' }),
+      RapidError,
+      'needs a schema that lists its keys',
+    );
+    asserts.assertThrows(
+      () =>
+        payload(Note, {
+          unknown: { api: 'reject' } as unknown as {
+            api: 'reject';
+            ui: 'drop';
+          },
+        }),
+      RapidError,
+      "takes 'drop', 'reject'",
+    );
   });
 });
 

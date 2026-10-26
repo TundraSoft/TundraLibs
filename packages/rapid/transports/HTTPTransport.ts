@@ -34,6 +34,7 @@ import {
   stripApiPrefix,
 } from '../utils/mod.ts';
 import { isStreamBody } from '../utils/streams.ts';
+import { responseFor } from '../utils/routeResponse.ts';
 import type {
   RapidChannelOptions,
   RapidComposeSlot,
@@ -661,7 +662,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           { action: ctx.action, requestId: ctx.requestId },
         );
       }
-      const schema = entry?.openapi?.response;
+      const schema = responseFor(entry?.openapi?.response, ctx.surface);
       if (
         schema?.parse !== undefined && returned !== null &&
         returned.redirect === undefined &&

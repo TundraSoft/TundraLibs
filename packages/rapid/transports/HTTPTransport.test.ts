@@ -9,6 +9,7 @@ import * as asserts from '@std/asserts';
 import { Application } from '../Application.ts';
 import { compress } from '../middlewares/mod.ts';
 import { makeTempDir, removeDir, writeFile } from '@tundralibs/compat/file';
+import { buildOpenApi } from '../utils/buildOpenApi.ts';
 
 const make = (mode: 'DEVELOPMENT' | 'PRODUCTION') =>
   Application.initialize({
@@ -136,6 +137,79 @@ describe('rapid.HTTPTransport response contract', () => {
     const body = await res.json();
     asserts.assertEquals(body.code, 'RAPID_RESPONSE_INVALID');
     asserts.assertEquals(body.details.reason, 'async says no');
+    await app.stop();
+  });
+
+  it('per surface: a reply is checked against the schema of the surface it answers on, and the document shows the api one', async () => {
+    const app = await Application.initialize({
+      name: 'response-per-surface',
+      mode: 'DEVELOPMENT',
+      server: { port: 0, hostname: '127.0.0.1', api: { prefix: '/api' } },
+      logger: { handlers: [] },
+    });
+    const api = schemaDouble('fail');
+    const ui = schemaDouble('pass');
+    app.get('/both', {
+      openapi: {
+        response: {
+          api: { ...api.schema, toOpenAPI: () => ({ type: 'array' }) },
+          ui: ui.schema,
+        },
+      },
+    }, () => ({ content: { total: 'NaN' } }));
+    const pageOnly = schemaDouble('fail');
+    app.get('/page', {
+      openapi: {
+        response: {
+          ui: { ...pageOnly.schema, toOpenAPI: () => ({ type: 'string' }) },
+        },
+      },
+    }, () => ({ content: { total: 'NaN' } }));
+    const status = async (path: string) => {
+      const res = await app.fetch(new Request(`http://app${path}`));
+      await res.body?.cancel();
+      return res.status;
+    };
+    asserts.assertEquals(await status('/both'), 200);
+    asserts.assertEquals([api.calls.parse, ui.calls.parse], [0, 1]);
+    asserts.assertEquals(await status('/api/both'), 500);
+    asserts.assertEquals(api.calls.parse, 1);
+    asserts.assertEquals(await status('/api/page'), 200); // no api schema: unchecked
+    asserts.assertEquals(pageOnly.calls.parse, 0);
+    asserts.assertEquals(await status('/page'), 500);
+
+    const paths = buildOpenApi(app.routes).paths as Record<
+      string,
+      { get: { responses: Record<string, { content: unknown }> } }
+    >;
+    const documented = (path: string) =>
+      (paths[path]!.get.responses['200']!.content as Record<
+        string,
+        { schema: unknown }
+      >)['application/json']!.schema;
+    asserts.assertEquals(documented('/both'), { type: 'array' }); // the api schema
+    asserts.assertEquals(documented('/page'), { type: 'object' }); // undeclared default, not the ui one
+    await app.stop();
+  });
+
+  it('a response that is neither a schema nor { api?, ui? } of schemas is a RAPID_CONFIG at registration', async () => {
+    const app = await make('DEVELOPMENT');
+    for (
+      const response of [
+        { apis: schemaDouble('pass').schema },
+        { api: { not: 'a schema' } },
+        {},
+      ]
+    ) {
+      asserts.assertThrows(
+        () =>
+          app.get('/x', { openapi: { response: response as never } }, () => ({
+            content: {},
+          })),
+        RapidError,
+        'response must be a schema',
+      );
+    }
     await app.stop();
   });
 });
