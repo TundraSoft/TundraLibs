@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.13.0...rapid-v0.14.0) (2026-10-26)
+
+
+### Features
+
+* **rapid:** per-surface payload keys, csrf consume, per-surface response ([#831](https://github.com/TundraSoft/TundraLibs/issues/831)) ([85550fe](https://github.com/TundraSoft/TundraLibs/commit/85550fe4b14bacbc170105491c92d7f634f4a4a0))
+
 ## [0.13.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.12.1...rapid-v0.13.0) (2026-10-19)
 
 
