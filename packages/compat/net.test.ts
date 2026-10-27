@@ -632,6 +632,48 @@ describe('compat.net', () => {
         listener.close();
       }
     });
+
+    // Regression: `timeout` and `signal` bound the dial only. Node's
+    // `net.connect({ signal })` destroys the socket whenever the signal
+    // fires, connected or not, so threading them through turned a connect
+    // timeout into a lifetime for the whole session.
+    for (
+      const [name, dial] of [
+        ['timeout', () => ({ timeout: 200 })],
+        ['signal', () => ({ signal: AbortSignal.timeout(200) })],
+      ] as const
+    ) {
+      it(`should keep the connection open after the connect ${name} fires`, async () => {
+        const port = name === 'timeout' ? 9974 : 9975;
+        const listener = await listen({ port, hostname: '127.0.0.1' });
+        const serving = listener.accept().then(async (server) => {
+          const data = await server.read();
+          if (data) await server.write(data);
+          server.close();
+        });
+        try {
+          const conn = await connect({
+            port,
+            hostname: '127.0.0.1',
+            ...dial(),
+          });
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            await conn.write('ping');
+            const echo = await conn.read();
+            asserts.assertEquals(
+              new TextDecoder().decode(echo ?? undefined),
+              'ping',
+            );
+          } finally {
+            conn.close();
+          }
+          await serving;
+        } finally {
+          listener.close();
+        }
+      });
+    }
   });
 
   describe('listen with signal', () => {

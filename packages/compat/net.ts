@@ -1646,13 +1646,15 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
       }
 
       // Setup abort handler. Keep a handle to the in-flight socket so the
-      // abort/timeout path can tear it down explicitly. We also thread the
-      // `signal` into createConnection / tls.connect, but tls.connect's
-      // honouring of `signal` isn't guaranteed across Node/Bun versions — if
-      // the runtime ignores it, an aborted TLS connect would reject the
-      // promise while the underlying socket kept dialing with no listener to
-      // close it. Destroying it here closes that leak. `destroy()` is
-      // idempotent, so calling it on an already-settled socket is harmless.
+      // abort/timeout path can tear it down explicitly, and remove the
+      // handler once the socket is up so the signal bounds the dial only.
+      // The `signal` is deliberately NOT threaded into createConnection /
+      // tls.connect: Node's `net.connect({ signal })` destroys the socket
+      // whenever the signal fires, connected or not, which turned a connect
+      // `timeout` into a lifetime for the whole session (an IMAP client
+      // dialing with `timeout: 150` lost its socket 150ms into the login).
+      // `destroy()` is idempotent, so calling it on an already-settled
+      // socket is harmless.
       let pendingSocket: { destroy: () => void } | undefined;
       const onAbort = () => {
         pendingSocket?.destroy();
@@ -1676,10 +1678,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
 
       // Unix socket connection
       if ('path' in options) {
-        const socket = nodeNet.createConnection({
-          path: options.path,
-          ...(effectiveSignal && { signal: effectiveSignal }),
-        });
+        const socket = nodeNet.createConnection({ path: options.path });
         pendingSocket = socket;
 
         socket.on('connect', () => {
@@ -1703,7 +1702,6 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
         const tlsOptions: Record<string, unknown> = {
           host: hostname,
           port,
-          ...(effectiveSignal && { signal: effectiveSignal }),
         };
 
         if (tlsCert && tlsKey) {
@@ -1738,11 +1736,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
       }
 
       // Plain TCP connection
-      const socket = nodeNet.createConnection({
-        port,
-        host: hostname,
-        ...(effectiveSignal && { signal: effectiveSignal }),
-      });
+      const socket = nodeNet.createConnection({ port, host: hostname });
       pendingSocket = socket;
 
       socket.on('connect', () => {
