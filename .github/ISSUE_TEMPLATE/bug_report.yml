@@ -18,6 +18,7 @@ body:
         - drivers
         - guardian
         - id
+        - mail
         - metro-man
         - norm
         - oql

@@ -148,6 +148,18 @@
         }
       ]
     },
+    "packages/mail": {
+      "release-type": "node",
+      "component": "mail",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
     "packages/metro-man": {
       "release-type": "node",
       "component": "metro-man",

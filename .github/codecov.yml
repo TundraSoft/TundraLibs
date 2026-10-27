@@ -110,6 +110,14 @@ component_management:
         - type: project
           target: auto
           threshold: 1%
+    - component_id: mail
+      name: mail
+      paths:
+        - packages/mail/**
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
     - component_id: metro-man
       name: metro-man
       paths:

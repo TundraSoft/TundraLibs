@@ -1,0 +1,42 @@
+{
+  "name": "@tundralibs/mail",
+  "version": "0.0.0",
+  "description": "Cross-runtime IMAP client and MIME parser (RFC 9051, RFC 5322, RFC 2045-2049, RFC 2047, RFC 2231) for Deno, Bun, Node.js and Cloudflare Workers — read a mailbox over TLS, parse raw messages into headers, text, HTML and attachments",
+  "keywords": [
+    "typescript",
+    "deno",
+    "bun",
+    "nodejs",
+    "cross-runtime",
+    "cloudflare-workers",
+    "imap",
+    "imap-client",
+    "mime",
+    "mime-parser",
+    "email",
+    "mail",
+    "rfc5322",
+    "rfc2047",
+    "rfc9051"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./imap": "./imap/mod.ts",
+    "./mime": "./mime/mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}
