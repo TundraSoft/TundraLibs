@@ -260,7 +260,7 @@ try {
 - The client does not pass compat's `timeout` or `signal` to `connect()`;
   the deadline described above bounds the dial, so the whole connect
   sequence runs under one clock. This also sidesteps a compat bug fixed
-  after 2.8.0, where on Bun and Node those options reached `net.connect`
+  in 2.8.1, where on Bun and Node those options reached `net.connect`
   and destroyed the socket when they fired after the connection was up.
 
 ## Related Documentation

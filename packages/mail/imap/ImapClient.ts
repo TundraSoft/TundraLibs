@@ -168,9 +168,9 @@ export class ImapClient {
     try {
       // The deadline, not compat's `timeout`/`signal`, bounds the dial, so
       // dial, greeting, STARTTLS and auth share one clock. It also keeps
-      // older compat releases safe: through 2.8.0 those options reached
-      // `net.connect` on Bun and Node, which destroys the socket when they
-      // fire even after it connected.
+      // older compat releases safe: before compat 2.8.1 those options
+      // reached `net.connect` on Bun and Node, which destroys the socket
+      // when they fire even after it connected.
       const dialing = connect({
         hostname: this.__hostname,
         port: this.__port,

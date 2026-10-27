@@ -31,6 +31,6 @@ modules so they slot in without moving anything.
   quietly.
 - **compat's connect `timeout` and `signal` are not used** for the dial.
   The client's own deadline covers dial, greeting, STARTTLS and auth under
-  one clock, and a late socket is closed when it arrives. Through compat
-  2.8.0 those options also destroyed an established socket on Bun and
-  Node, so passing them would need a compat floor above that.
+  one clock, and a late socket is closed when it arrives. Before compat
+  2.8.1 those options also destroyed an established socket on Bun and
+  Node, so passing them would need that floor.
