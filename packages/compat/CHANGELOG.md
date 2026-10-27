@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.8.0...compat-v2.8.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **compat:** connect timeout and signal bound the dial only on Bun and Node ([#835](https://github.com/TundraSoft/TundraLibs/issues/835)) ([8b2170b](https://github.com/TundraSoft/TundraLibs/commit/8b2170b53edd7a390dcc1f27aed6fc870f1b2bb7))
+
 ## [2.8.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.7.5...compat-v2.8.0) (2026-10-22)
 
 
