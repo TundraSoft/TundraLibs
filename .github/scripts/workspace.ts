@@ -41,8 +41,14 @@ const META_PATH = '.github/workspace-meta.json';
  * "already released". Seeding `0.1.0` made it treat that version as shipped,
  * so a new package's first `feat:` bumped the minor and its FIRST published
  * release was `0.2.0` — `0.1.0` never existed on JSR (this is exactly what
- * happened to ambient and tracer). From `0.0.0`, the first `feat:` produces
- * `0.1.0` as intended.
+ * happened to ambient and tracer).
+ *
+ * `0.0.0` is NOT enough on its own, though: release-please treats it as "no
+ * release yet" and proposes `1.0.0` for the first `feat:` (mail, #836). The
+ * squash commit that lands the package must carry a `Release-As: 0.1.0`
+ * footer — `addPackage` says so in its follow-ups — and the next release
+ * then starts the package at `0.1.0`. Once that release exists the footer
+ * is never needed again: `bump-minor-pre-major` keeps it pre-1.0.
  */
 const NEW_PACKAGE_VERSION = '0.0.0';
 
@@ -595,7 +601,9 @@ const addPackage = (rawName: string): void => {
 Done. Follow-ups:
   1. Fill in the description in ${path}/deno.json and ${path}/package.json.
   2. Create the PR label on GitHub:  gh label create 'pkg: ${dir}' -c '#1d76db' -d 'Package: ${dir}'
-  3. Commit (the generated config changes are included).`);
+  3. Commit (the generated config changes are included).
+  4. Put "Release-As: 0.1.0" in the body of the squash commit that lands the
+     package (the PR's merge message), or release-please will propose 1.0.0.`);
 };
 
 // ---------------------------------------------------------------------
