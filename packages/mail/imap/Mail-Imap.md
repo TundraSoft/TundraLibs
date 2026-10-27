@@ -257,10 +257,11 @@ try {
   INTERNALDATE is parsed with its zone into a `Date`.
 - Literals in replies are read exactly, binary-safe, however the bytes are
   split across socket reads; a literal beyond `maxSize` is drained.
-- The client does not pass compat's `timeout` or `signal` to `connect()`:
-  on Bun and Node those are handed to `net.connect`, which destroys the
-  socket when they fire even after the connection is up. The deadline
-  described above bounds the dial instead.
+- The client does not pass compat's `timeout` or `signal` to `connect()`;
+  the deadline described above bounds the dial, so the whole connect
+  sequence runs under one clock. This also sidesteps a compat bug fixed
+  after 2.8.0, where on Bun and Node those options reached `net.connect`
+  and destroyed the socket when they fired after the connection was up.
 
 ## Related Documentation
 

@@ -29,7 +29,8 @@ modules so they slot in without moving anything.
   UIDPLUS is advertised. It expunges every `\Deleted` message in the
   mailbox; the alternative, leaving the message flagged, loses it more
   quietly.
-- **compat's connect `timeout` and `signal` are not used** for the dial,
-  because on Bun and Node they are forwarded to `net.connect` and destroy
-  the socket when they fire after the connection is up. The client's own
-  deadline covers the dial; a late socket is closed when it arrives.
+- **compat's connect `timeout` and `signal` are not used** for the dial.
+  The client's own deadline covers dial, greeting, STARTTLS and auth under
+  one clock, and a late socket is closed when it arrives. Through compat
+  2.8.0 those options also destroyed an established socket on Bun and
+  Node, so passing them would need a compat floor above that.
