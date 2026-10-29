@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.6.0...utils-v1.7.0) (2026-10-29)
+
+
+### Features
+
+* **utils:** envArgs drops inline comments from .env values ([#838](https://github.com/TundraSoft/TundraLibs/issues/838)) ([2bc51a5](https://github.com/TundraSoft/TundraLibs/commit/2bc51a5ca52389fc9c0c5b1eee58a24075607fe4))
+
 ## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.5.0...utils-v1.6.0) (2026-10-23)
 
 
