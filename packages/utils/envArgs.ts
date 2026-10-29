@@ -14,7 +14,7 @@ import { hasPermissionSync } from '@tundralibs/compat/permissions';
 import { getEnv } from '@tundralibs/compat/runtime';
 import { type PrivateObject, privateObject } from './privateObject.ts';
 
-const LINE = /^\s*([\w.-]+)\s*=(.*?)\s*$/;
+const LINE = /^\s*([\w.-]+)\s*=(.*)/;
 const QUOTED_VALUE = /^\s*(['"])(.*?)\1\s*(?:#.*)?$/;
 const INLINE_COMMENT = /\s#.*$/;
 
