@@ -107,6 +107,36 @@ URL="https://example.com/path?query=value"`);
       removeSync(envPath);
     });
 
+    it('should drop inline comments after a value', () => {
+      const envPath = createTempEnvFile(
+        [
+          'KEY=abc123          # e.g. `openssl rand -hex 32`',
+          'BLANK=   # note',
+          'DQ="quoted"   # c',
+          "SQ='a # b'#c",
+          'NESTED="say "hi""',
+          'PASS=pass#word',
+          'URL=https://x.test/#top',
+          'COLOR=#fff',
+          'CRLF=value # c\r',
+        ].join('\n'),
+      );
+
+      const result = envArgs(envPath, false);
+
+      asserts.assertEquals(result.get('KEY'), 'abc123');
+      asserts.assertEquals(result.get('BLANK'), '');
+      asserts.assertEquals(result.get('DQ'), 'quoted');
+      asserts.assertEquals(result.get('SQ'), 'a # b');
+      asserts.assertEquals(result.get('NESTED'), 'say "hi"');
+      asserts.assertEquals(result.get('PASS'), 'pass#word');
+      asserts.assertEquals(result.get('URL'), 'https://x.test/#top');
+      asserts.assertEquals(result.get('COLOR'), '#fff');
+      asserts.assertEquals(result.get('CRLF'), 'value');
+
+      removeSync(envPath);
+    });
+
     it('should be immutable', () => {
       const result = envArgs();
       // Attempt to modify the result

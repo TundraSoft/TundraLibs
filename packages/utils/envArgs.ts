@@ -14,6 +14,16 @@ import { hasPermissionSync } from '@tundralibs/compat/permissions';
 import { getEnv } from '@tundralibs/compat/runtime';
 import { type PrivateObject, privateObject } from './privateObject.ts';
 
+const LINE = /^\s*([\w.-]+)\s*=(.*)/;
+const QUOTED_VALUE = /^\s*(['"])(.*?)\1\s*(?:#.*)?$/;
+const INLINE_COMMENT = /\s#.*$/;
+
+const parseValue = (raw: string): string => {
+  const quoted = QUOTED_VALUE.exec(raw);
+  if (quoted) return quoted[2] ?? '';
+  return raw.replace(INLINE_COMMENT, '').trim();
+};
+
 /**
  * Aggregate env vars from system env, an `.env` file, and Docker secrets
  * into one immutable view.
@@ -28,7 +38,11 @@ import { type PrivateObject, privateObject } from './privateObject.ts';
  * permissions all result in a smaller (possibly empty) result.
  *
  * Supported `.env` syntax: `KEY=value`, `KEY="quoted"`, `KEY='quoted'`.
- * Comments and blank lines are ignored.
+ * Blank lines and `#` comment lines are ignored. An unquoted value ends
+ * at the first `#` preceded by whitespace (`KEY=abc # note` reads `abc`;
+ * `KEY=pass#word` keeps the `#`); a quoted value is the text between its
+ * quotes, with anything after the closing quote dropped. Quote a value to
+ * keep a literal ` #`. Values are single-line.
  *
  * @param envFilePath - Path to a `.env` file, or a directory whose
  *   `.env` should be loaded. Defaults to `'./'`.
@@ -67,27 +81,10 @@ export const envArgs = function ( // NOSONAR - complexity cannot be reduced furt
     });
     if (filePermission === true) {
       const data = readTextFileSync(envFile);
-      // Improved regex pattern to avoid Sonar warnings
-      const pattern = /^\s*([\w.-]+)\s*=\s*(.+?)?\s*$/;
-      const isQuoted = /^(['"])(.*)\1$/;
-
       data.split('\n').forEach((line) => {
-        const match = pattern.exec(line);
-        if (match) {
-          const [, key, value] = match;
-          // Make sure key is defined before using it
-          if (key) {
-            if (value) {
-              let finalValue = value.trim();
-              const quoteMatch = isQuoted.exec(finalValue);
-              if (quoteMatch) {
-                finalValue = quoteMatch[2] ?? '';
-              }
-              env[key] = finalValue;
-            } else {
-              env[key] = '';
-            }
-          }
+        const match = LINE.exec(line);
+        if (match?.[1]) {
+          env[match[1]] = parseValue(match[2] ?? '');
         }
       });
     }
