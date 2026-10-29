@@ -94,8 +94,6 @@ DB_HOST=localhost
 DB_PORT=5432
 API_KEY="secret-key-with-spaces"
 DEBUG=true
-MULTI_LINE="line1
-line2"
 ```
 
 **TypeScript:**
@@ -155,13 +153,25 @@ env.forEach((key, value) => {
 ## .env File Format
 
 ```env
-# Comments are ignored
+# Comment lines and blank lines are ignored
 KEY=value
 QUOTED="value with spaces"
 EMPTY=
-MULTILINE="line1
-line2"
+SETUP_KEY=abc123   # inline comment, dropped → "abc123"
+NOTE=   # only a comment → ""
+PASSWORD=pass#word # no whitespace before # → "pass#word"
+HASH="a # b"       # quoted → "a # b"
 ```
+
+- An unquoted value ends at the first `#` that follows whitespace;
+  surrounding whitespace is trimmed.
+- A quoted value (`"…"` or `'…'`) is the text between the quotes;
+  anything after the closing quote is dropped. Quote a value to keep a
+  literal `#`. There is no escape processing (`\n` stays two
+  characters).
+- Each line is one entry — values cannot span lines.
+- Comment handling applies only to the `.env` file. System environment
+  variables and Docker secrets are read as-is.
 
 ## Best Practices
 
