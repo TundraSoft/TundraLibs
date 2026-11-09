@@ -24,6 +24,7 @@ import { snapshot as logicalSnapshot } from '../definition/mod.ts';
 import {
   buildSnapshot,
   diffSnapshots,
+  dirSource,
   FileLock,
   isRebuild,
   type MigrationAction,
@@ -925,6 +926,65 @@ describe('norm.migrations (real SQLite end to end)', () => {
       );
     } finally {
       FileLock.prototype.touch = origTouch;
+      await engine.disconnect();
+      await removeDir(dir, { recursive: true });
+      await removeDir(dbDir, { recursive: true });
+    }
+  });
+
+  it('a chunked rebuild under a TableLock does not stall on its own transaction (regression)', async () => {
+    // A `source:` Migrator on SQLite locks with a TableLock. Its per-chunk
+    // touch() used to write OUTSIDE the open migration transaction, which
+    // on SQLite waits for that very transaction: the rebuild stalled for
+    // minutes. The touch must now run inside the transaction.
+    const PlainEmail = Entity('users', {
+      id: Column.integer(),
+      email: Column.varchar(255), // encrypt+hash REMOVED → transforming rebuild
+      password: Column.hash('SHA-256').guard(Guardian.string().minLength(8)),
+      fullName: Column.varchar(120).nullable(),
+      bio: Column.text().nullable(),
+    }, {
+      pk: ['id'],
+      index: { byName: ['fullName'] },
+    });
+    const dir = await makeTempDir({ prefix: 'norm-mig-tlock-' });
+    const dbDir = await makeTempDir({ prefix: 'norm-mig-tlock-db-' });
+    const engine = new SQLiteEngine('mig-tlock', { path: dbDir });
+    await engine.connect();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const norm = normOn(engine, SECRET);
+      const dbV2 = norm.use(Schema('App', { Users: UsersV2 }));
+      await new Migrator(dbV2, { dir }).snapshot();
+      await new Migrator(dbV2, { source: dirSource(dir) }).apply();
+      await dbV2.repo('Users').insert(
+        Array.from({ length: 4 }, (_, i) => ({
+          id: 100 + i,
+          email: `U${i}@Filler.dev`,
+          password: 'hunter2boat',
+          fullName: `Filler ${i}`,
+        })),
+      );
+      const dbPlain = norm.use(Schema('App', { Users: PlainEmail }));
+      await new Migrator(dbPlain, { dir }).snapshot();
+      const mig = new Migrator(dbPlain, {
+        source: dirSource(dir),
+        rebuildChunkSize: 2,
+      });
+      const stalled = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('rebuild stalled on its TableLock touch')),
+          10_000,
+        );
+      });
+      const applied = await Promise.race([
+        mig.apply({ allowDrop: true }),
+        stalled,
+      ]);
+      asserts.assertEquals(applied.applied, [2]);
+      asserts.assertEquals((await dbPlain.repo('Users').count()).count, 4);
+    } finally {
+      clearTimeout(timer);
       await engine.disconnect();
       await removeDir(dir, { recursive: true });
       await removeDir(dbDir, { recursive: true });
