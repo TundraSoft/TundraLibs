@@ -26,9 +26,9 @@ asserts and translators. They are complex to implement cleanly across
 all four dialects and are not required by the API surface OQL is
 built for.
 
-- `CAST` — type conversion (STRING ↔ NUMBER ↔ DATE ↔ BIGINT ↔ BOOLEAN)
-- `COALESCE` — first non-null
-- `NULLIF` — null when equal
+- `CAST` — type conversion. Not planned as a general expression: target
+  types and failed conversions differ per engine (see OQL-Types.md,
+  Conditional expressions). `TO_STRING` covers the portable case.
 - Subqueries (`IN (SELECT ...)`, scalar subqueries in `SELECT`) —
   correlated `EXISTS` landed 2026-07-11 as the `$exists` / `$nexists`
   filter predicates (with SELECT `distinct` + `COUNT(DISTINCT col)`)

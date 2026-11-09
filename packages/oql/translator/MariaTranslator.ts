@@ -176,6 +176,8 @@ export class MariaTranslator extends AbstractTranslator {
     ['CONCAT', (a) => `CONCAT(${a.join(', ')})`],
     ['LENGTH', (a) => `CHAR_LENGTH(${a[0]})`],
     ['TO_STRING', (a) => `CAST(${a[0]} AS CHAR)`],
+    ['COALESCE', (a) => `COALESCE(${a.join(', ')})`],
+    ['NULLIF', (a) => `NULLIF(${a[0]}, ${a[1]})`],
     ['LOWER', (a) => `LOWER(${a[0]})`],
     ['UPPER', (a) => `UPPER(${a[0]})`],
     ['TRIM', (a) => `TRIM(${a[0]})`],

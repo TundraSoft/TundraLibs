@@ -73,6 +73,7 @@ export type { Operators } from './filter/Operators.ts';
 export type { QueryFilter } from './filter/QueryFilter.ts';
 
 // expressions/
+export type { ConditionalExpressions } from './expressions/ConditionalExpressions.ts';
 export type { DateExpressions } from './expressions/DateExpressions.ts';
 export type { Expressions } from './expressions/Expressions.ts';
 export type { GetExpressionByType } from './expressions/GetExpressionByType.ts';

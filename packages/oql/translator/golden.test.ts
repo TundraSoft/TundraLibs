@@ -434,6 +434,50 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT COALESCE, NULLIF and CASE',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nickname', 'age'],
+      expressions: {
+        nick: {
+          $$_expression: 'COALESCE',
+          args: ['@nickname', '@name', 'anon'],
+        },
+        blank: { $$_expression: 'NULLIF', args: ['@name', ''] },
+        tier: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [
+              { when: { '@age': { $gte: 18 } }, then: 'adult' },
+              { when: { '@age': { $null: true } }, then: null },
+            ],
+            else: 'minor',
+          },
+        },
+      },
+      projection: { '@nick': 'nick', '@blank': 'blank', '@tier': 'tier' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT COALESCE("nickname", "name", :p_0:) AS "nick", NULLIF("name", :p_1:) AS "blank", (CASE WHEN "age" >= :p_2: THEN :p_3: WHEN "age" IS NULL THEN NULL ELSE :p_4: END) AS "tier" FROM "users"',
+        params: { p_0: 'anon', p_1: '', p_2: 18, p_3: 'adult', p_4: 'minor' },
+      },
+      postgres: {
+        sql:
+          'SELECT COALESCE("nickname", "name", :p_0:) AS "nick", NULLIF("name", :p_1:) AS "blank", (CASE WHEN "age" >= :p_2: THEN :p_3: WHEN "age" IS NULL THEN NULL ELSE :p_4: END) AS "tier" FROM "users"',
+        params: { p_0: 'anon', p_1: '', p_2: 18, p_3: 'adult', p_4: 'minor' },
+      },
+      maria: {
+        sql:
+          'SELECT COALESCE(`nickname`, `name`, :p_0:) AS `nick`, NULLIF(`name`, :p_1:) AS `blank`, (CASE WHEN `age` >= :p_2: THEN :p_3: WHEN `age` IS NULL THEN NULL ELSE :p_4: END) AS `tier` FROM `users`',
+        params: { p_0: 'anon', p_1: '', p_2: 18, p_3: 'adult', p_4: 'minor' },
+      },
+    },
+  },
+  {
     // Decision: OQL `SUBSTR` `start` is 1-based on every dialect. The SQL
     // dialects are natively 1-based, so `start: 1` passes straight through
     // and selects from the first character. (The Mongo golden pins the

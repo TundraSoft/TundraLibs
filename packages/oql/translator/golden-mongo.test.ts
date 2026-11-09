@@ -489,6 +489,104 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT COALESCE, NULLIF and CASE → $ifNull, $cond, $switch',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nickname', 'age', 'role'],
+      expressions: {
+        nick: {
+          $$_expression: 'COALESCE',
+          args: ['@nickname', '@name', 'anon'],
+        },
+        blank: { $$_expression: 'NULLIF', args: ['@name', ''] },
+        tier: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [
+              {
+                when: { '@age': { $gte: 18 }, '@role': { $in: ['a', 'b'] } },
+                then: 'adult',
+              },
+              {
+                when: { $or: [{ '@age': { $null: true } }, { '@age': 0 }] },
+                then: null,
+              },
+            ],
+            else: 'minor',
+          },
+        },
+      },
+      projection: { '@nick': 'nick', '@blank': 'blank', '@tier': 'tier' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              nick: { $ifNull: ['$nickname', '$name', 'anon'] },
+              blank: { $cond: [{ $eq: ['$name', ''] }, null, '$name'] },
+              tier: {
+                $switch: {
+                  branches: [
+                    {
+                      case: {
+                        $and: [
+                          { $gte: ['$age', 18] },
+                          { $in: ['$role', ['a', 'b']] },
+                        ],
+                      },
+                      then: 'adult',
+                    },
+                    {
+                      case: {
+                        $or: [
+                          { $in: [{ $type: '$age' }, ['null', 'missing']] },
+                          { $eq: ['$age', 0] },
+                        ],
+                      },
+                      then: null,
+                    },
+                  ],
+                  default: 'minor',
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              nick: '$nick',
+              blank: '$blank',
+              tier: '$tier',
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A pattern operator has no aggregation-expression equivalent here.
+    name: 'CASE with a $like condition throws',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        tier: {
+          $$_expression: 'CASE',
+          args: { cases: [{ when: { '@name': { $like: 'a%' } }, then: 1 }] },
+        },
+      },
+      projection: { '@tier': 'tier' },
+    },
+    throws: true,
+  },
+  {
     name: 'SELECT with aggregates → aggregate pipeline',
     method: 'select',
     query: {
