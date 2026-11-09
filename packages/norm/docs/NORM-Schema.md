@@ -628,6 +628,12 @@ view is one row per target. `materialized: true` emits
 `CREATE MATERIALIZED VIEW` on Postgres and degrades to a plain view on
 other dialects.
 
+A view can read other views. Migrations create each view after the views
+it reads, through its `table`, `joins` or `$exists` filters, whatever
+the entity keys are called. When a view changes, every view that reads
+it is dropped and recreated with it. Views that read each other in a
+cycle fail the migration with `VIEW_CYCLE`.
+
 ### QUERY
 
 A read-only, client-side stored `SELECT` with no DDL. It is terminal:

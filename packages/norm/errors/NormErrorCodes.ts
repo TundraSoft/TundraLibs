@@ -116,4 +116,6 @@ export type NormErrorCode =
   | 'REBUILD_COUNT_MISMATCH'
   /** An unsupported rename was requested (e.g. `renamedFrom` on a
    * VIEW). */
-  | 'UNSUPPORTED_RENAME';
+  | 'UNSUPPORTED_RENAME'
+  /** Views read each other in a cycle, so none can be created first. */
+  | 'VIEW_CYCLE';

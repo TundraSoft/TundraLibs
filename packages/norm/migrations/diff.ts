@@ -298,6 +298,73 @@ function orderForCreate(
   return out;
 }
 
+/** Physical ids a VIEW's query reads: its base table, joined tables
+ * and `$exists` / `$nexists` subquery tables. */
+function viewReads(e: SnapEntity): Set<string> {
+  const out = new Set<string>();
+  const add = (t: { table: string; schema?: string }) =>
+    out.add(t.schema === undefined ? t.table : `${t.schema}.${t.table}`);
+  const walk = (filter: unknown): void => {
+    if (typeof filter !== 'object' || filter === null) return;
+    for (const [key, value] of Object.entries(filter)) {
+      if (key === '$and' || key === '$or') {
+        (value as unknown[]).forEach(walk);
+      } else if (key === '$exists' || key === '$nexists') {
+        const sub = value as {
+          table: string;
+          schema?: string;
+          where?: unknown;
+        };
+        add(sub);
+        walk(sub.where);
+      }
+    }
+  };
+  const q = e.query as {
+    table: string;
+    schema?: string;
+    joins?: Record<string, { table: string; schema?: string }>;
+    where?: unknown;
+  };
+  add(q);
+  for (const j of Object.values(q.joins ?? {})) add(j);
+  walk(q.where);
+  return out;
+}
+
+/** Order VIEW keys so each comes after the views it reads.
+ *
+ * @throws {NormMigrationError} `VIEW_CYCLE` when views read each other
+ *   in a cycle.
+ */
+function orderViews(
+  keys: string[],
+  entities: Record<string, SnapEntity>,
+): string[] {
+  const byPhys = new Map<string, string>();
+  for (const k of keys) byPhys.set(physId(entities[k]!), k);
+  const done = new Set<string>();
+  const out: string[] = [];
+  const visit = (k: string, path: string[]) => {
+    if (done.has(k)) return;
+    if (path.includes(k)) {
+      const cycle = [...path.slice(path.indexOf(k)), k].join(' → ');
+      throw new NormMigrationError(
+        `Views read each other in a cycle: ${cycle}`,
+        { subject: k, code: 'VIEW_CYCLE' },
+      );
+    }
+    for (const ref of viewReads(entities[k]!)) {
+      const dep = byPhys.get(ref);
+      if (dep !== undefined && dep !== k) visit(dep, [...path, k]);
+    }
+    done.add(k);
+    out.push(k);
+  };
+  for (const k of keys) visit(k, []);
+  return out;
+}
+
 function sameFk(a: SnapForeignKey, b: SnapForeignKey): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -505,6 +572,22 @@ export function diffSnapshots(
       changedViews.push(currKey);
     }
   }
+  // A view that reads a changed view is recreated with it: Postgres
+  // refuses to drop a view that another view still reads.
+  for (let grew = true; grew;) {
+    grew = false;
+    const changedPhys = new Set(
+      changedViews.map((k) => physId(prevEntities[matched.get(k)!]!)),
+    );
+    for (const [currKey, prevKey] of matched) {
+      const pre = prevEntities[prevKey]!;
+      if (pre.kind !== 'VIEW' || changedViews.includes(currKey)) continue;
+      if ([...viewReads(pre)].some((ref) => changedPhys.has(ref))) {
+        changedViews.push(currKey);
+        grew = true;
+      }
+    }
+  }
 
   // pairAndFlags is O(columns) and gives the SAME result across passes
   // 0.5 / 2 / 4 for a matched TABLE pair (a rename's `from` IS
@@ -558,33 +641,25 @@ export function diffSnapshots(
     }
   }
 
-  // ── Pass 1: drops (views first; tables reverse-topo) ──────────────
+  // ── Pass 1: drops (views first, readers before what they read;
+  //    tables reverse-topo) ────────────────────────────────────────
+  const viewDrops: string[] = [];
   for (const k of droppedKeys) {
-    const e = prevEntities[k]!;
     if (!allowDrop) {
       blockedDrops.push(k);
       continue;
     }
-    if (e.kind === 'VIEW') {
-      actions.push(
-        {
-          type: 'DROP_VIEW',
-          view: e.name,
-          ...(e.dbSchema !== undefined ? { schema: e.dbSchema } : {}),
-          ...(e.materialized === true ? { materialized: true } : {}),
-          ifExists: true,
-        },
-      );
-    }
+    if (prevEntities[k]!.kind === 'VIEW') viewDrops.push(k);
   }
-  for (const k of changedViews) {
-    const pre = prevEntities[matched.get(k)!]!;
+  for (const k of changedViews) viewDrops.push(matched.get(k)!);
+  for (const k of orderViews(viewDrops, prevEntities).reverse()) {
+    const e = prevEntities[k]!;
     actions.push(
       {
         type: 'DROP_VIEW',
-        view: pre.name,
-        ...(pre.dbSchema !== undefined ? { schema: pre.dbSchema } : {}),
-        ...(pre.materialized === true ? { materialized: true } : {}),
+        view: e.name,
+        ...(e.dbSchema !== undefined ? { schema: e.dbSchema } : {}),
+        ...(e.materialized === true ? { materialized: true } : {}),
         ifExists: true,
       },
     );
@@ -901,12 +976,13 @@ export function diffSnapshots(
     actions.push(...idxCreates);
   }
 
-  // ── Pass 5: views — new + changed recreate (last) ─────────────────
-  for (const k of newKeys) {
-    const e = curr.entities[k]!;
-    if (e.kind === 'VIEW') actions.push(createViewAction(e));
-  }
-  for (const k of changedViews) {
+  // ── Pass 5: views — new + changed recreate (last), each after the
+  //    views it reads ─────────────────────────────────────────────
+  const viewCreates = [
+    ...newKeys.filter((k) => curr.entities[k]!.kind === 'VIEW'),
+    ...changedViews,
+  ];
+  for (const k of orderViews(viewCreates, curr.entities)) {
     actions.push(createViewAction(curr.entities[k]!));
   }
 

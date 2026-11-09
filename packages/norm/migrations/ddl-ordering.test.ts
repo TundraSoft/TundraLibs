@@ -14,6 +14,7 @@ import * as asserts from '@std/asserts';
 import { diffSnapshots, type MigrationSnapshot, renderPlan } from './mod.ts';
 import type { SnapEntity } from './mod.ts';
 import type { SqlDialect } from './plans.ts';
+import { NormMigrationError } from '../errors/mod.ts';
 
 const GEN = '2026-07-15T00:00:00.000Z';
 
@@ -184,5 +185,99 @@ describe('norm.migrations DDL ordering (MarketMaker field report)', () => {
       ),
       'it stays inline',
     );
+  });
+});
+
+describe('norm.migrations VIEW ordering', () => {
+  const table: SnapEntity = {
+    kind: 'TABLE',
+    name: 'links',
+    columns: { id: { type: 'INTEGER' }, n: { type: 'INTEGER' } },
+    primaryKeys: ['id'],
+  };
+  const view = (
+    name: string,
+    query: Record<string, unknown>,
+  ): SnapEntity => ({
+    kind: 'VIEW',
+    name,
+    columns: { id: { type: 'INTEGER' } },
+    query: {
+      type: 'SELECT',
+      columns: ['id'],
+      projection: { '@id': true },
+      ...query,
+    } as SnapEntity['query'],
+  });
+  const viewOrder = (
+    actions: ReturnType<typeof diffSnapshots>['actions'],
+    type: 'CREATE_VIEW' | 'DROP_VIEW',
+  ) =>
+    actions.filter((a) => 'type' in a && a.type === type).map((a) =>
+      (a as { view: string }).view
+    );
+
+  it('creates each view after the views it reads, whatever the key order', () => {
+    // a_totals joins b_live, which reads c_base: keys sort the wrong way.
+    const { actions } = diffSnapshots(
+      null,
+      snap({
+        ATotals: view('a_totals', {
+          table: 'links',
+          joins: {
+            live: {
+              table: 'b_live',
+              columns: ['id'],
+              on: { '@live.@id': '@id' },
+            },
+          },
+        }),
+        BLive: view('b_live', { table: 'c_base' }),
+        CBase: view('c_base', { table: 'links' }),
+        Links: table,
+      }),
+    );
+    asserts.assertEquals(viewOrder(actions, 'CREATE_VIEW'), [
+      'c_base',
+      'b_live',
+      'a_totals',
+    ]);
+  });
+
+  it('recreates an unchanged view that reads a changed one, readers dropped first', () => {
+    const prev = snap({
+      Links: table,
+      ATotals: view('a_totals', { table: 'z_live' }),
+      ZLive: view('z_live', { table: 'links' }),
+    });
+    const curr = snap({
+      Links: table,
+      ATotals: view('a_totals', { table: 'z_live' }),
+      ZLive: view('z_live', { table: 'links', where: { '@n': 1 } }),
+    });
+    const { actions } = diffSnapshots(prev, curr);
+    asserts.assertEquals(viewOrder(actions, 'DROP_VIEW'), [
+      'a_totals',
+      'z_live',
+    ]);
+    asserts.assertEquals(viewOrder(actions, 'CREATE_VIEW'), [
+      'z_live',
+      'a_totals',
+    ]);
+  });
+
+  it('rejects views that read each other in a cycle', () => {
+    const err = asserts.assertThrows(
+      () =>
+        diffSnapshots(
+          null,
+          snap({
+            A: view('a', { table: 'b' }),
+            B: view('b', { table: 'a' }),
+          }),
+        ),
+      NormMigrationError,
+    );
+    asserts.assertEquals(err.code, 'VIEW_CYCLE');
   });
 });
