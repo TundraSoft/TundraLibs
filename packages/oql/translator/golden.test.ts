@@ -1229,6 +1229,28 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT ORDER BY an unprojected column',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      projection: { '@name': true },
+      orderBy: { '@id': 'ASC' },
+    },
+    expected: {
+      sqlite: {
+        sql: 'SELECT "name" AS "name" FROM "users" ORDER BY "id" ASC',
+      },
+      postgres: {
+        sql: 'SELECT "name" AS "name" FROM "users" ORDER BY "id" ASC',
+      },
+      maria: {
+        sql: 'SELECT `name` AS `name` FROM `users` ORDER BY `id` ASC',
+      },
+    },
+  },
+  {
     // `limit` alone is unaffected by the offset-only sentinel — no OFFSET
     // clause is emitted at all.
     name: 'SELECT LIMIT without OFFSET',

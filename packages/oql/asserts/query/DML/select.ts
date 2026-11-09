@@ -282,8 +282,11 @@ const validateProjectionEntry = (
 };
 
 /**
- * Validates `query.orderBy`: each key references a projection key or joined
- * column; each value is `'ASC'` or `'DESC'`.
+ * Validates `query.orderBy`: each key references a projection key, a
+ * joined column, or a declared base column; each value is `'ASC'` or
+ * `'DESC'`. An unprojected base column is rejected under `distinct` or an
+ * automatic GROUP BY (aggregates, or a projected join alias), where SQL
+ * requires the ORDER BY term to be selected or grouped.
  *
  * @internal
  */
@@ -291,6 +294,7 @@ const validateOrderBy = (
   query: Record<string, unknown>,
   projectionKeys: string[],
   joinedColumns: string[],
+  columnList: string[],
 ): void => {
   if (query.orderBy === undefined) return;
 
@@ -311,13 +315,29 @@ const validateOrderBy = (
   }
 
   const allowed = [...projectionKeys, ...joinedColumns];
+  const joins = (query.joins ?? {}) as Record<string, unknown>;
+  const grouped = query.aggregates !== undefined ||
+    projectionKeys.some((k) => k.slice(1) in joins);
+  const restriction = query.distinct === true
+    ? `'distinct'`
+    : grouped
+    ? `aggregates or a projected join alias`
+    : undefined;
   for (const [col, direction] of Object.entries(orderBy)) {
     if (!allowed.includes(col)) {
-      throw new TypeError(
-        `Invalid SELECT query: orderBy key '${col}' must exist in projection or joined columns. Available: ${
-          allowed.join(', ')
-        }`,
-      );
+      const isColumn = columnList.includes(col.slice(1));
+      if (isColumn && restriction !== undefined) {
+        throw new TypeError(
+          `Invalid SELECT query: orderBy key '${col}' must be projected when the query uses ${restriction}`,
+        );
+      }
+      if (!isColumn) {
+        throw new TypeError(
+          `Invalid SELECT query: orderBy key '${col}' must exist in columns, projection or joined columns. Available: ${
+            [...columnList.map((c) => `@${c}`), ...allowed].join(', ')
+          }`,
+        );
+      }
     }
     if (direction !== 'ASC' && direction !== 'DESC') {
       throw new TypeError(
@@ -339,7 +359,8 @@ const validateOrderBy = (
  *   aggregates (those need GROUP BY semantics — use `having`).
  * - `having` may only reference aggregates, and requires `aggregates` to be
  *   present.
- * - `orderBy` may reference projection keys or joined columns.
+ * - `orderBy` may reference projection keys, joined columns, or declared
+ *   base columns (the last only without `distinct` or a GROUP BY).
  */
 export const assertSelectQuery: <
   PT extends TableType = TableType,
@@ -458,7 +479,7 @@ export const assertSelectQuery: <
     }
   }
 
-  validateOrderBy(query, projectionKeys, joinedColumns);
+  validateOrderBy(query, projectionKeys, joinedColumns, columnList);
 
   if (
     query.limit !== undefined && (

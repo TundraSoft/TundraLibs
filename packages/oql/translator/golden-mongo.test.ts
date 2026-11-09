@@ -344,6 +344,29 @@ const CASES: Case[] = [
     },
   },
   {
+    // $sort runs before $project: after it, the aliased `name` is
+    // `displayName` and the unprojected `id` is gone.
+    name: 'SELECT ORDER BY an aliased and an unprojected column → aggregate',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      projection: { '@name': 'displayName' },
+      orderBy: { '@name': 'ASC', '@id': 'DESC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          { $sort: { name: 1, id: -1 } },
+          { $project: { displayName: '$name', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT ORDER BY + LIMIT + OFFSET',
     method: 'select',
     query: {
@@ -1740,8 +1763,8 @@ const CASES: Case[] = [
         viewOn: 'users',
         pipeline: [
           { $match: { active: true } },
-          { $project: { id: 1, name: 1 } },
           { $sort: { name: 1 } },
+          { $project: { id: 1, name: 1 } },
           { $skip: 5 },
           { $limit: 100 },
         ],
@@ -1780,8 +1803,8 @@ const CASES: Case[] = [
           viewOn: 'users',
           pipeline: [
             { $match: { active: true } },
-            { $project: { id: 1, name: 1 } },
             { $sort: { name: 1 } },
+            { $project: { id: 1, name: 1 } },
             { $skip: 5 },
             { $limit: 100 },
           ],
@@ -1853,10 +1876,10 @@ describe('oql.translator.MongoTranslator — round-4 regressions', () => {
     } as any);
     const pipeline = out.params.pipeline as Record<string, unknown>[];
     const stages = pipeline.map((s) => Object.keys(s)[0]);
-    asserts.assertEquals(stages, ['$match', '$project', '$sort', '$limit']);
+    asserts.assertEquals(stages, ['$match', '$sort', '$project', '$limit']);
     // The projection is preserved — `ssn` (deliberately projected away) is
     // NOT exposed by the view.
-    asserts.assertEquals(pipeline[1], { $project: { id: 1, name: 1 } });
+    asserts.assertEquals(pipeline[2], { $project: { id: 1, name: 1 } });
     asserts.assertEquals(pipeline[3], { $limit: 100 });
   });
 
@@ -1880,8 +1903,8 @@ describe('oql.translator.MongoTranslator — round-4 regressions', () => {
     const create = out.find((a) => a.sql === 'createView')!;
     const pipeline = create.params.pipeline as Record<string, unknown>[];
     const stages = pipeline.map((s) => Object.keys(s)[0]);
-    asserts.assertEquals(stages, ['$match', '$project', '$sort', '$limit']);
-    asserts.assertEquals(pipeline[1], { $project: { id: 1, name: 1 } });
+    asserts.assertEquals(stages, ['$match', '$sort', '$project', '$limit']);
+    asserts.assertEquals(pipeline[2], { $project: { id: 1, name: 1 } });
   });
 });
 
