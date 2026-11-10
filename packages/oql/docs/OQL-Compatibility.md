@@ -398,6 +398,9 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
   - SQLite uses `LIKE` (already case-insensitive for ASCII; non-ASCII
     requires `PRAGMA case_sensitive_like=OFF`, which is the default).
   - MongoDB uses `$regex` with the `i` option.
+- **An expression as a comparison value** (`{ '@expiresAt': { $lt: NOW } }`)
+  matches the same rows on every dialect: a row whose column or computed
+  value is NULL — or, on MongoDB, missing — never matches, `$ne` included.
 
 ## JOINs
 
