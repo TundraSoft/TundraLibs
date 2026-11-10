@@ -200,7 +200,7 @@ export type LoadConfigOptions = {
   exclude?: Array<RegExp>;
   /**
    * `true`: load `.env` from `path`.
-   * `string`: load `.env` from this path.
+   * `string`: load this env file, or the `.env` of this directory.
    * `false` / `undefined`: no env substitution.
    */
   env?: boolean | string;

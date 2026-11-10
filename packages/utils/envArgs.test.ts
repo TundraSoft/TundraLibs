@@ -53,15 +53,25 @@ describe({
       deleteEnv('TEST_ENV_VAR');
     });
 
-    it(
-      'should load variables from .env file (directory path)',
-      () => {
-        const result = envArgs('packages/utils/fixtures/sample2.env');
+    it('should load .env from a directory path', () => {
+      const dir = path.join(cwd(), `env_dir_${Date.now()}`);
+      makeDirSync(dir);
+      writeTextFileSync(path.join(dir, '.env'), 'FROM_DIR=yes');
+      try {
+        asserts.assertEquals(envArgs(dir, false).get('FROM_DIR'), 'yes');
+      } finally {
+        removeSync(dir);
+      }
+    });
 
-        asserts.assertEquals(result.get('USER'), 'TundraLib');
-        asserts.assertEquals(result.get('HOME'), '');
-      },
-    );
+    it('should load a file whose name does not end in .env', () => {
+      const envPath = createTempEnvFile('FROM_LOCAL=yes', '.env.local');
+      try {
+        asserts.assertEquals(envArgs(envPath, false).get('FROM_LOCAL'), 'yes');
+      } finally {
+        removeSync(envPath);
+      }
+    });
 
     it('should load variables from .env file (file path)', () => {
       const result = envArgs('packages/utils/fixtures/sample2.env');
