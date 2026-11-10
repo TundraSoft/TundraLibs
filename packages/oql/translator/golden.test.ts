@@ -289,6 +289,45 @@ const CASES: Case[] = [
     },
   },
   {
+    // A null `on` value is a NULL check; `= NULL` would never match.
+    name: 'SELECT with a null JOIN on value emits IS NULL',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@P.@id': '@pid', '@P.@org': null },
+        },
+      },
+      projection: { '@perm': true, '@P.@name': 'name' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" AND "P"."org" IS NULL',
+        params: {},
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" AND "P"."org" IS NULL',
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`perm` AS `perm`, `P`.`name` AS `name` FROM `grants` AS __base__ ' +
+          'INNER JOIN `principals` AS `P` ON `P`.`id` = __base__.`pid` AND `P`.`org` IS NULL',
+        params: {},
+      },
+    },
+  },
+  {
     name: 'SELECT with aggregates and auto GROUP BY',
     method: 'select',
     query: {

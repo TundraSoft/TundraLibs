@@ -1579,6 +1579,11 @@ export abstract class AbstractTranslator {
       const onParts: string[] = [];
       for (const [leftKey, rightVal] of Object.entries(def.on)) {
         const left = this._resolveColumnRef(leftKey, true);
+        // `= NULL` is never true; a null value is a NULL check.
+        if (rightVal === null) {
+          onParts.push(`${left} IS NULL`);
+          continue;
+        }
         const right = this.__renderJoinValue(rightVal, scope, params);
         onParts.push(`${left} = ${right}`);
       }
@@ -1601,7 +1606,6 @@ export abstract class AbstractTranslator {
     scope: string[],
     params: Parameters,
   ): string {
-    if (value === null) return 'NULL';
     // Column ref iff it names a column in scope; otherwise fall through to
     // expression / literal handling — the same rule as WHERE value positions.
     const ref = this.__valueColumnRef(value, scope, true);

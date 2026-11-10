@@ -1306,7 +1306,15 @@ export class MongoTranslator {
         conditions.push({ $eq: [foreignField, `$$${varName}`] });
         continue;
       }
-      // Literal / null — a constant condition on the joined collection.
+      // null is a NULL check: like SQL's IS NULL, it matches a missing
+      // field too, which aggregation `$eq` would not.
+      if (value === null) {
+        conditions.push({
+          $in: [{ $type: foreignField }, ['null', 'missing']],
+        });
+        continue;
+      }
+      // Literal — a constant condition on the joined collection.
       conditions.push({ $eq: [foreignField, value] });
     }
 

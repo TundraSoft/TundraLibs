@@ -518,6 +518,52 @@ const CASES: Case[] = [
     },
   },
   {
+    // A null `on` value matches a null or missing field, as SQL IS NULL
+    // does; aggregation `$eq` with null would skip a missing one.
+    name: 'SELECT with a null JOIN on value → $type null or missing',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@P.@id': '@pid', '@P.@org': null },
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              let: { v0: '$pid' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id', '$$v0'] },
+                      { $in: [{ $type: '$org' }, ['null', 'missing']] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $project: { perm: 1 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT with JOIN → aggregate with $lookup',
     method: 'select',
     query: {
