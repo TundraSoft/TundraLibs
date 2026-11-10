@@ -749,8 +749,7 @@ export abstract class AbstractTranslator {
    * skeleton the date-arithmetic emitters (`DATE_ADD` / `DATE_DIFF`)
    * otherwise hand-roll identically on every SQL dialect. `unitSql` is
    * the already-rendered unit operand; `cases` supplies each unit's
-   * `THEN` value — a scale factor on Postgres/SQLite, a SQL interval
-   * keyword (`DAY`, `HOUR`, …) on MariaDB.
+   * `THEN` value, a scale factor.
    */
   protected _timeUnitCase(
     unitSql: string,
@@ -773,6 +772,15 @@ export abstract class AbstractTranslator {
       `WHEN 'YEARS' THEN ${cases.YEARS} ` +
       `END`
     );
+  }
+
+  /**
+   * Render the `unit` of `DATE_ADD` / `DATE_DIFF`. Bound like any other
+   * argument by default; MariaDB overrides, because its unit is a
+   * keyword and a keyword cannot be bound.
+   */
+  protected _timeUnitArg(unit: unknown, bind: (v: unknown) => string): string {
+    return bind(unit);
   }
 
   /**
@@ -2266,9 +2274,13 @@ export abstract class AbstractTranslator {
       case 'POWER':
         return [r(args.base), r(args.exponent)];
       case 'DATE_ADD':
-        return [r(args.date), r(args.amount), r(args.unit)];
+        return [
+          r(args.date),
+          r(args.amount),
+          this._timeUnitArg(args.unit, r),
+        ];
       case 'DATE_DIFF':
-        return [r(args.from), r(args.to), r(args.unit)];
+        return [r(args.from), r(args.to), this._timeUnitArg(args.unit, r)];
       case 'SUBSTR':
         return args.length !== undefined
           ? [r(args.string), r(args.start), r(args.length)]

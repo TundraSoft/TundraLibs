@@ -350,6 +350,14 @@ The table below summarises the per-dialect emission. The general rule:
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                        |
 | **ENCRYPT / DECRYPT** | native (`pgp_sym_encrypt` / `pgp_sym_decrypt`)                                      | native (`AES_ENCRYPT` / `AES_DECRYPT`)                 | **passthrough**                                                  | **passthrough**                                                        |
 
+### DATE_ADD amount gotcha
+
+A negative `amount` subtracts on every dialect. A fractional one is not
+portable: Postgres and SQLite apply the fraction, MariaDB rounds it to the
+nearest whole unit, and MongoDB rejects it when the query runs. Pass whole
+numbers, in a smaller unit if you need the precision (`90` `MINUTES`, not
+`1.5` `HOURS`).
+
 ### UUID gotcha
 
 On dialects where UUID is materialised at translate time (SQLite, MongoDB),

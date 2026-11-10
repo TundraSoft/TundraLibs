@@ -2006,7 +2006,52 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", '+' || :p_0: || ' ' || :p_1:) AS "due" FROM "orders"`,
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "due" FROM "orders"`,
+      },
+    },
+  },
+
+  {
+    // MariaDB takes the unit as a keyword, which cannot be bound, so it is
+    // the one dialect that inlines it. SQLite's modifier carries the
+    // amount's own sign: a `'+' ||` prefix turns -7 into `+-7 DAYS`, which
+    // is not a modifier.
+    name: 'DATE_ADD / DATE_DIFF with a negative amount',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt', 'shippedAt'],
+      expressions: {
+        since: {
+          $$_expression: 'DATE_ADD',
+          args: { date: '@createdAt', amount: -7, unit: 'DAYS' },
+        },
+        took: {
+          $$_expression: 'DATE_DIFF',
+          args: { from: '@createdAt', to: '@shippedAt', unit: 'HOURS' },
+        },
+      },
+      projection: { '@id': true, '@since': 'since', '@took': 'took' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "since", ` +
+          `CAST((julianday("shippedAt") - julianday("createdAt")) * CASE :p_2: WHEN 'DAYS' THEN 1 WHEN 'HOURS' THEN 24 WHEN 'MINUTES' THEN 1440 WHEN 'SECONDS' THEN 86400 WHEN 'MONTHS' THEN 1.0/30 WHEN 'YEARS' THEN 1.0/365 END AS INTEGER) AS "took" FROM "orders"`,
+        params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id", ("createdAt" + (:p_0:::text || ' ' || :p_1:)::interval) AS "since", ` +
+          `CAST(EXTRACT(EPOCH FROM ("shippedAt" - "createdAt")) * CASE :p_2: WHEN 'DAYS' THEN 1.0/86400 WHEN 'HOURS' THEN 1.0/3600 WHEN 'MINUTES' THEN 1.0/60 WHEN 'SECONDS' THEN 1 WHEN 'MONTHS' THEN 1.0/(86400*30) WHEN 'YEARS' THEN 1.0/(86400*365) END AS BIGINT) AS "took" FROM "orders"`,
+        params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
+      },
+      maria: {
+        sql:
+          'SELECT `id` AS `id`, TIMESTAMPADD(DAY, :p_0:, `createdAt`) AS `since`, ' +
+          'TIMESTAMPDIFF(HOUR, `createdAt`, `shippedAt`) AS `took` FROM `orders`',
+        params: { p_0: -7 },
       },
     },
   },

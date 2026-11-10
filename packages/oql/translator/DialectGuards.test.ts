@@ -44,6 +44,9 @@ class MariaLiteralProbe extends MariaTranslator {
   public literal(value: unknown): string {
     return this._formatLiteral(value);
   }
+  public unit(value: unknown): string {
+    return this._timeUnitArg(value);
+  }
 }
 
 /** A dialect with every optional feature switched off. */
@@ -203,6 +206,22 @@ describe('oql.translator.guards', () => {
       const { sql, params } = new SQLiteTranslator().createView(VIEW_QUERY);
       asserts.assertStringIncludes(sql, `"status" = 'active'`);
       asserts.assertEquals(params, {});
+    });
+  });
+
+  describe('MariaDB time unit', () => {
+    // The unit is written into the SQL, so validation is the only thing
+    // between a hand-built query and the statement text. `constructor`
+    // is the inherited-key case a plain property lookup would let through.
+    it('refuses anything that is not an OQL time unit', () => {
+      const maria = new MariaLiteralProbe();
+      asserts.assertEquals(maria.unit('MONTHS'), 'MONTH');
+      for (
+        const unit of ['WEEKS', 'constructor', 'DAY); DROP TABLE t; --', 7]
+      ) {
+        const err = asserts.assertThrows(() => maria.unit(unit), OqlError);
+        asserts.assertEquals(err.code, 'INVALID_TIME_UNIT');
+      }
     });
   });
 

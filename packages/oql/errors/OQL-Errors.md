@@ -111,7 +111,7 @@ message text.
 | `UNHANDLED_EXPRESSION`        | `OqlError`                | An expression was given object-shaped `args` its type does not accept.         |
 | `PARAM_INLINE_UNSUPPORTED`    | `OqlError`                | A view body needed literal inlining under a non-`named` placeholder format.    |
 | `NON_FINITE_LITERAL`          | `OqlError`                | A view body needed to inline `NaN` or `Infinity` as a SQL literal.             |
-| `INVALID_TIME_UNIT`           | `OqlError`                | MongoDB date arithmetic was given an unrecognised `unit`. **Mongo only.**      |
+| `INVALID_TIME_UNIT`           | `OqlError`                | Date arithmetic was given an unrecognised `unit`. **Mongo and MariaDB only.**  |
 
 ## Code Reference
 
@@ -326,17 +326,17 @@ view should say — usually a `NULL` or a sentinel you write yourself.
 
 ### `INVALID_TIME_UNIT`
 
-**MongoDB only.** A `DATE_ADD` / `DATE_DIFF` expression carried a `unit` that
-is not one of OQL's time units (`DAYS`, `HOURS`, `MINUTES`, `SECONDS`,
-`MONTHS`, `YEARS`).
+**MongoDB and MariaDB only.** A `DATE_ADD` / `DATE_DIFF` expression carried a
+`unit` that is not one of OQL's time units (`DAYS`, `HOURS`, `MINUTES`,
+`SECONDS`, `MONTHS`, `YEARS`).
 
-The Mongo translator maps the unit eagerly, at translation time, so an
-unrecognised one is caught here rather than failing inside the aggregation
-pipeline. The SQL dialects do not: they render the unit into a
-`CASE <unit> WHEN 'DAYS' THEN … END`, which the database evaluates at
-execution — an unrecognised unit falls through the `CASE` and yields `NULL`
-rather than raising this code. Do not treat the absence of this error on
-Postgres, MariaDB, or SQLite as proof the unit was valid.
+Both translators map the unit at translation time — Mongo to its own unit
+name, MariaDB to the keyword `TIMESTAMPADD` / `TIMESTAMPDIFF` take — so an
+unrecognised one is caught here rather than failing in the database.
+Postgres and SQLite bind the unit as a parameter instead, and the database
+evaluates it at execution: an unrecognised unit yields `NULL` or a database
+error rather than this code. Do not treat the absence of this error on
+Postgres or SQLite as proof the unit was valid.
 
 **Triggered by** a hand-built or cast expression node; the date asserts and
 the `TimeUnit` type both reject unknown units. **Fix:** use one of the six

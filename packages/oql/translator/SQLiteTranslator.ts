@@ -196,9 +196,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     [
       'DATE_ADD',
       (a) => {
-        // strftime(ISO, date, '+' || amount || ' ' || unit)
+        // The modifier is `<amount> <unit>` with no leading `+`: SQLite
+        // takes the sign from the amount, and `+-7 DAYS` is not a
+        // modifier at all (the whole call returns NULL).
         const [date, amount, unit] = a;
-        return `strftime(${ISO_8601_UTC}, ${date}, '+' || ${amount} || ' ' || ${unit})`;
+        return `strftime(${ISO_8601_UTC}, ${date}, ${amount} || ' ' || ${unit})`;
       },
     ],
     [
