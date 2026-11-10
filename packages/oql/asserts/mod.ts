@@ -168,6 +168,7 @@ export {
   assertDateAddExpression,
   assertDateDiffExpression,
   assertDateExpression,
+  assertDateTruncExpression,
   assertDecryptExpression,
   assertDivideExpression,
   assertEncryptExpression,

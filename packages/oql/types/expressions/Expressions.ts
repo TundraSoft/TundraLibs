@@ -3,6 +3,7 @@ import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
 import type { QueryFilter } from '../filter/QueryFilter.ts';
 import type { NumericExpressions } from './NumericExpressions.ts';
+import type { DateTruncUnit } from './DateTruncUnit.ts';
 import type { TimeUnit } from './TimeUnit.ts';
 
 /**
@@ -87,8 +88,8 @@ type ConditionalArg<
  * `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
  *
  * **Date** (returns Date): `NOW`, `CURRENT_DATE`, `CURRENT_TIME`,
- * `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD` — and
- * `UNIX_TIMESTAMP`, which returns a 64-bit INTEGER, not a Date.
+ * `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC`
+ * — and `UNIX_TIMESTAMP`, which returns a 64-bit INTEGER, not a Date.
  *
  * **Cryptographic (platform-dependent)**: `ENCRYPT`, `DECRYPT`,
  * `HASH`.
@@ -187,6 +188,37 @@ export type Expressions<
     date: GetColumnByType<FT, Date> | Date;
     amount: GetColumnByType<FT, number> | number;
     unit: TimeUnit;
+  };
+} | {
+  /**
+   * Start of the day, month or year `date` falls in, as a timestamp —
+   * the value to group rows by period. `date` is a column or a nested
+   * `DATE_ADD` / `NOW`, never a literal.
+   *
+   * `unit` is a TRANSLATION-TIME switch, not a value: it must be a
+   * literal on the node and is never bound as a parameter.
+   *
+   * The period boundary is taken in the zone the engine reads `date` in:
+   * UTC on SQLite and MongoDB, the stored wall clock for a zone-less
+   * column, and the SESSION time zone for a Postgres `TIMESTAMPTZ` or a
+   * MariaDB `TIMESTAMP`. Run the database session in UTC for the same
+   * answer on every engine.
+   */
+  $$_expression: 'DATE_TRUNC';
+  args: {
+    date:
+      | GetColumnByType<FT, Date>
+      | Extract<
+        Expressions<T, FT>,
+        {
+          $$_expression:
+            | 'DATE_ADD'
+            | 'NOW'
+            | 'CURRENT_TIMESTAMP'
+            | 'CURRENT_TIMESTAMPTZ';
+        }
+      >;
+    unit: DateTruncUnit;
   };
 } | {
   /** Current timestamp (date + time). */

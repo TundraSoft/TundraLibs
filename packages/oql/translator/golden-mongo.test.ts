@@ -13,7 +13,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import type { Query } from '../types/mod.ts';
 import { MongoTranslator } from './MongoTranslator.ts';
-import { DialectUnsupportedError } from '../errors/mod.ts';
+import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type { TranslatedQuery } from './types/mod.ts';
 
 type Case = {
@@ -952,6 +952,94 @@ const CASES: Case[] = [
               _id: 0,
             },
           },
+        ],
+      },
+    },
+  },
+
+  {
+    name: 'DATE_TRUNC → $dateTrunc, grouped by month',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt'],
+      expressions: {
+        month: {
+          $$_expression: 'DATE_TRUNC',
+          args: { date: '@createdAt', unit: 'MONTHS' },
+        },
+      },
+      aggregates: { total: { $$_aggregate: 'COUNT' } },
+      projection: { '@month': 'month', '@total': 'total' },
+      orderBy: { '@month': 'ASC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $addFields: {
+              month: { $dateTrunc: { date: '$createdAt', unit: 'month' } },
+            },
+          },
+          { $group: { _id: { month: '$month' }, total: { $sum: 1 } } },
+          { $addFields: { month: '$_id.month' } },
+          { $sort: { month: 1 } },
+          { $project: { month: '$month', total: '$total', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    name: 'DATE_TRUNC over a nested DATE_ADD and NOW',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt'],
+      expressions: {
+        day: {
+          $$_expression: 'DATE_TRUNC',
+          args: {
+            date: {
+              $$_expression: 'DATE_ADD',
+              args: { date: '@createdAt', amount: 330, unit: 'MINUTES' },
+            },
+            unit: 'DAYS',
+          },
+        },
+        year: {
+          $$_expression: 'DATE_TRUNC',
+          args: { date: { $$_expression: 'NOW' }, unit: 'YEARS' },
+        },
+      },
+      projection: { '@day': 'day', '@year': 'year' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $addFields: {
+              day: {
+                $dateTrunc: {
+                  date: {
+                    $dateAdd: {
+                      startDate: '$createdAt',
+                      unit: 'minute',
+                      amount: 330,
+                    },
+                  },
+                  unit: 'day',
+                },
+              },
+              year: { $dateTrunc: { date: '$$NOW', unit: 'year' } },
+            },
+          },
+          { $project: { day: '$day', year: '$year', _id: 0 } },
         ],
       },
     },
@@ -1925,6 +2013,32 @@ describe('oql.translator.MongoTranslator', () => {
       asserts.assertEquals(result, c.expected);
     });
   }
+});
+
+describe('oql.translator.MongoTranslator — DATE_TRUNC unit', () => {
+  it('refuses a unit outside DAYS / MONTHS / YEARS in a filter operand', () => {
+    // A filter operand skips the asserts layer, so this is the translator's
+    // own check.
+    const err = asserts.assertThrows(
+      () =>
+        t.select({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          projection: { '@id': true },
+          where: {
+            '@id': {
+              $like: {
+                $$_expression: 'DATE_TRUNC',
+                args: { date: '@at', unit: 'HOURS' },
+              },
+            },
+          },
+        } as unknown as Query<'SELECT'>),
+      OqlError,
+    );
+    asserts.assertEquals((err as OqlError).code, 'INVALID_TIME_UNIT');
+  });
 });
 
 describe('oql.translator.MongoTranslator — round-4 regressions', () => {

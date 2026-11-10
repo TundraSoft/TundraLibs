@@ -26,6 +26,7 @@
 import type {
   AggregateFunction,
   ColumnDefinition,
+  DateTruncUnit,
   Expressions,
   Query,
 } from '../types/mod.ts';
@@ -656,6 +657,12 @@ export class SQLiteTranslator extends AbstractTranslator {
       `substr(replace(printf('%*s', ${width}, ''), ' ', ${fill}), 1, ${shortfall})`;
     const joined = side === 'left' ? `${pad} || ${str}` : `${str} || ${pad}`;
     return `substr(${joined}, 1, ${width})`;
+  }
+
+  /** Same ISO-8601 UTC text as `NOW`, so the result compares with stored dates. */
+  protected override _dateTrunc(date: string, unit: DateTruncUnit): string {
+    const modifier = { DAYS: 'day', MONTHS: 'month', YEARS: 'year' }[unit];
+    return `strftime(${ISO_8601_UTC}, ${date}, 'start of ${modifier}')`;
   }
 
   /** Epoch as a 64-bit INTEGER — `strftime('%s')` is text, `julianday` gives sub-second. */

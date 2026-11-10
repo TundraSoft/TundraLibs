@@ -7,6 +7,7 @@ import {
   assertCurrentTimestampTZExpression,
   assertDateAddExpression,
   assertDateExpression,
+  assertDateTruncExpression,
   assertNowExpression,
   assertUnixTimestampExpression,
   isCurrentDateExpression,
@@ -483,6 +484,79 @@ describe('oql.asserts.date — UNIX_TIMESTAMP', () => {
       () => assertUnixTimestampExpression({ $$_expression: 'NOW' }),
       TypeError,
       "Expected 'UNIX_TIMESTAMP'",
+    );
+  });
+});
+
+describe('oql.asserts.date — DATE_TRUNC', () => {
+  const trunc = (date: unknown, unit?: unknown) => ({
+    $$_expression: 'DATE_TRUNC',
+    args: { date, unit },
+  });
+
+  it('accepts a column with each unit, a nested DATE_ADD or clock, and is routed by the date-category assert', () => {
+    for (const unit of ['DAYS', 'MONTHS', 'YEARS']) {
+      assertDateTruncExpression(trunc('@createdAt', unit), ['createdAt']);
+    }
+    assertDateTruncExpression(
+      trunc({
+        $$_expression: 'DATE_ADD',
+        args: { date: '@createdAt', amount: 330, unit: 'MINUTES' },
+      }, 'DAYS'),
+      ['createdAt'],
+    );
+    assertDateTruncExpression(trunc({ $$_expression: 'NOW' }, 'YEARS'));
+    assertDateExpression(trunc('@createdAt', 'MONTHS'), ['createdAt']);
+  });
+
+  it('rejects a unit outside DAYS / MONTHS / YEARS, naming the offending value', () => {
+    asserts.assertThrows(
+      () => assertDateTruncExpression(trunc('@createdAt', 'HOURS')),
+      TypeError,
+      "got 'HOURS'",
+    );
+    asserts.assertThrows(
+      () => assertDateTruncExpression(trunc('@createdAt')),
+      TypeError,
+      "got 'undefined'",
+    );
+  });
+
+  it('rejects a date that is not a column, DATE_ADD or clock expression', () => {
+    asserts.assertThrows(
+      () => assertDateTruncExpression(trunc(new Date(0), 'DAYS')),
+      TypeError,
+    );
+    asserts.assertThrows(
+      () =>
+        assertDateTruncExpression(
+          trunc({ $$_expression: 'CURRENT_DATE' }, 'DAYS'),
+        ),
+      TypeError,
+      "got 'CURRENT_DATE'",
+    );
+    asserts.assertThrows(
+      () => assertDateTruncExpression(trunc('@missing', 'DAYS'), ['createdAt']),
+      TypeError,
+    );
+    asserts.assertThrows(
+      () =>
+        assertDateTruncExpression(
+          trunc({
+            $$_expression: 'DATE_ADD',
+            args: { date: '@missing', amount: 1, unit: 'DAYS' },
+          }, 'DAYS'),
+          ['createdAt'],
+        ),
+      TypeError,
+    );
+  });
+
+  it('rejects missing args', () => {
+    asserts.assertThrows(
+      () => assertDateTruncExpression({ $$_expression: 'DATE_TRUNC' }),
+      TypeError,
+      'args key must be an object',
     );
   });
 });
