@@ -130,7 +130,9 @@ middleware never called `next()` is a distinct, logged outcome
 
 - **Short-circuit**: set `ctx.response = { status: 429, content: {...} }`
   and return without `next()`. The transports treat the response like a
-  handler's.
+  handler's. The reply helpers work the same way, for example
+  `ctx.response = ctx.redirect('/login')`. A helper only builds the reply:
+  called without the assignment, it changes nothing.
 - **Enrich before `next()`**: headers (`ctx.setHeader`), cookies,
   `ctx.state`. A header set before `next()` survives an
   error inside the chain — the error override replaces the body, not the

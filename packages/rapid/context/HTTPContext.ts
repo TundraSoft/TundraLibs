@@ -655,7 +655,9 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /**
    * Build a redirect response: `302 Found` by default, `301 Moved
    * Permanently` when `permanent` is true. Return it from a handler
-   * (`return ctx.redirect('/login')`). Equivalent to returning
+   * (`return ctx.redirect('/login')`). Middleware return values are
+   * ignored, so a middleware assigns it instead
+   * (`ctx.response = ctx.redirect('/login')`). Equivalent to returning
    * `{ content: '', redirect: { url, permanent } }` — the reply key is the
    * transport-blind form a module method can use without `ctx`. The
    * target is NOT made surface-relative — wrap it in {@link href} to

@@ -472,6 +472,9 @@ helpers) and \`@tundralibs/rapid/cli\`.
   use these for auth), and by HTTP surface with \`onlyApi\` / \`onlyUi\`. Set
   headers BEFORE \`next()\` if they must survive an error; read the reply after
   \`next()\` via \`ctx.response\` / \`ctx.status\` / \`ctx.responseHeaders\`.
+  Short-circuit by assigning \`ctx.response\` and not calling \`next()\`:
+  \`ctx.response = ctx.redirect('/login')\`. A middleware's return value is
+  ignored.
 - **Errors:** throw \`new RapidError(code, { message?, details?, debug? })\` for
   a known condition — the code maps to the status and a client-safe message. An
   unknown throw is an opaque 500 by design, and so is a domain error whose
