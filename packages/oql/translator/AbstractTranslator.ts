@@ -1257,6 +1257,7 @@ export abstract class AbstractTranslator {
     const tableSql = this._qualifiedTable(spec.table, spec.schema);
     const aliasSql = this._quoteIdentifier(EXISTS_ALIAS);
     const conditions: string[] = [];
+    const nullSafe = (spec.nullSafe ?? []) as string[];
     for (const [subKey, outerVal] of Object.entries(spec.on)) {
       // `subKey` is a bare `@col` ref into the subquery table — splice
       // in the EXISTS alias so it resolves as `"__exists__"."col"`.
@@ -1268,7 +1269,11 @@ export abstract class AbstractTranslator {
         hasJoins,
         outerTable,
       );
-      conditions.push(`${left} = ${right}`);
+      conditions.push(
+        nullSafe.includes(subKey)
+          ? this._nullSafeEquals(left, right)
+          : `${left} = ${right}`,
+      );
     }
     if (spec.where) {
       conditions.push(

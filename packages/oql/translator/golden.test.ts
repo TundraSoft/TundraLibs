@@ -1597,6 +1597,44 @@ const CASES: Case[] = [
     },
   },
   {
+    // Only the listed correlation key is NULL-safe; `tenant` keeps `=`.
+    name: '$exists with a nullSafe key uses NULL-safe equality',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'principals',
+      columns: ['tenant', 'org', 'name'],
+      projection: { '@name': true },
+      where: {
+        $exists: {
+          table: 'grants',
+          on: { '@tenant': '@tenant', '@org': '@org' },
+          nullSafe: ['@org'],
+        },
+      },
+    },
+    expected: {
+      sqlite: {
+        sql: 'SELECT "name" AS "name" FROM "principals" WHERE EXISTS ' +
+          '(SELECT 1 FROM "grants" AS "__exists__" WHERE "__exists__"."tenant" = "principals"."tenant" ' +
+          'AND "__exists__"."org" IS "principals"."org")',
+        params: {},
+      },
+      postgres: {
+        sql: 'SELECT "name" AS "name" FROM "principals" WHERE EXISTS ' +
+          '(SELECT 1 FROM "grants" AS "__exists__" WHERE "__exists__"."tenant" = "principals"."tenant" ' +
+          'AND "__exists__"."org" IS NOT DISTINCT FROM "principals"."org")',
+        params: {},
+      },
+      maria: {
+        sql: 'SELECT `name` AS `name` FROM `principals` WHERE EXISTS ' +
+          '(SELECT 1 FROM `grants` AS `__exists__` WHERE `__exists__`.`tenant` = `principals`.`tenant` ' +
+          'AND `__exists__`.`org` <=> `principals`.`org`)',
+        params: {},
+      },
+    },
+  },
+  {
     name: '$exists composes inside $or',
     method: 'select',
     query: {

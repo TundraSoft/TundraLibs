@@ -229,6 +229,44 @@ describe('oql.asserts.Filters.Exists', () => {
       });
     });
 
+    describe('nullSafe', () => {
+      const withNullSafe = (nullSafe: unknown) => ({
+        table: 'grants',
+        on: { '@org': '@org', '@kind': 'role', '@gone': null },
+        nullSafe,
+      });
+
+      it('valid: a key whose value is an @ reference', () => {
+        assertExistsFilter(withNullSafe(['@org']));
+      });
+
+      it('invalid: not an array', () => {
+        asserts.assertThrows(
+          () => assertExistsFilter(withNullSafe('@org')),
+          TypeError,
+          "'nullSafe' must be an array",
+        );
+      });
+
+      it('invalid: entry is not a key of on', () => {
+        asserts.assertThrows(
+          () => assertExistsFilter(withNullSafe(['@tenant'])),
+          TypeError,
+          "'nullSafe' entry '@tenant' is not a key of 'on'",
+        );
+      });
+
+      it('invalid: value is a literal or null', () => {
+        for (const key of ['@kind', '@gone']) {
+          asserts.assertThrows(
+            () => assertExistsFilter(withNullSafe([key])),
+            TypeError,
+            `'nullSafe' entry '${key}' must compare against a column reference`,
+          );
+        }
+      });
+    });
+
     describe('invalid where', () => {
       it('non-object where', () => {
         asserts.assertThrows(
