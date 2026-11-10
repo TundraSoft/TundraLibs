@@ -118,6 +118,14 @@ export type ForeignKeyDef<
    * is equivalent to omitting it.
    */
   readonly reverseProject?: boolean;
+  /**
+   * Match NULL to NULL wherever this relation is joined, in either
+   * direction. Applies to the `on` pairs whose columns are nullable on
+   * BOTH sides; every other pair keeps plain equality. A read overrides
+   * it per call through its `nullSafe` option. Defaults to `false`: a
+   * NULL key matches nothing, as in SQL.
+   */
+  readonly nullSafe?: boolean;
   /** ON DELETE referential action for the physical FK constraint.
    * Omit = the database default (RESTRICT). TABLE fks only. */
   readonly onDelete?: ForeignKeyAction;
@@ -504,6 +512,7 @@ export type EmittedForeignKey = {
   readonly reverseCardinality?: 'hasOne' | 'hasMany';
   readonly project?: boolean;
   readonly reverseProject?: boolean;
+  readonly nullSafe?: boolean;
   readonly onDelete?: ForeignKeyAction;
   readonly onUpdate?: ForeignKeyAction;
 };
@@ -528,6 +537,7 @@ type EmittedForeignKeysOf<F> = {
       & (F[A] extends { readonly reverseProject: infer RP extends boolean }
         ? { readonly reverseProject: RP }
         : { readonly reverseProject?: boolean })
+      & { readonly nullSafe?: boolean }
       & (F[A] extends { readonly onDelete: infer OD extends ForeignKeyAction }
         ? { readonly onDelete: OD }
         : { readonly onDelete?: ForeignKeyAction })
@@ -1027,6 +1037,7 @@ function emitForeignKey(
       : {}),
     ...(fk.project === true ? { project: true } : {}),
     ...(fk.reverseProject === true ? { reverseProject: true } : {}),
+    ...(fk.nullSafe === true ? { nullSafe: true } : {}),
     ...(fk.onDelete !== undefined ? { onDelete: fk.onDelete } : {}),
     ...(fk.onUpdate !== undefined ? { onUpdate: fk.onUpdate } : {}),
   };

@@ -1145,3 +1145,223 @@ describe('live SQLite — timestamps', () => {
     }
   });
 });
+
+describe('norm.Repo — nullSafe relation keys', () => {
+  // `tenant` is NOT NULL on both ends, `code`/`orgCode` nullable on both:
+  // only the second pair can ever be NULL-safe.
+  const Orgs = Entity('ns_orgs', {
+    id: Column.integer(),
+    tenant: Column.integer(),
+    code: Column.varchar(20).nullable(),
+  }, { pk: ['id'] });
+  const grantColumns = () => ({
+    id: Column.integer(),
+    tenant: Column.integer(),
+    orgCode: Column.varchar(20).nullable(),
+    perm: Column.varchar(20),
+  });
+  const Grants = Entity('ns_grants', grantColumns(), {
+    pk: ['id'],
+    fk: {
+      Org: {
+        model: 'Orgs',
+        on: { tenant: 'tenant', orgCode: 'code' },
+        reverseAs: 'Grants',
+      },
+    },
+  });
+  const SafeGrants = Entity('ns_safe_grants', grantColumns(), {
+    pk: ['id'],
+    fk: {
+      Org: {
+        model: 'Orgs',
+        on: { tenant: 'tenant', orgCode: 'code' },
+        reverseAs: 'SafeGrants',
+        nullSafe: true,
+      },
+    },
+  });
+  const schema = () => use(Schema('NS', { Orgs, Grants, SafeGrants }));
+
+  const mock = () => {
+    const exec = new MockExec();
+    const runtime = compileRuntime(schema(), {}, exec, () => {});
+    return {
+      // deno-lint-ignore no-explicit-any
+      db: new NormDb<ReturnType<typeof schema>>(
+        runtime,
+        exec,
+        undefined,
+      ) as any,
+      exec,
+    };
+  };
+  const joinKeys = (exec: MockExec, alias: string): unknown =>
+    (exec.lastOf('SELECT') as unknown as {
+      joins: Record<string, { nullSafe?: string[] }>;
+    }).joins[alias]!.nullSafe;
+  const existsKeys = (exec: MockExec, type: string): unknown =>
+    (exec.lastOf(type) as unknown as {
+      where: { $exists: { nullSafe?: string[] } };
+    }).where.$exists.nullSafe;
+  const withOrg = { '@id': true, '@Org': true };
+
+  it('an FK flag covers the nullable-on-both-sides pair only, in both directions', async () => {
+    const { db, exec } = mock();
+    await db.repo('SafeGrants').find(undefined, { project: withOrg });
+    asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+    await db.repo('Orgs').find(undefined, {
+      project: { '@id': true, '@SafeGrants': true },
+    });
+    asserts.assertEquals(joinKeys(exec, 'SafeGrants'), [
+      '@SafeGrants.@orgCode',
+    ]);
+    // Undeclared: plain equality.
+    await db.repo('Grants').find(undefined, { project: withOrg });
+    asserts.assertEquals(joinKeys(exec, 'Org'), undefined);
+  });
+
+  it('the read option overrides the FK flag, for all relations or per alias', async () => {
+    const { db, exec } = mock();
+    await db.repo('SafeGrants').find(undefined, {
+      project: withOrg,
+      nullSafe: false,
+    });
+    asserts.assertEquals(joinKeys(exec, 'Org'), undefined);
+    await db.repo('Grants').find(undefined, {
+      project: withOrg,
+      nullSafe: true,
+    });
+    asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+    await db.repo('Grants').getByPK({ id: 1 }, {
+      project: withOrg,
+      nullSafe: { Org: true },
+    });
+    asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+
+    // An alias left out of the map keeps its FK's setting.
+    const both = { '@id': true, '@Grants': true, '@SafeGrants': true };
+    await db.repo('Orgs').find(undefined, {
+      project: both,
+      nullSafe: { Grants: true },
+    });
+    asserts.assertEquals(joinKeys(exec, 'Grants'), ['@Grants.@orgCode']);
+    asserts.assertEquals(joinKeys(exec, 'SafeGrants'), [
+      '@SafeGrants.@orgCode',
+    ]);
+    await db.repo('Orgs').find(undefined, {
+      project: both,
+      nullSafe: { SafeGrants: false },
+    });
+    asserts.assertEquals(joinKeys(exec, 'Grants'), undefined);
+    asserts.assertEquals(joinKeys(exec, 'SafeGrants'), undefined);
+  });
+
+  it('a filter lifted to $exists carries the key, in find, count and the total count', async () => {
+    const { db, exec } = mock();
+    await db.repo('Orgs').find({ '@SafeGrants.@perm': 'read' });
+    asserts.assertEquals(existsKeys(exec, 'SELECT'), ['@orgCode']);
+    await db.repo('Orgs').find({ '@Grants.@perm': 'read' });
+    asserts.assertEquals(existsKeys(exec, 'SELECT'), undefined);
+
+    await db.repo('Orgs').count({ '@Grants.@perm': 'read' }, {
+      nullSafe: true,
+    });
+    asserts.assertEquals(existsKeys(exec, 'COUNT'), ['@orgCode']);
+
+    // total: true re-plans the filter for its COUNT — the projected
+    // relation joins for the SELECT and lifts for the COUNT.
+    exec.calls.length = 0;
+    await db.repo('Orgs').find({ '@Grants.@perm': 'read' }, {
+      project: { '@id': true, '@Grants': true },
+      total: true,
+      nullSafe: true,
+    });
+    asserts.assertEquals(joinKeys(exec, 'Grants'), ['@Grants.@orgCode']);
+    asserts.assertEquals(existsKeys(exec, 'COUNT'), ['@orgCode']);
+  });
+
+  it('a per-alias flag that names no relation, or one with no nullable pair, is refused', async () => {
+    const { db, exec } = mock();
+    const unknown = await asserts.assertRejects(
+      () => db.repo('Grants').find(undefined, { nullSafe: { Nope: true } }),
+      NormQueryError,
+      "Unknown relation alias 'Nope' in nullSafe",
+    );
+    asserts.assertEquals(unknown.context.code, 'UNKNOWN_RELATION');
+
+    // Items.Owner joins NOT NULL columns.
+    const items = makeDb();
+    await asserts.assertRejects(
+      // deno-lint-ignore no-explicit-any
+      () =>
+        (items.db.repo('Items') as any).find(undefined, {
+          nullSafe: { Owner: true },
+        }),
+      NormQueryError,
+      "nullSafe cannot apply to relation 'Owner'",
+    );
+    asserts.assertEquals(exec.calls.length + items.exec.calls.length, 0);
+    // Turning it off there, or asking for every relation, is fine: the
+    // relation just has nothing to make NULL-safe.
+    for (const nullSafe of [{ Owner: false }, true]) {
+      // deno-lint-ignore no-explicit-any
+      await (items.db.repo('Items') as any).find(undefined, {
+        project: { '@id': true, '@Owner': true },
+        nullSafe,
+      });
+      asserts.assertEquals(joinKeys(items.exec, 'Owner'), undefined);
+    }
+  });
+
+  it('live SQLite: NULL keys match only when NULL-safe', async () => {
+    const norm = new Norm({
+      database: { dialect: 'sqlite', path: ':memory:' },
+    });
+    const db = norm.use(Schema('NS', { Orgs, Grants }));
+    await norm.connect();
+    try {
+      await db.raw(
+        'CREATE TABLE ns_orgs (id INTEGER PRIMARY KEY, tenant INTEGER NOT NULL, code TEXT)',
+      );
+      await db.raw(
+        'CREATE TABLE ns_grants (id INTEGER PRIMARY KEY, tenant INTEGER NOT NULL, orgCode TEXT, perm TEXT NOT NULL)',
+      );
+      await db.repo('Orgs').insert([
+        { id: 1, tenant: 1, code: null },
+        { id: 2, tenant: 1, code: 'a' },
+        { id: 3, tenant: 2, code: null },
+      ]);
+      await db.repo('Grants').insert([
+        { id: 10, tenant: 1, orgCode: null, perm: 'read' },
+        { id: 11, tenant: 1, orgCode: 'a', perm: 'write' },
+      ]);
+
+      const orgOf = async (nullSafe?: boolean) =>
+        (await db.repo('Grants').find(undefined, {
+          project: { '@id': true, '@Org': { '@id': true } },
+          orderBy: { '@id': 'ASC' },
+          ...(nullSafe !== undefined ? { nullSafe } : {}),
+        })).data.map((r) => [r.id, r.Org?.id ?? null]);
+      asserts.assertEquals(await orgOf(), [[10, null], [11, 2]]);
+      // Tenant still has to match: org 3 has a NULL code too.
+      asserts.assertEquals(await orgOf(true), [[10, 1], [11, 2]]);
+
+      const readers = { '@Grants.@perm': 'read' } as const;
+      asserts.assertEquals((await db.repo('Orgs').find(readers)).data, []);
+      asserts.assertEquals(
+        (await db.repo('Orgs').find(readers, { nullSafe: true })).data.map((
+          r,
+        ) => r.id),
+        [1],
+      );
+      asserts.assertEquals((await db.repo('Orgs').count(readers)).count, 0);
+      asserts.assertEquals(
+        (await db.repo('Orgs').count(readers, { nullSafe: true })).count,
+        1,
+      );
+    } finally {
+      await norm.disconnect();
+    }
+  });
+});

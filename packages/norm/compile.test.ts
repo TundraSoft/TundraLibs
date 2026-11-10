@@ -105,6 +105,26 @@ describe('norm.compile (reverse naming + crypto validation + scope defaults)', (
     asserts.assertStringIncludes(err.message, 'collides with column');
   });
 
+  it('fk nullSafe with no pair nullable on both sides is a definition error', () => {
+    const Hub = Entity('hubs', {
+      id: Column.integer(),
+      code: Column.varchar(20).nullable(),
+    }, { pk: ['id'] });
+    const spoke = (on: { hubId: 'id' } | { hubCode: 'code' }) =>
+      Entity('spokes', {
+        id: Column.integer(),
+        hubId: Column.integer().nullable(),
+        hubCode: Column.varchar(20).nullable(),
+      }, { pk: ['id'], fk: { Hub: { model: 'Hub', on, nullSafe: true } } });
+    // hubId is nullable but Hub.id is not: a NULL can sit on one side only.
+    const err = asserts.assertThrows(
+      () => compile(use(Schema('S', { Hub, Spoke: spoke({ hubId: 'id' }) }))),
+      NormDefinitionError,
+    );
+    asserts.assertStringIncludes(err.message, 'nullable on both sides');
+    compile(use(Schema('S', { Hub, Spoke: spoke({ hubCode: 'code' }) })));
+  });
+
   it('runtimes over the same definitions share one compiled entity — the Guardians are built once', () => {
     const Post = Entity('posts', {
       id: Column.integer(),
