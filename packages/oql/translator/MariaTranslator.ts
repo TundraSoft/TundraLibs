@@ -295,6 +295,11 @@ export class MariaTranslator extends AbstractTranslator {
     return `JSON_UNQUOTE(JSON_EXTRACT(${columnSql}, '$.${path.join('.')}'))`;
   }
 
+  /** NULL-safe equality via `<=>`. */
+  protected override _nullSafeEquals(left: string, right: string): string {
+    return `${left} <=> ${right}`;
+  }
+
   // ---------------------------------------------------------------------------
   // DML: UPSERT — MariaDB uses `INSERT ... ON DUPLICATE KEY UPDATE`.
   // ---------------------------------------------------------------------------

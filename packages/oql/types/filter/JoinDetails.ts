@@ -41,5 +41,22 @@ export type JoinDetails<
    */
   columns: Array<keyof JT>;
   on: JoinFilter<PT, LT>;
+  /**
+   * `on` keys compared NULL-safely: the pair also matches when both
+   * sides are `NULL`, where plain equality never does. Every other key
+   * keeps plain equality. Each entry must be an `on` key whose value is
+   * a column or an expression.
+   *
+   * @example
+   * ```ts ignore
+   * P: {
+   *   table: 'principals',
+   *   columns: ['id', 'org'],
+   *   on: { '@P.@id': '@pid', '@P.@org': '@org' },
+   *   nullSafe: ['@P.@org'], // a NULL org matches a NULL org
+   * }
+   * ```
+   */
+  nullSafe?: Array<keyof JoinFilter<PT, LT>>;
   type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
 };

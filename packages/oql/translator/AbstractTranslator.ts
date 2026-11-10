@@ -1577,6 +1577,7 @@ export abstract class AbstractTranslator {
       }
       const joinTable = this._qualifiedTable(String(def.table), def.schema);
       const onParts: string[] = [];
+      const nullSafe = (def.nullSafe ?? []) as string[];
       for (const [leftKey, rightVal] of Object.entries(def.on)) {
         const left = this._resolveColumnRef(leftKey, true);
         // `= NULL` is never true; a null value is a NULL check.
@@ -1585,13 +1586,28 @@ export abstract class AbstractTranslator {
           continue;
         }
         const right = this.__renderJoinValue(rightVal, scope, params);
-        onParts.push(`${left} = ${right}`);
+        onParts.push(
+          nullSafe.includes(leftKey)
+            ? this._nullSafeEquals(left, right)
+            : `${left} = ${right}`,
+        );
       }
       from += ` ${joinType} JOIN ${joinTable} AS ${
         this._quoteIdentifier(alias)
       } ON ${onParts.join(' AND ')}`;
     }
     return from;
+  }
+
+  /**
+   * NULL-safe equality of two SQL fragments — true when they are equal
+   * or both `NULL`. Used for the `on` keys a join lists in `nullSafe`.
+   * The operator differs per engine, so each dialect supplies its own.
+   *
+   * @throws {@link DialectUnsupportedError} Unless the dialect overrides it.
+   */
+  protected _nullSafeEquals(_left: string, _right: string): string {
+    throw new DialectUnsupportedError(this.Dialect, 'NULL-safe join');
   }
 
   /**

@@ -328,6 +328,55 @@ const CASES: Case[] = [
     },
   },
   {
+    // Only the listed keys are NULL-safe; `id` keeps plain `=`. A column
+    // value and an expression value both take the dialect's operator.
+    name: 'SELECT with nullSafe JOIN keys uses NULL-safe equality',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'org', 'level', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'rank', 'name'],
+          type: 'INNER',
+          on: {
+            '@P.@id': '@pid',
+            '@P.@org': '@org',
+            '@P.@rank': { $$_expression: 'ADD', args: ['@level', 1] },
+          },
+          nullSafe: ['@P.@org', '@P.@rank'],
+        },
+      },
+      projection: { '@perm': true, '@P.@name': 'name' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" ' +
+          'AND "P"."org" IS __base__."org" AND "P"."rank" IS (__base__."level" + :p_0:)',
+        params: { p_0: 1 },
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" ' +
+          'AND "P"."org" IS NOT DISTINCT FROM __base__."org" ' +
+          'AND "P"."rank" IS NOT DISTINCT FROM (__base__."level" + :p_0:)',
+        params: { p_0: 1 },
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`perm` AS `perm`, `P`.`name` AS `name` FROM `grants` AS __base__ ' +
+          'INNER JOIN `principals` AS `P` ON `P`.`id` = __base__.`pid` ' +
+          'AND `P`.`org` <=> __base__.`org` AND `P`.`rank` <=> (__base__.`level` + :p_0:)',
+        params: { p_0: 1 },
+      },
+    },
+  },
+  {
     name: 'SELECT with aggregates and auto GROUP BY',
     method: 'select',
     query: {

@@ -284,6 +284,11 @@ export class PostgresTranslator extends AbstractTranslator {
     return `${columnSql}#>>'{${path.join(',')}}'`;
   }
 
+  /** NULL-safe equality via `IS NOT DISTINCT FROM`. */
+  protected override _nullSafeEquals(left: string, right: string): string {
+    return `${left} IS NOT DISTINCT FROM ${right}`;
+  }
+
   // ---------------------------------------------------------------------------
   // DML: UPSERT
   // ---------------------------------------------------------------------------

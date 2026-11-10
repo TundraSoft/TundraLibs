@@ -15,7 +15,10 @@ import type {
   Joins,
   TableType,
 } from '../../types/mod.ts';
-import { assertColumnIdentifier } from '../columnIdentifier.ts';
+import {
+  assertColumnIdentifier,
+  isColumnIdentifier,
+} from '../columnIdentifier.ts';
 import { assertExpression } from '../expressions/mod.ts';
 
 /**
@@ -175,6 +178,8 @@ export const isJoinFilter: <
  * - schema: Optional schema name
  * - columns: Required array of column names available from the joined table
  * - on: The JoinFilter (ON clause)
+ * - nullSafe: Optional `on` keys compared NULL-safely; each must name an
+ *   `on` entry whose value is a column or an expression
  * - type: Join type (INNER, LEFT, RIGHT, FULL)
  *
  * @param x - The value to validate
@@ -293,6 +298,38 @@ export const assertJoinDetails: <
         error instanceof Error ? error.message : String(error)
       }`,
     );
+  }
+
+  // Validate optional 'nullSafe' property
+  if ('nullSafe' in obj && obj.nullSafe !== undefined) {
+    if (!Array.isArray(obj.nullSafe)) {
+      throw new TypeError(
+        `Invalid JoinDetails: 'nullSafe' must be an array, got ${typeof obj
+          .nullSafe}`,
+      );
+    }
+    const on = obj.on as Record<string, unknown>;
+    for (const key of obj.nullSafe) {
+      if (typeof key !== 'string' || !Object.hasOwn(on, key)) {
+        throw new TypeError(
+          `Invalid JoinDetails: 'nullSafe' entry '${
+            String(key)
+          }' is not a key of 'on'`,
+        );
+      }
+      // A literal or `null` has nothing to compare NULL-safely: a literal
+      // is never NULL, and a `null` value is already an IS NULL check.
+      const value = on[key];
+      const isColumn = typeof value === 'string' &&
+        isColumnIdentifier(value, columnList);
+      const isExpression = typeof value === 'object' && value !== null &&
+        !(value instanceof Date);
+      if (!isColumn && !isExpression) {
+        throw new TypeError(
+          `Invalid JoinDetails: 'nullSafe' entry '${key}' must compare against a column or an expression`,
+        );
+      }
+    }
   }
 
   // Validate optional 'type' property

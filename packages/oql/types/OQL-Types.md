@@ -482,6 +482,10 @@ type JoinDetails<
   // referenced elsewhere in the query.
   columns: Array<keyof JT>;
   on: JoinFilter<PT, LT>;
+  // `on` keys compared NULL-safely: the pair also matches when both
+  // sides are NULL. Each must be an `on` key whose value is a column
+  // or an expression.
+  nullSafe?: Array<keyof JoinFilter<PT, LT>>;
   type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
 };
 
