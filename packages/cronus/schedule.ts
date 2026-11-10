@@ -21,7 +21,7 @@
  * @module
  */
 
-import { InvalidScheduleError } from './errors/mod.ts';
+import { InvalidScheduleError, InvalidTimezoneError } from './errors/mod.ts';
 import type { ParsedSchedule } from './types/mod.ts';
 
 /** Month names → 1-12 (JAN = 1). Case-insensitive on lookup. */
@@ -247,25 +247,112 @@ export function parseSchedule(expression: string): ParsedSchedule {
 }
 
 /**
- * Does `date` (local time, minute resolution) satisfy the
- * {@link ParsedSchedule}?
+ * The calendar reading a schedule is matched against. Package-internal:
+ * the scheduler also builds its DST fall-back key from it.
+ */
+export type WallClock = {
+  year: number;
+  /** 1-12. */
+  month: number;
+  day: number;
+  /** 0-6, Sunday = 0. */
+  weekday: number;
+  hour: number;
+  minute: number;
+};
+
+/**
+ * Build the formatter that reads a `Date` in `timezone`. Building one
+ * is costly — a caller that matches repeatedly keeps it.
+ *
+ * @throws {InvalidTimezoneError} When the runtime does not know
+ *   `timezone`.
+ */
+export function zoneFormat(timezone: string): Intl.DateTimeFormat {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+    });
+  } catch (cause) {
+    throw new InvalidTimezoneError(
+      `Unknown time zone '${timezone}'`,
+      { timezone },
+      cause instanceof Error ? cause : undefined,
+    );
+  }
+}
+
+/** Read `date` in `zone` — on the host's local clock without one. */
+export function wallClock(date: Date, zone?: Intl.DateTimeFormat): WallClock {
+  if (zone === undefined) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1, // getMonth() is 0-11
+      day: date.getDate(),
+      weekday: date.getDay(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+    };
+  }
+  const read: Record<string, string> = {};
+  for (const part of zone.formatToParts(date)) read[part.type] = part.value;
+  return {
+    year: Number(read.year),
+    month: Number(read.month),
+    day: Number(read.day),
+    weekday: DAY_NAMES[read.weekday!.toUpperCase()]!,
+    hour: Number(read.hour),
+    minute: Number(read.minute),
+  };
+}
+
+/**
+ * Does a {@link WallClock} reading satisfy the {@link ParsedSchedule}?
  *
  * POSIX dom/dow rule: if both are restricted, EITHER matching is enough;
  * otherwise both must match (a field beginning with `*` always counts
  * as unrestricted — the Vixie star-flag rule).
  */
-export function matches(schedule: ParsedSchedule, date: Date): boolean {
-  if (!schedule.minute.has(date.getMinutes())) return false;
-  if (!schedule.hour.has(date.getHours())) return false;
-  // getMonth() is 0-11; the month field is 1-12.
-  if (!schedule.month.has(date.getMonth() + 1)) return false;
+export function matchesClock(
+  schedule: ParsedSchedule,
+  clock: WallClock,
+): boolean {
+  if (!schedule.minute.has(clock.minute)) return false;
+  if (!schedule.hour.has(clock.hour)) return false;
+  if (!schedule.month.has(clock.month)) return false;
 
-  const domOk = schedule.dayOfMonth.has(date.getDate());
-  const dowOk = schedule.dayOfWeek.has(date.getDay());
+  const domOk = schedule.dayOfMonth.has(clock.day);
+  const dowOk = schedule.dayOfWeek.has(clock.weekday);
   if (schedule.domRestricted && schedule.dowRestricted) {
     return domOk || dowOk; // POSIX OR
   }
   return domOk && dowOk;
+}
+
+/**
+ * Does `date` (minute resolution) satisfy the {@link ParsedSchedule}?
+ * The date is read in `timezone` — an IANA zone name — or on the
+ * host's local clock when it is omitted.
+ *
+ * @throws {InvalidTimezoneError} When the runtime does not know
+ *   `timezone`.
+ */
+export function matches(
+  schedule: ParsedSchedule,
+  date: Date,
+  timezone?: string,
+): boolean {
+  return matchesClock(
+    schedule,
+    wallClock(date, timezone === undefined ? undefined : zoneFormat(timezone)),
+  );
 }
 
 /**

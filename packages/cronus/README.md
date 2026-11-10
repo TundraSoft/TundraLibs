@@ -121,6 +121,26 @@ import { Cronus } from '@tundralibs/cronus';
 const cron = new Cronus({ unref: true });
 ```
 
+## Time zones
+
+Schedules follow the host's local clock unless told otherwise. Pass an
+IANA zone name to the scheduler, to one job, or both — the job's wins.
+An unknown name throws `InvalidTimezoneError` on the spot. Daylight
+saving follows the zone in use: see
+[matching semantics](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Schedule-Syntax#matching-semantics).
+
+```typescript
+import { Cronus } from '@tundralibs/cronus';
+
+declare function sendDigest(): Promise<void>;
+declare function rollLogs(): Promise<void>;
+
+const cron = new Cronus({ timezone: 'Asia/Kolkata' });
+
+cron.add('digest', '0 9 * * MON-FRI', sendDigest); // 09:00 in Kolkata
+cron.add('roll-logs', '0 0 * * *', rollLogs, { timezone: 'UTC' });
+```
+
 ## Related Documentation
 
 - [Cronus-Schedule-Syntax](https://github.com/TundraSoft/TundraLibs/wiki/Cronus-Schedule-Syntax) - Cron

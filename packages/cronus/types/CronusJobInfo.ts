@@ -12,6 +12,11 @@
 export type CronusJobInfo = {
   name: string;
   schedule: string;
+  /**
+   * The time zone `schedule` is read in — the job's own or the
+   * scheduler's. Absent when it follows the host's local clock.
+   */
+  timezone?: string;
   once: boolean;
   enabled: boolean;
   /** `true` while the job's action is currently executing. */

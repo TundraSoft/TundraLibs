@@ -21,4 +21,10 @@ export type CronusOptions = {
    * @default false
    */
   unref?: boolean;
+  /**
+   * IANA time zone (`'Asia/Kolkata'`, `'UTC'`) every job's schedule is
+   * read in, unless the job names its own. Omitted, schedules follow
+   * the host's local clock.
+   */
+  timezone?: string;
 };

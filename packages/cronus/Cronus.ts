@@ -39,7 +39,14 @@ import {
   InvalidActionError,
   JobNotFoundError,
 } from './errors/mod.ts';
-import { isValidSchedule, matches, parseSchedule } from './schedule.ts';
+import {
+  isValidSchedule,
+  matches,
+  matchesClock,
+  parseSchedule,
+  wallClock,
+  zoneFormat,
+} from './schedule.ts';
 import type {
   CronusAction,
   CronusEvents,
@@ -69,6 +76,10 @@ type CronusJob = {
   name: string;
   schedule: string;
   action: CronusAction;
+  /** The zone the schedule is read in; `undefined` = host local clock. */
+  timezone: string | undefined;
+  /** Reads a `Date` in `timezone`, built once at registration. */
+  zone: Intl.DateTimeFormat | undefined;
   once: boolean;
   enabled: boolean;
   /** Guards against concurrent runs of the same job (overlap prevention). */
@@ -76,8 +87,9 @@ type CronusJob = {
   runCount: number;
   lastRun: Date | null;
   /**
-   * Local wall-clock key of the last SCHEDULED fire — fixed-time jobs
-   * only. A DST fall-back replays a wall hour on new epoch minutes;
+   * Wall-clock key, in the job's zone, of the last SCHEDULED fire —
+   * fixed-time jobs only. A DST fall-back replays a wall hour on new
+   * epoch minutes;
    * this key (which includes the date) blocks the replay.
    */
   lastLocalFire: string | null;
@@ -102,6 +114,8 @@ export class Cronus extends Events<CronusEvents> {
   private readonly __jobs: Map<string, CronusJob> = new Map();
   private readonly __parsed: Map<string, ParsedSchedule> = new Map();
   private readonly __unref: boolean;
+  private readonly __timezone: string | undefined;
+  private readonly __zone: Intl.DateTimeFormat | undefined;
   private __timer: TimerHandle | undefined;
   private __active = false;
   /** Invalidates in-flight timer chains on stop()/start(). */
@@ -114,10 +128,16 @@ export class Cronus extends Events<CronusEvents> {
    * is called, so jobs can be registered first.
    *
    * @param options - See {@link CronusOptions}.
+   * @throws {InvalidTimezoneError} When `options.timezone` is not a
+   *   zone the runtime knows.
    */
   constructor(options: CronusOptions = {}) {
     super();
     this.__unref = options.unref ?? false;
+    this.__timezone = options.timezone;
+    this.__zone = options.timezone === undefined
+      ? undefined
+      : zoneFormat(options.timezone);
   }
 
   /** `true` while the ticker is running. */
@@ -142,6 +162,8 @@ export class Cronus extends Events<CronusEvents> {
    * @throws {DuplicateJobError} When `name` is already registered.
    * @throws {InvalidScheduleError} When `schedule` is malformed.
    * @throws {InvalidActionError} When `action` is not a function.
+   * @throws {InvalidTimezoneError} When `options.timezone` is not a
+   *   zone the runtime knows.
    */
   public add(
     name: string,
@@ -160,12 +182,19 @@ export class Cronus extends Events<CronusEvents> {
         name,
       });
     }
-    // Parse now — a bad schedule fails at registration, never silently.
-    this.__parsed.set(name, parseSchedule(schedule));
+    // Parse now — a bad schedule or zone fails at registration, never
+    // silently, and before anything is stored.
+    const parsed = parseSchedule(schedule);
+    const zone = options.timezone === undefined
+      ? this.__zone
+      : zoneFormat(options.timezone);
+    this.__parsed.set(name, parsed);
     this.__jobs.set(name, {
       name,
       schedule,
       action,
+      timezone: options.timezone ?? this.__timezone,
+      zone,
       once: options.once ?? false,
       enabled: options.enabled ?? true,
       running: false,
@@ -312,12 +341,19 @@ export class Cronus extends Events<CronusEvents> {
   }
 
   /**
-   * Would `schedule` fire at `at` (default: now)?
+   * Would `schedule` fire at `at` (default: now), read in `timezone`
+   * (default: the host's local clock)?
    *
    * @throws {InvalidScheduleError} When `schedule` is malformed.
+   * @throws {InvalidTimezoneError} When `timezone` is not a zone the
+   *   runtime knows.
    */
-  public static matches(schedule: string, at: Date = new Date()): boolean {
-    return matches(parseSchedule(schedule), at);
+  public static matches(
+    schedule: string,
+    at: Date = new Date(),
+    timezone?: string,
+  ): boolean {
+    return matches(parseSchedule(schedule), at, timezone);
   }
 
   /**
@@ -349,15 +385,17 @@ export class Cronus extends Events<CronusEvents> {
       if (this.__jobs.get(job.name) !== job) continue; // removed mid-tick
       if (!job.enabled) continue;
       const parsed = this.__parsed.get(job.name);
-      if (parsed === undefined || !matches(parsed, at)) continue;
+      if (parsed === undefined) continue;
+      const clock = wallClock(at, job.zone);
+      if (!matchesClock(parsed, clock)) continue;
       // DST fall-back guard (Vixie parity): a FIXED-TIME job fires at
       // most once per wall-clock minute — when the fall-back replays
       // an hour, the second pass reads the same local key and is
       // skipped. Wildcard jobs run every physical minute regardless.
       let localKey: string | undefined;
       if (parsed.fixedTime) {
-        localKey = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}T` +
-          `${at.getHours()}:${at.getMinutes()}`;
+        localKey = `${clock.year}-${clock.month}-${clock.day}T` +
+          `${clock.hour}:${clock.minute}`;
         if (job.lastLocalFire === localKey) continue;
       }
       if (job.running) {
@@ -387,7 +425,7 @@ export class Cronus extends Events<CronusEvents> {
 
   /** Snapshot a {@link CronusJob} onto its public read-only view. */
   private __info(job: CronusJob): CronusJobInfo {
-    return {
+    const info: CronusJobInfo = {
       name: job.name,
       schedule: job.schedule,
       once: job.once,
@@ -396,6 +434,8 @@ export class Cronus extends Events<CronusEvents> {
       runCount: job.runCount,
       lastRun: job.lastRun === null ? null : new Date(job.lastRun.getTime()),
     };
+    if (job.timezone !== undefined) info.timezone = job.timezone;
+    return info;
   }
 
   /**

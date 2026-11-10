@@ -166,8 +166,10 @@ strictly the 15th).
 
 ## Matching semantics
 
-- **Local time.** Matching reads the host's local wall clock
-  (`getMinutes()`/`getHours()`/…), with Vixie cron's DST semantics:
+- **Wall-clock time.** Matching reads the wall clock of the job's
+  time zone — its own `timezone` option, else the scheduler's, else
+  the host's local zone — with Vixie cron's DST semantics, in whichever
+  zone applies:
   - **Fall-back** (an hour repeats): a _fixed-time_ job — minute AND
     hour both concrete, e.g. `30 1 * * *` — fires **once**, not twice;
     wildcard jobs (`* * * * *`, `*/5 …`, `30 * * * *`) keep firing
@@ -227,19 +229,26 @@ const schedule = parseSchedule('*/15 9-17 * * MON-FRI');
 
 ### `matches()`
 
-Does a `Date` (local time, minute resolution) satisfy a parsed
-schedule?
+Does a `Date` (minute resolution) satisfy a parsed schedule? The date
+is read in `timezone` — an IANA zone name — or on the host's local
+clock when it is omitted.
 
 ```typescript ignore
-matches(schedule: ParsedSchedule, date: Date): boolean
+matches(schedule: ParsedSchedule, date: Date, timezone?: string): boolean
 ```
+
+**Throws:**
+
+- `InvalidTimezoneError` - When the runtime does not know `timezone`.
 
 **Example:**
 
 ```typescript
 import { matches, parseSchedule } from '@tundralibs/cronus';
 
-matches(parseSchedule('30 6 * * *'), new Date(2026, 0, 1, 6, 30)); // true
+const daily = parseSchedule('30 6 * * *');
+matches(daily, new Date(2026, 0, 1, 6, 30)); // true
+matches(daily, new Date('2026-01-01T01:00:00Z'), 'Asia/Kolkata'); // true
 ```
 
 ### `isValidSchedule()`
