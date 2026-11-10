@@ -9,6 +9,7 @@
  * - CURRENT_TIMESTAMP: Current timestamp (alias for NOW)
  * - CURRENT_TIMESTAMPTZ: Current timestamp with timezone (PostgreSQL)
  * - DATE_ADD: Add/subtract time intervals from dates
+ * - DATE_TRUNC: Start of the day, month or year a date falls in
  *
  * @module asserts/Expressions/Date
  */
@@ -462,6 +463,67 @@ export const isDateAddExpression = (
   }
 };
 
+/** Units `DATE_TRUNC` truncates to. @internal */
+const DATE_TRUNC_UNITS: readonly string[] = ['DAYS', 'MONTHS', 'YEARS'];
+
+/**
+ * Asserts that a value is a valid DATE_TRUNC expression — the start of
+ * the day, month or year `date` falls in.
+ *
+ * `date` is a column identifier, or a nested `DATE_ADD`, `NOW`,
+ * `CURRENT_TIMESTAMP` or `CURRENT_TIMESTAMPTZ` expression. `unit` is a
+ * translation-time switch, so it must be the literal `'DAYS'`,
+ * `'MONTHS'` or `'YEARS'`.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid DATE_TRUNC expression
+ *
+ * @example
+ * ```ts
+ * assertDateTruncExpression({
+ *   $$_expression: 'DATE_TRUNC',
+ *   args: { date: '@created_at', unit: 'MONTHS' },
+ * }, ['created_at']);
+ * ```
+ */
+export const assertDateTruncExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { $$_expression: 'DATE_TRUNC' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { $$_expression: 'DATE_TRUNC' }> => {
+  assertBaseExpression(x, 'DATE_TRUNC');
+  if (!('args' in x) || typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: args key must be an object with date and unit properties`,
+    );
+  }
+  const { date, unit } = x.args as { date?: unknown; unit?: unknown };
+  if (!isColumnIdentifier(date, columnList)) {
+    assertBaseExpression(date);
+    if (date.$$_expression === 'DATE_ADD') {
+      assertDateAddExpression(date, columnList);
+    } else if (
+      date.$$_expression !== 'NOW' &&
+      date.$$_expression !== 'CURRENT_TIMESTAMP' &&
+      date.$$_expression !== 'CURRENT_TIMESTAMPTZ'
+    ) {
+      throw new TypeError(
+        `Invalid Expression definition: date must be a ColumnIdentifier or a DATE_ADD, NOW, CURRENT_TIMESTAMP or CURRENT_TIMESTAMPTZ expression, got '${date.$$_expression}'`,
+      );
+    }
+  }
+  if (typeof unit !== 'string' || !DATE_TRUNC_UNITS.includes(unit)) {
+    throw new TypeError(
+      `Invalid DATE_TRUNC unit: Expected one of ${
+        DATE_TRUNC_UNITS.join(', ')
+      }, got '${String(unit)}'`,
+    );
+  }
+};
+
 /**
  * Asserts that a value is a valid date-related expression.
  *
@@ -520,6 +582,8 @@ export const assertDateExpression: (
     assertCurrentTimestampTZExpression(x);
   } else if (x.$$_expression === 'DATE_ADD') {
     assertDateAddExpression(x, columnList);
+  } else if (x.$$_expression === 'DATE_TRUNC') {
+    assertDateTruncExpression(x, columnList);
   } else if (x.$$_expression === 'UNIX_TIMESTAMP') {
     assertUnixTimestampExpression(x);
   } else {

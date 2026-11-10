@@ -583,6 +583,14 @@ type Expressions<
       unit: TimeUnit;
     };
   }
+  | {
+    $$_expression: 'DATE_TRUNC';
+    args: {
+      // a Date column, or a nested DATE_ADD / NOW / CURRENT_TIMESTAMP(TZ)
+      date: GetColumnByType<FT, Date> | Expressions<T, FT>;
+      unit: 'DAYS' | 'MONTHS' | 'YEARS';
+    };
+  }
   | { $$_expression: 'NOW' }
   | { $$_expression: 'CURRENT_DATE' }
   | { $$_expression: 'CURRENT_TIME' }
@@ -726,7 +734,8 @@ type DateExpressions =
   | 'CURRENT_TIME'
   | 'CURRENT_TIMESTAMP'
   | 'CURRENT_TIMESTAMPTZ'
-  | 'DATE_ADD';
+  | 'DATE_ADD'
+  | 'DATE_TRUNC';
 ```
 
 > Note: `LENGTH` and `DATE_DIFF` are classified as **numeric** (they
@@ -830,8 +839,8 @@ There is no general `CAST`. The engines disagree on what it means:
 ### Date expressions
 
 Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
-`CURRENT_TIME`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`.
-(`DATE_DIFF` returns a number and is classified numeric.)
+`CURRENT_TIME`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
+`DATE_TRUNC`. (`DATE_DIFF` returns a number and is classified numeric.)
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
   `date` (negative `amount` subtracts). Months and years stop at the
@@ -840,6 +849,37 @@ Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
 - `DATE_DIFF` — `args: { from; to; unit }`; complete time units between
   `from` and `to`, the same number on every dialect — see
   [DATE_DIFF units](../docs/OQL-Compatibility.md#date_diff-units).
+- `DATE_TRUNC` — `args: { date; unit }`; the start of the day, month or
+  year `date` falls in, for grouping rows by period. `unit` is `'DAYS'`,
+  `'MONTHS'` or `'YEARS'`, written as a literal on the node (it is never a
+  bound parameter); any other value throws. `date` is a column or a nested
+  `DATE_ADD` / `NOW` / `CURRENT_TIMESTAMP(TZ)`, not a `Date` literal.
+
+  The boundary is taken in the zone the engine reads `date` in: UTC on
+  SQLite and MongoDB, the stored wall clock for a zone-less column
+  (Postgres `TIMESTAMP`, MariaDB `DATETIME`), and the session time zone
+  for a Postgres `TIMESTAMPTZ` or a MariaDB `TIMESTAMP`. Run the database
+  session in UTC to get the same buckets on every engine.
+
+  ```typescript
+  import type { Query } from '@tundralibs/oql';
+
+  // Orders per month.
+  const perMonth: Query<'SELECT'> = {
+    type: 'SELECT',
+    table: 'orders',
+    columns: ['id', 'createdAt'],
+    expressions: {
+      month: {
+        $$_expression: 'DATE_TRUNC',
+        args: { date: '@createdAt', unit: 'MONTHS' },
+      },
+    },
+    aggregates: { total: { $$_aggregate: 'COUNT' } },
+    projection: { '@month': 'month', '@total': 'total' },
+    orderBy: { '@month': 'ASC' },
+  };
+  ```
 
 ```typescript
 type TimeUnit = 'DAYS' | 'MONTHS' | 'YEARS' | 'HOURS' | 'MINUTES' | 'SECONDS';

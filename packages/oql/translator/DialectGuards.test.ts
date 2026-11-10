@@ -104,6 +104,53 @@ const VIEW_QUERY = {
 } as unknown as Query<'CREATE_VIEW'>;
 
 describe('oql.translator.guards', () => {
+  describe('DATE_TRUNC unit', () => {
+    // `expressions` are validated by the asserts layer; a filter operand is
+    // not, so the translator's own check is what stops a unit reaching SQL.
+    const withUnit = (unit: string) =>
+      ({
+        type: 'SELECT',
+        table: 'orders',
+        columns: ['id', 'at'],
+        projection: { '@id': true },
+        where: {
+          '@at': {
+            $gte: {
+              $$_expression: 'DATE_TRUNC',
+              args: { date: '@at', unit },
+            },
+          },
+        },
+      }) as unknown as Query<'SELECT'>;
+
+    it('refuses a unit outside DAYS / MONTHS / YEARS on every SQL dialect', () => {
+      for (const unit of ['HOURS', "day', now()); DROP TABLE orders; --"]) {
+        for (
+          const t of [
+            new SQLiteTranslator(),
+            new PostgresTranslator(),
+            new MariaTranslator(),
+          ]
+        ) {
+          const err = asserts.assertThrows(
+            () => t.select(withUnit(unit)),
+            OqlError,
+          );
+          asserts.assertEquals((err as OqlError).code, 'INVALID_TIME_UNIT');
+        }
+      }
+    });
+
+    it('emits the operand when the unit is valid', () => {
+      // Control: same query shape — proves the unit is what is rejected.
+      const { sql } = new PostgresTranslator().select(withUnit('MONTHS'));
+      asserts.assertStringIncludes(
+        sql,
+        `WHERE "at" >= date_trunc('month', "at")`,
+      );
+    });
+  });
+
   describe('join support flags', () => {
     it('maria refuses FULL JOIN (no such syntax in MySQL/MariaDB)', () => {
       const err = asserts.assertThrows(
