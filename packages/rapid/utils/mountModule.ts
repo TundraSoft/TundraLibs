@@ -508,6 +508,9 @@ function registerDecoration<S extends RapidContextState>(
           ...(decoration.access !== undefined
             ? { access: decoration.access }
             : {}),
+          ...(decoration.timezone !== undefined
+            ? { timezone: decoration.timezone }
+            : {}),
         },
       );
       break;

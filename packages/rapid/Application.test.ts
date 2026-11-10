@@ -2067,6 +2067,67 @@ describe('rapid.Application', () => {
       }
     });
 
+    it("jobs.timezone and a job's own timezone reach the scheduler", async () => {
+      class Reports {
+        @JOB('decorated', '0 9 * * *', { timezone: 'America/New_York' })
+        run() {
+          return { content: 'ok' };
+        }
+      }
+      const app = await Application.initialize({
+        name: 'jobzones',
+        server: { enabled: false },
+        jobs: { timezone: 'Asia/Tokyo' },
+      });
+      app.job('inherits', '0 9 * * *', () => ({ content: 'ok' }));
+      app.job('own', '0 9 * * *', () => ({ content: 'ok' }), {
+        timezone: 'UTC',
+      });
+      app.module(new Reports());
+      await app.start();
+      try {
+        const zones = Object.fromEntries(
+          app.jobMetrics!.jobs.map((job) => [job.name, job.timezone]),
+        );
+        asserts.assertEquals(zones, {
+          inherits: 'Asia/Tokyo',
+          own: 'UTC',
+          decorated: 'America/New_York',
+        });
+      } finally {
+        await app.stop();
+      }
+    });
+
+    it('an unknown time zone is refused at registration, not at start()', async () => {
+      const boot = await asserts.assertRejects(
+        () =>
+          Application.initialize({
+            name: 'badzone',
+            server: { enabled: false },
+            jobs: { timezone: 'Mars/Olympus' },
+          }),
+        RapidError,
+        'jobs.timezone must be an IANA time zone name',
+      );
+      asserts.assertEquals(boot.code, 'RAPID_CONFIG');
+
+      const app = await Application.initialize({
+        name: 'badjobzone',
+        server: { enabled: false },
+      });
+      const job = asserts.assertThrows(
+        () =>
+          app.job('j', '0 9 * * *', () => ({ content: 'ok' }), {
+            timezone: 'Mars/Olympus',
+          }),
+        RapidError,
+        "job 'j' timezone must be an IANA time zone name",
+      );
+      asserts.assertEquals(job.code, 'RAPID_CONFIG');
+      asserts.assertEquals(app.jobs.length, 0);
+    });
+
     it('socketMetrics reports websocket connection counters', async () => {
       const app = await Application.initialize({
         name: 'sockmetrics',

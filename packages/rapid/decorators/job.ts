@@ -7,7 +7,7 @@
  * @module
  */
 
-import { parseSchedule } from '@tundralibs/cronus';
+import { matches, parseSchedule } from '@tundralibs/cronus';
 import { RapidError } from '../errors/mod.ts';
 import type { RapidBinds, RapidModuleReply } from '../types/mod.ts';
 import {
@@ -25,6 +25,27 @@ type JobDecorator<This, A extends readonly unknown[]> = (
     (this: This, ...args: A) => RapidModuleReply
   >,
 ) => void;
+
+const EVERY_MINUTE = parseSchedule('* * * * *');
+
+/**
+ * Registration-time check for a `timezone`: a zone the scheduler can
+ * read a schedule in. Internal — shared with `app.job()` and the
+ * `jobs.timezone` option.
+ *
+ * @throws {RapidError} RAPID_CONFIG naming `where`.
+ */
+export function assertTimezone(where: string, timezone: unknown): void {
+  try {
+    matches(EVERY_MINUTE, new Date(0), timezone as string);
+  } catch (cause) {
+    throw new RapidError('RAPID_CONFIG', {
+      message: `${where} must be an IANA time zone name (e.g. 'Asia/Kolkata')`,
+      details: { timezone },
+      cause: cause instanceof Error ? cause : undefined,
+    });
+  }
+}
 
 /** Options for {@link JOB}. */
 export type JobDecoratorOptions<A extends readonly unknown[]> = {
@@ -44,6 +65,11 @@ export type JobDecoratorOptions<A extends readonly unknown[]> = {
    * JOB context (none, or a system identity the policy recognises).
    */
   access?: string;
+  /**
+   * IANA time zone the schedule is read in.
+   * @default the app's `jobs.timezone`, else the server's local clock
+   */
+  timezone?: string;
 };
 
 /**
@@ -51,7 +77,7 @@ export type JobDecoratorOptions<A extends readonly unknown[]> = {
  *
  * @param name - Unique job name.
  * @param schedule - 5-field cron expression, validated NOW.
- * @throws {RapidError} RAPID_CONFIG when `schedule` is invalid, at
+ * @throws {RapidError} RAPID_CONFIG when `schedule` or `timezone` is invalid, at
  *   decoration time under legacy decorator compilation, or on a
  *   non-method/static/private target.
  */
@@ -84,6 +110,9 @@ export const JOB: {
     });
   }
   if (options.access !== undefined) assertAccess('@JOB', options.access);
+  if (options.timezone !== undefined) {
+    assertTimezone(`@JOB '${name}' timezone`, options.timezone);
+  }
   return (_target: object, context: ClassMethodDecoratorContext): void => {
     assertMethodContext(context, 'JOB');
     if (options.access !== undefined) {
@@ -97,6 +126,7 @@ export const JOB: {
       binds: options.bind ?? [],
       methodName: String(context.name),
       ...(options.access !== undefined ? { access: options.access } : {}),
+      ...(options.timezone !== undefined ? { timezone: options.timezone } : {}),
     });
   };
 };

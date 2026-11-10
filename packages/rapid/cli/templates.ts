@@ -120,6 +120,7 @@ server:
 
 jobs:
   enabled: true # run scheduled (@JOB / app.job) jobs on this replica — every enabled replica runs every job
+# timezone: Asia/Kolkata # IANA zone schedules are read in (default: the server's local zone); a job may name its own
 
 uploads: # multipart file parts (ctx.payload / ctx.files)
   # path: ./uploads # default: a temp dir created at boot, removed at stop()
@@ -554,10 +555,11 @@ concurrent callers share it), \`status\` (the interpreted outcome), \`config\`,
   pub/sub channel clients may subscribe to; \`ctx.publish('name', data)\` pushes.
   Browser upgrades from another origin are refused unless listed in
   \`server.socketOrigins\`. \`app.fetch()\` (Workers, tests) serves HTTP only.
-- \`app.job('name', '*/5 * * * *', handler, { args? })\` registers a cron job
-  (5-field schedule, validated at registration). Every replica with
+- \`app.job('name', '*/5 * * * *', handler, { args?, timezone? })\` registers a
+  cron job (5-field schedule, validated at registration). Every replica with
   \`jobs.enabled\` runs every job — there is no leader election; schedules use
-  the server's local time; a tick that fires while the previous run is still
+  \`jobs.timezone\` (default: the server's local time) unless the job names
+  its own \`timezone\`; a tick that fires while the previous run is still
   going is SKIPPED. \`app.triggerJob('name', args)\` runs one now (bypasses the
   overlap guard) and returns the outcome.
 

@@ -42,7 +42,10 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
   public start(): Promise<void> {
     // unref: the HTTP server (or the caller) owns the process
     // lifecycle — a pending tick must never block shutdown.
-    const cronus = new Cronus({ unref: true });
+    const cronus = new Cronus({
+      unref: true,
+      timezone: this._app.option('jobs')?.timezone,
+    });
     cronus.on('skip', (name) => {
       this._app.meter?.job({ job: name, outcome: 'overlap' });
       this._app.log.debug('job tick skipped — previous run still going', {
@@ -58,7 +61,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       });
     });
     for (const job of this._app.jobs) {
-      // Schedules were validated at registration; cannot throw here.
+      // Schedules and zones were validated at registration; cannot throw here.
       // Scheduled firings carry the registration-default params only
       // (no overrides — those exist solely on the trigger path).
       cronus.add(job.name, job.schedule, async (run) => {
@@ -72,7 +75,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
           undefined,
           true,
         ); // hold the slot until detached work settles
-      });
+      }, { timezone: job.timezone });
     }
     cronus.start();
     this.__cronus = cronus;

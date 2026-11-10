@@ -21,4 +21,6 @@ export type RapidJobEntry<S extends RapidContextState = RapidContextState> = {
   args?: Readonly<Record<string, unknown>>;
   /** The declared `access` string, judged by the auth binding before the handler. */
   access?: string;
+  /** IANA time zone the schedule is read in; absent, `jobs.timezone` applies. */
+  timezone?: string;
 };
