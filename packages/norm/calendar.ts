@@ -25,7 +25,9 @@ export function utcDay(d: Date): Date {
 }
 
 function clock(h: string, m: string, s = '00', fraction = ''): string {
-  const f = fraction.replace(/0+$/, '');
+  let end = fraction.length;
+  while (end > 0 && fraction[end - 1] === '0') end--;
+  const f = fraction.slice(0, end);
   return f === '' ? `${h}:${m}:${s}` : `${h}:${m}:${s}.${f}`;
 }
 
