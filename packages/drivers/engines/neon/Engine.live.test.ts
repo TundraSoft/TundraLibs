@@ -220,6 +220,44 @@ describe({
         }
       });
 
+      it('binds a Date where Postgres has no column to infer its type from', async () => {
+        const engine = makeEngine('neon-live-dates');
+        const t = tableName('dates');
+        const at = new Date('2026-01-02T12:34:56.000Z');
+        const from = new Date('2026-01-01T00:00:00.000Z');
+        try {
+          // Sent as untyped text, each of these fails or comes back a string.
+          const sel = await engine.execute<Record<string, unknown>>({
+            sql: `SELECT date_trunc('day', :at:) AS day, :at: - :from: AS gap,
+              :at: AS bare, :at: IS NULL AS missing`,
+            params: { at, from },
+          });
+          const row = sel.data[0]!;
+          asserts.assertEquals(row.day, new Date('2026-01-02T00:00:00.000Z'));
+          asserts.assertEquals(row.gap, '1 day 12:34:56');
+          asserts.assertEquals(row.bare, at);
+          asserts.assertEquals(row.missing, false);
+
+          // The typed param still lands in every date/time column type.
+          await engine.execute({
+            sql: `CREATE TABLE ${t} (tz TIMESTAMPTZ, ts TIMESTAMP, dt DATE)`,
+          });
+          const ins = await engine.execute<Record<string, unknown>>({
+            sql: `INSERT INTO ${t} (tz, ts, dt) VALUES (:at:, :at:, :at:)
+              RETURNING *`,
+            params: { at },
+          });
+          asserts.assertEquals(ins.data[0], {
+            tz: at,
+            ts: at,
+            dt: new Date('2026-01-02T00:00:00.000Z'),
+          });
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
       it('UPDATE and DELETE report affected-row counts', async () => {
         const engine = makeEngine('neon-live-crud');
         const t = tableName('crud');
