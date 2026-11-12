@@ -575,6 +575,14 @@ describe({
           );
           asserts.assertEquals(r.data[0]!.dt.toISOString(), at.toISOString());
           asserts.assertEquals(r.data[0]!.ts.toISOString(), at.toISOString());
+          const edge = await engine.execute<Record<string, unknown>>({
+            sql:
+              `SELECT CAST(NULL AS DATE) AS none, CAST('0000-00-00' AS DATE) AS zero`,
+          });
+          asserts.assertEquals(edge.data[0], {
+            none: null,
+            zero: '0000-00-00',
+          });
           await asserts.assertRejects(
             () =>
               engine.execute({
