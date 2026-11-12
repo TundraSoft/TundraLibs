@@ -64,7 +64,12 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 | `VARCHAR` / `TEXT`             | `string`              |
 | `BLOB` / `BINARY`              | `Buffer` (Node-style) |
 | `JSON`                         | parsed object         |
+| `DATE`                         | `Date` (UTC midnight) |
 | `DATETIME` / `TIMESTAMP`       | `Date`                |
+
+Dates are written and read in UTC whatever the host's time zone: each
+connection sets its session `time_zone` to `+00:00`, a `Date` parameter is
+sent as its UTC clock, and a `DATETIME` is read as a UTC clock.
 
 ## Errors
 

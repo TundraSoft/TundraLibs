@@ -543,6 +543,53 @@ describe({
         }
       });
 
+      it('dates are written and read as UTC, whatever the host zone', async () => {
+        const engine = new MariaEngine('maria-types-utc', TEST_CONFIG);
+        await engine.connect();
+        const t = tableName('types_utc');
+        try {
+          await engine.execute({
+            sql:
+              `CREATE TABLE ${t} (id INT PRIMARY KEY, d DATE, dt DATETIME(3), ts TIMESTAMP(3) NULL)`,
+          });
+          const at = new Date('2026-01-15T23:30:00.250Z');
+          await engine.execute({
+            sql:
+              `INSERT INTO ${t} (id, d, dt, ts) VALUES (1, :at:, :at:, :at:)`,
+            params: { at },
+          });
+          const raw = await engine.execute<Record<string, unknown>>({
+            sql:
+              `SELECT @@session.time_zone AS zone, CAST(d AS CHAR) AS d, CAST(dt AS CHAR) AS dt, UNIX_TIMESTAMP(ts) * 1000 AS ms FROM ${t}`,
+          });
+          asserts.assertEquals(raw.data[0]!.zone, '+00:00');
+          asserts.assertEquals(raw.data[0]!.d, '2026-01-15');
+          asserts.assertEquals(raw.data[0]!.dt, '2026-01-15 23:30:00.250');
+          asserts.assertEquals(Number(raw.data[0]!.ms), at.getTime());
+          const r = await engine.execute<{ d: Date; dt: Date; ts: Date }>({
+            sql: `SELECT d, dt, ts FROM ${t}`,
+          });
+          asserts.assertEquals(
+            r.data[0]!.d.toISOString(),
+            '2026-01-15T00:00:00.000Z',
+          );
+          asserts.assertEquals(r.data[0]!.dt.toISOString(), at.toISOString());
+          asserts.assertEquals(r.data[0]!.ts.toISOString(), at.toISOString());
+          await asserts.assertRejects(
+            () =>
+              engine.execute({
+                sql: `SELECT :at: AS v`,
+                params: { at: new Date('nope') },
+              }),
+            EngineError,
+            'Invalid Date',
+          );
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
       it('utf-8 / multi-byte values round-trip', async () => {
         const engine = new MariaEngine('maria-types-utf8', TEST_CONFIG);
         await engine.connect();
