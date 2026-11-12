@@ -84,9 +84,8 @@ const MARIA_INDEX_METHODS = new Set(['BTREE', 'HASH']);
 
 /**
  * OQL time-unit → MariaDB interval keyword for the `TIMESTAMPADD` /
- * `TIMESTAMPDIFF` unit argument (which must be an inlined keyword, not a
- * bound parameter). Fed to {@link AbstractTranslator._timeUnitCase} by
- * both date-arithmetic emitters.
+ * `TIMESTAMPDIFF` unit argument, which must be an inlined keyword: it
+ * cannot be a bound parameter or any other expression.
  */
 const MARIA_INTERVAL_UNITS = {
   DAYS: 'DAY',
@@ -210,20 +209,9 @@ export class MariaTranslator extends AbstractTranslator {
     ['CURRENT_TIME', () => 'CURRENT_TIME()'],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP()'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
-    ['DATE_ADD', (a) => {
-      // MariaDB: TIMESTAMPADD(unit, amount, date). The unit keyword must be
-      // inlined, not parameterised, so a CASE maps the OQL unit string to
-      // the SQL keyword.
-      const [date, amount, unit] = a;
-      const unitKeyword = this._timeUnitCase(unit!, MARIA_INTERVAL_UNITS);
-      return `TIMESTAMPADD(${unitKeyword}, ${amount}, ${date})`;
-    }],
-    ['DATE_DIFF', (a) => {
-      // MariaDB: TIMESTAMPDIFF(unit, from, to) — unit can't be parameterised.
-      const [from, to, unit] = a;
-      const unitKeyword = this._timeUnitCase(unit!, MARIA_INTERVAL_UNITS);
-      return `TIMESTAMPDIFF(${unitKeyword}, ${from}, ${to})`;
-    }],
+    // `unit` arrives as the keyword itself — see `_timeUnitArg`.
+    ['DATE_ADD', (a) => `TIMESTAMPADD(${a[2]}, ${a[1]}, ${a[0]})`],
+    ['DATE_DIFF', (a) => `TIMESTAMPDIFF(${a[2]}, ${a[0]}, ${a[1]})`],
     ['UUID', () => 'UUID()'],
     ['HASH', (a) => `SHA2(${a[0]}, 256)`],
     ['ENCRYPT', (a) => `AES_ENCRYPT(${a[0]}, ${a[1]})`],
@@ -280,6 +268,27 @@ export class MariaTranslator extends AbstractTranslator {
   // ---------------------------------------------------------------------------
   // Filters: JSON path extraction
   // ---------------------------------------------------------------------------
+
+  /**
+   * The unit goes into the SQL as a keyword, so it is looked up — never
+   * interpolated — and anything outside the table is refused.
+   *
+   * @throws {OqlError} `INVALID_TIME_UNIT` when the unit isn't a
+   *   recognised OQL time unit.
+   */
+  protected override _timeUnitArg(unit: unknown): string {
+    if (
+      typeof unit !== 'string' || !Object.hasOwn(MARIA_INTERVAL_UNITS, unit)
+    ) {
+      throw new OqlError(
+        `Unknown time unit '${String(unit)}' — expected one of ${
+          Object.keys(MARIA_INTERVAL_UNITS).join(', ')
+        }`,
+        { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+      );
+    }
+    return MARIA_INTERVAL_UNITS[unit as keyof typeof MARIA_INTERVAL_UNITS];
+  }
 
   /**
    * JSON path extraction for a `@col.@key` filter key:
