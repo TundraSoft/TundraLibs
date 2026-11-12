@@ -408,9 +408,36 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
   - SQLite uses `LIKE` (already case-insensitive for ASCII; non-ASCII
     requires `PRAGMA case_sensitive_like=OFF`, which is the default).
   - MongoDB uses `$regex` with the `i` option.
-- **An expression as a comparison value** (`{ '@expiresAt': { $lt: NOW } }`)
-  matches the same rows on every dialect: a row whose column or computed
-  value is NULL — or, on MongoDB, missing — never matches, `$ne` included.
+
+### NULL in a filter
+
+> **A comparison never matches a NULL — on every dialect, MongoDB
+> included.** `$ne` and `$nin` do not return rows whose column is NULL,
+> and two NULL columns are not equal. On MongoDB a missing field counts
+> as NULL.
+
+That is SQL's rule, and MongoDB's own operators break it: a native
+`$ne` / `$nin` matches a document whose field is null or missing, and
+inside `$expr` null and missing sort below every value and equal each
+other. OQL does not pass that through:
+
+| Filter                                                         | SQL                 | MongoDB                                                    |
+| -------------------------------------------------------------- | ------------------- | ---------------------------------------------------------- |
+| `{ '@a': { $ne: 5 } }`                                         | `a <> 5`            | `{ a: { $nin: [5, null] } }`                               |
+| `{ '@a': { $nin: [5, 6] } }`                                   | `a NOT IN (5, 6)`   | `{ a: { $nin: [5, 6, null] } }`                            |
+| `{ '@a': '@b' }`, `{ '@a': { $lt: '@b' } }`                    | `a = b`, `a < b`    | `$expr` comparison, plus a `$gt: null` guard on each field |
+| `{ '@a': { $lt: { $$_expression: 'ADD', args: ['@b', 1] } } }` | `a < (b + 1)`       | the same guarded `$expr`                                   |
+| `{ '@a': { $between: ['@b', 9] } }`                            | `a BETWEEN b AND 9` | the same guarded `$expr`                                   |
+
+So `{ '@status': { $ne: 'BANNED' } }` skips a document with no `status`.
+To include it, ask for it:
+`{ $or: [{ '@status': { $ne: 'BANNED' } }, { '@status': null }] }`.
+
+Two places on MongoDB do not follow the rule yet. `$nlike` / `$nilike`
+still match a null or missing field, where SQL's `NOT LIKE` does not.
+And a `CASE` `when` condition compares null and missing as ordinary
+low values, so `when: { '@a': { $lt: 6 } }` takes the branch for a
+null `a`.
 
 ## JOINs
 

@@ -284,6 +284,12 @@ const filters: QueryFilter<User> = {
 unknown. Use `$null: true` / `$null: false` instead. The shorthand
 `'@col': null` is still accepted and means `IS NULL`.
 
+**A comparison never matches a NULL, on MongoDB too.**
+`{ '@status': { $ne: 'banned' } }` skips rows whose `status` is NULL —
+or, on MongoDB, missing — on every dialect; add
+`{ '@status': null }` in an `$or` to include them. See
+[NULL in a filter](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#null-in-a-filter).
+
 **`boolean` columns only take the three shorthand forms** — a literal
 (`'@active': true`), an array (`'@active': [true, false]`, implicit
 `$in`), or `null` (implicit `$null: true`). The `{ $eq: … }`-style

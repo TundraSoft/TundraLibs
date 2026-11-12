@@ -70,7 +70,8 @@ const CASES: Case[] = [
   {
     // `@role` is a column, so this is a column-to-column comparison — emitted
     // as `$expr` (Mongo find-filters can only compare fields via $expr).
-    // Mirrors SQL's `WHERE status = role`, closing the cross-dialect gap.
+    // Mirrors SQL's `WHERE status = role`: the `$gt: null` guards keep two
+    // null or missing fields from counting as equal.
     name: 'WHERE @col value resolves to a $expr column comparison',
     method: 'select',
     query: {
@@ -84,7 +85,15 @@ const CASES: Case[] = [
       sql: 'find',
       params: {
         collection: 'users',
-        filter: { $expr: { $eq: ['$status', '$role'] } },
+        filter: {
+          $expr: {
+            $and: [
+              { $eq: ['$status', '$role'] },
+              { $gt: ['$status', null] },
+              { $gt: ['$role', null] },
+            ],
+          },
+        },
         options: { projection: { id: 1 } },
       },
     },
@@ -124,7 +133,88 @@ const CASES: Case[] = [
       sql: 'find',
       params: {
         collection: 'orders',
-        filter: { $expr: { $gt: ['$price', '$cost'] } },
+        filter: {
+          $expr: {
+            $and: [
+              { $gt: ['$price', '$cost'] },
+              { $gt: ['$price', null] },
+              { $gt: ['$cost', null] },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Only the bound that is a column needs a guard; a literal is never null.
+    name: 'WHERE $between with a @col bound resolves to a guarded $expr',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'price', 'cost'],
+      projection: { '@id': true },
+      where: { '@price': { $between: ['@cost', 100] } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'orders',
+        filter: {
+          $expr: {
+            $and: [
+              {
+                $and: [{ $gte: ['$price', '$cost'] }, {
+                  $lte: ['$price', 100],
+                }],
+              },
+              { $gt: ['$price', null] },
+              { $gt: ['$cost', null] },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Mongo's own `$ne` matches a null or missing field; SQL's `<>` never
+    // does, so null joins the excluded values.
+    name: 'WHERE $ne excludes null and missing fields',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'status'],
+      projection: { '@id': true },
+      where: { '@status': { $ne: 'BANNED' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { status: { $nin: ['BANNED', null] } },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Both operators on one field share a single `$nin`.
+    name: 'WHERE $ne and $nin on one field merge into one $nin',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'status'],
+      projection: { '@id': true },
+      where: { '@status': { $nin: ['BANNED', 'DELETED'], $ne: 'DRAFT' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { status: { $nin: ['BANNED', 'DELETED', 'DRAFT', null] } },
         options: { projection: { id: 1 } },
       },
     },
@@ -1976,7 +2066,17 @@ const CASES: Case[] = [
               as: 'Author',
             },
           },
-          { $match: { $expr: { $gt: ['$createdAt', '$Author.joinedAt'] } } },
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $gt: ['$createdAt', '$Author.joinedAt'] },
+                  { $gt: ['$createdAt', null] },
+                  { $gt: ['$Author.joinedAt', null] },
+                ],
+              },
+            },
+          },
           { $project: { id: 1 } },
         ],
       },
