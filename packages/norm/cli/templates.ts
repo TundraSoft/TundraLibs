@@ -184,7 +184,8 @@ const Profiles = Entity('profiles', {
   // Relations are FKs referencing the target's REGISTRY KEY (its key in
   // Schema(...)), never a table name. Optional: onDelete/onUpdate,
   // project: true (eager-load on default reads), reverseProject,
-  // reverseCardinality: 'hasOne' | 'hasMany'.
+  // reverseCardinality: 'hasOne' | 'hasMany', nullSafe: true (NULL keys
+  // match NULL).
   fk: { User: { model: 'Users', on: { userId: 'id' }, reverseAs: 'Profile' } },
 });
 \`\`\`

@@ -257,7 +257,29 @@ export type ReverseRelation = {
   /** FK declared `reverseProject: true` — the TARGET's default reads
    * eagerly include this reverse (hasOne only; compile re-validates). */
   readonly eager?: true;
+  /** FK declared `nullSafe: true`. */
+  readonly nullSafe?: true;
+  /** SOURCE columns of the `on` pairs nullable on both sides — the
+   * only pairs NULL-safe matching can apply to. */
+  readonly nullableCols: readonly string[];
 };
+
+/** Local columns of an FK's `on` pairs that are nullable on BOTH sides.
+ * Only those can hold NULL on each end, so only those can match NULL to
+ * NULL. */
+export function nullableFkColumns(
+  source: AnyDefinition,
+  fk: EmittedForeignKey,
+  target: AnyDefinition,
+): string[] {
+  const local = source.columns as Record<string, ColumnSpec>;
+  const remote = target.columns as Record<string, ColumnSpec>;
+  return Object.entries(fk.on)
+    .filter(([l, r]) =>
+      local[l]?.nullable === true && remote[r]?.nullable === true
+    )
+    .map(([l]) => l);
+}
 
 /** `<targetKey>` → `<reverseName>` → relation. */
 export type ReverseMap = ReadonlyMap<
@@ -894,6 +916,15 @@ export function buildReverseMap(
             `lists on every default read are rejected.`,
         });
       }
+      const nullableCols = nullableFkColumns(source, fk, registry[targetKey]!);
+      if (fk.nullSafe === true && nullableCols.length === 0) {
+        issues.push({
+          model: sourceKey,
+          path: `fk.${fkAlias}.nullSafe`,
+          message: `nullSafe needs an 'on' pair whose columns are nullable ` +
+            `on both sides — a NOT NULL key never holds NULL to match.`,
+        });
+      }
       const list = incoming.get(targetKey) ?? [];
       list.push({
         sourceKey,
@@ -903,6 +934,8 @@ export function buildReverseMap(
         on,
         cardinality,
         ...(fk.reverseProject === true ? { eager: true as const } : {}),
+        ...(fk.nullSafe === true ? { nullSafe: true as const } : {}),
+        nullableCols,
         explicitName: fk.reverseAs,
       });
       incoming.set(targetKey, list);

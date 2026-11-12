@@ -39,6 +39,7 @@ compose.
   - [`model` is a registry key](#model-is-a-registry-key)
   - [Reverse relations](#reverse-relations)
   - [Eager projection](#eager-projection)
+  - [NULL-safe keys](#null-safe-keys)
   - [Referential actions](#referential-actions)
   - [Many-to-many through a view](#many-to-many-through-a-view)
 - [Hash siblings](#hash-siblings)
@@ -893,6 +894,56 @@ Explicit projections replace the eager default entirely, and write
 Both flags are plain `boolean`s. Omitting either defaults to `false`
 (not eager); writing `project: false` / `reverseProject: false`
 explicitly type-checks and behaves exactly like omitting it.
+
+### NULL-safe keys
+
+A relation joins on plain equality, so a row whose key holds NULL
+matches nothing, as in SQL. **`nullSafe: true`** makes NULL match NULL
+wherever the relation is joined: in either direction, and in a
+projection, a filter, or an `orderBy`.
+
+```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
+export const Orgs = Entity('orgs', {
+  id: Column.integer(),
+  tenant: Column.integer(),
+  code: Column.varchar(20).nullable(), // NULL = the tenant's default org
+}, { pk: ['id'] });
+
+export const Grants = Entity('grants', {
+  id: Column.integer(),
+  tenant: Column.integer(),
+  orgCode: Column.varchar(20).nullable(),
+}, {
+  pk: ['id'],
+  fk: {
+    Org: {
+      model: 'Orgs',
+      on: { tenant: 'tenant', orgCode: 'code' },
+      reverseAs: 'Grants',
+      nullSafe: true, // orgCode NULL matches code NULL
+    },
+  },
+});
+```
+
+It applies to the `on` pairs whose columns are `.nullable()` on both
+sides; every other pair keeps plain equality (`tenant` above). A
+`nullSafe: true` FK with no such pair is rejected with a
+`NormDefinitionError` when schemas compose in
+[`use()`](#schemas-and-composition). A single read can turn it on or off
+through its own
+[`nullSafe` option](NORM-Querying.md#null-safe-relation-keys).
+
+Two things follow from matching on NULL:
+
+- The database does not check an FK constraint for a row whose key
+  holds NULL, so nothing guarantees the matching target exists.
+- A unique constraint lets several rows hold NULL, so a NULL key can
+  match more than one target. A projected belongsTo then carries one of
+  them, and a filter or `orderBy` through it returns the row once per
+  match.
 
 ### Referential actions
 

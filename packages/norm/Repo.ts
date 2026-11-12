@@ -49,6 +49,7 @@ import {
   type CompiledEntity,
   decryptCell,
   digestOf,
+  nullableFkColumns,
   type Runtime,
 } from './compile.ts';
 import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
@@ -191,6 +192,12 @@ export type FindOptions = {
    * a cached value and do not populate one (the query still runs against
    * the database). No effect when caching is not configured. */
   noCache?: boolean;
+  /** Match NULL to NULL on relation keys for THIS read, overriding each
+   * foreign key's own `nullSafe`: a boolean for every relation the read
+   * touches, or a map of relation alias → flag (aliases left out keep
+   * their foreign key's setting). Only `on` pairs nullable on both
+   * sides are affected. */
+  nullSafe?: boolean | Record<string, boolean>;
 };
 
 /** Resolved projection plan (join planner output). */
@@ -201,6 +208,7 @@ type ProjectionPlan = {
     columns: string[];
     type: 'LEFT';
     on: Record<string, string>;
+    nullSafe?: string[];
   }>;
   oqlProjection: Record<string, true | string>;
   oqlAggregates: Record<string, unknown>;
@@ -586,6 +594,7 @@ export class ReadRepo<
       effProject,
       where as Row | undefined,
       options.orderBy as Row | undefined,
+      options.nullSafe,
     );
     if (options.aggregates !== undefined) {
       this._mergeAggregates(plan, options.aggregates, options);
@@ -608,7 +617,12 @@ export class ReadRepo<
     let countPlan: ProjectionPlan | undefined;
     if (options.total === true && where !== undefined) {
       try {
-        countPlan = this._resolveProjection(undefined, where as Row, undefined);
+        countPlan = this._resolveProjection(
+          undefined,
+          where as Row,
+          undefined,
+          options.nullSafe,
+        );
       } catch (cause) {
         throw new NormQueryError(
           `total: true cannot COUNT this filter — drop total or ` +
@@ -839,7 +853,7 @@ export class ReadRepo<
    */
   public async count(
     filter?: FilterOf<R, Self>,
-    options: { noCache?: boolean } = {},
+    options: { noCache?: boolean; nullSafe?: FindOptions['nullSafe'] } = {},
   ): Promise<NormResult> {
     const id = ulid();
     const c = this._compiled;
@@ -851,7 +865,12 @@ export class ReadRepo<
       ? await this._prepareWhere(filter as Row)
       : undefined;
     const plan = where !== undefined
-      ? this._resolveProjection(undefined, where as Row, undefined)
+      ? this._resolveProjection(
+        undefined,
+        where as Row,
+        undefined,
+        options.nullSafe,
+      )
       : undefined;
     const scopeApplied = this._scopeForOp();
     const effWhere = await this._mergeScopeWhere(
@@ -1467,6 +1486,7 @@ export class ReadRepo<
     project: ProjectionInput | undefined,
     where: Row | undefined,
     orderBy: Row | undefined,
+    nullSafe?: FindOptions['nullSafe'],
   ): ProjectionPlan {
     const runtime = this._runtime;
     const compiled = this._compiled;
@@ -1505,6 +1525,60 @@ export class ReadRepo<
       .foreignKeys as Record<string, EmittedForeignKey> | undefined ?? {};
     const reverseEntries = runtime.reverseMap.get(compiled.key);
 
+    // A relation's NULL-safe candidates: the FK holder's columns of the
+    // `on` pairs nullable on both sides, and the FK's own flag.
+    const nullSafeSpec = (
+      alias: string,
+    ): { declared: boolean; cols: readonly string[] } | undefined => {
+      if (alias in fks) {
+        const fk = fks[alias]!;
+        return {
+          declared: fk.nullSafe === true,
+          cols: nullableFkColumns(
+            compiled.def,
+            fk,
+            runtime.compiled.get(fk.model)!.def,
+          ),
+        };
+      }
+      const rel = reverseEntries?.get(alias);
+      return rel === undefined
+        ? undefined
+        : { declared: rel.nullSafe === true, cols: rel.nullableCols };
+    };
+    if (typeof nullSafe === 'object') {
+      for (const [alias, flag] of Object.entries(nullSafe)) {
+        const spec = nullSafeSpec(alias);
+        if (spec === undefined) {
+          throw new NormQueryError(
+            `Unknown relation alias '${alias}' in nullSafe on ` +
+              `'${compiled.key}': not a foreign key or reverse relation.`,
+            { entity: compiled.key, subject: alias, code: 'UNKNOWN_RELATION' },
+          );
+        }
+        if (flag && spec.cols.length === 0) {
+          throw new NormQueryError(
+            `nullSafe cannot apply to relation '${alias}' on ` +
+              `'${compiled.key}': none of its key pairs is nullable on ` +
+              `both sides.`,
+            {
+              entity: compiled.key,
+              subject: alias,
+              code: 'INVALID_PROJECTION',
+            },
+          );
+        }
+      }
+    }
+    // The query option wins over the FK's flag.
+    const nullSafeCols = (alias: string): readonly string[] => {
+      const spec = nullSafeSpec(alias)!;
+      const wanted = typeof nullSafe === 'object'
+        ? nullSafe[alias] ?? spec.declared
+        : nullSafe ?? spec.declared;
+      return wanted ? spec.cols : [];
+    };
+
     const addCols = (alias: string, cols: ReadonlyArray<string>): void => {
       const entry = oqlJoins[alias]!;
       for (const col of cols) {
@@ -1522,6 +1596,9 @@ export class ReadRepo<
         for (const [localCol, remoteCol] of Object.entries(fk.on)) {
           on[`@${alias}.@${remoteCol}`] = `@${localCol}`;
         }
+        const safe = nullSafeCols(alias).map((localCol) =>
+          `@${alias}.@${fk.on[localCol]}`
+        );
         const tDef = target.def as { name: string; dbSchema?: string };
         oqlJoins[alias] = {
           table: tDef.name,
@@ -1529,6 +1606,7 @@ export class ReadRepo<
           columns: [],
           type: 'LEFT',
           on,
+          ...(safe.length > 0 ? { nullSafe: safe } : {}),
         };
       }
       return { targetKey: fk.model, target };
@@ -1544,6 +1622,9 @@ export class ReadRepo<
         for (const [targetCol, sourceCol] of Object.entries(rel.on)) {
           on[`@${name}.@${sourceCol}`] = `@${targetCol}`;
         }
+        const safe = nullSafeCols(name).map((sourceCol) =>
+          `@${name}.@${sourceCol}`
+        );
         oqlJoins[name] = {
           table: rel.sourceTableName,
           ...(rel.sourceDbSchema !== undefined
@@ -1552,6 +1633,7 @@ export class ReadRepo<
           columns: [],
           type: 'LEFT',
           on,
+          ...(safe.length > 0 ? { nullSafe: safe } : {}),
         };
       }
       return { targetKey: rel.sourceKey, target };
@@ -1778,7 +1860,8 @@ export class ReadRepo<
     }
 
     // Pass 2: filter/orderBy refs may need filter-only joins.
-    const existsAliases = new Set<string>();
+    // Lifted alias → its NULL-safe source columns.
+    const existsAliases = new Map<string, readonly string[]>();
     const visitAliasRef = (
       alias: string,
       col: string,
@@ -1864,7 +1947,7 @@ export class ReadRepo<
               },
             );
           }
-          existsAliases.add(alias);
+          existsAliases.set(alias, nullSafeCols(alias));
           return;
         }
         if (!joined) ensureRevJoin(alias);
@@ -1898,7 +1981,7 @@ export class ReadRepo<
       where: existsAliases.size > 0
         ? this.__liftToExists(where, existsAliases) as Row
         : where,
-      existsAliases: [...existsAliases],
+      existsAliases: [...existsAliases.keys()],
       aliasMap,
       relations,
       masks,
@@ -1915,7 +1998,7 @@ export class ReadRepo<
    * caller's original tree stays valid for join-based plans. */
   private __liftToExists(
     node: unknown,
-    aliases: ReadonlySet<string>,
+    aliases: ReadonlyMap<string, readonly string[]>,
   ): unknown {
     if (node === null || node === undefined || node instanceof Date) {
       return node;
@@ -1955,12 +2038,14 @@ export class ReadRepo<
       for (const [targetCol, sourceCol] of Object.entries(rel.on)) {
         on[`@${sourceCol}`] = `@${targetCol}`;
       }
+      const safe = aliases.get(alias)!.map((sourceCol) => `@${sourceCol}`);
       existsNodes.push({
         table: rel.sourceTableName,
         ...(rel.sourceDbSchema !== undefined
           ? { schema: rel.sourceDbSchema }
           : {}),
         on,
+        ...(safe.length > 0 ? { nullSafe: safe } : {}),
         ...(Object.keys(sub).length > 0 ? { where: sub } : {}),
       });
     }
@@ -2507,14 +2592,23 @@ export class Repo<
   /** Fetch one row by primary key (composite keys: all columns). */
   public getByPK(
     pk: PrimaryKeyOf<D>,
-    options?: { decrypt?: boolean; noCache?: boolean },
+    options?: {
+      decrypt?: boolean;
+      noCache?: boolean;
+      nullSafe?: FindOptions['nullSafe'];
+    },
   ): Promise<NormResult<DefaultRowOf<R, Self> | null>>;
   /** Fetch one row by primary key under an explicit projection. */
   public getByPK<
     const P extends ProjectionInput & ValidProjection<R, Self, P>,
   >(
     pk: PrimaryKeyOf<D>,
-    options: { project: P; decrypt?: boolean; noCache?: boolean },
+    options: {
+      project: P;
+      decrypt?: boolean;
+      noCache?: boolean;
+      nullSafe?: FindOptions['nullSafe'];
+    },
   ): Promise<NormResult<ProjectedRowOf<R, Self, P> | null>>;
   /**
    * @throws {@link NormQueryError} Propagated from {@link find} — e.g. an
@@ -2526,6 +2620,7 @@ export class Repo<
       project?: ProjectionInput;
       decrypt?: boolean;
       noCache?: boolean;
+      nullSafe?: FindOptions['nullSafe'];
     } = {},
     // deno-lint-ignore no-explicit-any
   ): Promise<NormResult<any>> {
@@ -2537,6 +2632,7 @@ export class Repo<
       decrypt: options.decrypt,
       project: options.project,
       noCache: options.noCache,
+      nullSafe: options.nullSafe,
     });
     const row = r.data[0] ?? null;
     const out: NormResult<Row | null> = {

@@ -106,6 +106,7 @@ type FindOptions = {
   offset?: number;
   decrypt?: boolean; // default true; false leaves ciphertext
   total?: boolean; // also run a matching COUNT → result.total
+  nullSafe?: boolean | Record<string, boolean>; // see NULL-safe relation keys
 };
 ```
 
@@ -147,7 +148,7 @@ withProfile.data?.Profile; // { bio: string } | null
 ### getByPK(pk, options?)
 
 Fetch one row by primary key, supplying every key column for a
-composite key. Options are `{ project?, decrypt? }`:
+composite key. Options are `{ project?, decrypt?, nullSafe? }`:
 
 ```typescript ignore
 const user = await db.repo('Users').getByPK({ id: someId });
@@ -157,10 +158,11 @@ user.data; // DefaultRowOf<...> | null
 const tag = await db.repo('PostTags').getByPK({ postId: 1, tagId: 2 });
 ```
 
-### count(filter?)
+### count(filter?, options?)
 
 Counts matching rows. The answer rides `count` and the envelope has no
-`data`. An empty `{}` filter counts all rows.
+`data`. An empty `{}` filter counts all rows. Options are
+`{ noCache?, nullSafe? }`.
 
 ```typescript ignore
 const n = await db.repo('Users').count({ '@role': 'viewer' });
@@ -446,6 +448,36 @@ target's local default row. Eager never recurses:
 const adaFull = await db.repo('Users').getByPK({ id: adaId });
 adaFull.data?.Profile; // the profile row, or null when absent
 ```
+
+### NULL-safe relation keys
+
+A relation joins on plain equality, so a NULL key matches nothing. A FK
+declared [`nullSafe: true`](NORM-Schema.md#null-safe-keys) matches NULL
+to NULL instead, and the `nullSafe` option of `find`, `findOne`,
+`getByPK`, and `count` overrides that for one read:
+
+```typescript ignore
+// Every relation this read touches:
+await db.repo('Grants').find({}, {
+  project: { '@id': true, '@Org': true },
+  nullSafe: true,
+});
+
+// One relation, by alias; the others keep their FK's setting:
+await db.repo('Orgs').find({}, {
+  project: { '@id': true, '@Grants': true },
+  nullSafe: { Grants: false },
+});
+
+await db.repo('Orgs').count({ '@Grants.@id': { $gt: 0 } }, {
+  nullSafe: true,
+});
+```
+
+Only key pairs nullable on both sides can match NULL to NULL. A blanket
+`true` skips the relations that have no such pair; naming one of them
+`true` in the per-alias form raises `INVALID_PROJECTION`, and an alias
+that is not a relation of the entity raises `UNKNOWN_RELATION`.
 
 ### Many-to-many through a junction VIEW
 
