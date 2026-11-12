@@ -242,7 +242,8 @@ export class NeonHttpEngine extends SQLConnectionEngine<
    *   which matches node-postgres text semantics. Sending the raw value would let
    *   `JSON.stringify` turn all three into `null`, silently binding SQL NULL.
    * - `bigint` → decimal string (a JSON number would lose precision past 2^53)
-   * - `Date` → ISO-8601 string (accepted for `date`/`timestamp[tz]`)
+   * - `Date` → ISO-8601 string; {@link _standardizeQuery} types its
+   *   placeholder `timestamptz`
    * - `Uint8Array` (incl. Node `Buffer`) → `\x`-prefixed hex (Postgres `bytea`)
    * - plain object / array → `JSON.stringify` (for `json`/`jsonb` columns)
    * - `string` → the string
@@ -287,7 +288,8 @@ export class NeonHttpEngine extends SQLConnectionEngine<
   /**
    * Rewrite `:name:` placeholders to Postgres `$N` markers and stash the
    * ordered, JSON-serializable param values (via {@link _encodeValue}) in
-   * `__params` for {@link _execute}.
+   * `__params` for {@link _execute}. A `Date` param's marker is
+   * `$N::timestamptz`.
    *
    * Duplicates PostgresEngine's rewrite rather than refactoring the shared base
    * — the two diverge in what they stash (`$N` + encoded JSON values here vs.
@@ -318,7 +320,12 @@ export class NeonHttpEngine extends SQLConnectionEngine<
           idx = orderedNames.length; // 1-based
           nameToIndex.set(key, idx);
         }
-        return `$${idx}`;
+        // A `Date` travels as ISO text, which Postgres reads as an untyped
+        // literal: `date_trunc('day', $1)`, `$1 - $2` and `$1 IS NULL` cannot
+        // resolve it. Type it `timestamptz`, as the socket engine binds it.
+        return (supplied as Record<string, unknown>)[key] instanceof Date
+          ? `$${idx}::timestamptz`
+          : `$${idx}`;
       },
     );
 

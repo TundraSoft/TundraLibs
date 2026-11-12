@@ -184,6 +184,23 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
       assertEquals(q.__params, [1, 2]);
     });
 
+    it('types every occurrence of a Date placeholder as timestamptz', () => {
+      const eng = makeEngine();
+      const q = eng.std({
+        sql: 'SELECT :at: - :from:, :at: IS NULL, :n:',
+        params: { at: new Date(1), from: new Date(0), n: 1 },
+      });
+      assertEquals(
+        q.sql,
+        'SELECT $1::timestamptz - $2::timestamptz, $1::timestamptz IS NULL, $3;',
+      );
+      assertEquals(q.__params, [
+        '1970-01-01T00:00:00.001Z',
+        '1970-01-01T00:00:00.000Z',
+        1,
+      ]);
+    });
+
     it('throws MISSING_PARAMETERS for an absent placeholder', () => {
       const eng = makeEngine();
       const err = assertThrows(

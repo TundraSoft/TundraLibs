@@ -113,6 +113,13 @@ which is decoded with the **same** OID → JS mapping the socket-based
 (`int8` → `bigint`, `bool` → `boolean`, `json`/`jsonb` → parsed object,
 `bytea` → `Uint8Array`, timestamps → `Date`, `numeric` → `string`, …).
 
+A `Date` parameter is sent as ISO-8601 text with its placeholder typed
+`timestamptz`, so it works where Postgres has no column to infer a type from
+(`date_trunc('day', :at:)`, `:to: - :from:`, `:at: IS NULL`). Bound to a
+`timestamp` or `date` column it is converted in the session's `TimeZone`,
+and unlike `PostgresEngine` this engine does not check that zone — keep the
+database on UTC, see [Time zone](../postgres/Drivers-Postgres.md#time-zone).
+
 ## Limitations
 
 - **No interactive transactions** (`transactions: false`). Neon's `/sql`
