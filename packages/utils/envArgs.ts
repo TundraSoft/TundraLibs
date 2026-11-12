@@ -44,8 +44,9 @@ const parseValue = (raw: string): string => {
  * quotes, with anything after the closing quote dropped. Quote a value to
  * keep a literal ` #`. Values are single-line.
  *
- * @param envFilePath - Path to a `.env` file, or a directory whose
- *   `.env` should be loaded. Defaults to `'./'`.
+ * @param envFilePath - Path to an env file of any name (`.env`,
+ *   `.env.local`, `prod.env`), or a directory whose `.env` should be
+ *   loaded. Defaults to `'./'`.
  * @param loadDockerSecrets - `true` (default) reads `/run/secrets`,
  *   `false` disables, a string overrides the path (useful in tests or
  *   non-default deployments).
@@ -70,27 +71,23 @@ export const envArgs = function ( // NOSONAR - complexity cannot be reduced furt
     });
   }
 
-  try {
-    // Simplify path resolution logic
-    const envFile = envFilePath.endsWith('.env')
-      ? envFilePath
-      : path.join(envFilePath, '.env');
-    const filePermission = hasPermissionSync({
-      name: 'read',
-      path: envFile,
-    });
-    if (filePermission === true) {
-      const data = readTextFileSync(envFile);
-      data.split('\n').forEach((line) => {
+  // A directory cannot be read as a file, so the read failing is what
+  // sends a directory path on to its `.env`.
+  for (const envFile of [envFilePath, path.join(envFilePath, '.env')]) {
+    try {
+      if (hasPermissionSync({ name: 'read', path: envFile }) !== true) {
+        continue;
+      }
+      readTextFileSync(envFile).split('\n').forEach((line) => {
         const match = LINE.exec(line);
         if (match?.[1]) {
           env[match[1]] = parseValue(match[2] ?? '');
         }
       });
+      break;
+    } catch {
+      // Not a readable file: try the next candidate.
     }
-  } catch {
-    // Log error in development environments if needed
-    // console.debug(`Error loading .env file: ${error.message}`);
   }
 
   if (loadDockerSecrets) {

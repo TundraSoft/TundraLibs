@@ -33,8 +33,8 @@ Loads environment variables from multiple sources.
 
 **Parameters:**
 
-- `envFilePath` — a directory (its `.env` is loaded) or a path ending
-  in `.env`. Default: `'./'`.
+- `envFilePath` — an env file of any name (`.env`, `.env.local`,
+  `prod.env`), or a directory, whose `.env` is loaded. Default: `'./'`.
 - `loadDockerSecrets` — `true` (**default**) reads every file under
   `/run/secrets` as a `key=filename` secret; `false` disables Docker
   secrets entirely; a string overrides the secrets directory path
