@@ -70,6 +70,10 @@ const POSTGRES_DEFAULTS: Partial<PostgresEngineOptions> = {
   port: 5432,
 };
 
+/** `TimeZone` values Postgres reports for UTC, compared case-insensitively. */
+const UTC_ZONE =
+  /^(?:etc\/)?(?:utc|uct|universal|zulu|greenwich|gmt(?:[+-]?0)?)$/i;
+
 /**
  * Pooled Postgres engine speaking the v3 frontend/backend protocol over a raw
  * TCP socket — no `pg` or `postgres.js` dependency. Also the base for the
@@ -192,6 +196,7 @@ export class PostgresEngine
         allowCleartextPassword,
         allowMd5Password,
       });
+      this.__assertUtcSession(pg);
       return pg;
     } catch (e) {
       try {
@@ -230,6 +235,7 @@ export class PostgresEngine
             allowCleartextPassword,
             allowMd5Password,
           });
+          this.__assertUtcSession(pgPlain);
           return pgPlain;
         } catch (retryErr) {
           try {
@@ -242,6 +248,30 @@ export class PostgresEngine
       }
       throw this.__mapPgError(e, 'connect');
     }
+  }
+
+  /**
+   * Refuses a session whose `TimeZone`, as the server reported it at startup,
+   * is not UTC. Postgres converts a `Date` sent for a `date` or `timestamp`
+   * column, and evaluates `date_trunc`, `EXTRACT` and casts, in that zone, so
+   * any other zone stores and filters the wrong day and clock time. A server
+   * that reports no `TimeZone` is not checked.
+   *
+   * @throws {EngineError} `INVALID_CONFIG_VALUE` unless `allowNonUtcTimeZone` is set.
+   */
+  private __assertUtcSession(conn: PgConnection): void {
+    const zone = conn.serverParams.get('TimeZone');
+    if (
+      zone === undefined || UTC_ZONE.test(zone) ||
+      this._getOption('allowNonUtcTimeZone') === true
+    ) return;
+    throw new EngineError('INVALID_CONFIG_VALUE', {
+      instanceId: this.instanceId,
+      option: 'TimeZone',
+      reason: `the database session runs in ${zone}, not UTC; ` +
+        `run ALTER DATABASE <name> SET timezone TO 'UTC', ` +
+        `or pass allowNonUtcTimeZone: true to accept it`,
+    });
   }
 
   /**
