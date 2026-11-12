@@ -28,6 +28,7 @@ BaseError (@tundralibs/utils)
     ├── DuplicateJobError
     ├── JobNotFoundError
     ├── InvalidScheduleError
+    ├── InvalidTimezoneError
     └── InvalidActionError
 ```
 
@@ -42,6 +43,7 @@ error is preserved as `cause`).
 | `DuplicateJobError`    | `add`/`addOnce` — name already registered                              | `{ name }`                       |
 | `JobNotFoundError`     | `get`/`remove`/`enable`/`disable`/`isRunning`/`trigger` — unknown name | `{ name }`                       |
 | `InvalidScheduleError` | `parseSchedule` (and therefore `add`) — malformed expression           | `{ expression, field?, reason }` |
+| `InvalidTimezoneError` | `new Cronus`/`add`/`matches` — time zone the runtime does not know     | `{ timezone }`                   |
 | `InvalidActionError`   | `add` — action is not a function                                       | `{ name }`                       |
 
 All registration errors are thrown synchronously at the call site —

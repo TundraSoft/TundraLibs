@@ -14,6 +14,7 @@ import {
   DuplicateJobError,
   InvalidActionError,
   InvalidScheduleError,
+  InvalidTimezoneError,
   JobNotFoundError,
 } from './errors/mod.ts';
 
@@ -625,6 +626,86 @@ describe('cronus.Cronus', () => {
       asserts.assertEquals(hourly, 2);
     });
 
+    it('reads schedules in the scheduler time zone', async () => {
+      const manual = new ManualCronus({ timezone: 'Asia/Tokyo' });
+      let runs = 0;
+      manual.add('morning', '0 9 * * *', () => {
+        runs++;
+      });
+      manual.tick(new Date('2026-11-10T09:00:00Z')); // 18:00 in Tokyo
+      await defer(1);
+      asserts.assertEquals(runs, 0);
+      manual.tick(new Date('2026-11-11T00:00:00Z')); // 09:00 in Tokyo
+      await defer(1);
+      asserts.assertEquals(runs, 1);
+    });
+
+    it('a job time zone overrides the scheduler one', async () => {
+      const manual = new ManualCronus({ timezone: 'Asia/Tokyo' });
+      const ran: string[] = [];
+      manual.add('tokyo', '0 9 * * *', () => {
+        ran.push('tokyo');
+      });
+      manual.add('utc', '0 9 * * *', () => {
+        ran.push('utc');
+      }, { timezone: 'UTC' });
+      manual.tick(new Date('2026-11-10T09:00:00Z'));
+      await defer(1);
+      asserts.assertEquals(ran, ['utc']);
+      asserts.assertEquals(manual.get('tokyo').timezone, 'Asia/Tokyo');
+      asserts.assertEquals(manual.get('utc').timezone, 'UTC');
+    });
+
+    it('reports no time zone for a job on the host clock', () => {
+      cron = new Cronus();
+      cron.add('a', '* * * * *', () => {});
+      asserts.assertFalse('timezone' in cron.get('a'));
+    });
+
+    it('DST fall-back in a named zone: a fixed-time job fires ONCE', async () => {
+      const manual = new ManualCronus({ timezone: 'America/New_York' });
+      let runs = 0;
+      manual.add('nightly', '30 1 * * *', () => {
+        runs++;
+      });
+      // 2026-11-01: New York reads 01:30 at 05:30Z and again at 06:30Z.
+      manual.tick(new Date('2026-11-01T05:30:00Z'));
+      await defer(1);
+      manual.tick(new Date('2026-11-01T06:30:00Z'));
+      await defer(1);
+      asserts.assertEquals(runs, 1);
+    });
+
+    it('DST spring-forward in a named zone: the skipped hour never fires', async () => {
+      const manual = new ManualCronus({ timezone: 'America/New_York' });
+      const ran: string[] = [];
+      manual.add('skipped', '30 2 * * *', () => {
+        ran.push('02:30');
+      });
+      manual.add('after', '30 3 * * *', () => {
+        ran.push('03:30');
+      });
+      // 2026-03-08: 01:30 EST is 06:30Z; one hour on it reads 03:30 EDT.
+      manual.tick(new Date('2026-03-08T06:30:00Z'));
+      await defer(1);
+      manual.tick(new Date('2026-03-08T07:30:00Z'));
+      await defer(1);
+      asserts.assertEquals(ran, ['03:30']);
+    });
+
+    it('rejects an unknown time zone at construction and registration', () => {
+      asserts.assertThrows(
+        () => new Cronus({ timezone: 'Mars/Olympus' }),
+        InvalidTimezoneError,
+      );
+      cron = new Cronus();
+      asserts.assertThrows(
+        () => cron.add('a', '* * * * *', () => {}, { timezone: 'Nope/Zone' }),
+        InvalidTimezoneError,
+      );
+      asserts.assertFalse(cron.has('a')); // nothing half-registered
+    });
+
     it('a stale timer chain dies after stop()/start() (no double ticker)', () => {
       const realSetTimeout = globalThis.setTimeout;
       const arms: Array<() => void> = [];
@@ -667,6 +748,14 @@ describe('cronus.Cronus', () => {
       asserts.assertEquals(Cronus.isValid('nope'), false);
       asserts.assertEquals(
         Cronus.matches('30 6 * * *', new Date(2026, 0, 1, 6, 30)),
+        true,
+      );
+      asserts.assertEquals(
+        Cronus.matches(
+          '0 9 * * *',
+          new Date('2026-11-11T00:00:00Z'),
+          'Asia/Tokyo',
+        ),
         true,
       );
     });

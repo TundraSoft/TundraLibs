@@ -50,6 +50,8 @@ export {
   InvalidActionError,
   type InvalidScheduleContext,
   InvalidScheduleError,
+  type InvalidTimezoneContext,
+  InvalidTimezoneError,
   type JobNotFoundContext,
   JobNotFoundError,
 } from './errors/mod.ts';

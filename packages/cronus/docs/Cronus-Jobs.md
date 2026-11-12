@@ -180,14 +180,16 @@ add(name: string, schedule: string, action: CronusAction, options?: CronusJobOpt
 - `schedule` - A 5-field cron expression
   ([syntax](Cronus-Schedule-Syntax.md)).
 - `action` - Sync or async function; receives a `CronusRunContext`.
-- `options` - `{ once?: boolean; enabled?: boolean }` (defaults:
-  `false`, `true`).
+- `options` - `{ once?: boolean; enabled?: boolean; timezone?: string }`
+  (defaults: `false`, `true`, the scheduler's `timezone`).
 
 **Throws:**
 
 - `DuplicateJobError` - When `name` is already registered.
 - `InvalidScheduleError` - When `schedule` is malformed.
 - `InvalidActionError` - When `action` is not a function.
+- `InvalidTimezoneError` - When `options.timezone` is not a zone the
+  runtime knows.
 
 ### `addOnce()`
 
@@ -200,6 +202,8 @@ Manage and inspect registrations. `get()`/`list()` return snapshots
 (`CronusJobInfo`) — mutating one never affects the scheduler.
 `lastRun` is when the most recent run **started** (not completed);
 `runCount` counts runs started, including failures and triggers.
+`timezone` is the zone the job runs in — absent when it follows the
+host's local clock.
 `remove()`/`get()` throw `JobNotFoundError` for unknown names. A
 removed job's in-flight run is not interrupted, and its completion
 cannot touch a job registered later under the same name.

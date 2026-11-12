@@ -8,7 +8,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { isValidSchedule, matches, parseSchedule } from './mod.ts';
-import { InvalidScheduleError } from './errors/mod.ts';
+import { InvalidScheduleError, InvalidTimezoneError } from './errors/mod.ts';
 
 /** A local Date at the given wall-clock parts (matcher reads local time). */
 const at = (
@@ -282,6 +282,38 @@ describe('cronus.schedule', () => {
       for (let d = 1; d <= 30; d++) {
         asserts.assert(!matches(s, at(2026, 4, d, 12, 0)));
       }
+    });
+  });
+
+  describe('time zone', () => {
+    // 20:00 on Sunday in UTC is 01:30 on Monday in Kolkata (+05:30).
+    const sundayEveningUtc = new Date('2026-11-08T20:00:00Z');
+
+    it('reads the date in the named zone, across a day boundary', () => {
+      const mondayNight = parseSchedule('30 1 * * MON');
+      asserts.assert(matches(mondayNight, sundayEveningUtc, 'Asia/Kolkata'));
+      asserts.assertFalse(matches(mondayNight, sundayEveningUtc, 'UTC'));
+      asserts.assert(
+        matches(parseSchedule('0 20 * * SUN'), sundayEveningUtc, 'UTC'),
+      );
+    });
+
+    it('reads midnight as hour 0 of the new day', () => {
+      asserts.assert(
+        matches(
+          parseSchedule('0 0 9 11 *'),
+          new Date('2026-11-08T18:30:00Z'),
+          'Asia/Kolkata',
+        ),
+      );
+    });
+
+    it('rejects a zone the runtime does not know', () => {
+      const error = asserts.assertThrows(
+        () => matches(parseSchedule('* * * * *'), new Date(0), 'Mars/Olympus'),
+        InvalidTimezoneError,
+      );
+      asserts.assertEquals(error.context.timezone, 'Mars/Olympus');
     });
   });
 });

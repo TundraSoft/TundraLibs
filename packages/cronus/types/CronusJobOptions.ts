@@ -17,4 +17,9 @@ export type CronusJobOptions = {
    * @default true
    */
   enabled?: boolean;
+  /**
+   * IANA time zone this job's schedule is read in. Omitted, the job
+   * follows the scheduler's `timezone`.
+   */
+  timezone?: string;
 };
