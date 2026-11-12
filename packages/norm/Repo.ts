@@ -55,6 +55,7 @@ import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
+import { readTimeOfDay, utcDay } from './calendar.ts';
 import type { ObjectGuardian } from '@tundralibs/guardian';
 import {
   canonicalizePlain,
@@ -2001,6 +2002,11 @@ export class ReadRepo<
     const dialect = this._executor.capabilities.dialect;
     const zone = dialect === 'maria' ? '' : 'Z';
     const date = (v: unknown): unknown => jsonDate(v, zone);
+    const day = (v: unknown): unknown => {
+      const d = jsonDate(v, zone);
+      return d instanceof Date && !Number.isNaN(d.getTime()) ? utcDay(d) : d;
+    };
+    const storesDays = dialect === 'sqlite' || dialect === 'mongo';
     for (const rel of plan.relations) {
       const target = this._runtime.compiled.get(rel.targetKey)!;
       const specs = target.def.columns as Record<string, ColumnSpec>;
@@ -2012,6 +2018,8 @@ export class ReadRepo<
         if (type === undefined || target.localEncrypted.has(col)) continue;
         if (type === 'BIGINT') decoders.push([key, toBigint]);
         else if (type === 'BOOLEAN') decoders.push([key, toBoolean]);
+        else if (type === 'TIME') decoders.push([key, readTimeOfDay]);
+        else if (type === 'DATE' && storesDays) decoders.push([key, day]);
         else if (DATE_TYPES.has(type)) decoders.push([key, date]);
         else if (
           dialect === 'sqlite' && (type === 'JSON' || type === 'JSONB')
@@ -2047,24 +2055,57 @@ export class ReadRepo<
    * top-level row columns; relation values are decoded by
    * {@linkcode _decodeRelationColumns}. On SQLite, a zone-less
    * `YYYY-MM-DD HH:MM:SS` value is read as UTC, which is what SQLite's
-   * date functions produce. */
+   * date functions produce. Where norm stores the day itself (SQLite,
+   * Mongo), a `DATE` value is reduced to UTC midnight — rows written
+   * before that rule kept the full instant. A `TIME` value becomes its
+   * `HH:MM:SS` string on every engine. */
   protected _decodeDateColumns(rows: Row[]): void {
     if (rows.length === 0) return;
     const c = this._compiled;
     const specs = c.def.columns as Record<string, ColumnSpec>;
-    const sqlite = this._executor.capabilities.dialect === 'sqlite';
+    const dialect = this._executor.capabilities.dialect;
+    const sqlite = dialect === 'sqlite';
+    const storesDays = sqlite || dialect === 'mongo';
     for (const [key, spec] of Object.entries(specs)) {
-      if (!DATE_TYPES.has(spec.type) || c.localEncrypted.has(key)) continue;
+      if (c.localEncrypted.has(key)) continue;
+      if (spec.type === 'TIME') {
+        for (const row of rows) {
+          if (row[key] != null) row[key] = readTimeOfDay(row[key]);
+        }
+        continue;
+      }
+      if (!DATE_TYPES.has(spec.type)) continue;
+      const day = storesDays && spec.type === 'DATE';
       for (const row of rows) {
-        const v = row[key];
-        if (typeof v !== 'string') continue;
-        row[key] = new Date(
-          sqlite && SQLITE_ZONELESS_DATETIME.test(v)
-            ? `${v.replace(' ', 'T')}Z`
-            : v,
-        );
+        let v = row[key];
+        if (typeof v === 'string') {
+          v = new Date(
+            sqlite && SQLITE_ZONELESS_DATETIME.test(v)
+              ? `${v.replace(' ', 'T')}Z`
+              : v,
+          );
+        }
+        if (day && v instanceof Date && !Number.isNaN(v.getTime())) {
+          v = utcDay(v);
+        }
+        if (v !== row[key]) row[key] = v;
       }
     }
+  }
+
+  /** `DATE` columns norm stores as the UTC day itself — every
+   * non-encrypted one on SQLite and Mongo, which have no day type.
+   * Postgres and MariaDB reduce the value to a day themselves; an
+   * encrypted column's day is reduced by `canonicalizePlain`. */
+  protected _storedDayColumns(): string[] {
+    const dialect = this._executor.capabilities.dialect;
+    if (dialect !== 'sqlite' && dialect !== 'mongo') return [];
+    const c = this._compiled;
+    return Object.entries(c.def.columns as Record<string, ColumnSpec>)
+      .filter(([key, spec]) =>
+        spec.type === 'DATE' && !c.localEncrypted.has(key)
+      )
+      .map(([key]) => key);
   }
 
   /** Parse every top-level `JSON` / `JSONB` column that came back as its
@@ -4089,6 +4130,7 @@ export class Repo<
     const postDefaults = op === 'update'
       ? c.postUpdateDefaults
       : c.postInsertDefaults;
+    const dayColumns = this._storedDayColumns();
     const out: Row[] = [];
     for (let i = 0; i < parsed.length; i++) {
       let row = parsed[i]!;
@@ -4111,6 +4153,10 @@ export class Repo<
           if (isExpressionValue(v)) continue;
           row[col] = fn(v);
         }
+      }
+      for (const col of dayColumns) {
+        const v = row[col];
+        if (v instanceof Date) row[col] = utcDay(v);
       }
       out.push(await this.__encryptRow(row));
     }

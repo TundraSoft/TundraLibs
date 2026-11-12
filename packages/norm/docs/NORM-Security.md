@@ -154,7 +154,9 @@ yields the same digest.
 
 | Logical type                                        | Canonical string                     | Decoded back to |
 | --------------------------------------------------- | ------------------------------------ | --------------- |
-| `DATE` / `TIME` / `DATETIME` / `TIMESTAMP`          | `Date.toISOString()`                 | `Date`          |
+| `DATE`                                              | `toISOString()` of its UTC midnight  | `Date`          |
+| `DATETIME` / `TIMESTAMP` / `TIMESTAMPTZ`            | `Date.toISOString()`                 | `Date`          |
+| `TIME`                                              | `'HH:MM:SS'` (fraction if non-zero)  | `string`        |
 | `BIGINT`                                            | decimal string                       | `bigint`        |
 | `INTEGER` / `DECIMAL` / `FLOAT` / `DOUBLE` / `REAL` | `String(n)`                          | `number`        |
 | `BOOLEAN`                                           | `'true'` / `'false'`                 | `boolean`       |
