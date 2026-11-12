@@ -836,7 +836,8 @@ Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
   `date` (negative `amount` subtracts).
 - `DATE_DIFF` — `args: { from; to; unit }`; whole time units between
-  `from` and `to`.
+  `from` and `to`. `MONTHS` / `YEARS` differ by dialect — see
+  [DATE_DIFF units](../docs/OQL-Compatibility.md#date_diff-units).
 
 ```typescript
 type TimeUnit = 'DAYS' | 'MONTHS' | 'YEARS' | 'HOURS' | 'MINUTES' | 'SECONDS';

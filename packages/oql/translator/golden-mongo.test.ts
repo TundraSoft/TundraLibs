@@ -1161,11 +1161,16 @@ const CASES: Case[] = [
                   amount: 7,
                 },
               },
+              // Fixed-length units divide the elapsed milliseconds, so a
+              // partial unit is dropped as it is on the SQL engines.
               ageHours: {
-                $dateDiff: {
-                  startDate: '$createdAt',
-                  endDate: '$shippedAt',
-                  unit: 'hour',
+                $toLong: {
+                  $trunc: {
+                    $divide: [
+                      { $subtract: ['$shippedAt', '$createdAt'] },
+                      3_600_000,
+                    ],
+                  },
                 },
               },
               ageMonths: {
