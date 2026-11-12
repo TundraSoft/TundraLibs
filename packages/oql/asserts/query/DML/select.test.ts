@@ -555,6 +555,17 @@ describe('oql.asserts.Query.DML.Select', () => {
       assertSelectQuery(query);
     });
 
+    it('with orderBy on an unprojected declared column', () => {
+      const query = {
+        type: 'SELECT',
+        table: 'users',
+        columns: ['id', 'name'],
+        projection: { '@name': true },
+        orderBy: { '@id': 'ASC' },
+      };
+      assertSelectQuery(query);
+    });
+
     it('with orderBy on joined column', () => {
       const query = {
         type: 'SELECT',
@@ -1013,18 +1024,52 @@ describe('oql.asserts.Query.DML.Select', () => {
       );
     });
 
-    it('orderBy non-projected key', () => {
+    it('orderBy undeclared key', () => {
       asserts.assertThrows(
         () =>
           assertSelectQuery({
             type: 'SELECT',
             table: 'users',
-            columns: ['id', 'name', 'email'],
+            columns: ['id', 'name'],
             projection: { '@id': true, '@name': true },
             orderBy: { '@email': 'ASC' },
           }),
         TypeError,
-        'must exist in projection',
+        'must exist in columns, projection or joined columns',
+      );
+    });
+
+    it('orderBy unprojected column with distinct', () => {
+      asserts.assertThrows(
+        () =>
+          assertSelectQuery({
+            type: 'SELECT',
+            table: 'users',
+            columns: ['id', 'name'],
+            projection: { '@name': true },
+            distinct: true,
+            orderBy: { '@id': 'ASC' },
+          }),
+        TypeError,
+        "must be projected when the query uses 'distinct'",
+      );
+    });
+
+    it('orderBy unprojected column with aggregates', () => {
+      asserts.assertThrows(
+        () =>
+          assertSelectQuery({
+            type: 'SELECT',
+            table: 'users',
+            columns: ['id', 'name'],
+            aggregates: {
+              n: { $$_aggregate: 'COUNT', column: '@id' },
+            },
+            projection: { '@name': true, '@n': true },
+            orderBy: { '@id': 'ASC' },
+          }),
+        TypeError,
+        'must be projected when the query uses aggregates',
       );
     });
   });

@@ -454,8 +454,9 @@ export class MongoTranslator {
 
   /**
    * Expand a {@link MongoFindAction} into the equivalent aggregation
-   * pipeline — `$match` (filter) → `$project` → `$sort` → `$skip` →
-   * `$limit`, matching find's evaluation order. Reached via
+   * pipeline — `$match` (filter) → `$sort` → `$project` → `$skip` →
+   * `$limit`, matching find's evaluation order (find sorts before it
+   * projects). Reached via
    * {@link __pipelineFromSelect} from every path that materialises a SELECT
    * into a pipeline — `insertQuery` (`$merge` source), `createView` and
    * `alterView` (view body) — so a plain-`find` source SELECT keeps its
@@ -467,11 +468,11 @@ export class MongoTranslator {
     if (filter && Object.keys(filter).length > 0) {
       pipeline.push({ $match: filter });
     }
-    if (options.projection && Object.keys(options.projection).length > 0) {
-      pipeline.push({ $project: options.projection });
-    }
     if (options.sort && Object.keys(options.sort).length > 0) {
       pipeline.push({ $sort: options.sort });
+    }
+    if (options.projection && Object.keys(options.projection).length > 0) {
+      pipeline.push({ $project: options.projection });
     }
     if (options.skip !== undefined) pipeline.push({ $skip: options.skip });
     if (options.limit !== undefined) pipeline.push({ $limit: options.limit });
@@ -1005,7 +1006,7 @@ export class MongoTranslator {
    * the pipeline form the SELECT-materialising paths need — `insertQuery`
    * (`$merge` source), `createView` and `alterView` (view definition).
    * For an aggregate action this is the existing pipeline; for a find
-   * action it's the full `$match` → `$project` → `$sort` → `$skip` →
+   * action it's the full `$match` → `$sort` → `$project` → `$skip` →
    * `$limit` expansion via {@link __findToPipeline}, so the source SELECT's
    * WHERE / projection / sort / limit / skip are all preserved rather than
    * collapsed to a bare `$match` (which dropped the projection — exposing
@@ -1207,8 +1208,8 @@ export class MongoTranslator {
         }
         pipeline.push({ $group: groupBody });
         // After $group, grouped fields live under `_id.<key>`. Flatten
-        // them back to top level so the subsequent $project / $sort /
-        // $match sees plain field names.
+        // them back to top level so the subsequent $match / $sort /
+        // $project sees plain field names.
         if (groupedKeys.length > 0) {
           const flatten: Record<string, unknown> = {};
           for (const key of groupedKeys) flatten[key] = `$_id.${key}`;
@@ -1221,12 +1222,14 @@ export class MongoTranslator {
         $match: this.__translateFilter(q.having, this.__columnsOf(q)),
       });
     }
+    // $sort before $project: orderBy names source fields, which an
+    // alias or an unprojected column would no longer have after it.
+    if (q.orderBy && Object.keys(q.orderBy).length > 0) {
+      pipeline.push({ $sort: this.__buildSort(q.orderBy) });
+    }
     const projection = this.__buildProjection(q);
     if (Object.keys(projection).length > 0) {
       pipeline.push({ $project: projection });
-    }
-    if (q.orderBy && Object.keys(q.orderBy).length > 0) {
-      pipeline.push({ $sort: this.__buildSort(q.orderBy) });
     }
     if (q.offset !== undefined) pipeline.push({ $skip: q.offset });
     if (q.limit !== undefined) pipeline.push({ $limit: q.limit });
