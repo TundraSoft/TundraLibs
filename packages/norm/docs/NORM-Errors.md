@@ -200,6 +200,7 @@ snapshot chain.
 | `DIGEST_IMMUTABLE`       | A one-way digest column's algorithm changed. There is no plaintext to re-digest.                                                            | Add a new column and backfill it from source data; do not try to migrate the digest in place.                         |
 | `REBUILD_COUNT_MISMATCH` | A table rebuild copied a different row count than the original held. `context.subject` is the entity key.                                   | Do not retry blindly: the original table is preserved as `<name>__pre_migrate`. Investigate before dropping it.       |
 | `UNSUPPORTED_RENAME`     | An unsupported rename was requested: `renamedFrom` on a `VIEW`.                                                                             | Drop and recreate the view; there is no data at stake.                                                                |
+| `VIEW_CYCLE`             | Views read each other in a cycle, so none of them can be created first.                                                                     | Break the cycle: no view can read a view that reads it back.                                                          |
 
 `NormAdvisoryLockError` is what the executor throws when a server-side
 lock times out; only the migrator wraps it into a `LOCK_TIMEOUT`
