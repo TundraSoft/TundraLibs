@@ -30,6 +30,7 @@ import {
   pbkdf2Verify,
 } from '@tundralibs/crypt/digest';
 import { signHMAC } from '@tundralibs/crypt/sign';
+import { readTimeOfDay, toTimeOfDay, utcDay } from './calendar.ts';
 
 /**
  * Verify a plaintext against a stored `Column.password('PBKDF2')` hash
@@ -394,7 +395,6 @@ export function verifyKeyId(
 
 const DATE_TYPES: ReadonlySet<string> = new Set([
   'DATE',
-  'TIME',
   'DATETIME',
   'TIMESTAMP',
   'TIMESTAMPTZ',
@@ -424,7 +424,12 @@ export function canonicalizePlain(v: unknown, type: string): string {
     if (!(v instanceof Date) || Number.isNaN(v.getTime())) {
       throw new Error('accepts plaintext Date');
     }
-    return v.toISOString();
+    return (type === 'DATE' ? utcDay(v) : v).toISOString();
+  }
+  if (type === 'TIME') {
+    const time = toTimeOfDay(v);
+    if (time === undefined) throw new Error('accepts plaintext time of day');
+    return time;
   }
   if (type === 'BIGINT') {
     if (typeof v !== 'bigint') throw new Error('accepts plaintext bigint');
@@ -460,8 +465,10 @@ export function canonicalizePlain(v: unknown, type: string): string {
 export function decodePlain(s: string, type: string): unknown {
   if (DATE_TYPES.has(type)) {
     const d = new Date(s);
-    return Number.isNaN(d.getTime()) ? s : d;
+    if (Number.isNaN(d.getTime())) return s;
+    return type === 'DATE' ? utcDay(d) : d;
   }
+  if (type === 'TIME') return readTimeOfDay(s);
   if (type === 'BIGINT') {
     try {
       return s.trim() === '' ? s : BigInt(s);

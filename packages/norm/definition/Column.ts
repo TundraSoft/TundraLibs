@@ -1009,10 +1009,15 @@ export const Column = {
   bit: (): ColumnBuilder<number> => new ColumnBuilder<number>({ type: 'BIT' }),
   boolean: (): ColumnBuilder<boolean> =>
     new ColumnBuilder<boolean>({ type: 'BOOLEAN' }),
+  /** A calendar day (`DATE`), read back as a `Date` at UTC midnight. On
+   * SQLite and Mongo, norm stores the UTC day of the `Date` written. */
   date: (): DateColumnBuilder => new DateColumnBuilder({ type: 'DATE' }),
-  /** Time-of-day (`TIME`). Values ride as `Date` — only the clock
-   * part is significant at the database. */
-  time: (): DateColumnBuilder => new DateColumnBuilder({ type: 'TIME' }),
+  /** Time of day (`TIME`) as an `'HH:MM:SS'` string, with the fraction
+   * only when it is non-zero (`'10:30:00.25'`). Writes take `'HH:MM'` or
+   * `'HH:MM:SS[.ffffff]'`; a `Date` from untyped code keeps its UTC
+   * clock. */
+  time: (): ColumnBuilder<string> =>
+    new ColumnBuilder<string>({ type: 'TIME' }),
   /** `DATETIME` — for engines/schemas that distinguish it from
    * TIMESTAMP (MariaDB famously does). Values ride as `Date`. */
   datetime: (): DateColumnBuilder =>

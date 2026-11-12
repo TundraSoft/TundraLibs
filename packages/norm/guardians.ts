@@ -34,8 +34,9 @@ import {
   GuardianError,
   type NumberGuardian,
   type ObjectGuardian,
-  type StringGuardian,
+  StringGuardian,
 } from '@tundralibs/guardian';
+import { toTimeOfDay } from './calendar.ts';
 import type { ColumnSpec } from './definition/mod.ts';
 import { isExpressionValue } from './definition/Column.ts';
 import { NormValidationError, type ValidationIssue } from './errors/mod.ts';
@@ -56,10 +57,10 @@ const STRING_TYPES: ReadonlySet<string> = new Set([
 /** Column types whose JS value is `Date`. Exported for reuse by
  * {@link Repo}'s read-path date decode — SQLite has no native
  * date/time storage, so these come back as the ISO string norm wrote,
- * not a `Date` instance. */
+ * not a `Date` instance. `TIME` is not one: its value is an
+ * `HH:MM:SS` string. */
 export const DATE_TYPES: ReadonlySet<string> = new Set([
   'DATE',
-  'TIME',
   'DATETIME',
   'TIMESTAMP',
   'TIMESTAMPTZ',
@@ -121,6 +122,21 @@ function buildBase(spec: ColumnSpec) {
 
   if (DATE_TYPES.has(type)) {
     return (spec.guard as DateGuardian | undefined) ?? Guardian.date();
+  }
+
+  if (type === 'TIME') {
+    // A time-of-day string or a Date, canonicalized to `HH:MM:SS` before
+    // any `.guard()` rule sees it.
+    const time = Guardian.unknown()
+      .refine(
+        (v) => toTimeOfDay(v) !== undefined,
+        "must be a time of day ('HH:MM', 'HH:MM:SS[.ffffff]') or a Date",
+      )
+      .process((v) => toTimeOfDay(v)!, StringGuardian);
+    const guard = spec.guard as StringGuardian | undefined;
+    return guard === undefined
+      ? time
+      : time.process((v) => guard.parse(v), StringGuardian);
   }
 
   if (type === 'BOOLEAN') {

@@ -23,6 +23,7 @@
 
 import type { Query } from '@tundralibs/oql/types';
 import { runtimeOf } from '../Norm.ts';
+import { readTimeOfDay, utcDay } from '../calendar.ts';
 import { digestOf, type Runtime } from '../compile.ts';
 import { NormAdvisoryLockError, NormMigrationError } from '../errors/mod.ts';
 import { hashSourceOf } from '../definition/mod.ts';
@@ -1260,7 +1261,6 @@ function actionsHash(actions: ReadonlyArray<MigrationAction>): string {
 /** Types whose canonical form is a full ISO timestamp string. */
 const DATE_ISH = new Set([
   'DATE',
-  'TIME',
   'DATETIME',
   'TIMESTAMP',
   'TIMESTAMPTZ',
@@ -1279,13 +1279,17 @@ function coerceCanonical(v: unknown, logicalType: string): string {
       ? 'true'
       : 'false';
   }
-  if (v instanceof Date) return v.toISOString();
-  if (DATE_ISH.has(logicalType) && typeof v === 'string') {
+  if (logicalType === 'TIME') return String(readTimeOfDay(v));
+  if (
+    DATE_ISH.has(logicalType) && (v instanceof Date || typeof v === 'string')
+  ) {
     const d = new Date(v);
     // Unparseable → keep the raw string (loud digest mismatch beats
     // silently digesting 'Invalid Date').
-    return Number.isNaN(d.getTime()) ? v : d.toISOString();
+    if (Number.isNaN(d.getTime())) return String(v);
+    return (logicalType === 'DATE' ? utcDay(d) : d).toISOString();
   }
+  if (v instanceof Date) return v.toISOString();
   if (JSON_ISH.has(logicalType)) {
     if (typeof v === 'string') {
       try {
