@@ -1803,7 +1803,7 @@ export class MongoTranslator {
     if (typeof rhs !== 'object' || rhs instanceof Date) {
       const ref = this.__valueFieldRef(rhs, columns);
       if (ref !== null) {
-        exprs.push({ $eq: [lhs, ref] });
+        exprs.push(this.__notNull({ $eq: [lhs, ref] }, lhs, ref));
         return { spec: {}, exprs };
       }
       return { spec: { [fieldPath]: rhs }, exprs };
@@ -1811,6 +1811,8 @@ export class MongoTranslator {
     // Multiple operators on the same field merge into a single
     // `{ field: { $op1: …, $op2: … } }` document — deep-merge the inner spec.
     const out: Record<string, unknown> = {};
+    // Literal `$ne` / `$nin` values, emitted together as one `$nin`.
+    const excluded: unknown[] = [];
     const mergeLiteral = (fragment: Record<string, unknown>) => {
       for (const [k, v] of Object.entries(fragment)) {
         if (
@@ -1833,23 +1835,18 @@ export class MongoTranslator {
         // Aggregation comparison operators share these names.
         const ref = this.__valueFieldRef(val, columns);
         if (ref !== null) {
-          exprs.push({ [op]: [lhs, ref] });
+          exprs.push(this.__notNull({ [op]: [lhs, ref] }, lhs, ref));
           continue;
         }
         // A computed operand has no per-field form — left there it is a
         // literal document nothing equals — so it compares inside `$expr`.
-        // BSON orders null and missing below every value and holds them
-        // equal to each other, where SQL never matches NULL; `$gt: null`
-        // is true for everything else, so the two guards restore that.
         if (this.__isExpressionNode(val)) {
           const operand = this.__translateExpression(val as Expressions);
-          exprs.push({
-            $and: [
-              { [op]: [lhs, operand] },
-              { $gt: [lhs, null] },
-              { $gt: [operand, null] },
-            ],
-          });
+          exprs.push(this.__notNull({ [op]: [lhs, operand] }, lhs, operand));
+          continue;
+        }
+        if (op === '$ne') {
+          excluded.push(val);
           continue;
         }
       } else if (op === '$between') {
@@ -1857,9 +1854,16 @@ export class MongoTranslator {
         const loRef = this.__valueFieldRef(lo, columns);
         const hiRef = this.__valueFieldRef(hi, columns);
         if (loRef !== null || hiRef !== null) {
-          exprs.push({
-            $and: [{ $gte: [lhs, loRef ?? lo] }, { $lte: [lhs, hiRef ?? hi] }],
-          });
+          exprs.push(this.__notNull(
+            {
+              $and: [
+                { $gte: [lhs, loRef ?? lo] },
+                { $lte: [lhs, hiRef ?? hi] },
+              ],
+            },
+            lhs,
+            ...[loRef, hiRef].filter((ref) => ref !== null),
+          ));
           continue;
         }
       } else if (
@@ -1889,10 +1893,33 @@ export class MongoTranslator {
           );
           continue;
         }
+        if (op === '$nin') {
+          excluded.push(...(val as unknown[]));
+          continue;
+        }
       }
       mergeLiteral(this.__translateOperator(fieldPath, op, val));
     }
+    // Mongo's `$ne` / `$nin` also match a null or missing field, which
+    // SQL's `<>` / `NOT IN` never do. Listing null among the excluded
+    // values drops those documents.
+    if (excluded.length > 0) {
+      mergeLiteral({ [fieldPath]: { $nin: [...excluded, null] } });
+    }
     return { spec: out, exprs };
+  }
+
+  /**
+   * AND a `$expr` comparison with a guard per operand that is true only
+   * for a value that is neither null nor missing. BSON orders both below
+   * every other value and holds them equal to each other, so an
+   * unguarded comparison matches documents SQL's would not: `NULL`
+   * compared with anything is never true there.
+   */
+  private __notNull(comparison: unknown, ...operands: unknown[]): unknown {
+    return {
+      $and: [comparison, ...operands.map((o) => ({ $gt: [o, null] }))],
+    };
   }
 
   /**
@@ -1989,13 +2016,11 @@ export class MongoTranslator {
     }
     switch (op) {
       case '$eq':
-      case '$ne':
       case '$gt':
       case '$gte':
       case '$lt':
       case '$lte':
       case '$in':
-      case '$nin':
         return { [fieldPath]: { [op]: val } };
       case '$null':
         return val ? { [fieldPath]: null } : { [fieldPath]: { $ne: null } };
