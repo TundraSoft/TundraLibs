@@ -130,6 +130,73 @@ const CASES: Case[] = [
     },
   },
   {
+    // A computed operand compares inside $expr; the two `$gt: null` guards
+    // keep a null or missing side from matching, as it never does in SQL.
+    name: 'WHERE operator value Expression resolves to a guarded $expr',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'links',
+      columns: ['id', 'status', 'expiresAt'],
+      projection: { '@id': true },
+      where: {
+        '@status': 'OPEN',
+        '@expiresAt': { $lt: { $$_expression: 'NOW' } },
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'links',
+        filter: {
+          status: 'OPEN',
+          $expr: {
+            $and: [
+              { $lt: ['$expiresAt', '$$NOW'] },
+              { $gt: ['$expiresAt', null] },
+              { $gt: ['$$NOW', null] },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Only the computed operator moves; the literal one stays on the field.
+    name: 'WHERE Expression and literal operators on one field split',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'price', 'cost'],
+      projection: { '@id': true },
+      where: {
+        '@price': {
+          $gte: { $$_expression: 'ADD', args: ['@cost', 1] },
+          $lt: 100,
+        },
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'orders',
+        filter: {
+          price: { $lt: 100 },
+          $expr: {
+            $and: [
+              { $gte: ['$price', { $add: ['$cost', 1] }] },
+              { $gt: ['$price', null] },
+              { $gt: [{ $add: ['$cost', 1] }, null] },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
     // $in with a column reference can't be expressed in a Mongo $match — throw
     // rather than silently treat the @ref as a literal.
     name: 'WHERE $in with a @col value throws (unsupported in Mongo)',

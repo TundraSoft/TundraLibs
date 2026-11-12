@@ -1805,6 +1805,22 @@ export class MongoTranslator {
           exprs.push({ [op]: [lhs, ref] });
           continue;
         }
+        // A computed operand has no per-field form — left there it is a
+        // literal document nothing equals — so it compares inside `$expr`.
+        // BSON orders null and missing below every value and holds them
+        // equal to each other, where SQL never matches NULL; `$gt: null`
+        // is true for everything else, so the two guards restore that.
+        if (this.__isExpressionNode(val)) {
+          const operand = this.__translateExpression(val as Expressions);
+          exprs.push({
+            $and: [
+              { [op]: [lhs, operand] },
+              { $gt: [lhs, null] },
+              { $gt: [operand, null] },
+            ],
+          });
+          continue;
+        }
       } else if (op === '$between') {
         const [lo, hi] = val as [unknown, unknown];
         const loRef = this.__valueFieldRef(lo, columns);
