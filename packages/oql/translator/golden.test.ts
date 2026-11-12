@@ -2232,7 +2232,7 @@ const CASES: Case[] = [
       postgres: {
         sql:
           `SELECT "id" AS "id", ("createdAt" + (:p_0:::text || ' ' || :p_1:)::interval) AS "since", ` +
-          `CAST(EXTRACT(EPOCH FROM ("shippedAt" - "createdAt")) * CASE :p_2: WHEN 'DAYS' THEN 1.0/86400 WHEN 'HOURS' THEN 1.0/3600 WHEN 'MINUTES' THEN 1.0/60 WHEN 'SECONDS' THEN 1 WHEN 'MONTHS' THEN 1.0/(86400*30) WHEN 'YEARS' THEN 1.0/(86400*365) END AS BIGINT) AS "took" FROM "orders"`,
+          `CAST(TRUNC(EXTRACT(EPOCH FROM ("shippedAt" - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 WHEN 'MONTHS' THEN 86400*30 WHEN 'YEARS' THEN 86400*365 END) AS BIGINT) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       maria: {

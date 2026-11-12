@@ -201,17 +201,21 @@ export class PostgresTranslator extends AbstractTranslator {
       return `(${date} + (${amount}::text || ' ' || ${unit})::interval)`;
     }],
     ['DATE_DIFF', (a) => {
-      // EXTRACT(EPOCH FROM (to - from)) gives seconds; scale by unit.
+      // EXTRACT(EPOCH FROM (to - from)) gives seconds. Divide by the
+      // unit's length rather than multiply by its reciprocal: `1.0/86400`
+      // is rounded down, so an exact day would truncate to 0.
       const [from, to, unit] = a;
-      const scale = this._timeUnitCase(unit!, {
-        DAYS: '1.0/86400',
-        HOURS: '1.0/3600',
-        MINUTES: '1.0/60',
+      const seconds = this._timeUnitCase(unit!, {
+        DAYS: '86400',
+        HOURS: '3600',
+        MINUTES: '60',
         SECONDS: '1',
-        MONTHS: '1.0/(86400*30)',
-        YEARS: '1.0/(86400*365)',
+        MONTHS: '86400*30',
+        YEARS: '86400*365',
       });
-      return `CAST(EXTRACT(EPOCH FROM (${to} - ${from})) * ${scale} AS BIGINT)`;
+      // TRUNC drops a partial unit, as SQLite and MariaDB do; a bare
+      // CAST to BIGINT would round it.
+      return `CAST(TRUNC(EXTRACT(EPOCH FROM (${to} - ${from})) / ${seconds}) AS BIGINT)`;
     }],
     ['UUID', () => 'gen_random_uuid()'],
     ['HASH', (a) => `encode(digest(${a[0]}, 'sha256'), 'hex')`],

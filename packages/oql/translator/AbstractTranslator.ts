@@ -749,7 +749,7 @@ export abstract class AbstractTranslator {
    * skeleton the date-arithmetic emitters (`DATE_ADD` / `DATE_DIFF`)
    * otherwise hand-roll identically on every SQL dialect. `unitSql` is
    * the already-rendered unit operand; `cases` supplies each unit's
-   * `THEN` value, a scale factor.
+   * `THEN` value, a scale factor or divisor.
    */
   protected _timeUnitCase(
     unitSql: string,
