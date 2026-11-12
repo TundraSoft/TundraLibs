@@ -223,6 +223,52 @@ describe({
       );
     });
 
+    describe('session time zone', () => {
+      it('refuses a non-UTC session unless allowNonUtcTimeZone is set', async () => {
+        const admin = new PostgresEngine('tz-admin', TEST_CONFIG);
+        await admin.connect();
+        const role = `tz_probe_${crypto.randomUUID().slice(0, 8)}`;
+        await admin.execute({
+          sql: `CREATE ROLE ${role} LOGIN PASSWORD 'tz-probe'`,
+        });
+        await admin.execute({
+          sql: `ALTER ROLE ${role} SET timezone TO 'Asia/Kolkata'`,
+        });
+        const zoneAs = async (options: Record<string, unknown>) => {
+          const engine = new PostgresEngine('tz-pg', {
+            ...TEST_CONFIG,
+            username: role,
+            password: 'tz-probe',
+            ...options,
+          });
+          try {
+            await engine.connect();
+            const r = await engine.execute<{ z: string }>({
+              sql: `SELECT current_setting('TimeZone') AS z`,
+            });
+            return r.data[0]!.z;
+          } finally {
+            await engine.disconnect();
+          }
+        };
+        try {
+          const err = await asserts.assertRejects(
+            () => zoneAs({}),
+            EngineError,
+          );
+          asserts.assertEquals(err.code, 'INVALID_CONFIG_VALUE');
+          asserts.assertStringIncludes(err.message, 'Asia/Kolkata');
+          asserts.assertEquals(
+            await zoneAs({ allowNonUtcTimeZone: true }),
+            'Asia/Kolkata',
+          );
+        } finally {
+          await admin.execute({ sql: `DROP ROLE ${role}` });
+          await admin.disconnect();
+        }
+      });
+    });
+
     describe('Postgres-specific type decoding', () => {
       it('decodes int8 (BIGINT), float8, jsonb, timestamp, bool, null', async () => {
         const engine = new PostgresEngine('types-pg', TEST_CONFIG);

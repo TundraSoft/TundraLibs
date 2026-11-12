@@ -169,6 +169,7 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 | `ssl`                    | various   | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration).                                                                                                                                                               |
 | `allowCleartextPassword` | `boolean` | `true`  | Permit cleartext-password auth over an **unencrypted** connection. Permitted by default but warns via `notice` on every such handshake; set `false` to throw `INVALID_AUTH` instead (see [Authentication](#authentication)). |
 | `allowMd5Password`       | `boolean` | `false` | Answer MD5 password auth. Refused with `INVALID_AUTH` by default; set `true` only for a peer that offers nothing better, such as Cloudflare Hyperdrive (see [MD5](#md5)).                                                    |
+| `allowNonUtcTimeZone`    | `boolean` | `false` | Connect when the session `TimeZone` is not UTC. Refused with `INVALID_CONFIG_VALUE` by default (see [Time zone](#time-zone)).                                                                                                |
 
 ## Behind PgBouncer / pgcat / RDS Proxy
 
@@ -202,6 +203,23 @@ warning described under [Authentication](#authentication); set
 | `date` / `timestamp` / `timestamptz` | `Date`                         |
 | `numeric`                            | `string` (preserves precision) |
 | `uuid`                               | `string`                       |
+
+### Time zone
+
+Postgres converts a `Date` written to a `date` or `timestamp` column, and
+evaluates `date_trunc`, `EXTRACT` and casts, in the session's `TimeZone`. In
+any zone but UTC those store and filter the wrong day and clock time;
+`timestamptz` is correct in every zone. The driver therefore refuses a
+connection whose server reports a non-UTC `TimeZone` at startup, with
+`INVALID_CONFIG_VALUE`. Fix it on the database, which also works behind poolers
+that refuse startup parameters:
+
+```sql
+ALTER DATABASE app SET timezone TO 'UTC';
+```
+
+Set `allowNonUtcTimeZone: true` only when the application uses `timestamptz`
+alone. A server that reports no `TimeZone` is not checked.
 
 ## Performance
 
