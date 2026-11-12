@@ -329,8 +329,9 @@ type ExistsFilter<PT, FPT> = {
   // Keys are single-segment '@column' refs into the subquery table
   // (the internal __exists__ alias is implicit). Values follow the
   // join-value rule: an '@x' string is an outer column reference iff
-  // `x` names a column in the outer scope; anything else is a
-  // parameterised literal. Expressions are NOT allowed here.
+  // `x` names a column in the outer scope; `null` is an IS NULL check;
+  // anything else is a parameterised literal. Expressions are NOT
+  // allowed here.
   on: Record<`@${string}`, null | ColumnTypes | (keyof FPT & string)>;
   // `on` keys compared NULL-safely: the pair also matches when both
   // sides are NULL. Each must be an `on` key whose value is an '@'

@@ -1285,6 +1285,11 @@ export abstract class AbstractTranslator {
       // `subKey` is a bare `@col` ref into the subquery table — splice
       // in the EXISTS alias so it resolves as `"__exists__"."col"`.
       const left = this._resolveColumnRef(`@${EXISTS_ALIAS}.${subKey}`, true);
+      // `= NULL` is never true; a null value is a NULL check.
+      if (outerVal === null) {
+        conditions.push(`${left} IS NULL`);
+        continue;
+      }
       const right = this.__renderExistsOuterValue(
         outerVal,
         scope,
@@ -1337,7 +1342,6 @@ export abstract class AbstractTranslator {
     hasJoins: boolean,
     outerTable: string | undefined,
   ): string {
-    if (value === null) return 'NULL';
     if (typeof value === 'string' && value.startsWith('@')) {
       const stripped = value.slice(1);
       if (this.__columnInScope(stripped, scope, hasJoins)) {

@@ -478,7 +478,8 @@ beside `localField` / `foreignField`, which needs MongoDB 5.0 or later.
 A lone `nullSafe` key is the concise form without the guard.
 
 A `$exists` / `$nexists` correlation map takes the same `nullSafe`
-array, with the same SQL operators.
+array, with the same SQL operators, and reads a `null` value the same
+way: `IS NULL` on the subquery column.
 
 A `null` value in `on` is a NULL check on the joined column (`IS NULL`;
 null or missing on MongoDB) and cannot be listed in `nullSafe`, nor can
