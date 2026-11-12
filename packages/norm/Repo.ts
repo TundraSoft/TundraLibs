@@ -129,13 +129,12 @@ function toBoolean(v: unknown): unknown {
 }
 
 /** A date inside relation JSON — always a string there. A zone-less
- * one is read in `zone`: `'Z'` where the engine stores UTC, `''`
- * (local time) on MariaDB, whose driver writes and reads `Date`s in the
- * host's time zone. */
-function jsonDate(v: unknown, zone: 'Z' | ''): unknown {
+ * one is read as UTC: every engine renders it in UTC (the MariaDB
+ * driver runs its session in UTC). */
+function jsonDate(v: unknown): unknown {
   if (typeof v !== 'string') return v;
   const m = ZONELESS_DATETIME.exec(v);
-  return new Date(m ? `${m[1]}T${m[2]}${m[3] ?? ''}${zone}` : v);
+  return new Date(m ? `${m[1]}T${m[2]}${m[3] ?? ''}Z` : v);
 }
 
 /** A JSON column's stored TEXT, parsed; anything else as it came. */
@@ -2000,10 +1999,8 @@ export class ReadRepo<
   protected _decodeRelationColumns(rows: Row[], plan: ProjectionPlan): void {
     if (rows.length === 0) return;
     const dialect = this._executor.capabilities.dialect;
-    const zone = dialect === 'maria' ? '' : 'Z';
-    const date = (v: unknown): unknown => jsonDate(v, zone);
     const day = (v: unknown): unknown => {
-      const d = jsonDate(v, zone);
+      const d = jsonDate(v);
       return d instanceof Date && !Number.isNaN(d.getTime()) ? utcDay(d) : d;
     };
     const storesDays = dialect === 'sqlite' || dialect === 'mongo';
@@ -2020,7 +2017,7 @@ export class ReadRepo<
         else if (type === 'BOOLEAN') decoders.push([key, toBoolean]);
         else if (type === 'TIME') decoders.push([key, readTimeOfDay]);
         else if (type === 'DATE' && storesDays) decoders.push([key, day]);
-        else if (DATE_TYPES.has(type)) decoders.push([key, date]);
+        else if (DATE_TYPES.has(type)) decoders.push([key, jsonDate]);
         else if (
           dialect === 'sqlite' && (type === 'JSON' || type === 'JSONB')
         ) {

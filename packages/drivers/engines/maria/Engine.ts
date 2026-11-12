@@ -31,7 +31,12 @@
  * ```
  */
 
-import { type Connection, createConnection } from '$maria';
+import {
+  type Connection,
+  createConnection,
+  type FieldInfo,
+  type TypeCastNextFunction,
+} from '$maria';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { validateTLS } from '@tundralibs/compat/common';
 import { MariaTranslator } from '@tundralibs/oql/translator';
@@ -47,6 +52,29 @@ import type { MariaEngineOptions } from './types/mod.ts';
 const MARIA_DEFAULTS: Partial<MariaEngineOptions> = {
   port: 3306,
 };
+
+/** Column types the server returns as a day or a wall clock. */
+const DATE_COLUMN_TYPES: ReadonlySet<string> = new Set([
+  'DATE',
+  'NEWDATE',
+  'DATETIME',
+  'TIMESTAMP',
+]);
+
+/**
+ * Read a `DATE` / `DATETIME` / `TIMESTAMP` value as UTC — the session runs
+ * in UTC, so its wall clock is the UTC clock. `npm:mariadb` would read it
+ * in the host's time zone. A value that is not a calendar date (MariaDB's
+ * zero date) comes back as the server's text.
+ */
+function readUtc(field: FieldInfo, next: TypeCastNextFunction): unknown {
+  if (!DATE_COLUMN_TYPES.has(field.type)) return next();
+  const text = field.string();
+  if (text === null) return null;
+  const clock = text.length > 10 ? text.slice(11, 23) : '00:00:00';
+  const date = new Date(`${text.slice(0, 10)}T${clock}Z`);
+  return Number.isNaN(date.getTime()) ? text : date;
+}
 
 /**
  * MariaDB / MySQL engine.
@@ -168,6 +196,10 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
       namedPlaceholders: true,
       supportBigInt: true,
       decimalAsNumber: true,
+      // Dates travel as UTC both ways, whatever the host's time zone:
+      // `_encodeValue` sends the UTC clock and `readUtc` reads it back.
+      initSql: "SET time_zone = '+00:00'",
+      typeCast: readUtc,
     };
   }
 
@@ -210,6 +242,25 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
   //#endregion BaseEngine hooks
 
   //#region SQLEngine hooks
+
+  /**
+   * A `Date` goes to the server as its UTC clock (`YYYY-MM-DD
+   * HH:MM:SS.mmm`). The session runs in UTC, so a `TIMESTAMP` column stores
+   * that instant and a `DATETIME` / `DATE` column its UTC clock or day.
+   *
+   * @throws {EngineError} `OPERATION_FAILED` for an Invalid Date.
+   */
+  protected override _encodeValue(value: unknown): unknown {
+    if (!(value instanceof Date)) return value;
+    if (Number.isNaN(value.getTime())) {
+      throw new EngineError('OPERATION_FAILED', {
+        instanceId: this.instanceId,
+        operation: 'encode Date parameter',
+        reason: 'value is an Invalid Date',
+      });
+    }
+    return value.toISOString().slice(0, 23).replace('T', ' ');
+  }
 
   /**
    * Runs the query with named placeholders. A `SELECT` yields the row array
