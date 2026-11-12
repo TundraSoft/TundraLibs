@@ -229,13 +229,16 @@ a fallback for an unrecognised one.
 
 ## `jobs`
 
-| Key       | Type      | Default | Read by                                                                             |
-| --------- | --------- | ------- | ----------------------------------------------------------------------------------- |
-| `enabled` | `boolean` | `true`  | `start()` — whether this replica runs the cron scheduler. `triggerJob()` ignores it |
+| Key        | Type           | Default                 | Read by                                                                             |
+| ---------- | -------------- | ----------------------- | ----------------------------------------------------------------------------------- |
+| `enabled`  | `boolean`      | `true`                  | `start()` — whether this replica runs the cron scheduler. `triggerJob()` ignores it |
+| `timezone` | IANA zone name | the server's local zone | the scheduler — the zone schedules are read in. Validated at boot                   |
 
 There is no leader election: every replica with `jobs.enabled` runs every
-job. Schedules are evaluated against the server's local time, once per
-minute; a still-running job's next tick is skipped, never queued.
+job. Schedules are evaluated once per minute, in `jobs.timezone` unless
+the job names its own (`app.job(…, { timezone })`,
+`@JOB(…, { timezone })`); a still-running job's next tick is skipped,
+never queued.
 
 ## `uploads`
 

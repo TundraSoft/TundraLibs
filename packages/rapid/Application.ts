@@ -32,6 +32,7 @@ import {
 } from '@tundralibs/doctor';
 import { RapidError } from './errors/mod.ts';
 import { assertAccess } from './decorators/registry.ts';
+import { assertTimezone } from './decorators/job.ts';
 import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport } from './transports/HTTPTransport.ts';
 // TYPE-ONLY: the cron scheduler is loaded when jobs actually start — a
@@ -1421,15 +1422,20 @@ export class Application<S extends RapidContextState = RapidContextState>
    *
    * @param options - `args`: default invocation params — every firing's
    *   `ctx.args.params` starts from these; `triggerJob` overrides merge
-   *   on top per firing.
-   * @throws {RapidError} RAPID_CONFIG on a duplicate job name or an
-   *   invalid cron schedule.
+   *   on top per firing. `timezone`: the IANA zone the schedule is read
+   *   in, over `jobs.timezone`.
+   * @throws {RapidError} RAPID_CONFIG on a duplicate job name, an
+   *   invalid cron schedule or an unknown time zone.
    */
   public job(
     name: string,
     schedule: RapidJobEntry<S>['schedule'],
     handler: RapidJobEntry<S>['handler'],
-    options: { args?: Readonly<Record<string, unknown>>; access?: string } = {},
+    options: {
+      args?: Readonly<Record<string, unknown>>;
+      access?: string;
+      timezone?: string;
+    } = {},
   ): this {
     this.__assertRegistrable('job()', false);
     if (this.__jobs.has(name)) {
@@ -1450,12 +1456,16 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { name, schedule, reason },
       });
     }
+    if (options.timezone !== undefined) {
+      assertTimezone(`job '${name}' timezone`, options.timezone);
+    }
     this.__jobs.set(name, {
       name,
       schedule,
       handler,
       args: options.args,
       ...(options.access !== undefined ? { access: options.access } : {}),
+      ...(options.timezone !== undefined ? { timezone: options.timezone } : {}),
     });
     return this;
   }
@@ -2410,6 +2420,10 @@ export class Application<S extends RapidContextState = RapidContextState>
       });
     }
     if (mode !== upper) this._setOption('mode', upper);
+    // Read only when the scheduler starts — an unknown zone would
+    // otherwise fail at start(), or never on a jobs-disabled replica.
+    const timezone = this._getOption('jobs')?.timezone as unknown;
+    if (timezone !== undefined) assertTimezone('jobs.timezone', timezone);
     // `stateMode` steers how ctx.state is built; an unknown value would
     // silently fall through to CLONE ('share' from YAML meaning SHARE).
     const stateMode = this._getOption('stateMode') as unknown;

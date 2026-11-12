@@ -100,4 +100,6 @@ export type RapidDecoration =
     methodName: string;
     /** The `access` string the job declares. */
     access?: string;
+    /** IANA time zone the schedule is read in, validated at decoration time. */
+    timezone?: string;
   };

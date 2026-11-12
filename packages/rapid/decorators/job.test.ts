@@ -36,6 +36,26 @@ describe('rapid.decorators.job', () => {
     );
   });
 
+  it('records a timezone, and rejects an unknown one at decoration time', () => {
+    class Digest {
+      @JOB('digest', '0 9 * * *', { timezone: 'Asia/Kolkata' })
+      run(): RapidContextResponse {
+        return { content: 'sent' };
+      }
+    }
+    const [entry] = decorationsOf(Digest, 'run')!;
+    asserts.assertEquals(
+      entry.kind === 'JOB' ? entry.timezone : undefined,
+      'Asia/Kolkata',
+    );
+    const error = asserts.assertThrows(
+      () => JOB('bad', '0 9 * * *', { timezone: 'Mars/Olympus' }),
+      RapidError,
+      "@JOB 'bad' timezone must be an IANA time zone name",
+    );
+    asserts.assertEquals(error.code, 'RAPID_CONFIG');
+  });
+
   it('legacy-mode compilation trips the runtime guard', () => {
     // Simulate what experimentalDecorators would pass at runtime:
     const factory = GET('/x');

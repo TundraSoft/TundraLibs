@@ -16,4 +16,10 @@ export type RapidApplicationJobsOptions = {
    * @default true
    */
   enabled?: boolean;
+  /**
+   * IANA time zone (`'Asia/Kolkata'`, `'UTC'`) every job's schedule is
+   * read in, unless the job names its own. Omitted, schedules follow the
+   * server's local clock.
+   */
+  timezone?: string;
 };
