@@ -21,7 +21,7 @@
 
 import { decodeHex } from '@std/encoding';
 import type { AESOptions, RSAOptions } from './types/mod.ts';
-import { deriveMacSecret } from './mac.ts';
+import { deriveMacSecret, ENVELOPE_VERSION, macMessage } from './mac.ts';
 import { validateAESKey } from './aesKey.ts';
 import { validateDigestAlgorithm } from '../digest/mod.ts';
 import { derivePBKDF2Key } from '../generators/mod.ts';
@@ -53,7 +53,8 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  * Decrypts data produced by {@link encryptAES}.
  *
  * Expects the envelope produced by {@link encryptAES}: hex
- * `data:iv:salt` for `GCM`, or `data:iv:salt:mac` for `CBC`/`CTR`. The AES key
+ * `data:iv:salt` for `GCM`, or `data:iv:salt:mac:v2` for `CBC`/`CTR` (the
+ * 4-part `data:iv:salt:mac` written before the version is still accepted). The AES key
  * is re-derived from the supplied secret + embedded salt with PBKDF2, using
  * the same `options.pbkdf2` the envelope was encrypted with.
  *
@@ -65,9 +66,11 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  * Security — all modes are authenticated:
  * `GCM` rejects tampered ciphertext natively (AEAD). For `CBC`/`CTR` this
  * function verifies the encrypt-then-MAC HMAC-SHA-256 (constant-time, via
- * {@link verifyHMAC}) over the `data:iv:salt` envelope **before** decrypting,
- * and throws if it does not match — so a modified envelope or wrong secret is
- * rejected rather than returning corrupted plaintext.
+ * {@link verifyHMAC}) over the `data:iv:salt` envelope and the mode, key
+ * length and PBKDF2 settings **before** decrypting, and throws if it does not
+ * match — so a modified envelope, wrong secret or other settings are rejected
+ * rather than returning corrupted plaintext. A 4-part envelope's MAC covers
+ * `data:iv:salt` only: decrypted with other settings, it returns garbage.
  *
  * @param {string} data - The ciphertext envelope from {@link encryptAES}
  * @param {string | CryptoKey} secret - The secret used at encryption time, or
@@ -78,8 +81,10 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
  * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
  * @throws {Error} When the envelope shape is wrong (`data:iv:salt` for GCM,
- *   `data:iv:salt:mac` for CBC/CTR, `data:iv` for a `CryptoKey` secret)
- * @throws {Error} When CBC/CTR authentication fails (tampered ciphertext or wrong secret)
+ *   `data:iv:salt:mac:v2` or `data:iv:salt:mac` for CBC/CTR, `data:iv` for a
+ *   `CryptoKey` secret)
+ * @throws {Error} When CBC/CTR authentication fails (tampered ciphertext, wrong
+ *   secret, or other mode, keyLength or pbkdf2 settings)
  * @throws {Error} When the IV/counter or salt is empty
  * @throws {Error} When a `CryptoKey` secret is combined with CBC/CTR, is not
  *   an AES-GCM key, contradicts an explicit `keyLength` option, or is given
@@ -182,29 +187,36 @@ export async function decryptAES(
   }
 
   const parts = data.split(':');
-  // GCM (AEAD) envelopes are 3-part `data:iv:salt`. CBC/CTR carry a 4th
-  // encrypt-then-MAC HMAC part: `data:iv:salt:mac`.
-  const expectedParts = mode === 'GCM' ? 3 : 4;
-  if (parts.length !== expectedParts) {
+  // GCM (AEAD) envelopes are 3-part `data:iv:salt`. CBC/CTR carry an
+  // encrypt-then-MAC HMAC part and the envelope version: `data:iv:salt:mac:v2`.
+  // A 4-part `data:iv:salt:mac` envelope predates the version.
+  const shapeOk = mode === 'GCM' ? parts.length === 3 : parts.length === 4 ||
+    (parts.length === 5 && parts[4] === ENVELOPE_VERSION);
+  if (!shapeOk) {
     throw new Error(
       mode === 'GCM'
         ? 'Invalid encrypted data format. Expected "data:iv:salt"'
-        : 'Invalid encrypted data format. Expected "data:iv:salt:mac"',
+        : 'Invalid encrypted data format. Expected "data:iv:salt:mac:v2"',
     );
   }
 
   // Authenticate CBC/CTR before touching the ciphertext (encrypt-then-MAC,
-  // verify-then-decrypt). A failed check means the envelope was tampered with
-  // or the secret is wrong — reject rather than return corrupted plaintext.
+  // verify-then-decrypt). A failed check means the envelope was tampered with,
+  // the secret is wrong, or (for a versioned envelope) the mode, key length or
+  // PBKDF2 settings differ from encryption — reject rather than return
+  // corrupted plaintext.
   if (mode !== 'GCM') {
+    const envelope = parts.slice(0, 3).join(':');
     const valid = await verifyHMAC(
-      parts.slice(0, 3).join(':'),
+      parts.length === 5
+        ? macMessage(envelope, mode, keyLength, options?.pbkdf2)
+        : envelope,
       parts[3]!,
       deriveMacSecret(secret),
     );
     if (!valid) {
       throw new Error(
-        'Authentication failed: ciphertext was tampered with or the secret is incorrect',
+        'Authentication failed: ciphertext was tampered with, the secret is incorrect, or the mode, keyLength or pbkdf2 settings differ from encryption',
       );
     }
   }

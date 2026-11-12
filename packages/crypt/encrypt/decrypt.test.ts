@@ -240,12 +240,77 @@ describe('crypt.decrypt', () => {
     const data = 'tamper target';
     const secret = 'testsecretwith32characterslong!';
 
-    // GCM (AEAD) envelope is data:iv:salt; CBC/CTR add a 4th MAC part.
+    // GCM (AEAD) envelope is data:iv:salt; CBC/CTR add a MAC and `v2`.
     const gcm = await encryptAES(data, secret, { mode: 'GCM' });
     asserts.assertEquals(gcm.split(':').length, 3);
     for (const mode of ['CBC', 'CTR'] as const) {
       const env = await encryptAES(data, secret, { mode });
-      asserts.assertEquals(env.split(':').length, 4);
+      asserts.assertEquals(env.split(':').length, 5);
+      asserts.assertEquals(env.split(':')[4], 'v2');
+    }
+  });
+
+  it('decryptAES - CBC/CTR rejects a mode, keyLength or pbkdf2 other than encryption', async () => {
+    const secret = 'testsecretwith32characterslong!';
+    const pbkdf2 = { iterations: 1000 };
+    for (const mode of ['CBC', 'CTR'] as const) {
+      const env = await encryptAES('bound', secret, { mode, pbkdf2 });
+      const other = mode === 'CBC' ? 'CTR' as const : 'CBC' as const;
+      for (
+        const options of [
+          { mode: other, pbkdf2 },
+          { mode, keyLength: 128 as const, pbkdf2 },
+          { mode },
+          { mode, pbkdf2: { iterations: 1001 } },
+          { mode, pbkdf2: { ...pbkdf2, hash: 'SHA-512' as const } },
+        ]
+      ) {
+        await asserts.assertRejects(
+          () => decryptAES(env, secret, options),
+          Error,
+          'Authentication failed',
+        );
+      }
+    }
+  });
+
+  it('decryptAES - a 4-part CBC/CTR envelope from before the version still decrypts', async () => {
+    // Written by crypt 1.5.0, whose MAC covers data:iv:salt only.
+    const legacy = {
+      CBC:
+        '3e605c4f83ecd52ae05b56fd68bc9877:f3d51790da668c2a39a7e42ddbb7b0ea:75d5ce82b11a311fdeb1f619101c94d2:5030f0cd385f05a26dc28c63bdaf6677035f19d468a99068dfa380f035b4412d',
+      CTR:
+        'a207dc08ea80baac7761bf1996f0a3:33bee80d17eafb27019367a623904bb7:2af6264e2a629cb846d986310fa3a9fd:158edaa14fcec96a7357a1dc11d024cf656ee4170b1706e5570ad008e7aef5c1',
+    };
+    for (const mode of ['CBC', 'CTR'] as const) {
+      asserts.assertEquals(
+        await decryptAES(legacy[mode], 'legacy-secret', {
+          mode,
+          pbkdf2: { iterations: 1000 },
+        }),
+        'legacy envelope',
+      );
+    }
+  });
+
+  it('decryptAES - rejects a CBC/CTR envelope with its version stripped or changed', async () => {
+    const secret = 'testsecretwith32characterslong!';
+    for (const mode of ['CBC', 'CTR'] as const) {
+      const parts = (await encryptAES('versioned', secret, { mode })).split(
+        ':',
+      );
+      // Read as a 4-part envelope, the MAC no longer matches what it signs.
+      await asserts.assertRejects(
+        () => decryptAES(parts.slice(0, 4).join(':'), secret, { mode }),
+        Error,
+        'Authentication failed',
+      );
+      await asserts.assertRejects(
+        () =>
+          decryptAES([...parts.slice(0, 4), 'v3'].join(':'), secret, { mode }),
+        Error,
+        'data:iv:salt:mac:v2',
+      );
     }
   });
 

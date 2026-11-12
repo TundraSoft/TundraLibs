@@ -19,7 +19,7 @@
 
 import { encodeHex } from '@std/encoding';
 import type { AESOptions, RSAOptions } from './types/mod.ts';
-import { deriveMacSecret } from './mac.ts';
+import { deriveMacSecret, ENVELOPE_VERSION, macMessage } from './mac.ts';
 import { validateAESKey } from './aesKey.ts';
 import {
   DIGEST_OUTPUT_BYTES,
@@ -49,12 +49,14 @@ const CBC_IV_BYTES = 16;
  * 210 000 iterations unless `options.pbkdf2` says otherwise) using a fresh
  * random per-message salt. The salt is embedded in the output so decrypt can
  * derive the same key; the PBKDF2 settings are not, so decrypt must be passed
- * the same `options.pbkdf2`.
+ * the same `options.pbkdf2`. For `CBC`/`CTR` a mismatch fails authentication;
+ * for `GCM` it fails the auth tag.
  *
  * Output format (all components hex-encoded):
  * - `GCM` (default, AEAD): `{dataHex}:{ivHex}:{saltHex}`.
- * - `CBC` / `CTR`: `{dataHex}:{ivHex}:{saltHex}:{macHex}` — a 4th
- *   encrypt-then-MAC part.
+ * - `CBC` / `CTR`: `{dataHex}:{ivHex}:{saltHex}:{macHex}:v2` — an
+ *   encrypt-then-MAC part and the envelope version. {@link decryptAES} also
+ *   accepts the 4-part `data:iv:salt:mac` form written before the version.
  * - `GCM` with a `CryptoKey` secret: `{dataHex}:{ivHex}` — no salt part,
  *   because no derivation ran.
  *
@@ -80,10 +82,13 @@ const CBC_IV_BYTES = 16;
  * Security — all modes are authenticated:
  * `GCM` is authenticated on its own (AEAD: it embeds an auth tag). `CBC` and
  * `CTR` have no native integrity, so they are wrapped with **encrypt-then-MAC**:
- * an HMAC-SHA-256 (via {@link signHMAC}) computed over the full `data:iv:salt`
- * envelope and keyed by a secret domain-separated from the AES-derivation
- * secret. {@link decryptAES} verifies this MAC (constant-time) and rejects
- * tampered ciphertext, closing the bit-flipping / padding-oracle / chosen-
+ * an HMAC-SHA-256 (via {@link signHMAC}) computed over the `data:iv:salt`
+ * envelope plus the mode, key length and PBKDF2 settings, keyed by a secret
+ * domain-separated from the AES-derivation secret. {@link decryptAES} verifies
+ * this MAC (constant-time) and rejects tampered ciphertext or a decrypt with
+ * other settings. A 4-part envelope written before the version is
+ * authenticated over `data:iv:salt` only, so other settings yield garbage for
+ * it. This closes the bit-flipping / padding-oracle / chosen-
  * ciphertext exposure those modes otherwise have. Prefer `GCM` (one standard
  * AEAD primitive); reach for `CBC`/`CTR` only for external-format compatibility.
  *
@@ -92,7 +97,7 @@ const CBC_IV_BYTES = 16;
  *   or an AES-GCM `CryptoKey` to use directly (skips derivation)
  * @param {AESOptions} [options] - Optional encryption settings (mode and keyLength)
  * @returns {Promise<string>} Hex-encoded envelope: `data:iv:salt` for GCM,
- *   `data:iv:salt:mac` for CBC/CTR, `data:iv` for a `CryptoKey` secret
+ *   `data:iv:salt:mac:v2` for CBC/CTR, `data:iv` for a `CryptoKey` secret
  *
  * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
  * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
@@ -165,14 +170,18 @@ export const encryptAES = async (
   const envelope = `${blob}:${encodeHex(salt)}`;
 
   // GCM is authenticated (AEAD) on its own. CBC/CTR are not, so authenticate
-  // them with encrypt-then-MAC: an HMAC-SHA-256 over the full `data:iv:salt`
-  // envelope, keyed by a domain-separated secret. decryptAES verifies it
-  // (constant-time) before decrypting, so tampered ciphertext is rejected.
+  // them with encrypt-then-MAC: an HMAC-SHA-256 over the `data:iv:salt`
+  // envelope and the settings the key was derived with, keyed by a
+  // domain-separated secret. decryptAES verifies it (constant-time) before
+  // decrypting, so tampered ciphertext and mismatched settings are rejected.
   if (mode === 'GCM') {
     return envelope;
   }
-  const mac = await signHMAC(envelope, deriveMacSecret(secret));
-  return `${envelope}:${mac}`;
+  const mac = await signHMAC(
+    macMessage(envelope, mode, keyLength, options?.pbkdf2),
+    deriveMacSecret(secret),
+  );
+  return `${envelope}:${mac}:${ENVELOPE_VERSION}`;
 };
 
 /**

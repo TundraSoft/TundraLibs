@@ -230,10 +230,10 @@ describe('crypt.encrypt', () => {
       const encrypted = await encryptAES(data, secret, options);
       asserts.assertEquals(typeof encrypted, 'string');
       asserts.assertEquals(encrypted.length > 0, true);
-      // GCM is data:iv:salt (3 parts); CBC/CTR add an encrypt-then-MAC part.
+      // GCM is data:iv:salt (3 parts); CBC/CTR add a MAC part and the version.
       asserts.assertEquals(
         encrypted.split(':').length,
-        options.mode === 'GCM' ? 3 : 4,
+        options.mode === 'GCM' ? 3 : 5,
       );
     }
   });
@@ -719,7 +719,7 @@ describe('crypt.encrypt', () => {
 describe('crypt.encrypt AES pbkdf2 option', () => {
   const pbkdf2 = { iterations: 1000 };
 
-  for (const mode of ['GCM', 'CBC'] as const) {
+  for (const mode of ['GCM', 'CBC', 'CTR'] as const) {
     it(`${mode}: a string-secret envelope needs the same pbkdf2 settings to decrypt`, async () => {
       const sealed = await encryptAES('hello', 'secret', { mode, pbkdf2 });
       asserts.assertEquals(

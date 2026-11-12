@@ -74,9 +74,9 @@ async function encryptAES(
 - `options`:
   - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode (default: `'GCM'`; a `CryptoKey` secret permits only `'GCM'`)
   - `keyLength?: 128 | 192 | 256` - Key length in bits (default: `256`)
-  - `pbkdf2?: { iterations?: number; hash?: 'SHA-256' | 'SHA-384' | 'SHA-512' }` - PBKDF2 settings for a string secret (default `{ iterations: 210_000, hash: 'SHA-256' }`). They are not stored in the envelope, so `decryptAES` needs the same value. Cloudflare Workers refuses more than 100 000 iterations. Passing it with a `CryptoKey` secret throws.
+  - `pbkdf2?: { iterations?: number; hash?: 'SHA-256' | 'SHA-384' | 'SHA-512' }` - PBKDF2 settings for a string secret (default `{ iterations: 210_000, hash: 'SHA-256' }`). They are not stored in the envelope, so `decryptAES` needs the same value; decryption with other values fails. Cloudflare Workers refuses more than 100 000 iterations. Passing it with a `CryptoKey` secret throws.
 
-**Returns:** Encrypted data as a hex-string envelope — `{ciphertext}:{iv}:{salt}` for GCM, `{ciphertext}:{iv}:{salt}:{mac}` for CBC/CTR (the 4th part is the encrypt-then-MAC HMAC), and `{ciphertext}:{iv}` for a `CryptoKey` secret (no salt — no derivation ran)
+**Returns:** Encrypted data as a hex-string envelope — `{ciphertext}:{iv}:{salt}` for GCM, `{ciphertext}:{iv}:{salt}:{mac}:v2` for CBC/CTR (the 4th part is the encrypt-then-MAC HMAC, the 5th the envelope version), and `{ciphertext}:{iv}` for a `CryptoKey` secret (no salt — no derivation ran)
 
 > The output includes a fresh random salt for key derivation, so repeated encryptions with the same secret produce different ciphertexts. Both the IV and the salt are required to decrypt and are embedded in the envelope — store the returned string verbatim.
 
@@ -113,7 +113,7 @@ async function decryptAES(
 
 **Parameters:**
 
-- `data` - Encrypted data from `encryptAES()`; expects the full hex envelope verbatim — `ciphertext:iv:salt` for GCM, `ciphertext:iv:salt:mac` for CBC/CTR, or `ciphertext:iv` when decrypting with a `CryptoKey`.
+- `data` - Encrypted data from `encryptAES()`; expects the full hex envelope verbatim — `ciphertext:iv:salt` for GCM, `ciphertext:iv:salt:mac:v2` for CBC/CTR (a 4-part `ciphertext:iv:salt:mac` envelope written by crypt 1.5 or older is still accepted), or `ciphertext:iv` when decrypting with a `CryptoKey`.
 - `secret` - Secret key (must match encryption: a string-secret envelope needs its string, a key-based envelope needs the same AES-GCM `CryptoKey` — the two are not interchangeable)
 - `options`:
   - `mode?: 'GCM' | 'CBC' | 'CTR'` - Encryption mode
@@ -291,12 +291,21 @@ All three modes are authenticated — you never need to add your own MAC.
 - **AES-GCM** ✅ Recommended - AEAD; authenticated on its own (embeds an auth
   tag).
 - **AES-CBC** ✅ Authenticated automatically - `encryptAES` wraps it with
-  encrypt-then-MAC (HMAC-SHA-256 over the `data:iv:salt` envelope, appended as
-  a 4th `:mac` component), and `decryptAES` verifies it constant-time before
-  decrypting. Use only for external-format compatibility; prefer GCM.
+  encrypt-then-MAC (HMAC-SHA-256 over the `data:iv:salt` envelope and the
+  mode, key length and PBKDF2 settings, appended as `:mac:v2`), and
+  `decryptAES` verifies it constant-time before decrypting, so the wrong
+  secret or other settings fail authentication. Use only for external-format
+  compatibility; prefer GCM.
 - **AES-CTR** ✅ Authenticated automatically - same encrypt-then-MAC wrapping
   and constant-time verification as CBC. Use only for external-format
   compatibility; prefer GCM.
+
+CBC/CTR envelopes written by crypt 1.6.0 or newer end in `:v2`, and crypt 1.5
+or older cannot read them: upgrade every reader before the first writer. A
+4-part envelope from 1.5 or older still decrypts, but its MAC covers
+`data:iv:salt` only, so decrypting it with a mode, key length or PBKDF2
+setting other than the one it was encrypted with can return garbage instead of
+failing. Re-encrypt it to bind the settings.
 
 ### IV / Nonce Lengths
 
