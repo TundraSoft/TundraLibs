@@ -375,6 +375,12 @@ const query: Query<'SELECT', User, {
 };
 ```
 
+A column pair in `on` never matches when either side is `NULL`. To
+match rows whose key is `NULL` on both sides, list that `on` key in the
+join's `nullSafe` array (`nullSafe: ['@orders.@userId']`); the
+[JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins)
+gives the operator each dialect uses.
+
 > **MongoDB ignores the declared join `type` entirely.** `INNER`,
 > `LEFT`, `RIGHT`, and `FULL` all compile to the same LEFT-equivalent
 > `$lookup` on Mongo — `RIGHT` is not reversed and `FULL` does not

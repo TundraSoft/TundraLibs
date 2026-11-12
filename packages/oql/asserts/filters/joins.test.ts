@@ -501,6 +501,100 @@ describe('oql.asserts.Filters.Joins', () => {
     });
   });
 
+  describe('assertJoinDetails — nullSafe', () => {
+    const columns = ['id', 'org', 'level', 'P.id', 'P.org', 'P.rank'];
+    const join = (on: Record<string, unknown>, nullSafe: unknown) => ({
+      table: 'principals',
+      columns: ['id', 'org', 'rank'],
+      on,
+      nullSafe,
+    });
+
+    it('valid: a key whose value is a column', () => {
+      assertJoinDetails(
+        join({ '@P.@id': '@id', '@P.@org': '@org' }, ['@P.@org']),
+        columns,
+      );
+    });
+
+    it('valid: a key whose value is an expression', () => {
+      assertJoinDetails(
+        join(
+          { '@P.@rank': { $$_expression: 'ADD', args: ['@level', 1] } },
+          ['@P.@rank'],
+        ),
+        columns,
+      );
+    });
+
+    it('valid: an empty list', () => {
+      assertJoinDetails(join({ '@P.@id': '@id' }, []), columns);
+    });
+
+    it('invalid: not an array', () => {
+      asserts.assertThrows(
+        () => assertJoinDetails(join({ '@P.@org': '@org' }, true), columns),
+        TypeError,
+        "'nullSafe' must be an array",
+      );
+    });
+
+    it('invalid: entry is not a key of on', () => {
+      asserts.assertThrows(
+        () =>
+          assertJoinDetails(
+            join({ '@P.@id': '@id' }, ['@P.@org']),
+            columns,
+          ),
+        TypeError,
+        "'nullSafe' entry '@P.@org' is not a key of 'on'",
+      );
+    });
+
+    it('invalid: entry is not a string', () => {
+      asserts.assertThrows(
+        () => assertJoinDetails(join({ '@P.@id': '@id' }, [1]), columns),
+        TypeError,
+        "'nullSafe' entry '1' is not a key of 'on'",
+      );
+    });
+
+    it('invalid: value is null', () => {
+      asserts.assertThrows(
+        () =>
+          assertJoinDetails(join({ '@P.@org': null }, ['@P.@org']), columns),
+        TypeError,
+        "'nullSafe' entry '@P.@org' must compare against a column or an expression",
+      );
+    });
+
+    it('invalid: value is a literal', () => {
+      for (const literal of ['acme', 7, true, new Date(0)]) {
+        asserts.assertThrows(
+          () =>
+            assertJoinDetails(
+              join({ '@P.@org': literal }, ['@P.@org']),
+              columns,
+            ),
+          TypeError,
+          'must compare against a column or an expression',
+        );
+      }
+    });
+
+    it('invalid: an @-string naming no declared column is a literal', () => {
+      asserts.assertThrows(
+        () =>
+          assertJoinDetails(
+            join({ '@P.@org': '@nope' }, ['@P.@org']),
+            columns,
+          ),
+        TypeError,
+        'must compare against a column or an expression',
+      );
+    });
+  });
+
   describe('isJoinDetails', () => {
     it('valid values', () => {
       asserts.assertEquals(

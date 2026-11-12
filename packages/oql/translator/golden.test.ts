@@ -289,6 +289,94 @@ const CASES: Case[] = [
     },
   },
   {
+    // A null `on` value is a NULL check; `= NULL` would never match.
+    name: 'SELECT with a null JOIN on value emits IS NULL',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@P.@id': '@pid', '@P.@org': null },
+        },
+      },
+      projection: { '@perm': true, '@P.@name': 'name' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" AND "P"."org" IS NULL',
+        params: {},
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" AND "P"."org" IS NULL',
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`perm` AS `perm`, `P`.`name` AS `name` FROM `grants` AS __base__ ' +
+          'INNER JOIN `principals` AS `P` ON `P`.`id` = __base__.`pid` AND `P`.`org` IS NULL',
+        params: {},
+      },
+    },
+  },
+  {
+    // Only the listed keys are NULL-safe; `id` keeps plain `=`. A column
+    // value and an expression value both take the dialect's operator.
+    name: 'SELECT with nullSafe JOIN keys uses NULL-safe equality',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'org', 'level', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'rank', 'name'],
+          type: 'INNER',
+          on: {
+            '@P.@id': '@pid',
+            '@P.@org': '@org',
+            '@P.@rank': { $$_expression: 'ADD', args: ['@level', 1] },
+          },
+          nullSafe: ['@P.@org', '@P.@rank'],
+        },
+      },
+      projection: { '@perm': true, '@P.@name': 'name' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" ' +
+          'AND "P"."org" IS __base__."org" AND "P"."rank" IS (__base__."level" + :p_0:)',
+        params: { p_0: 1 },
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."perm" AS "perm", "P"."name" AS "name" FROM "grants" AS __base__ ' +
+          'INNER JOIN "principals" AS "P" ON "P"."id" = __base__."pid" ' +
+          'AND "P"."org" IS NOT DISTINCT FROM __base__."org" ' +
+          'AND "P"."rank" IS NOT DISTINCT FROM (__base__."level" + :p_0:)',
+        params: { p_0: 1 },
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`perm` AS `perm`, `P`.`name` AS `name` FROM `grants` AS __base__ ' +
+          'INNER JOIN `principals` AS `P` ON `P`.`id` = __base__.`pid` ' +
+          'AND `P`.`org` <=> __base__.`org` AND `P`.`rank` <=> (__base__.`level` + :p_0:)',
+        params: { p_0: 1 },
+      },
+    },
+  },
+  {
     name: 'SELECT with aggregates and auto GROUP BY',
     method: 'select',
     query: {
@@ -1570,6 +1658,44 @@ const CASES: Case[] = [
         sql: 'SELECT __base__.`id` AS `id`, `p`.`plan` AS `plan` ' +
           'FROM `users` AS __base__ LEFT JOIN `profiles` AS `p` ON `p`.`userId` = __base__.`id` ' +
           'WHERE NOT EXISTS (SELECT 1 FROM `audit`.`bans` AS `__exists__` WHERE `__exists__`.`userId` = __base__.`id`)',
+        params: {},
+      },
+    },
+  },
+  {
+    // Only the listed correlation key is NULL-safe; `tenant` keeps `=`.
+    name: '$exists with a nullSafe key uses NULL-safe equality',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'principals',
+      columns: ['tenant', 'org', 'name'],
+      projection: { '@name': true },
+      where: {
+        $exists: {
+          table: 'grants',
+          on: { '@tenant': '@tenant', '@org': '@org' },
+          nullSafe: ['@org'],
+        },
+      },
+    },
+    expected: {
+      sqlite: {
+        sql: 'SELECT "name" AS "name" FROM "principals" WHERE EXISTS ' +
+          '(SELECT 1 FROM "grants" AS "__exists__" WHERE "__exists__"."tenant" = "principals"."tenant" ' +
+          'AND "__exists__"."org" IS "principals"."org")',
+        params: {},
+      },
+      postgres: {
+        sql: 'SELECT "name" AS "name" FROM "principals" WHERE EXISTS ' +
+          '(SELECT 1 FROM "grants" AS "__exists__" WHERE "__exists__"."tenant" = "principals"."tenant" ' +
+          'AND "__exists__"."org" IS NOT DISTINCT FROM "principals"."org")',
+        params: {},
+      },
+      maria: {
+        sql: 'SELECT `name` AS `name` FROM `principals` WHERE EXISTS ' +
+          '(SELECT 1 FROM `grants` AS `__exists__` WHERE `__exists__`.`tenant` = `principals`.`tenant` ' +
+          'AND `__exists__`.`org` <=> `principals`.`org`)',
         params: {},
       },
     },

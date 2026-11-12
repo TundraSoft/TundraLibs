@@ -67,6 +67,12 @@ export type ExistsFilter<
    */
   on: Record<`@${string}`, null | ColumnTypes | (keyof FPT & string)>;
   /**
+   * `on` keys compared NULL-safely: the pair also matches when both
+   * sides are `NULL`, where plain equality never does. Each entry must
+   * be an `on` key whose value is an `@` reference.
+   */
+  nullSafe?: Array<`@${string}`>;
+  /**
    * Optional filter on the subquery table's own columns. Keys are
    * `@column` refs into the subquery table.
    */

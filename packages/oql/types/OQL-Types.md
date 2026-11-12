@@ -332,6 +332,10 @@ type ExistsFilter<PT, FPT> = {
   // `x` names a column in the outer scope; anything else is a
   // parameterised literal. Expressions are NOT allowed here.
   on: Record<`@${string}`, null | ColumnTypes | (keyof FPT & string)>;
+  // `on` keys compared NULL-safely: the pair also matches when both
+  // sides are NULL. Each must be an `on` key whose value is an '@'
+  // reference.
+  nullSafe?: Array<`@${string}`>;
   // Optional filter over the subquery table's own columns. Keys are
   // qualified with the __exists__ alias at translate time; values are
   // always literals/expressions — correlation happens only via `on`.
@@ -482,6 +486,10 @@ type JoinDetails<
   // referenced elsewhere in the query.
   columns: Array<keyof JT>;
   on: JoinFilter<PT, LT>;
+  // `on` keys compared NULL-safely: the pair also matches when both
+  // sides are NULL. Each must be an `on` key whose value is a column
+  // or an expression.
+  nullSafe?: Array<keyof JoinFilter<PT, LT>>;
   type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
 };
 

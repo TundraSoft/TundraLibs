@@ -334,6 +334,7 @@ const CASES: Case[] = [
               from: 'profiles',
               localField: 'id',
               foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
               as: 'profile',
             },
           },
@@ -706,6 +707,53 @@ const CASES: Case[] = [
     },
   },
   {
+    // A null `on` value matches a null or missing field, as SQL IS NULL
+    // does; aggregation `$eq` with null would skip a missing one.
+    name: 'SELECT with a null JOIN on value → $type null or missing',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@P.@id': '@pid', '@P.@org': null },
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              let: { v0: '$pid' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id', '$$v0'] },
+                      { $gt: ['$id', null] },
+                      { $in: [{ $type: '$org' }, ['null', 'missing']] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $project: { perm: 1 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT with JOIN → aggregate with $lookup',
     method: 'select',
     query: {
@@ -732,6 +780,7 @@ const CASES: Case[] = [
               from: 'profiles',
               localField: 'id',
               foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
               as: 'Profile',
             },
           },
@@ -776,7 +825,9 @@ const CASES: Case[] = [
                     $expr: {
                       $and: [
                         { $eq: ['$id', '$$v0'] },
+                        { $gt: ['$id', null] },
                         { $eq: ['$tenantId', '$$v1'] },
+                        { $gt: ['$tenantId', null] },
                       ],
                     },
                   },
@@ -863,12 +914,110 @@ const CASES: Case[] = [
               from: 'users',
               let: { v0: { $add: ['$amount', 1] } },
               pipeline: [
-                { $match: { $expr: { $eq: ['$id', '$$v0'] } } },
+                {
+                  $match: {
+                    $expr: {
+                      $and: [{ $eq: ['$id', '$$v0'] }, { $gt: ['$id', null] }],
+                    },
+                  },
+                },
               ],
               as: 'U',
             },
           },
           { $project: { id: 1, userName: '$U.name', _id: 0 } },
+        ],
+      },
+    },
+  },
+
+  {
+    // Only the listed key is NULL-safe: `org` folds null and missing
+    // together on both sides, `id` keeps plain equality and its guard.
+    name: 'SELECT with a nullSafe JOIN key → $ifNull on both sides',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'org', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@P.@id': '@pid', '@P.@org': '@org' },
+          nullSafe: ['@P.@org'],
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              let: { v0: '$pid', v1: '$org' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id', '$$v0'] },
+                      { $gt: ['$id', null] },
+                      {
+                        $eq: [
+                          { $ifNull: ['$org', null] },
+                          { $ifNull: ['$$v1', null] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $project: { perm: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The concise form already matches null and missing to each other,
+    // so a NULL-safe single key is that form with no guard.
+    name: 'SELECT with a single nullSafe JOIN key → unguarded concise $lookup',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['org', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['org', 'name'],
+          type: 'LEFT',
+          on: { '@P.@org': '@org' },
+          nullSafe: ['@P.@org'],
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              localField: 'org',
+              foreignField: 'org',
+              as: 'P',
+            },
+          },
+          { $project: { perm: 1 } },
         ],
       },
     },
@@ -1823,6 +1972,7 @@ const CASES: Case[] = [
               from: 'users',
               localField: 'authorId',
               foreignField: 'id',
+              pipeline: [{ $match: { id: { $ne: null } } }],
               as: 'Author',
             },
           },

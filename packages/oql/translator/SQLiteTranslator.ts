@@ -307,6 +307,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `json_extract(${columnSql}, '$.${path.join('.')}')`;
   }
 
+  /** NULL-safe equality via `IS`, which compares any two values in SQLite. */
+  protected override _nullSafeEquals(left: string, right: string): string {
+    return `${left} IS ${right}`;
+  }
+
   // ---------------------------------------------------------------------------
   // DML: INSERT — SQLite-specific value rendering
   // ---------------------------------------------------------------------------

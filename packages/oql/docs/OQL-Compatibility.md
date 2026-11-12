@@ -458,6 +458,32 @@ on every dialect. On MongoDB that means two `$lookup` shapes:
   `$expr: { $and: [ … ] }`. A composite key therefore correlates on
   _all_ of its parts, matching the SQL `ON a = b AND c = d`.
 
+### NULL in a join condition
+
+A column or Expression pair in `on` is plain equality: it never matches
+when either side is `NULL`, on every dialect. List the `on` key in the
+join's `nullSafe` array to also match when both sides are `NULL`; keys
+left out keep plain equality.
+
+| Pair                 | Postgres               | MariaDB | SQLite | MongoDB                            |
+| -------------------- | ---------------------- | ------- | ------ | ---------------------------------- |
+| plain                | `=`                    | `=`     | `=`    | `$eq`, plus a not-null guard       |
+| listed in `nullSafe` | `IS NOT DISTINCT FROM` | `<=>`   | `IS`   | `$eq` over `$ifNull` on both sides |
+
+On MongoDB a missing field counts as `NULL` in both rows. A bare
+`$lookup` would match a null or missing local field to every null or
+missing foreign field, so a plain pair carries a guard that drops those
+foreign documents. In the concise form that guard is a `pipeline`
+beside `localField` / `foreignField`, which needs MongoDB 5.0 or later.
+A lone `nullSafe` key is the concise form without the guard.
+
+A `$exists` / `$nexists` correlation map takes the same `nullSafe`
+array, with the same SQL operators.
+
+A `null` value in `on` is a NULL check on the joined column (`IS NULL`;
+null or missing on MongoDB) and cannot be listed in `nullSafe`, nor can
+a literal — `assertJoinDetails` rejects both with a `TypeError`.
+
 ## When to expect a throw vs a silent fallback
 
 We **throw** (as `DialectUnsupportedError`) when:

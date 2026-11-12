@@ -79,6 +79,8 @@ const validateOnEntry = (key: string, value: unknown): void => {
  * - `on`: required non-empty object; keys are single-segment `@column`
  *   refs into the subquery table; values are outer column refs or
  *   literal primitives (see {@link validateOnEntry}).
+ * - `nullSafe`: optional array of `on` keys whose value is an `@`
+ *   reference.
  * - `where`: optional QueryFilter over the subquery table's columns
  *   (validated without a column list — the subquery table's schema is
  *   not declared).
@@ -153,6 +155,30 @@ export const assertExistsFilter: <PT extends TableType = TableType>(
   }
   for (const [key, value] of Object.entries(on)) {
     validateOnEntry(key, value);
+  }
+
+  if ('nullSafe' in obj && obj.nullSafe !== undefined) {
+    if (!Array.isArray(obj.nullSafe)) {
+      throw new TypeError(
+        `Invalid ExistsFilter: 'nullSafe' must be an array, got ${typeof obj
+          .nullSafe}`,
+      );
+    }
+    for (const key of obj.nullSafe) {
+      if (typeof key !== 'string' || !Object.hasOwn(on, key)) {
+        throw new TypeError(
+          `Invalid ExistsFilter: 'nullSafe' entry '${
+            String(key)
+          }' is not a key of 'on'`,
+        );
+      }
+      const value = on[key];
+      if (typeof value !== 'string' || !value.startsWith('@')) {
+        throw new TypeError(
+          `Invalid ExistsFilter: 'nullSafe' entry '${key}' must compare against a column reference`,
+        );
+      }
+    }
   }
 
   if ('where' in obj && obj.where !== undefined) {

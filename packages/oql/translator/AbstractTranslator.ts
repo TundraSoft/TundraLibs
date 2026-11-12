@@ -1280,6 +1280,7 @@ export abstract class AbstractTranslator {
     const tableSql = this._qualifiedTable(spec.table, spec.schema);
     const aliasSql = this._quoteIdentifier(EXISTS_ALIAS);
     const conditions: string[] = [];
+    const nullSafe = (spec.nullSafe ?? []) as string[];
     for (const [subKey, outerVal] of Object.entries(spec.on)) {
       // `subKey` is a bare `@col` ref into the subquery table — splice
       // in the EXISTS alias so it resolves as `"__exists__"."col"`.
@@ -1291,7 +1292,11 @@ export abstract class AbstractTranslator {
         hasJoins,
         outerTable,
       );
-      conditions.push(`${left} = ${right}`);
+      conditions.push(
+        nullSafe.includes(subKey)
+          ? this._nullSafeEquals(left, right)
+          : `${left} = ${right}`,
+      );
     }
     if (spec.where) {
       conditions.push(
@@ -1600,16 +1605,37 @@ export abstract class AbstractTranslator {
       }
       const joinTable = this._qualifiedTable(String(def.table), def.schema);
       const onParts: string[] = [];
+      const nullSafe = (def.nullSafe ?? []) as string[];
       for (const [leftKey, rightVal] of Object.entries(def.on)) {
         const left = this._resolveColumnRef(leftKey, true);
+        // `= NULL` is never true; a null value is a NULL check.
+        if (rightVal === null) {
+          onParts.push(`${left} IS NULL`);
+          continue;
+        }
         const right = this.__renderJoinValue(rightVal, scope, params);
-        onParts.push(`${left} = ${right}`);
+        onParts.push(
+          nullSafe.includes(leftKey)
+            ? this._nullSafeEquals(left, right)
+            : `${left} = ${right}`,
+        );
       }
       from += ` ${joinType} JOIN ${joinTable} AS ${
         this._quoteIdentifier(alias)
       } ON ${onParts.join(' AND ')}`;
     }
     return from;
+  }
+
+  /**
+   * NULL-safe equality of two SQL fragments — true when they are equal
+   * or both `NULL`. Used for the `on` keys a join lists in `nullSafe`.
+   * The operator differs per engine, so each dialect supplies its own.
+   *
+   * @throws {@link DialectUnsupportedError} Unless the dialect overrides it.
+   */
+  protected _nullSafeEquals(_left: string, _right: string): string {
+    throw new DialectUnsupportedError(this.Dialect, 'NULL-safe join');
   }
 
   /**
@@ -1624,7 +1650,6 @@ export abstract class AbstractTranslator {
     scope: string[],
     params: Parameters,
   ): string {
-    if (value === null) return 'NULL';
     // Column ref iff it names a column in scope; otherwise fall through to
     // expression / literal handling — the same rule as WHERE value positions.
     const ref = this.__valueColumnRef(value, scope, true);

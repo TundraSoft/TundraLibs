@@ -1264,6 +1264,9 @@ export class MongoTranslator {
    *   the sub-pipeline a bare `$field` addresses the *joined*
    *   collection).
    *
+   * NULL follows SQL in both forms: a column or Expression pair matches
+   * a null or missing field only when its key is listed in `nullSafe`.
+   *
    * Returns `null` for an empty `on` (nothing to correlate on).
    */
   private __buildLookup(
@@ -1273,19 +1276,26 @@ export class MongoTranslator {
     const onEntries = Object.entries(def.on);
     if (onEntries.length === 0) return null;
     const from = String(def.table);
+    const nullSafe = (def.nullSafe ?? []) as string[];
 
     if (onEntries.length === 1) {
       const [joinedKey, localRef] = onEntries[0]!;
       const localField = this.__joinLocalPath(localRef);
       if (localField !== null) {
-        return {
-          $lookup: {
-            from,
-            localField,
-            foreignField: this.__joinForeignField(joinedKey, alias),
-            as: alias,
-          },
+        const foreignField = this.__joinForeignField(joinedKey, alias);
+        const lookup: Record<string, unknown> = {
+          from,
+          localField,
+          foreignField,
         };
+        // On its own this form is NULL-safe: a null or missing local
+        // field matches every null or missing foreign field. Plain
+        // equality never matches NULL, so those foreign rows are dropped.
+        if (!nullSafe.includes(joinedKey)) {
+          lookup.pipeline = [{ $match: { [foreignField]: { $ne: null } } }];
+        }
+        lookup.as = alias;
+        return { $lookup: lookup };
       }
     }
 
@@ -1297,19 +1307,40 @@ export class MongoTranslator {
     for (const [joinedKey, value] of onEntries) {
       const foreignField = `$${this.__joinForeignField(joinedKey, alias)}`;
       const localPath = this.__joinLocalPath(value);
-      if (localPath !== null) {
+      if (localPath !== null || this.__isExpressionNode(value)) {
         const varName = `v${Object.keys(letVars).length}`;
-        letVars[varName] = `$${localPath}`;
-        conditions.push({ $eq: [foreignField, `$$${varName}`] });
+        letVars[varName] = localPath !== null
+          ? `$${localPath}`
+          : this.__translateExpression(value as Expressions);
+        if (nullSafe.includes(joinedKey)) {
+          // `$ifNull` folds a missing field into null, so null and
+          // missing all compare equal — SQL has only the one NULL.
+          conditions.push({
+            $eq: [
+              { $ifNull: [foreignField, null] },
+              { $ifNull: [`$$${varName}`, null] },
+            ],
+          });
+          continue;
+        }
+        // Aggregation `$eq` holds null equal to null (and missing to
+        // missing), which SQL `=` never does. `$gt: null` is true for
+        // every value except null and missing.
+        conditions.push(
+          { $eq: [foreignField, `$$${varName}`] },
+          { $gt: [foreignField, null] },
+        );
         continue;
       }
-      if (this.__isExpressionNode(value)) {
-        const varName = `v${Object.keys(letVars).length}`;
-        letVars[varName] = this.__translateExpression(value as Expressions);
-        conditions.push({ $eq: [foreignField, `$$${varName}`] });
+      // null is a NULL check: like SQL's IS NULL, it matches a missing
+      // field too, which aggregation `$eq` would not.
+      if (value === null) {
+        conditions.push({
+          $in: [{ $type: foreignField }, ['null', 'missing']],
+        });
         continue;
       }
-      // Literal / null — a constant condition on the joined collection.
+      // Literal — a constant condition on the joined collection.
       conditions.push({ $eq: [foreignField, value] });
     }
 
