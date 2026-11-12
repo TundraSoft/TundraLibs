@@ -15,7 +15,7 @@ Widgets()` and `widgets.find('1')` are just JS, with nothing
 framework-owned in the call path. A unit test needs no `Application`, no
 `HTTPContext`, no mount step, no port.
 
-```ts
+```ts ignore
 const widgets = new Widgets();
 const created = widgets.create('gizmo'); // just calls the method
 assertEqual(created.status, 201);
