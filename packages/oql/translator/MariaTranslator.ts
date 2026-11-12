@@ -22,6 +22,7 @@
 import type {
   AggregateFunction,
   ColumnDefinition,
+  DateTruncUnit,
   Expressions,
   Query,
 } from '../types/mod.ts';
@@ -681,6 +682,16 @@ export class MariaTranslator extends AbstractTranslator {
       sql += ` COMMENT '${safe}'`;
     }
     return sql;
+  }
+
+  /** MariaDB has no `date_trunc`: format the leading fields, cast back. */
+  protected override _dateTrunc(date: string, unit: DateTruncUnit): string {
+    const format = {
+      DAYS: '%Y-%m-%d',
+      MONTHS: '%Y-%m-01',
+      YEARS: '%Y-01-01',
+    }[unit];
+    return `CAST(DATE_FORMAT(${date}, '${format}') AS DATETIME)`;
   }
 
   /** Epoch as BIGINT — `UNIX_TIMESTAMP()` is integer seconds; milliseconds need `NOW(3)`. */

@@ -21,6 +21,7 @@
 import type {
   Aggregates,
   ColumnDefinition,
+  DateTruncUnit,
   ExistsFilter,
   Expressions,
   Operators,
@@ -942,6 +943,23 @@ export abstract class AbstractTranslator {
     if (expr.$$_expression === 'UNIX_TIMESTAMP') {
       return this._unixTimestamp(expr.unit ?? 'seconds');
     }
+    // `unit` is a translation-time switch here too. It is matched against
+    // the three literals, so nothing a caller supplies reaches the SQL.
+    if (expr.$$_expression === 'DATE_TRUNC') {
+      const unit: unknown = expr.args.unit;
+      if (unit !== 'DAYS' && unit !== 'MONTHS' && unit !== 'YEARS') {
+        throw new OqlError(
+          `Unknown DATE_TRUNC unit '${
+            String(unit)
+          }' — expected one of DAYS, MONTHS, YEARS`,
+          { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+        );
+      }
+      return this._dateTrunc(
+        this.__renderExprArg(expr.args.date, scope, params, hasJoins),
+        unit,
+      );
+    }
     // CASE conditions are filters, not args: translate each `when` the
     // way a WHERE clause is translated.
     if (expr.$$_expression === 'CASE') {
@@ -979,6 +997,20 @@ export abstract class AbstractTranslator {
     throw new DialectUnsupportedError(
       this.Dialect,
       "expression 'UNIX_TIMESTAMP'",
+    );
+  }
+
+  /**
+   * `date` (already-rendered SQL) truncated to the start of its `unit`.
+   * Each dialect overrides with its native form and must reference
+   * `date` exactly once — it may carry positional parameters.
+   *
+   * @throws {DialectUnsupportedError} when the dialect has no override.
+   */
+  protected _dateTrunc(_date: string, _unit: DateTruncUnit): string {
+    throw new DialectUnsupportedError(
+      this.Dialect,
+      "expression 'DATE_TRUNC'",
     );
   }
 

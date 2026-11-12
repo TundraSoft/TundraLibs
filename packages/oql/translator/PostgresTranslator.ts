@@ -15,6 +15,7 @@
 import type {
   AggregateFunction,
   ColumnDefinition,
+  DateTruncUnit,
   Expressions,
   Query,
 } from '../types/mod.ts';
@@ -627,6 +628,11 @@ export class PostgresTranslator extends AbstractTranslator {
       return this._renderTypeSuffix(baseType, rest as ColumnDefinition);
     }
     return this._renderTypeSuffix(baseType, def);
+  }
+
+  protected override _dateTrunc(date: string, unit: DateTruncUnit): string {
+    const field = { DAYS: 'day', MONTHS: 'month', YEARS: 'year' }[unit];
+    return `date_trunc('${field}', ${date})`;
   }
 
   /** Epoch as BIGINT — EXTRACT yields numeric (PG14+) or double, so floor and cast. */

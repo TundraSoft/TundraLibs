@@ -2248,6 +2248,21 @@ export class MongoTranslator {
           },
         };
       }
+      case 'DATE_TRUNC': {
+        const a = args as { date: unknown; unit: unknown };
+        if (a.unit !== 'DAYS' && a.unit !== 'MONTHS' && a.unit !== 'YEARS') {
+          throw new OqlError(
+            `Unknown DATE_TRUNC unit '${
+              String(a.unit)
+            }' — expected one of DAYS, MONTHS, YEARS`,
+            { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit: a.unit },
+          );
+        }
+        // Truncates in UTC: no `timezone` is passed.
+        return {
+          $dateTrunc: { date: r(a.date), unit: MONGO_TIME_UNITS[a.unit] },
+        };
+      }
       case 'DATE_DIFF': {
         const a = args as { from: unknown; to: unknown; unit: unknown };
         return {

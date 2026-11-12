@@ -6,4 +6,5 @@ export type DateExpressions =
   | 'CURRENT_TIMESTAMP'
   | 'CURRENT_TIMESTAMPTZ'
   | 'DATE_ADD'
+  | 'DATE_TRUNC'
   | 'UNIX_TIMESTAMP';

@@ -2123,6 +2123,79 @@ const CASES: Case[] = [
   },
 
   {
+    // The unit is a translation-time switch, so nothing is bound, and the
+    // auto GROUP BY / ORDER BY repeat the projected body.
+    name: 'SELECT DATE_TRUNC — group rows by month',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt'],
+      expressions: {
+        month: {
+          $$_expression: 'DATE_TRUNC',
+          args: { date: '@createdAt', unit: 'MONTHS' },
+        },
+      },
+      aggregates: { total: { $$_aggregate: 'COUNT' } },
+      projection: { '@month': 'month', '@total': 'total' },
+      orderBy: { '@month': 'ASC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", 'start of month') AS "month", COUNT(1) AS "total" FROM "orders" GROUP BY strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", 'start of month') ORDER BY strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", 'start of month') ASC`,
+        params: {},
+      },
+      postgres: {
+        sql:
+          `SELECT date_trunc('month', "createdAt") AS "month", COUNT(1) AS "total" FROM "orders" GROUP BY date_trunc('month', "createdAt") ORDER BY date_trunc('month', "createdAt") ASC`,
+        params: {},
+      },
+      maria: {
+        sql:
+          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) AS `month`, COUNT(1) AS `total` FROM `orders` GROUP BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ORDER BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ASC",
+        params: {},
+      },
+    },
+  },
+
+  {
+    name: 'SELECT DATE_TRUNC — DAYS on a column, YEARS on a nested NOW',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt'],
+      expressions: {
+        day: {
+          $$_expression: 'DATE_TRUNC',
+          args: { date: '@createdAt', unit: 'DAYS' },
+        },
+        year: {
+          $$_expression: 'DATE_TRUNC',
+          args: { date: { $$_expression: 'NOW' }, unit: 'YEARS' },
+        },
+      },
+      projection: { '@day': 'day', '@year': 'year' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", 'start of day') AS "day", strftime('%Y-%m-%dT%H:%M:%fZ', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'start of year') AS "year" FROM "orders"`,
+      },
+      postgres: {
+        sql:
+          `SELECT date_trunc('day', "createdAt") AS "day", date_trunc('year', CURRENT_TIMESTAMP) AS "year" FROM "orders"`,
+      },
+      maria: {
+        sql:
+          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-%d') AS DATETIME) AS `day`, CAST(DATE_FORMAT(NOW(), '%Y-01-01') AS DATETIME) AS `year` FROM `orders`",
+      },
+    },
+  },
+
+  {
     // updateSet: explicit conflict values; references read the EXISTING
     // row, which Postgres only allows through a table qualifier.
     name: 'UPSERT with updateSet (copied column + existing-row expression)',
