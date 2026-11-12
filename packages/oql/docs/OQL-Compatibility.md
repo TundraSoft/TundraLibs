@@ -346,7 +346,7 @@ The table below summarises the per-dialect emission. The general rule:
 | REPLACE               | native                                                                              | native                                                 | native                                                           | native (`$replaceAll`)                                                              |
 | LPAD / RPAD           | native                                                                              | native                                                 | emulated (`printf` + `replace` + `substr`; custom fill honoured) | passthrough                                                                         |
 | NOW / CURRENT_*       | native                                                                              | native                                                 | native (ISO 8601 UTC text via `strftime`)                        | native (`$$NOW`); on INSERT, computed by the translator                             |
-| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native                                                           | native (`$dateAdd` / `$dateDiff`)                                                   |
+| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native                                                           | native (`$dateAdd`; `$dateDiff`, or elapsed milliseconds divided for fixed units)   |
 | UNIX_TIMESTAMP        | native (`FLOOR(EXTRACT(EPOCH …))::BIGINT`) — the driver decodes it as a JS `bigint` | native (`UNIX_TIMESTAMP()`; milliseconds via `NOW(3)`) | native (`strftime('%s')` / `julianday`, cast to INTEGER)         | native (`$toLong` over `$$NOW`); on INSERT, computed by the translator              |
 | **UUID**              | native (`gen_random_uuid()`)                                                        | native (`UUID()`)                                      | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)                                                 |
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                                     |
@@ -359,6 +359,19 @@ portable: Postgres and SQLite apply the fraction, MariaDB rounds it to the
 nearest whole unit, and MongoDB rejects it when the query runs. Pass whole
 numbers, in a smaller unit if you need the precision (`90` `MINUTES`, not
 `1.5` `HOURS`).
+
+### DATE_DIFF units
+
+`SECONDS`, `MINUTES`, `HOURS` and `DAYS` count whole elapsed units on every
+dialect: 00:59 → 01:01 is `0` `HOURS`, and 36 hours is `1` `DAYS`. MongoDB
+divides the elapsed milliseconds instead of calling `$dateDiff`, which
+counts boundaries crossed; a numeric operand is not rejected there, so pass
+dates.
+
+`MONTHS` and `YEARS` are **not** portable. Postgres and SQLite count 30-day
+and 365-day blocks, MariaDB counts complete calendar units, and MongoDB
+counts calendar boundaries crossed: 31 January → 1 March is `0`, `1` and
+`2` `MONTHS` respectively.
 
 ### UUID gotcha
 

@@ -342,6 +342,17 @@ const MONGO_TIME_UNITS: Record<TimeUnit, string> = {
 };
 
 /**
+ * Milliseconds in each fixed-length {@link TimeUnit}. `MONTHS` / `YEARS`
+ * have no fixed length, so `DATE_DIFF` leaves those to `$dateDiff`.
+ */
+const MONGO_FIXED_UNIT_MS: Partial<Record<TimeUnit, number>> = {
+  DAYS: 86_400_000,
+  HOURS: 3_600_000,
+  MINUTES: 60_000,
+  SECONDS: 1_000,
+};
+
+/**
  * Turns a validated {@link Query} into a {@link MongoAction} for the mongo
  * driver to execute. Mirrors the SQL translators' method surface but is
  * not an {@link AbstractTranslator} — there is no SQL string or parameter
@@ -2322,12 +2333,22 @@ export class MongoTranslator {
       }
       case 'DATE_DIFF': {
         const a = args as { from: unknown; to: unknown; unit: unknown };
+        const unit = this.__mongoTimeUnit(a.unit);
+        const unitMs = MONGO_FIXED_UNIT_MS[a.unit as TimeUnit];
+        if (unitMs !== undefined) {
+          // `$dateDiff` counts unit boundaries crossed, so 00:59 → 01:01
+          // is 1 hour. The SQL engines count whole elapsed units and call
+          // that 0; dividing the elapsed milliseconds matches them.
+          return {
+            $toLong: {
+              $trunc: {
+                $divide: [{ $subtract: [r(a.to), r(a.from)] }, unitMs],
+              },
+            },
+          };
+        }
         return {
-          $dateDiff: {
-            startDate: r(a.from),
-            endDate: r(a.to),
-            unit: this.__mongoTimeUnit(a.unit),
-          },
+          $dateDiff: { startDate: r(a.from), endDate: r(a.to), unit },
         };
       }
 
