@@ -397,7 +397,9 @@ It is read-only: `snapshot()` and `renderPlans()` throw
 `READ_ONLY_SOURCE` — author snapshots with `{ dir }`, ship them inlined.
 
 Without a directory there is no `migrator.lock`, so `source` takes a
-`lock` (`{ acquire(timeoutMs?), touch(), release() }`). On SQLite it
+`lock` (`{ acquire(timeoutMs?), touch(txId?), release() }`). `touch`
+receives the open migration transaction's id, if any; a lock stored in
+the database writes inside it. On SQLite the lock
 defaults to a `TableLock`: one row of `_norm_migration_lock` claimed by
 primary-key insert, with the same token and stale-reclaim behaviour as
 the file lock. Elsewhere the default is none — PostgreSQL and MariaDB

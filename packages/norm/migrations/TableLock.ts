@@ -168,8 +168,10 @@ export class TableLock {
   }
 
   /** Refresh our stamp. No-op when not held; never throws (a failed
-   * refresh only risks an early reclaim). */
-  async touch(): Promise<void> {
+   * refresh only risks an early reclaim). Pass the open migration
+   * transaction's `txId`: on SQLite a write outside it waits for it to
+   * finish, which stalls the step that is waiting on this touch. */
+  async touch(txId?: string): Promise<void> {
     if (!this.__held) return;
     try {
       await this.__executor.execute({
@@ -178,7 +180,7 @@ export class TableLock {
         columns: ['name', 'token', 'stampedAt'],
         data: { stampedAt: Date.now() },
         where: { '@name': LOCK_NAME, '@token': this.__token },
-      });
+      }, txId);
     } catch {
       // Best effort — see above.
     }

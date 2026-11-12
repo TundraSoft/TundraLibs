@@ -72,8 +72,10 @@ const REBUILD_CHUNK = 500;
 export type MigrationLock = {
   /** Take the lock, waiting up to `timeoutMs`; throws `LOCK_TIMEOUT`. */
   acquire(timeoutMs?: number): Promise<void>;
-  /** Refresh a held lock so a long step is not reclaimed as stale. */
-  touch(): Promise<void>;
+  /** Refresh a held lock so a long step is not reclaimed as stale.
+   * `txId` is the migration transaction open at the time, if any: a
+   * lock stored in the database must write inside it. */
+  touch(txId?: string): Promise<void>;
   /** Release a held lock; idempotent. */
   release(): Promise<void>;
 };
@@ -275,8 +277,8 @@ export class Migrator {
    * on engines with no server-side advisory lock (Mongo, SQLite), is the
    * ONLY thing keeping two runners off the same version. No-op / never
    * throws when no apply is in flight (touch() guards `__held`). */
-  private __touchLock(): Promise<void> {
-    return this.__activeLock?.touch() ?? Promise.resolve();
+  private __touchLock(txId?: string): Promise<void> {
+    return this.__activeLock?.touch(txId) ?? Promise.resolve();
   }
 
   // ─── Snapshot ──────────────────────────────────────────────────────
@@ -964,7 +966,7 @@ export class Migrator {
       // minutes — far past the stale TTL — and on engines with no
       // server-side advisory lock the file lock is all that stops a
       // contender from reclaiming and running the same version.
-      await this.__touchLock();
+      await this.__touchLock(txId);
       if (batch.length < this.__chunk) break;
     }
   }
