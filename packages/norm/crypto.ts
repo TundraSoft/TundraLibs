@@ -156,7 +156,7 @@ function parseAlgorithm(
 //
 // Envelope shapes tell the two generations apart: key-based cells are
 // 2-part `data:iv`, legacy per-message-salt cells are 3-part
-// `data:iv:salt` — 4-part with a MAC for CBC/CTR — and keep decrypting
+// `data:iv:salt` — `data:iv:salt:mac:v2` for CBC/CTR — and keep decrypting
 // through the per-cell path. `rotateKey()` re-encrypts, so it also
 // upgrades legacy cells to the fast envelope as it runs.
 
