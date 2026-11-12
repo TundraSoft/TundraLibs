@@ -56,9 +56,9 @@ describe('norm.crypto instance cell key', () => {
     );
   });
 
-  it('CBC stays on the per-cell string path (4-part, MACed)', async () => {
+  it('CBC stays on the per-cell string path (5-part, MACed)', async () => {
     const env = await defaultEncrypt('cbc-cell', SECRET, 'AES-256-CBC');
-    asserts.assertEquals(env.split(':').length, 4);
+    asserts.assertEquals(env.split(':').length, 5);
     asserts.assertEquals(
       await defaultDecrypt(env, SECRET, 'AES-256-CBC'),
       'cbc-cell',
