@@ -365,7 +365,11 @@ await app.start();
   `drain`, `modules`, `declaredEvents`); `stop()` disposes it.
 - The `rapid modules` CLI command regenerates `modules/mod.ts` from the
   files in the directory (sorted, `export abstract class` skipped, duplicate
-  class names refused); `--check` fails CI when the barrel is stale.
+  class names refused). It rewrites only the lines between `// rapid:start`
+  and `// rapid:end`; anything you write outside the markers is kept.
+  `--check` fails CI when the marked region is stale. A barrel generated
+  before the markers existed is replaced whole on the next run, with a
+  warning naming each line it drops.
 
 `initModules(context, sources, container?)` from `@tundralibs/rapid/modules`
 is the same boot without an `Application` — for a worker, a CLI or a test

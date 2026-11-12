@@ -30,8 +30,9 @@ const HELP = `rapid <command>
         copilot pointer sections (only what rapid itself generated —
         everything else is left alone)
   modules [dir] [--check] [--force]
-        (re)generate the modules barrel (dir defaults to ./modules);
-        an existing hand-written mod.ts is refused unless --force
+        (re)generate the modules barrel (dir defaults to ./modules)
+        between its rapid:start / rapid:end markers, keeping every line
+        outside them; a mod.ts without markers is refused unless --force
   health [url] [--path /healthz]
         hit a running app's health path; exit 0 on 2xx
   access <entry.ts> [--fail-on-undeclared] [--json]
