@@ -57,7 +57,7 @@ npx jsr add @tundralibs/rapid
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `init [name] [--module] [--norm] [--ui] [--with bootstrap\|pico] [--yes]` | Scaffold a project (interactive unless `--yes`).                                                                         |
 | `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                             |
-| `modules [dir] [--check] [--force]`                                       | (Re)generate the modules barrel (`--check` fails CI when it's stale; an existing hand-written `mod.ts` needs `--force`). |
+| `modules [dir] [--check] [--force]`                                       | (Re)generate the barrel's `// rapid:start` to `// rapid:end` region (`--check`: fail when stale; no markers: `--force`). |
 | `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                          |
 | `access <entry.ts> [--fail-on-undeclared] [--json]`                       | List every action with its `access` string; undeclared = public. `--fail-on-undeclared` exits 1 for CI.                  |
 
