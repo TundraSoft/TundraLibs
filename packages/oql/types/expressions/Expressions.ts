@@ -1,6 +1,7 @@
 import type { FlattenEntity } from '@tundralibs/utils';
 import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
+import type { QueryFilter } from '../filter/QueryFilter.ts';
 import type { NumericExpressions } from './NumericExpressions.ts';
 import type { TimeUnit } from './TimeUnit.ts';
 
@@ -38,6 +39,30 @@ type NumericExpressionArg<
   | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
 
 /**
+ * An argument to a conditional expression (`COALESCE`, `NULLIF`,
+ * `CASE`): a column reference, a literal of any type, `null`, or any
+ * nested expression.
+ *
+ * @template T  - Table schema type.
+ * @template FT - Flattened table type with `'@'` prefix for column
+ *                references.
+ *
+ * @internal
+ */
+type ConditionalArg<
+  T extends TableType,
+  FT extends FlattenEntity<T, '', '@'>,
+> =
+  | keyof FT
+  | string
+  | number
+  | bigint
+  | boolean
+  | Date
+  | null
+  | Expressions<T, FT>;
+
+/**
  * Type-safe expression definitions for computed values in database
  * queries.
  *
@@ -68,8 +93,12 @@ type NumericExpressionArg<
  * **Cryptographic (platform-dependent)**: `ENCRYPT`, `DECRYPT`,
  * `HASH`.
  *
- * **Utility**: `UUID`. (`COALESCE`, `NULLIF`, `CAST` are TODOs;
- * tracked as commented-out branches below.)
+ * **Utility**: `UUID`.
+ *
+ * **Conditional** (returns the type of its arguments): `COALESCE`,
+ * `NULLIF`, `CASE`. There is no general `CAST`: target types and failed
+ * conversions behave differently on each engine (see
+ * OQL-Compatibility.md); `TO_STRING` covers the portable case.
  *
  * ## Database compatibility
  *
@@ -310,33 +339,23 @@ export type Expressions<
    */
   $$_expression: 'HASH';
   args: keyof FT | string | number | bigint | Date | boolean;
+} | {
+  /** First argument that is not `NULL`. */
+  $$_expression: 'COALESCE';
+  args: Array<ConditionalArg<T, FT>>;
+} | {
+  /** `NULL` when both arguments are equal, otherwise the first. */
+  $$_expression: 'NULLIF';
+  args: [ConditionalArg<T, FT>, ConditionalArg<T, FT>];
+} | {
+  /**
+   * `then` of the first case whose `when` filter matches, otherwise
+   * `else` (`NULL` when omitted). `when` takes the same shape as a
+   * `where` filter.
+   */
+  $$_expression: 'CASE';
+  args: {
+    cases: Array<{ when: QueryFilter; then: ConditionalArg<T, FT> }>;
+    else?: ConditionalArg<T, FT>;
+  };
 };
-// TODO: Complex to implement — commented out for now.
-// | {
-//   /**
-//    * COALESCE — first non-null value. Useful for defaults.
-//    */
-//   $$_expression: 'COALESCE';
-//   args: Array<keyof FT | string | number | bigint | Date | boolean | null>;
-// } | {
-//   /**
-//    * NULLIF — returns NULL when both arguments are equal,
-//    * otherwise returns the first. Useful for converting specific
-//    * values to NULL.
-//    */
-//   $$_expression: 'NULLIF';
-//   args: [
-//     keyof FT | string | number | bigint | Date | boolean,
-//     keyof FT | string | number | bigint | Date | boolean,
-//   ];
-// } | {
-//   /**
-//    * CAST — convert a value to a different type. Supported
-//    * targets: STRING, NUMBER, BIGINT, DATE, BOOLEAN.
-//    */
-//   $$_expression: 'CAST';
-//   args: {
-//     value: keyof FT | string | number | bigint | Date | boolean;
-//     targetType: 'STRING' | 'NUMBER' | 'BIGINT' | 'DATE' | 'BOOLEAN';
-//   };
-// };

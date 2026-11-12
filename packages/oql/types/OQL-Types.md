@@ -645,14 +645,28 @@ type Expressions<
   | {
     $$_expression: 'HASH';
     args: keyof FT | string | number | bigint | Date | boolean;
+  }
+  // conditional — ConditionalArg is a column, any literal, null, or any
+  // nested expression
+  | { $$_expression: 'COALESCE'; args: Array<ConditionalArg<T, FT>> }
+  | {
+    $$_expression: 'NULLIF';
+    args: [ConditionalArg<T, FT>, ConditionalArg<T, FT>];
+  }
+  | {
+    $$_expression: 'CASE';
+    args: {
+      cases: Array<{ when: QueryFilter; then: ConditionalArg<T, FT> }>;
+      else?: ConditionalArg<T, FT>;
+    };
   };
 ```
 
 - `T` — the table schema; `FT` — the flattened table type with `'@'`
   column-reference prefixes. Both default so `Expressions` is usable
   without parameters.
-- `COALESCE`, `NULLIF`, and `CAST` are TODOs and currently commented
-  out in the source.
+- There is no general `CAST`. See
+  [Conditional expressions](#conditional-expressions).
 
 ### Expression name unions
 
@@ -749,6 +763,60 @@ at the application layer if you need it).
 - `DECRYPT` — `args: { secret; data }`; symmetric decryption (only on
   data encrypted by the same database).
 - `HASH` — `args: <value>`; cryptographic hashing.
+
+### Conditional expressions
+
+`COALESCE`, `NULLIF` and `CASE` take arguments of any type: a column, a
+literal, `null`, or a nested expression of any kind. They return the
+type of those arguments. Other expressions do not yet accept them as
+arguments, so declare them in `expressions` and project them.
+
+- `COALESCE` — `args`: two or more values; the first that is not `NULL`.
+- `NULLIF` — `args`: exactly two values; `NULL` when they are equal,
+  otherwise the first.
+- `CASE` — `args: { cases: Array<{ when; then }>; else? }`. `when` is a
+  filter in the same shape as `where`, and `then` is the result of the
+  first case that matches. With no match the result is `else`, or `NULL`
+  when `else` is omitted. On MongoDB, `when` supports `$and`, `$or`,
+  `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$between`
+  and `$null`; other operators throw `DialectUnsupportedError`.
+
+```ts
+import type { Query } from '@tundralibs/oql';
+
+const q: Query<'SELECT'> = {
+  type: 'SELECT',
+  table: 'users',
+  columns: ['id', 'name', 'nickname', 'age'],
+  expressions: {
+    display: {
+      $$_expression: 'COALESCE',
+      args: ['@nickname', { $$_expression: 'NULLIF', args: ['@name', ''] }],
+    },
+    tier: {
+      $$_expression: 'CASE',
+      args: {
+        cases: [{ when: { '@age': { $gte: 18 } }, then: 'adult' }],
+        else: 'minor',
+      },
+    },
+  },
+  projection: { '@id': true, '@display': true, '@tier': true },
+};
+```
+
+There is no general `CAST`. The engines disagree on what it means:
+
+- **Target types:** SQLite has no DATE or BOOLEAN type, and
+  `CAST('2024-01-05' AS DATE)` returns `2024`. MariaDB has no `BOOLEAN`
+  target.
+- **Failed conversions:** `CAST('12abc' AS INTEGER)` is an error on
+  Postgres, but returns `12` on SQLite and MariaDB (MariaDB with a
+  warning).
+- **Booleans:** MongoDB's `$toBool` turns the string `'false'` into
+  `true`.
+
+`TO_STRING` covers the one conversion that behaves the same everywhere.
 
 ### Date expressions
 

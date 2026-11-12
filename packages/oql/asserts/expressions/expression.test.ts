@@ -16,6 +16,65 @@ describe('oql.asserts.Expressions.mod', () => {
       });
     });
 
+    it('valid: Conditional expressions', () => {
+      const cols = ['name', 'nickname', 'age'];
+      assertExpression(
+        { $$_expression: 'COALESCE', args: ['@nickname', '@name', null] },
+        cols,
+      );
+      assertExpression(
+        { $$_expression: 'NULLIF', args: ['@name', ''] },
+        cols,
+      );
+      assertExpression(
+        {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { '@age': { $gte: 18 } },
+              then: { $$_expression: 'UPPER', args: '@name' },
+            }],
+            else: 0,
+          },
+        },
+        cols,
+      );
+    });
+
+    it('invalid: Conditional expressions', () => {
+      const cols = ['name', 'age'];
+      const bad: Array<[unknown, string]> = [
+        [{ $$_expression: 'COALESCE', args: ['@name'] }, 'at least 2'],
+        [{ $$_expression: 'NULLIF', args: [1, 2, 3] }, 'exactly 2'],
+        [{ $$_expression: 'CASE', args: { cases: [] } }, 'non-empty'],
+        [
+          { $$_expression: 'CASE', args: { cases: [{ when: {} }] } },
+          'must be { when, then }',
+        ],
+        [
+          {
+            $$_expression: 'CASE',
+            args: { cases: [{ when: { '@missing': 1 }, then: 1 }] },
+          },
+          'cases[0].when is not a valid filter',
+        ],
+        [
+          {
+            $$_expression: 'COALESCE',
+            args: ['@name', { $$_expression: 'ADD', args: [] }],
+          },
+          'args[1] contains invalid nested expression',
+        ],
+      ];
+      for (const [x, msg] of bad) {
+        asserts.assertThrows(
+          () => assertExpression(x, cols),
+          TypeError,
+          msg,
+        );
+      }
+    });
+
     it('valid: Numeric expressions', () => {
       assertExpression({ $$_expression: 'ADD', args: [1, 2, 3] });
       assertExpression({ $$_expression: 'SUBTRACT', args: [10, 3, 2] });

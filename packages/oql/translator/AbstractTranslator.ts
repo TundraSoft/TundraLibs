@@ -934,6 +934,21 @@ export abstract class AbstractTranslator {
     if (expr.$$_expression === 'UNIX_TIMESTAMP') {
       return this._unixTimestamp(expr.unit ?? 'seconds');
     }
+    // CASE conditions are filters, not args: translate each `when` the
+    // way a WHERE clause is translated.
+    if (expr.$$_expression === 'CASE') {
+      const r = (v: unknown) =>
+        this.__renderExprArg(v, scope, params, hasJoins);
+      const whens = expr.args.cases.map((c) =>
+        `WHEN ${this._translateFilter(c.when, scope, params, hasJoins)} THEN ${
+          r(c.then)
+        }`
+      );
+      const otherwise = expr.args.else === undefined
+        ? ''
+        : ` ELSE ${r(expr.args.else)}`;
+      return `(CASE ${whens.join(' ')}${otherwise} END)`;
+    }
     const emit = this._expressionMap.get(expr.$$_expression);
     if (!emit) {
       throw new DialectUnsupportedError(

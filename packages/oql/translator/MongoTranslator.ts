@@ -2065,6 +2065,78 @@ export class MongoTranslator {
   }
 
   /**
+   * Translate a `CASE` condition — a {@link QueryFilter} — to an
+   * aggregation boolean expression, which `$switch` needs in place of a
+   * find filter. Covers `$and` / `$or` and the comparison, `$in` /
+   * `$nin`, `$between` and `$null` operators; pattern operators and
+   * `$exists` subqueries throw.
+   *
+   * @throws {DialectUnsupportedError} For an operator outside that set.
+   */
+  private __filterToExpr(filter: QueryFilter): unknown {
+    const r = (v: unknown): unknown => this.__resolveExpressionRef(v);
+    const parts: unknown[] = [];
+    for (const [key, value] of Object.entries(filter)) {
+      if (key === '$and' || key === '$or') {
+        parts.push({
+          [key]: (value as QueryFilter[]).map((f) => this.__filterToExpr(f)),
+        });
+        continue;
+      }
+      if (key.startsWith('$')) {
+        throw new DialectUnsupportedError(
+          this.Dialect,
+          `filter operator '${key}' inside a CASE condition`,
+        );
+      }
+      const field = r(key);
+      const isOps = typeof value === 'object' && value !== null &&
+        !(value instanceof Date) && !Array.isArray(value) &&
+        !('$$_expression' in value);
+      const ops = isOps ? value as Record<string, unknown> : { $eq: value };
+      for (const [op, operand] of Object.entries(ops)) {
+        parts.push(this.__conditionToExpr(field, op, operand));
+      }
+    }
+    return parts.length === 1 ? parts[0] : { $and: parts };
+  }
+
+  /** One `field <op> operand` comparison of {@link __filterToExpr}. */
+  private __conditionToExpr(
+    field: unknown,
+    op: string,
+    operand: unknown,
+  ): unknown {
+    const r = (v: unknown): unknown => this.__resolveExpressionRef(v);
+    switch (op) {
+      case '$eq':
+      case '$ne':
+      case '$gt':
+      case '$gte':
+      case '$lt':
+      case '$lte':
+        return { [op]: [field, r(operand)] };
+      case '$in':
+        return { $in: [field, (operand as unknown[]).map(r)] };
+      case '$nin':
+        return { $not: [{ $in: [field, (operand as unknown[]).map(r)] }] };
+      case '$between': {
+        const [lo, hi] = operand as [unknown, unknown];
+        return { $and: [{ $gte: [field, r(lo)] }, { $lte: [field, r(hi)] }] };
+      }
+      case '$null': {
+        const isNull = { $in: [{ $type: field }, ['null', 'missing']] };
+        return operand === true ? isNull : { $not: [isNull] };
+      }
+      default:
+        throw new DialectUnsupportedError(
+          this.Dialect,
+          `filter operator '${op}' inside a CASE condition`,
+        );
+    }
+  }
+
+  /**
    * Translate an OQL Expression to Mongo aggregation-operator form.
    * Pipeline / aggregation expressions only — these don't apply to
    * `find` filter syntax (which has different operator names).
@@ -2208,6 +2280,29 @@ export class MongoTranslator {
       case 'LPAD':
       case 'RPAD':
         return r((args as { string: unknown }).string);
+
+      // Conditional
+      case 'COALESCE':
+        return { $ifNull: (args as unknown[]).map(r) };
+      case 'NULLIF': {
+        const [a, b] = (args as unknown[]).map(r);
+        return { $cond: [{ $eq: [a, b] }, null, a] };
+      }
+      case 'CASE': {
+        const a = args as {
+          cases: Array<{ when: QueryFilter; then: unknown }>;
+          else?: unknown;
+        };
+        return {
+          $switch: {
+            branches: a.cases.map((c) => ({
+              case: this.__filterToExpr(c.when),
+              then: r(c.then),
+            })),
+            default: a.else === undefined ? null : r(a.else),
+          },
+        };
+      }
 
       default: {
         const t: never = expr;
