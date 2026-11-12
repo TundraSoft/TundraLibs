@@ -2230,7 +2230,7 @@ const CASES: Case[] = [
       sqlite: {
         sql:
           `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "since", ` +
-          `CAST((julianday("shippedAt") - julianday("createdAt")) * CASE :p_2: WHEN 'DAYS' THEN 1 WHEN 'HOURS' THEN 24 WHEN 'MINUTES' THEN 1440 WHEN 'SECONDS' THEN 86400 WHEN 'MONTHS' THEN 1.0/30 WHEN 'YEARS' THEN 1.0/365 END AS INTEGER) AS "took" FROM "orders"`,
+          `(CAST(ROUND((julianday("shippedAt") - julianday("createdAt")) * 86400000) AS INTEGER) / CASE :p_2: WHEN 'DAYS' THEN 86400000 WHEN 'HOURS' THEN 3600000 WHEN 'MINUTES' THEN 60000 WHEN 'SECONDS' THEN 1000 WHEN 'MONTHS' THEN 2592000000 WHEN 'YEARS' THEN 31536000000 END) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       postgres: {
