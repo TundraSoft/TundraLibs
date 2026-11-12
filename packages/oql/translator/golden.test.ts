@@ -1827,12 +1827,8 @@ const CASES: Case[] = [
     },
   },
   {
-    // An `on` value of `null` renders the SQL keyword NULL verbatim:
-    // `"__exists__"."deletedAt" = NULL`. NOTE: `= NULL` is always UNKNOWN in
-    // SQL (it never matches any row), which is distinct from the package's
-    // `@col: null` => `IS NULL` convention used in ordinary WHERE clauses.
-    // Pinned here as the ACTUAL emission, not an endorsement of the shape.
-    name: '$exists on-value null emits `= NULL` (always-unknown, pinned as-is)',
+    // A null `on` value is a NULL check; `= NULL` would never match.
+    name: '$exists with a null on value emits IS NULL',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -1851,21 +1847,21 @@ const CASES: Case[] = [
         sql:
           'SELECT "id" AS "id", "name" AS "name" FROM "users" WHERE EXISTS ' +
           '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id" ' +
-          'AND "__exists__"."deletedAt" = NULL)',
+          'AND "__exists__"."deletedAt" IS NULL)',
         params: {},
       },
       postgres: {
         sql:
           'SELECT "id" AS "id", "name" AS "name" FROM "users" WHERE EXISTS ' +
           '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id" ' +
-          'AND "__exists__"."deletedAt" = NULL)',
+          'AND "__exists__"."deletedAt" IS NULL)',
         params: {},
       },
       maria: {
         sql:
           'SELECT `id` AS `id`, `name` AS `name` FROM `users` WHERE EXISTS ' +
           '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id` ' +
-          'AND `__exists__`.`deletedAt` = NULL)',
+          'AND `__exists__`.`deletedAt` IS NULL)',
         params: {},
       },
     },
