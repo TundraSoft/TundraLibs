@@ -209,15 +209,18 @@ export class SQLiteTranslator extends AbstractTranslator {
       'DATE_DIFF',
       (a) => {
         const [from, to, unit] = a;
-        const scale = this._timeUnitCase(unit!, {
-          DAYS: '1',
-          HOURS: '24',
-          MINUTES: '1440',
-          SECONDS: '86400',
-          MONTHS: '1.0/30',
-          YEARS: '1.0/365',
+        // julianday() is a float of days, so an exact one-hour gap times 24
+        // lands a hair under 1. Round to whole milliseconds first, then
+        // integer-divide, which truncates toward zero.
+        const unitMs = this._timeUnitCase(unit!, {
+          DAYS: '86400000',
+          HOURS: '3600000',
+          MINUTES: '60000',
+          SECONDS: '1000',
+          MONTHS: '2592000000',
+          YEARS: '31536000000',
         });
-        return `CAST((julianday(${to}) - julianday(${from})) * ${scale} AS INTEGER)`;
+        return `(CAST(ROUND((julianday(${to}) - julianday(${from})) * 86400000) AS INTEGER) / ${unitMs})`;
       },
     ],
     // UUID: SQLite has no native uuid generator. We pre-generate a value
