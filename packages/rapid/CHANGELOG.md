@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.14.0...rapid-v0.15.0) (2026-11-13)
+
+
+### Features
+
+* **rapid:** keep hand-written lines in the modules barrel ([#866](https://github.com/TundraSoft/TundraLibs/issues/866)) ([bafbbe5](https://github.com/TundraSoft/TundraLibs/commit/bafbbe534e85eed447e44eb6159620ef2c5d20c2))
+* **rapid:** schedule jobs in a named time zone ([#858](https://github.com/TundraSoft/TundraLibs/issues/858)) ([8bd8ecb](https://github.com/TundraSoft/TundraLibs/commit/8bd8ecbf62de0d32336c88b135647620a81c0d6f))
+
+
+### Documentation
+
+* **rapid:** show ctx.redirect in middleware as ctx.response ([#848](https://github.com/TundraSoft/TundraLibs/issues/848)) ([67c543a](https://github.com/TundraSoft/TundraLibs/commit/67c543aefa687aba43d31468df8f8c931939f0d4))
+* **rapid:** tag the module testability sketch as not compiled ([#864](https://github.com/TundraSoft/TundraLibs/issues/864)) ([2f1e802](https://github.com/TundraSoft/TundraLibs/commit/2f1e80299a3160c4cec8ff32e651dc62b579bfc1))
+
 ## [0.14.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.13.0...rapid-v0.14.0) (2026-10-26)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.7.0...utils-v1.8.0) (2026-11-13)
+
+
+### Features
+
+* **utils:** envArgs reads an env file of any name ([#849](https://github.com/TundraSoft/TundraLibs/issues/849)) ([2a886d9](https://github.com/TundraSoft/TundraLibs/commit/2a886d9be63375d0f5e5db3d08e96cf66605390c))
+
 ## [1.7.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.6.0...utils-v1.7.0) (2026-10-29)
 
 

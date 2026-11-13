@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.5.0...oql-v1.6.0) (2026-11-13)
+
+
+### Features
+
+* **oql:** COALESCE, NULLIF and CASE expressions ([#854](https://github.com/TundraSoft/TundraLibs/issues/854)) ([1788040](https://github.com/TundraSoft/TundraLibs/commit/17880408750b2b8f54fa670a5d9ad10a6a46db58))
+* **oql:** NULL-safe join and EXISTS keys via nullSafe ([#855](https://github.com/TundraSoft/TundraLibs/issues/855)) ([3a10e77](https://github.com/TundraSoft/TundraLibs/commit/3a10e7719d4a5aa93cf44b48bec994fe25b19016))
+* **oql:** orderBy may name a declared column that is not projected ([#853](https://github.com/TundraSoft/TundraLibs/issues/853)) ([87bcb43](https://github.com/TundraSoft/TundraLibs/commit/87bcb43c8e82fa77a19bfa71434ba55facb4db0a))
+
+
+### Bug Fixes
+
+* **oql:** compare a computed filter operand on MongoDB ([#857](https://github.com/TundraSoft/TundraLibs/issues/857)) ([4ab8425](https://github.com/TundraSoft/TundraLibs/commit/4ab8425a87a74ed648f3cd6b851b96431d42c9a6))
+* **oql:** count calendar months and years in DATE_DIFF on every dialect ([#869](https://github.com/TundraSoft/TundraLibs/issues/869)) ([a3e44d5](https://github.com/TundraSoft/TundraLibs/commit/a3e44d592ba4e15c2eb0359f557a7b85a8d5d22c))
+* **oql:** count exact DATE_DIFF gaps correctly on SQLite ([#865](https://github.com/TundraSoft/TundraLibs/issues/865)) ([e91bb95](https://github.com/TundraSoft/TundraLibs/commit/e91bb95868ecea16973a5db922dd8b0ac9cc5d7d))
+* **oql:** DATE_ADD and DATE_DIFF on MariaDB, negative DATE_ADD on SQLite ([#856](https://github.com/TundraSoft/TundraLibs/issues/856)) ([298fe78](https://github.com/TundraSoft/TundraLibs/commit/298fe78c5752a158750c9051a59d97e22d05eb03))
+* **oql:** drop the partial unit in DATE_DIFF on MongoDB ([#867](https://github.com/TundraSoft/TundraLibs/issues/867)) ([11bdbac](https://github.com/TundraSoft/TundraLibs/commit/11bdbacf10d2426164669de9a9d7739a1a65ee65))
+* **oql:** drop the partial unit in DATE_DIFF on Postgres ([#863](https://github.com/TundraSoft/TundraLibs/issues/863)) ([05141c2](https://github.com/TundraSoft/TundraLibs/commit/05141c20474334dd9717d056fb64d6a3fbaf82b7))
+* **oql:** never match NULL in a MongoDB comparison ([#862](https://github.com/TundraSoft/TundraLibs/issues/862)) ([93b24a4](https://github.com/TundraSoft/TundraLibs/commit/93b24a4267745e1dc49a2c0c8c80833d401ffc4d))
+* **oql:** read a null EXISTS key as IS NULL ([#861](https://github.com/TundraSoft/TundraLibs/issues/861)) ([e7b6735](https://github.com/TundraSoft/TundraLibs/commit/e7b6735718f8d0a01199c919ed1b00d6f3aa9544))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.4.0...oql-v1.5.0) (2026-10-19)
 
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.8.0...drivers-v1.9.0) (2026-11-13)
+
+
+### Features
+
+* **drivers:** refuse a Postgres session that is not in UTC ([#845](https://github.com/TundraSoft/TundraLibs/issues/845)) ([d292323](https://github.com/TundraSoft/TundraLibs/commit/d292323aebf301d66734b72943bcc5cf2f5e3bbc))
+
+
+### Bug Fixes
+
+* **drivers,norm:** read and write MariaDB dates in UTC ([#844](https://github.com/TundraSoft/TundraLibs/issues/844)) ([70a9ea4](https://github.com/TundraSoft/TundraLibs/commit/70a9ea4282bb42de1438681d71e4f6c527070081))
+* **drivers:** type a Date parameter as timestamptz on Neon ([#868](https://github.com/TundraSoft/TundraLibs/issues/868)) ([ec8a03a](https://github.com/TundraSoft/TundraLibs/commit/ec8a03aa73a12edb2a7eca4bc4971b4d1f067d47))
+
 ## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.7.0...drivers-v1.8.0) (2026-10-23)
 
 
