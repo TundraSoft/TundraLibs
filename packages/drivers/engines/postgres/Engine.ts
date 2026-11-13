@@ -64,15 +64,12 @@ import { PgServerError } from './PgServerError.ts';
 import { type EncodedParam, encodeParam } from './binary.ts';
 import { buildSSLRequest } from './protocol.ts';
 import { pgSqlStateToCode } from './sqlState.ts';
+import { nonUtcReason, UTC_ZONE } from './timeZone.ts';
 import type { PostgresEngineOptions } from './types/mod.ts';
 
 const POSTGRES_DEFAULTS: Partial<PostgresEngineOptions> = {
   port: 5432,
 };
-
-/** `TimeZone` values Postgres reports for UTC, compared case-insensitively. */
-const UTC_ZONE =
-  /^(?:etc\/)?(?:utc|uct|universal|zulu|greenwich|gmt(?:[+-]?0)?)$/i;
 
 /**
  * Pooled Postgres engine speaking the v3 frontend/backend protocol over a raw
@@ -268,9 +265,7 @@ export class PostgresEngine
     throw new EngineError('INVALID_CONFIG_VALUE', {
       instanceId: this.instanceId,
       option: 'TimeZone',
-      reason: `the database session runs in ${zone}, not UTC; ` +
-        `run ALTER DATABASE <name> SET timezone TO 'UTC', ` +
-        `or pass allowNonUtcTimeZone: true to accept it`,
+      reason: nonUtcReason(zone),
     });
   }
 
