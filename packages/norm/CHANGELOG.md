@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.13.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.12.1...norm-v1.13.0) (2026-11-13)
+
+
+### Features
+
+* **crypt:** bind the mode, key length and PBKDF2 settings into the CBC/CTR MAC ([#846](https://github.com/TundraSoft/TundraLibs/issues/846)) ([f6fc84b](https://github.com/TundraSoft/TundraLibs/commit/f6fc84bbd30b2ee941391afa5ba19f5eb08ddcc1))
+* **norm:** NULL-safe relation keys via nullSafe ([#860](https://github.com/TundraSoft/TundraLibs/issues/860)) ([ad1a33d](https://github.com/TundraSoft/TundraLibs/commit/ad1a33d14432b97f9b15f54f08f36737046a2a01))
+
+
+### Bug Fixes
+
+* **drivers,norm:** read and write MariaDB dates in UTC ([#844](https://github.com/TundraSoft/TundraLibs/issues/844)) ([70a9ea4](https://github.com/TundraSoft/TundraLibs/commit/70a9ea4282bb42de1438681d71e4f6c527070081))
+* **norm:** create views after the views they read ([#850](https://github.com/TundraSoft/TundraLibs/issues/850)) ([1abf036](https://github.com/TundraSoft/TundraLibs/commit/1abf0364ae5611b9ea3759ac76f408ff7e51bf84))
+* **norm:** store date() as its UTC day and read time() as a string ([#843](https://github.com/TundraSoft/TundraLibs/issues/843)) ([cbe2ba2](https://github.com/TundraSoft/TundraLibs/commit/cbe2ba266ef61b153ca7e69520f934a9ecde1ad3))
+* **norm:** TableLock no longer stalls a SQLite rebuild ([#851](https://github.com/TundraSoft/TundraLibs/issues/851)) ([f8c665c](https://github.com/TundraSoft/TundraLibs/commit/f8c665c4da862567f09384dab92b05d1539cef67))
+
 ## [1.12.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.12.0...norm-v1.12.1) (2026-10-20)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.1.1...cronus-v1.2.0) (2026-11-13)
+
+
+### Features
+
+* **cronus:** run schedules in a named time zone ([#847](https://github.com/TundraSoft/TundraLibs/issues/847)) ([0fadd45](https://github.com/TundraSoft/TundraLibs/commit/0fadd4511ac74eb6f8a28578b99e8d736ef3f44f))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.1.0...cronus-v1.1.1) (2026-09-22)
 
 

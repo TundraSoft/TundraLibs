@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.5.0...crypt-v1.6.0) (2026-11-13)
+
+
+### Features
+
+* **crypt:** bind the mode, key length and PBKDF2 settings into the CBC/CTR MAC ([#846](https://github.com/TundraSoft/TundraLibs/issues/846)) ([f6fc84b](https://github.com/TundraSoft/TundraLibs/commit/f6fc84bbd30b2ee941391afa5ba19f5eb08ddcc1))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.4.1...crypt-v1.5.0) (2026-10-01)
 
 
