@@ -51,6 +51,15 @@ import { Parameters } from './Parameters.ts';
 const ISO_8601_UTC = "'%Y-%m-%dT%H:%M:%fZ'";
 
 /**
+ * Width of one month on the calendar-position scale `DATE_DIFF` uses for
+ * `MONTHS` / `YEARS`: 32 days in milliseconds, longer than any month. A
+ * date's position is its month number times this, plus the milliseconds
+ * since that month began, so dividing the difference of two positions by
+ * it yields the complete calendar months between them.
+ */
+const MONTH_SLOT_MS = 2_764_800_000;
+
+/**
  * SQL data-type map. SQLite's storage classes (TEXT, INTEGER, REAL, BLOB,
  * NUMERIC) are advisory but kept readable for portability.
  */
@@ -217,10 +226,21 @@ export class SQLiteTranslator extends AbstractTranslator {
           HOURS: '3600000',
           MINUTES: '60000',
           SECONDS: '1000',
-          MONTHS: '2592000000',
-          YEARS: '31536000000',
+          MONTHS: `${MONTH_SLOT_MS}`,
+          YEARS: `${12 * MONTH_SLOT_MS}`,
         });
-        return `(CAST(ROUND((julianday(${to}) - julianday(${from})) * 86400000) AS INTEGER) / ${unitMs})`;
+        const elapsed =
+          `CAST(ROUND((julianday(${to}) - julianday(${from})) * 86400000) AS INTEGER)`;
+        // A month or a year has no fixed length, so those two units
+        // divide a calendar position instead of elapsed time. The
+        // result is the complete calendar months or years between the
+        // dates, which is what TIMESTAMPDIFF returns on MariaDB.
+        const position = (date: string) =>
+          `((CAST(strftime('%Y', ${date}) AS INTEGER) * 12 + CAST(strftime('%m', ${date}) AS INTEGER)) * ${MONTH_SLOT_MS}` +
+          ` + CAST(ROUND((julianday(${date}) - julianday(${date}, 'start of month')) * 86400000) AS INTEGER))`;
+        return `(CASE WHEN ${unit} IN ('MONTHS', 'YEARS') THEN ${
+          position(to!)
+        } - ${position(from!)} ELSE ${elapsed} END / ${unitMs})`;
       },
     ],
     // UUID: SQLite has no native uuid generator. We pre-generate a value

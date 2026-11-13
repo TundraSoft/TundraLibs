@@ -346,7 +346,7 @@ The table below summarises the per-dialect emission. The general rule:
 | REPLACE               | native                                                                              | native                                                 | native                                                           | native (`$replaceAll`)                                                              |
 | LPAD / RPAD           | native                                                                              | native                                                 | emulated (`printf` + `replace` + `substr`; custom fill honoured) | passthrough                                                                         |
 | NOW / CURRENT_*       | native                                                                              | native                                                 | native (ISO 8601 UTC text via `strftime`)                        | native (`$$NOW`); on INSERT, computed by the translator                             |
-| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native                                                           | native (`$dateAdd`; `$dateDiff`, or elapsed milliseconds divided for fixed units)   |
+| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native                                                           | native (`$dateAdd`); DATE_DIFF emulated, see [DATE_DIFF units](#date_diff-units)    |
 | UNIX_TIMESTAMP        | native (`FLOOR(EXTRACT(EPOCH …))::BIGINT`) — the driver decodes it as a JS `bigint` | native (`UNIX_TIMESTAMP()`; milliseconds via `NOW(3)`) | native (`strftime('%s')` / `julianday`, cast to INTEGER)         | native (`$toLong` over `$$NOW`); on INSERT, computed by the translator              |
 | **UUID**              | native (`gen_random_uuid()`)                                                        | native (`UUID()`)                                      | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)                                                 |
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                                     |
@@ -362,16 +362,55 @@ numbers, in a smaller unit if you need the precision (`90` `MINUTES`, not
 
 ### DATE_DIFF units
 
-`SECONDS`, `MINUTES`, `HOURS` and `DAYS` count whole elapsed units on every
-dialect: 00:59 → 01:01 is `0` `HOURS`, and 36 hours is `1` `DAYS`. MongoDB
-divides the elapsed milliseconds instead of calling `$dateDiff`, which
-counts boundaries crossed; a numeric operand is not rejected there, so pass
-dates.
+`DATE_DIFF` returns the number of **complete** units from `from` to `to`:
+a partial unit is dropped, and the result is negative when `to` is the
+earlier date. `MONTHS` and `YEARS` are calendar months and years.
 
-`MONTHS` and `YEARS` are **not** portable. Postgres and SQLite count 30-day
-and 365-day blocks, MariaDB counts complete calendar units, and MongoDB
-counts calendar boundaries crossed: 31 January → 1 March is `0`, `1` and
-`2` `MONTHS` respectively.
+| `from` → `to`                        | Unit     | Result |
+| ------------------------------------ | -------- | ------ |
+| 00:59 → 01:01, same day              | `HOURS`  | `0`    |
+| 36 hours apart                       | `DAYS`   | `1`    |
+| 31 January → 28 February             | `MONTHS` | `0`    |
+| 31 January → 1 March                 | `MONTHS` | `1`    |
+| 1 March → 31 January                 | `MONTHS` | `-1`   |
+| 15 January 10:00 → 15 February 09:59 | `MONTHS` | `0`    |
+| 29 February 2024 → 28 February 2025  | `YEARS`  | `0`    |
+| 29 February 2024 → 1 March 2025      | `YEARS`  | `1`    |
+
+**Every dialect returns the same number for the same two dates.** That is
+why oql builds the calculation itself instead of calling whatever each
+database offers: the native answers disagree, so the same query would give
+a different result on a different dialect.
+
+- MongoDB's `$dateDiff` counts unit boundaries crossed: 00:59 → 01:01 is
+  one hour and 31 January → 1 February is one month.
+- Postgres and SQLite have no function that returns a difference in a
+  chosen unit.
+- MariaDB's `TIMESTAMPDIFF` counts complete units for all six, so it is the
+  reference: the other three are written to match it.
+
+| Dialect  | `SECONDS`, `MINUTES`, `HOURS`, `DAYS`                      | `MONTHS`, `YEARS`                               |
+| -------- | ---------------------------------------------------------- | ----------------------------------------------- |
+| MariaDB  | `TIMESTAMPDIFF`                                            | `TIMESTAMPDIFF`                                 |
+| Postgres | `EXTRACT(EPOCH FROM to - from)` over the unit, `TRUNC`ated | the year and month fields of `age(to, from)`    |
+| SQLite   | `julianday` gap in milliseconds, integer-divided           | gap between calendar positions, integer-divided |
+| MongoDB  | `to - from` in milliseconds, divided and `$trunc`ated      | gap between calendar positions, `$trunc`ated    |
+
+A month has no fixed length, so elapsed time cannot be divided into months.
+SQLite and MongoDB instead place each date on a scale where every month
+gets a 32-day slot: `(year × 12 + month) × 32 days`, plus the time since
+that month began. A slot is longer than any month, so the gap between two
+positions divided by one slot is the complete calendar months, and divided
+by twelve slots the complete years.
+
+Month and year boundaries are read in UTC on SQLite and MongoDB, and in the
+session time zone on Postgres and MariaDB, so keep that session on UTC.
+[@tundralibs/drivers](https://jsr.io/@tundralibs/drivers) sets it on
+MariaDB and refuses a non-UTC Postgres session by default; its Neon engine
+does not check.
+
+MongoDB does not reject a numeric operand for the fixed-length units, so
+pass dates.
 
 ### UUID gotcha
 

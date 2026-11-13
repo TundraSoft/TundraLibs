@@ -2204,6 +2204,10 @@ const CASES: Case[] = [
     // the one dialect that inlines it. SQLite's modifier carries the
     // amount's own sign: a `'+' ||` prefix turns -7 into `+-7 DAYS`, which
     // is not a modifier.
+    //
+    // DATE_DIFF binds the unit on SQLite and Postgres, so one statement
+    // serves all six: MONTHS / YEARS take the calendar branch, the rest
+    // divide elapsed time.
     name: 'DATE_ADD / DATE_DIFF with a negative amount',
     method: 'select',
     query: {
@@ -2226,13 +2230,20 @@ const CASES: Case[] = [
       sqlite: {
         sql:
           `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "since", ` +
-          `(CAST(ROUND((julianday("shippedAt") - julianday("createdAt")) * 86400000) AS INTEGER) / CASE :p_2: WHEN 'DAYS' THEN 86400000 WHEN 'HOURS' THEN 3600000 WHEN 'MINUTES' THEN 60000 WHEN 'SECONDS' THEN 1000 WHEN 'MONTHS' THEN 2592000000 WHEN 'YEARS' THEN 31536000000 END) AS "took" FROM "orders"`,
+          `(CASE WHEN :p_2: IN ('MONTHS', 'YEARS') THEN ` +
+          `((CAST(strftime('%Y', "shippedAt") AS INTEGER) * 12 + CAST(strftime('%m', "shippedAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("shippedAt") - julianday("shippedAt", 'start of month')) * 86400000) AS INTEGER)) - ` +
+          `((CAST(strftime('%Y', "createdAt") AS INTEGER) * 12 + CAST(strftime('%m', "createdAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("createdAt") - julianday("createdAt", 'start of month')) * 86400000) AS INTEGER)) ` +
+          `ELSE CAST(ROUND((julianday("shippedAt") - julianday("createdAt")) * 86400000) AS INTEGER) END ` +
+          `/ CASE :p_2: WHEN 'DAYS' THEN 86400000 WHEN 'HOURS' THEN 3600000 WHEN 'MINUTES' THEN 60000 WHEN 'SECONDS' THEN 1000 WHEN 'MONTHS' THEN 2764800000 WHEN 'YEARS' THEN 33177600000 END) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       postgres: {
         sql:
           `SELECT "id" AS "id", ("createdAt" + (:p_0:::text || ' ' || :p_1:)::interval) AS "since", ` +
-          `CAST(TRUNC(EXTRACT(EPOCH FROM ("shippedAt" - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 WHEN 'MONTHS' THEN 86400*30 WHEN 'YEARS' THEN 86400*365 END) AS BIGINT) AS "took" FROM "orders"`,
+          `CAST(CASE :p_2: ` +
+          `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) * 12 + EXTRACT(MONTH FROM age("shippedAt", "createdAt")) ` +
+          `WHEN 'YEARS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) ` +
+          `ELSE TRUNC(EXTRACT(EPOCH FROM ("shippedAt" - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 END) END AS BIGINT) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       maria: {

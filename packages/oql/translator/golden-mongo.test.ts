@@ -26,6 +26,22 @@ type Case = {
 
 const t = new MongoTranslator();
 
+/**
+ * Where a date sits on the scale DATE_DIFF uses for MONTHS / YEARS: its
+ * month number in 32-day slots, plus the milliseconds into that month.
+ */
+const calendarPosition = (date: string) => ({
+  $add: [
+    {
+      $multiply: [
+        { $add: [{ $multiply: [{ $year: date }, 12] }, { $month: date }] },
+        2_764_800_000,
+      ],
+    },
+    { $subtract: [date, { $dateTrunc: { date, unit: 'month' } }] },
+  ],
+});
+
 const CASES: Case[] = [
   // ---------------------------------------------------------------------------
   // SELECT → find
@@ -1117,10 +1133,11 @@ const CASES: Case[] = [
   // Date arithmetic — OQL TimeUnit → Mongo unit
   // ---------------------------------------------------------------------------
   {
-    // `$dateAdd` / `$dateDiff` only accept lowercase singular units and
-    // fail at execution with `unknown time unit value: DAYS` on the raw
-    // OQL unit, so the translator maps them.
-    name: 'DATE_ADD / DATE_DIFF map OQL time units to Mongo units',
+    // `$dateAdd` only accepts lowercase singular units and fails at
+    // execution with `unknown time unit value: DAYS` on the raw OQL unit,
+    // so the translator maps it. DATE_DIFF never reaches `$dateDiff`: it
+    // divides, so a partial unit is dropped as it is on the SQL engines.
+    name: 'DATE_ADD maps the OQL time unit; DATE_DIFF divides',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -1139,12 +1156,17 @@ const CASES: Case[] = [
           $$_expression: 'DATE_DIFF',
           args: { from: '@createdAt', to: '@shippedAt', unit: 'MONTHS' },
         },
+        ageYears: {
+          $$_expression: 'DATE_DIFF',
+          args: { from: '@createdAt', to: '@shippedAt', unit: 'YEARS' },
+        },
       },
       projection: {
         '@id': true,
         '@due': 'due',
         '@ageHours': 'ageHours',
         '@ageMonths': 'ageMonths',
+        '@ageYears': 'ageYears',
       },
     },
     expected: {
@@ -1161,8 +1183,7 @@ const CASES: Case[] = [
                   amount: 7,
                 },
               },
-              // Fixed-length units divide the elapsed milliseconds, so a
-              // partial unit is dropped as it is on the SQL engines.
+              // Fixed-length units divide the elapsed milliseconds.
               ageHours: {
                 $toLong: {
                   $trunc: {
@@ -1173,11 +1194,37 @@ const CASES: Case[] = [
                   },
                 },
               },
+              // A month has no fixed length, so MONTHS / YEARS divide
+              // the gap between two calendar positions by the 32-day
+              // slot each month gets on that scale.
               ageMonths: {
-                $dateDiff: {
-                  startDate: '$createdAt',
-                  endDate: '$shippedAt',
-                  unit: 'month',
+                $toLong: {
+                  $trunc: {
+                    $divide: [
+                      {
+                        $subtract: [
+                          calendarPosition('$shippedAt'),
+                          calendarPosition('$createdAt'),
+                        ],
+                      },
+                      2_764_800_000,
+                    ],
+                  },
+                },
+              },
+              ageYears: {
+                $toLong: {
+                  $trunc: {
+                    $divide: [
+                      {
+                        $subtract: [
+                          calendarPosition('$shippedAt'),
+                          calendarPosition('$createdAt'),
+                        ],
+                      },
+                      33_177_600_000,
+                    ],
+                  },
                 },
               },
             },
@@ -1188,6 +1235,7 @@ const CASES: Case[] = [
               due: '$due',
               ageHours: '$ageHours',
               ageMonths: '$ageMonths',
+              ageYears: '$ageYears',
               _id: 0,
             },
           },
