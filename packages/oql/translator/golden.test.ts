@@ -2194,7 +2194,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "due" FROM "orders"`,
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:, CASE WHEN :p_1: IN ('MONTHS', 'YEARS') AND :p_0: = CAST(:p_0: AS INTEGER) AND strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) <> strftime('%d', "createdAt") THEN '-' || strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) || ' days' ELSE '+0 days' END) AS "due" FROM "orders"`,
       },
     },
   },
@@ -2229,7 +2229,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "since", ` +
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:, CASE WHEN :p_1: IN ('MONTHS', 'YEARS') AND :p_0: = CAST(:p_0: AS INTEGER) AND strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) <> strftime('%d', "createdAt") THEN '-' || strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) || ' days' ELSE '+0 days' END) AS "since", ` +
           `(CASE WHEN :p_2: IN ('MONTHS', 'YEARS') THEN ` +
           `((CAST(strftime('%Y', "shippedAt") AS INTEGER) * 12 + CAST(strftime('%m', "shippedAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("shippedAt") - julianday("shippedAt", 'start of month')) * 86400000) AS INTEGER)) - ` +
           `((CAST(strftime('%Y', "createdAt") AS INTEGER) * 12 + CAST(strftime('%m', "createdAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("createdAt") - julianday("createdAt", 'start of month')) * 86400000) AS INTEGER)) ` +
