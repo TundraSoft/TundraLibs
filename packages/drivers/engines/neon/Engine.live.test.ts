@@ -130,6 +130,64 @@ describe({
       });
     });
 
+    describe('session time zone', () => {
+      it({
+        name: 'refuses a non-UTC session unless allowNonUtcTimeZone is set',
+        // Needs a second proxy logged in as the non-UTC role.
+        ignore: useRealEndpoint,
+        fn: async () => {
+          const admin = makeEngine('neon-live-tz-admin');
+          const role = `tz_probe_${crypto.randomUUID().slice(0, 8)}`;
+          await admin.execute({
+            sql: `CREATE ROLE ${role} LOGIN PASSWORD 'tz-probe'`,
+          });
+          await admin.execute({
+            sql: `ALTER ROLE ${role} SET timezone TO 'Asia/Kolkata'`,
+          });
+          let roleProxy: NeonPgProxy | undefined;
+          try {
+            roleProxy = await startNeonPgProxy({
+              ...TEST_CONFIG,
+              username: role,
+              password: 'tz-probe',
+            });
+            const zoneAs = async (options: Record<string, unknown>) => {
+              const engine = new NeonHttpEngine('neon-live-tz', {
+                host: TEST_CONFIG.host,
+                endpoint: roleProxy!.url,
+                username: role,
+                password: 'tz-probe',
+                database: TEST_CONFIG.database,
+                ...options,
+              });
+              try {
+                const r = await engine.execute<{ z: string }>({
+                  sql: `SELECT current_setting('TimeZone') AS z`,
+                });
+                return r.data[0]!.z;
+              } finally {
+                await engine.disconnect();
+              }
+            };
+            const err = await asserts.assertRejects(
+              () => zoneAs({}),
+              EngineError,
+            );
+            asserts.assertEquals(err.code, 'INVALID_CONFIG_VALUE');
+            asserts.assertStringIncludes(err.message, 'Asia/Kolkata');
+            asserts.assertEquals(
+              await zoneAs({ allowNonUtcTimeZone: true }),
+              'Asia/Kolkata',
+            );
+          } finally {
+            if (roleProxy) await roleProxy.close();
+            await admin.execute({ sql: `DROP ROLE ${role}` });
+            await admin.disconnect();
+          }
+        },
+      });
+    });
+
     describe('CRUD with PG type parity', () => {
       it('DDL + INSERT RETURNING decodes with Postgres parity', async () => {
         const engine = makeEngine('neon-live-types');
