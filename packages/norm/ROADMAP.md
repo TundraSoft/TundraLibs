@@ -10,7 +10,7 @@
 > entirely productization, the cheaper class of gap to close, rather
 > than capability.
 >
-> **Last updated:** 2026-10-07
+> **Last updated:** 2026-11-13
 
 ## Current state
 
@@ -64,6 +64,16 @@ before adopting is tooling rather than new query power.
   Mongo, and the fetch-only edge dialects arrived for free through
   `drivers`.
 - **Polymorphic associations / STI / embeddables.**
+- **Filter values are not converted by column type.** A write converts
+  each value by its column; a filter value reaches the engine as given.
+  A `Date` matches a `timestamp` or `date` column on every engine. A
+  date string is not reliable. One with a non-UTC offset
+  (`'2026-01-15T15:30:00+05:30'`) matches the same instant on no
+  engine. SQLite compares text, so only the exact stored form matches:
+  `'2026-01-15T10:00:00.000Z'` does, `'2026-01-15T10:00:00Z'` does not,
+  and neither does `'2026-01-15'` against a `date` column. MongoDB
+  matches no string against a date. Probed 2026-11-13 on Postgres,
+  MariaDB, SQLite, and MongoDB. Until this lands, filter with a `Date`.
 
 ### Ergonomics
 
