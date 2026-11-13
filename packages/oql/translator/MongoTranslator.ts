@@ -321,7 +321,7 @@ const LIKE_OPERATORS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * OQL {@link TimeUnit} → Mongo `$dateAdd` / `$dateDiff` unit.
+ * OQL {@link TimeUnit} → Mongo `$dateAdd` unit.
  *
  * Mongo's date-arithmetic operators only accept lowercase singular unit
  * names and fail at execution with `unknown time unit value: …` on
@@ -342,14 +342,26 @@ const MONGO_TIME_UNITS: Record<TimeUnit, string> = {
 };
 
 /**
- * Milliseconds in each fixed-length {@link TimeUnit}. `MONTHS` / `YEARS`
- * have no fixed length, so `DATE_DIFF` leaves those to `$dateDiff`.
+ * Width of one month on the calendar-position scale `DATE_DIFF` uses for
+ * `MONTHS` / `YEARS`: 32 days in milliseconds, longer than any month. A
+ * date's position is its month number times this, plus the milliseconds
+ * since that month began, so dividing the difference of two positions by
+ * it yields the complete calendar months between them.
  */
-const MONGO_FIXED_UNIT_MS: Partial<Record<TimeUnit, number>> = {
+const MONTH_SLOT_MS = 2_764_800_000;
+
+/**
+ * What `DATE_DIFF` divides by for each {@link TimeUnit}: milliseconds for
+ * the fixed-length units, {@link MONTH_SLOT_MS} slots for `MONTHS` /
+ * `YEARS`.
+ */
+const MONGO_DATE_DIFF_DIVISOR: Record<TimeUnit, number> = {
   DAYS: 86_400_000,
   HOURS: 3_600_000,
   MINUTES: 60_000,
   SECONDS: 1_000,
+  MONTHS: MONTH_SLOT_MS,
+  YEARS: 12 * MONTH_SLOT_MS,
 };
 
 /**
@@ -2104,8 +2116,8 @@ export class MongoTranslator {
   }
 
   /**
-   * Map an OQL {@link TimeUnit} to the unit name Mongo's `$dateAdd` /
-   * `$dateDiff` expect. See {@link MONGO_TIME_UNITS}.
+   * Map an OQL {@link TimeUnit} to the unit name Mongo's `$dateAdd`
+   * expects. See {@link MONGO_TIME_UNITS}.
    *
    * @throws {OqlError} `INVALID_TIME_UNIT` when the unit isn't a
    *   recognised OQL time unit. The asserts layer already rejects those,
@@ -2333,22 +2345,41 @@ export class MongoTranslator {
       }
       case 'DATE_DIFF': {
         const a = args as { from: unknown; to: unknown; unit: unknown };
-        const unit = this.__mongoTimeUnit(a.unit);
-        const unitMs = MONGO_FIXED_UNIT_MS[a.unit as TimeUnit];
-        if (unitMs !== undefined) {
-          // `$dateDiff` counts unit boundaries crossed, so 00:59 → 01:01
-          // is 1 hour. The SQL engines count whole elapsed units and call
-          // that 0; dividing the elapsed milliseconds matches them.
-          return {
-            $toLong: {
-              $trunc: {
-                $divide: [{ $subtract: [r(a.to), r(a.from)] }, unitMs],
-              },
+        this.__mongoTimeUnit(a.unit); // rejects an unknown unit
+        const unit = a.unit as TimeUnit;
+        // `$dateDiff` counts unit boundaries crossed, so 00:59 → 01:01 is
+        // 1 hour and 31 January → 1 February is 1 month. The SQL engines
+        // count complete units and call both 0. Dividing elapsed
+        // milliseconds matches them for the fixed-length units; a month
+        // or a year has no fixed length, so those divide a calendar
+        // position instead (see MONTH_SLOT_MS).
+        const calendar = unit === 'MONTHS' || unit === 'YEARS';
+        const position = (date: unknown) => ({
+          $add: [
+            {
+              $multiply: [
+                {
+                  $add: [{ $multiply: [{ $year: date }, 12] }, {
+                    $month: date,
+                  }],
+                },
+                MONTH_SLOT_MS,
+              ],
             },
-          };
-        }
+            { $subtract: [date, { $dateTrunc: { date, unit: 'month' } }] },
+          ],
+        });
+        const operand = (date: unknown) =>
+          calendar ? position(r(date)) : r(date);
         return {
-          $dateDiff: { startDate: r(a.from), endDate: r(a.to), unit },
+          $toLong: {
+            $trunc: {
+              $divide: [
+                { $subtract: [operand(a.to), operand(a.from)] },
+                MONGO_DATE_DIFF_DIVISOR[unit],
+              ],
+            },
+          },
         };
       }
 

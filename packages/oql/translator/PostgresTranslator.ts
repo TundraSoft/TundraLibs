@@ -210,12 +210,17 @@ export class PostgresTranslator extends AbstractTranslator {
         HOURS: '3600',
         MINUTES: '60',
         SECONDS: '1',
-        MONTHS: '86400*30',
-        YEARS: '86400*365',
       });
+      // A month or a year has no fixed length. age() counts complete
+      // calendar months and years, which is what TIMESTAMPDIFF returns
+      // on MariaDB: 31 January to 1 March is 1 month.
+      const age = `age(${to}, ${from})`;
       // TRUNC drops a partial unit, as SQLite and MariaDB do; a bare
       // CAST to BIGINT would round it.
-      return `CAST(TRUNC(EXTRACT(EPOCH FROM (${to} - ${from})) / ${seconds}) AS BIGINT)`;
+      return `CAST(CASE ${unit} ` +
+        `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM ${age}) * 12 + EXTRACT(MONTH FROM ${age}) ` +
+        `WHEN 'YEARS' THEN EXTRACT(YEAR FROM ${age}) ` +
+        `ELSE TRUNC(EXTRACT(EPOCH FROM (${to} - ${from})) / ${seconds}) END AS BIGINT)`;
     }],
     ['UUID', () => 'gen_random_uuid()'],
     ['HASH', (a) => `encode(digest(${a[0]}, 'sha256'), 'hex')`],
