@@ -68,7 +68,8 @@ await neon.disconnect();
 `:name:` placeholders are rewritten to Postgres `$N` markers and the ordered
 values are sent as the request's `params` array. No network happens at
 construction or on `connect()` — the client is stateless (one HTTP request per
-query), which is exactly what makes it edge-safe.
+query), which is exactly what makes it edge-safe. The first query sends one
+extra request, see [Time zone](#time-zone).
 
 ## Configuration
 
@@ -78,15 +79,16 @@ authentication mechanism — a `connectionString`, the
 `username`+`password`+`database` components, or a bearer `token`. The
 constructor throws `MISSING_CONFIG_VALUE` otherwise.
 
-| Option             | Type     | Default | Notes                                                                                                                                                       |
-| ------------------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `host`             | `string` | —       | Required. Neon endpoint host, e.g. `ep-cool-name-a1b2c3.us-east-2.aws.neon.tech`. The request URL is `https://<host>/sql`.                                  |
-| `connectionString` | `string` | —       | Full `postgresql://user:password@host/db`. Sent in the `Neon-Connection-String` header; the password in it authenticates. Takes precedence over components. |
-| `username`         | `string` | —       | Component auth: assembled into a connection string with `password` + `database`.                                                                            |
-| `password`         | `string` | —       | Component auth (see `username`).                                                                                                                            |
-| `database`         | `string` | —       | Component auth (see `username`).                                                                                                                            |
-| `token`            | `string` | —       | Bearer JWT for Neon Authorize / row-level security. Sent as `Authorization: Bearer <token>`. May accompany a connection string or stand alone.              |
-| `timeout`          | `number` | `30`    | Per-request timeout in seconds (1–120), passed through to RESTler. Must be a positive number.                                                               |
+| Option                | Type      | Default | Notes                                                                                                                                                                  |
+| --------------------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`                | `string`  | —       | Required. Neon endpoint host, e.g. `ep-cool-name-a1b2c3.us-east-2.aws.neon.tech`. The request URL is `https://<host>/sql`.                                             |
+| `connectionString`    | `string`  | —       | Full `postgresql://user:password@host/db`. Sent in the `Neon-Connection-String` header; the password in it authenticates. Takes precedence over components.            |
+| `username`            | `string`  | —       | Component auth: assembled into a connection string with `password` + `database`.                                                                                       |
+| `password`            | `string`  | —       | Component auth (see `username`).                                                                                                                                       |
+| `database`            | `string`  | —       | Component auth (see `username`).                                                                                                                                       |
+| `token`               | `string`  | —       | Bearer JWT for Neon Authorize / row-level security. Sent as `Authorization: Bearer <token>`. May accompany a connection string or stand alone.                         |
+| `timeout`             | `number`  | `30`    | Per-request timeout in seconds (1–120), passed through to RESTler. Must be a positive number.                                                                          |
+| `allowNonUtcTimeZone` | `boolean` | `false` | Run queries when the session `TimeZone` is not UTC, and skip the request that checks it. Refused with `INVALID_CONFIG_VALUE` by default (see [Time zone](#time-zone)). |
 
 The pool-related fields on `SQLEngineOptions` (`pool`) are inert — this engine
 is pool-free (one stateless HTTP client, no socket pool).
@@ -117,8 +119,23 @@ A `Date` parameter is sent as ISO-8601 text with its placeholder typed
 `timestamptz`, so it works where Postgres has no column to infer a type from
 (`date_trunc('day', :at:)`, `:to: - :from:`, `:at: IS NULL`). Bound to a
 `timestamp` or `date` column it is converted in the session's `TimeZone`,
-and unlike `PostgresEngine` this engine does not check that zone — keep the
-database on UTC, see [Time zone](../postgres/Drivers-Postgres.md#time-zone).
+which is why the engine insists on UTC.
+
+### Time zone
+
+The engine refuses a database whose session `TimeZone` is not UTC, for the
+reason `PostgresEngine` does — see
+[Postgres → Time zone](../postgres/Drivers-Postgres.md#time-zone). HTTP has no
+startup handshake to read the zone from, so the first query on a connected
+engine first sends `SELECT current_setting('TimeZone')`: one extra request per
+engine instance, so on Workers keep one engine per isolate rather than one per
+request. A zone other than UTC rejects the query with `INVALID_CONFIG_VALUE`
+before it is sent, and the next query checks again. `connect()` and `ping()`
+do not check.
+
+Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`). Set
+`allowNonUtcTimeZone: true` only when the application uses `timestamptz`
+alone; it also drops the extra request.
 
 ## Limitations
 

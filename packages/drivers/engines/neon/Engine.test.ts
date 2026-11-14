@@ -27,6 +27,8 @@ const EMPTY_RESULT: NeonQueryResult = {
 /**
  * A fake `NeonHttpClient` — records the `(query, params)` it received and
  * returns a scripted result (or rejects with a scripted error). No network.
+ * The engine's `TimeZone` request is answered from `zone` and counted apart,
+ * so `callCount` / `lastQuery` describe the caller's queries alone.
  */
 class StubClient {
   public lastQuery: string | null = null;
@@ -34,12 +36,24 @@ class StubClient {
   public callCount = 0;
   public result: NeonQueryResult = EMPTY_RESULT;
   public error: unknown = null;
+  /** The session `TimeZone` the server reports; `null` returns no row. */
+  public zone: string | null = 'UTC';
+  public zoneCalls = 0;
 
   // deno-lint-ignore require-await
   public async sql<R = Record<string, unknown>>(
     query: string,
     params: readonly unknown[] = [],
   ): Promise<NeonQueryResult<R>> {
+    if (query.includes("current_setting('TimeZone')")) {
+      this.zoneCalls++;
+      return {
+        rows: this.zone === null ? [] : [{ zone: this.zone }],
+        fields: [{ name: 'zone', dataTypeID: 25 }],
+        rowCount: this.zone === null ? 0 : 1,
+        command: 'SELECT',
+      } as unknown as NeonQueryResult<R>;
+    }
     this.callCount++;
     this.lastQuery = query;
     this.lastParams = params;
@@ -70,8 +84,14 @@ class TestNeonHttpEngine extends NeonHttpEngine {
   }
 }
 
-const makeEngine = (): TestNeonHttpEngine =>
-  new TestNeonHttpEngine('neon-test', { host: HOST, connectionString: CONN });
+const makeEngine = (
+  options: { allowNonUtcTimeZone?: boolean } = {},
+): TestNeonHttpEngine =>
+  new TestNeonHttpEngine('neon-test', {
+    host: HOST,
+    connectionString: CONN,
+    ...options,
+  });
 
 const neonError = (
   code: string | undefined,
@@ -533,6 +553,60 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
         EngineError,
       );
       assertEquals((err as EngineError).code, 'UNSUPPORTED_OPERATION');
+    });
+  });
+
+  describe('session time zone', () => {
+    it('refuses a non-UTC session before sending the query', async () => {
+      const eng = makeEngine();
+      eng.stub.zone = 'Asia/Kolkata';
+      const err = await assertRejects(
+        () => eng.execute({ sql: 'SELECT 1' }),
+        EngineError,
+      );
+      assertEquals(err.code, 'INVALID_CONFIG_VALUE');
+      assert(err.message.includes('Asia/Kolkata'));
+      assertEquals(eng.stub.callCount, 0);
+    });
+
+    it('asks for the zone once per connection, concurrent queries included', async () => {
+      const eng = makeEngine();
+      await Promise.all([
+        eng.execute({ sql: 'SELECT 1' }),
+        eng.execute({ sql: 'SELECT 2' }),
+      ]);
+      await eng.execute({ sql: 'SELECT 3' });
+      assertEquals(eng.stub.zoneCalls, 1);
+      assertEquals(eng.stub.callCount, 3);
+
+      await eng.disconnect();
+      await eng.execute({ sql: 'SELECT 4' });
+      assertEquals(eng.stub.zoneCalls, 2);
+    });
+
+    it('checks again after a refusal, so a fixed database is accepted', async () => {
+      const eng = makeEngine();
+      eng.stub.zone = 'Asia/Kolkata';
+      await assertRejects(() => eng.execute({ sql: 'SELECT 1' }), EngineError);
+      eng.stub.zone = 'Etc/UTC';
+      await eng.execute({ sql: 'SELECT 1' });
+      assertEquals(eng.stub.zoneCalls, 2);
+      assertEquals(eng.stub.callCount, 1);
+    });
+
+    it('allowNonUtcTimeZone skips the check and its request', async () => {
+      const eng = makeEngine({ allowNonUtcTimeZone: true });
+      eng.stub.zone = 'Asia/Kolkata';
+      await eng.execute({ sql: 'SELECT 1' });
+      assertEquals(eng.stub.zoneCalls, 0);
+      assertEquals(eng.stub.callCount, 1);
+    });
+
+    it('does not check a server that reports no zone', async () => {
+      const eng = makeEngine();
+      eng.stub.zone = null;
+      await eng.execute({ sql: 'SELECT 1' });
+      assertEquals(eng.stub.callCount, 1);
     });
   });
 

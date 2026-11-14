@@ -194,12 +194,15 @@ function forbiddenReason(
 
   // Postgres TCP wire protocol. Match the drivers-postgres path suffix (NOT a
   // bare `binary.ts`, which would false-positive on @std/yaml/_type/binary.ts)
-  // and allow the two PURE, socket-free modules the Neon driver legitimately
-  // reuses: `values.ts` (value decoding) and `sqlState.ts` (SQLSTATE map).
+  // and allow the PURE, socket-free modules the Neon driver legitimately
+  // reuses: `values.ts` (value decoding), `sqlState.ts` (SQLSTATE map) and
+  // `timeZone.ts` (the UTC session rule).
   const pg = spec.match(/\/drivers\/engines\/postgres\/(.+)$/);
   if (pg) {
     const base = pg[1].split('/').pop() ?? pg[1];
-    if (base !== 'values.ts' && base !== 'sqlState.ts') {
+    if (
+      base !== 'values.ts' && base !== 'sqlState.ts' && base !== 'timeZone.ts'
+    ) {
       return `Postgres wire module (engines/postgres/${pg[1]})`;
     }
   }
