@@ -2207,7 +2207,8 @@ const CASES: Case[] = [
     //
     // DATE_DIFF binds the unit on SQLite and Postgres, so one statement
     // serves all six: MONTHS / YEARS take the calendar branch, the rest
-    // divide elapsed time.
+    // divide elapsed time. The Postgres CASE around `to` is there for two
+    // DATE columns, whose bare difference is an integer EXTRACT rejects.
     name: 'DATE_ADD / DATE_DIFF with a negative amount',
     method: 'select',
     query: {
@@ -2243,7 +2244,7 @@ const CASES: Case[] = [
           `CAST(CASE :p_2: ` +
           `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) * 12 + EXTRACT(MONTH FROM age("shippedAt", "createdAt")) ` +
           `WHEN 'YEARS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) ` +
-          `ELSE TRUNC(EXTRACT(EPOCH FROM ("shippedAt" - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 END) END AS BIGINT) AS "took" FROM "orders"`,
+          `ELSE TRUNC(EXTRACT(EPOCH FROM (CASE WHEN TRUE THEN "shippedAt" WHEN FALSE THEN "createdAt" ELSE CAST(NULL AS TIMESTAMP) END - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 END) END AS BIGINT) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       maria: {

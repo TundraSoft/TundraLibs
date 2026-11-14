@@ -216,12 +216,18 @@ export class PostgresTranslator extends AbstractTranslator {
       // calendar months and years, which is what TIMESTAMPDIFF returns
       // on MariaDB: 31 January to 1 March is 1 month.
       const age = `age(${to}, ${from})`;
+      // `date - date` is an integer, which EXTRACT(EPOCH …) rejects. The
+      // CASE always yields `to`; its other arms only widen a DATE `to` to
+      // a timestamp, so two dates subtract to an interval. Any other
+      // pairing keeps the type the bare subtraction gave it.
+      const span = `(CASE WHEN TRUE THEN ${to} WHEN FALSE THEN ${from} ` +
+        `ELSE CAST(NULL AS TIMESTAMP) END - ${from})`;
       // TRUNC drops a partial unit, as SQLite and MariaDB do; a bare
       // CAST to BIGINT would round it.
       return `CAST(CASE ${unit} ` +
         `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM ${age}) * 12 + EXTRACT(MONTH FROM ${age}) ` +
         `WHEN 'YEARS' THEN EXTRACT(YEAR FROM ${age}) ` +
-        `ELSE TRUNC(EXTRACT(EPOCH FROM (${to} - ${from})) / ${seconds}) END AS BIGINT)`;
+        `ELSE TRUNC(EXTRACT(EPOCH FROM ${span}) / ${seconds}) END AS BIGINT)`;
     }],
     ['UUID', () => 'gen_random_uuid()'],
     ['HASH', (a) => `encode(digest(${a[0]}, 'sha256'), 'hex')`],
