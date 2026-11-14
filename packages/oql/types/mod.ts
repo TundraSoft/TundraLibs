@@ -79,6 +79,7 @@ export type { Expressions } from './expressions/Expressions.ts';
 export type { GetExpressionByType } from './expressions/GetExpressionByType.ts';
 export type { NumericExpressions } from './expressions/NumericExpressions.ts';
 export type { StringExpressions } from './expressions/StringExpressions.ts';
+export type { DateTruncUnit } from './expressions/DateTruncUnit.ts';
 export type { TimeUnit } from './expressions/TimeUnit.ts';
 
 // aggregates/
