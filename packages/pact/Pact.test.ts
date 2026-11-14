@@ -49,6 +49,21 @@ function expectThrowCode(fn: () => unknown, code: string): PactError {
   return error;
 }
 
+/**
+ * A well-formed code verifyMFA refuses for `seed`. verifyMFA accepts the
+ * current step and the one either side, so the code avoids all three, and
+ * the step after them in case the clock crosses a step before the verify.
+ */
+async function wrongCode(seed: string): Promise<string> {
+  const now = Date.now();
+  const live = new Set<string>();
+  for (const offset of [-1, 0, 1, 2]) {
+    live.add(await generateTOTP(seed, { epoch: now + offset * 30_000 }));
+  }
+  return ['111111', '222222', '333333', '444444', '555555']
+    .find((code) => !live.has(code))!;
+}
+
 /** An in-memory user/session/key/reset store wired into pact hooks. */
 function makeStore() {
   const byId = new Map<string, PactStoredUser>();
@@ -431,10 +446,7 @@ describe('Pact MFA hardening', () => {
     });
     const seed = pact.generateMFASecret();
     store.seed('m1', 'm1@example.dev', { mfaSecret: seed });
-    const wrong = async () => {
-      const code = await generateTOTP(seed);
-      return code === '123456' ? '654321' : '123456';
-    };
+    const wrong = () => wrongCode(seed);
     return { pact, seed, wrong };
   }
 
@@ -1407,8 +1419,7 @@ describe('Pact events and MFA', () => {
     store.seed('ev3', 'nomfa@example.dev');
     const code = await generateTOTP(seed);
     asserts.assert(await pact.verifyMFA('ev2', code));
-    const wrong = code === '123456' ? '654321' : '123456';
-    asserts.assertFalse(await pact.verifyMFA('ev2', wrong));
+    asserts.assertFalse(await pact.verifyMFA('ev2', await wrongCode(seed)));
     asserts.assertFalse(await pact.verifyMFA('ev3', code), 'unenrolled');
     asserts.assertFalse(await pact.verifyMFA('ghost', code), 'unknown user');
   });
