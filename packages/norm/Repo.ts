@@ -32,6 +32,7 @@ import type {
   ColumnSpec,
   DefaultRowOf,
   EmittedForeignKey,
+  ExpressionDefault,
   InsertOf,
   PrimaryKeyOf,
   ProjectedRowOf,
@@ -102,6 +103,26 @@ const TEMPORAL_SKEW_MS = 1000;
  * `new Date()` would read it as local time. */
 const SQLITE_ZONELESS_DATETIME =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
+
+/** Expressions oql's `DATE_TRUNC` takes as its `date`. */
+const DAY_SOURCES: ReadonlySet<string> = new Set([
+  'NOW',
+  'CURRENT_TIMESTAMP',
+  'CURRENT_TIMESTAMPTZ',
+  'DATE_ADD',
+]);
+
+/** The UTC day of a clock or `DATE_ADD` expression, reduced by the engine
+ * that computes it. `CURRENT_DATE` is written as the day of `NOW`, the
+ * same day in the form a stored day has. Any other expression is returned
+ * as given. */
+function dayOf(expr: ExpressionDefault): ExpressionDefault {
+  const date = expr.$$_expression === 'CURRENT_DATE'
+    ? { $$_expression: 'NOW' }
+    : expr;
+  if (!DAY_SOURCES.has(date.$$_expression)) return expr;
+  return { $$_expression: 'DATE_TRUNC', args: { date, unit: 'DAYS' } };
+}
 
 /** A BIGINT value a driver returned as something else, as `bigint`: a
  * safe `number` (SQLite, Mongo, JSON), a digit string (a `TO_STRING`
@@ -4217,6 +4238,9 @@ export class Repo<
       ? c.postUpdateDefaults
       : c.postInsertDefaults;
     const dayColumns = this._storedDayColumns();
+    // A Mongo insert document cannot evaluate `DATE_TRUNC`.
+    const mongoInsert = op === 'insert' &&
+      this._executor.capabilities.dialect === 'mongo';
     const out: Row[] = [];
     for (let i = 0; i < parsed.length; i++) {
       let row = parsed[i]!;
@@ -4243,6 +4267,7 @@ export class Repo<
       for (const col of dayColumns) {
         const v = row[col];
         if (v instanceof Date) row[col] = utcDay(v);
+        else if (isExpressionValue(v) && !mongoInsert) row[col] = dayOf(v);
       }
       out.push(await this.__encryptRow(row));
     }

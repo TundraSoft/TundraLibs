@@ -1146,6 +1146,55 @@ describe('live SQLite — timestamps', () => {
   });
 });
 
+describe('norm.Repo — an expression on a date() column', () => {
+  const NOW = { $$_expression: 'NOW' } as const;
+  const DAY_OF_NOW = {
+    $$_expression: 'DATE_TRUNC',
+    args: { date: NOW, unit: 'DAYS' },
+  };
+  const Stamps = Entity('stamps', {
+    id: Column.integer(),
+    day: Column.date().default(NOW),
+  }, { pk: ['id'] });
+  const schema = () => use(Schema('DX', { Stamps }));
+  const mock = (dialect: Executor['capabilities']['dialect']) => {
+    const exec = new MockExec();
+    Object.assign(exec.capabilities, { dialect });
+    const runtime = compileRuntime(schema(), {}, exec, () => {});
+    return {
+      repo: new NormDb<ReturnType<typeof schema>>(runtime, exec, undefined)
+        .repo('Stamps'),
+      exec,
+    };
+  };
+  const written = (exec: MockExec, type: string): unknown => {
+    const { data } = exec.lastOf(type) as unknown as { data: Row | Row[] };
+    return (Array.isArray(data) ? data[0]! : data).day;
+  };
+
+  it('is reduced to its day where norm stores the day', async () => {
+    for (const dialect of ['sqlite', 'mongo'] as const) {
+      const { repo, exec } = mock(dialect);
+      await repo.update({ day: NOW } as never, { '@id': 1 });
+      asserts.assertEquals(written(exec, 'UPDATE'), DAY_OF_NOW, dialect);
+      await repo.upsert({ id: 1 }, { conflictKeys: ['id'] });
+      asserts.assertEquals(written(exec, 'UPSERT'), DAY_OF_NOW, dialect);
+    }
+    const { repo, exec } = mock('sqlite');
+    await repo.insert({ id: 1 });
+    asserts.assertEquals(written(exec, 'INSERT'), DAY_OF_NOW);
+  });
+
+  it('is sent as given where the engine or the insert document reduces it', async () => {
+    // A Mongo insert document cannot evaluate DATE_TRUNC.
+    for (const dialect of ['mongo', 'postgres', 'maria'] as const) {
+      const { repo, exec } = mock(dialect);
+      await repo.insert({ id: 1 });
+      asserts.assertEquals(written(exec, 'INSERT'), NOW, dialect);
+    }
+  });
+});
+
 describe('norm.Repo — nullSafe relation keys', () => {
   // `tenant` is NOT NULL on both ends, `code`/`orgCode` nullable on both:
   // only the second pair can ever be NULL-safe.
