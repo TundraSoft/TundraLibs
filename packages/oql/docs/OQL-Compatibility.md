@@ -346,7 +346,7 @@ The table below summarises the per-dialect emission. The general rule:
 | REPLACE               | native                                                                              | native                                                 | native                                                           | native (`$replaceAll`)                                                              |
 | LPAD / RPAD           | native                                                                              | native                                                 | emulated (`printf` + `replace` + `substr`; custom fill honoured) | passthrough                                                                         |
 | NOW / CURRENT_*       | native                                                                              | native                                                 | native (ISO 8601 UTC text via `strftime`)                        | native (`$$NOW`); on INSERT, computed by the translator                             |
-| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native                                                           | native (`$dateAdd`); DATE_DIFF emulated, see [DATE_DIFF units](#date_diff-units)    |
+| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native; DATE_ADD adjusted, see [month end](#date_add-month-end)  | native (`$dateAdd`); DATE_DIFF emulated, see [DATE_DIFF units](#date_diff-units)    |
 | UNIX_TIMESTAMP        | native (`FLOOR(EXTRACT(EPOCH …))::BIGINT`) — the driver decodes it as a JS `bigint` | native (`UNIX_TIMESTAMP()`; milliseconds via `NOW(3)`) | native (`strftime('%s')` / `julianday`, cast to INTEGER)         | native (`$toLong` over `$$NOW`); on INSERT, computed by the translator              |
 | **UUID**              | native (`gen_random_uuid()`)                                                        | native (`UUID()`)                                      | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)                                                 |
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                                     |
@@ -359,6 +359,22 @@ portable: Postgres and SQLite apply the fraction, MariaDB rounds it to the
 nearest whole unit, and MongoDB rejects it when the query runs. Pass whole
 numbers, in a smaller unit if you need the precision (`90` `MINUTES`, not
 `1.5` `HOURS`).
+
+### DATE_ADD month end
+
+Adding `MONTHS` or `YEARS` to a day the target month does not have stops at
+that month's last day, with the time of day kept:
+
+| Date        | Added         | Result                          |
+| ----------- | ------------- | ------------------------------- |
+| 31 January  | `1` `MONTHS`  | 28 February (29 in a leap year) |
+| 31 March    | `-1` `MONTHS` | 28 February (29 in a leap year) |
+| 29 February | `1` `YEARS`   | 28 February                     |
+
+This is what Postgres, MariaDB, and MongoDB do. SQLite on its own carries the
+extra days into the next month (31 January plus one month is 3 March), so OQL
+steps its result back to the month's last day: one query gives the same date
+on every dialect. A fractional amount on SQLite is left as SQLite computes it.
 
 ### DATE_DIFF units
 

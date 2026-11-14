@@ -211,7 +211,19 @@ export class SQLiteTranslator extends AbstractTranslator {
         // takes the sign from the amount, and `+-7 DAYS` is not a
         // modifier at all (the whole call returns NULL).
         const [date, amount, unit] = a;
-        return `strftime(${ISO_8601_UTC}, ${date}, ${amount} || ' ' || ${unit})`;
+        const modifier = `${amount} || ' ' || ${unit}`;
+        // SQLite rolls a day the target month lacks into the next month:
+        // 31 Jan plus one month is 3 Mar, where Postgres, MariaDB and
+        // MongoDB give 28 Feb. The day the roll lands on is how far it
+        // overshot, so stepping back that many days is the target
+        // month's last day. A fractional amount moves the day on purpose,
+        // so only a whole one is stepped back.
+        const landed = `strftime('%d', ${date}, ${modifier})`;
+        return `strftime(${ISO_8601_UTC}, ${date}, ${modifier}, ` +
+          `CASE WHEN ${unit} IN ('MONTHS', 'YEARS') ` +
+          `AND ${amount} = CAST(${amount} AS INTEGER) ` +
+          `AND ${landed} <> strftime('%d', ${date}) ` +
+          `THEN '-' || ${landed} || ' days' ELSE '+0 days' END)`;
       },
     ],
     [

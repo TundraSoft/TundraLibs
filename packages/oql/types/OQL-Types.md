@@ -834,7 +834,9 @@ Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
 (`DATE_DIFF` returns a number and is classified numeric.)
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
-  `date` (negative `amount` subtracts).
+  `date` (negative `amount` subtracts). Months and years stop at the
+  target month's last day on every dialect — see
+  [DATE_ADD month end](../docs/OQL-Compatibility.md#date_add-month-end).
 - `DATE_DIFF` — `args: { from; to; unit }`; complete time units between
   `from` and `to`, the same number on every dialect — see
   [DATE_DIFF units](../docs/OQL-Compatibility.md#date_diff-units).
