@@ -1,8 +1,34 @@
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
-import { readTimeOfDay, toTimeOfDay, utcDay } from './calendar.ts';
+import { asUtc, readTimeOfDay, toTimeOfDay, utcDay } from './calendar.ts';
 
 describe('norm.calendar', () => {
+  it('asUtc: a date-time that names no offset is marked UTC', () => {
+    asserts.assertEquals(asUtc('2026-01-15T10:00:00'), '2026-01-15T10:00:00Z');
+    asserts.assertEquals(asUtc('2026-01-15 10:00:00'), '2026-01-15T10:00:00Z');
+    asserts.assertEquals(asUtc('2026-01-15T10:00'), '2026-01-15T10:00Z');
+    asserts.assertEquals(
+      asUtc('2026-01-15T10:00:00.123456'),
+      '2026-01-15T10:00:00.123Z',
+    );
+  });
+
+  it('asUtc: anything else comes back as it came', () => {
+    const others = [
+      '2026-01-15T10:00:00Z',
+      '2026-01-15T10:00:00+05:30',
+      '2026-01-15T10:00:00-0800',
+      '2026-01-15',
+      'Thu, 15 Jan 2026 10:00:00',
+      '2026-01-15T10:00:001',
+      '',
+      1768471200000,
+      null,
+      new Date(0),
+    ];
+    for (const v of others) asserts.assertStrictEquals(asUtc(v), v, String(v));
+  });
+
   it('utcDay: UTC midnight of the day, before and after the epoch', () => {
     asserts.assertEquals(
       utcDay(new Date('2026-01-15T23:30:00.250Z')).toISOString(),

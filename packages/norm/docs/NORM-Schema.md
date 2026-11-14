@@ -129,6 +129,14 @@ import { Column } from '@tundralibs/norm';
 | `Column.password(algorithm?)`                  | `VARCHAR`      | `string`     | Auth digest: `SHA-*` (deterministic, filterable) or `'PBKDF2'` (salted, verify-based). See [Digest columns](#digest-columns).                                                                                                                                                                 |
 | `Column.mask(source, fn)`                      | _(virtual)_    | `string`     | Computed-on-read [mask](#masked-columns); never stored.                                                                                                                                                                                                                                       |
 
+`date`, `datetime`, `timestamp`, and `timestamptz` are typed `Date`, and
+a write also takes an ISO 8601 string, which is what a JSON payload
+carries. A date-time string that names no offset
+(`'2026-01-15T10:00:00'`, or with a space for the `T`) is read as UTC,
+so it is the same instant on every host; a string that names an offset
+keeps it. Any other format is parsed as the runtime's `Date` parses it.
+Filter values are not converted: filter with a `Date`.
+
 `json`, `boolean`, `blob`, `binary`, `varbinary`, and `bit` are the
 base builder: they carry the [common modifiers](#common-modifiers) and
 `encrypt()`, but none of the value validators, since there is nothing

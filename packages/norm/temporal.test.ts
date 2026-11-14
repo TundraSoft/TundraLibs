@@ -406,6 +406,16 @@ describe('norm temporal — live SQLite', () => {
     });
     asserts.assertEquals(laterV.data[0]!.Fees, 600);
 
+    // A string that names no offset (typed `Date`, but JSON payloads
+    // carry strings) is UTC, whatever the host's zone.
+    const iso = new Date(future.getTime() + 3_600_000).toISOString();
+    const v3 = await repo.insert({
+      Name: 'Platinum',
+      Fees: 650,
+      EffectiveFrom: iso.slice(0, -1) as unknown as Date,
+    });
+    asserts.assertEquals(ms(v3.data[0]!.EffectiveFrom), Date.parse(iso));
+
     // A past EffectiveFrom is rejected — history is immutable.
     const err = await asserts.assertRejects(
       () =>

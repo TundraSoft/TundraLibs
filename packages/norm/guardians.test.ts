@@ -91,6 +91,17 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertThrows(() => g.parse(new Date('2031-01-01T00:00:00Z')));
   });
 
+  it('date: a string that names no offset is read as UTC', () => {
+    // Fails under a non-UTC TZ without the fix.
+    const at = new Date('2025-06-01T10:00:00Z');
+    for (const spec of [Specs.when, Column.timestamp().spec]) {
+      const g = buildCellGuardian(spec);
+      asserts.assertEquals(g.parse('2025-06-01T10:00:00'), at);
+      asserts.assertEquals(g.parse('2025-06-01 10:00:00'), at);
+      asserts.assertEquals(g.parse('2025-06-01T15:30:00+05:30'), at);
+    }
+  });
+
   it('boolean + unrecognised types', () => {
     asserts.assertEquals(buildCellGuardian(Specs.flag).parse(true), true);
     asserts.assertEquals(buildCellGuardian(Specs.flag).parse(false), false);
