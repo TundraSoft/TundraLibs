@@ -1,7 +1,6 @@
 import * as asserts from '@std/asserts';
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { WebServer } from '@tundralibs/compat/webserver';
-import { getFreePort } from '@tundralibs/utils';
 import { CacherEngineError } from '../../errors/mod.ts';
 import { kvHttpBinding } from './kvHttpBinding.ts';
 import { WorkersKVCacher } from './mod.ts';
@@ -110,11 +109,11 @@ describe('cacher.engines.WorkersKVCacher over http', () => {
   let baseURL = '';
 
   beforeAll(async () => {
-    const port = await getFreePort();
     server = new WebServer('kv-rest', {
       mode: 'TCP',
       hostname: '127.0.0.1',
-      port,
+      // OS-assigned: a port picked at random can be one fetch blocks.
+      port: 0,
       handler: async (req: Request) => {
         if (req.headers.get('authorization') !== 'Bearer tok') {
           return cfError(403, 'Authentication error');
@@ -171,7 +170,7 @@ describe('cacher.engines.WorkersKVCacher over http', () => {
       },
     });
     await server.start();
-    baseURL = `http://127.0.0.1:${port}`;
+    baseURL = `http://127.0.0.1:${server.port}`;
   });
   afterAll(async () => {
     await server.stop();
