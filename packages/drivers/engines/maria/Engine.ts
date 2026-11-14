@@ -248,9 +248,14 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
    * HH:MM:SS.mmm`). The session runs in UTC, so a `TIMESTAMP` column stores
    * that instant and a `DATETIME` / `DATE` column its UTC clock or day.
    *
+   * An array is encoded element by element, at any depth: the driver expands
+   * it into a comma-separated list and would write a `Date` left inside it in
+   * the host's time zone.
+   *
    * @throws {EngineError} `OPERATION_FAILED` for an Invalid Date.
    */
   protected override _encodeValue(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map((v) => this._encodeValue(v));
     if (!(value instanceof Date)) return value;
     if (Number.isNaN(value.getTime())) {
       throw new EngineError('OPERATION_FAILED', {

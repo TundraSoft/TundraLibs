@@ -148,6 +148,19 @@ class ProbeMariaEngine extends MariaEngine {
   public wrapError(error: unknown, query: EngineQuery): EngineError {
     return this._wrapDriverError(error, query);
   }
+
+  /** The parameter values `query` hands to the `mariadb` driver. */
+  public async sentParams(query: EngineQuery): Promise<unknown> {
+    let sent: unknown;
+    const client = {
+      query: (_options: unknown, values: unknown) => {
+        sent = values;
+        return Promise.resolve([]);
+      },
+    };
+    await this._execute(this._standardizeQuery(query), client as never);
+    return sent;
+  }
 }
 
 describe('drivers.MariaEngine.error-mapping (no DB)', () => {
@@ -217,6 +230,44 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
       instanceId: 'MARIA::maria-errmap',
     });
     asserts.assertStrictEquals(engine.wrapError(original, q), original);
+  });
+});
+
+describe('drivers.MariaEngine.parameter-encoding (no DB)', () => {
+  const engine = new ProbeMariaEngine('maria-encode', TEST_CONFIG);
+  const at = new Date('2026-01-15T20:00:00.000Z');
+  const clock = '2026-01-15 20:00:00.000';
+
+  it('sends a Date inside an array parameter as its UTC clock, at any depth', async () => {
+    asserts.assertEquals(
+      await engine.sentParams({
+        sql: 'SELECT :at:, :list:, :nested:, :json:',
+        params: {
+          at,
+          list: [at, 7, null],
+          nested: [[at, 'x'], [at]],
+          json: { at },
+        },
+      }),
+      {
+        at: clock,
+        list: [clock, 7, null],
+        nested: [[clock, 'x'], [clock]],
+        json: { at },
+      },
+    );
+  });
+
+  it('rejects an Invalid Date inside an array parameter', async () => {
+    await asserts.assertRejects(
+      () =>
+        engine.sentParams({
+          sql: 'SELECT :list:',
+          params: { list: [at, [new Date('nope')]] },
+        }),
+      EngineError,
+      'Invalid Date',
+    );
   });
 });
 
@@ -575,6 +626,11 @@ describe({
           );
           asserts.assertEquals(r.data[0]!.dt.toISOString(), at.toISOString());
           asserts.assertEquals(r.data[0]!.ts.toISOString(), at.toISOString());
+          const found = await engine.execute<{ id: number }>({
+            sql: `SELECT id FROM ${t} WHERE dt IN (:list:)`,
+            params: { list: [new Date(0), at] },
+          });
+          asserts.assertEquals(found.data, [{ id: 1 }]);
           const edge = await engine.execute<Record<string, unknown>>({
             sql:
               `SELECT CAST(NULL AS DATE) AS none, CAST('0000-00-00' AS DATE) AS zero`,
