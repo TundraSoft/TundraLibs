@@ -1364,7 +1364,9 @@ export class MongoTranslator {
         continue;
       }
       // Literal — a constant condition on the joined collection.
-      conditions.push({ $eq: [foreignField, value] });
+      conditions.push({
+        $eq: [foreignField, this.__expressionLiteral(value)],
+      });
     }
 
     const lookup: Record<string, unknown> = { from };
@@ -1885,8 +1887,8 @@ export class MongoTranslator {
           exprs.push(this.__notNull(
             {
               $and: [
-                { $gte: [lhs, loRef ?? lo] },
-                { $lte: [lhs, hiRef ?? hi] },
+                { $gte: [lhs, loRef ?? this.__expressionLiteral(lo)] },
+                { $lte: [lhs, hiRef ?? this.__expressionLiteral(hi)] },
               ],
             },
             lhs,
@@ -2157,9 +2159,9 @@ export class MongoTranslator {
   /**
    * Resolve an expression/aggregate argument for Mongo: a leading-`@`
    * string column reference becomes a `$field` path, a nested expression
-   * object is translated recursively, and anything else (literals) passes
-   * through unchanged. Shared by {@link __translateExpression} and
-   * {@link __translateAggregate}.
+   * object is translated recursively, and anything else is a literal
+   * (see {@link __expressionLiteral}). Shared by
+   * {@link __translateExpression} and {@link __translateAggregate}.
    */
   private __resolveExpressionRef(v: unknown): unknown {
     if (typeof v === 'string' && v.startsWith('@')) {
@@ -2171,7 +2173,20 @@ export class MongoTranslator {
     ) {
       return this.__translateExpression(v as Expressions);
     }
-    return v;
+    return this.__expressionLiteral(v);
+  }
+
+  /**
+   * A literal operand of an aggregation expression. There a string
+   * starting with `$` is a field path or a variable and an object is an
+   * operator, so those are wrapped in `$literal`; every other value
+   * already reads as itself and is emitted as is.
+   */
+  private __expressionLiteral(v: unknown): unknown {
+    const ambiguous = typeof v === 'string'
+      ? v.startsWith('$')
+      : typeof v === 'object' && v !== null && !(v instanceof Date);
+    return ambiguous ? { $literal: v } : v;
   }
 
   /**

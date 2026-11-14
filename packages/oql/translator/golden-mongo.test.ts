@@ -913,6 +913,207 @@ const CASES: Case[] = [
     },
   },
   {
+    // Unwrapped, `'$secret'` reads the row's `secret` field and `'$$ROOT'`
+    // the whole document; the SQL dialects bind both as text.
+    name: 'SELECT expression argument starting with $ stays a literal',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'label'],
+      expressions: {
+        shown: { $$_expression: 'COALESCE', args: ['@label', '$secret'] },
+        tier: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { '@label': { $in: ['$0.00', 'free'] } },
+              then: '$$ROOT',
+            }],
+            else: '$label',
+          },
+        },
+      },
+      projection: { '@shown': 'shown', '@tier': 'tier' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              shown: { $ifNull: ['$label', { $literal: '$secret' }] },
+              tier: {
+                $switch: {
+                  branches: [{
+                    case: {
+                      $in: ['$label', [{ $literal: '$0.00' }, 'free']],
+                    },
+                    then: { $literal: '$$ROOT' },
+                  }],
+                  default: { $literal: '$label' },
+                },
+              },
+            },
+          },
+          { $project: { shown: '$shown', tier: '$tier', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // An object argument is data as well: bare, MongoDB would evaluate
+    // its `'$'` as a field path.
+    name: 'WHERE Expression operand keeps $ and object arguments literal',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'label', 'meta'],
+      projection: { '@id': true },
+      where: {
+        '@label': {
+          $eq: { $$_expression: 'CONCAT', args: ['$0', '.00'] },
+        },
+        '@meta': {
+          $ne: { $$_expression: 'COALESCE', args: ['@meta', { unit: '$' }] },
+        },
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $and: [
+              {
+                $and: [
+                  {
+                    $eq: ['$label', { $concat: [{ $literal: '$0' }, '.00'] }],
+                  },
+                  { $gt: ['$label', null] },
+                  { $gt: [{ $concat: [{ $literal: '$0' }, '.00'] }, null] },
+                ],
+              },
+              {
+                $and: [
+                  {
+                    $ne: ['$meta', {
+                      $ifNull: ['$meta', { $literal: { unit: '$' } }],
+                    }],
+                  },
+                  { $gt: ['$meta', null] },
+                  {
+                    $gt: [
+                      { $ifNull: ['$meta', { $literal: { unit: '$' } }] },
+                      null,
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    name: 'WHERE $between beside a @col bound keeps a $ bound literal',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'label', 'cap'],
+      projection: { '@id': true },
+      where: { '@label': { $between: ['$', '@cap'] } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $and: [
+              {
+                $and: [{ $gte: ['$label', { $literal: '$' }] }, {
+                  $lte: ['$label', '$cap'],
+                }],
+              },
+              { $gt: ['$label', null] },
+              { $gt: ['$cap', null] },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Inside the sub-pipeline a bare `'$vip'` is the joined document's
+    // `vip` field, not the text.
+    name: 'SELECT with a constant JOIN condition starting with $',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'userId'],
+      joins: {
+        U: {
+          table: 'users',
+          columns: ['id', 'tag', 'name'],
+          type: 'LEFT',
+          on: { '@U.@tag': '$vip' },
+        },
+      },
+      projection: { '@id': true, '@U.@name': 'userName' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'users',
+              pipeline: [
+                { $match: { $expr: { $eq: ['$tag', { $literal: '$vip' }] } } },
+              ],
+              as: 'U',
+            },
+          },
+          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    name: 'UPDATE expression argument starting with $ stays a literal',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'label'],
+      data: {
+        label: { $$_expression: 'COALESCE', args: ['@label', '$none'] },
+      },
+      where: { '@id': 1 },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: { id: 1 },
+        data: [{
+          $set: { label: { $ifNull: ['$label', { $literal: '$none' }] } },
+        }],
+        options: { multiple: true },
+      },
+    },
+  },
+  {
     // A pattern operator has no aggregation-expression equivalent here.
     name: 'CASE with a $like condition throws',
     method: 'select',
