@@ -46,10 +46,6 @@ are to be closed, not deferred features.
   `NOT LIKE` skips a NULL; the MongoDB translation keeps the document.
   The other negated comparisons already follow the SQL rule, see
   [NULL in a filter](docs/OQL-Compatibility.md#null-in-a-filter).
-- **MongoDB `CASE` `when` conditions are not null-guarded.** A comparison
-  inside `when` treats null and missing as ordinary low values, so
-  `when: { '@a': { $lt: 6 } }` takes the branch for a null `a`, where
-  SQL moves on to the next branch.
 
 ## Architecture decisions worth remembering
 

@@ -501,11 +501,12 @@ So `{ '@status': { $ne: 'BANNED' } }` skips a document with no `status`.
 To include it, ask for it:
 `{ $or: [{ '@status': { $ne: 'BANNED' } }, { '@status': null }] }`.
 
-Two places on MongoDB do not follow the rule yet. `$nlike` / `$nilike`
+A `CASE` `when` condition follows the same rule:
+`when: { '@a': { $lt: 6 } }` does not take the branch for a null or
+missing `a`.
+
+One place on MongoDB does not follow the rule yet. `$nlike` / `$nilike`
 still match a null or missing field, where SQL's `NOT LIKE` does not.
-And a `CASE` `when` condition compares null and missing as ordinary
-low values, so `when: { '@a': { $lt: 6 } }` takes the branch for a
-null `a`.
 
 ## JOINs
 

@@ -2164,7 +2164,8 @@ export class MongoTranslator {
    * aggregation boolean expression, which `$switch` needs in place of a
    * find filter. Covers `$and` / `$or` and the comparison, `$in` /
    * `$nin`, `$between` and `$null` operators; pattern operators and
-   * `$exists` subqueries throw.
+   * `$exists` subqueries throw. A condition is true exactly where SQL's
+   * is: each comparison is false on a null or missing input.
    *
    * @throws {DialectUnsupportedError} For an operator outside that set.
    */
@@ -2188,7 +2189,11 @@ export class MongoTranslator {
       const isOps = typeof value === 'object' && value !== null &&
         !(value instanceof Date) && !Array.isArray(value) &&
         !('$$_expression' in value);
-      const ops = isOps ? value as Record<string, unknown> : { $eq: value };
+      const ops = isOps
+        ? value as Record<string, unknown>
+        : value === null
+        ? { $null: true }
+        : { $eq: value };
       for (const [op, operand] of Object.entries(ops)) {
         parts.push(this.__conditionToExpr(field, op, operand));
       }
@@ -2202,22 +2207,44 @@ export class MongoTranslator {
     op: string,
     operand: unknown,
   ): unknown {
-    const r = (v: unknown): unknown => this.__resolveExpressionRef(v);
+    // Guarded against null: the field, and each operand that is a column
+    // or an expression. A literal operand is never null.
+    const guards = [field];
+    const r = (v: unknown): unknown => {
+      const resolved = this.__resolveExpressionRef(v);
+      if (
+        (typeof v === 'string' && v.startsWith('@')) ||
+        this.__isExpressionNode(v)
+      ) guards.push(resolved);
+      return resolved;
+    };
     switch (op) {
       case '$eq':
       case '$ne':
       case '$gt':
       case '$gte':
       case '$lt':
-      case '$lte':
-        return { [op]: [field, r(operand)] };
+      case '$lte': {
+        const comparison = { [op]: [field, r(operand)] };
+        return this.__notNull(comparison, ...guards);
+      }
       case '$in':
-        return { $in: [field, (operand as unknown[]).map(r)] };
-      case '$nin':
-        return { $not: [{ $in: [field, (operand as unknown[]).map(r)] }] };
+        // One equal element makes IN true whatever the others are, so
+        // only the field is guarded.
+        return this.__notNull(
+          { $in: [field, (operand as unknown[]).map(r)] },
+          field,
+        );
+      case '$nin': {
+        const list = (operand as unknown[]).map(r);
+        return this.__notNull({ $not: [{ $in: [field, list] }] }, ...guards);
+      }
       case '$between': {
-        const [lo, hi] = operand as [unknown, unknown];
-        return { $and: [{ $gte: [field, r(lo)] }, { $lte: [field, r(hi)] }] };
+        const [lo, hi] = (operand as [unknown, unknown]).map(r);
+        return this.__notNull(
+          { $and: [{ $gte: [field, lo] }, { $lte: [field, hi] }] },
+          ...guards,
+        );
       }
       case '$null': {
         const isNull = { $in: [{ $type: field }, ['null', 'missing']] };
