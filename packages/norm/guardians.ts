@@ -27,7 +27,7 @@
 import {
   type BigIntGuardian,
   type BooleanGuardian,
-  type DateGuardian,
+  DateGuardian,
   EnumGuardian,
   type FinishedGuardian,
   Guardian,
@@ -36,7 +36,7 @@ import {
   type ObjectGuardian,
   StringGuardian,
 } from '@tundralibs/guardian';
-import { toTimeOfDay } from './calendar.ts';
+import { asUtc, toTimeOfDay } from './calendar.ts';
 import type { ColumnSpec } from './definition/mod.ts';
 import { isExpressionValue } from './definition/Column.ts';
 import { NormValidationError, type ValidationIssue } from './errors/mod.ts';
@@ -121,7 +121,11 @@ function buildBase(spec: ColumnSpec) {
   }
 
   if (DATE_TYPES.has(type)) {
-    return (spec.guard as DateGuardian | undefined) ?? Guardian.date();
+    // An offset-less date-time string is marked UTC before the guard
+    // parses it.
+    const guard = (spec.guard as DateGuardian | undefined) ?? Guardian.date();
+    return Guardian.unknown()
+      .process((v) => guard.parse(asUtc(v)), DateGuardian);
   }
 
   if (type === 'TIME') {

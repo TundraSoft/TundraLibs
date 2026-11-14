@@ -56,7 +56,7 @@ import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
-import { readTimeOfDay, utcDay } from './calendar.ts';
+import { asUtc, readTimeOfDay, utcDay } from './calendar.ts';
 import type { ObjectGuardian } from '@tundralibs/guardian';
 import {
   canonicalizePlain,
@@ -103,11 +103,6 @@ const TEMPORAL_SKEW_MS = 1000;
 const SQLITE_ZONELESS_DATETIME =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
-/** A zone-less datetime — SQLite's `datetime()`, or a Postgres
- * `timestamp` / MariaDB `DATETIME` rendered into relation JSON. */
-const ZONELESS_DATETIME =
-  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(\.\d{1,3})?\d*$/;
-
 /** A BIGINT value a driver returned as something else, as `bigint`: a
  * safe `number` (SQLite, Mongo, JSON), a digit string (a `TO_STRING`
  * relation value), or a BSON `Long` (Mongo past 2^53). */
@@ -133,9 +128,7 @@ function toBoolean(v: unknown): unknown {
  * one is read as UTC: every engine renders it in UTC (the MariaDB
  * driver runs its session in UTC). */
 function jsonDate(v: unknown): unknown {
-  if (typeof v !== 'string') return v;
-  const m = ZONELESS_DATETIME.exec(v);
-  return new Date(m ? `${m[1]}T${m[2]}${m[3] ?? ''}Z` : v);
+  return typeof v === 'string' ? new Date(asUtc(v) as string) : v;
 }
 
 /** A JSON column's stored TEXT, parsed; anything else as it came. */
@@ -3075,7 +3068,7 @@ export class Repo<
     }
     const d = supplied instanceof Date
       ? supplied
-      : new Date(supplied as string);
+      : new Date(asUtc(supplied) as string);
     if (Number.isNaN(d.getTime())) {
       throw new NormQueryError(
         `${this._compiled.key}.insert(): '${t.from}' is not a valid date.`,

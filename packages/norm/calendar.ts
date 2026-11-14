@@ -18,6 +18,21 @@ const TIME_OF_DAY =
  * time-of-day strings. */
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T/;
 
+/** A date, then `T` or a space, then `HH:MM[:SS[.f]]`, and no offset. */
+const ZONELESS_DATETIME =
+  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)(?:(\.\d{1,3})\d*)?$/;
+
+/**
+ * A date-time string that names no offset, marked as UTC; anything else
+ * as it came. Left unmarked, `new Date()` reads it in the host's zone,
+ * so the same string would be a different instant on another host.
+ */
+export function asUtc(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  const m = ZONELESS_DATETIME.exec(v);
+  return m === null ? v : `${m[1]}T${m[2]}${m[3] ?? ''}Z`;
+}
+
 /** UTC midnight of the day `d` falls on. */
 export function utcDay(d: Date): Date {
   const ms = d.getTime();
