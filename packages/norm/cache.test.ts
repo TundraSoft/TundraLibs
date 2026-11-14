@@ -315,6 +315,39 @@ describe('norm read cache', () => {
       asserts.assertEquals(exec.selects(), 2, 'repeat of first filter → hit');
     });
 
+    // Each pair is one text to JSON and two answers to a database:
+    // MongoDB matches a Date but not its ISO string, and no engine
+    // matches NaN against NULL.
+    const AT = '2026-01-15T10:00:00.000Z';
+    const JSON_TWINS: Array<[string, unknown, unknown]> = [
+      ['a Date and its ISO string', { '@at': new Date(AT) }, { '@at': AT }],
+      ['a Date inside $in and its ISO string', {
+        '@at': { $in: [new Date(AT)] },
+      }, { '@at': { $in: [AT] } }],
+      ['NaN and null', { '@value': NaN }, { '@value': null }],
+      ['a bigint and a string spelling its tag', { '@label': 5n }, {
+        '@label': '$$normEnc:bigint:5',
+      }],
+    ];
+    for (const [pair, first, second] of JSON_TWINS) {
+      it(`caches ${pair} separately`, async () => {
+        const Readings = Entity('readings', {
+          id: Column.integer(),
+          at: Column.timestamp().nullable(),
+          value: Column.double().nullable(),
+          label: Column.varchar(40).nullable(),
+        }, { pk: ['id'], cache: 5 });
+        const { db, exec } = setup({ Readings }, { engine: 'MEMORY' });
+        const readings = db.repo('Readings');
+        exec.selectRows = [{ id: 1 }];
+        await readings.find(first as never);
+        exec.selectRows = [];
+        const other = await readings.find(second as never);
+        asserts.assertEquals(exec.selects(), 2);
+        asserts.assertEquals(other.data, []);
+      });
+    }
+
     it('caches a single-table aggregate (no join)', async () => {
       const Sales = Entity('sales', {
         id: Column.integer(),

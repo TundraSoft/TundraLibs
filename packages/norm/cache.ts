@@ -168,16 +168,28 @@ function decodeFields(obj: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-/** Stable-ish JSON of a query IR for hashing. `bigint` filter values
- * (e.g. a bigint pk) would make `JSON.stringify` throw, so tag them;
- * the IR's own keys are inserted in a fixed order by the read path, so
- * two identical calls hash identically (logically-equal filters written
- * with a different key order are a benign cache miss). */
+/** Stable-ish JSON of a query IR for hashing. Filter values that plain
+ * JSON cannot keep apart are tagged: a `bigint` (e.g. a bigint pk) would
+ * throw, a `Date` would become its ISO string, and `NaN` / `±Infinity`
+ * would become `null`, each of which the database answers differently.
+ * A string that starts with the tag is tagged as well, so it cannot pose
+ * as one of those. The IR's own keys are inserted in a fixed order by
+ * the read path, so two identical calls hash identically (logically-equal
+ * filters written with a different key order are a benign cache miss). */
 function stringifyQuery(q: unknown): string {
-  return JSON.stringify(
-    q,
-    (_k, v) => (typeof v === 'bigint' ? `${TAG}:bigint:${v.toString()}` : v),
-  );
+  return JSON.stringify(q, function (this: unknown, k: string, v: unknown) {
+    // `toJSON` has already run on `v`; the holder still has the Date.
+    const raw = (this as Record<string, unknown>)[k];
+    if (typeof raw === 'bigint') return `${TAG}:bigint:${raw}`;
+    if (raw instanceof Date) return `${TAG}:date:${v}`;
+    if (typeof raw === 'number' && !Number.isFinite(raw)) {
+      return `${TAG}:number:${raw}`;
+    }
+    if (typeof raw === 'string' && raw.startsWith(TAG)) {
+      return `${TAG}:string:${raw}`;
+    }
+    return v;
+  });
 }
 
 /**
