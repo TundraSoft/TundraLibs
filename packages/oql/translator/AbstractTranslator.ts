@@ -107,6 +107,16 @@ type FilterContext = {
  */
 const LIKE_ESCAPE_CHAR = '\\';
 
+/** The units `DATE_ADD` / `DATE_DIFF` take, in the order errors list them. */
+const TIME_UNITS: readonly unknown[] = [
+  'DAYS',
+  'HOURS',
+  'MINUTES',
+  'SECONDS',
+  'MONTHS',
+  'YEARS',
+];
+
 /** LIKE wildcards (plus the escape char itself) that must be escaped. */
 const LIKE_WILDCARDS = /[\\%_]/g;
 
@@ -782,8 +792,19 @@ export abstract class AbstractTranslator {
    * Render the `unit` of `DATE_ADD` / `DATE_DIFF`. Bound like any other
    * argument by default; MariaDB overrides, because its unit is a
    * keyword and a keyword cannot be bound.
+   *
+   * @throws {OqlError} `INVALID_TIME_UNIT` when the unit isn't a
+   *   recognised OQL time unit.
    */
   protected _timeUnitArg(unit: unknown, bind: (v: unknown) => string): string {
+    if (!TIME_UNITS.includes(unit)) {
+      throw new OqlError(
+        `Unknown time unit '${String(unit)}' — expected one of ${
+          TIME_UNITS.join(', ')
+        }`,
+        { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+      );
+    }
     return bind(unit);
   }
 

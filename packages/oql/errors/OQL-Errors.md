@@ -326,27 +326,17 @@ view should say — usually a `NULL` or a sentinel you write yourself.
 
 ### `INVALID_TIME_UNIT`
 
-A date expression carried a `unit` outside its allowed set. Two cases raise
-it:
+A date expression carried a `unit` outside its allowed set. Every dialect
+checks the unit at translation time, so nothing reaches the database:
 
-- `DATE_TRUNC`, on **every dialect**, when `unit` is not `DAYS`, `MONTHS` or
-  `YEARS`. The unit selects the SQL that is emitted, so it is checked at
-  translation time.
-- `DATE_ADD` / `DATE_DIFF`, on **MongoDB and MariaDB only**, when `unit` is
-  not one of OQL's time units (`DAYS`, `HOURS`, `MINUTES`, `SECONDS`,
-  `MONTHS`, `YEARS`).
+- `DATE_TRUNC` takes `DAYS`, `MONTHS` or `YEARS`.
+- `DATE_ADD` / `DATE_DIFF` take OQL's time units (`DAYS`, `HOURS`,
+  `MINUTES`, `SECONDS`, `MONTHS`, `YEARS`).
 
-For `DATE_ADD` / `DATE_DIFF` both translators map the unit at translation
-time — Mongo to its own unit name, MariaDB to the keyword `TIMESTAMPADD` /
-`TIMESTAMPDIFF` take — so an unrecognised one is caught here rather than
-failing in the database. Postgres and SQLite bind the unit as a parameter
-instead, and the database evaluates it at execution: an unrecognised unit
-yields `NULL` or a database error rather than this code. Do not treat the
-absence of this error on Postgres or SQLite as proof the unit was valid.
-
-**Triggered by** a hand-built or cast expression node; the date asserts and
-the unit types both reject unknown units. **Fix:** use a unit from the
-expression's allowed set.
+**Triggered by** a hand-built or cast expression node used as a filter
+operand, which the query asserts do not check. Under `expressions` the same
+node fails the asserts first, with a `TypeError`. **Fix:** use a unit from
+the expression's allowed set.
 
 **Extra context:** `dialect`, `unit`.
 
