@@ -115,7 +115,7 @@ const query: Query<'SELECT', User> = {
 };
 
 // Validate query structure at runtime
-assertSelect(query); // Throws TypeError if invalid
+assertSelect(query); // Throws if invalid
 
 // Translate to SQL
 const translator = new PostgresTranslator();
@@ -630,6 +630,10 @@ operator-to-column-type gating (`$like` only on strings, `$gt` only on
 numeric/date) is a **TypeScript-only** guarantee. `assertQuery` does
 **not** re-check it at runtime — see the note under
 [Operators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#operators).
+
+A validator throws `TypeError`. The one exception is a date expression
+with a `unit` outside its allowed set: that throws `OqlError` with code
+`INVALID_TIME_UNIT`, the same error a translator throws for it.
 
 ```typescript
 import type { Query } from '@tundralibs/oql';

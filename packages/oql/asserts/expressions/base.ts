@@ -4,6 +4,7 @@
  * @module asserts/Expressions/Base
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import type { Expressions, TimeUnit } from '../../types/mod.ts';
 
 /**
@@ -64,7 +65,13 @@ const VALID_TIME_UNITS: readonly TimeUnit[] = [
   'SECONDS',
 ] as const;
 
-/** Asserts that a value is a valid {@link TimeUnit}. */
+/**
+ * Asserts that a value is a valid {@link TimeUnit}.
+ *
+ * @throws {OqlError} `INVALID_TIME_UNIT` when it is not, the code the
+ *   translators raise for the same unit in a filter operand. The
+ *   validator has no dialect, so `context` carries `unit` only.
+ */
 export const validateTimeUnits: (x: unknown) => asserts x is TimeUnit = (
   x: unknown,
 ): asserts x is TimeUnit => {
@@ -73,10 +80,11 @@ export const validateTimeUnits: (x: unknown) => asserts x is TimeUnit = (
     !VALID_TIME_UNITS.includes(x as TimeUnit)
   ) {
     const got = typeof x === 'string' ? `'${x}'` : typeof x;
-    throw new TypeError(
+    throw new OqlError(
       `Invalid time unit: Expected one of ${
         VALID_TIME_UNITS.join(', ')
       }, got ${got}`,
+      { code: 'INVALID_TIME_UNIT', unit: x },
     );
   }
 };

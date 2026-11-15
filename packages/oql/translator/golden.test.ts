@@ -572,6 +572,67 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT COALESCE, NULLIF and CASE as numeric operands',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'age', 'score'],
+      expressions: {
+        total: {
+          $$_expression: 'ADD',
+          args: ['@score', { $$_expression: 'COALESCE', args: ['@age', 0] }],
+        },
+        gap: {
+          $$_expression: 'SUBTRACT',
+          args: ['@score', { $$_expression: 'NULLIF', args: ['@age', 0] }],
+        },
+        scaled: {
+          $$_expression: 'MULTIPLY',
+          args: ['@score', {
+            $$_expression: 'CASE',
+            args: {
+              cases: [{ when: { '@age': { $gte: 18 } }, then: 2 }],
+              else: 1,
+            },
+          }],
+        },
+        ratio: {
+          $$_expression: 'DIVIDE',
+          args: ['@score', { $$_expression: 'NULLIF', args: ['@age', 0] }],
+        },
+        size: {
+          $$_expression: 'ABS',
+          args: [{ $$_expression: 'COALESCE', args: ['@score', '@age'] }],
+        },
+      },
+      projection: {
+        '@total': 'total',
+        '@gap': 'gap',
+        '@scaled': 'scaled',
+        '@ratio': 'ratio',
+        '@size': 'size',
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+      },
+      postgres: {
+        sql:
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+      },
+      maria: {
+        sql:
+          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (`score` / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
+        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+      },
+    },
+  },
+  {
     // Decision: OQL `SUBSTR` `start` is 1-based on every dialect. The SQL
     // dialects are natively 1-based, so `start: 1` passes straight through
     // and selects from the first character. (The Mongo golden pins the

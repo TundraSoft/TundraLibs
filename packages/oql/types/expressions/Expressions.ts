@@ -2,6 +2,7 @@ import type { FlattenEntity } from '@tundralibs/utils';
 import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
 import type { QueryFilter } from '../filter/QueryFilter.ts';
+import type { ConditionalExpressions } from './ConditionalExpressions.ts';
 import type { NumericExpressions } from './NumericExpressions.ts';
 import type { DateTruncUnit } from './DateTruncUnit.ts';
 import type { TimeUnit } from './TimeUnit.ts';
@@ -18,11 +19,14 @@ import type { TimeUnit } from './TimeUnit.ts';
  * args to a depth of 10 — so the nested member only brings the type
  * in line with the behaviour on both sides of it.
  *
- * Restricted to {@link NumericExpressions} rather than the whole
+ * Restricted to {@link NumericExpressions} and
+ * {@link ConditionalExpressions} rather than the whole
  * {@link Expressions} union: that is exactly the set the runtime
  * validator accepts in a numeric position, so a string expression
  * such as `CONCAT` stays rejected at compile time instead of
- * throwing at assert time.
+ * throwing at assert time. A conditional's result type is not
+ * checked: `COALESCE` over string columns compiles and is left to
+ * the database.
  *
  * @template T  - Table schema type.
  * @template FT - Flattened table type with `'@'` prefix for column
@@ -37,7 +41,10 @@ type NumericExpressionArg<
   | GetColumnByType<FT, number | bigint>
   | number
   | bigint
-  | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
+  | Extract<
+    Expressions<T, FT>,
+    { $$_expression: NumericExpressions | ConditionalExpressions }
+  >;
 
 /**
  * An argument to a conditional expression (`COALESCE`, `NULLIF`,

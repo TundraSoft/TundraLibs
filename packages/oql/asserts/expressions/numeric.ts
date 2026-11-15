@@ -19,18 +19,20 @@
  * @module asserts/Expressions/Numeric
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import type { Expressions, NumericExpressions } from '../../types/mod.ts';
 import { isColumnIdentifier } from '../columnIdentifier.ts';
 import { assertBaseExpression, validateTimeUnits } from './base.ts';
+import { assertExpression, CONDITIONAL_TYPES } from './expression.ts';
 
 /**
  * One unified arg validator for numeric / string / date contexts. Each
  * `kind` defines what literal types are accepted; column references
  * (`@col`) are always allowed.
  *
- * - `numeric`: number, bigint, column ref, or nested numeric expression
- *              (recurses to `assertNumericExpression`). Used by ADD, SUB,
- *              MUL, DIV, MOD, ABS, CEIL, FLOOR, ROUND, POWER, SQRT.
+ * - `numeric`: number, bigint, column ref, or a nested numeric or
+ *              conditional expression. Used by ADD, SUB, MUL, DIV, MOD,
+ *              ABS, CEIL, FLOOR, ROUND, POWER, SQRT.
  * - `string`:  any string (literal or column ref). Used by LENGTH.
  * - `date`:    Date instance or column ref. Used by DATE_DIFF.
  *
@@ -78,13 +80,19 @@ const validateExprArg = (
     }
     return;
   }
-  // numeric: literal number / bigint / nested numeric expression.
+  // numeric: literal number / bigint / nested numeric expression, or a
+  // conditional one, whose result type is only known to the database.
   if (typeof arg === 'number' || typeof arg === 'bigint') return;
   if (typeof arg === 'object' && arg !== null && '$$_expression' in arg) {
     try {
-      assertNumericExpression(arg, columnList, depth + 1, maxDepth);
+      if (CONDITIONAL_TYPES.has(arg.$$_expression as string)) {
+        assertExpression(arg, columnList, depth + 1, maxDepth);
+      } else {
+        assertNumericExpression(arg, columnList, depth + 1, maxDepth);
+      }
       return;
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid Expression definition: ${argName} contains invalid ` +
           `nested expression in ${expressionType} - ${
@@ -1041,7 +1049,7 @@ export const isLengthExpression: (
  * @throws {TypeError} If the expression structure is invalid
  * @throws {TypeError} If required properties are missing
  * @throws {TypeError} If date arguments are invalid
- * @throws {TypeError} If unit is not a valid TimeUnit
+ * @throws {OqlError} `INVALID_TIME_UNIT` if unit is not a valid TimeUnit
  *
  * @example
  * ```ts

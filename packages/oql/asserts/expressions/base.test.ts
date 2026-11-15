@@ -1,5 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { OqlError } from '../../errors/mod.ts';
 import {
   assertBaseExpression,
   isBaseExpression,
@@ -155,13 +156,13 @@ describe('oql.asserts.Expressions.Base', () => {
 
       asserts.assertThrows(
         () => validateTimeUnits('days'),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits('Days'),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
     });
@@ -169,25 +170,25 @@ describe('oql.asserts.Expressions.Base', () => {
     it('invalid: wrong string', () => {
       asserts.assertThrows(
         () => validateTimeUnits('INVALID'),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits('days'),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits('Day'),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits('WEEK'),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
     });
@@ -195,25 +196,25 @@ describe('oql.asserts.Expressions.Base', () => {
     it('invalid: not a string', () => {
       asserts.assertThrows(
         () => validateTimeUnits(123),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits(null),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits(undefined),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
 
       asserts.assertThrows(
         () => validateTimeUnits({ unit: 'DAYS' }),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
     });
@@ -221,7 +222,7 @@ describe('oql.asserts.Expressions.Base', () => {
     it('invalid: empty string', () => {
       asserts.assertThrows(
         () => validateTimeUnits(''),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
     });
@@ -298,7 +299,7 @@ describe('oql.asserts.Expressions.Base', () => {
       assertBaseExpression(invalidExpression, 'DATE_ADD');
       asserts.assertThrows(
         () => validateTimeUnits(invalidExpression.args.unit),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
     });

@@ -25,7 +25,7 @@ Runtime validators for OQL queries.
 
 The asserts module provides runtime validation for OQL queries. All validators follow the Guardian pattern with two variants:
 
-- **Assert functions** - Throw `TypeError` on validation failure
+- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it
 - **Type guard functions** - Return `boolean` without throwing
 
 This ensures queries are structurally valid before translation and execution.
@@ -584,7 +584,7 @@ Signature: `assertFilterOperator(x, columnList?)` / `isFilterOperator(x, columnL
 
 - Value is a non-empty object (not an array)
 - Each key is a valid column identifier (and, if `columnList` is provided, exists in it)
-- Each value is valid Operators (a direct value, an array, or an operator object). An invalid value throws `Invalid FilterOperator: Value for '<key>' must be valid Operators (direct value, array, or operator object)`
+- Each value is valid Operators (a direct value, an array, or an operator object). An invalid value throws `Invalid FilterOperator: Value for '<key>' must be valid Operators - <reason>`, where the reason is the message of the Operators check that failed
 
 ### Operators
 
@@ -779,6 +779,8 @@ Signature: `assertExpressions(x, columnList?, depth?, maxDepth?)` / `isExpressio
 
 - Value is a valid base expression with a recognized `$$_expression` type
 - Delegates the category-specific shape (numeric / string / date) to the matching validator
+- A numeric operand may be a nested numeric expression or a nested `COALESCE`, `NULLIF` or `CASE`. String and date expressions do not take nested conditionals
+- A `unit` outside the expression's allowed set throws `OqlError` with code `INVALID_TIME_UNIT`. It applies to `DATE_ADD`, `DATE_DIFF`, `DATE_TRUNC` and `UNIX_TIMESTAMP`
 - An unrecognized type throws `Invalid Expression type: Unknown expression type '<type>'`
 - Nesting beyond `maxDepth` throws to guard against runaway recursion
 
@@ -871,6 +873,7 @@ function handleQuery(query: unknown) {
 
 ```typescript
 import { assertSelect } from '@tundralibs/oql/asserts';
+import { OqlError } from '@tundralibs/oql/errors';
 
 declare function executeQuery(query: unknown): unknown;
 
@@ -880,8 +883,8 @@ function validateAndExecute(query: unknown) {
     // Query is valid, proceed
     return executeQuery(query);
   } catch (error) {
-    if (error instanceof TypeError) {
-      // Validation error
+    if (error instanceof TypeError || error instanceof OqlError) {
+      // Validation error. OqlError here means a bad time unit.
       console.error('Query validation failed:', error.message);
       return { error: error.message };
     }
@@ -955,8 +958,8 @@ assertSelect({
 // Invalid operator
 assertQueryFilter({ '@age': { $invalid: 18 } }, ['age']);
 // TypeError: Invalid QueryFilter: Filter properties are invalid - Invalid
-// FilterOperator: Value for '@age' must be valid Operators (direct value,
-// array, or operator object)
+// FilterOperator: Value for '@age' must be valid Operators - Invalid
+// Operators: Unknown operator '$invalid'. Valid operators are: $eq, $ne, ...
 ```
 
 ## Performance
