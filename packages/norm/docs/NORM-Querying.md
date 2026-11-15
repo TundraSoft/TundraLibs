@@ -512,6 +512,13 @@ Only key pairs nullable on both sides can match NULL to NULL. A blanket
 `true` in the per-alias form raises `INVALID_PROJECTION`, and an alias
 that is not a relation of the entity raises `UNKNOWN_RELATION`.
 
+oql spells the same switch as a list of key names on a join or an
+`$exists`; see
+[NULL in a join condition](../../oql/docs/OQL-Compatibility.md#null-in-a-join-condition).
+norm writes that list from the FK's setting and this option, so the
+list form appears in norm only inside a
+[hand-written `$exists`](#hand-written-exists--nexists-advanced).
+
 ### Many-to-many through a junction VIEW
 
 Model a many-to-many as a `VIEW` that joins the junction to the far

@@ -117,6 +117,7 @@ explicit, and adds three fluent hooks:
 
 ```ts ignore
 // The current version — filter the open end:
+const sentinel = new Date('2099-12-31T23:59:59.999Z'); // the default
 await repo.find({ '@Name': 'Gold', '@EffectiveTo': sentinel });
 
 // The version in force at an instant — the virtual @AsOf column rewrites
@@ -144,6 +145,11 @@ temporal: {
   sentinel: '2099-12-31T23:59:59.999Z', // optional — the open-end marker
 }
 ```
+
+Give `sentinel` an offset, as the default has. A string without one is
+read in the host's time zone, so hosts in different zones store
+different open-end instants. Off UTC, the same string passed as a
+filter value matches no row, because a filter reads it as UTC.
 
 ## Cross-engine notes
 
@@ -194,6 +200,8 @@ temporal: {
   diffed like any other.
 - [Schema definition](NORM-Schema.md): columns, entities, and the
   `temporal` option in context.
+- [Dates and time zones](NORM-Dates.md): how the period columns and
+  every other date are stored.
 
 ---
 

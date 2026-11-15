@@ -707,6 +707,8 @@ where each dialect runs.
   relations, hooks, validators.
 - [Querying](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Querying): filters, projections, relations,
   aggregates, pagination.
+- [Dates and time zones](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Dates): how each date and
+  time column is stored, and the UTC database session rule.
 - [Read caching](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Caching): per-entity TTLs, per-table
   invalidation, engines, and backend-failure behavior.
 - [Temporal tables](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Temporal): effective-dated version

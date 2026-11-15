@@ -119,9 +119,9 @@ import { Column } from '@tundralibs/norm';
 | `Column.boolean()`                             | `BOOLEAN`      | `boolean`    | No numeric/string validators.                                                                                                                                                                                                                                                                 |
 | `Column.date()`                                | `DATE`         | `Date`       | A calendar day, read back as a `Date` at UTC midnight. SQLite and Mongo store the UTC day of the value written.                                                                                                                                                                               |
 | `Column.time()`                                | `TIME`         | `string`     | `'HH:MM:SS'`, fraction only when non-zero. Writes take `'HH:MM'` or `'HH:MM:SS[.ffffff]'`.                                                                                                                                                                                                    |
-| `Column.datetime()`                            | `DATETIME`     | `Date`       | For engines that distinguish it from `TIMESTAMP` (MariaDB).                                                                                                                                                                                                                                   |
-| `Column.timestamp()`                           | `TIMESTAMP`    | `Date`       | Wall-clock, no zone.                                                                                                                                                                                                                                                                          |
-| `Column.timestamptz()`                         | `TIMESTAMPTZ`  | `Date`       | Timestamp with time zone: `TIMESTAMPTZ` on Postgres, tz-aware `TIMESTAMP` on MariaDB, ISO-with-offset `TEXT` on SQLite.                                                                                                                                                                       |
+| `Column.datetime()`                            | `DATETIME`     | `Date`       | An instant. `DATETIME` on MariaDB, `TIMESTAMP` on Postgres.                                                                                                                                                                                                                                   |
+| `Column.timestamp()`                           | `TIMESTAMP`    | `Date`       | An instant. On MariaDB the range is limited; see [Dates and time zones](NORM-Dates.md#column-types).                                                                                                                                                                                          |
+| `Column.timestamptz()`                         | `TIMESTAMPTZ`  | `Date`       | An instant. `TIMESTAMPTZ` on Postgres, `TIMESTAMP` on MariaDB (the type `timestamp()` has there), ISO `TEXT` on SQLite.                                                                                                                                                                       |
 | `Column.json<Shape>()` / `Column.json(schema)` | `JSONB`        | `Shape`      | Typed object. Renders as `JSONB` on Postgres (never bare `JSON`), native `JSON` on MariaDB, `TEXT` on SQLite (reads come back parsed on every dialect). Given a `Guardian.object({...})` `schema`, `Shape` is INFERRED and every key is validated at write time — see [below](#json-schemas). |
 | `Column.blob()`                                | `BLOB`         | `Uint8Array` | Raw bytes. The crypto codec is text-canonical, so binary cannot be encrypted; encrypt an encoded text form instead.                                                                                                                                                                           |
 | `Column.binary(length)`                        | `BINARY(n)`    | `Uint8Array` | Fixed-length raw bytes (`BYTEA`/`BINARY`/`BLOB`). Like `blob`, not encryptable.                                                                                                                                                                                                               |
@@ -138,6 +138,8 @@ so it is the same instant on every host; a string that names an offset
 keeps it. Any other format is parsed as the runtime's `Date` parses it.
 A filter value on these columns and on `time` is converted too: see
 [Date and time values](NORM-Querying.md#date-and-time-values).
+[Dates and time zones](NORM-Dates.md) has the native type on each
+engine and the database session rule.
 
 `json`, `boolean`, `blob`, `binary`, `varbinary`, and `bit` are the
 base builder: they carry the [common modifiers](#common-modifiers) and
@@ -1165,6 +1167,8 @@ start and [Querying](NORM-Querying.md).
 - [Migrations](NORM-Migrations.md): snapshots, plans, the rebuild
   engine, and `renamedFrom` hints.
 - [Scoping](NORM-Scoping.md): tenant scoping and default filters.
+- [Dates and time zones](NORM-Dates.md): how dates are stored on each
+  engine, and the UTC session rule.
 
 ---
 
