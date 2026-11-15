@@ -104,19 +104,33 @@ const TEMPORAL_SKEW_MS = 1000;
 const SQLITE_ZONELESS_DATETIME =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
-/** Expressions oql's `DATE_TRUNC` takes as its `date`. */
-const DAY_SOURCES: ReadonlySet<string> = new Set([
+/** Clock expressions that hold an instant. */
+const CLOCKS: ReadonlySet<string> = new Set([
   'NOW',
   'CURRENT_TIMESTAMP',
   'CURRENT_TIMESTAMPTZ',
-  'DATE_ADD',
 ]);
+
+/** Expressions oql's `DATE_TRUNC` takes as its `date`. */
+const DAY_SOURCES: ReadonlySet<string> = new Set([...CLOCKS, 'DATE_ADD']);
 
 /** The UTC day of a clock or `DATE_ADD` expression, reduced by the engine
  * that computes it. `CURRENT_DATE` is written as the day of `NOW`, the
  * same day in the form a stored day has. Any other expression is returned
- * as given. */
-function dayOf(expr: ExpressionDefault): ExpressionDefault {
+ * as given.
+ *
+ * A Mongo insert document (`insertDocument`) cannot evaluate `DATE_TRUNC`.
+ * oql computes `CURRENT_DATE` as the UTC day when it builds the document,
+ * so a clock is written as that. */
+function dayOf(
+  expr: ExpressionDefault,
+  insertDocument: boolean,
+): ExpressionDefault {
+  if (insertDocument) {
+    return CLOCKS.has(expr.$$_expression)
+      ? { $$_expression: 'CURRENT_DATE' }
+      : expr;
+  }
   const date = expr.$$_expression === 'CURRENT_DATE'
     ? { $$_expression: 'NOW' }
     : expr;
@@ -4238,7 +4252,6 @@ export class Repo<
       ? c.postUpdateDefaults
       : c.postInsertDefaults;
     const dayColumns = this._storedDayColumns();
-    // A Mongo insert document cannot evaluate `DATE_TRUNC`.
     const mongoInsert = op === 'insert' &&
       this._executor.capabilities.dialect === 'mongo';
     const out: Row[] = [];
@@ -4267,7 +4280,7 @@ export class Repo<
       for (const col of dayColumns) {
         const v = row[col];
         if (v instanceof Date) row[col] = utcDay(v);
-        else if (isExpressionValue(v) && !mongoInsert) row[col] = dayOf(v);
+        else if (isExpressionValue(v)) row[col] = dayOf(v, mongoInsert);
       }
       out.push(await this.__encryptRow(row));
     }

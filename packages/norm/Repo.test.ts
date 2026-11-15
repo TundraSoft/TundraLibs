@@ -1185,13 +1185,28 @@ describe('norm.Repo — an expression on a date() column', () => {
     asserts.assertEquals(written(exec, 'INSERT'), DAY_OF_NOW);
   });
 
-  it('is sent as given where the engine or the insert document reduces it', async () => {
-    // A Mongo insert document cannot evaluate DATE_TRUNC.
-    for (const dialect of ['mongo', 'postgres', 'maria'] as const) {
+  it('is sent as given where the engine reduces it', async () => {
+    for (const dialect of ['postgres', 'maria'] as const) {
       const { repo, exec } = mock(dialect);
       await repo.insert({ id: 1 });
       asserts.assertEquals(written(exec, 'INSERT'), NOW, dialect);
     }
+  });
+
+  it('is the day oql computes for a Mongo insert document', async () => {
+    // The document cannot evaluate DATE_TRUNC.
+    const TODAY = { $$_expression: 'CURRENT_DATE' };
+    for (
+      const clock of ['NOW', 'CURRENT_TIMESTAMP', 'CURRENT_TIMESTAMPTZ']
+    ) {
+      const { repo, exec } = mock('mongo');
+      await repo.insert({ id: 1, day: { $$_expression: clock } } as never);
+      asserts.assertEquals(written(exec, 'INSERT'), TODAY, clock);
+    }
+    const { repo, exec } = mock('mongo');
+    await repo.insert([{ id: 1 }, { id: 2 }]);
+    const { data } = exec.lastOf('INSERT') as unknown as { data: Row[] };
+    asserts.assertEquals(data.map((row) => row.day), [TODAY, TODAY]);
   });
 });
 
