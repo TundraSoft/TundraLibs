@@ -195,8 +195,9 @@ export function payload(
  * Bind the parsed query (`ctx.args.query` — `$op` filters + sorting).
  * UNTRUSTED as-is: the validator is where the allowlist/re-casing
  * belongs. Without one the parameter is PINNED to the raw
- * {@link RapidContextQuery} shape. Not emitted into OpenAPI (the query
- * grammar is uniform, not per-route).
+ * {@link RapidContextQuery} shape. Only the schema-object form is emitted
+ * into OpenAPI, one query parameter per declared key (the `$op` grammar
+ * is uniform, not per-route).
  *
  * @throws {RapidError} RAPID_QUERY_INVALID (400) at invocation when the
  *   query string breaches a `server.query` cap.
@@ -237,6 +238,7 @@ export function query(
   }
   return {
     source: 'query',
+    schema: arg,
     validate: (value) => {
       const flat = flatQuery(value as RapidContextQuery);
       if (known !== undefined) {

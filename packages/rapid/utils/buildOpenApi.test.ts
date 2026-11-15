@@ -175,6 +175,51 @@ describe('rapid.utils.buildOpenApi', () => {
     );
   });
 
+  it('a query(Schema) bind documents one query parameter per declared key', () => {
+    const doc = buildOpenApi(
+      [
+        {
+          method: 'GET',
+          path: '/search',
+          middlewares: [],
+          handler: () => ({}),
+          openapi: {
+            binds: [{
+              source: 'query',
+              schema: {
+                toJSONSchema: () => ({
+                  type: 'object',
+                  properties: {
+                    q: { type: 'string', minLength: 2 },
+                    limit: { type: 'integer' },
+                  },
+                  required: ['q'],
+                }),
+              },
+            }],
+          },
+        },
+      ] as never,
+      {},
+    );
+    const parameters: unknown = (doc.paths as Paths)['/search']!.get!
+      .parameters;
+    asserts.assertEquals(parameters, [
+      {
+        name: 'q',
+        in: 'query',
+        required: true,
+        schema: { type: 'string', minLength: 2 },
+      },
+      {
+        name: 'limit',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer' },
+      },
+    ]);
+  });
+
   it("response.toOpenAPI() overrides the default {type:'object'} 200 schema", () => {
     const doc = buildOpenApi(
       [

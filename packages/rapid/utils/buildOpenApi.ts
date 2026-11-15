@@ -315,6 +315,24 @@ export function buildOpenApi(
       }
     }
 
+    // A `query(Schema)` binder documents one parameter per declared key.
+    for (const bind of meta?.binds ?? []) {
+      if (bind.source !== 'query' || bind.schema === undefined) continue;
+      const shape = (bind.schema.toJSONSchema?.() ??
+        bind.schema.toOpenAPI?.()) as {
+          properties?: Record<string, unknown>;
+          required?: string[];
+        } | undefined;
+      for (const [name, schema] of Object.entries(shape?.properties ?? {})) {
+        parameters.push({
+          name,
+          in: 'query',
+          required: shape?.required?.includes(name) === true,
+          schema,
+        });
+      }
+    }
+
     // A paged operation documents how to ASK for a page too — the query
     // params and the two request headers `ctx.args.paging` resolves from
     // — else a client can read the total but cannot discover how to move

@@ -15,6 +15,7 @@ import { upgradeCommand } from './commands/upgrade.ts';
 import { modulesCommand } from './commands/modules.ts';
 import { healthCommand } from './commands/health.ts';
 import { accessCommand } from './commands/access.ts';
+import { sdkCommand } from './commands/sdk.ts';
 
 const HELP = `rapid <command>
 
@@ -40,6 +41,11 @@ const HELP = `rapid <command>
         with the \`access\` it declares; an action with none is PUBLIC.
         The entry exports the Application (or a factory) as default/app.
         --fail-on-undeclared exits 1 when any action is public
+  sdk <entry.ts> [--out ./sdk] [--name ClientName]
+        write a typed client for the app's HTTP API: a @tundralibs/restler
+        class with one method per route, arguments and replies validated
+        with @tundralibs/guardian. The entry exports the Application as
+        for \`access\`.
 `;
 
 /** Parse args and dispatch. Returns the exit code. */
@@ -70,6 +76,17 @@ export function run(args: ParsedArgs = argv()): Promise<number> {
       return accessCommand(entry, {
         failOnUndeclared: rest['fail-on-undeclared'] === true,
         json: rest.json === true,
+      });
+    }
+    case 'sdk': {
+      const entry = rest._[0] as string | undefined;
+      if (entry === undefined) {
+        console.error(`sdk needs the app's entry module\n\n${HELP}`);
+        return Promise.resolve(1);
+      }
+      return sdkCommand(entry, {
+        out: rest.out as string | undefined,
+        name: rest.name as string | undefined,
       });
     }
     case undefined:
