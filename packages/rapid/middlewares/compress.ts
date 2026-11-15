@@ -48,7 +48,7 @@ const isCompressible = (contentType: string): boolean =>
 /** Serialize the current response body to bytes + its content-type. */
 /** The content type the body WILL be serialised with — no serialisation here. */
 const contentTypeOf = (ctx: HTTPContext<RapidContextState>): string => {
-  const explicit = ctx.responseHeaders.get('content-type');
+  const explicit = ctx._outboundHeader('content-type');
   if (explicit !== null) return explicit;
   const content = ctx.response!.content;
   if (content instanceof Uint8Array) return 'application/octet-stream';
@@ -98,9 +98,9 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     await next();
     if (ctx.type !== 'HTTP') return;
     if (ctx.response === null) return;
-    if (ctx.responseHeaders.has('content-encoding')) return; // already encoded
+    if (ctx._outboundHeader('content-encoding') !== null) return; // already encoded
     if (NO_BODY.has(ctx.status)) return;
-    if (ctx.status === 206 || ctx.responseHeaders.has('content-range')) {
+    if (ctx.status === 206 || ctx._outboundHeader('content-range') !== null) {
       // A partial response's Content-Range describes IDENTITY byte
       // positions — compressing the slice would hand resume/seek clients
       // gzip bytes under identity offsets, reassembling garbage.
@@ -112,7 +112,7 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     // etag() hashed the identity body; weaken its tag (nginx does the
     // same) so no cache splices gzip and identity bytes under one tag.
     const weaken = (): void => {
-      const tag = ctx.responseHeaders.get('etag');
+      const tag = ctx._outboundHeader('etag');
       if (tag !== null && !tag.startsWith('W/')) {
         ctx.setHeader('etag', `W/${tag}`);
       }
@@ -122,7 +122,7 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     // setter overwrites per-key, so a bare `Vary: Accept-Encoding` would
     // drop `cors()`'s `Vary: Origin` and make a shared cache serve one
     // origin's response to another.
-    const priorVary = ctx.responseHeaders.get('vary');
+    const priorVary = ctx._outboundHeader('vary');
     const vary = priorVary === null
       ? 'Accept-Encoding'
       : /\baccept-encoding\b/i.test(priorVary)
@@ -132,7 +132,7 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     const streamBody = ctx.response.content;
     const streamed = isStreamBody(streamBody);
     const contentType = streamed
-      ? ctx.responseHeaders.get('content-type') ?? 'application/octet-stream'
+      ? ctx._outboundHeader('content-type') ?? 'application/octet-stream'
       : contentTypeOf(ctx);
     if (!isCompressible(contentType)) return;
     // The representation varies by Accept-Encoding from here on, whether

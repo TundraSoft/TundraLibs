@@ -342,6 +342,15 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     this.__named?.cookies.add(name);
   }
 
+  /**
+   * One outbound header as set so far, read off the live headers — the
+   * framework's own read, where {@link responseHeaders} would copy every
+   * header to answer for one. @internal
+   */
+  public _outboundHeader(name: string): string | null {
+    return this._headers.get(name);
+  }
+
   /** The outbound headers set so far, as pairs. @internal */
   public _outboundHeaders(): [string, string][] {
     return [...this._headers];

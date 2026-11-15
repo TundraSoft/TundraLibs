@@ -360,14 +360,14 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
           // a session-authenticated route is covered by construction.
           if (loaded) {
             const http = ctx as HTTPContext;
-            const vary = http.responseHeaders.get('vary');
+            const vary = http._outboundHeader('vary');
             const names = vary === null
               ? []
               : vary.split(',').map((v) => v.trim()).filter((v) => v !== '');
             if (!names.some((v) => v.toLowerCase() === 'cookie')) {
               http.setHeader('vary', [...names, 'Cookie'].join(', '));
             }
-            if (http.responseHeaders.get('cache-control') === null) {
+            if (http._outboundHeader('cache-control') === null) {
               http.setHeader('cache-control', 'private');
             }
           }
