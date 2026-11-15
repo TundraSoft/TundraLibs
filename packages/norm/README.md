@@ -720,6 +720,8 @@ where each dialect runs.
 - [Scoping](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Scoping): tenant scoping and default filters.
 - [Errors](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Errors): the error classes and every stable
   `NormErrorCode`.
+- [Upgrade notes](https://github.com/TundraSoft/TundraLibs/wiki/NORM-Upgrading): changes that alter what an
+  existing app stores, reads or matches.
 
 ## License
 
