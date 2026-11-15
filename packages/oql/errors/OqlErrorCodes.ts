@@ -40,7 +40,11 @@ export const OqlErrorCodes: Record<OqlErrorCode, string> = {
   UNKNOWN: 'Unknown OQL error',
   /** The target dialect does not support the requested feature. */
   DIALECT_UNSUPPORTED: 'Dialect does not support the requested feature',
-  /** A column reference did not start with the required `@` sigil. */
+  /**
+   * A column reference did not start with the required `@` sigil, or, on
+   * MongoDB, named a declared expression where an UPDATE or DELETE reads
+   * a column.
+   */
   INVALID_COLUMN_REF: 'Malformed column reference',
   /** A JSON-path filter key carried an operator outside the allowed set. */
   JSON_PATH_UNSUPPORTED_OPERATOR:

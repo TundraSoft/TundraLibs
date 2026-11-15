@@ -236,6 +236,21 @@ literally, so `$$NOW` would be saved as the string `"$$NOW"`.
   `UNIX_TIMESTAMP` and `UUID` are computed by the translator, the clock
   ones at one instant per statement. Any other expression throws
   `DialectUnsupportedError`.
+- **UPDATE / DELETE `where` on an expression alias**: `updateMany` and
+  `deleteMany` take a query filter, which sees no computed field, so a
+  key naming a declared expression compares that expression inside
+  `$expr`, NULL-guarded as a `CASE` condition is. It takes the operators
+  a SELECT `where` on the alias takes, and a column inside an `$in` list
+  as well.
+- **An expression alias where a column belongs**: in an UPDATE or
+  DELETE, an `@key` naming a declared expression as a filter value or an
+  expression argument throws `OqlError` `INVALID_COLUMN_REF` before
+  anything is written. The SQL dialects read it as a column the table
+  lacks, and the database fails with Column not found. Earlier releases
+  stored or compared the text on MongoDB.
+- **A JSON path as an expression argument**, `'@meta.@tag'` or
+  `'@meta.tag'`, is text on every dialect: only a filter key reads into a
+  JSON column. Earlier releases read the nested field on MongoDB.
 
 ### INSERT … SELECT (`INSERT_FROM_QUERY`)
 

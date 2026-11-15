@@ -1307,7 +1307,10 @@ const CASES: Case[] = [
       },
       expressions: {
         shown: { $$_expression: 'COALESCE', args: ['@label', '@nope'] },
-        deep: { $$_expression: 'COALESCE', args: ['@meta.@tag', '@nope.@tag'] },
+        deep: {
+          $$_expression: 'COALESCE',
+          args: ['@meta.@tag', '@meta.@a.@b', '@nope.@tag'],
+        },
         joined: { $$_expression: 'COALESCE', args: ['@P.@title', '@P.@nope'] },
         again: { $$_expression: 'COALESCE', args: ['@shown', '-'] },
       },
@@ -1351,7 +1354,7 @@ const CASES: Case[] = [
           {
             $addFields: {
               shown: { $ifNull: ['$label', '@nope'] },
-              deep: { $ifNull: ['$meta.tag', '@nope.@tag'] },
+              deep: { $ifNull: ['@meta.@tag', '@meta.@a.@b', '@nope.@tag'] },
               joined: { $ifNull: ['$P.title', '@P.@nope'] },
               again: { $ifNull: ['@shown', '-'] },
             },
@@ -2467,6 +2470,75 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: 'inactive' },
+        options: { multiple: true },
+      },
+    },
+  },
+  {
+    // A query filter sees no computed field, so the alias compares as its
+    // expression inside `$expr`, guarded against NULL like a column.
+    name: 'UPDATE where on an expression alias → $expr over the expression',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'qty'],
+      expressions: { d: { $$_expression: 'ADD', args: ['@qty', 1] } },
+      data: { qty: 0 },
+      where: { '@id': { $gt: 0 }, '@d': { $lte: '@id' } },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: {
+          id: { $gt: 0 },
+          $expr: {
+            $and: [
+              { $lte: [{ $add: ['$qty', 1] }, '$id'] },
+              { $gt: [{ $add: ['$qty', 1] }, null] },
+              { $gt: ['$id', null] },
+            ],
+          },
+        },
+        data: { $set: { qty: 0 } },
+        options: { multiple: true },
+      },
+    },
+  },
+  {
+    // As in SQL, the alias wins over the column it shadows.
+    name: 'DELETE where on an expression alias inside $or',
+    method: 'delete',
+    query: {
+      type: 'DELETE',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: { name: { $$_expression: 'UPPER', args: '@name' } },
+      where: { $or: [{ '@name': null }, { '@id': 2 }] },
+    },
+    expected: {
+      sql: 'delete',
+      params: {
+        collection: 'users',
+        filter: {
+          $or: [
+            {
+              $expr: {
+                $in: [{
+                  $type: {
+                    $cond: [
+                      { $gt: ['$name', null] },
+                      { $toUpper: '$name' },
+                      null,
+                    ],
+                  },
+                }, ['null', 'missing']],
+              },
+            },
+            { id: 2 },
+          ],
+        },
         options: { multiple: true },
       },
     },
@@ -3670,6 +3742,61 @@ describe('oql.translator.MongoTranslator — $exists refusals', () => {
       DialectUnsupportedError,
     );
     asserts.assertStringIncludes(err.feature, '@P.@id');
+  });
+});
+
+describe('oql.translator.MongoTranslator — expression alias where a column belongs', () => {
+  // SQL resolves these to a column the table lacks and the database
+  // fails; MongoDB would store or compare the text.
+  const expressions = { u: { $$_expression: 'UPPER', args: '@name' } };
+  const refuses = (run: () => unknown) => {
+    const err = asserts.assertThrows(run, OqlError, "'@u'");
+    asserts.assertEquals(err.code, 'INVALID_COLUMN_REF');
+  };
+  const update = (q: Record<string, unknown>) => () =>
+    t.update({
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      expressions,
+      data: { nick: 'x' },
+      ...q,
+    } as unknown as Query<'UPDATE'>);
+
+  it('in UPDATE data', () => {
+    refuses(update({
+      data: { nick: { $$_expression: 'CONCAT', args: ['@u', '!'] } },
+    }));
+  });
+
+  it('as an UPDATE filter value', () => {
+    refuses(update({ where: { '@name': { $ne: '@u' } } }));
+  });
+
+  it('in an expression a filter key names', () => {
+    refuses(update({
+      expressions: {
+        ...expressions,
+        v: { $$_expression: 'LOWER', args: '@u' },
+      },
+      where: { '@v': 'ada' },
+    }));
+  });
+
+  it('in a DELETE filter operand', () => {
+    refuses(() =>
+      t.delete({
+        type: 'DELETE',
+        table: 'users',
+        columns: ['id', 'name', 'nick'],
+        expressions,
+        where: {
+          '@name': {
+            $ne: { $$_expression: 'COALESCE', args: ['@nick', '@u'] },
+          },
+        },
+      } as unknown as Query<'DELETE'>)
+    );
   });
 });
 

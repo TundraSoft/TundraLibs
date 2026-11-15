@@ -336,6 +336,37 @@ const LIKE_OPERATORS: ReadonlySet<string> = new Set([
 const NO_COLUMNS: ReadonlySet<string> = new Set();
 
 /**
+ * The column scope of an UPDATE or DELETE, carrying the statement's
+ * declared expressions. A `where` key naming one compares its value inside
+ * `$expr`, since a query filter sees no computed field. The SQL translators
+ * also put the expression keys in the scope, so an `@key` value or
+ * expression argument there names a column the table lacks and the
+ * database refuses it; here the translator throws instead.
+ */
+class WriteScope extends Set<string> {
+  public readonly expressions: Readonly<Record<string, Expressions>>;
+
+  constructor(
+    columns: Iterable<string>,
+    expressions: Record<string, Expressions> = {},
+  ) {
+    super(columns);
+    this.expressions = expressions;
+  }
+
+  /**
+   * The declared expression a `where` key `@name` names. As in SQL it wins
+   * over a column of the same name.
+   */
+  public expressionAt(key: string): Expressions | undefined {
+    const name = key.slice(1);
+    return Object.hasOwn(this.expressions, name)
+      ? this.expressions[name]
+      : undefined;
+  }
+}
+
+/**
  * The aggregates whose `distinct` MongoDB has to compute in two steps,
  * each mapped to the expression that reduces the set of a group's distinct
  * values. The set holds one `null` when any row's value was null; SQL's
@@ -531,22 +562,24 @@ export class MongoTranslator {
 
   /**
    * Translate an `UPDATE`. Always `multiple: true`, and a `q.where`-less
-   * query yields an empty filter that matches the whole collection.
+   * query yields an empty filter that matches the whole collection. A
+   * `where` key naming a declared expression compares inside `$expr`.
    *
    * @throws {TypeError} When `q` is not a valid `UPDATE` query.
    * @throws {@link DialectUnsupportedError} For an `$exists` / `$nexists`
    *   filter — `updateMany` takes a query filter, not a pipeline.
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when a value or an
+   *   expression argument names a declared expression, which is no column.
    */
   public update(q: Query<'UPDATE'>): MongoUpdateAction {
     assertUpdate(q);
+    const columns = new WriteScope(this.__columnsOf(q), q.expressions);
     return {
       sql: 'update',
       params: {
         collection: q.table,
-        filter: q.where
-          ? this.__translateFilter(q.where, this.__columnsOf(q))
-          : {},
-        data: this.__updateBody(q.data, this.__columnsOf(q)),
+        filter: q.where ? this.__translateFilter(q.where, columns) : {},
+        data: this.__updateBody(q.data, columns),
         options: { multiple: true },
       },
     };
@@ -554,21 +587,23 @@ export class MongoTranslator {
 
   /**
    * Translate a `DELETE`. Always `multiple: true`, and a `q.where`-less
-   * query yields an empty filter — which deletes every document.
+   * query yields an empty filter — which deletes every document. A
+   * `where` key naming a declared expression compares inside `$expr`.
    *
    * @throws {TypeError} When `q` is not a valid `DELETE` query.
    * @throws {@link DialectUnsupportedError} For an `$exists` / `$nexists`
    *   filter — `deleteMany` takes a query filter, not a pipeline.
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when a value or an
+   *   expression argument names a declared expression, which is no column.
    */
   public delete(q: Query<'DELETE'>): MongoDeleteAction {
     assertDelete(q);
+    const columns = new WriteScope(this.__columnsOf(q), q.expressions);
     return {
       sql: 'delete',
       params: {
         collection: q.table,
-        filter: q.where
-          ? this.__translateFilter(q.where, this.__columnsOf(q))
-          : {},
+        filter: q.where ? this.__translateFilter(q.where, columns) : {},
         options: { multiple: true },
       },
     };
@@ -1860,6 +1895,9 @@ export class MongoTranslator {
    * column path is in `columns` becomes a `$x` field reference (for use inside
    * `$expr`); anything else is data. Mirrors the SQL translator's rule so the
    * same OQL filter compares columns in both dialects.
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when the string names a
+   *   declared expression of an UPDATE or DELETE.
    */
   private __valueFieldRef(
     value: unknown,
@@ -1867,7 +1905,32 @@ export class MongoTranslator {
   ): string | null {
     if (typeof value !== 'string' || !value.startsWith('@')) return null;
     const path = value.slice(1).replace('.@', '.');
+    this.__assertNotExpression(value, path, columns);
     return columns.has(path) ? `$${path}` : null;
+  }
+
+  /**
+   * Refuse an `@` value or expression argument of an UPDATE or DELETE that
+   * names one of its declared expressions rather than a column. SQL reads
+   * it as a column the table lacks and the database fails; MongoDB would
+   * compare or store the text.
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` for such a reference.
+   */
+  private __assertNotExpression(
+    ref: string,
+    path: string,
+    columns: ReadonlySet<string>,
+  ): void {
+    if (
+      columns instanceof WriteScope && !columns.has(path) &&
+      columns.expressionAt(ref) !== undefined
+    ) {
+      throw new OqlError(
+        `'${ref}' names the declared expression '${path}', not a column: an UPDATE or DELETE reads only columns in a value or an expression argument`,
+        { code: 'INVALID_COLUMN_REF', dialect: this.Dialect, ref },
+      );
+    }
   }
 
   /**
@@ -1960,6 +2023,18 @@ export class MongoTranslator {
           this.__translateFilter(f, columns, existsLookups)
         );
         conditions.push({ $or: subs });
+        continue;
+      }
+      const declared = columns instanceof WriteScope
+        ? columns.expressionAt(key)
+        : undefined;
+      if (declared !== undefined) {
+        const field = this.__translateExpression(declared, columns);
+        for (
+          const [op, operand] of Object.entries(this.__conditionOps(value))
+        ) {
+          exprs.push(this.__conditionToExpr(field, op, operand, columns));
+        }
         continue;
       }
       // Per-column condition; key looks like `@col`, `@Alias.@col`, or a
@@ -2239,7 +2314,7 @@ export class MongoTranslator {
    * @throws {DialectUnsupportedError} For the `$like` family.
    */
   private __likeExpressionOperand(
-    lhs: string,
+    lhs: unknown,
     op: string,
     expr: Expressions,
     columns: ReadonlySet<string>,
@@ -2424,11 +2499,15 @@ export class MongoTranslator {
 
   /**
    * Resolve an expression argument for Mongo. An `@` string is a `$field`
-   * path when it names one of `columns` or a path into one, and text
-   * otherwise, as on the SQL dialects; MongoDB reads no `@` string as a
+   * path when it names one of `columns`, and text otherwise, as on the SQL
+   * dialects: a JSON path such as `'@meta.@tag'` is text, since only a
+   * filter key reads into a JSON column. MongoDB reads no `@` string as a
    * field path or an operator. A nested expression object is translated
    * recursively, and anything else is a literal (see
    * {@link __expressionLiteral}).
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when the string names a
+   *   declared expression of an UPDATE or DELETE.
    */
   private __resolveExpressionRef(
     v: unknown,
@@ -2436,9 +2515,8 @@ export class MongoTranslator {
   ): unknown {
     if (typeof v === 'string' && v.startsWith('@')) {
       const path = v.slice(1).replace('.@', '.');
-      return columns.has(path) || columns.has(path.split('.')[0]!)
-        ? `$${path}`
-        : v;
+      this.__assertNotExpression(v, path, columns);
+      return columns.has(path) ? `$${path}` : v;
     }
     if (
       typeof v === 'object' && v !== null && !(v instanceof Date) &&
@@ -2505,21 +2583,28 @@ export class MongoTranslator {
         );
       }
       const field = this.__columnRef(key, columns);
-      const isOps = typeof value === 'object' && value !== null &&
-        !(value instanceof Date) && !Array.isArray(value) &&
-        !('$$_expression' in value);
-      const ops = isOps
-        ? value as Record<string, unknown>
-        : value === null
-        ? { $null: true }
-        : Array.isArray(value)
-        ? { $in: value }
-        : { $eq: value };
-      for (const [op, operand] of Object.entries(ops)) {
+      for (const [op, operand] of Object.entries(this.__conditionOps(value))) {
         parts.push(this.__conditionToExpr(field, op, operand, columns));
       }
     }
     return parts.length === 1 ? parts[0] : { $and: parts };
+  }
+
+  /**
+   * The operators of a filter value, with the shorthands spelled out: a
+   * literal is `$eq`, `null` is `$null` and a list is `$in`.
+   */
+  private __conditionOps(value: unknown): Record<string, unknown> {
+    const isOps = typeof value === 'object' && value !== null &&
+      !(value instanceof Date) && !Array.isArray(value) &&
+      !('$$_expression' in value);
+    return isOps
+      ? value as Record<string, unknown>
+      : value === null
+      ? { $null: true }
+      : Array.isArray(value)
+      ? { $in: value }
+      : { $eq: value };
   }
 
   /** One `field <op> operand` comparison of {@link __filterToExpr}. */
@@ -2550,7 +2635,7 @@ export class MongoTranslator {
       }
       if (this.__isExpressionNode(operand)) {
         return this.__likeExpressionOperand(
-          field as string,
+          field,
           op,
           operand as Expressions,
           columns,
