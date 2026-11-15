@@ -317,13 +317,16 @@ describe('norm read cache', () => {
 
     // Each pair is one text to JSON and two answers to a database:
     // MongoDB matches a Date but not its ISO string, and no engine
-    // matches NaN against NULL.
+    // matches NaN against NULL. The Date pairs filter a text column: on
+    // a timestamp column the string becomes the Date before the key.
     const AT = '2026-01-15T10:00:00.000Z';
     const JSON_TWINS: Array<[string, unknown, unknown]> = [
-      ['a Date and its ISO string', { '@at': new Date(AT) }, { '@at': AT }],
+      ['a Date and its ISO string', { '@label': new Date(AT) }, {
+        '@label': AT,
+      }],
       ['a Date inside $in and its ISO string', {
-        '@at': { $in: [new Date(AT)] },
-      }, { '@at': { $in: [AT] } }],
+        '@label': { $in: [new Date(AT)] },
+      }, { '@label': { $in: [AT] } }],
       ['NaN and null', { '@value': NaN }, { '@value': null }],
       ['a bigint and a string spelling its tag', { '@label': 5n }, {
         '@label': '$$normEnc:bigint:5',
@@ -333,7 +336,6 @@ describe('norm read cache', () => {
       it(`caches ${pair} separately`, async () => {
         const Readings = Entity('readings', {
           id: Column.integer(),
-          at: Column.timestamp().nullable(),
           value: Column.double().nullable(),
           label: Column.varchar(40).nullable(),
         }, { pk: ['id'], cache: 5 });
