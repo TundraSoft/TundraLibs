@@ -113,6 +113,33 @@ describe('utils.getFreePort', () => {
     );
   });
 
+  it('rejects a range that holds only ports fetch blocks', async () => {
+    // 6000 and 6665-6669 are on the WHATWG Fetch bad port list.
+    for (const [min, max] of [[6000, 6000], [6665, 6669]]) {
+      await asserts.assertRejects(
+        () => getFreePort({ min, max }),
+        PortError,
+        'All ports in range are excluded',
+      );
+    }
+  });
+
+  it('skips a blocked port the random source lands on', async () => {
+    const real = crypto.getRandomValues.bind(crypto);
+    let draws = 0;
+    // The first draw maps to 10080, which fetch blocks; later ones to 10081.
+    crypto.getRandomValues = ((array: Uint32Array) =>
+      array.fill(
+        draws++ === 0 ? 0 : 0xFFFFFFFF,
+      )) as typeof crypto.getRandomValues;
+    try {
+      const port = await getFreePort({ min: 10080, max: 10081 });
+      asserts.assertEquals(port, 10081);
+    } finally {
+      crypto.getRandomValues = real;
+    }
+  });
+
   it('ignores excluded ports outside range', async () => {
     const port = await getFreePort({
       min: 4000,
