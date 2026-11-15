@@ -12,6 +12,7 @@ import {
   exit,
   isBrowser,
   isWorkers,
+  onSignal,
   unrefTimer,
 } from '@tundralibs/compat/runtime';
 import { Tracer } from '@tundralibs/tracer';
@@ -145,6 +146,9 @@ let __containerProviderInstalled = false;
  * runtime-enforced way in.
  */
 const INIT_BRAND: unique symbol = Symbol('rapid.application.init');
+
+/** The signals `shutdownSignals` accepts — compat's `Signal`. */
+const SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'];
 
 /**
  * The closed key sets `__configureUi` validates the DATA half against —
@@ -346,6 +350,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __started = false;
   /** Set by `stop()`; `fetch()` refuses to rebuild a transport on a torn-down app. */
   private __stopped = false;
+  /** Detaches for the bound `shutdownSignals`. */
+  private readonly __signalDetach: (() => void)[] = [];
   /** Whether a module runtime was booted and has been disposed: such an app cannot serve again. */
   private __modulesDisposed = false;
 
@@ -637,6 +643,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         mode: 'PRODUCTION',
         stateMode: 'CLONE',
         shutdownTimeout: 25, // seconds — under Cloud Run's 30s SIGTERM window
+        shutdownSignals: [],
       });
       this.__validate();
       // server.static → ordered mounts, boot-loud. Relative roots anchor
@@ -2183,6 +2190,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         this.__jobTransport = new JOBTransport(this);
         await this.__jobTransport.start();
       }
+      this.__bindShutdownSignals();
       this._emit('start');
       this.log.info('started', {
         address: this.address,
@@ -2296,8 +2304,31 @@ export class Application<S extends RapidContextState = RapidContextState>
     });
   }
 
+  /** Make each `shutdownSignals` entry stop the app; a signal this platform lacks is skipped with a warning. */
+  private __bindShutdownSignals(): void {
+    for (const signal of this.option('shutdownSignals')!) {
+      try {
+        this.__signalDetach.push(
+          onSignal(signal, () => {
+            this.log.info(`${signal} received — stopping`);
+            this.stop().catch((error) =>
+              this.log.error('stop() after a shutdown signal failed', {
+                error: RapidError.from(error).message,
+              })
+            );
+          }),
+        );
+      } catch {
+        this.log.warn(
+          `shutdownSignals: ${signal} is not available on this platform`,
+        );
+      }
+    }
+  }
+
   /** The single-flight body of {@link stop}. */
   private async __stop(): Promise<this> {
+    for (const detach of this.__signalDetach.splice(0)) detach();
     // `__stopped` is set when teardown COMPLETES, on both paths below — not
     // at entry: during the drain the app must keep answering (ready()
     // reports 503 there), and only a request after the drain is served
@@ -2684,6 +2715,16 @@ export class Application<S extends RapidContextState = RapidContextState>
       throw new RapidError('RAPID_CONFIG', {
         message: 'uploads.maxFiles must be a positive integer',
         details: { key: 'uploads.maxFiles', value: uploads.maxFiles },
+      });
+    }
+    const shutdownSignals = this._getOption('shutdownSignals')!;
+    if (
+      !Array.isArray(shutdownSignals) ||
+      shutdownSignals.some((signal) => !SIGNALS.includes(signal))
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `shutdownSignals must be a list of ${SIGNALS.join(', ')}`,
+        details: { key: 'shutdownSignals', value: shutdownSignals },
       });
     }
     const shutdownTimeout = this._getOption('shutdownTimeout')!;
