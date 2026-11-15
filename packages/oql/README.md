@@ -478,8 +478,9 @@ above, so path filters on it are validated at runtime.
 projection; `COUNT { distinct: ['col'] }` emits `COUNT(DISTINCT col)`
 (exactly one declared column — multi-column DISTINCT counts are not
 portable across dialects). `distinct: true` is **rejected** alongside
-`aggregates` or a join-alias projection: those trigger an automatic
-GROUP BY that already deduplicates. MongoDB throws for both — build an
+an aggregate or a join-alias projection: those trigger an automatic
+GROUP BY that already deduplicates. An empty `aggregates: {}` groups
+nothing and is the same as no `aggregates` key. MongoDB throws for both — build an
 explicit `$group` pipeline instead.
 
 ### Aggregation Functions
@@ -623,7 +624,7 @@ system can't express on its own, for example:
   aggregates, expressions, ORDER BY, HAVING) must be listed in `columns`.
 - `having` may only filter on a declared `aggregates` alias, and is
   rejected outright on `COUNT` (no GROUP BY to filter against).
-- `distinct: true` conflicts with `aggregates` or a join-alias
+- `distinct: true` conflicts with an aggregate or a join-alias
   projection — both already trigger an implicit GROUP BY.
 - `$exists` / `$nexists` `on` keys are restricted to single-segment
   `@column` refs and reject Expression values.
@@ -638,9 +639,11 @@ numeric/date) is a **TypeScript-only** guarantee. `assertQuery` does
 **not** re-check it at runtime — see the note under
 [Operators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#operators).
 
-A validator throws `TypeError`. The one exception is a date expression
-with a `unit` outside its allowed set: that throws `OqlError` with code
-`INVALID_TIME_UNIT`, the same error a translator throws for it.
+A validator throws `TypeError`, with two exceptions that throw `OqlError`.
+A date expression with a `unit` outside its allowed set throws code
+`INVALID_TIME_UNIT`, the same error a translator throws for it. An `UPDATE`
+or `DELETE` filter key that reaches through a join, such as `'@Items.@sku'`,
+throws code `RELATION_FILTER_UNSUPPORTED`.
 
 ```typescript
 import type { Query } from '@tundralibs/oql';

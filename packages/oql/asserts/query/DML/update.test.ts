@@ -9,6 +9,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { assertUpdateQuery, isUpdateQuery } from './update.ts';
+import { OqlError } from '../../../errors/mod.ts';
 
 describe('oql.asserts.Query.DML.Update', () => {
   describe('valid queries', () => {
@@ -419,6 +420,37 @@ describe('oql.asserts.Query.DML.Update', () => {
         TypeError,
         'invalid expression',
       );
+    });
+
+    it('refuses a filter through a relation, nested or not', () => {
+      for (
+        const where of [
+          { '@Items.@sku': 'ZZ' },
+          { $or: [{ '@id': 1 }, { $and: [{ '@Items.@sku': 'ZZ' }] }] },
+        ]
+      ) {
+        const err = asserts.assertThrows(
+          () =>
+            assertUpdateQuery({
+              type: 'UPDATE',
+              table: 'orders',
+              columns: ['id', 'customer', 'meta'],
+              data: { customer: 'zed' },
+              where,
+            }),
+          OqlError,
+          "filter key '@Items.@sku'",
+        );
+        asserts.assertEquals(err.code, 'RELATION_FILTER_UNSUPPORTED');
+      }
+      // Control: a declared column as the root is a JSON path.
+      assertUpdateQuery({
+        type: 'UPDATE',
+        table: 'orders',
+        columns: ['id', 'customer', 'meta'],
+        data: { customer: 'zed' },
+        where: { '@meta.@sku': 'ZZ' },
+      });
     });
   });
 

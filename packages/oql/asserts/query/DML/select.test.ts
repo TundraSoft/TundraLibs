@@ -225,6 +225,20 @@ describe('oql.asserts.Query.DML.Select', () => {
       };
       assertSelectQuery(query);
     });
+
+    it('treats an empty aggregates object as ungrouped', () => {
+      // Grouped queries refuse `distinct` and an unprojected base column in
+      // `orderBy`; with no aggregate declared, both are allowed.
+      const query = {
+        type: 'SELECT',
+        table: 'users',
+        columns: ['id', 'name'],
+        aggregates: {},
+        projection: { '@id': true },
+      };
+      assertSelectQuery({ ...query, distinct: true });
+      assertSelectQuery({ ...query, orderBy: { '@name': 'ASC' } });
+    });
   });
 
   describe('invalid aggregates', () => {
@@ -255,21 +269,6 @@ describe('oql.asserts.Query.DML.Select', () => {
           }),
         TypeError,
         'must be an object',
-      );
-    });
-
-    it('aggregates is empty object', () => {
-      asserts.assertThrows(
-        () =>
-          assertSelectQuery({
-            type: 'SELECT',
-            table: 'users',
-            columns: ['id'],
-            projection: { '@id': true },
-            aggregates: {},
-          }),
-        TypeError,
-        'cannot be an empty object',
       );
     });
 

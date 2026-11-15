@@ -21,6 +21,21 @@ import { validateExpressions } from './common.ts';
 const DEPRECATED_PROPS = ['groupBy', 'returnColumns'] as const;
 
 /**
+ * Whether a SELECT gets an automatic GROUP BY: it declares at least one
+ * aggregate, or projects a join alias whole. The one rule the validator
+ * and the translators share; `aggregates: {}` is not grouped.
+ */
+export const isGroupedSelect = (query: {
+  aggregates?: unknown;
+  joins?: unknown;
+  projection?: unknown;
+}): boolean =>
+  Object.keys(Object(query.aggregates)).length > 0 ||
+  Object.keys(Object(query.projection)).some((k) =>
+    Object.hasOwn(Object(query.joins), k.slice(1))
+  );
+
+/**
  * Validates the optional `distinct` flag. Must be a boolean. When
  * `true` it cannot be combined with declared `aggregates` or with a
  * projection key that auto-expands a join alias into a `JSON_ROW`
@@ -39,8 +54,8 @@ const validateDistinct = (query: Record<string, unknown>): void => {
         .distinct}`,
     );
   }
-  if (query.distinct !== true) return;
-  if (query.aggregates !== undefined) {
+  if (query.distinct !== true || !isGroupedSelect(query)) return;
+  if (Object.keys(Object(query.aggregates)).length > 0) {
     throw new TypeError(
       `Invalid SELECT query: 'distinct' cannot be combined with 'aggregates' — aggregate SELECTs GROUP BY every non-aggregated projection key, which already deduplicates rows`,
     );
@@ -80,12 +95,6 @@ const validateAggregates = (
   }
 
   const aggregates = query.aggregates as Record<string, unknown>;
-  if (Object.keys(aggregates).length === 0) {
-    throw new TypeError(
-      `Invalid SELECT query: 'aggregates' cannot be an empty object`,
-    );
-  }
-
   for (const [key, value] of Object.entries(aggregates)) {
     if (typeof key !== 'string' || key.trim().length === 0) {
       throw new TypeError(
@@ -320,9 +329,7 @@ const validateOrderBy = (
   }
 
   const joinedKeys = joinedColumns.map((c) => `@${c.replace('.', '.@')}`);
-  const joins = (query.joins ?? {}) as Record<string, unknown>;
-  const grouped = query.aggregates !== undefined ||
-    projectionKeys.some((k) => k.slice(1) in joins);
+  const grouped = isGroupedSelect(query);
   const distinct = query.distinct === true ? `'distinct'` : undefined;
   const restriction = distinct ??
     (grouped ? `aggregates or a projected join alias` : undefined);

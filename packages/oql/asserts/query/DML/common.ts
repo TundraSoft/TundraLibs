@@ -1,5 +1,6 @@
 /**
- * Shared DML validators: pre-declared expressions, per-row data entries.
+ * Shared DML validators: pre-declared expressions, per-row data entries,
+ * the UPDATE and DELETE relation-filter refusal.
  *
  * @module asserts/Query/DML/Common
  */
@@ -186,4 +187,45 @@ const hasColumnReference = (expr: unknown): boolean => {
     return Object.values(expr).some(hasColumnReference);
   }
   return false;
+};
+
+/**
+ * Refuses a filter key that reaches through a join, `'@Items.@sku'` where
+ * `Items` is not a column of the table. UPDATE and DELETE take no joins,
+ * so such a key cannot resolve on any engine. A declared column as the
+ * root is a JSON path, and the table name or `__base__` a qualified
+ * column; those and an expression key are left to the filter validator. `$exists` subqueries
+ * keep their own scope and are not walked.
+ *
+ * @throws {OqlError} `RELATION_FILTER_UNSUPPORTED` for the first such key.
+ */
+export const assertNoRelationFilter = (
+  where: unknown,
+  query: Record<string, unknown>,
+  columnList: string[],
+  context: 'UPDATE' | 'DELETE',
+): void => {
+  if (typeof where !== 'object' || where === null) return;
+  for (const [key, value] of Object.entries(where)) {
+    if (key === '$and' || key === '$or') {
+      if (Array.isArray(value)) {
+        for (const sub of value) {
+          assertNoRelationFilter(sub, query, columnList, context);
+        }
+      }
+      continue;
+    }
+    if (!key.startsWith('@') || !key.includes('.@')) continue;
+    const root = key.slice(1).split('.@')[0]!;
+    if (
+      columnList.includes(root) || root === query.table ||
+      root === '__base__' || Object.hasOwn(Object(query.expressions), root)
+    ) continue;
+    throw new OqlError(
+      `Invalid ${context} query: filter key '${key}' reads '${root}', which is not a column of '${
+        String(query.table)
+      }'. A filter through a relation or join is not supported in UPDATE or DELETE`,
+      { code: 'RELATION_FILTER_UNSUPPORTED', key },
+    );
+  }
 };

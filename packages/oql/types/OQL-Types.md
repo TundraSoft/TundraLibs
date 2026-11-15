@@ -155,7 +155,7 @@ preamble (`table`, optional `schema`, and `columns: Array<keyof PT>`).
   schema?: string;
   columns: Array<keyof PT>;
   // Optional SELECT DISTINCT. Rejected (validator throws) when combined
-  // with `aggregates` or a join-alias projection (JSON_ROW auto-expand)
+  // with an aggregate or a join-alias projection (JSON_ROW auto-expand)
   // — the automatic GROUP BY those trigger already deduplicates.
   distinct?: boolean;
   // REQUIRED. Keys are @-prefixed identifiers (columns / expressions /

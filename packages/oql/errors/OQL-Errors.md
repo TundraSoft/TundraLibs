@@ -25,18 +25,20 @@ OQL validates a query in three passes. The last one produces every
 | Pass         | Enforced by                                    | Raises                              |
 | ------------ | ---------------------------------------------- | ----------------------------------- |
 | **Shape**    | the types in `@tundralibs/oql/types`           | a compile-time type error           |
-| **Scoping**  | `assertQuery` (`@tundralibs/oql/asserts`)      | `TypeError`, with one exception     |
+| **Scoping**  | `assertQuery` (`@tundralibs/oql/asserts`)      | `TypeError`, with two exceptions    |
 | **Emission** | the translators (`@tundralibs/oql/translator`) | `OqlError` — the codes on this page |
 
 The types validate a query's **shape**; `assertQuery` validates the rules that
 span sibling properties (a `having` key naming a declared aggregate, every
 referenced column appearing in `columns`) — see
 [the shape-vs-scoping note in the type docs](../types/OQL-Types.md). Those
-asserts throw plain `TypeError`s, **not** `OqlError`s. The one exception is a
+asserts throw plain `TypeError`s, **not** `OqlError`s, with two exceptions. A
 date expression's `unit`: the asserts refuse a bad one with
 [`INVALID_TIME_UNIT`](#invalid_time_unit), the code the translators use for
-the same mistake. Every other code below is raised from
-`packages/oql/translator` while SQL (or a Mongo pipeline) is being emitted.
+the same mistake. And an `UPDATE` or `DELETE` filter through a join, refused
+with [`RELATION_FILTER_UNSUPPORTED`](#relation_filter_unsupported). Every
+other code below is raised from `packages/oql/translator` while SQL (or a
+Mongo pipeline) is being emitted.
 
 That split is the single most useful thing to know when handling these
 errors. A query that passed `assertQuery` can still fail translation, but
@@ -84,7 +86,7 @@ BaseError                  (@tundralibs/utils — typed context, cause, toJSON)
 `.code` is a getter over `context.code`, and it is **guarded**: if `context`
 carries no code, or a string that is not a key of `OqlErrorCodes`, the getter
 returns `'UNKNOWN'` rather than the raw value. So `err.code` is always one of
-the 13 codes below, and always safe to `switch` on exhaustively.
+the 14 codes below, and always safe to `switch` on exhaustively.
 
 `OqlErrorCodes` (also exported from `@tundralibs/oql/errors`) maps each code
 to a short label. It is a lookup table for tooling and the guard above — it
@@ -95,7 +97,7 @@ each throw site, so the label in `OqlErrorCodes` is not what you see in
 
 ## Error Codes
 
-All 13 codes in the `OqlErrorCode` union. Branch on `err.code`, never on
+All 14 codes in the `OqlErrorCode` union. Branch on `err.code`, never on
 message text.
 
 | Code                          | Raised by                 | Meaning                                                                        |
@@ -113,6 +115,7 @@ message text.
 | `PARAM_INLINE_UNSUPPORTED`    | `OqlError`                | A view body needed literal inlining under a non-`named` placeholder format.    |
 | `NON_FINITE_LITERAL`          | `OqlError`                | A view body needed to inline `NaN` or `Infinity` as a SQL literal.             |
 | `INVALID_TIME_UNIT`           | `OqlError`                | A date expression was given an unrecognised `unit`.                            |
+| `RELATION_FILTER_UNSUPPORTED` | `OqlError`                | An `UPDATE` or `DELETE` filter key reached through a join.                     |
 
 ## Code Reference
 
@@ -142,10 +145,13 @@ for its own grammar gaps, for example:
 
 - **SQLite** — `ALTER COLUMN`, `ALTER CONSTRAINT`, `CREATE_VIEW` with
   `orReplace`, and a rename-only `ALTER_VIEW` (supply a `query` to redefine).
+- **Postgres** — a `DATE_ADD` in a `CREATE_INDEX` `where`, which an index
+  predicate cannot hold.
 - **MongoDB** — `CREATE_SCHEMA` (databases are implicit), `distinct` on
   `SELECT` / `COUNT`, `STRING_AGG`, an `$exists` / `$nexists` filter on
-  `UPDATE` or `DELETE`, and column references or expressions in positions a
-  Mongo find-filter cannot take.
+  `UPDATE` or `DELETE`, any expression in a `CREATE_INDEX` `where`, and
+  column references or expressions in positions a Mongo find-filter cannot
+  take.
 
 **Fix:** read `err.dialect` and `err.feature` — the `feature` string is
 written for a human and usually names the workaround inline. The full
@@ -351,6 +357,23 @@ it. A `DATE_ADD` or `DATE_DIFF` with no `unit` at all is a `TypeError` from
 the asserts. **Fix:** use a unit from the expression's allowed set.
 
 **Extra context:** `unit`, and `dialect` when a translator threw it.
+
+### `RELATION_FILTER_UNSUPPORTED`
+
+An `UPDATE` or `DELETE` `where` named a key such as `'@Items.@sku'`, whose
+root `Items` is not a column of the table. `UPDATE` and `DELETE` take no
+joins, so the key cannot resolve on any engine. A root that is a declared
+column is a JSON path and is not refused.
+
+**Triggered by** the `assertUpdate` and `assertDelete` asserts, which every
+translator runs first, so all four engines throw it. Keys inside `$and` and
+`$or` are checked; an `$exists` subquery keeps its own scope. A norm
+relation filter on `update()` or `delete()` reaches oql in this form.
+**Fix:** select the matching keys first, through the join, then update or
+delete by those keys. A correlated `$exists` in the `where` is the other
+way on the SQL engines.
+
+**Extra context:** `key` — the offending filter key.
 
 ## Handling Errors
 

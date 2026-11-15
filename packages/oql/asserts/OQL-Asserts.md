@@ -25,7 +25,7 @@ Runtime validators for OQL queries.
 
 The asserts module provides runtime validation for OQL queries. All validators follow the Guardian pattern with two variants:
 
-- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it
+- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it. An `UPDATE` or `DELETE` filter key that reaches through a join throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`
 - **Type guard functions** - Return `boolean` without throwing
 
 This ensures queries are structurally valid before translation and execution.
@@ -131,10 +131,10 @@ const valid = isSelect(query); // Returns boolean
 - WHERE may reference pre-declared `expressions` by their `@key`; the translator substitutes the expression body.
 - JOIN conditions reference declared join columns.
 - Aggregates have valid `$$_aggregate` discriminators and column refs.
-- ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
+- ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, at least one aggregate, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
 - `limit`, if provided, must be a **positive integer** (`>= 1`; `0` is rejected).
 - `offset`, if provided, must be a **non-negative integer** (`>= 0`).
-- `distinct`, if provided, must be a boolean. `distinct: true` is rejected when combined with `aggregates` or a join-alias projection (`JSON_ROW` auto-expand) — the automatic GROUP BY those trigger already deduplicates rows.
+- `distinct`, if provided, must be a boolean. `distinct: true` is rejected when combined with at least one aggregate or a join-alias projection (`JSON_ROW` auto-expand) — the automatic GROUP BY those trigger already deduplicates rows.
 
 ### INSERT Query
 
@@ -203,7 +203,7 @@ const valid = isUpdate(query);
 - Table and columns are specified
 - Data keys are in the column list
 - Data values follow the INSERT rules above (same literal-vs-Expression disambiguation); column references inside Expressions are permitted (UPDATE can reference the row being modified)
-- WHERE clause is valid
+- WHERE clause is valid. A key whose root is not a column, the table or an expression key, such as `'@Items.@sku'`, reaches through a join, which UPDATE does not take: it throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`
 
 ### DELETE Query
 
@@ -222,7 +222,7 @@ const valid = isDelete(query);
 - Table is specified
 - `columns` is a non-empty array — this is the table's column list used to resolve `@col` references inside the optional `where` filter (and any pre-declared `expressions`), **not** a projection (DELETE returns no rows). A missing or empty array throws `Invalid DELETE query: 'columns' must be a non-empty array`.
 - Optional `expressions` are well-formed
-- WHERE clause is valid (syntactically optional — DELETE without WHERE removes every row)
+- WHERE clause is valid (syntactically optional — DELETE without WHERE removes every row). A key that reaches through a join, such as `'@Items.@sku'`, throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`, as for UPDATE
 
 ### UPSERT Query
 

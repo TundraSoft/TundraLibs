@@ -342,6 +342,56 @@ describe('oql.translator.guards', () => {
     });
   });
 
+  describe('index predicate', () => {
+    const index = (operand: unknown) =>
+      ({
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where: { '@due': { $gte: operand } },
+      }) as Query<'CREATE_INDEX'>;
+    const dateAdd = {
+      $$_expression: 'DATE_ADD',
+      args: { date: new Date('2026-03-15T00:00:00Z'), amount: 1, unit: 'DAYS' },
+    };
+    const add = { $$_expression: 'ADD', args: ['@due', 1] };
+
+    it('refuses DATE_ADD where the engine cannot hold it, with one error', () => {
+      // Postgres builds the interval from text, which is not IMMUTABLE; a
+      // MongoDB partial filter takes no $expr. SQLite can hold it.
+      const features = [new PostgresTranslator(), new MongoTranslator()].map(
+        (t) => {
+          const err = asserts.assertThrows(
+            () => t.createIndex(index(dateAdd)),
+            DialectUnsupportedError,
+          );
+          return err.feature;
+        },
+      );
+      asserts.assertEquals(features, [
+        'the computed expression DATE_ADD in an index predicate',
+        'the computed expression DATE_ADD in an index predicate',
+      ]);
+      asserts.assertStringIncludes(
+        new SQLiteTranslator().createIndex(index(dateAdd)).sql,
+        'WHERE "due" >= strftime(',
+      );
+    });
+
+    it('refuses any expression on MongoDB only', () => {
+      asserts.assertThrows(
+        () => new MongoTranslator().createIndex(index(add)),
+        DialectUnsupportedError,
+        'the computed expression ADD in an index predicate',
+      );
+      asserts.assertEquals(
+        new PostgresTranslator().createIndex(index(add)).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("due" + 1)',
+      );
+    });
+  });
+
   describe('param inlining', () => {
     it('refuses to inline a non-named placeholder format', () => {
       const err = asserts.assertThrows(

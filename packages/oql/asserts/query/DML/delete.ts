@@ -12,7 +12,7 @@ import {
   assertSchemaName,
   assertTableName,
 } from '../common.ts';
-import { validateExpressions } from './common.ts';
+import { assertNoRelationFilter, validateExpressions } from './common.ts';
 
 /**
  * Asserts a value is a valid `DELETE` query: `table` and `columns` are valid,
@@ -49,6 +49,7 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
     // the base table name takes precedence (qualified-column form) and
     // is excluded. DELETE has no joins, so no alias exclusion is needed.
     const jsonPathRoots = columnList.filter((c) => c !== query.table);
+    assertNoRelationFilter(query.where, query, columnList, 'DELETE');
     assertQueryFilter(
       query.where,
       availableKeys,
