@@ -1122,6 +1122,10 @@ export class MongoEngine
       code = op === 'connect' ? 'CONNECTION_FAILED' : 'CONNECTION_LOST';
     }
 
+    // E11000 names the unique index only in its message text.
+    const index = code === 'DUPLICATE_KEY'
+      ? / index: (\S+)/.exec(message)?.[1]
+      : undefined;
     return new EngineError(
       code,
       {
@@ -1130,6 +1134,7 @@ export class MongoEngine
         reason: message,
         driverCode: err.code,
         driverCodeName: err.codeName,
+        ...(index !== undefined ? { constraint: index } : {}),
       } as never,
       err,
     );

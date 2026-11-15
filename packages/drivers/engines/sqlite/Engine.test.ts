@@ -148,8 +148,8 @@ describe({
 
     it('lifts constraint / column names into metadata (resolves the template placeholder)', () => {
       // UNIQUE / CHECK fill `${constraint}`; NOT NULL fills `${column}`. Without
-      // this the EngineError template renders a literal `${constraint}` /
-      // `${column}` (onMissing:'literal') and the context field stays undefined.
+      // this the message leaves the name out and the context field stays
+      // undefined.
       const dup = engine.wrapError(
         {
           code: 'SQLITE_CONSTRAINT_UNIQUE',
