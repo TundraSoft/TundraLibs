@@ -306,12 +306,12 @@ Correlated `EXISTS (SELECT 1 FROM <table> AS __exists__ WHERE …)` /
 `QueryFilter` is (SELECT/COUNT/UPDATE/DELETE `where`, nested in
 `$and` / `$or`).
 
-| Dialect  | Behaviour                                                                                    |
-| -------- | -------------------------------------------------------------------------------------------- |
-| Postgres | Native `EXISTS` / `NOT EXISTS`.                                                              |
-| MariaDB  | Native `EXISTS` / `NOT EXISTS`.                                                              |
-| SQLite   | Native `EXISTS` / `NOT EXISTS`.                                                              |
-| MongoDB  | **Throws** `DialectUnsupportedError` — correlated subqueries have no Mongo find-filter form. |
+| Dialect  | Behaviour                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| Postgres | Native `EXISTS` / `NOT EXISTS`.                                                                   |
+| MariaDB  | Native `EXISTS` / `NOT EXISTS`.                                                                   |
+| SQLite   | Native `EXISTS` / `NOT EXISTS`.                                                                   |
+| MongoDB  | A `$lookup` stage on SELECT and COUNT. **Throws** `DialectUnsupportedError` on UPDATE and DELETE. |
 
 Correlation goes through the `on` map only (subquery column → outer
 column ref or literal); the optional `where` filters the subquery
@@ -319,6 +319,23 @@ table locally. Outer refs resolve through `__base__` when the outer
 query has joins, and are qualified with the outer table's own name
 otherwise, so they can never be captured by the subquery table's
 scope.
+
+On MongoDB a SELECT or COUNT carrying the node runs as an aggregation
+pipeline. Each node is a `$lookup` whose sub-pipeline matches the `on`
+map against the outer columns bound in `let`, applies the node's
+`where`, and stops at `$limit: 1`. The filter's `$match` then tests the
+looked-up array, non-empty for `$exists` and empty for `$nexists`, and
+an `$unset` drops it before the rows are sorted or projected. A null or
+missing key matches nothing unless it is listed in `nullSafe`, as on
+SQL.
+
+`updateMany` and `deleteMany` take a query filter, which has no stage
+to run a lookup in, so an UPDATE or DELETE carrying the node throws on
+MongoDB, as does a partial-index predicate. Select the keys with the
+same filter first, then update or delete by `$in` on them. An `on`
+value that names a joined column (`'@Alias.@col'`) also throws on
+MongoDB: a join there is an array on the document, with no single row
+to bind the key to.
 
 ## Expressions
 
@@ -585,7 +602,7 @@ A lone `nullSafe` key is the concise form without the guard.
 
 A `$exists` / `$nexists` correlation map takes the same `nullSafe`
 array, with the same SQL operators, and reads a `null` value the same
-way: `IS NULL` on the subquery column.
+way: `IS NULL` on the subquery column, null or missing on MongoDB.
 
 A `null` value in `on` is a NULL check on the joined column (`IS NULL`;
 null or missing on MongoDB) and cannot be listed in `nullSafe`, nor can

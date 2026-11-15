@@ -142,8 +142,9 @@ for its own grammar gaps, for example:
 - **SQLite** — `ALTER COLUMN`, `ALTER CONSTRAINT`, `CREATE_VIEW` with
   `orReplace`, and a rename-only `ALTER_VIEW` (supply a `query` to redefine).
 - **MongoDB** — `CREATE_SCHEMA` (databases are implicit), `distinct` on
-  `SELECT` / `COUNT`, `STRING_AGG`, correlated `$exists` filters, and column
-  references or expressions in positions a Mongo find-filter cannot take.
+  `SELECT` / `COUNT`, `STRING_AGG`, an `$exists` / `$nexists` filter on
+  `UPDATE` or `DELETE`, and column references or expressions in positions a
+  Mongo find-filter cannot take.
 
 **Fix:** read `err.dialect` and `err.feature` — the `feature` string is
 written for a human and usually names the workaround inline. The full
