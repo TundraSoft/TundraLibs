@@ -30,6 +30,7 @@ import { healthCommand } from './commands/health.ts';
 import { initCommand } from './commands/init.ts';
 import { accessCommand, formatAccessReport } from './commands/access.ts';
 import { sdkCommand } from './commands/sdk.ts';
+import { run as cli } from './mod.ts';
 
 /**
  * A stubbed version lookup: the real one fetches jsr.io on every
@@ -76,6 +77,58 @@ describe('rapid.cli sdk', () => {
         asserts.assert(await pathExists(`${dir}/sdk/${file}`), file);
       }
       asserts.assertEquals(await sdkCommand(`${dir}/missing.ts`, {}, quiet), 1);
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+
+  it('reads the servers the entry gave openapi(), reports one it leaves out, and --strict-servers reaches the generator', async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-cli-sdk-servers-' });
+    const application = new URL('../Application.ts', import.meta.url).href;
+    const endpoints = new URL('../endpoints/mod.ts', import.meta.url).href;
+    const entry = async (name: string, servers: string): Promise<string> => {
+      const file = `${dir}/${name}.mts`;
+      await writeTextFile(
+        file,
+        [
+          `import { Application } from '${application}';`,
+          `import { openapi } from '${endpoints}';`,
+          `export const app = await Application.initialize({ name: '${name}', logger: { handlers: [] } });`,
+          `app.get('/openapi.json', openapi({ servers: ${servers} }));`,
+        ].join('\n'),
+      );
+      return file;
+    };
+    try {
+      const lines: string[] = [];
+      asserts.assertEquals(
+        await sdkCommand(
+          await entry(
+            'listed',
+            `[{ url: 'http://shop.test' }, { url: '/api' }]`,
+          ),
+          { out: `${dir}/sdk`, name: 'Shop', strictServers: true },
+          (line) => void lines.push(line),
+        ),
+        0,
+      );
+      const client = await readTextFile(`${dir}/sdk/Shop.ts`);
+      asserts.assertStringIncludes(client, "'http://shop.test',");
+      asserts.assertStringIncludes(client, 'RESTlerConfigError');
+      asserts.assertStringIncludes(
+        lines.join('\n'),
+        '- server "/api" is not an absolute http(s) URL',
+      );
+
+      // The flag as the CLI parses it: with no server to be strict about
+      // the command fails, and without the flag the same entry succeeds.
+      const bare = await entry('bare', '[]');
+      const out = `${dir}/bare`;
+      asserts.assertEquals(
+        await cli({ _: ['sdk', bare], out, 'strict-servers': true }),
+        1,
+      );
+      asserts.assertEquals(await sdkCommand(bare, { out }, quiet), 0);
     } finally {
       await removeDir(dir, { recursive: true });
     }
