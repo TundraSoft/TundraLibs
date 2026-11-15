@@ -2899,6 +2899,11 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         expected: { $and: [{ $in: ['$a', [1, 2]] }, present('$a')] },
       },
       {
+        name: 'reads a direct list as $in',
+        when: { '@a': [1, 2] },
+        expected: { $and: [{ $in: ['$a', [1, 2]] }, present('$a')] },
+      },
+      {
         name: 'guards the field of $nin',
         when: { '@a': { $nin: [1, 2] } },
         expected: {

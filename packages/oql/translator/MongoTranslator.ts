@@ -2223,6 +2223,8 @@ export class MongoTranslator {
         ? value as Record<string, unknown>
         : value === null
         ? { $null: true }
+        : Array.isArray(value)
+        ? { $in: value }
         : { $eq: value };
       for (const [op, operand] of Object.entries(ops)) {
         parts.push(this.__conditionToExpr(field, op, operand));
