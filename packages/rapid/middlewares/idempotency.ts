@@ -96,7 +96,11 @@ export type IdempotencyHooks = {
     record: Extract<IdempotencyRecord, { state: 'pending' }>,
     ttl: number,
   ): boolean | Promise<boolean>;
-  /** Store (or replace) the completed record, expiring `ttl` seconds from now. */
+  /**
+   * Store (or replace) the completed record, expiring `ttl` seconds from
+   * now. A throw is logged and the reply still goes out; the key then
+   * stays pending, so a retry answers 409 until `pendingTtl`.
+   */
   saveRecord(
     key: string,
     record: IdempotencyRecord,
@@ -469,11 +473,27 @@ export function idempotency(options: IdempotencyOptions): RapidMiddleware {
         ...(added !== undefined ? { headers: added } : {}),
       };
     }
-    await hooks.saveRecord(
-      key,
-      { state: 'done', fingerprint, reply: replayable },
-      ttl,
-    );
+    try {
+      await hooks.saveRecord(
+        key,
+        { state: 'done', fingerprint, reply: replayable },
+        ttl,
+      );
+    } catch (error) {
+      // The work ran and its reply is the truth: a store that cannot keep
+      // the record must not turn it into a 500. The pending marker stands
+      // — releasing it would let a retry run the work again at once — so a
+      // retry gets a 409 until `pendingTtl`.
+      ctx.meter?.middleware('idempotency', 'save_failed', meterAction(ctx));
+      ctx.app.log.error(
+        'idempotency record could not be saved — the reply is sent, a retry answers 409 until pendingTtl',
+        {
+          requestId: ctx.requestId,
+          action: ctx.action,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
   };
   return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }
