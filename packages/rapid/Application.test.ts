@@ -8,6 +8,7 @@
  * @module
  */
 
+import { onSignal } from '@tundralibs/compat/runtime';
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import {
@@ -132,6 +133,45 @@ describe('rapid.Application', () => {
       await app.stop();
       asserts.assertEquals(stops, 1);
       asserts.assertEquals(app.running, false);
+    });
+
+    it('shutdownSignals: a listed signal stops the started app, and anything else is refused at boot', async () => {
+      const runtime = globalThis as {
+        Deno?: { pid: number; kill(pid: number, signal: string): void };
+        process?: { pid: number; kill(pid: number, signal: string): void };
+      };
+      const host = runtime.Deno ?? runtime.process!;
+      // The test's own handler: the process survives the signal even if
+      // the app bound nothing.
+      const release = onSignal('SIGHUP', () => {});
+      const app = await Application.initialize({
+        name: 'signals',
+        logger: { handlers: [] },
+        server: { port: 0 },
+        shutdownSignals: ['SIGHUP'],
+      });
+      app.get('/', () => ({ content: 'x' }));
+      try {
+        await app.start();
+        host.kill(host.pid, 'SIGHUP');
+        for (let i = 0; i < 100 && app.running; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        asserts.assertEquals(app.running, false);
+      } finally {
+        await app.stop();
+        release();
+      }
+      const refused = await asserts.assertRejects(
+        () =>
+          Application.initialize({
+            name: 'signals-bad',
+            logger: { handlers: [] },
+            shutdownSignals: ['SIGKILL'] as never,
+          }),
+        RapidError,
+      );
+      asserts.assertStringIncludes(refused.message, 'shutdownSignals');
     });
 
     it('restart works after a clean stop', async () => {

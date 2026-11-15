@@ -70,6 +70,8 @@ mode: DEVELOPMENT
 stateMode: CLONE
 # Graceful-shutdown drain window in SECONDS (1-30) before force-close — app.stop()
 shutdownTimeout: 25
+# Signals that stop the app, draining in-flight requests for shutdownTimeout
+shutdownSignals: [SIGTERM, SIGINT]
 
 headers: # header NAMES the core reads and stamps — one place, shared by custom middleware too
   requestId: x-request-id # inbound correlation id adopted per request (ctx.requestId), echoed on every response
@@ -180,7 +182,8 @@ import { Application } from '@tundralibs/rapid';
 import { health } from '@tundralibs/rapid/endpoints';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await Application.initialize(configDir);
+// Exported for \`rapid access\` and \`rapid sdk\`, which read the app.
+export const app = await Application.initialize(configDir);
 
 // What the route answers with: checked in DEVELOPMENT, shown in the docs.
 const Home = Guardian.object({
@@ -191,8 +194,11 @@ const Home = Guardian.object({
 ${PLAIN_ROUTE}
 app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
-await app.start();
-app.log.info(\`{{name}} listening on \${app.address}\`);
+// Listen only when run directly: importing this file never starts a server.
+if (import.meta.main) {
+  await app.start();
+  app.log.info(\`{{name}} listening on \${app.address}\`);
+}
 `;
 
 const MAIN_MODULES = `import { Application } from '@tundralibs/rapid';
@@ -200,14 +206,18 @@ import { health } from '@tundralibs/rapid/endpoints';
 import * as modules from './modules/mod.ts';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await Application.initialize(configDir);
+// Exported for \`rapid access\` and \`rapid sdk\`, which read the app.
+export const app = await Application.initialize(configDir);
 app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
 // Boot the module system — every RapidModule exported from modules/mod.ts.
 await app.modules({ modules: [modules] });
 
-await app.start();
-app.log.info(\`{{name}} listening on \${app.address}\`);
+// Listen only when run directly: importing this file never starts a server.
+if (import.meta.main) {
+  await app.start();
+  app.log.info(\`{{name}} listening on \${app.address}\`);
+}
 `;
 
 const MODULE_SAMPLE = `import { Guardian } from '@tundralibs/guardian';
@@ -486,9 +496,9 @@ helpers) and \`@tundralibs/rapid/cli\`.
   \`ctx.args.query\` (\`filters: { status: { $eq: 'active' } }\`, \`sorting\`;
   ops \`eq/ne/gt/gte/lt/lte/like/ilike/null/in/nin\`, \`field=[a,b]\` = \`$in\`)
   — map it onto your query instead of parsing the URL.
-- **Shutdown, DI, uploads.** rapid installs no signal handler: add
-  \`onSignal('SIGTERM', () => void app.stop())\` (from
-  \`@tundralibs/compat/runtime\`); \`stop()\` drains for \`shutdownTimeout\`.
+- **Shutdown, DI, uploads.** \`shutdownSignals\` in Application.yaml (set
+  to SIGTERM and SIGINT here) makes a signal call \`app.stop()\`, which
+  drains for \`shutdownTimeout\`; without the key rapid binds no signal.
   Scope implementations per app with \`app.container.stock(Token, impl)\` and
   resolve them with \`inject(Token)\` (\`@tundralibs/doctor\`) inside handlers.
   Uploads are refused (415) until \`uploads.allowedExtensions\` lists the
