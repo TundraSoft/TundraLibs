@@ -140,6 +140,8 @@ every rule above. The open-end marker has one rule of its own: give
 - [Querying](NORM-Querying.md): filter values on date and time columns.
 - [Temporal tables](NORM-Temporal.md) and [Audit tables](NORM-Audit.md):
   the period columns and `@AsOf`.
+- [Upgrade notes](NORM-Upgrading.md): what changed for rows and code
+  written against an earlier version.
 
 ---
 
