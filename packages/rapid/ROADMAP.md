@@ -89,10 +89,9 @@ hit/miss header on a cached reply, and a hit/miss counter on the meter.
   calls: core-vs-CLI home, latency percentiles, the in-core request ring,
   repaint cadence, a zero-dep renderer.
 - **SDK generator follow-ups** — `rapid sdk` writes the client; still to
-  do: the paging totals of a collection reply,
-  one shared type for a schema several routes reuse, a version selector
-  for header-versioned routes, and a token-refresh hook for the `auth`
-  option.
+  do: one shared type for a schema several routes reuse, a version
+  selector for header-versioned routes, and a token-refresh hook for the
+  `auth` option.
 
 ### Scaling & ops
 

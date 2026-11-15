@@ -43,6 +43,7 @@ export async function sdkCommand(
       {
         ...(opts.name === undefined ? {} : { name: opts.name }),
         strictServers: opts.strictServers === true,
+        pagingHeaders: app.option('server')?.paging,
       },
     );
     await makeDir(out, { recursive: true });
