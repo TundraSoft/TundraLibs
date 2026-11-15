@@ -12,6 +12,7 @@ import {
   exit,
   isBrowser,
   isWorkers,
+  onSignal,
   unrefTimer,
 } from '@tundralibs/compat/runtime';
 import { Tracer } from '@tundralibs/tracer';
@@ -66,7 +67,10 @@ import {
   type StaticMount,
 } from './utils/mod.ts';
 import { unknownConfigKeys } from './utils/configKeys.ts';
-import { assertRouteResponse } from './utils/routeResponse.ts';
+import {
+  assertRouteResponse,
+  routesWithoutResponse,
+} from './utils/routeResponse.ts';
 import {
   isAbsolute as _pathIsAbsolute,
   join as joinPath,
@@ -152,6 +156,9 @@ let __containerProviderInstalled = false;
  * runtime-enforced way in.
  */
 const INIT_BRAND: unique symbol = Symbol('rapid.application.init');
+
+/** The signals `shutdownSignals` accepts — compat's `Signal`. */
+const SIGNALS: readonly string[] = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'];
 
 /**
  * The closed key sets `__configureUi` validates the DATA half against —
@@ -323,6 +330,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __apiSurface?: ApiSurface;
   /** Options the app does not have, still to be warned about in PRODUCTION. */
   private __unknownKeys: string[] = [];
+  /** `server.requireResponse` passed, or PRODUCTION already warned. */
+  private __responsesChecked = false;
   /** The in-progress `stop()`, so a concurrent second call joins it. */
   private __stopping?: Promise<this>;
   /**
@@ -355,6 +364,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __started = false;
   /** Set by `stop()`; `fetch()` refuses to rebuild a transport on a torn-down app. */
   private __stopped = false;
+  /** Detaches for the bound `shutdownSignals`. */
+  private readonly __signalDetach: (() => void)[] = [];
   /** Whether a module runtime was booted and has been disposed: such an app cannot serve again. */
   private __modulesDisposed = false;
 
@@ -647,6 +658,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         mode: 'PRODUCTION',
         stateMode: 'CLONE',
         shutdownTimeout: 25, // seconds — under Cloud Run's 30s SIGTERM window
+        shutdownSignals: [],
       });
       this.__validate();
       // A key the options do not have is a typo that would be ignored.
@@ -1249,7 +1261,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       opts.template === undefined && opts.layout === undefined &&
       opts.apiOnly === undefined && opts.uiOnly === undefined &&
       opts.access === undefined && opts.compose === undefined &&
-      opts.cache === undefined
+      opts.cache === undefined && opts.response === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -1285,8 +1297,13 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (opts.access !== undefined) {
       assertAccess(`${method} ${path}`, opts.access);
     }
-    if (opts.openapi?.response !== undefined) {
-      assertRouteResponse(`${method} ${path}`, opts.openapi.response);
+    // `response` beside the chain is the plain route's spelling of
+    // `openapi.response`, and wins over it.
+    const openapi = opts.response !== undefined
+      ? { ...opts.openapi, response: opts.response }
+      : opts.openapi;
+    if (openapi?.response !== undefined) {
+      assertRouteResponse(`${method} ${path}`, openapi.response);
     }
     if (opts.compose !== undefined) {
       // Shape only, here — the actions resolve against the mounted modules
@@ -1339,7 +1356,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       middlewares,
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
       ...(version !== undefined ? { version } : {}),
-      ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
+      ...(openapi !== undefined ? { openapi } : {}),
       ...(template !== undefined ? { template } : {}),
       ...(opts.apiOnly === true ? { apiOnly: true } : {}),
       ...(opts.uiOnly === true ? { uiOnly: true } : {}),
@@ -2117,6 +2134,38 @@ export class Application<S extends RapidContextState = RapidContextState>
     });
   }
 
+  /**
+   * `server.requireResponse`: every route that answers data declares what
+   * it answers with. DEVELOPMENT refuses to boot and names them all;
+   * PRODUCTION warns once and serves.
+   */
+  private __assertResponsesDeclared(): void {
+    if (this.option('server')?.requireResponse === false) return;
+    if (this.__responsesChecked) return;
+    const missing = routesWithoutResponse(
+      this.__routes as unknown as readonly RapidRouteEntry[],
+      {
+        uiPrefer: this.uiPrefer,
+        api: this.__apiSurface !== undefined || !this.uiEnabled,
+      },
+    );
+    this.__responsesChecked = missing.length === 0 ||
+      this.mode !== 'DEVELOPMENT';
+    if (missing.length === 0) return;
+    const message = `${missing.length} route${
+      missing.length === 1 ? ' declares' : 's declare'
+    } no response: ${
+      missing.join(', ')
+    } — give each a schema or a reply kind ('none', 'text', 'bytes', 'stream', 'redirect'), or set server.requireResponse: false`;
+    if (this.mode === 'DEVELOPMENT') {
+      throw new RapidError('RAPID_CONFIG', {
+        message,
+        details: { routes: missing },
+      });
+    }
+    this.log.warn(message);
+  }
+
   private __assertBootConfig(): void {
     // PRODUCTION's half of the unknown-option check: said once.
     if (this.__unknownKeys.length > 0) {
@@ -2125,6 +2174,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     }
     this.__assertAuthBound();
     this.__assertCacheBound();
+    this.__assertResponsesDeclared();
     this.__planCompose();
     this.__logAccessSummary();
     if (this.option('stateMode') === 'SHARE') {
@@ -2208,6 +2258,7 @@ export class Application<S extends RapidContextState = RapidContextState>
         this.__jobTransport = new JOBTransport(this);
         await this.__jobTransport.start();
       }
+      this.__bindShutdownSignals();
       this._emit('start');
       this.log.info('started', {
         address: this.address,
@@ -2321,8 +2372,31 @@ export class Application<S extends RapidContextState = RapidContextState>
     });
   }
 
+  /** Make each `shutdownSignals` entry stop the app; a signal this platform lacks is skipped with a warning. */
+  private __bindShutdownSignals(): void {
+    for (const signal of this.option('shutdownSignals')!) {
+      try {
+        this.__signalDetach.push(
+          onSignal(signal, () => {
+            this.log.info(`${signal} received — stopping`);
+            this.stop().catch((error) =>
+              this.log.error('stop() after a shutdown signal failed', {
+                error: RapidError.from(error).message,
+              })
+            );
+          }),
+        );
+      } catch {
+        this.log.warn(
+          `shutdownSignals: ${signal} is not available on this platform`,
+        );
+      }
+    }
+  }
+
   /** The single-flight body of {@link stop}. */
   private async __stop(): Promise<this> {
+    for (const detach of this.__signalDetach.splice(0)) detach();
     // `__stopped` is set when teardown COMPLETES, on both paths below — not
     // at entry: during the drain the app must keep answering (ready()
     // reports 503 there), and only a request after the drain is served
@@ -2514,7 +2588,14 @@ export class Application<S extends RapidContextState = RapidContextState>
       socketPath,
       socketOrigins,
       versioning,
+      requireResponse,
     } = this._getOption('server') ?? {};
+    if (requireResponse !== undefined && typeof requireResponse !== 'boolean') {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'server.requireResponse must be a boolean',
+        details: { key: 'server.requireResponse', value: requireResponse },
+      });
+    }
     if (
       trustProxy !== undefined && typeof trustProxy !== 'boolean' &&
       (!Number.isInteger(trustProxy) || trustProxy < 0)
@@ -2709,6 +2790,16 @@ export class Application<S extends RapidContextState = RapidContextState>
       throw new RapidError('RAPID_CONFIG', {
         message: 'uploads.maxFiles must be a positive integer',
         details: { key: 'uploads.maxFiles', value: uploads.maxFiles },
+      });
+    }
+    const shutdownSignals = this._getOption('shutdownSignals')!;
+    if (
+      !Array.isArray(shutdownSignals) ||
+      shutdownSignals.some((signal) => !SIGNALS.includes(signal))
+    ) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `shutdownSignals must be a list of ${SIGNALS.join(', ')}`,
+        details: { key: 'shutdownSignals', value: shutdownSignals },
       });
     }
     const shutdownTimeout = this._getOption('shutdownTimeout')!;

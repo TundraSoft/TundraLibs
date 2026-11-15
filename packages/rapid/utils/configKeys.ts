@@ -30,6 +30,7 @@ const KEYS = group<RapidApplicationOptions>({
   mode: null,
   stateMode: null,
   shutdownTimeout: null,
+  shutdownSignals: null,
   headers: group<NonNullable<RapidApplicationOptions['headers']>>({
     requestId: null,
     requestIdEcho: null,
@@ -55,6 +56,7 @@ const KEYS = group<RapidApplicationOptions>({
       ui: null,
     }),
     autoHead: null,
+    requireResponse: null,
     methodNotAllowed: null,
     ignoreTrailingSlash: null,
     api: group<NonNullable<Server['api']>>({

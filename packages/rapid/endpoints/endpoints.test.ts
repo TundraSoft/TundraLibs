@@ -24,7 +24,12 @@ const make = (metricsOn = false) =>
   Application.initialize({
     name: 'endpoints-test',
     mode: 'DEVELOPMENT',
-    server: { port: 0, hostname: '127.0.0.1', metrics: metricsOn },
+    server: {
+      port: 0,
+      hostname: '127.0.0.1',
+      metrics: metricsOn,
+      requireResponse: false,
+    },
     logger: { handlers: [] },
     uploads: { path: '/tmp/rapid-endpoints-test' },
   });
@@ -398,7 +403,7 @@ describe('rapid.endpoints.docs', () => {
     const app = await Application.initialize({
       name: 'docs-test',
       mode: 'DEVELOPMENT',
-      server: { port: 0, hostname: '127.0.0.1' },
+      server: { port: 0, hostname: '127.0.0.1', requireResponse: false },
       logger: { handlers: [] },
       ...extra,
     });
@@ -795,7 +800,7 @@ describe('rapid.endpoints.docs — multi-tag operations', () => {
     const app = await Application.initialize({
       name: 'docs-tags',
       mode: 'DEVELOPMENT',
-      server: { port: 0, hostname: '127.0.0.1' },
+      server: { port: 0, hostname: '127.0.0.1', requireResponse: false },
       logger: { handlers: [] },
     });
     app.route(

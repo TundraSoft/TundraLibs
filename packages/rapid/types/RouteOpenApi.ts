@@ -42,11 +42,11 @@ export type RapidRouteOpenApi = {
   /** The route's binders — param/query/header/payload sources. */
   binds?: readonly RapidBinder[];
   /**
-   * The declared response schema (from `@GET(..., { response })`) — either
-   * emitter is honored (`toOpenAPI` preferred, then `toJSONSchema`), matching
-   * the request-body path. When it can also `parse` (a full guardian
-   * schema), DEVELOPMENT mode enforces it against the actual reply — see
-   * the decorator option's doc for the exact scope.
+   * What the route declared it answers with (`@GET(..., { response })` or
+   * the `response` route option). A schema is emitted as the 200 body
+   * (`toOpenAPI` preferred, then `toJSONSchema`) and, when it can also
+   * `parse`, DEVELOPMENT enforces it against the reply. A reply kind is
+   * documented as that kind and DEVELOPMENT checks the reply is one.
    */
   response?: RapidRouteResponse;
   /**

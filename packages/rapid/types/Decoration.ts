@@ -52,11 +52,7 @@ export type RapidDecoration =
     operationId?: string;
     /** Security-scheme names; `[]` = public. Overrides the module default. */
     security?: readonly string[];
-    /**
-     * The response shape: `buildOpenApi` emits its `toOpenAPI()` as the 200
-     * schema, and when it can `parse`, DEVELOPMENT enforces it against the
-     * reply (see `RapidRouteOpenApi.response`).
-     */
+    /** What the route answers with (see `RapidRouteOpenApi.response`). */
     response?: RapidRouteResponse;
     /** Route answers with a COLLECTION — documentation shape only. */
     paging?: boolean;

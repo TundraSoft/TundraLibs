@@ -96,6 +96,14 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * a guardian schema works, emitter-only shapes stay documentation-only.
    * The request side is `bind: [payload(Schema)]` (a schema OBJECT —
    * validates and documents the body at once).
+   *
+   * A route that does not answer JSON names its reply kind instead:
+   * `'none'` (a 204), `'text'`, `'bytes'`, `'stream'` or `'redirect'`.
+   * The document describes that kind, and DEVELOPMENT rejects a success
+   * reply of another kind the same way.
+   *
+   * Required on every route that answers data unless
+   * `server.requireResponse` is `false`.
    */
   response?: RapidRouteResponse;
   /**

@@ -35,7 +35,11 @@ import {
   stripApiPrefix,
 } from '../utils/mod.ts';
 import { isStreamBody, toReadableStream } from '../utils/streams.ts';
-import { responseFor } from '../utils/routeResponse.ts';
+import {
+  isResponseKind,
+  replyIsKind,
+  responseFor,
+} from '../utils/routeResponse.ts';
 import type {
   RapidChannelOptions,
   RapidComposeSlot,
@@ -674,7 +678,20 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           { action: ctx.action, requestId: ctx.requestId },
         );
       }
-      const schema = responseFor(entry?.openapi?.response, ctx.surface);
+      const declared = responseFor(entry?.openapi?.response, ctx.surface);
+      const success = returned === null || returned.status === undefined ||
+        (returned.status >= 200 && returned.status < 400);
+      // A named reply kind: the success reply must be of that kind.
+      if (
+        isResponseKind(declared) && success &&
+        this._app.mode === 'DEVELOPMENT' && !replyIsKind(declared, returned)
+      ) {
+        throw responseContractError(
+          ctx.action,
+          new Error(`the route declares response: '${declared}'`),
+        );
+      }
+      const schema = isResponseKind(declared) ? undefined : declared;
       if (
         schema?.parse !== undefined && returned !== null &&
         returned.redirect === undefined &&

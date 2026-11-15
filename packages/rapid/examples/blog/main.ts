@@ -117,6 +117,7 @@ import {
   usernameOf,
 } from './auth.ts';
 import { BlogSchema } from './models/mod.ts';
+import { AdminSummary } from './schemas.ts';
 import * as blog from './modules/mod.ts';
 import {
   AdminChrome,
@@ -181,7 +182,7 @@ app.auth(binding);
 // handler as the /posts JSON API). The old static landing page stays at
 // /public/. Shows `ctx.redirect` and that function-API and module-API
 // routes coexist.
-app.get('/', (ctx) => ctx.redirect('/posts/ui'));
+app.get('/', { response: 'redirect' }, (ctx) => ctx.redirect('/posts/ui'));
 
 // ── the UI layer + the live channel ──────────────────────────────────
 // The UI's data half is CONFIG — configs/Application.yaml's `ui:` set
@@ -243,7 +244,7 @@ app.get('/me', me());
 // password and set the same cookie /login would, so the permission-based
 // nav is clickable (visit /login/as/ada → the menu gains Admin). A real
 // app has a login form posting to /login instead.
-app.get('/login/as/:username:', async (ctx) => {
+app.get('/login/as/:username:', { response: 'redirect' }, async (ctx) => {
   const password = DEMO_ACCOUNTS[ctx.params.username];
   if (password === undefined) throw new RapidError('RAPID_NOT_FOUND');
   const { session } = await pact.login({
@@ -262,7 +263,7 @@ app.get('/login/as/:username:', async (ctx) => {
 });
 // The nav's sign-out LINK (a GET, so it can be an <a>): run the same
 // handler as POST /logout, then back to the page.
-app.get('/logout', async (ctx) => {
+app.get('/logout', { response: 'redirect' }, async (ctx) => {
   await logout()(ctx);
   return { content: '', redirect: '/posts/ui' };
 });
@@ -296,6 +297,7 @@ app.get(
 const demoApiKey = await issueDemoApiKey();
 app.get(
   '/admin/summary',
+  { response: AdminSummary },
   authorize('Admin', 'READ'),
   async (ctx) => {
     const { count } = await database.norm.use(BlogSchema).repo('Posts').count();

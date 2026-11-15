@@ -33,12 +33,16 @@ import type {
 } from '@tundralibs/rapid/types';
 import type { Post } from '../types.ts';
 import {
+  CommentShape,
   CreateCommentBody,
   CreatePostBody,
   PostList,
+  PostShape,
   PostSummary,
+  PostWithLinks,
   UpdatePostBody,
 } from '../schemas.ts';
+import { Guardian } from '@tundralibs/guardian';
 import { validated } from '@tundralibs/rapid';
 import { BlogModule } from './BlogModule.ts';
 import {
@@ -180,6 +184,7 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
     bind: [param('id')],
     description: 'Fetch one post by id.',
     template: PostDetailView,
+    response: PostShape,
   })
   async find(id: string): Promise<RapidContextResponse> {
     return { content: await this.get(id) };
@@ -192,6 +197,7 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
     bind: [param('id')],
     version: 'v2',
     description: 'Fetch one post by id (v2: adds _links).',
+    response: PostWithLinks,
   })
   async findV2(id: string): Promise<RapidContextResponse> {
     const post = await this.get(id);
@@ -203,6 +209,7 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
   @POST('/', {
     bind: [payload(validated(CreatePostBody))],
     description: 'Create a post.',
+    response: PostShape,
   })
   async create(
     body: { title: string; body: string; tags?: string[] },
@@ -221,6 +228,7 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
   @PATCH('/:id:', {
     bind: [param('id'), payload(validated(UpdatePostBody))],
     description: 'Partially update a post.',
+    response: PostShape,
   })
   async patch(
     id: string,
@@ -242,7 +250,11 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
     return { content: await this.get(id) };
   }
 
-  @DELETE('/:id:', { bind: [param('id')], description: 'Delete a post.' })
+  @DELETE('/:id:', {
+    bind: [param('id')],
+    description: 'Delete a post.',
+    response: 'none',
+  })
   async remove(id: string): Promise<RapidContextResponse> {
     await this.get(id);
     await this.db.repo('Posts').delete({ '@id': id });
@@ -262,6 +274,7 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
     bind: [param('id')],
     description: "List a post's comments.",
     template: CommentsView,
+    response: Guardian.array(CommentShape),
   })
   async comments(postId: string): Promise<RapidContextResponse> {
     await this.get(postId);
@@ -287,6 +300,7 @@ export class Posts extends BlogModule<typeof POST_EVENTS> {
   @POST('/:id:/comments', {
     bind: [param('id'), payload(validated(CreateCommentBody))],
     description: 'Add a comment to a post.',
+    response: CommentShape,
   })
   async addComment(
     postId: string,

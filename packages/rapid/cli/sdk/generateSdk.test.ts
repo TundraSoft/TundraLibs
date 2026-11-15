@@ -108,6 +108,46 @@ class Vault {
   }
 }
 
+@Module('Files', { prefix: '/files' })
+class Files {
+  @GET('/note', { response: 'text' })
+  note(): RapidContextResponse {
+    return { content: 'hello' };
+  }
+
+  @GET('/raw', { response: 'bytes' })
+  raw(): RapidContextResponse {
+    return { content: new Uint8Array([1, 2, 3]) };
+  }
+
+  @GET('/feed', { response: 'stream', security: [] })
+  feed(): RapidContextResponse {
+    return {
+      content: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([4, 5]));
+          controller.close();
+        },
+      }),
+    };
+  }
+
+  @GET('/missing', { response: 'bytes' })
+  missing(): RapidContextResponse {
+    throw new RapidError('RAPID_NOT_FOUND');
+  }
+
+  @POST('/purge', { response: 'none' })
+  purge(): RapidContextResponse {
+    return { status: 204, content: '' };
+  }
+
+  @GET('/latest', { response: 'redirect' })
+  latest(): RapidContextResponse {
+    return { content: '', redirect: '/files/raw' };
+  }
+}
+
 type Fetch = typeof globalThis.fetch;
 type Failure = {
   code: string;
@@ -125,6 +165,12 @@ type Client = {
   vaultToken(): Promise<unknown>;
   vaultKeys(): Promise<unknown>;
   vaultOpen(): Promise<unknown>;
+  filesNote(): Promise<string>;
+  filesRaw(): Promise<Uint8Array>;
+  filesFeed(): Promise<ReadableStream<Uint8Array>>;
+  filesMissing(): Promise<Uint8Array>;
+  filesPurge(): Promise<void>;
+  filesLatest?: unknown;
 };
 
 let builds = 0;
@@ -503,6 +549,47 @@ describe('rapid.cli sdk generateSdk', () => {
       asserts.assertStringIncludes(schemas, 'export type UsersTenantHeaders');
       asserts.assert(!schemas.includes('UsersPagedHeaders'));
     } finally {
+      await app.stop();
+    }
+  });
+
+  it('a route that names a reply kind gets a method of that kind; a redirect gets none', async () => {
+    const app = await Application.initialize({
+      name: 'sdk-kinds',
+      mode: 'DEVELOPMENT',
+      logger: { handlers: [] },
+    });
+    app.module(new Files());
+    const { client, entry, dispose } = await build(
+      app,
+      async (input, init) =>
+        await app.fetch(new Request(input as string, init)),
+    );
+    try {
+      asserts.assertEquals(await client.filesNote(), 'hello');
+      asserts.assertEquals(await client.filesRaw(), new Uint8Array([1, 2, 3]));
+      asserts.assertEquals(
+        new Uint8Array(
+          await new Response(await client.filesFeed()).arrayBuffer(),
+        ),
+        new Uint8Array([4, 5]),
+      );
+      asserts.assertEquals(await client.filesPurge(), undefined);
+      // An error reply of a byte route is still the server's envelope.
+      asserts.assertEquals(
+        (await failure(client.filesMissing())).code,
+        'RAPID_NOT_FOUND',
+      );
+      asserts.assertEquals(client.filesLatest, undefined);
+      if (isDeno) {
+        const check = await new Deno.Command(Deno.execPath(), {
+          args: ['check', entry],
+          stderr: 'piped',
+        }).output();
+        asserts.assert(check.success, new TextDecoder().decode(check.stderr));
+      }
+    } finally {
+      await dispose();
       await app.stop();
     }
   });

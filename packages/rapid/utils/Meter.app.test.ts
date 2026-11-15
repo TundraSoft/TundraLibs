@@ -16,7 +16,7 @@ const make = (metrics: boolean | RapidApplicationMetricsOptions = true) =>
   Application.initialize({
     name: 'meter-app',
     mode: 'DEVELOPMENT',
-    server: { port: 0, metrics },
+    server: { port: 0, metrics, requireResponse: false },
     logger: { handlers: [] },
   });
 

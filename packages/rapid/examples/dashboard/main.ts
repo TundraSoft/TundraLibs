@@ -41,6 +41,7 @@
  * @module
  */
 
+import { Guardian } from '@tundralibs/guardian';
 import { Application } from '@tundralibs/rapid';
 import {
   html,
@@ -422,6 +423,47 @@ const APP_JS = `(() => {
 })();
 `;
 
+// ── what each route answers with: checked in DEVELOPMENT, documented ──
+const Ranking = Guardian.array(
+  Guardian.tuple([Guardian.string(), Guardian.number()]),
+);
+const DashShape = Guardian.object({
+  days: Guardian.number(),
+  revenue: Guardian.number(),
+  delta: Guardian.number().nullable(),
+  orders: Guardian.number(),
+  prevOrders: Guardian.number(),
+  avgDeal: Guardian.number(),
+  target: Guardian.number(),
+  trend: Guardian.array(Guardian.number()),
+  regions: Ranking,
+  reps: Ranking,
+});
+const OrdersShape = Guardian.object({
+  rows: Guardian.array(Guardian.object({
+    id: Guardian.string(),
+    product: Guardian.string(),
+    qty: Guardian.number(),
+    amount: Guardian.number(),
+    region: Guardian.string(),
+    rep: Guardian.string(),
+    at: Guardian.date(),
+  })),
+});
+const LogShape = Guardian.discriminatedUnion('state', [
+  Guardian.object({ state: Guardian.literal('clean') }),
+  Guardian.object({
+    state: Guardian.literal('error'),
+    message: Guardian.string(),
+    values: Guardian.object({
+      product: Guardian.string(),
+      qty: Guardian.string(),
+      region: Guardian.string(),
+      rep: Guardian.string(),
+    }),
+  }),
+]);
+
 // ── the app: every region is API-first (JSON unless swapped) ─────────
 const app = await Application.initialize({
   name: 'sales-dashboard',
@@ -429,7 +471,7 @@ const app = await Application.initialize({
   ui: { core: Shell }, // one bag: data + code halves (programmatic app)
 });
 
-app.get('/app.js', () => ({
+app.get('/app.js', { response: 'text' }, () => ({
   content: APP_JS,
   headers: { 'content-type': 'text/javascript; charset=UTF-8' },
 }));
@@ -463,17 +505,21 @@ app.get('/', {
 // `ctx.isSwap` is the representer's own decision (config-aware), so
 // per-representation side effects — here, the fragment counter the
 // dash footer shows — never re-derive header checks.
-app.get('/dash', { template: DashView }, (ctx) => {
+app.get('/dash', { template: DashView, response: DashShape }, (ctx) => {
   if (ctx.isSwap) fragmentsServed++;
   return { content: dashboard(daysOf(ctx)) };
 });
 
-app.get('/cards/orders', { template: OrdersView }, (ctx) => {
-  if (ctx.isSwap) fragmentsServed++;
-  return { content: { rows: orders.slice(-8).reverse() } };
-});
+app.get(
+  '/cards/orders',
+  { template: OrdersView, response: OrdersShape },
+  (ctx) => {
+    if (ctx.isSwap) fragmentsServed++;
+    return { content: { rows: orders.slice(-8).reverse() } };
+  },
+);
 
-app.post('/orders', { template: LogForm }, async (ctx) => {
+app.post('/orders', { template: LogForm, response: LogShape }, async (ctx) => {
   const body = ((await ctx.payload) ?? {}) as Record<string, string>;
   const { product = '', region = '', rep = '' } = body;
   const qty = Number(body.qty ?? '');

@@ -7,6 +7,7 @@
  * Run: `deno run -A packages/rapid/examples/sessions.ts`
  * @module
  */
+import { Guardian } from '@tundralibs/guardian';
 import { Application, csrf, getSession, session } from '@tundralibs/rapid';
 
 const app = await Application.initialize({
@@ -22,7 +23,16 @@ const app = await Application.initialize({
 app.use(session({ secure: false }));
 app.use(csrf({ secure: false }));
 
-app.get('/me', async (ctx) => {
+// What each route answers with: checked in DEVELOPMENT, documented.
+const Cart = Guardian.array(Guardian.string());
+const Ok = Guardian.object({ ok: Guardian.boolean() });
+
+app.get('/me', {
+  response: Guardian.object({
+    userId: Guardian.string().nullable(),
+    cart: Cart,
+  }),
+}, async (ctx) => {
   const s = (await getSession(ctx))!;
   return {
     content: {
@@ -32,7 +42,9 @@ app.get('/me', async (ctx) => {
   };
 });
 
-app.post('/cart/add/:item:', async (ctx) => {
+app.post('/cart/add/:item:', {
+  response: Guardian.object({ cart: Cart }),
+}, async (ctx) => {
   const s = (await getSession(ctx))!;
   const cart = s.get<string[]>('cart') ?? [];
   cart.push(ctx.params.item);
@@ -40,14 +52,14 @@ app.post('/cart/add/:item:', async (ctx) => {
   return { content: { cart } };
 });
 
-app.post('/login', async (ctx) => {
+app.post('/login', { response: Ok }, async (ctx) => {
   const s = (await getSession(ctx))!;
   s.regenerate(); // new id (fixation-safe); the anonymous cart carries over
   s.set('userId', 'user-42');
   return { content: { ok: true } };
 });
 
-app.post('/logout', async (ctx) => {
+app.post('/logout', { response: Ok }, async (ctx) => {
   (await getSession(ctx))!.destroy();
   return { content: { ok: true } };
 });

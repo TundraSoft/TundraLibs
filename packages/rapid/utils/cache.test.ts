@@ -34,7 +34,10 @@ import { formatAccessReport } from '../cli/commands/access.ts';
 import { buildOpenApi } from './buildOpenApi.ts';
 import { memoryStore } from './memoryStore.ts';
 
-const QUIET = { logger: { handlers: [] as never[] } };
+const QUIET = {
+  logger: { handlers: [] as never[] },
+  server: { requireResponse: false },
+};
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const binding: RapidAuthBinding = {

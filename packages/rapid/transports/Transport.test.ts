@@ -330,7 +330,7 @@ describe('rapid Transport — logger.access', () => {
   const boot = (logger?: Record<string, unknown>) =>
     Application.initialize({
       name: 'access',
-      server: { port: 0 },
+      server: { port: 0, requireResponse: false },
       ...(logger === undefined ? {} : { logger }),
     });
 
