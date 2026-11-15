@@ -7,7 +7,7 @@
 > items are the deferred-feature work in
 > [Intentionally deferred](#intentionally-deferred-phase-2) below.
 >
-> **Last updated:** 2026-11-13
+> **Last updated:** 2026-11-15
 
 ## Current state
 
@@ -36,16 +36,6 @@ built for.
 - Full-text search
 - CTEs (`WITH`, including recursive)
 - Advanced joins (CROSS, NATURAL, self-joins, multi-condition with OR)
-
-## Known gaps
-
-Places where one engine still answers differently from the others. These
-are to be closed, not deferred features.
-
-- **MongoDB `$nlike` / `$nilike` match a null or missing field.** SQL's
-  `NOT LIKE` skips a NULL; the MongoDB translation keeps the document.
-  The other negated comparisons already follow the SQL rule, see
-  [NULL in a filter](docs/OQL-Compatibility.md#null-in-a-filter).
 
 ## Architecture decisions worth remembering
 

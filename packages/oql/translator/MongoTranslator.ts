@@ -2130,7 +2130,8 @@ export class MongoTranslator {
       $regex: `^${escaped}$`,
     };
     if (caseInsensitive) inner.$options = 'i';
-    return negate ? { $not: inner } : inner;
+    // `$not` alone also matches a null or missing field; NOT LIKE does not.
+    return negate ? { $not: inner, $ne: null } : inner;
   }
 
   /**

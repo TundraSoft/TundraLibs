@@ -680,6 +680,30 @@ const CASES: Case[] = [
     },
   },
   {
+    // SQL's NOT LIKE skips a NULL; `$not` alone would keep a null or
+    // missing field, so each negated pattern also asks for `$ne: null`.
+    name: 'SELECT $nlike / $nilike skip a null or missing field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      projection: { '@id': true },
+      where: { '@name': { $nlike: 'John%' }, '@nick': { $nilike: 'j_' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          name: { $not: { $regex: '^John.*$' }, $ne: null },
+          nick: { $not: { $regex: '^j.$', $options: 'i' }, $ne: null },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
     name: 'SELECT $startsWith escapes regex specials',
     method: 'select',
     query: {
