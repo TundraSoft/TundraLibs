@@ -74,7 +74,8 @@ export type NormErrorCode =
    * know. */
   | 'INVALID_TIME_ZONE'
   /** A zoned helper was given an invalid `Date`, or text that is not a
-   * date or date-time. */
+   * date or date-time. Also carried by {@link NormQueryError} when a
+   * filter value or `@AsOf` names a day or time no calendar has. */
   | 'INVALID_DATE'
   // ── Definition / registry ({@link NormDefinitionError}) ────────────
   /** Two registry keys map to the same database object, or a key is

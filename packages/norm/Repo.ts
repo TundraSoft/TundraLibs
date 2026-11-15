@@ -57,7 +57,13 @@ import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
-import { asUtc, readTimeOfDay, toTimeOfDay, utcDay } from './calendar.ts';
+import {
+  asUtc,
+  readTimeOfDay,
+  rollsOver,
+  toTimeOfDay,
+  utcDay,
+} from './calendar.ts';
 import type { ObjectGuardian } from '@tundralibs/guardian';
 import {
   canonicalizePlain,
@@ -176,34 +182,48 @@ const VALUE_OPERATORS = new Set(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte']);
 /** Filter operators that compare the column with a list of values. */
 const LIST_OPERATORS = new Set(['$in', '$nin', '$between']);
 
+/** The temporal column a filter value is compared with. */
+type TemporalRef = { entityKey: string; col: string; plainType: string };
+
 /**
  * One filter value for a temporal column, in the form a write stores:
  * the canonical time of day for `TIME`, a `Date` for the date types, its
  * UTC day for `DATE`. Anything a write would not read as one (`null`, a
  * column reference, an expression, other text) comes back as it came.
+ *
+ * @throws {@link NormQueryError} `INVALID_DATE` when a date string names
+ *   a day or time no calendar has, which a write refuses too.
  */
-function temporalValue(type: string, v: unknown): unknown {
-  if (type === 'TIME') return toTimeOfDay(v) ?? v;
-  const d = typeof v === 'string' && ISO_DATE.test(v)
-    ? new Date(asUtc(v) as string)
-    : v;
+function temporalValue(ref: TemporalRef, v: unknown): unknown {
+  if (ref.plainType === 'TIME') return toTimeOfDay(v) ?? v;
+  let d = v;
+  if (typeof v === 'string' && ISO_DATE.test(v)) {
+    if (rollsOver(v)) {
+      throw new NormQueryError(
+        `Column '${ref.col}' on entity '${ref.entityKey}' cannot be ` +
+          `filtered by '${v}': no calendar has that day or time.`,
+        { entity: ref.entityKey, subject: ref.col, code: 'INVALID_DATE' },
+      );
+    }
+    d = new Date(asUtc(v));
+  }
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return v;
-  return type === 'DATE' ? utcDay(d) : d;
+  return ref.plainType === 'DATE' ? utcDay(d) : d;
 }
 
 /** {@linkcode temporalValue} over a filter condition: a bare value, the
  * array shorthand, or the comparison operators of an operator bag.
  * `cond` is the filter walk's own copy, so a bag is rewritten in place. */
-function temporalCondition(type: string, cond: unknown): unknown {
-  if (Array.isArray(cond)) return cond.map((v) => temporalValue(type, v));
+function temporalCondition(ref: TemporalRef, cond: unknown): unknown {
+  if (Array.isArray(cond)) return cond.map((v) => temporalValue(ref, v));
   if (typeof cond !== 'object' || cond === null || cond instanceof Date) {
-    return temporalValue(type, cond);
+    return temporalValue(ref, cond);
   }
   const bag = cond as Row;
   for (const [op, v] of Object.entries(bag)) {
-    if (VALUE_OPERATORS.has(op)) bag[op] = temporalValue(type, v);
+    if (VALUE_OPERATORS.has(op)) bag[op] = temporalValue(ref, v);
     else if (LIST_OPERATORS.has(op) && Array.isArray(v)) {
-      bag[op] = v.map((item) => temporalValue(type, item));
+      bag[op] = v.map((item) => temporalValue(ref, item));
     }
   }
   return bag;
@@ -1167,7 +1187,7 @@ export class ReadRepo<
       const cond = await this.__rewriteWhereNode(value);
       out[key] =
         convert && (ref.plainType === 'TIME' || DATE_TYPES.has(ref.plainType))
-          ? temporalCondition(ref.plainType, cond)
+          ? temporalCondition(ref, cond)
           : cond;
     }
     if (legacy.length > 0) {
@@ -3202,7 +3222,10 @@ export class Repo<
     const d = supplied instanceof Date
       ? supplied
       : new Date(asUtc(supplied) as string);
-    if (Number.isNaN(d.getTime())) {
+    if (
+      Number.isNaN(d.getTime()) ||
+      (typeof supplied === 'string' && rollsOver(supplied))
+    ) {
       throw new NormQueryError(
         `${this._compiled.key}.insert(): '${t.from}' is not a valid date.`,
         { entity: this._compiled.key, subject: t.from, code: 'TEMPORAL_PAST' },

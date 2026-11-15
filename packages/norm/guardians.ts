@@ -36,7 +36,7 @@ import {
   type ObjectGuardian,
   StringGuardian,
 } from '@tundralibs/guardian';
-import { asUtc, toTimeOfDay } from './calendar.ts';
+import { asUtc, rollsOver, toTimeOfDay } from './calendar.ts';
 import type { ColumnSpec } from './definition/mod.ts';
 import { isExpressionValue } from './definition/Column.ts';
 import { NormValidationError, type ValidationIssue } from './errors/mod.ts';
@@ -127,8 +127,13 @@ function buildBase(spec: ColumnSpec) {
     return Guardian.unknown()
       .process((v) => {
         const marked = asUtc(v);
-        // Report the string the caller sent, without the added `Z`.
-        if (marked !== v && Number.isNaN(Date.parse(marked as string))) {
+        // Report the string the caller sent, without the added `Z`. A
+        // day the runtime would roll over is refused, not stored shifted.
+        if (
+          typeof v === 'string' &&
+          (rollsOver(v) ||
+            (marked !== v && Number.isNaN(Date.parse(marked as string))))
+        ) {
           throw new GuardianError(`Cannot coerce "${v}" to Date`, {
             expected: 'ISO 8601 date-time',
             got: v,

@@ -12,6 +12,7 @@ changelog has those.
   - [`date()` holds the UTC day on SQLite and MongoDB](#date-holds-the-utc-day-on-sqlite-and-mongodb)
   - [`time()` reads a string](#time-reads-a-string)
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
+  - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
 
@@ -19,8 +20,8 @@ changelog has those.
 
 norm 1.13.0, with drivers 1.9.0 and oql 1.6.0, makes dates, times and
 NULL behave the same on every engine and on every host.
-[Dates and time zones](NORM-Dates.md) describes the result. Seven of the
-fixes change what an app written against an earlier version sees. Where
+[Dates and time zones](NORM-Dates.md) describes the result. The fixes
+below change what an app written against an earlier version sees. Where
 the app host and the database both run on UTC, the first, second and
 fifth change nothing.
 
@@ -69,6 +70,23 @@ compiles; [Factories](NORM-Schema.md#factories) lists what a write takes.
 versions let the runtime read it in the host's zone, so a host off UTC
 stored a different instant. A string that names an offset, and a `Date`,
 are unchanged.
+
+### A date no calendar has is refused
+
+`'2026-02-30'`, `'2026-02-29'` and `'2026-01-15T24:00:00'` name a day or
+time no calendar has. Earlier versions let the runtime move them to a
+later day, so `'2026-02-30'` was stored, and matched by a filter, as
+March 2. Such a string now fails:
+
+| Where                                                                   | Error                                         |
+| ----------------------------------------------------------------------- | --------------------------------------------- |
+| A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`   | `NormValidationError`, with the column's path |
+| A filter value on one of those columns, or `@AsOf` on a temporal entity | `NormQueryError` with code `INVALID_DATE`     |
+| A supplied `EffectiveFrom` on a temporal entity                         | `NormQueryError` with code `TEMPORAL_PAST`    |
+
+A `Date` is never refused, and a row an earlier version stored keeps the
+shifted day. Validate a date that arrives as text before it reaches norm,
+or catch the error.
 
 ### A MongoDB comparison never matches NULL
 

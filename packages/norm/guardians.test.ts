@@ -112,6 +112,47 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertEquals(e.context.got, '2026-01-15T25:00:00');
   });
 
+  it('date: a day or time no calendar has is rejected, not rolled over', () => {
+    const impossible = [
+      '2026-02-30',
+      '2026-02-29',
+      '2026-02-30T10:00:00Z',
+      '2026-04-31 10:00:00',
+      '2026-02-30T10:00:00+05:30',
+      '2026-01-01T24:00:00Z',
+    ];
+    const specs = [
+      Column.date().spec,
+      Column.datetime().spec,
+      Column.timestamp().spec,
+      Column.timestamptz().spec,
+    ];
+    for (const spec of specs) {
+      const g = buildCellGuardian(spec);
+      for (const text of impossible) {
+        asserts.assertThrows(
+          () => g.parse(text),
+          GuardianError,
+          `Cannot coerce "${text}" to Date`,
+        );
+      }
+      asserts.assertEquals(
+        g.parse('2024-02-29'),
+        new Date('2024-02-29T00:00:00Z'),
+      );
+      // A Date is an instant already, however it was built.
+      const rolled = new Date(Date.UTC(2026, 1, 30));
+      asserts.assertEquals(g.parse(rolled), rolled);
+    }
+  });
+
+  it('date: an offset with no colon is the same instant', () => {
+    const g = buildCellGuardian(Column.timestamptz().spec);
+    const at = new Date('2025-06-01T10:00:00Z');
+    asserts.assertEquals(g.parse('2025-06-01T15:30:00+0530'), at);
+    asserts.assertEquals(g.parse('2025-06-01T02:00:00-08'), at);
+  });
+
   it('boolean + unrecognised types', () => {
     asserts.assertEquals(buildCellGuardian(Specs.flag).parse(true), true);
     asserts.assertEquals(buildCellGuardian(Specs.flag).parse(false), false);
