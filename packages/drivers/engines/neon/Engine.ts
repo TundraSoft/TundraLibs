@@ -170,6 +170,25 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
   //#endregion ConnectionEngine seams
 
+  /**
+   * Liveness check that also runs the UTC session check, so a health check
+   * cannot pass on a session whose every query is refused.
+   *
+   * @returns `false` when the engine is closed or a request fails.
+   * @throws {EngineError} `INVALID_CONFIG_VALUE` when the session `TimeZone`
+   *   is not UTC and `allowNonUtcTimeZone` is not set.
+   */
+  public override async ping(): Promise<boolean> {
+    if (!(await super.ping())) return false;
+    try {
+      await this.__assertUtcSession(this._resource as NeonHttpClient);
+      return true;
+    } catch (error) {
+      if (error instanceof EngineError) throw error;
+      return false;
+    }
+  }
+
   //#region SQLConnectionEngine hooks
 
   /**
@@ -472,9 +491,9 @@ export class NeonHttpEngine extends SQLConnectionEngine<
   /**
    * Refuses a session whose `TimeZone` is not UTC, for the reason
    * {@link PostgresEngine} does. HTTP has no startup handshake to read the
-   * zone from, so the first query asks for it in one extra request; a pass is
-   * kept until the engine closes, a failure is checked again on the next
-   * query. A server that reports no zone is not checked.
+   * zone from, so the first query or `ping()` asks for it in one extra request;
+   * a pass is kept until the engine closes, a failure is checked again on the
+   * next call. A server that reports no zone is not checked.
    *
    * @throws {EngineError} `INVALID_CONFIG_VALUE` unless `allowNonUtcTimeZone` is set.
    */

@@ -126,12 +126,14 @@ which is why the engine insists on UTC.
 The engine refuses a database whose session `TimeZone` is not UTC, for the
 reason `PostgresEngine` does — see
 [Postgres → Time zone](../postgres/Drivers-Postgres.md#time-zone). HTTP has no
-startup handshake to read the zone from, so the first query on a connected
-engine first sends `SELECT current_setting('TimeZone')`: one extra request per
-engine instance, so on Workers keep one engine per isolate rather than one per
-request. A zone other than UTC rejects the query with `INVALID_CONFIG_VALUE`
-before it is sent, and the next query checks again. `connect()` and `ping()`
-do not check.
+startup handshake to read the zone from, so the first query or `ping()` on a
+connected engine first sends `SELECT current_setting('TimeZone')`: one extra
+request per engine instance, so on Workers keep one engine per isolate rather
+than one per request. A zone other than UTC rejects the query with
+`INVALID_CONFIG_VALUE` before it is sent, and the next query checks again.
+`ping()` rejects with the same error rather than returning `false`, so a
+health check cannot pass while every query is refused. `connect()` does not
+check.
 
 Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`). Set
 `allowNonUtcTimeZone: true` only when the application uses `timestamptz`
