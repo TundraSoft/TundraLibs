@@ -573,6 +573,97 @@ const CASES: Case[] = [
     },
   },
   {
+    // The joined rows are an array under `o`, so the sort value is
+    // computed from it. The inclusion $project drops `__sort_0` again.
+    name: 'SELECT ORDER BY an unprojected joined column → computed sort field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      orderBy: { '@o.@amount': 'DESC', '@name': 'ASC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $addFields: { __sort_0: { $max: '$o.amount' } } },
+          { $sort: { __sort_0: -1, name: 1 } },
+          { $project: { id: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // $group discards the joined array, so the sort value rides through
+    // it as an accumulator.
+    name:
+      'SELECT ORDER BY an unprojected joined column with aggregates → accumulated in $group',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'team'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { n: { $$_aggregate: 'COUNT' } },
+      projection: { '@team': true, '@n': true },
+      orderBy: { '@team': 'DESC', '@o.@amount': 'ASC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          {
+            $group: {
+              _id: { team: '$team' },
+              n: { $sum: 1 },
+              __sort_1: { $min: { $min: '$o.amount' } },
+            },
+          },
+          { $addFields: { team: '$_id.team' } },
+          { $sort: { team: -1, __sort_1: 1 } },
+          { $project: { team: 1, n: 1 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT ORDER BY + LIMIT + OFFSET',
     method: 'select',
     query: {

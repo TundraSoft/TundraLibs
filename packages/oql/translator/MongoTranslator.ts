@@ -1095,16 +1095,43 @@ export class MongoTranslator {
   /**
    * Map an OQL `orderBy` (`{ '@col': 'ASC' | 'DESC' }`) to a Mongo sort
    * document (`{ col: 1 | -1 }`). Shared by `__buildFind` (as `options.sort`)
-   * and `__buildAggregate` (as the `$sort` stage value).
+   * and `__buildAggregate` (as the `$sort` stage value). A key listed in
+   * `joined` sorts on its computed field (see {@link __joinedSorts}).
    */
   private __buildSort(
     orderBy: NonNullable<Query<'SELECT'>['orderBy']>,
+    joined: Record<string, [string, string, string]> = {},
   ): Record<string, 1 | -1> {
     return Object.fromEntries(
-      Object.entries(orderBy).map((
-        [k, v],
-      ) => [k.slice(1).replace('.@', '.'), v === 'ASC' ? 1 : -1]),
+      Object.entries(orderBy).map(([k, v]) => [
+        joined[k]?.[0] ?? k.slice(1).replace('.@', '.'),
+        v === 'ASC' ? 1 : -1,
+      ]),
     );
+  }
+
+  /**
+   * The orderBy keys that name a joined column the query does not
+   * project, each mapped to `[field, operator, path]`. `$lookup` leaves
+   * the joined rows in an array, so the key sorts on a computed `field`:
+   * the smallest value at `path` for `ASC`, the largest for `DESC`, NULLs
+   * skipped. That is the MIN / MAX the SQL translators order a grouped
+   * query by. The inclusion `$project` drops the field again.
+   */
+  private __joinedSorts(
+    q: Query<'SELECT'>,
+  ): Record<string, [string, string, string]> {
+    const out: Record<string, [string, string, string]> = {};
+    Object.entries(q.orderBy ?? {}).forEach(([key, dir], i) => {
+      if (key.includes('.@') && !(key in q.projection)) {
+        out[key] = [
+          `__sort_${i}`,
+          dir === 'ASC' ? '$min' : '$max',
+          `$${key.slice(1).replace('.@', '.')}`,
+        ];
+      }
+    });
+    return out;
   }
 
   /** Build a simple `find` op — no joins, no aggregates. */
@@ -1192,6 +1219,8 @@ export class MongoTranslator {
     if (q.where && deferMatch) {
       this.__pushMatch(pipeline, q.where, this.__columnsOf(q));
     }
+    const joinedSorts = this.__joinedSorts(q);
+    let grouped = false;
     if (q.aggregates) {
       // JSON_ROW over a $lookup'd alias is NOT a $group job on Mongo:
       // $lookup already aggregated the related docs into an array per
@@ -1242,6 +1271,13 @@ export class MongoTranslator {
         for (const name of Object.keys(mapFields)) {
           groupBody[name] = { $first: `$${name}` };
         }
+        // The joined arrays do not survive $group, so the sort values are
+        // accumulated in it: the inner operator reduces one document's
+        // array, the outer one the group.
+        for (const [field, op, path] of Object.values(joinedSorts)) {
+          groupBody[field] = { [op]: { [op]: path } };
+        }
+        grouped = true;
         pipeline.push({ $group: groupBody });
         // After $group, grouped fields live under `_id.<key>`. Flatten
         // them back to top level so the subsequent $match / $sort /
@@ -1259,7 +1295,16 @@ export class MongoTranslator {
     // $sort before $project: orderBy names source fields, which an
     // alias or an unprojected column would no longer have after it.
     if (q.orderBy && Object.keys(q.orderBy).length > 0) {
-      pipeline.push({ $sort: this.__buildSort(q.orderBy) });
+      if (!grouped && Object.keys(joinedSorts).length > 0) {
+        pipeline.push({
+          $addFields: Object.fromEntries(
+            Object.values(joinedSorts).map((
+              [field, op, path],
+            ) => [field, { [op]: path }]),
+          ),
+        });
+      }
+      pipeline.push({ $sort: this.__buildSort(q.orderBy, joinedSorts) });
     }
     const projection = this.__buildProjection(q);
     if (Object.keys(projection).length > 0) {

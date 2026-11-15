@@ -3182,6 +3182,117 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT ORDER BY an unprojected joined column',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount', 'status'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      orderBy: { '@o.@amount': 'DESC', '@name': 'ASC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" ORDER BY "o"."amount" DESC, __base__."name" ASC',
+        params: {},
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" ORDER BY "o"."amount" DESC, __base__."name" ASC',
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`id` AS `id` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` ORDER BY `o`.`amount` DESC, __base__.`name` ASC',
+        params: {},
+      },
+    },
+  },
+  {
+    // Grouped by the projected join alias: `status` is projected, so it is
+    // in the GROUP BY and orders as itself; `amount` is not, so it orders
+    // by the group's MIN.
+    name:
+      'SELECT ORDER BY an unprojected joined column, alias projected → MIN for ASC',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount', 'status'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@o.@status': 'status', '@o': 'orders' },
+      orderBy: { '@o.@status': 'ASC', '@o.@amount': 'ASC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."id" AS "id", "o"."status" AS "status", json_group_array(json_object(:p_0:, "o"."userId", :p_1:, "o"."amount", :p_2:, "o"."status")) AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."id" AS "id", "o"."status" AS "status", jsonb_agg(jsonb_build_object(:p_0:::text, "o"."userId", :p_1:::text, "o"."amount", :p_2:::text, "o"."status")) AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`id` AS `id`, `o`.`status` AS `status`, JSON_ARRAYAGG(JSON_OBJECT(:p_0:, `o`.`userId`, :p_1:, `o`.`amount`, :p_2:, `o`.`status`)) AS `orders` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`id`, `o`.`status` ORDER BY `o`.`status` ASC, MIN(`o`.`amount`) ASC',
+      },
+    },
+  },
+  {
+    name:
+      'SELECT ORDER BY an unprojected joined column with aggregates → MAX for DESC',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'team'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount', 'status'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { n: { $$_aggregate: 'COUNT' } },
+      projection: { '@team': true, '@n': true },
+      orderBy: { '@team': 'ASC', '@o.@amount': 'DESC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."team" AS "team", COUNT(1) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
+        params: {},
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."team" AS "team", COUNT(1) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`team` AS `team`, COUNT(1) AS `n` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`team` ORDER BY __base__.`team` ASC, MAX(`o`.`amount`) DESC',
+        params: {},
+      },
+    },
+  },
+  {
     // Finding 4: `having` on COUNT is meaningless (no GROUP BY, no
     // user-referenceable aggregate alias) and was unusable (cryptic throw on
     // SQL, silent drop on Mongo). The validator now rejects it on every

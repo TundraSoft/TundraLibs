@@ -1740,11 +1740,7 @@ export abstract class AbstractTranslator {
     params: Parameters,
     exprCache: Map<string, string>,
   ): string {
-    const hasAggregates = !!q.aggregates &&
-      Object.keys(q.aggregates).length > 0;
-    const hasAutoExpandedJoin = !!q.joins &&
-      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
-    if (!hasAggregates && !hasAutoExpandedJoin) return '';
+    if (!this.__isGrouped(q)) return '';
     const groupBy: string[] = [];
     for (const key of Object.keys(q.projection)) {
       const stripped = key.slice(1);
@@ -1772,6 +1768,15 @@ export abstract class AbstractTranslator {
     return groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
   }
 
+  /** Whether {@link __buildGroupBy} groups this query. */
+  private __isGrouped(q: Query<'SELECT'>): boolean {
+    const hasAggregates = !!q.aggregates &&
+      Object.keys(q.aggregates).length > 0;
+    const hasAutoExpandedJoin = !!q.joins &&
+      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
+    return hasAggregates || hasAutoExpandedJoin;
+  }
+
   /** Build the ` ORDER BY` clause, or `''` when `q.orderBy` is empty. */
   private __buildOrderBy(
     q: Query<'SELECT'>,
@@ -1785,7 +1790,15 @@ export abstract class AbstractTranslator {
     for (const [key, dir] of Object.entries(q.orderBy)) {
       parts.push(
         `${
-          this.__resolveOrderByKey(q, key, hasJoins, scope, params, exprCache)
+          this.__resolveOrderByKey(
+            q,
+            key,
+            dir,
+            hasJoins,
+            scope,
+            params,
+            exprCache,
+          )
         } ${dir}`,
       );
     }
@@ -1800,12 +1813,17 @@ export abstract class AbstractTranslator {
    * {@link BASE_ALIAS} prefix, an execution-time error on every dialect.
    * Order by the underlying SQL body instead — the same substitution
    * {@link __buildGroupBy} applies. The body was translated and cached by
-   * {@link __buildProjection} (ORDER BY keys are always projection keys),
+   * {@link __buildProjection} (these keys are always projection keys),
    * so this reuses it; the re-translate fallbacks are purely defensive.
+   *
+   * A joined column the query does not project is not in the GROUP BY, so
+   * a grouped query orders by the group's smallest value for `ASC` and its
+   * largest for `DESC`.
    */
   private __resolveOrderByKey(
     q: Query<'SELECT'>,
     key: string,
+    dir: 'ASC' | 'DESC',
     hasJoins: boolean,
     scope: string[],
     params: Parameters,
@@ -1835,7 +1853,13 @@ export abstract class AbstractTranslator {
         );
       }
     }
-    return this._resolveColumnRef(key, hasJoins);
+    const ref = this._resolveColumnRef(key, hasJoins);
+    if (
+      key.includes('.@') && !(key in q.projection) && this.__isGrouped(q)
+    ) {
+      return `${dir === 'ASC' ? 'MIN' : 'MAX'}(${ref})`;
+    }
+    return ref;
   }
 
   /**

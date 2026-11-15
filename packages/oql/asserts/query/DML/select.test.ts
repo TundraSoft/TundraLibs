@@ -15,6 +15,21 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { assertSelectQuery, isSelectQuery } from './select.ts';
 
+// orders with a join to users, for the orderBy-through-a-join cases.
+const ORDERS_WITH_USER = {
+  type: 'SELECT',
+  table: 'orders',
+  columns: ['id', 'userId'],
+  joins: {
+    User: {
+      table: 'users',
+      type: 'INNER',
+      columns: ['id', 'name'],
+      on: { '@User.@id': '@userId' },
+    },
+  },
+};
+
 describe('oql.asserts.Query.DML.Select', () => {
   describe('basic queries', () => {
     it('simple query', () => {
@@ -584,6 +599,28 @@ describe('oql.asserts.Query.DML.Select', () => {
       };
       assertSelectQuery(query);
     });
+
+    it('with orderBy on an unprojected joined column', () => {
+      assertSelectQuery({
+        ...ORDERS_WITH_USER,
+        projection: { '@id': true },
+        orderBy: { '@User.@name': 'ASC' },
+      });
+    });
+
+    it('with orderBy on an unprojected joined column in a grouped query', () => {
+      assertSelectQuery({
+        ...ORDERS_WITH_USER,
+        aggregates: { n: { $$_aggregate: 'COUNT' } },
+        projection: { '@userId': true, '@n': true },
+        orderBy: { '@User.@name': 'DESC' },
+      });
+      assertSelectQuery({
+        ...ORDERS_WITH_USER,
+        projection: { '@id': true, '@User': 'user' },
+        orderBy: { '@User.@name': 'DESC' },
+      });
+    });
   });
 
   describe('limit and offset', () => {
@@ -1071,6 +1108,35 @@ describe('oql.asserts.Query.DML.Select', () => {
         TypeError,
         'must be projected when the query uses aggregates',
       );
+    });
+
+    it('orderBy unprojected joined column with distinct', () => {
+      asserts.assertThrows(
+        () =>
+          assertSelectQuery({
+            ...ORDERS_WITH_USER,
+            projection: { '@id': true },
+            distinct: true,
+            orderBy: { '@User.@name': 'ASC' },
+          }),
+        TypeError,
+        "orderBy key '@User.@name' must be projected when the query uses 'distinct'",
+      );
+    });
+
+    it('orderBy through an alias that is not joined, or a column the join lacks', () => {
+      for (const key of ['@Nope.@name', '@User.@email', 'User.name']) {
+        asserts.assertThrows(
+          () =>
+            assertSelectQuery({
+              ...ORDERS_WITH_USER,
+              projection: { '@id': true },
+              orderBy: { [key]: 'ASC' },
+            }),
+          TypeError,
+          `orderBy key '${key}' must exist in columns, projection or joined columns. Available: @id, @userId, @id, @User.@id, @User.@name`,
+        );
+      }
     });
   });
 
