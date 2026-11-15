@@ -839,13 +839,14 @@ There is no general `CAST`. The engines disagree on what it means:
 ### Date expressions
 
 Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
-`CURRENT_TIME`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
-`DATE_TRUNC`. (`DATE_DIFF` returns a number and is classified numeric.)
+`CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC`.
+(`DATE_DIFF` returns a number and is classified numeric.)
 
 SQLite has no date type, so there each of these returns ISO 8601 UTC text,
-such as `2026-02-01T10:20:30.000Z`, in place of a `Date`. On MariaDB a
-`DATE_ADD` whose `date` is a `Date` literal returns text too:
-`2026-02-28 10:20:30.000`.
+such as `2026-02-01T10:20:30.000Z`, in place of a `Date`.
+
+`CURRENT_TIME` returns a string on every dialect — see
+[CURRENT_TIME](../docs/OQL-Compatibility.md#current_time).
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
   `date` (negative `amount` subtracts). Months and years stop at the

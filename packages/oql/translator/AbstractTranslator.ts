@@ -756,6 +756,21 @@ export abstract class AbstractTranslator {
   }
 
   /**
+   * Escape a computed `$startsWith` / `$endsWith` / `$contains` operand in
+   * SQL, the way a string literal is escaped before it is bound: the escape
+   * char first, then `%` and `_`.
+   */
+  protected _likeEscapeOperand(sql: string): string {
+    return [LIKE_ESCAPE_CHAR, '%', '_'].reduce(
+      (acc, ch) =>
+        `REPLACE(${acc}, ${this._formatLiteral(ch)}, ${
+          this._formatLiteral(LIKE_ESCAPE_CHAR + ch)
+        })`,
+      sql,
+    );
+  }
+
+  /**
    * Assemble the `CASE <unit> WHEN 'DAYS' THEN … … 'YEARS' THEN … END`
    * skeleton the date-arithmetic emitters (`DATE_ADD` / `DATE_DIFF`)
    * otherwise hand-roll identically on every SQL dialect. `unitSql` is
@@ -2257,13 +2272,18 @@ export abstract class AbstractTranslator {
         `filter operator '${op}'`,
       );
     }
-    // $startsWith / $endsWith / $contains splice the bound value into a LIKE
-    // pattern. A column ref (or expression) keeps the standard path; a string
-    // literal has its `%`/`_` (and the escape char) escaped with a trailing
-    // ESCAPE clause so it matches verbatim.
+    // $startsWith / $endsWith / $contains splice the value into a LIKE
+    // pattern. Its `%`/`_` (and the escape char) are escaped, with a trailing
+    // ESCAPE clause, so it matches verbatim: a string literal before it is
+    // bound, a column ref or expression in SQL.
     if (op === '$startsWith' || op === '$endsWith' || op === '$contains') {
       const ref = this.__valueColumnRef(val, scope, hasJoins);
-      if (ref !== null) return emit(colSql, ref);
+      if (ref !== null || this.__isExpressionNode(val)) {
+        const operand = this._likeEscapeOperand(
+          ref ?? this.__renderOperatorValue(val, scope, params, hasJoins),
+        );
+        return `${emit(colSql, operand)}${this._likeEscapeClause()}`;
+      }
       if (typeof val !== 'string') {
         return emit(
           colSql,

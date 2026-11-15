@@ -353,6 +353,29 @@ The table below summarises the per-dialect emission. The general rule:
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                                     |
 | **ENCRYPT / DECRYPT** | native (`pgp_sym_encrypt` / `pgp_sym_decrypt`)                                      | native (`AES_ENCRYPT` / `AES_DECRYPT`)                 | **passthrough**                                                  | **passthrough**                                                                     |
 
+### CURRENT_TIME
+
+`CURRENT_TIME` is the UTC clock time as an `'HH:MM:SS'` string on every
+dialect: in a select, in a filter, and as a written value. It carries no
+fraction and does not follow the session time zone.
+
+| Dialect  | Emitted                                                                    |
+| -------- | -------------------------------------------------------------------------- |
+| Postgres | `CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)` |
+| MariaDB  | `UTC_TIME()`                                                               |
+| SQLite   | `time('now')`                                                              |
+| MongoDB  | `$dateToString` of `$$NOW` with `%H:%M:%S`                                 |
+
+On Postgres the value is a `TIME`. Comparing it with a text column fails
+there, since Postgres has no operator for the pair.
+
+### DATE_ADD result
+
+`DATE_ADD` on a `Date` value returns what it returns on a column: a Date on
+Postgres, MariaDB and MongoDB, ISO 8601 UTC text on SQLite. MariaDB casts
+the value to `DATETIME(6)` for that, and Postgres to `timestamptz`, which
+is also what lets a view hold the expression.
+
 ### DATE_ADD amount gotcha
 
 A negative `amount` subtracts on every dialect. A fractional one is not
@@ -486,6 +509,15 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
   - SQLite uses `LIKE` (already case-insensitive for ASCII; non-ASCII
     requires `PRAGMA case_sensitive_like=OFF`, which is the default).
   - MongoDB uses `$regex` with the `i` option.
+- **Computed operand** (a column reference or an expression as the value):
+  - `$startsWith` / `$endsWith` / `$contains` match it as written on every
+    dialect. A `%`, `_` or `\` in the computed value is escaped in the SQL,
+    as it is in a string literal. MongoDB takes an expression there, not a
+    column reference.
+  - `$like` / `$nlike` / `$ilike` / `$nilike` read it as a pattern on the
+    SQL dialects, so a `%` or `_` in the computed value is a wildcard.
+    MongoDB refuses it, see
+    [below](#when-to-expect-a-throw-vs-a-silent-fallback).
 
 ### NULL in a filter
 

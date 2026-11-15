@@ -240,14 +240,26 @@ export class PostgresTranslator extends AbstractTranslator {
     ],
     ['NOW', () => 'CURRENT_TIMESTAMP'],
     ['CURRENT_DATE', () => 'CURRENT_DATE'],
-    ['CURRENT_TIME', () => 'CURRENT_TIME'],
+    // The UTC clock time as a TIME without fraction or zone: it reaches JS
+    // as 'HH:MM:SS', where CURRENT_TIME gave '18:35:56.811132+00'.
+    [
+      'CURRENT_TIME',
+      () =>
+        `CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)`,
+    ],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP'],
-    ['DATE_ADD', (a) => {
+    ['DATE_ADD', (a, e) => {
       // Postgres: date + interval. Build the interval as a string concat
       // since amount/unit may be parameterised.
       const [date, amount, unit] = a;
-      return `(${date} + (${amount}::text || ' ' || ${unit})::interval)`;
+      // A Date inlined into a view body is an untyped string, and
+      // `unknown + interval` resolves to interval + interval.
+      const typed =
+        e.$$_expression === 'DATE_ADD' && e.args.date instanceof Date
+          ? `${date}::timestamptz`
+          : date;
+      return `(${typed} + (${amount}::text || ' ' || ${unit})::interval)`;
     }],
     ['DATE_DIFF', (a) => {
       // EXTRACT(EPOCH FROM (to - from)) gives seconds. Divide by the
@@ -568,6 +580,11 @@ export class PostgresTranslator extends AbstractTranslator {
     params: Parameters,
   ): string {
     return `${this._parameterize(value, params)}::text`;
+  }
+
+  /** `REPLACE` takes text only, where `||` also took a number or a date. */
+  protected override _likeEscapeOperand(sql: string): string {
+    return super._likeEscapeOperand(`CAST(${sql} AS TEXT)`);
   }
 
   /**
