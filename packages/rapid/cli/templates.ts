@@ -275,6 +275,8 @@ NORM_DB:
 # -- postgres --
 #   port: 5432
 #   # also: applicationName, statementTimeoutMs, allowCleartextPassword
+#   # a session TimeZone other than UTC is refused at connect; set the
+#   # database to UTC, or accept it (also on neon): allowNonUtcTimeZone: true
 
 # -- maria (MySQL / MariaDB) --
 #   port: 3306
