@@ -385,19 +385,19 @@ ${methods.join('\n')}${
       : this.__check(what, value, guard)) as Record<string, unknown>;
   }
 
-  /** Validated query arguments as strings; an unset one is left out. */
-  private __query<T>(
+  /** Validated query or header arguments as strings; an unset one is left out. */
+  private __strings<T>(
     what: string,
     value: T | undefined,
     guard: BaseGuardian<T>,
   ): Record<string, string> {
-    const query: Record<string, string> = {};
-    if (value === undefined) return query;
+    const strings: Record<string, string> = {};
+    if (value === undefined) return strings;
     const checked = this.__check(what, value, guard) as Record<string, unknown>;
     for (const [key, item] of Object.entries(checked)) {
-      if (item !== undefined && item !== null) query[key] = String(item);
+      if (item !== undefined && item !== null) strings[key] = String(item);
     }
-    return query;
+    return strings;
   }
 
   /** Send, then validate the reply when the route declares its shape. */
@@ -453,7 +453,7 @@ ${methods.join('\n')}${
 /**
  * Generate the client's source files from an OpenAPI document as
  * `buildOpenApi` assembles it. Operations that only answer HTML are
- * skipped; header parameters are not turned into arguments. When routes
+ * skipped. When routes
  * require security schemes, the client's `auth` option is narrowed to
  * them: `BEARER` for an http bearer, oauth2 or openIdConnect scheme,
  * `BASIC` for http basic, and one `CUSTOM` field per apiKey scheme. When
@@ -556,24 +556,35 @@ export function generateSdk(
         );
       }
 
-      const queryParams = parameters.filter((p) => p.in === 'query');
-      if (queryParams.length > 0) {
-        const required = queryParams.filter((p) => p.required === true);
-        const query = use(
-          'Query',
-          `Query arguments of \`${method}\`.`,
+      // A request header the reply echoes is the paging pair: `page` and
+      // `limit` in `query` already ask for it.
+      const echoed = isJson(ok) && isJson(ok.headers) ? ok.headers : {};
+      for (
+        const [where, arg, suffix, what] of [
+          ['query', 'query', 'Query', 'Query arguments'],
+          ['header', 'headers', 'Headers', 'Request headers'],
+        ] as const
+      ) {
+        const declared = parameters.filter((p) =>
+          p.in === where && !(where === 'header' && String(p.name) in echoed)
+        );
+        if (declared.length === 0) continue;
+        const required = declared.filter((p) => p.required === true);
+        const shape = use(
+          suffix,
+          `${what} of \`${method}\`.`,
           schemaSource({
             type: 'object',
             properties: Object.fromEntries(
-              queryParams.map((p) => [String(p.name), p.schema]),
+              declared.map((p) => [String(p.name), p.schema]),
             ),
             required: required.map((p) => String(p.name)),
           }),
         ) as string;
-        args.push(`query${required.length === 0 ? '?' : ''}: ${query}`);
-        docs.push('@param query - Query arguments.');
+        args.push(`${arg}${required.length === 0 ? '?' : ''}: ${shape}`);
+        docs.push(`@param ${arg} - ${what}.`);
         endpoint.push(
-          `query: this.__query('query of ${method}', query, ${query}Schema)`,
+          `${arg}: this.__strings('${arg} of ${method}', ${arg}, ${shape}Schema)`,
         );
       }
 

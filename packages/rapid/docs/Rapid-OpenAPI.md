@@ -422,12 +422,12 @@ The entry exports the application as `default` or `app`, as for
 | File         | Holds                                                                                |
 | ------------ | ------------------------------------------------------------------------------------ |
 | `Shop.ts`    | The client class: one method per operation, named from its `operationId`.            |
-| `schemas.ts` | A type and a guardian schema for each request body, query and reply.                 |
+| `schemas.ts` | A type and a guardian schema for each request body, query, headers and reply.        |
 | `errors.ts`  | `ShopError` and its codes: rapid's own (`RAPID_NOT_FOUND`, …) plus the client's six. |
 | `mod.ts`     | The barrel.                                                                          |
 
 A method takes the path parameters in path order, then `body`, then
-`query`:
+`query`, then `headers`:
 
 ```ts ignore
 import { Shop, ShopError } from './sdk/mod.ts';
@@ -475,7 +475,11 @@ try {
   gives the generator nothing to read. Transforms and custom refinements are
   not carried over, so a generated schema can be looser than the server's,
   never stricter.
-- **Not generated:** arguments for `header()` binds, socket commands, and
+- **A `header()` bind is a key of the `headers` argument**, an optional
+  string under the header's own name:
+  `shop.ordersList({}, { 'x-tenant': 'acme' })`. The two paging request
+  headers are left out; `page` and `limit` in `query` ask for the same.
+- **Not generated:** socket commands, and
   operations that answer HTML only (listed as skipped). The client imports
   `@tundralibs/restler`, `@tundralibs/guardian` and `@tundralibs/utils`; add
   them to the project that uses it. The output is unformatted: run your
