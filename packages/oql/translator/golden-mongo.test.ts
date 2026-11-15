@@ -12,7 +12,10 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import type { Query } from '../types/mod.ts';
-import { MongoTranslator } from './MongoTranslator.ts';
+import {
+  type MongoAggregateAction,
+  MongoTranslator,
+} from './MongoTranslator.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type { TranslatedQuery } from './types/mod.ts';
 
@@ -732,8 +735,18 @@ const CASES: Case[] = [
                     {
                       case: {
                         $and: [
-                          { $gte: ['$age', 18] },
-                          { $in: ['$role', ['a', 'b']] },
+                          {
+                            $and: [
+                              { $gte: ['$age', 18] },
+                              { $gt: ['$age', null] },
+                            ],
+                          },
+                          {
+                            $and: [
+                              { $in: ['$role', ['a', 'b']] },
+                              { $gt: ['$role', null] },
+                            ],
+                          },
                         ],
                       },
                       then: 'adult',
@@ -742,7 +755,12 @@ const CASES: Case[] = [
                       case: {
                         $or: [
                           { $in: [{ $type: '$age' }, ['null', 'missing']] },
-                          { $eq: ['$age', 0] },
+                          {
+                            $and: [
+                              { $eq: ['$age', 0] },
+                              { $gt: ['$age', null] },
+                            ],
+                          },
                         ],
                       },
                       then: null,
@@ -2408,6 +2426,159 @@ describe('oql.translator.MongoTranslator — DATE_TRUNC unit', () => {
       OqlError,
     );
     asserts.assertEquals((err as OqlError).code, 'INVALID_TIME_UNIT');
+  });
+});
+
+describe('oql.translator.MongoTranslator — CASE condition on a NULL input', () => {
+  // BSON orders null and missing below every value and holds them equal,
+  // so each comparison carries a `$gt: [x, null]` guard per nullable input.
+  const present = (operand: unknown) => ({ $gt: [operand, null] });
+  const sign = {
+    $$_expression: 'CASE',
+    args: { cases: [{ when: { '@a': { $lt: 0 } }, then: -1 }], else: 0 },
+  };
+  const signSwitch = {
+    $switch: {
+      branches: [{
+        case: { $and: [{ $lt: ['$a', 0] }, present('$a')] },
+        then: -1,
+      }],
+      default: 0,
+    },
+  };
+  const pipelineOf = (query: unknown) =>
+    (t.select(query as Query<'SELECT'>) as MongoAggregateAction).params
+      .pipeline;
+  /** The stage a one-branch CASE on `when` is translated to. */
+  const stageOf = (when: unknown): unknown =>
+    pipelineOf({
+      type: 'SELECT',
+      table: 'rows',
+      columns: ['a', 'b'],
+      expressions: {
+        c: { $$_expression: 'CASE', args: { cases: [{ when, then: 1 }] } },
+      },
+      projection: { '@c': 'c' },
+    })[0];
+  const switchOn = (condition: unknown) => ({
+    $addFields: {
+      c: {
+        $switch: { branches: [{ case: condition, then: 1 }], default: null },
+      },
+    },
+  });
+
+  for (const op of ['$eq', '$ne', '$gt', '$gte', '$lt', '$lte']) {
+    it(`guards the field of ${op} against a literal`, () => {
+      asserts.assertEquals(
+        stageOf({ '@a': { [op]: 6 } }),
+        switchOn({ $and: [{ [op]: ['$a', 6] }, present('$a')] }),
+      );
+    });
+  }
+
+  const CONDITIONS: Array<{ name: string; when: unknown; expected: unknown }> =
+    [
+      {
+        name: 'guards a direct value as $eq',
+        when: { '@a': 6 },
+        expected: { $and: [{ $eq: ['$a', 6] }, present('$a')] },
+      },
+      {
+        name: 'guards both sides of a column comparison',
+        when: { '@a': { $ne: '@b' } },
+        expected: {
+          $and: [{ $ne: ['$a', '$b'] }, present('$a'), present('$b')],
+        },
+      },
+      {
+        name: 'guards an expression operand',
+        when: { '@a': { $lt: { $$_expression: 'ADD', args: ['@b', 1] } } },
+        expected: {
+          $and: [
+            { $lt: ['$a', { $add: ['$b', 1] }] },
+            present('$a'),
+            present({ $add: ['$b', 1] }),
+          ],
+        },
+      },
+      {
+        name: 'guards the field of $in',
+        when: { '@a': { $in: [1, 2] } },
+        expected: { $and: [{ $in: ['$a', [1, 2]] }, present('$a')] },
+      },
+      {
+        name: 'guards the field of $nin',
+        when: { '@a': { $nin: [1, 2] } },
+        expected: {
+          $and: [{ $not: [{ $in: ['$a', [1, 2]] }] }, present('$a')],
+        },
+      },
+      {
+        name: 'guards the field and a column bound of $between',
+        when: { '@a': { $between: ['@b', 9] } },
+        expected: {
+          $and: [
+            { $and: [{ $gte: ['$a', '$b'] }, { $lte: ['$a', 9] }] },
+            present('$a'),
+            present('$b'),
+          ],
+        },
+      },
+      {
+        name: 'reads a direct null as IS NULL, true for a missing field too',
+        when: { '@a': null },
+        expected: { $in: [{ $type: '$a' }, ['null', 'missing']] },
+      },
+      {
+        name: 'guards each comparison nested under $or and $and',
+        when: {
+          $or: [{ '@a': { $lt: 0 } }, {
+            $and: [{ '@a': 1 }, { '@b': { $ne: 2 } }],
+          }],
+        },
+        expected: {
+          $or: [
+            { $and: [{ $lt: ['$a', 0] }, present('$a')] },
+            {
+              $and: [
+                { $and: [{ $eq: ['$a', 1] }, present('$a')] },
+                { $and: [{ $ne: ['$b', 2] }, present('$b')] },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+  for (const c of CONDITIONS) {
+    it(c.name, () => {
+      asserts.assertEquals(stageOf(c.when), switchOn(c.expected));
+    });
+  }
+
+  it('guards a CASE stored by UPDATE', () => {
+    const out = t.update({
+      type: 'UPDATE',
+      table: 'rows',
+      columns: ['a', 'b'],
+      data: { b: sign },
+    } as unknown as Query<'UPDATE'>);
+    asserts.assertEquals(out.params.data, [{ $set: { b: signSwitch } }]);
+  });
+
+  it('guards a CASE whose result is filtered', () => {
+    const pipeline = pipelineOf({
+      type: 'SELECT',
+      table: 'rows',
+      columns: ['a', 'b'],
+      expressions: { c: sign },
+      projection: { '@a': true },
+      where: { '@c': -1 },
+    });
+    asserts.assertEquals(pipeline.slice(0, 2), [
+      { $addFields: { c: signSwitch } },
+      { $match: { c: -1 } },
+    ]);
   });
 });
 
