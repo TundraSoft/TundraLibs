@@ -147,7 +147,11 @@ export const DOCS_TRYIT = `(() => {
     }
     url.pathname = path;
     const names = (form.dataset.security || '').split(',').filter(Boolean);
-    apply(headers, url, names.length ? names : Object.keys(load()));
+    // A public operation gets no credential; one that names no scheme may
+    // still be guarded, so it gets every stored one.
+    if (!form.hasAttribute('data-public')) {
+      apply(headers, url, names.length ? names : Object.keys(load()));
+    }
     const csrf = cookie(CSRF_COOKIE);
     if (csrf) headers.set(CSRF_HEADER, csrf);
     const bodyEl = form.querySelector('[data-docs-body]');
