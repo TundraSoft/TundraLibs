@@ -50,6 +50,11 @@ describe('rapid.ui.html', () => {
     asserts.assertEquals(render(html`${fake}`), '[object Object]');
   });
 
+  it('a copy of an Html is not Html — the brand does not travel with its fields', () => {
+    const copy = { ...raw('<b>bold</b>') };
+    asserts.assertEquals(render(html`${copy}`), '[object Object]');
+  });
+
   it('template() pairs a name with the pure render fn; view is optional to the author', () => {
     const UserList = template<{ names: string[] }>(
       (data) => html`<ul>${data.names.map((n) => html`<li>${n}</li>`)}</ul>`,
