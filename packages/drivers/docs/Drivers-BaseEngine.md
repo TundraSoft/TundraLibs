@@ -189,6 +189,10 @@ State machine: `CLOSED → CONNECTING → READY → CLOSED`. There is no
 | `status`       | Read-only getter.                                                                                                                 |
 | `poolStats`    | `{ total, active, idle, waiting }` snapshot.                                                                                      |
 
+One engine's `ping()` does throw: `NeonHttpEngine` rejects with
+`INVALID_CONFIG_VALUE` on a non-UTC session — see
+[Neon → Time zone](../engines/neon/Drivers-Neon.md#time-zone).
+
 ## Pool semantics
 
 The pool lives inline on the engine. Two modes:

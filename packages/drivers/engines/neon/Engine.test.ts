@@ -39,6 +39,8 @@ class StubClient {
   /** The session `TimeZone` the server reports; `null` returns no row. */
   public zone: string | null = 'UTC';
   public zoneCalls = 0;
+  /** Thrown by the `TimeZone` request when set. */
+  public zoneError: unknown = null;
 
   // deno-lint-ignore require-await
   public async sql<R = Record<string, unknown>>(
@@ -47,6 +49,7 @@ class StubClient {
   ): Promise<NeonQueryResult<R>> {
     if (query.includes("current_setting('TimeZone')")) {
       this.zoneCalls++;
+      if (this.zoneError) throw this.zoneError;
       return {
         rows: this.zone === null ? [] : [{ zone: this.zone }],
         fields: [{ name: 'zone', dataTypeID: 25 }],
@@ -607,6 +610,44 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
       eng.stub.zone = null;
       await eng.execute({ sql: 'SELECT 1' });
       assertEquals(eng.stub.callCount, 1);
+    });
+
+    it('ping() rejects a non-UTC session with the error a query gets', async () => {
+      const eng = makeEngine();
+      eng.stub.zone = 'Asia/Kolkata';
+      await eng.connect();
+      const fromPing = await assertRejects(() => eng.ping(), EngineError);
+      const fromQuery = await assertRejects(
+        () => eng.execute({ sql: 'SELECT 1' }),
+        EngineError,
+      );
+      assertEquals(fromPing.code, 'INVALID_CONFIG_VALUE');
+      assertEquals(fromPing.message, fromQuery.message);
+    });
+
+    it('ping() runs the check once and the next query reuses it', async () => {
+      const eng = makeEngine();
+      await eng.connect();
+      assertEquals(await eng.ping(), true);
+      assertEquals(eng.stub.zoneCalls, 1);
+      assertEquals(await eng.ping(), true);
+      await eng.execute({ sql: 'SELECT 1' });
+      assertEquals(eng.stub.zoneCalls, 1);
+    });
+
+    it('ping() returns false when the zone request fails', async () => {
+      const eng = makeEngine();
+      eng.stub.zoneError = neonError('42501');
+      await eng.connect();
+      assertEquals(await eng.ping(), false);
+    });
+
+    it('ping() with allowNonUtcTimeZone sends no zone request', async () => {
+      const eng = makeEngine({ allowNonUtcTimeZone: true });
+      eng.stub.zone = 'Asia/Kolkata';
+      await eng.connect();
+      assertEquals(await eng.ping(), true);
+      assertEquals(eng.stub.zoneCalls, 0);
     });
   });
 
