@@ -682,4 +682,44 @@ describe('rapid.middlewares.idempotency — cookies and the lost claim', () => {
       await app.stop();
     }
   });
+
+  it('a store that cannot save the record does not fail the request: the reply goes out and the retry is a 409', async () => {
+    const records = new Map<string, IdempotencyRecord>();
+    const hooks: IdempotencyHooks = {
+      getRecord: (key) => records.get(key),
+      claim: (key, record) =>
+        records.has(key) ? false : (records.set(key, record), true),
+      saveRecord: () => {
+        throw new Error('store down');
+      },
+      release: (key) => void records.delete(key),
+    };
+    const app = await Application.initialize({
+      name: 'idem-save',
+      logger: { handlers: [] },
+    });
+    let runs = 0;
+    app.use(idempotency({ scope: false, hooks }));
+    app.post('/charge', () => {
+      runs++;
+      return { status: 201, content: { charged: true } };
+    });
+    const post = () =>
+      app.fetch(
+        new Request('http://app/charge', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'k' },
+        }),
+      );
+    try {
+      const first = await post();
+      asserts.assertEquals(first.status, 201);
+      asserts.assertEquals(await first.json(), { charged: true });
+      // The marker stands, so the work is not run a second time.
+      asserts.assertEquals((await post()).status, 409);
+      asserts.assertEquals(runs, 1);
+    } finally {
+      await app.stop();
+    }
+  });
 });
