@@ -1719,13 +1719,11 @@ export class MongoTranslator {
       // native dotted-path syntax; JSON paths additionally get the
       // restricted operator set policed.
       const fieldPath = this.__filterFieldPath(key, value, columns);
-      const { spec, exprs: colExprs } = this.__translateColumnCondition(
-        fieldPath,
-        value as Operators,
-        columns,
-      );
+      const { spec, exprs: colExprs, clashes } = this
+        .__translateColumnCondition(fieldPath, value as Operators, columns);
       merged = { ...merged, ...spec };
       exprs.push(...colExprs);
+      conditions.push(...clashes);
     }
     if (exprs.length > 0) {
       merged = {
@@ -1800,7 +1798,9 @@ export class MongoTranslator {
   /**
    * Translate a `'@col': RHS` pair. Returns a per-field literal `spec`
    * (`{ field: <mongo-spec> }`) plus any `$expr` `exprs` for value-position
-   * column references (`@otherCol`). A column reference is resolved to a
+   * column references (`@otherCol`), and `clashes`: per-field specs kept
+   * out of `spec` because two OQL operators translate to the same Mongo
+   * key, each to be ANDed beside it. A column reference is resolved to a
    * `$expr` comparison for the comparison operators; for `$in`/`$nin` and the
    * LIKE family — which Mongo cannot faithfully express field-to-field — a
    * {@link DialectUnsupportedError} is thrown rather than silently treating
@@ -1810,10 +1810,15 @@ export class MongoTranslator {
     fieldPath: string,
     rhs: Operators,
     columns: ReadonlySet<string>,
-  ): { spec: Record<string, unknown>; exprs: unknown[] } {
+  ): {
+    spec: Record<string, unknown>;
+    exprs: unknown[];
+    clashes: Record<string, unknown>[];
+  } {
     const exprs: unknown[] = [];
+    const clashes: Record<string, unknown>[] = [];
     const lhs = `$${fieldPath}`;
-    if (rhs === null) return { spec: { [fieldPath]: null }, exprs };
+    if (rhs === null) return { spec: { [fieldPath]: null }, exprs, clashes };
     if (Array.isArray(rhs)) {
       // Implicit $in. A column ref inside the list cannot be expressed in a
       // Mongo $match — reject rather than silently treat it as a literal.
@@ -1828,15 +1833,16 @@ export class MongoTranslator {
       return {
         spec: { [fieldPath]: { $in: rhs.filter((el) => el !== null) } },
         exprs,
+        clashes,
       };
     }
     if (typeof rhs !== 'object' || rhs instanceof Date) {
       const ref = this.__valueFieldRef(rhs, columns);
       if (ref !== null) {
         exprs.push(this.__notNull({ $eq: [lhs, ref] }, lhs, ref));
-        return { spec: {}, exprs };
+        return { spec: {}, exprs, clashes };
       }
-      return { spec: { [fieldPath]: rhs }, exprs };
+      return { spec: { [fieldPath]: rhs }, exprs, clashes };
     }
     // Multiple operators on the same field merge into a single
     // `{ field: { $op1: …, $op2: … } }` document — deep-merge the inner spec.
@@ -1851,6 +1857,12 @@ export class MongoTranslator {
           !Array.isArray(out[k]) &&
           typeof v === 'object' && v !== null && !Array.isArray(v)
         ) {
+          // `$between` and `$gte` both emit `$gte`, two patterns both
+          // emit `$regex`: merged, the later would replace the earlier.
+          if (Object.keys(v).some((key) => key in (out[k] as object))) {
+            clashes.push({ [k]: v });
+            continue;
+          }
           out[k] = { ...(out[k] as object), ...(v as object) };
         } else {
           out[k] = v;
@@ -1941,7 +1953,7 @@ export class MongoTranslator {
     if (excluded.length > 0) {
       mergeLiteral({ [fieldPath]: { $nin: [...excluded, null] } });
     }
-    return { spec: out, exprs };
+    return { spec: out, exprs, clashes };
   }
 
   /**

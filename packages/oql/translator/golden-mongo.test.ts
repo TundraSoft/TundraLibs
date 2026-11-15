@@ -375,6 +375,118 @@ const CASES: Case[] = [
     },
   },
   {
+    // `$between` emits `$gte` / `$lte` too. Merged into one document the
+    // later bound replaced the earlier, so the second operator stands as
+    // its own condition under `$and`.
+    name: 'WHERE $gte / $lte beside $between keep both ranges',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'qty'],
+      projection: { '@id': true },
+      where: { '@qty': { $gte: 2, $lte: 8, $between: [1, 9] } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'orders',
+        filter: {
+          qty: { $gte: 2, $lte: 8 },
+          $and: [{ qty: { $gte: 1, $lte: 9 } }],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Every pattern operator emits `$regex`. Each later one keeps its own
+    // document, so `$ilike`'s `i` option stays off the other patterns.
+    name: 'WHERE several pattern operators on one field all apply',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      projection: { '@id': true },
+      where: {
+        '@name': {
+          $ilike: 'a%',
+          $like: '%z',
+          $startsWith: 'A',
+          $endsWith: 'z',
+          $contains: 'd',
+        },
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          name: { $regex: '^a.*$', $options: 'i' },
+          $and: [
+            { name: { $regex: '^.*z$' } },
+            { name: { $regex: '^A' } },
+            { name: { $regex: 'z$' } },
+            { name: { $regex: 'd' } },
+          ],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    name: 'WHERE $nlike beside $nilike keeps both patterns',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      projection: { '@id': true },
+      where: { '@name': { $nlike: 'A%', $nilike: 'b%' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          name: { $not: { $regex: '^A.*$' }, $ne: null },
+          $and: [{
+            name: { $not: { $regex: '^b.*$', $options: 'i' }, $ne: null },
+          }],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // The clashing condition joins the filter's own `$and`.
+    name: 'WHERE a clashing operator joins an explicit $and',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'qty'],
+      projection: { '@id': true },
+      where: {
+        '@qty': { $between: [1, 9], $gte: 2 },
+        $and: [{ '@id': 1 }],
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'orders',
+        filter: {
+          qty: { $gte: 1, $lte: 9 },
+          $and: [{ qty: { $gte: 2 } }, { $and: [{ id: 1 }] }],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
     // $in with a column reference can't be expressed in a Mongo $match — throw
     // rather than silently treat the @ref as a literal.
     name: 'WHERE $in with a @col value throws (unsupported in Mongo)',
