@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { OqlError } from '../../errors/mod.ts';
 import { assertQuery, isQuery } from './query.ts';
 
 describe('oql.asserts.Query', () => {
@@ -203,6 +204,180 @@ describe('oql.asserts.Query', () => {
           TypeError,
           'Invalid SELECT query',
         );
+      });
+
+      describe('time unit', () => {
+        const diff = (unit: unknown) => ({
+          $$_expression: 'DATE_DIFF',
+          args: { from: '@at', to: '@at', unit },
+        });
+        const add = (unit: unknown, date: unknown = '@at') => ({
+          $$_expression: 'DATE_ADD',
+          args: { date, amount: 1, unit },
+        });
+        const select = (extra: Record<string, unknown>) => ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at', 'n'],
+          projection: { '@id': true },
+          ...extra,
+        });
+        // One query per place the validator checks an expression, each
+        // built from the unit so the same shape serves as its own control.
+        const positions: Record<string, (unit: unknown) => unknown> = {
+          'DATE_DIFF': (u) => select({ expressions: { e: diff(u) } }),
+          'DATE_ADD': (u) => select({ expressions: { e: add(u) } }),
+          'DATE_TRUNC': (u) =>
+            select({
+              expressions: {
+                e: {
+                  $$_expression: 'DATE_TRUNC',
+                  args: { date: '@at', unit: u },
+                },
+              },
+            }),
+          'DATE_TRUNC of a DATE_ADD': (u) =>
+            select({
+              expressions: {
+                e: {
+                  $$_expression: 'DATE_TRUNC',
+                  args: { date: add(u), unit: 'DAYS' },
+                },
+              },
+            }),
+          'nested in ADD': (u) =>
+            select({
+              expressions: { e: { $$_expression: 'ADD', args: [1, diff(u)] } },
+            }),
+          'nested in COALESCE': (u) =>
+            select({
+              expressions: {
+                e: { $$_expression: 'COALESCE', args: [diff(u), 0] },
+              },
+            }),
+          'aggregate': (u) =>
+            select({
+              projection: { '@s': true },
+              aggregates: { s: { $$_aggregate: 'SUM', column: diff(u) } },
+            }),
+          'join on': (u) =>
+            select({
+              joins: {
+                Item: {
+                  table: 'items',
+                  type: 'LEFT',
+                  columns: ['orderId', 'at'],
+                  on: { '@Item.@orderId': '@id', '@Item.@at': add(u) },
+                },
+              },
+            }),
+          'COUNT expressions': (u) => ({
+            type: 'COUNT',
+            table: 'orders',
+            columns: ['id', 'at'],
+            expressions: { e: diff(u) },
+          }),
+          'COUNT join on': (u) => ({
+            type: 'COUNT',
+            table: 'orders',
+            columns: ['id', 'at'],
+            joins: {
+              Item: {
+                table: 'items',
+                type: 'LEFT',
+                columns: ['orderId', 'at'],
+                on: { '@Item.@orderId': '@id', '@Item.@at': add(u) },
+              },
+            },
+          }),
+          'INSERT data': (u) => ({
+            type: 'INSERT',
+            table: 'orders',
+            columns: ['id', 'at'],
+            data: { id: 1, at: add(u, new Date(0)) },
+          }),
+          'UPDATE data': (u) => ({
+            type: 'UPDATE',
+            table: 'orders',
+            columns: ['id', 'at'],
+            data: { at: add(u) },
+            where: { '@id': 1 },
+          }),
+          'UPSERT data': (u) => ({
+            type: 'UPSERT',
+            table: 'orders',
+            columns: ['id', 'at'],
+            data: { id: 1, at: add(u) },
+            conflictKeys: ['@id'],
+          }),
+          'INSERT_FROM_QUERY source': (u) => ({
+            type: 'INSERT_FROM_QUERY',
+            table: 'archive',
+            columns: ['id', 'e'],
+            query: select({
+              expressions: { e: diff(u) },
+              projection: { '@id': true, '@e': true },
+            }),
+          }),
+          'CREATE_VIEW source': (u) => ({
+            type: 'CREATE_VIEW',
+            view: 'v',
+            query: select({ expressions: { e: diff(u) } }),
+          }),
+          'ALTER_VIEW source': (u) => ({
+            type: 'ALTER_VIEW',
+            view: 'v',
+            query: select({ expressions: { e: diff(u) } }),
+          }),
+        };
+
+        for (const [position, build] of Object.entries(positions)) {
+          it(`a bad unit throws INVALID_TIME_UNIT: ${position}`, () => {
+            assertQuery(build('DAYS'));
+            const err = assertThrows(
+              () => assertQuery(build('fortnight')),
+              OqlError,
+            );
+            // No dialect: the validator runs before one is chosen.
+            assertEquals(err.context, {
+              code: 'INVALID_TIME_UNIT',
+              unit: 'fortnight',
+            });
+            assertEquals(isQuery(build('fortnight')), false);
+          });
+        }
+
+        it('a bad UNIX_TIMESTAMP unit throws INVALID_TIME_UNIT', () => {
+          const build = (unit: string) =>
+            select({
+              expressions: { e: { $$_expression: 'UNIX_TIMESTAMP', unit } },
+            });
+          assertQuery(build('milliseconds'));
+          const err = assertThrows(
+            () => assertQuery(build('minutes')),
+            OqlError,
+          );
+          assertEquals(err.context, {
+            code: 'INVALID_TIME_UNIT',
+            unit: 'minutes',
+          });
+        });
+
+        it('a missing unit is still a TypeError', () => {
+          assertThrows(
+            () =>
+              assertQuery(select({
+                expressions: {
+                  e: {
+                    $$_expression: 'DATE_DIFF',
+                    args: { from: '@at', to: '@at' },
+                  },
+                },
+              })),
+            TypeError,
+            "Missing 'unit' property",
+          );
+        });
       });
     });
   });

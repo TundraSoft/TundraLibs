@@ -4,6 +4,7 @@
  * @module asserts/Query/DML/Common
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import { assertExpression } from '../../expressions/mod.ts';
 
 /**
@@ -51,6 +52,7 @@ export const validateExpressions = (
     try {
       assertExpression(expr, columnList);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid ${context} query: expression '${key}' is invalid: ${
           (error as Error).message
@@ -161,6 +163,7 @@ const validateObjectDataValue = (
       );
     }
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid ${context}: ${key} has invalid expression: ${
         (error as Error).message

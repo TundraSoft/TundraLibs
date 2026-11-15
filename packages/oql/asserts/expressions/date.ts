@@ -14,6 +14,7 @@
  * @module asserts/Expressions/Date
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import { isColumnIdentifier } from '../columnIdentifier.ts';
 import type { DateExpressions, Expressions } from '../../types/mod.ts';
 import { assertBaseExpression, validateTimeUnits } from './base.ts';
@@ -304,6 +305,7 @@ export const isCurrentTimestampTZExpression: (
  *
  * @param x - The value to validate
  * @throws {TypeError} If the value is not a valid UNIX_TIMESTAMP expression
+ * @throws {OqlError} `INVALID_TIME_UNIT` if `unit` is present and is neither literal
  *
  * @example
  * ```ts
@@ -324,10 +326,11 @@ export const assertUnixTimestampExpression: (
   }
   const unit = (x as { unit?: unknown }).unit;
   if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
-    throw new TypeError(
+    throw new OqlError(
       `Invalid UNIX_TIMESTAMP unit: Expected 'seconds' or 'milliseconds', got '${
         String(unit)
       }'`,
+      { code: 'INVALID_TIME_UNIT', unit },
     );
   }
 };
@@ -346,7 +349,8 @@ export const assertUnixTimestampExpression: (
  * @throws {TypeError} If the value is not a valid DATE_ADD expression
  * @throws {TypeError} If date is not a Date object or valid column identifier
  * @throws {TypeError} If amount is not a number or valid column identifier
- * @throws {TypeError} If unit is not a valid time unit
+ * @throws {TypeError} If unit is missing
+ * @throws {OqlError} `INVALID_TIME_UNIT` if unit is not a valid time unit
  *
  * @example
  * ```ts
@@ -478,6 +482,7 @@ const DATE_TRUNC_UNITS: readonly string[] = ['DAYS', 'MONTHS', 'YEARS'];
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid DATE_TRUNC expression
+ * @throws {OqlError} `INVALID_TIME_UNIT` if unit is not one of the three
  *
  * @example
  * ```ts
@@ -516,10 +521,11 @@ export const assertDateTruncExpression: (
     }
   }
   if (typeof unit !== 'string' || !DATE_TRUNC_UNITS.includes(unit)) {
-    throw new TypeError(
+    throw new OqlError(
       `Invalid DATE_TRUNC unit: Expected one of ${
         DATE_TRUNC_UNITS.join(', ')
       }, got '${String(unit)}'`,
+      { code: 'INVALID_TIME_UNIT', unit },
     );
   }
 };

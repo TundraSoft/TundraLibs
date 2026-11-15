@@ -21,6 +21,7 @@
  * @module asserts/Query/DML/InsertFromQuery
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import type { Query, TableType } from '../../../types/mod.ts';
 import {
   assertColumns,
@@ -66,6 +67,7 @@ export const assertInsertFromQuery: <PT extends TableType = TableType>(
   try {
     assertSelectQuery(query.query);
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid INSERT_FROM_QUERY query: 'query' is not a valid SELECT - ${
         error instanceof Error ? error.message : String(error)

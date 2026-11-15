@@ -234,6 +234,34 @@ describe('oql.translator.guards', () => {
       );
       asserts.assertStringIncludes(err.message, "filter operator '$gte'");
     });
+
+    it('says which column a refused value belongs to, and why', () => {
+      for (const op of ['$in', '$nin']) {
+        for (
+          const t of [
+            new SQLiteTranslator(),
+            new PostgresTranslator(),
+            new MariaTranslator(),
+            new MongoTranslator(),
+          ]
+        ) {
+          asserts.assertThrows(
+            () =>
+              t.select(
+                {
+                  type: 'SELECT',
+                  table: 'users',
+                  columns: ['id', 'status'],
+                  projection: { '@id': true },
+                  where: { '@status': { [op]: ['a', null] } },
+                } as unknown as Query<'SELECT'>,
+              ),
+            TypeError,
+            `Value for '@status' must be valid Operators - Invalid Operators: '${op}' array element at index 1 cannot be null — use '$null: true'`,
+          );
+        }
+      }
+    });
   });
 
   describe('DATE_ADD / DATE_DIFF unit', () => {
@@ -270,6 +298,35 @@ describe('oql.translator.guards', () => {
             return (err as OqlError).message;
           });
           asserts.assertEquals(new Set(messages).size, 1);
+        }
+      }
+    });
+
+    it('refuses it under expressions with the same code', () => {
+      // There the validator refuses it, before a dialect is involved.
+      for (const expression of operands('WEEKS')) {
+        for (
+          const t of [
+            new SQLiteTranslator(),
+            new PostgresTranslator(),
+            new MariaTranslator(),
+            new MongoTranslator(),
+          ]
+        ) {
+          const err = asserts.assertThrows(
+            () =>
+              t.select(
+                {
+                  type: 'SELECT',
+                  table: 'orders',
+                  columns: ['id', 'at'],
+                  expressions: { e: expression },
+                  projection: { '@id': true, '@e': true },
+                } as unknown as Query<'SELECT'>,
+              ),
+            OqlError,
+          );
+          asserts.assertEquals(err.code, 'INVALID_TIME_UNIT');
         }
       }
     });

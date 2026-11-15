@@ -9,6 +9,7 @@
  * @module asserts/Filters/Joins
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import type {
   JoinDetails,
   JoinFilter,
@@ -128,6 +129,7 @@ export const assertJoinFilter: <
         assertExpression(value, columnList);
         continue;
       } catch (error) {
+        if (error instanceof OqlError) throw error;
         throw new TypeError(
           `Invalid JoinFilter: Value for key '${key}' is not a valid expression - ${
             error instanceof Error ? error.message : String(error)
@@ -293,6 +295,7 @@ export const assertJoinDetails: <
   try {
     assertJoinFilter<PT, LT>(obj.on, columnList);
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid JoinDetails: 'on' property is invalid - ${
         error instanceof Error ? error.message : String(error)
@@ -435,6 +438,7 @@ export const assertJoins: <
     try {
       assertJoinDetails<PT, LT>(value, columnList);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid Joins: Join '${key}' is invalid - ${
           error instanceof Error ? error.message : String(error)

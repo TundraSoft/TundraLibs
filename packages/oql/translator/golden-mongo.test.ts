@@ -964,6 +964,99 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT COALESCE, NULLIF and CASE as numeric operands',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'age', 'score'],
+      expressions: {
+        total: {
+          $$_expression: 'ADD',
+          args: ['@score', { $$_expression: 'COALESCE', args: ['@age', 0] }],
+        },
+        gap: {
+          $$_expression: 'SUBTRACT',
+          args: ['@score', { $$_expression: 'NULLIF', args: ['@age', 0] }],
+        },
+        scaled: {
+          $$_expression: 'MULTIPLY',
+          args: ['@score', {
+            $$_expression: 'CASE',
+            args: {
+              cases: [{ when: { '@age': { $gte: 18 } }, then: 2 }],
+              else: 1,
+            },
+          }],
+        },
+        ratio: {
+          $$_expression: 'DIVIDE',
+          args: ['@score', { $$_expression: 'NULLIF', args: ['@age', 0] }],
+        },
+        size: {
+          $$_expression: 'ABS',
+          args: [{ $$_expression: 'COALESCE', args: ['@score', '@age'] }],
+        },
+      },
+      projection: {
+        '@total': 'total',
+        '@gap': 'gap',
+        '@scaled': 'scaled',
+        '@ratio': 'ratio',
+        '@size': 'size',
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              total: { $add: ['$score', { $ifNull: ['$age', 0] }] },
+              gap: {
+                $subtract: [
+                  '$score',
+                  { $cond: [{ $eq: ['$age', 0] }, null, '$age'] },
+                ],
+              },
+              scaled: {
+                $multiply: ['$score', {
+                  $switch: {
+                    branches: [{
+                      case: {
+                        $and: [{ $gte: ['$age', 18] }, { $gt: ['$age', null] }],
+                      },
+                      then: 2,
+                    }],
+                    default: 1,
+                  },
+                }],
+              },
+              ratio: {
+                $divide: [
+                  '$score',
+                  { $cond: [{ $eq: ['$age', 0] }, null, '$age'] },
+                ],
+              },
+              size: { $abs: { $ifNull: ['$score', '$age'] } },
+            },
+          },
+          {
+            $project: {
+              total: '$total',
+              gap: '$gap',
+              scaled: '$scaled',
+              ratio: '$ratio',
+              size: '$size',
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
     // Unwrapped, `'$secret'` reads the row's `secret` field and `'$$ROOT'`
     // the whole document; the SQL dialects bind both as text.
     name: 'SELECT expression argument starting with $ stays a literal',

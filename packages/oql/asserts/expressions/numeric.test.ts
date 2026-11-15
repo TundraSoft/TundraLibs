@@ -1,5 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { OqlError } from '../../errors/mod.ts';
 import {
   assertAbsExpression,
   assertAddExpression,
@@ -566,7 +567,7 @@ describe('oql.asserts.Expressions.Numeric', () => {
             $$_expression: 'DATE_DIFF',
             args: { from: date1, to: date2, unit: 'INVALID' },
           } as any),
-        TypeError,
+        OqlError,
         'Expected one of',
       );
     });
@@ -760,6 +761,66 @@ describe('oql.asserts.Expressions.Numeric', () => {
       };
 
       assertNumericExpression(expr, ['quantity', 'bonus']);
+    });
+
+    describe('conditional operands', () => {
+      const columns = ['quantity', 'bonus'];
+      const conditionals: Record<string, unknown> = {
+        COALESCE: { $$_expression: 'COALESCE', args: ['@bonus', 0] },
+        NULLIF: { $$_expression: 'NULLIF', args: ['@bonus', 0] },
+        CASE: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{ when: { '@bonus': { $gt: 0 } }, then: 2 }],
+            else: 1,
+          },
+        },
+      };
+
+      for (const [name, nested] of Object.entries(conditionals)) {
+        it(`valid: ${name} in every numeric position`, () => {
+          for (
+            const op of ['ADD', 'SUBTRACT', 'MULTIPLY', 'DIVIDE', 'MODULO']
+          ) {
+            assertNumericExpression(
+              { $$_expression: op, args: ['@quantity', nested] } as any,
+              columns,
+            );
+          }
+          for (const op of ['ABS', 'CEIL', 'FLOOR', 'ROUND', 'SQRT']) {
+            assertNumericExpression(
+              { $$_expression: op, args: [nested] } as any,
+              columns,
+            );
+          }
+          assertNumericExpression(
+            {
+              $$_expression: 'POWER',
+              args: { base: nested, exponent: nested },
+            } as any,
+            columns,
+          );
+        });
+      }
+
+      it('invalid: a malformed conditional is still refused', () => {
+        asserts.assertThrows(
+          () =>
+            assertNumericExpression(
+              {
+                $$_expression: 'ADD',
+                args: ['@quantity', { $$_expression: 'NULLIF', args: [1] }],
+              } as any,
+              columns,
+            ),
+          TypeError,
+          'args[1] contains invalid nested expression in ADD',
+        );
+      });
+
+      it('invalid: a conditional alone is not a numeric expression', () => {
+        asserts.assert(!isNumericExpression(conditionals.COALESCE as any));
+      });
     });
 
     it('validate with column list', () => {

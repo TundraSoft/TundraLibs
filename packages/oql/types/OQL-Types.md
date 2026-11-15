@@ -749,7 +749,9 @@ Mathematical operations returning a number/bigint: `ADD`, `SUBTRACT`,
 `POWER`, `SQRT`, plus `LENGTH` (character count of a string) and
 `DATE_DIFF` (whole time units between two dates). `ADD`/`SUBTRACT`/
 `MULTIPLY`/`DIVIDE`/`MODULO`/`ABS`/`CEIL`/`FLOOR`/`ROUND`/`SQRT` take an
-array of numeric operands; `POWER` takes `{ base, exponent }`.
+array of numeric operands; `POWER` takes `{ base, exponent }`. An operand
+is a number, a numeric column, a nested numeric expression, or a nested
+`COALESCE`, `NULLIF` or `CASE`.
 
 ### String expressions
 
@@ -787,8 +789,9 @@ at the application layer if you need it).
 
 `COALESCE`, `NULLIF` and `CASE` take arguments of any type: a column, a
 literal, `null`, or a nested expression of any kind. They return the
-type of those arguments. Other expressions do not yet accept them as
-arguments, so declare them in `expressions` and project them.
+type of those arguments. Numeric expressions accept them as operands, so
+`DIVIDE` by a `NULLIF` is one expression. String and date expressions do
+not yet accept them as arguments.
 
 - `COALESCE` — `args`: two or more values; the first that is not `NULL`.
 - `NULLIF` — `args`: exactly two values; `NULL` when they are equal,

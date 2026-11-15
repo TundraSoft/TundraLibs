@@ -109,6 +109,19 @@ describe('oql.asserts.Filters.FilterOperator', () => {
         'must be valid Operators',
       );
     });
+
+    it('invalid: says which column and why', () => {
+      for (const op of ['$in', '$nin']) {
+        asserts.assertThrows(
+          () =>
+            assertFilterOperator<{ status: string }>({
+              '@status': { [op]: ['a', null] } as any,
+            }),
+          TypeError,
+          `Value for '@status' must be valid Operators - Invalid Operators: '${op}' array element at index 1 cannot be null — use '$null: true'`,
+        );
+      }
+    });
   });
 
   describe('isFilterOperator', () => {
