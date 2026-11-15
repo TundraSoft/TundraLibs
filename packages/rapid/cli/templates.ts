@@ -174,13 +174,17 @@ const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
 import { health } from '@tundralibs/rapid/endpoints';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await Application.initialize(configDir);
+// Exported for \`rapid access\` and \`rapid sdk\`, which read the app.
+export const app = await Application.initialize(configDir);
 
 app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));
 app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
-await app.start();
-app.log.info(\`{{name}} listening on \${app.address}\`);
+// Listen only when run directly: importing this file never starts a server.
+if (import.meta.main) {
+  await app.start();
+  app.log.info(\`{{name}} listening on \${app.address}\`);
+}
 `;
 
 const MAIN_MODULES = `import { Application } from '@tundralibs/rapid';
@@ -188,14 +192,18 @@ import { health } from '@tundralibs/rapid/endpoints';
 import * as modules from './modules/mod.ts';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
-const app = await Application.initialize(configDir);
+// Exported for \`rapid access\` and \`rapid sdk\`, which read the app.
+export const app = await Application.initialize(configDir);
 app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
 // Boot the module system — every RapidModule exported from modules/mod.ts.
 await app.modules({ modules: [modules] });
 
-await app.start();
-app.log.info(\`{{name}} listening on \${app.address}\`);
+// Listen only when run directly: importing this file never starts a server.
+if (import.meta.main) {
+  await app.start();
+  app.log.info(\`{{name}} listening on \${app.address}\`);
+}
 `;
 
 const MODULE_SAMPLE =

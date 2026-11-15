@@ -857,6 +857,53 @@ describe('rapid.cli init scaffold — installable and type-correct', () => {
     },
   });
 
+  it({
+    name:
+      'a generated project works with `rapid access` and `rapid sdk` as scaffolded, and importing its main.ts starts no server',
+    // The scaffold imports `@tundralibs/rapid`, which only Deno resolves
+    // to the workspace package from a file's own location.
+    bun: false,
+    node: false,
+    fn: async () => {
+      const root = new URL('../../../', import.meta.url).pathname;
+      const dir = await makeTempDir({
+        dir: root,
+        prefix: '.rapid-scaffold-entry-',
+      });
+      try {
+        const files = scaffold(
+          { name: 'entry', module: false, norm: false },
+          '1.0.0',
+        );
+        for (const [path, body] of Object.entries(files)) {
+          const slash = path.lastIndexOf('/');
+          if (slash > 0) {
+            await makeDir(`${dir}/${path.slice(0, slash)}`, {
+              recursive: true,
+            });
+          }
+          await writeTextFile(`${dir}/${path}`, body);
+        }
+        const lines: string[] = [];
+        const log = (line: string) => void lines.push(line);
+        asserts.assertEquals(await accessCommand(`${dir}/main.ts`, {}, log), 0);
+        asserts.assertStringIncludes(lines.join('\n'), 'GET /healthz');
+        asserts.assertEquals(
+          await sdkCommand(`${dir}/main.ts`, { out: `${dir}/sdk` }, quiet),
+          0,
+        );
+        asserts.assert(await pathExists(`${dir}/sdk/mod.ts`));
+        const { app } = await import(`file://${dir}/main.ts`) as {
+          app: Application;
+        };
+        asserts.assertEquals(app.running, false);
+        await app.stop();
+      } finally {
+        await removeDir(dir, { recursive: true });
+      }
+    },
+  });
+
   it('initCommand rejects a name that would corrupt the generated YAML/JSON/TS', async () => {
     const tmp = await makeTempDir({ prefix: 'rapid-init-name-' });
     try {
