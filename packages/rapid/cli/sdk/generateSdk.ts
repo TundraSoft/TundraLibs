@@ -400,19 +400,20 @@ ${methods.join('\n')}${
     return strings;
   }
 
-  /** Send, then validate the reply when the route declares its shape. */
+  /** Send, without the credential for a public route, then validate the reply when the route declares its shape. */
   private async __call<B>(
     operation: string,
     endpoint: RESTlerEndpoint,
     guard?: BaseGuardian<B>,
+    skipAuth = false,
   ): Promise<B> {
     try {
-      const response = await this._makeRequest<unknown, B>(
-        endpoint,
-        guard === undefined
+      const response = await this._makeRequest<unknown, B>(endpoint, {
+        skipAuth,
+        ...(guard === undefined
           ? {}
-          : { responseSchema: (data) => guard.parse(data) },
-      );
+          : { responseSchema: (data: unknown) => guard.parse(data) }),
+      });
       return response.body as B;
     } catch (error) {
       if (!(error instanceof RESTlerResponseValidationError)) throw error;
@@ -610,6 +611,10 @@ export function generateSdk(
       if (security.length > 0) {
         summary.push(`Auth: ${security.map((s) => `\`${s}\``).join(' or ')}.`);
       }
+      // `security: []` is the route saying it is public; a route that
+      // says nothing may still be guarded, so it keeps the credential.
+      const open = Array.isArray(operation.security) && security.length === 0;
+      if (open) summary.push('Public: the credential is not sent.');
       methods.push(`  /**
 ${
         [...summary, `\`${label}\``, '', ...docs].map((line) =>
@@ -624,7 +629,11 @@ ${
       }> {
     return await this.__call('${method}', {
       ${endpoint.join(',\n      ')},
-    }${response === undefined ? '' : `, ${response}Schema`});
+    }${
+        response === undefined
+          ? (open ? ', undefined' : '')
+          : `, ${response}Schema`
+      }${open ? ', true' : ''});
   }
 `);
     }
