@@ -87,9 +87,10 @@ type ConditionalArg<
  * **String** (returns string): `CONCAT`, `LOWER`, `UPPER`, `TRIM`,
  * `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
  *
- * **Date** (returns Date): `NOW`, `CURRENT_DATE`, `CURRENT_TIME`,
- * `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC`
- * — and `UNIX_TIMESTAMP`, which returns a 64-bit INTEGER, not a Date.
+ * **Date** (returns Date; ISO 8601 UTC text on SQLite): `NOW`,
+ * `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`,
+ * `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC` — and
+ * `UNIX_TIMESTAMP`, which returns a 64-bit INTEGER, not a Date.
  *
  * **Cryptographic (platform-dependent)**: `ENCRYPT`, `DECRYPT`,
  * `HASH`.
@@ -181,7 +182,8 @@ export type Expressions<
 } | {
   /**
    * Date addition: add a number of time units to a date. Negative
-   * `amount` subtracts.
+   * `amount` subtracts. Returns text, not a Date, on SQLite, and on
+   * MariaDB when `date` is a literal.
    */
   $$_expression: 'DATE_ADD';
   args: {
@@ -191,9 +193,9 @@ export type Expressions<
   };
 } | {
   /**
-   * Start of the day, month or year `date` falls in, as a timestamp —
-   * the value to group rows by period. `date` is a column or a nested
-   * `DATE_ADD` / `NOW`, never a literal.
+   * Start of the day, month or year `date` falls in, as a Date (text on
+   * SQLite) — the value to group rows by period. `date` is a column or
+   * a nested `DATE_ADD` / `NOW`, never a literal.
    *
    * `unit` is a TRANSLATION-TIME switch, not a value: it must be a
    * literal on the node and is never bound as a parameter.
