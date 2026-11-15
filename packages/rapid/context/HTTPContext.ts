@@ -965,14 +965,22 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    * The interpreted response, extras composed back in. `headers` is a
    * COPY — the same guard {@link responseHeaders} applies, so reading
    * the response cannot become a back door to mutating the live
-   * outbound headers after {@link respond}.
+   * outbound headers after {@link respond}. The copy is made when
+   * `headers` is first read: most readers want `content` or a null
+   * check, and a copy per read was the larger part of a middleware
+   * stack's cost.
    */
   public override get response(): Readonly<RapidContextResponse> | null {
     const base = super.response;
-    return base === null ? null : {
+    if (base === null) return null;
+    const live = this._headers;
+    let copy: Headers | undefined;
+    return {
       content: base.content,
       status: this._status,
-      headers: new Headers(this._headers),
+      get headers(): Headers {
+        return copy ??= new Headers(live);
+      },
       // Middleware reading the reply back (etag folds the window into
       // its hash) must see paging too, or the fold is dead code.
       ...(this._paging === undefined ? {} : { paging: this._paging }),
