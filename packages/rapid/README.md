@@ -123,6 +123,10 @@ instead: the set named `Application` (`Application.yaml`/`.json`/…) becomes th
 application options, and every other set (a database config, your own settings)
 stays readable via `app.config`.
 
+A key that is not an application option, such as a misspelt
+`server.maxBodysize`, stops the boot in DEVELOPMENT with every such key
+named. PRODUCTION logs the same list once as a warning and serves.
+
 Given `configs/Application.yaml`:
 
 ```yaml

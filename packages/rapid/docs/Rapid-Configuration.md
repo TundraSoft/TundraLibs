@@ -19,6 +19,14 @@ carrying every key below.
   registered middleware — `SHARE` + `markStateKeyUser` — runs at `start()` /
   the first `fetch()`). `include` / `exclude` from `loadConfig` are
   forwarded untouched to filter which files in `path` become sets.
+- **A key that is not an option is refused too.** A misspelt key
+  (`server.maxBodysize`) would otherwise be ignored and the default used.
+  In DEVELOPMENT `initialize()` rejects with `RAPID_CONFIG` naming every
+  such key by its path; PRODUCTION serves and logs the same list once as a
+  warning at boot. The keys under `logger`, `tracer`, `server.tls` and
+  `server.static` are not rapid's to list and are left to their owners. A
+  setting of your own belongs in its own config file, read through
+  `app.config`, not in `Application.yaml`.
 - **Durations are seconds** (`shutdownTimeout`, `logger.access.slow`,
   `server.static.*.maxAge`). **Sizes are bytes** (`server.maxBodySize`,
   `uploads.maxSize`).

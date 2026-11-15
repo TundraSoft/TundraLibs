@@ -431,6 +431,9 @@ helpers) and \`@tundralibs/rapid/cli\`.
   \`worker.ts\` passes the options inline instead. Never construct
   \`new Application()\`; register everything before \`app.start()\` (or the first
   \`app.fetch()\`).
+- **Only rapid's own options go in \`configs/Application.yaml\`.** A key that is
+  not an option stops the boot in DEVELOPMENT, naming it; put your own
+  settings in another file in \`configs/\` and read them through \`app.config\`.
 - **\`configs/Application.yaml\` is annotated** — every key carries a comment
   saying what reads it. A wrong value fails the boot with \`RAPID_CONFIG\` naming
   the key; nothing fails on the first request. Durations are SECONDS, sizes
