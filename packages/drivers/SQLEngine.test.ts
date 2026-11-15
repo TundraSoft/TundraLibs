@@ -1081,6 +1081,22 @@ describe('SQLEngine', () => {
       asserts.assertStrictEquals(result.sql, "SELECT '123'::integer;");
     });
 
+    it('never opens a placeholder at a colon that follows a colon', () => {
+      const engine = new FakeSQLEngine('test');
+      const cases: Array<[string, string]> = [
+        ['SELECT x::date::text', 'SELECT x::date::text;'],
+        ['SELECT :a:::date::text', 'SELECT :a::date::text;'],
+        ['SELECT x::int + :a:', 'SELECT x::int + :a;'],
+        ['SELECT arr[x::int:5]', 'SELECT arr[x::int:5];'],
+      ];
+      for (const [sql, expected] of cases) {
+        asserts.assertStrictEquals(
+          engine.testStandardizeQuery({ sql, params: { a: 1 } }).sql,
+          expected,
+        );
+      }
+    });
+
     it('should encode parameter values', () => {
       const engine = new FakeSQLEngine('test');
 

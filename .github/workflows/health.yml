@@ -21,6 +21,7 @@ jobs:
     # sync with .github/workflows/ci.yml.
     env:
       DB_SCHEMA: ci
+      LIVE_DB_REQUIRED: 'true'
       POSTGRES_HOST: localhost
       POSTGRES_PORT: '5432'
       POSTGRES_USER: postgres

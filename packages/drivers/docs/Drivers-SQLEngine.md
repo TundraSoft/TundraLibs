@@ -316,6 +316,11 @@ await engine.execute({
 
 Missing parameters throw `EngineError('MISSING_PARAMETERS')`.
 
+A colon that follows a colon never opens a placeholder, so a Postgres cast
+chain such as `x::date::text` passes through and a parameter is cast with
+`:id:::int`. Put a space before a placeholder that follows a lone colon: the
+array slice `arr[:lo:: :hi:]`, not `arr[:lo:::hi:]`.
+
 ## Value encoding
 
 Every parameter value is passed through `_encodeValue` in
@@ -326,7 +331,7 @@ override it for runtime quirks:
 | -------- | -------------------------------------------------------------------------------- |
 | Postgres | Custom `_standardizeQuery` does positional binary/text encoding (see binary.ts). |
 | MariaDB  | `Date` → UTC clock `YYYY-MM-DD HH:MM:SS.mmm`, inside arrays too; the rest as-is. |
-| SQLite   | `Date → ISO`, `boolean → 0/1`, `object → JSON`, `undefined → null`.              |
+| SQLite   | `Date → ISO`, `boolean → 0/1`, `object → JSON`, `undefined → null`, `-0 → 0`.    |
 
 ## Hooks for subclasses
 

@@ -247,6 +247,10 @@ unchanged. Nothing inside a
 [hand-written `$exists`](#hand-written-exists--nexists-advanced) is
 converted.
 
+A date string that names a day or time no calendar has, such as
+`'2026-02-30'` or `'2026-01-15T24:00:00'`, throws a `NormQueryError`
+with code `INVALID_DATE`, as a write of it fails validation.
+
 On a `date()` column a value stands for its UTC day, whatever its time:
 
 ```typescript ignore

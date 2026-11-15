@@ -1048,6 +1048,39 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     );
   });
 
+  it('a nullable column left out is written as null on MongoDB', async () => {
+    const { db, exec } = makeDb();
+    const sent = (type: string) =>
+      (exec.lastOf(type) as unknown as { data: Row[] }).data;
+    // SQL stores NULL for a column the statement leaves out.
+    await db.repo('Guarded').insert({ id: 1 });
+    asserts.assertEquals(sent('INSERT'), [{ id: 1 }]);
+
+    // A document holds only the fields written.
+    Object.assign(exec.capabilities, { dialect: 'mongo' });
+    await db.repo('Guarded').insert({ id: 1 });
+    asserts.assertEquals(sent('INSERT'), [{ id: 1, label: null }]);
+    await db.repo('Guarded').insert([{ id: 1 }, { id: 2, label: 'kept' }]);
+    asserts.assertEquals(sent('INSERT'), [
+      { id: 1, label: null },
+      { id: 2, label: 'kept' },
+    ]);
+    await db.repo('Guarded').upsert({ id: 1 }, { conflictKeys: ['id'] });
+    asserts.assertEquals(sent('UPSERT'), [{ id: 1, label: null }]);
+    // A conflict still copies only what the caller passed.
+    asserts.assertEquals(
+      (exec.lastOf('UPSERT') as unknown as Row).updateOnConflict,
+      [],
+    );
+    // A column updateOnConflict names stays out of the row, which oql
+    // refuses on every engine.
+    await db.repo('Guarded').upsert({ id: 1 }, {
+      conflictKeys: ['id'],
+      updateOnConflict: ['label'],
+    });
+    asserts.assertEquals(sent('UPSERT'), [{ id: 1 }]);
+  });
+
   it('truncate() refuses on a scoped handle (regression)', async () => {
     // TRUNCATE carries no WHERE, so on a scoped handle it would silently
     // empty EVERY scope's rows. It must refuse rather than perform an
@@ -1241,6 +1274,47 @@ describe('norm.Repo — an expression on a date() column', () => {
     await repo.insert([{ id: 1 }, { id: 2 }]);
     const { data } = exec.lastOf('INSERT') as unknown as { data: Row[] };
     asserts.assertEquals(data.map((row) => row.day), [TODAY, TODAY]);
+  });
+
+  it('is computed for a Mongo insert document when it adds to a Date', async () => {
+    const add = (date: unknown, amount: number, unit: string) => ({
+      $$_expression: 'DATE_ADD',
+      args: { date, amount, unit },
+    });
+    const from = (iso: string) => new Date(iso);
+    // A day the target month lacks is that month's last day, as oql's
+    // DATE_ADD gives on the SQL engines.
+    const cases: [ReturnType<typeof add>, string][] = [
+      [add(from('2026-01-31T15:00:00Z'), 1, 'MONTHS'), '2026-02-28'],
+      [add(from('2026-01-31T15:00:00Z'), 13, 'MONTHS'), '2027-02-28'],
+      [add(from('2026-01-31T15:00:00Z'), -2, 'MONTHS'), '2025-11-30'],
+      [add(from('2024-02-29T23:30:00Z'), 1, 'YEARS'), '2025-02-28'],
+      [add(from('2026-01-31T15:00:00Z'), 30, 'DAYS'), '2026-03-02'],
+      [add(from('2026-01-31T15:00:00Z'), 10, 'HOURS'), '2026-02-01'],
+      [add(from('2026-12-31T23:30:00Z'), 30, 'MINUTES'), '2027-01-01'],
+      [add(from('2026-12-31T23:59:30Z'), -31, 'SECONDS'), '2026-12-31'],
+    ];
+    for (const [expr, day] of cases) {
+      const { repo, exec } = mock('mongo');
+      await repo.insert({ id: 1, day: expr } as never);
+      asserts.assertEquals(
+        written(exec, 'INSERT'),
+        from(`${day}T00:00:00Z`),
+        JSON.stringify(expr.args),
+      );
+    }
+    // Anything else is left for oql to refuse.
+    for (
+      const expr of [
+        add(from('2026-01-31T15:00:00Z'), 1.5, 'DAYS'),
+        add(from('2026-01-31T15:00:00Z'), 1, 'WEEKS'),
+        add('@other', 1, 'DAYS'),
+      ]
+    ) {
+      const { repo, exec } = mock('mongo');
+      await repo.insert({ id: 1, day: expr } as never);
+      asserts.assertEquals(written(exec, 'INSERT'), expr);
+    }
   });
 });
 
