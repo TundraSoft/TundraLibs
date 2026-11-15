@@ -26,6 +26,7 @@ import {
   PROGRESS_TABLE_NAME,
   TableLock,
 } from './mod.ts';
+import { requireLive } from '../tests/requireLive.ts';
 
 const V1 = {
   Items: Entity('items', {
@@ -197,7 +198,11 @@ describe('norm.migrations sources (Postgres)', () => {
       ? 'memorySource applies 1→2 exactly as the directory did (Postgres)'
       : `SKIPPED — Postgres at ${PG_SERVER.host}:${PG_SERVER.port} unavailable`,
     async () => {
-      if (!pgAvailable) return;
+      if (!pgAvailable) {
+        return requireLive(
+          `Postgres at ${PG_SERVER.host}:${PG_SERVER.port} unavailable`,
+        );
+      }
       await assertParity(
         { dialect: 'postgres', ...PG_SERVER, database: PG_DB },
         `SELECT c.table_name, c.column_name, c.data_type, c.is_nullable,
