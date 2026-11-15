@@ -321,6 +321,18 @@ const LIKE_OPERATORS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The aggregates whose `distinct` MongoDB has to compute in two steps,
+ * each mapped to the expression that reduces the set of a group's distinct
+ * values. The set holds one `null` when any row's value was null; SQL's
+ * `DISTINCT` aggregates skip it, as `$sum` and `$avg` do by themselves.
+ */
+const DISTINCT_REDUCERS: Readonly<Record<string, (set: string) => unknown>> = {
+  COUNT: (set) => ({ $size: { $setDifference: [set, [null]] } }),
+  SUM: (set) => ({ $sum: set }),
+  AVG: (set) => ({ $avg: set }),
+};
+
+/**
  * OQL {@link TimeUnit} → Mongo `$dateAdd` unit.
  *
  * Mongo's date-arithmetic operators only accept lowercase singular unit
@@ -1219,7 +1231,23 @@ export class MongoTranslator {
           groupId[stripped] = `$${stripped.replace('.@', '.')}`;
           groupedKeys.push(stripped);
         }
+        const flatten: Record<string, unknown> = {};
         for (const [name, agg] of Object.entries(groupAggs)) {
+          const { $$_aggregate: fn, column, distinct } = agg as {
+            $$_aggregate: string;
+            column?: unknown;
+            distinct?: boolean;
+          };
+          const reduce = distinct === true ? DISTINCT_REDUCERS[fn] : undefined;
+          if (reduce !== undefined) {
+            // `$group` has no DISTINCT accumulator: collect the group's
+            // distinct values, then reduce that set once the group is built.
+            groupBody[name] = {
+              $addToSet: this.__resolveExpressionRef(column),
+            };
+            flatten[name] = reduce(`$${name}`);
+            continue;
+          }
           // deno-lint-ignore no-explicit-any
           groupBody[name] = this.__translateAggregate(agg as any);
         }
@@ -1233,9 +1261,8 @@ export class MongoTranslator {
         // After $group, grouped fields live under `_id.<key>`. Flatten
         // them back to top level so the subsequent $match / $sort /
         // $project sees plain field names.
-        if (groupedKeys.length > 0) {
-          const flatten: Record<string, unknown> = {};
-          for (const key of groupedKeys) flatten[key] = `$_id.${key}`;
+        for (const key of groupedKeys) flatten[key] = `$_id.${key}`;
+        if (Object.keys(flatten).length > 0) {
           pipeline.push({ $addFields: flatten });
         }
       }

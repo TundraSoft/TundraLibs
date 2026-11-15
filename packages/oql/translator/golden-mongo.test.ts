@@ -2453,6 +2453,75 @@ const CASES: Case[] = [
     },
   },
   {
+    // `COUNT(DISTINCT col)`: the group collects its distinct values, and
+    // the count is the size of that set without the null SQL never counts.
+    name: 'SELECT COUNT(column) with distinct → $addToSet, sized after $group',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'scores',
+      columns: ['userId', 'score'],
+      aggregates: {
+        c: { $$_aggregate: 'COUNT', column: '@score', distinct: true },
+      },
+      projection: { '@userId': true, '@c': 'c' },
+      having: { '@c': { $gte: 2 } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'scores',
+        pipeline: [
+          {
+            $group: { _id: { userId: '$userId' }, c: { $addToSet: '$score' } },
+          },
+          {
+            $addFields: {
+              c: { $size: { $setDifference: ['$c', [null]] } },
+              userId: '$_id.userId',
+            },
+          },
+          { $match: { c: { $gte: 2 } } },
+          { $project: { userId: 1, c: '$c', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // MIN and MAX of a set are those of its rows: `distinct` changes nothing.
+    name: 'SELECT SUM / AVG with distinct reduce the set, MIN keeps $min',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'scores',
+      columns: ['userId', 'score'],
+      aggregates: {
+        s: { $$_aggregate: 'SUM', column: '@score', distinct: true },
+        a: { $$_aggregate: 'AVG', column: '@score', distinct: true },
+        lo: { $$_aggregate: 'MIN', column: '@score', distinct: true },
+      },
+      projection: { '@s': 's', '@a': 'a', '@lo': 'lo' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'scores',
+        pipeline: [
+          {
+            $group: {
+              _id: {},
+              s: { $addToSet: '$score' },
+              a: { $addToSet: '$score' },
+              lo: { $min: '$score' },
+            },
+          },
+          { $addFields: { s: { $sum: '$s' }, a: { $avg: '$a' } } },
+          { $project: { s: '$s', a: '$a', lo: '$lo', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'COUNT → count',
     method: 'count',
     query: {

@@ -474,6 +474,14 @@ OQL chose passthrough over throwing because:
 | ARRAY_AGG             | native (`array_agg`)                          | native (`JSON_ARRAYAGG`)                   | native (`json_group_array`)                   | native (`$push`)                                                                                |
 | JSON_ROW              | native (`jsonb_agg(jsonb_build_object(...))`) | native (`JSON_ARRAYAGG(JSON_OBJECT(...))`) | native (`json_group_array(json_object(...))`) | native (`$push` of an object)                                                                   |
 
+`distinct: true` on COUNT, SUM or AVG is `COUNT(DISTINCT col)` and its
+siblings in SQL. MongoDB's `$group` has no such accumulator, so the
+translator collects each group's distinct values with `$addToSet` and
+counts, sums or averages that set in the next stage. NULL is left out, as
+in SQL. One group's distinct values therefore have to fit in a single
+16 MB document; a column with more distinct values per group than that
+fails on MongoDB.
+
 ## Filters
 
 All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
