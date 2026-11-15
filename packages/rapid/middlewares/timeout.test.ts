@@ -49,6 +49,28 @@ describe('rapid.middlewares.timeout', () => {
     }
   });
 
+  it('a stream the handler returns after the 504 went out is cancelled, not left open', async () => {
+    const app = await Application.initialize({
+      name: 'timeout-late-stream',
+      logger: { handlers: [] },
+    });
+    let cancelled = false;
+    app.get('/late', timeout(0.02), async () => {
+      await sleep(60);
+      return {
+        content: new ReadableStream<Uint8Array>({
+          cancel: () => void (cancelled = true),
+        }),
+      };
+    });
+    const reply = await app.fetch(new Request('http://app/late'));
+    asserts.assertEquals(reply.status, 504);
+    await reply.text();
+    await sleep(80);
+    asserts.assertEquals(cancelled, true);
+    await app.stop();
+  });
+
   it('R2-M1: abandoned work is DETACHED so a slot-owner can hold it', async () => {
     // JS cannot cancel a promise, so the deadline only stops WAITING.
     // The still-running work must reach ctx.detach(), which is what
