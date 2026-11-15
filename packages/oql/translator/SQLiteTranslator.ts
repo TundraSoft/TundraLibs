@@ -176,8 +176,10 @@ export class SQLiteTranslator extends AbstractTranslator {
     [
       'MODULO',
       (a) =>
-        a.reduce((x, y) =>
-          `(CASE WHEN ${x} = CAST(${x} AS INTEGER) AND ${y} = CAST(${y} AS INTEGER) THEN ${x} % ${y} ELSE mod(${x}, ${y}) END)`
+        a.slice(1).reduce(
+          (x, y) =>
+            `(CASE WHEN ${x} = CAST(${x} AS INTEGER) AND ${y} = CAST(${y} AS INTEGER) THEN ${x} % ${y} ELSE mod(${x}, ${y}) END)`,
+          a[0]!,
         ),
     ],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
