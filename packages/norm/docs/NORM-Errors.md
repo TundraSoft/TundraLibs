@@ -171,7 +171,10 @@ see [Choosing an entry point](../README.md#choosing-an-entry-point).
 
 Both are thrown as a plain `NormError` by `zonedDay`, `zonedTimeOfDay`,
 and `zonedInstant`; see
-[Dates in a time zone](NORM-Schema.md#dates-in-a-time-zone).
+[Dates in a time zone](NORM-Schema.md#dates-in-a-time-zone). A filter
+value that names a day or time no calendar has raises `INVALID_DATE` as
+a `NormQueryError`; see
+[Date and time values](NORM-Querying.md#date-and-time-values).
 
 | Code                | Raised when                                                                                                                                      | What to do                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
