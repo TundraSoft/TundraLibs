@@ -454,6 +454,16 @@ try {
   document does not list becomes `UNKNOWN_ERROR` and keeps the server's
   under `originalCode`. `TIMEOUT`, `NETWORK_ERROR` and `RATE_LIMITED` cover
   the transport; `transient` says whether a retry can help.
+- **`auth` carries the schemes the routes require.** Each scheme a route
+  names in `security` is looked up in the `securitySchemes` given to the
+  app's mounted `openapi()` or `docs()`: an http bearer, `oauth2` or
+  `openIdConnect` scheme accepts `{ type: 'BEARER', token }`, http basic
+  accepts `{ type: 'BASIC', username, password }`, and each `apiKey` scheme
+  adds a field of its own name to `{ type: 'CUSTOM', … }`, sent in the
+  header, query parameter or cookie the scheme declares (a browser will not
+  send the cookie). Getting and refreshing a token is yours. A scheme that
+  is not declared, or another http scheme, is reported and left out. With no
+  `security` on any route the option is RESTler's own `auth`.
 - **What a schema cannot say stays `unknown`.** A route with no `response`
   returns `unknown`; a `payload()` or `query()` bound to a plain function
   gives the generator nothing to read. Transforms and custom refinements are

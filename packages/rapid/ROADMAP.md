@@ -115,8 +115,9 @@ from the transport's `started` — unify on the latter.
   repaint cadence, a zero-dep renderer.
 - **SDK generator follow-ups** — `rapid sdk` writes the client; still to
   do: header-bound arguments, the paging totals of a collection reply,
-  one shared type for a schema several routes reuse, and a version
-  selector for header-versioned routes.
+  one shared type for a schema several routes reuse, a version selector
+  for header-versioned routes, and a token-refresh hook for the `auth`
+  option.
 
 ### Scaling & ops
 

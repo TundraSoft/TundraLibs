@@ -125,6 +125,34 @@ export function assembleOpenApi<S extends RapidContextState>(
   return doc;
 }
 
+/** The schemes given to each `openapi()` handler and each app `docs()` mounted on. */
+const MOUNTED_SCHEMES = new WeakMap<object, OpenApiSecuritySchemes>();
+
+/** Record the `securitySchemes` of an `openapi()` handler, or of the app `docs()` mounted on. */
+export function recordSecuritySchemes(
+  owner: object,
+  schemes: OpenApiSecuritySchemes | undefined,
+): void {
+  if (schemes !== undefined) {
+    MOUNTED_SCHEMES.set(owner, { ...MOUNTED_SCHEMES.get(owner), ...schemes });
+  }
+}
+
+/**
+ * The security schemes the app's mounted `openapi()` and `docs()` declare,
+ * merged — what `rapid sdk` builds the client's `auth` option
+ * from, since a route names a scheme and only those handlers define it.
+ */
+export function mountedSecuritySchemes<S extends RapidContextState>(
+  app: Application<S>,
+): OpenApiSecuritySchemes {
+  const schemes = { ...MOUNTED_SCHEMES.get(app) };
+  for (const route of app.routes) {
+    Object.assign(schemes, MOUNTED_SCHEMES.get(route.handler));
+  }
+  return schemes;
+}
+
 const HTTP_METHODS = new Set([
   'get',
   'put',
@@ -210,7 +238,7 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
   }
   const expose = options.expose ?? 'DEVELOPMENT';
   const cache = new Map<string, Record<string, unknown>>();
-  return (ctx) => {
+  const handler: RapidHTTPHandler = (ctx) => {
     if (expose !== 'ALL' && expose !== ctx.app.mode) {
       // Indistinguishable from an unrouted path — same envelope, same
       // requestId, same disclosure.
@@ -223,4 +251,6 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
       content,
     }));
   };
+  recordSecuritySchemes(handler, options.securitySchemes);
+  return handler;
 }

@@ -24,6 +24,7 @@ import {
   assembleOpenApi,
   filterOpenApi,
   type OpenApiDocumentOptions,
+  recordSecuritySchemes,
 } from './openapi.ts';
 import {
   type DocsDocument,
@@ -242,6 +243,7 @@ export function docs<S extends RapidContextState = RapidContextState>(
   if (options.securitySchemes !== undefined) {
     assertSecuritySchemes(options.securitySchemes, 'docs()');
   }
+  recordSecuritySchemes(app, options.securitySchemes);
   const expose = options.expose ?? 'DEVELOPMENT';
   const loginPath = typeof options.tryIt === 'object'
     ? options.tryIt.login?.path
