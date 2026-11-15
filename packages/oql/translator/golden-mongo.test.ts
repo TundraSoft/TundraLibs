@@ -1297,8 +1297,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // A pattern operator has no aggregation-expression equivalent here.
-    name: 'CASE with a $like condition throws',
+    // A find filter's `$regex` has no place in `$switch`; `$regexMatch`
+    // takes the same pattern.
+    name: 'CASE with a $like condition → $regexMatch',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -1308,6 +1309,45 @@ const CASES: Case[] = [
         tier: {
           $$_expression: 'CASE',
           args: { cases: [{ when: { '@name': { $like: 'a%' } }, then: 1 }] },
+        },
+      },
+      projection: { '@tier': 'tier' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              tier: {
+                $switch: {
+                  branches: [{
+                    case: { $regexMatch: { input: '$name', regex: '^a.*$' } },
+                    then: 1,
+                  }],
+                  default: null,
+                },
+              },
+            },
+          },
+          { $project: { tier: '$tier', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // The filter path refuses a column as a pattern; so does a CASE.
+    name: 'CASE with a $like condition on a @col value throws',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      expressions: {
+        tier: {
+          $$_expression: 'CASE',
+          args: { cases: [{ when: { '@name': { $like: '@nick' } }, then: 1 }] },
         },
       },
       projection: { '@tier': 'tier' },
@@ -2989,6 +3029,9 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
       },
       projection: { '@c': 'c' },
     })[0];
+  const LOWER_B = {
+    $cond: [{ $gt: ['$b', null] }, { $toLower: '$b' }, null],
+  };
   const switchOn = (condition: unknown) => ({
     $addFields: {
       c: {
@@ -3056,6 +3099,65 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
             { $and: [{ $gte: ['$a', '$b'] }, { $lte: ['$a', 9] }] },
             present('$a'),
             present('$b'),
+          ],
+        },
+      },
+      {
+        name: 'matches $ilike with the i option',
+        when: { '@a': { $ilike: 'x_' } },
+        expected: {
+          $regexMatch: { input: '$a', regex: '^x.$', options: 'i' },
+        },
+      },
+      {
+        name: 'guards the field of $nlike',
+        when: { '@a': { $nlike: 'x%' } },
+        expected: {
+          $and: [
+            { $not: [{ $regexMatch: { input: '$a', regex: '^x.*$' } }] },
+            present('$a'),
+          ],
+        },
+      },
+      {
+        name: 'guards the field of $nilike',
+        when: { '@a': { $nilike: 'x%' } },
+        expected: {
+          $and: [
+            {
+              $not: [{
+                $regexMatch: { input: '$a', regex: '^x.*$', options: 'i' },
+              }],
+            },
+            present('$a'),
+          ],
+        },
+      },
+      {
+        name: 'escapes the literal of $startsWith, $endsWith and $contains',
+        when: {
+          $and: [
+            { '@a': { $startsWith: 'a.b' } },
+            { '@a': { $endsWith: 'a.b' } },
+            { '@a': { $contains: 'a.b' } },
+          ],
+        },
+        expected: {
+          $and: [
+            { $regexMatch: { input: '$a', regex: '^a\\.b' } },
+            { $regexMatch: { input: '$a', regex: 'a\\.b$' } },
+            { $regexMatch: { input: '$a', regex: 'a\\.b' } },
+          ],
+        },
+      },
+      {
+        name: 'searches for a computed $contains operand as a literal',
+        when: { '@a': { $contains: { $$_expression: 'LOWER', args: '@b' } } },
+        expected: {
+          $cond: [
+            { $gt: [LOWER_B, null] },
+            { $gte: [{ $indexOfCP: ['$a', LOWER_B] }, 0] },
+            false,
           ],
         },
       },

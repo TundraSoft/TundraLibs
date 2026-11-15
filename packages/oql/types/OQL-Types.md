@@ -795,9 +795,10 @@ arguments, so declare them in `expressions` and project them.
 - `CASE` — `args: { cases: Array<{ when; then }>; else? }`. `when` is a
   filter in the same shape as `where`, and `then` is the result of the
   first case that matches. With no match the result is `else`, or `NULL`
-  when `else` is omitted. On MongoDB, `when` supports `$and`, `$or`,
-  `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$between`
-  and `$null`; other operators throw `DialectUnsupportedError`.
+  when `else` is omitted. On MongoDB, `when` supports `$and`, `$or` and
+  every column operator; `$exists` and `$nexists` throw
+  `DialectUnsupportedError`, and so does a pattern operator whose value
+  is a column.
 
 ```ts
 import type { Query } from '@tundralibs/oql';

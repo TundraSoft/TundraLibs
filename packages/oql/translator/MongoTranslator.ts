@@ -2207,11 +2207,12 @@ export class MongoTranslator {
    * Translate a `CASE` condition — a {@link QueryFilter} — to an
    * aggregation boolean expression, which `$switch` needs in place of a
    * find filter. Covers `$and` / `$or` and the comparison, `$in` /
-   * `$nin`, `$between` and `$null` operators; pattern operators and
-   * `$exists` subqueries throw. A condition is true exactly where SQL's
-   * is: each comparison is false on a null or missing input.
+   * `$nin`, `$between`, `$null` and pattern operators; `$exists`
+   * subqueries throw. A condition is true exactly where SQL's is: each
+   * comparison is false on a null or missing input.
    *
-   * @throws {DialectUnsupportedError} For an operator outside that set.
+   * @throws {DialectUnsupportedError} For an operator outside that set,
+   *   and for a pattern operand the filter path refuses too.
    */
   private __filterToExpr(filter: QueryFilter): unknown {
     const r = (v: unknown): unknown => this.__resolveExpressionRef(v);
@@ -2264,6 +2265,35 @@ export class MongoTranslator {
       ) guards.push(resolved);
       return resolved;
     };
+    if (LIKE_OPERATORS.has(op)) {
+      if (typeof operand === 'string' && operand.startsWith('@')) {
+        throw new DialectUnsupportedError(
+          this.Dialect,
+          `column reference as the value of '${op}'`,
+        );
+      }
+      if (this.__isExpressionNode(operand)) {
+        return this.__likeExpressionOperand(
+          field as string,
+          op,
+          operand as Expressions,
+        );
+      }
+      // The pattern a filter would use, matched by `$regexMatch`. That is
+      // false for a null or missing input; its negation needs the guard.
+      const spec = this.__translateOperator('f', op, operand).f as Record<
+        string,
+        unknown
+      >;
+      const { $regex: regex, $options: options } = (spec.$not ?? spec) as {
+        $regex: string;
+        $options?: string;
+      };
+      const match = {
+        $regexMatch: { input: field, regex, ...(options ? { options } : {}) },
+      };
+      return spec.$not ? this.__notNull({ $not: [match] }, field) : match;
+    }
     switch (op) {
       case '$eq':
       case '$ne':
