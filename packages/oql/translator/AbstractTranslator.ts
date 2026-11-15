@@ -1528,8 +1528,10 @@ export abstract class AbstractTranslator {
 
   /**
    * Build the column scope for a SELECT — base columns (qualified with
-   * BASE_ALIAS when joins are present) plus joined columns plus any
-   * declared expression keys.
+   * BASE_ALIAS when joins are present) plus joined columns. Declared
+   * expression keys are not in it: a filter key naming one is replaced by
+   * its body through the filter context, and an `@key` as an expression
+   * argument or a filter value is not a column, so it binds as text.
    */
   private __buildScope(q: Query<'SELECT'>, hasJoins: boolean): string[] {
     const scope: string[] = [];

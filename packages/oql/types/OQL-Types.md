@@ -518,54 +518,30 @@ type Expressions<
   T extends TableType = TableType,
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
 > =
-  // numeric
-  | {
-    $$_expression: 'ADD';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'SUBTRACT';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'MULTIPLY';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'DIVIDE';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'MODULO';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'ABS';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'CEIL';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'FLOOR';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'ROUND';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
+  // numeric — NumericExpressionArg is a numeric column, a number, a bigint, a
+  // nested numeric expression (LENGTH and DATE_DIFF included), or a
+  // COALESCE, NULLIF or CASE, whose result type only the database knows
+  | { $$_expression: 'ADD'; args: Array<NumericExpressionArg<T, FT>> } // 1 or more
+  | { $$_expression: 'SUBTRACT'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
+  | { $$_expression: 'MULTIPLY'; args: Array<NumericExpressionArg<T, FT>> } // 1 or more
+  | { $$_expression: 'DIVIDE'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
+  | { $$_expression: 'MODULO'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
+  // ABS, CEIL, FLOOR and SQRT read args[0]; ROUND reads args[0] and the
+  // precision args[1]. Each takes 1 or more, and the rest are ignored.
+  | { $$_expression: 'ABS'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'CEIL'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'FLOOR'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'ROUND'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'SQRT'; args: Array<NumericExpressionArg<T, FT>> }
   | {
     $$_expression: 'POWER';
     args: {
-      base: GetColumnByType<FT, number | bigint> | number | bigint;
-      exponent: GetColumnByType<FT, number | bigint> | number | bigint;
+      base: NumericExpressionArg<T, FT>;
+      exponent: NumericExpressionArg<T, FT>;
     };
   }
-  | {
-    $$_expression: 'SQRT';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
+  // LENGTH takes a string column or any string; DATE_DIFF a Date column
+  // or a Date, no nested expression
   | { $$_expression: 'LENGTH'; args: GetColumnByType<FT, string> | string }
   | {
     $$_expression: 'DATE_DIFF';
@@ -597,6 +573,7 @@ type Expressions<
   | { $$_expression: 'CURRENT_TIME' }
   | { $$_expression: 'CURRENT_TIMESTAMP' }
   | { $$_expression: 'CURRENT_TIMESTAMPTZ' }
+  | { $$_expression: 'UNIX_TIMESTAMP'; unit?: 'seconds' | 'milliseconds' }
   // utility
   | { $$_expression: 'UUID' }
   // string
@@ -736,7 +713,8 @@ type DateExpressions =
   | 'CURRENT_TIMESTAMP'
   | 'CURRENT_TIMESTAMPTZ'
   | 'DATE_ADD'
-  | 'DATE_TRUNC';
+  | 'DATE_TRUNC'
+  | 'UNIX_TIMESTAMP';
 ```
 
 > Note: `LENGTH` and `DATE_DIFF` are classified as **numeric** (they
@@ -846,10 +824,13 @@ There is no general `CAST`. The engines disagree on what it means:
 
 Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
 `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC`.
-(`DATE_DIFF` returns a number and is classified numeric.)
+(`DATE_DIFF` returns a number and is classified numeric.) `UNIX_TIMESTAMP`
+is a date expression that returns an integer.
 
-SQLite has no date type, so there each of these returns ISO 8601 UTC text,
-such as `2026-02-01T10:20:30.000Z`, in place of a `Date`.
+SQLite has no date type, so there each of these returns text in place of a
+`Date`: ISO 8601 UTC such as `2026-02-01T10:20:30.000Z`, except
+`CURRENT_DATE`, which is the date alone, `2026-02-01`. The type per engine
+is in [date expression results](../docs/OQL-Compatibility.md#date-expression-results).
 
 `CURRENT_TIME` returns a string on every dialect — see
 [CURRENT_TIME](../docs/OQL-Compatibility.md#current_time).
