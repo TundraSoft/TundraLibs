@@ -428,6 +428,16 @@ MariaDB and refuses a non-UTC session by default on Postgres and Neon.
 MongoDB does not reject a numeric operand for the fixed-length units, so
 pass dates.
 
+The result reaches JavaScript as a whole `number` on every dialect, never a
+`bigint`: Postgres and MariaDB cast it to a double, which is exact for any
+two dates they can hold. Postgres has no `%` and no two-argument `ROUND`
+for a double, so `MODULO`, and `ROUND` with a precision, over a `DATE_DIFF`
+or arithmetic on one go through `NUMERIC` there and are cast back: the
+result is a `number` there too.
+
+`DIVIDE` on a `DATE_DIFF` keeps the fraction on Postgres, MariaDB and
+MongoDB. SQLite divides two integers and drops it.
+
 ### UUID gotcha
 
 On dialects where UUID is materialised at translate time (SQLite, MongoDB),

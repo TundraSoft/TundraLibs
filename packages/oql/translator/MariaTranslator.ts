@@ -212,7 +212,12 @@ export class MariaTranslator extends AbstractTranslator {
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
     // `unit` arrives as the keyword itself — see `_timeUnitArg`.
     ['DATE_ADD', (a) => `TIMESTAMPADD(${a[2]}, ${a[1]}, ${a[0]})`],
-    ['DATE_DIFF', (a) => `TIMESTAMPDIFF(${a[2]}, ${a[0]}, ${a[1]})`],
+    // TIMESTAMPDIFF is BIGINT, which reaches JS as a bigint. DOUBLE
+    // reaches it as a number, and holds every whole count exactly.
+    [
+      'DATE_DIFF',
+      (a) => `CAST(TIMESTAMPDIFF(${a[2]}, ${a[0]}, ${a[1]}) AS DOUBLE)`,
+    ],
     ['UUID', () => 'UUID()'],
     ['HASH', (a) => `SHA2(${a[0]}, 256)`],
     ['ENCRYPT', (a) => `AES_ENCRYPT(${a[0]}, ${a[1]})`],

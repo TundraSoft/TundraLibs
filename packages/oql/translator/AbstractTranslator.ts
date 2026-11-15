@@ -1007,7 +1007,7 @@ export abstract class AbstractTranslator {
       );
     }
     const args = this.__flattenExprArgs(expr, scope, params, hasJoins);
-    return emit(args);
+    return emit(args, expr);
   }
 
   /**

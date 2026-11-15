@@ -56,6 +56,12 @@ const translators: Record<
 // Test cases
 // =============================================================================
 
+/** What Postgres emits for DATE_DIFF from "createdAt" to "shippedAt". */
+const PG_DATE_DIFF = `CAST(CASE :p_0: ` +
+  `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) * 12 + EXTRACT(MONTH FROM age("shippedAt", "createdAt")) ` +
+  `WHEN 'YEARS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) ` +
+  `ELSE TRUNC(EXTRACT(EPOCH FROM (CASE WHEN TRUE THEN "shippedAt" WHEN FALSE THEN "createdAt" ELSE CAST(NULL AS TIMESTAMP) END - "createdAt")) / CASE :p_0: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 END) END AS DOUBLE PRECISION)`;
+
 const CASES: Case[] = [
   // ---------------------------------------------------------------------------
   // SELECT
@@ -2205,6 +2211,9 @@ const CASES: Case[] = [
     // amount's own sign: a `'+' ||` prefix turns -7 into `+-7 DAYS`, which
     // is not a modifier.
     //
+    // Postgres and MariaDB cast DATE_DIFF to a double: it reaches JS as a
+    // number, where their BIGINT would be a bigint.
+    //
     // DATE_DIFF binds the unit on SQLite and Postgres, so one statement
     // serves all six: MONTHS / YEARS take the calendar branch, the rest
     // divide elapsed time. The Postgres CASE around `to` is there for two
@@ -2244,14 +2253,64 @@ const CASES: Case[] = [
           `CAST(CASE :p_2: ` +
           `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) * 12 + EXTRACT(MONTH FROM age("shippedAt", "createdAt")) ` +
           `WHEN 'YEARS' THEN EXTRACT(YEAR FROM age("shippedAt", "createdAt")) ` +
-          `ELSE TRUNC(EXTRACT(EPOCH FROM (CASE WHEN TRUE THEN "shippedAt" WHEN FALSE THEN "createdAt" ELSE CAST(NULL AS TIMESTAMP) END - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 END) END AS BIGINT) AS "took" FROM "orders"`,
+          `ELSE TRUNC(EXTRACT(EPOCH FROM (CASE WHEN TRUE THEN "shippedAt" WHEN FALSE THEN "createdAt" ELSE CAST(NULL AS TIMESTAMP) END - "createdAt")) / CASE :p_2: WHEN 'DAYS' THEN 86400 WHEN 'HOURS' THEN 3600 WHEN 'MINUTES' THEN 60 WHEN 'SECONDS' THEN 1 END) END AS DOUBLE PRECISION) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       maria: {
         sql:
           'SELECT `id` AS `id`, TIMESTAMPADD(DAY, :p_0:, `createdAt`) AS `since`, ' +
-          'TIMESTAMPDIFF(HOUR, `createdAt`, `shippedAt`) AS `took` FROM `orders`',
+          'CAST(TIMESTAMPDIFF(HOUR, `createdAt`, `shippedAt`) AS DOUBLE) AS `took` FROM `orders`',
         params: { p_0: -7 },
+      },
+    },
+  },
+
+  {
+    // Postgres has no `%` and no two-argument ROUND for a double, which is
+    // what DATE_DIFF returns. `weekday` and `took` are built on one, so
+    // they go through NUMERIC and come back a double. `slot` and `tenth`
+    // are not, and keep the bare form and the type it has always given.
+    name: 'MODULO / ROUND with a precision over DATE_DIFF',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'createdAt', 'shippedAt'],
+      expressions: {
+        weekday: {
+          $$_expression: 'MODULO',
+          args: [{
+            $$_expression: 'ADD',
+            args: [{
+              $$_expression: 'DATE_DIFF',
+              args: { from: '@createdAt', to: '@shippedAt', unit: 'DAYS' },
+            }, 1],
+          }, 7],
+        },
+        took: {
+          $$_expression: 'ROUND',
+          args: [{
+            $$_expression: 'DATE_DIFF',
+            args: { from: '@createdAt', to: '@shippedAt', unit: 'DAYS' },
+          }, 1],
+        },
+        slot: { $$_expression: 'MODULO', args: ['@id', 7] },
+        tenth: { $$_expression: 'ROUND', args: ['@id', 1] },
+      },
+      projection: {
+        '@weekday': 'weekday',
+        '@took': 'took',
+        '@slot': 'slot',
+        '@tenth': 'tenth',
+      },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      postgres: {
+        sql:
+          `SELECT CAST((CAST((${PG_DATE_DIFF} + :p_1:) AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "weekday", ` +
+          `CAST(ROUND(CAST(${PG_DATE_DIFF} AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "took", ` +
+          `("id" % :p_2:) AS "slot", ROUND("id", :p_1:) AS "tenth" FROM "orders"`,
+        params: { p_0: 'DAYS', p_1: 1, p_2: 7 },
       },
     },
   },

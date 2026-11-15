@@ -24,6 +24,7 @@ import { OqlError } from '../errors/mod.ts';
 import type {
   AggregateMap,
   DialectSupport,
+  ExpressionEmitter,
   ExpressionMap,
   FilterOperatorMap,
   IdentifierQuote,
@@ -84,6 +85,24 @@ const PG_INDEX_METHODS = new Set([
 ]);
 
 /**
+ * Numeric expressions whose Postgres result is a double when an operand is
+ * one. Only a numeric expression can be an operand of another.
+ */
+const DOUBLE_CARRIERS = new Set([
+  'ADD',
+  'SUBTRACT',
+  'MULTIPLY',
+  'DIVIDE',
+  'MODULO',
+  'POWER',
+  'SQRT',
+  'ABS',
+  'CEIL',
+  'FLOOR',
+  'ROUND',
+]);
+
+/**
  * Emits PostgreSQL SQL. Stateless and reusable — see
  * {@link AbstractTranslator} for the shared method surface. This is the
  * dialect with the fewest emulations: schemas, TRUNCATE, FULL JOIN,
@@ -134,6 +153,22 @@ export class PostgresTranslator extends AbstractTranslator {
   protected override readonly _offsetOnlyLimit: string | null = null;
 
   /**
+   * Whether `value` is an expression Postgres evaluates to a double:
+   * a `DATE_DIFF`, or arithmetic over one.
+   */
+  private __isDouble(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) return false;
+    const { $$_expression: type, args } = value as {
+      $$_expression?: string;
+      args?: unknown;
+    };
+    if (type === 'DATE_DIFF') return true;
+    if (type === undefined || !DOUBLE_CARRIERS.has(type)) return false;
+    return typeof args === 'object' && args !== null &&
+      Object.values(args).some((arg) => this.__isDouble(arg));
+  }
+
+  /**
    * Postgres expression emitters. Unlike SQLite's pass-throughs, the
    * crypto ones emit real calls: `HASH` → `digest()` and
    * `ENCRYPT` / `DECRYPT` → `pgp_sym_*`, all of which need the `pgcrypto`
@@ -142,22 +177,35 @@ export class PostgresTranslator extends AbstractTranslator {
    */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
-    (args: string[]) => string
+    ExpressionEmitter
   >([
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
     ['DIVIDE', (a) => `(${a.join(' / ')})`],
-    ['MODULO', (a) => `(${a.join(' % ')})`],
+    // Postgres has no `%` and no two-argument ROUND for a double, which
+    // is what DATE_DIFF returns. Such an operand goes through NUMERIC and
+    // the result is cast back, so it still reaches JS as a number.
+    [
+      'MODULO',
+      (a, e) =>
+        this.__isDouble(e)
+          ? `CAST((${
+            a.map((x) => `CAST(${x} AS NUMERIC)`).join(' % ')
+          }) AS DOUBLE PRECISION)`
+          : `(${a.join(' % ')})`,
+    ],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],
     ['ABS', (a) => `ABS(${a[0]})`],
     ['CEIL', (a) => `CEIL(${a[0]})`],
     ['FLOOR', (a) => `FLOOR(${a[0]})`],
-    [
-      'ROUND',
-      (a) => a.length > 1 ? `ROUND(${a[0]}, ${a[1]})` : `ROUND(${a[0]})`,
-    ],
+    ['ROUND', (a, e) => {
+      if (a.length === 1) return `ROUND(${a[0]})`;
+      return this.__isDouble(e)
+        ? `CAST(ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]}) AS DOUBLE PRECISION)`
+        : `ROUND(${a[0]}, ${a[1]})`;
+    }],
     ['CONCAT', (a) => a.join(' || ')],
     ['LENGTH', (a) => `LENGTH(${a[0]})`],
     ['TO_STRING', (a) => `CAST(${a[0]} AS TEXT)`],
@@ -223,11 +271,12 @@ export class PostgresTranslator extends AbstractTranslator {
       const span = `(CASE WHEN TRUE THEN ${to} WHEN FALSE THEN ${from} ` +
         `ELSE CAST(NULL AS TIMESTAMP) END - ${from})`;
       // TRUNC drops a partial unit, as SQLite and MariaDB do; a bare
-      // CAST to BIGINT would round it.
+      // CAST would keep the fraction. DOUBLE PRECISION, not BIGINT: it
+      // reaches JS as a number, and holds every whole count exactly.
       return `CAST(CASE ${unit} ` +
         `WHEN 'MONTHS' THEN EXTRACT(YEAR FROM ${age}) * 12 + EXTRACT(MONTH FROM ${age}) ` +
         `WHEN 'YEARS' THEN EXTRACT(YEAR FROM ${age}) ` +
-        `ELSE TRUNC(EXTRACT(EPOCH FROM ${span}) / ${seconds}) END AS BIGINT)`;
+        `ELSE TRUNC(EXTRACT(EPOCH FROM ${span}) / ${seconds}) END AS DOUBLE PRECISION)`;
     }],
     ['UUID', () => 'gen_random_uuid()'],
     ['HASH', (a) => `encode(digest(${a[0]}, 'sha256'), 'hex')`],
