@@ -6,7 +6,7 @@ shipped. Shipped capabilities and the reasoning behind them are recorded in
 history lives in git. One pool, no 1.0-vs-later gate: everything is in scope
 and up for scheduling. Where an item notes a dependency ("after caching",
 "downstream of OpenAPI") that is a sequencing fact, not a deferral. Last
-updated **2026-09-09**.
+updated **2026-11-15**.
 
 ## Next up
 
@@ -60,39 +60,14 @@ updated **2026-09-09**.
   invalidation + a future live-reload nudge) rides the dev-console
   work.
 
-### Response caching (PINNED 2026-09-08 — after the first rapid release)
+### Route cache follow-ups
 
-Decided shape, not yet built. A **middleware**, `cache()`, hooks-backed like
-`session`/`rateLimit`/`idempotency` (`getCached`/`saveCached`/`purgeKeys`/
-`purgeTags`/`reset`, memory default with a `maxEntries` bound, cacher adapter
-is the implementer's), plus a small **core** handle for invalidation
-(`app.cache.purge(tags)` / `app.cache.reset()` reachable from any write
-handler — the middleware registers its hooks, like `app.publish()` reaches
-subscribers). Why middleware: opt-in per route, must sit after
-`authenticate` and outside `etag`/`compress`, carries state. Key = surface +
-method + routed path + normalised query + Vary values, **anonymous replies
-only by default** — per-user caching is an explicit `scope: (ctx) =>
-principal`, so a wrong key can never leak one user's reply to another.
-Cacheability follows the handler's `Cache-Control` (`no-store`/`private`
-never stored, `max-age` overrides the configured `ttl`); 200 only, no
-streams, no `set-cookie`. Reset in three layers: a short default TTL
-(seconds, 60) as the safety net; route `tags` + purge for everyday
-invalidation (writes know WHAT changed, not which URLs rendered it); a
-generation prefix for `reset()` so backends without key scans still work.
-Multi-replica purge: the shared backend is the source of truth; the memory
-default is per-process (document, optionally bump the generation over
-`app.publish()`). Stampede: coalesce concurrent misses per replica. Hits
-carry `age` + a configurable hit/miss header and the stored `etag`. Route
-option sugar (`{ cache: { ttl, tags } }`) over the decorators' `middleware`
-option.
-
-### metro-man tidy-up (PINNED 2026-09-08 — discuss after caching)
-
-A standard way for middleware to record their own counters (rate-limit
-rejections, idempotency replays, cache hit ratio) instead of ad-hoc
-`ctx.meter` use, and one clock: the meter's histogram measures the onion
-while the access line and `headers.responseTime` measure arrival→finalize
-from the transport's `started` — unify on the latter.
+The route `cache` option, `app.cache(store)` and `app.invalidateCache(action)`
+shipped in a different shape from the middleware pinned on 2026-09-08.
+Parts of that design the shipped cache does not have, none decided: purge
+by tag and a whole-cache reset (today a write names each action it
+invalidates), coalescing concurrent misses per replica, an `age` and a
+hit/miss header on a cached reply, and a hit/miss counter on the meter.
 
 ### Tooling & DX
 
