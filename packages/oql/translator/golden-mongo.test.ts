@@ -1978,6 +1978,65 @@ const CASES: Case[] = [
     },
   },
   {
+    // Aggregates run over the joined rows, so COUNT counts them, and a
+    // joined group key nests under its alias: `_id` takes no dotted name.
+    name: 'SELECT aggregates grouped by a joined column → nested group key',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'team'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'sku', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: {
+        n: { $$_aggregate: 'COUNT' },
+        hi: { $$_aggregate: 'MAX', column: '@o.@amount' },
+      },
+      projection: { '@team': true, '@o.@sku': 'item', '@n': true, '@hi': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { team: '$team', o: { sku: { $ifNull: ['$o.sku', null] } } },
+              n: { $sum: 1 },
+              hi: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { team: '$_id.team', 'o.sku': '$_id.o.sku' } },
+          {
+            $project: {
+              team: 1,
+              item: { $ifNull: ['$o.sku', null] },
+              n: 1,
+              hi: 1,
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
     // A composite join key. Every `on` entry is a condition (SQL ANDs
     // them all), so a single-field localField/foreignField `$lookup`
     // would silently drop the tenant correlation and over-match. The

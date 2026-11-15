@@ -1274,8 +1274,16 @@ export class MongoTranslator {
         const stripped = key.slice(1);
         if (stripped in aggregates) continue;
         if (q.joins && stripped in q.joins) continue;
-        groupId[stripped] = `$${stripped.replace('.@', '.')}`;
-        groupedKeys.push(stripped);
+        // A group key name takes no `.`, so a joined column nests under
+        // its alias, `_id.o.sku`, and is put back at `o.sku` below.
+        // Nested, a missing value groups apart from null unless made null.
+        const path = stripped.replace('.@', '.');
+        const [head, sub] = path.split('.');
+        groupId[head!] = sub === undefined ? `$${path}` : {
+          ...groupId[head!] as object,
+          [sub]: { $ifNull: [`$${path}`, null] },
+        };
+        groupedKeys.push(path);
       }
       const flatten: Record<string, unknown> = {};
       // What each `$group` field holds over no rows at all.
@@ -1338,8 +1346,8 @@ export class MongoTranslator {
         );
       }
       // After $group, grouped fields live under `_id.<key>`. Flatten
-      // them back to top level so the subsequent $match / $sort /
-      // $project sees plain field names.
+      // them back to their own paths so the subsequent $match / $sort /
+      // $project read them as before the group.
       for (const key of groupedKeys) flatten[key] = `$_id.${key}`;
       if (Object.keys(flatten).length > 0) {
         pipeline.push({ $addFields: flatten });
