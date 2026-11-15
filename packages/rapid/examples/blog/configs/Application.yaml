@@ -1,7 +1,6 @@
 name: rapid-blog-example
 mode: DEVELOPMENT
 server:
-  requireResponse: false # this example's routes declare no `response` yet
   port: 8001
   hostname: localhost
   paging:

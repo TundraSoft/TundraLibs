@@ -129,5 +129,9 @@ export function routesWithoutResponse(
     !BUILT_IN.has(route.handler) &&
     !(route.template !== undefined && !app.api &&
       (route.template.prefer ?? app.uiPrefer) === 'html')
-  ).map((route) => `${route.method} ${route.path}`);
+  ).map((route) =>
+    `${route.method} ${route.path}${
+      route.version === undefined ? '' : ` @${route.version}`
+    }`
+  );
 }
