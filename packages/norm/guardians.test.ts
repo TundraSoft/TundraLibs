@@ -102,6 +102,16 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     }
   });
 
+  it('date: a rejected string is reported as the caller sent it', () => {
+    const e = asserts.assertThrows(
+      () =>
+        buildCellGuardian(Column.timestamp().spec).parse('2026-01-15T25:00:00'),
+      GuardianError,
+      'Cannot coerce "2026-01-15T25:00:00" to Date',
+    );
+    asserts.assertEquals(e.context.got, '2026-01-15T25:00:00');
+  });
+
   it('boolean + unrecognised types', () => {
     asserts.assertEquals(buildCellGuardian(Specs.flag).parse(true), true);
     asserts.assertEquals(buildCellGuardian(Specs.flag).parse(false), false);

@@ -125,7 +125,19 @@ function buildBase(spec: ColumnSpec) {
     // parses it.
     const guard = (spec.guard as DateGuardian | undefined) ?? Guardian.date();
     return Guardian.unknown()
-      .process((v) => guard.parse(asUtc(v)), DateGuardian);
+      .process((v) => {
+        const marked = asUtc(v);
+        // Report the string the caller sent, without the added `Z`.
+        if (marked !== v && Number.isNaN(Date.parse(marked as string))) {
+          throw new GuardianError(`Cannot coerce "${v}" to Date`, {
+            expected: 'ISO 8601 date-time',
+            got: v,
+            comparison: 'coerce',
+            type: 'date',
+          });
+        }
+        return guard.parse(marked);
+      }, DateGuardian);
   }
 
   if (type === 'TIME') {
