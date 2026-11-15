@@ -306,12 +306,12 @@ Correlated `EXISTS (SELECT 1 FROM <table> AS __exists__ WHERE …)` /
 `QueryFilter` is (SELECT/COUNT/UPDATE/DELETE `where`, nested in
 `$and` / `$or`).
 
-| Dialect  | Behaviour                                                                                    |
-| -------- | -------------------------------------------------------------------------------------------- |
-| Postgres | Native `EXISTS` / `NOT EXISTS`.                                                              |
-| MariaDB  | Native `EXISTS` / `NOT EXISTS`.                                                              |
-| SQLite   | Native `EXISTS` / `NOT EXISTS`.                                                              |
-| MongoDB  | **Throws** `DialectUnsupportedError` — correlated subqueries have no Mongo find-filter form. |
+| Dialect  | Behaviour                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| Postgres | Native `EXISTS` / `NOT EXISTS`.                                                                   |
+| MariaDB  | Native `EXISTS` / `NOT EXISTS`.                                                                   |
+| SQLite   | Native `EXISTS` / `NOT EXISTS`.                                                                   |
+| MongoDB  | A `$lookup` stage on SELECT and COUNT. **Throws** `DialectUnsupportedError` on UPDATE and DELETE. |
 
 Correlation goes through the `on` map only (subquery column → outer
 column ref or literal); the optional `where` filters the subquery
@@ -319,6 +319,23 @@ table locally. Outer refs resolve through `__base__` when the outer
 query has joins, and are qualified with the outer table's own name
 otherwise, so they can never be captured by the subquery table's
 scope.
+
+On MongoDB a SELECT or COUNT carrying the node runs as an aggregation
+pipeline. Each node is a `$lookup` whose sub-pipeline matches the `on`
+map against the outer columns bound in `let`, applies the node's
+`where`, and stops at `$limit: 1`. The filter's `$match` then tests the
+looked-up array, non-empty for `$exists` and empty for `$nexists`, and
+an `$unset` drops it before the rows are sorted or projected. A null or
+missing key matches nothing unless it is listed in `nullSafe`, as on
+SQL.
+
+`updateMany` and `deleteMany` take a query filter, which has no stage
+to run a lookup in, so an UPDATE or DELETE carrying the node throws on
+MongoDB, as does a partial-index predicate. Select the keys with the
+same filter first, then update or delete by `$in` on them. An `on`
+value that names a joined column (`'@Alias.@col'`) also throws on
+MongoDB: a join there is an array on the document, with no single row
+to bind the key to.
 
 ## Expressions
 
@@ -335,7 +352,9 @@ The table below summarises the per-dialect emission. The general rule:
 | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | ADD/SUBTRACT/…        | native                                                                              | native                                                 | native                                                           | native (`$add` / `$subtract` / …)                                                   |
 | POWER                 | native                                                                              | native                                                 | native (`POWER` via SQLite built-in math, default since 3.35.0)  | native (`$pow`)                                                                     |
-| ROUND                 | native                                                                              | native                                                 | native                                                           | native                                                                              |
+| DIVIDE                | native; first operand cast to a double                                              | native; first operand cast to a double                 | native; first operand cast to a real                             | native (`$divide`)                                                                  |
+| MODULO                | native, through `NUMERIC`                                                           | native                                                 | emulated (`%` for whole numbers, `mod()` otherwise)              | native (`$mod`)                                                                     |
+| ROUND                 | native; with a precision, through `NUMERIC`                                         | native                                                 | native                                                           | native                                                                              |
 | CONCAT                | native (`\|\|`)                                                                     | native (`CONCAT`)                                      | native (`\|\|`)                                                  | native (`$concat`)                                                                  |
 | TO_STRING             | native (`CAST … AS TEXT`)                                                           | native (`CAST … AS CHAR`)                              | native (`CAST … AS TEXT`)                                        | native (`$toString`)                                                                |
 | COALESCE / NULLIF     | native                                                                              | native                                                 | native                                                           | native (`$ifNull` / `$cond`)                                                        |
@@ -352,6 +371,54 @@ The table below summarises the per-dialect emission. The general rule:
 | **UUID**              | native (`gen_random_uuid()`)                                                        | native (`UUID()`)                                      | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)                                                 |
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                                     |
 | **ENCRYPT / DECRYPT** | native (`pgp_sym_encrypt` / `pgp_sym_decrypt`)                                      | native (`AES_ENCRYPT` / `AES_DECRYPT`)                 | **passthrough**                                                  | **passthrough**                                                                     |
+
+### Number results
+
+`DIVIDE` keeps the fraction on every dialect: `7` divided by `2` is `3.5`,
+a JavaScript `number`. The SQL dialects cast the first operand to a double
+to get there. Earlier releases returned `3` on Postgres and SQLite, and a
+four-place decimal such as `0.3333` on MariaDB.
+
+`MODULO` keeps the fraction too, so `2.5 % 2` is `0.5`, and the sign of the
+result follows the first operand: `-7 % 2` is `-1` and `7 % -2` is `1`.
+Postgres computes it in `NUMERIC`, which is decimal, so a remainder that a
+double cannot hold exactly differs in its last digits: `2.675 % 2` is
+`0.675` on Postgres and `0.6749999999999998` on the other three. The
+result is cast back to a double, so a `BIGINT` operand gives a `number`
+there, where earlier releases gave a `bigint`.
+
+SQLite calls `mod()` when an operand has a fraction. That is one of
+SQLite's optional math functions: the builds Deno, Bun and Node ship have
+them, and Turso and Cloudflare D1 are untested.
+
+A zero divisor is not portable for either one. Postgres and MongoDB fail
+the query, MariaDB and SQLite return `NULL`.
+
+`ROUND` with a precision goes through `NUMERIC` on Postgres and is cast
+back, so it takes any numeric operand and returns a `number`. The dialects
+do not agree on a value halfway between two results. These are the results
+on PostgreSQL 18, MariaDB 11, SQLite 3.46 and MongoDB 8 for a value passed
+in the query and, where it differs, for a `DOUBLE` column holding it:
+
+| Expression        | Postgres | MariaDB               | SQLite | MongoDB |
+| ----------------- | -------- | --------------------- | ------ | ------- |
+| `ROUND(2.5)`      | `2`      | `3`, column `2`       | `3`    | `2`     |
+| `ROUND(3.5)`      | `4`      | `4`                   | `4`    | `4`     |
+| `ROUND(-2.5)`     | `-2`     | `-3`, column `-2`     | `-3`   | `-2`    |
+| `ROUND(2.5, 0)`   | `3`      | `3`, column `2`       | `3`    | `2`     |
+| `ROUND(-2.5, 0)`  | `-3`     | `-3`, column `-2`     | `-3`   | `-2`    |
+| `ROUND(0.125, 2)` | `0.13`   | `0.13`, column `0.12` | `0.13` | `0.12`  |
+| `ROUND(2.675, 2)` | `2.68`   | `2.68`                | `2.67` | `2.67`  |
+
+A negative precision is not portable either: `ROUND(1234.5, -2)` is `1200`
+on Postgres, MariaDB and MongoDB, and `1235` on SQLite. Round in
+application code when the result has to be the same everywhere.
+
+Whole-number arithmetic over integer columns reaches JavaScript as a
+`bigint` on MariaDB and as a `number` on the other three. This covers
+`ADD`, `SUBTRACT`, `MULTIPLY`, `MODULO` and `ABS`. The result is left as
+MariaDB returns it, because a cast to a double would lose exactness on
+large values. Convert with `Number()` when the values are known to fit.
 
 ### DATE_ADD amount gotcha
 
@@ -430,13 +497,9 @@ pass dates.
 
 The result reaches JavaScript as a whole `number` on every dialect, never a
 `bigint`: Postgres and MariaDB cast it to a double, which is exact for any
-two dates they can hold. Postgres has no `%` and no two-argument `ROUND`
-for a double, so `MODULO`, and `ROUND` with a precision, over a `DATE_DIFF`
-or arithmetic on one go through `NUMERIC` there and are cast back: the
-result is a `number` there too.
-
-`DIVIDE` on a `DATE_DIFF` keeps the fraction on Postgres, MariaDB and
-MongoDB. SQLite divides two integers and drops it.
+two dates they can hold. `DIVIDE`, `MODULO` and `ROUND` over a `DATE_DIFF`
+behave as they do over any other number, see
+[number results](#number-results).
 
 ### UUID gotcha
 
@@ -473,6 +536,12 @@ OQL chose passthrough over throwing because:
 | STRING_AGG            | native                                        | native (`GROUP_CONCAT`)                    | native (`GROUP_CONCAT`)                       | **throws** (no clean aggregation-pipeline equivalent — build via `$push` + `$reduce` if needed) |
 | ARRAY_AGG             | native (`array_agg`)                          | native (`JSON_ARRAYAGG`)                   | native (`json_group_array`)                   | native (`$push`)                                                                                |
 | JSON_ROW              | native (`jsonb_agg(jsonb_build_object(...))`) | native (`JSON_ARRAYAGG(JSON_OBJECT(...))`) | native (`json_group_array(json_object(...))`) | native (`$push` of an object)                                                                   |
+
+`COUNT` reaches JavaScript as a `number` on every dialect. Postgres and
+MariaDB count in a 64-bit integer, so the projected value is cast to a
+double there, which is exact up to 2^53. Earlier releases returned a
+`bigint` on those two. `having` and `orderBy` compare the count before the
+cast.
 
 ## Filters
 
@@ -585,7 +654,7 @@ A lone `nullSafe` key is the concise form without the guard.
 
 A `$exists` / `$nexists` correlation map takes the same `nullSafe`
 array, with the same SQL operators, and reads a `null` value the same
-way: `IS NULL` on the subquery column.
+way: `IS NULL` on the subquery column, null or missing on MongoDB.
 
 A `null` value in `on` is a NULL check on the joined column (`IS NULL`;
 null or missing on MongoDB) and cannot be listed in `nullSafe`, nor can

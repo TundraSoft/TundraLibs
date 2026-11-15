@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import type { Query } from '@tundralibs/oql/types';
 import { MongoEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -45,7 +46,7 @@ async function isMongoAvailable(): Promise<boolean> {
   }
 }
 
-const mongoAvailable = await isMongoAvailable();
+const mongoAvailable = liveAvailable('MongoDB', await isMongoAvailable());
 const collectionName = `oql_translator_live_${Date.now()}`;
 
 describe({

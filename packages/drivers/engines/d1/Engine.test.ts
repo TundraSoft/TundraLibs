@@ -179,6 +179,13 @@ describe('drivers.engines.d1.D1Engine', () => {
       assertEquals((err as EngineError).code, 'MISSING_PARAMETERS');
     });
 
+    it('never opens a placeholder at a colon that follows a colon', () => {
+      const eng = makeEngine();
+      const q = eng.std({ sql: 'SELECT x::a::b, :a:', params: { a: 1 } });
+      assertEquals(q.sql, 'SELECT x::a::b, ?;');
+      assertEquals(q.__params, [1]);
+    });
+
     it('always stashes a __params array, even with no placeholders', () => {
       const eng = makeEngine();
       const q = eng.std({ sql: 'SELECT 1' });

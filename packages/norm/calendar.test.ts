@@ -3,6 +3,7 @@ import * as asserts from '@std/asserts';
 import {
   asUtc,
   readTimeOfDay,
+  rollsOver,
   toTimeOfDay,
   utcDay,
   zonedDay,
@@ -30,7 +31,6 @@ describe('norm.calendar', () => {
     const others = [
       '2026-01-15T10:00:00Z',
       '2026-01-15T10:00:00+05:30',
-      '2026-01-15T10:00:00-0800',
       '2026-01-15',
       'Thu, 15 Jan 2026 10:00:00',
       '2026-01-15T10:00:001',
@@ -40,6 +40,40 @@ describe('norm.calendar', () => {
       new Date(0),
     ];
     for (const v of others) asserts.assertStrictEquals(asUtc(v), v, String(v));
+  });
+
+  it('asUtc: an offset with no colon is written with one', () => {
+    const cases: [string, string][] = [
+      ['2026-01-15T10:00:00-0800', '2026-01-15T10:00:00-08:00'],
+      ['2026-01-15 10:00+0530', '2026-01-15T10:00+05:30'],
+      ['2026-01-15T10:00:00.25-08', '2026-01-15T10:00:00.25-08:00'],
+    ];
+    for (const [text, respelled] of cases) {
+      asserts.assertEquals(asUtc(text), respelled);
+    }
+  });
+
+  it('rollsOver: a day or clock the runtime moves to a later day', () => {
+    const rolled = [
+      '2026-02-30',
+      '2026-02-29',
+      '2026-04-31T10:00:00Z',
+      '2026-02-30 10:00:00+05:30',
+      '2026-01-01T24:00:00',
+      '2026-12-31T24:00Z',
+    ];
+    for (const text of rolled) asserts.assert(rollsOver(text), text);
+    const kept = [
+      '2024-02-29',
+      '2026-02-28T23:59:59Z',
+      '2026-12-31',
+      // Refused by the runtime, so nothing to catch.
+      '2026-13-01',
+      '2026-01-01T23:60:00',
+      'tomorrow',
+      '',
+    ];
+    for (const text of kept) asserts.assertFalse(rollsOver(text), text);
   });
 
   it('utcDay: UTC midnight of the day, before and after the epoch', () => {
@@ -170,6 +204,31 @@ describe('norm.calendar', () => {
       zonedInstant('2026-11-14 10:00Z', 'Asia/Kolkata').toISOString(),
       '2026-11-14T10:00:00.000Z',
     );
+  });
+
+  it('zonedInstant: an offset may leave out the colon or the minutes', () => {
+    const cases: [string, string][] = [
+      ['2026-11-14T10:00:00-0800', '2026-11-14T18:00:00.000Z'],
+      ['2026-11-14T10:00:00+0530', '2026-11-14T04:30:00.000Z'],
+      ['2026-11-14T10:00:00-08', '2026-11-14T18:00:00.000Z'],
+      ['2026-11-14 10:00:00.5+05', '2026-11-14T05:00:00.500Z'],
+    ];
+    for (const [text, instant] of cases) {
+      asserts.assertEquals(
+        zonedInstant(text, 'Asia/Kolkata').toISOString(),
+        instant,
+        text,
+      );
+    }
+    for (
+      const text of ['2026-11-14T10:00:00+2500', '2026-11-14T10:00:00+053']
+    ) {
+      asserts.assertEquals(
+        codeOf(() => zonedInstant(text, 'Asia/Kolkata')),
+        'INVALID_DATE',
+        text,
+      );
+    }
   });
 
   it('zoned helpers: an unknown zone is INVALID_TIME_ZONE', () => {

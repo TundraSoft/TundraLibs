@@ -2,7 +2,8 @@
  * Postgres live run of the Shortly suite — the same 22 steps as
  * SQLite, per the fixture contract ("Replicating for Postgres/Maria =
  * one new fixture file"). Skipped cleanly when the database in
- * `packages/norm/.env` (`POSTGRES_*`) is unreachable.
+ * `packages/norm/.env` (`POSTGRES_*`) is unreachable; with
+ * `LIVE_DB_REQUIRED=true` that fails the run instead.
  *
  * Runs against the CONFIGURED database (drivers-test convention):
  * every norm object is dropped before AND after the run, so a crashed
@@ -18,6 +19,7 @@
 import { describe, it } from '@tundralibs/compat/test';
 import { PostgresEngine } from '@tundralibs/drivers/postgres';
 import { envArgs } from '@tundralibs/utils';
+import { requireLive } from './requireLive.ts';
 import { type LiveEngine, runLiveSuite } from './suite.ts';
 
 const env = envArgs('./packages/norm/');
@@ -83,8 +85,9 @@ async function dropAll(engine: any): Promise<void> {
 }
 
 if (!available) {
+  const why = `Postgres at ${CONFIG.host}:${CONFIG.port} unreachable`;
   describe('norm.live-postgres', () => {
-    it(`SKIPPED — Postgres at ${CONFIG.host}:${CONFIG.port} unreachable`, () => {});
+    it(`SKIPPED — ${why}`, () => requireLive(why));
   });
 } else {
   let engine: PostgresEngine;
