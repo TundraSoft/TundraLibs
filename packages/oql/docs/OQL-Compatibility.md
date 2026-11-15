@@ -358,7 +358,7 @@ The table below summarises the per-dialect emission. The general rule:
 | CONCAT                | native (`\|\|`)                                                                     | native (`CONCAT`)                                      | native (`\|\|`)                                                  | native (`$concat`)                                                                  |
 | TO_STRING             | native (`CAST … AS TEXT`)                                                           | native (`CAST … AS CHAR`)                              | native (`CAST … AS TEXT`)                                        | native (`$toString`)                                                                |
 | COALESCE / NULLIF     | native                                                                              | native                                                 | native                                                           | native (`$ifNull` / `$cond`)                                                        |
-| CASE                  | native                                                                              | native                                                 | native                                                           | native (`$switch`; `when` limited to comparison, `$in`/`$nin`, `$between`, `$null`) |
+| CASE                  | native                                                                              | native                                                 | native                                                           | native (`$switch`; `when` takes every column operator, a pattern via `$regexMatch`) |
 | LENGTH/LOWER/UPPER    | native                                                                              | native                                                 | native                                                           | native                                                                              |
 | TRIM/LTRIM/RTRIM      | native                                                                              | native                                                 | native                                                           | native (`$trim` / `$ltrim` / `$rtrim`)                                              |
 | SUBSTR                | native (`SUBSTRING`)                                                                | native (`SUBSTRING`)                                   | native (`substr`)                                                | native (`$substrCP`)                                                                |
@@ -543,6 +543,14 @@ double there, which is exact up to 2^53. Earlier releases returned a
 `bigint` on those two. `having` and `orderBy` compare the count before the
 cast.
 
+`distinct: true` on COUNT, SUM or AVG is `COUNT(DISTINCT col)` and its
+siblings in SQL. MongoDB's `$group` has no such accumulator, so the
+translator collects each group's distinct values with `$addToSet` and
+counts, sums or averages that set in the next stage. NULL is left out, as
+in SQL. One group's distinct values therefore have to fit in a single
+16 MB document; a column with more distinct values per group than that
+fails on MongoDB.
+
 ## Filters
 
 All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
@@ -572,6 +580,7 @@ other. OQL does not pass that through:
 | -------------------------------------------------------------- | ------------------- | ---------------------------------------------------------- |
 | `{ '@a': { $ne: 5 } }`                                         | `a <> 5`            | `{ a: { $nin: [5, null] } }`                               |
 | `{ '@a': { $nin: [5, 6] } }`                                   | `a NOT IN (5, 6)`   | `{ a: { $nin: [5, 6, null] } }`                            |
+| `{ '@a': { $nlike: 'x%' } }`                                   | `a NOT LIKE 'x%'`   | `{ a: { $not: { $regex: '^x.*$' }, $ne: null } }`          |
 | `{ '@a': '@b' }`, `{ '@a': { $lt: '@b' } }`                    | `a = b`, `a < b`    | `$expr` comparison, plus a `$gt: null` guard on each field |
 | `{ '@a': { $lt: { $$_expression: 'ADD', args: ['@b', 1] } } }` | `a < (b + 1)`       | the same guarded `$expr`                                   |
 | `{ '@a': { $between: ['@b', 9] } }`                            | `a BETWEEN b AND 9` | the same guarded `$expr`                                   |
@@ -583,9 +592,6 @@ To include it, ask for it:
 A `CASE` `when` condition follows the same rule:
 `when: { '@a': { $lt: 6 } }` does not take the branch for a null or
 missing `a`.
-
-One place on MongoDB does not follow the rule yet. `$nlike` / `$nilike`
-still match a null or missing field, where SQL's `NOT LIKE` does not.
 
 ## JOINs
 
