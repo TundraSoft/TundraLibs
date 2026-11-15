@@ -1147,21 +1147,29 @@ export class MongoTranslator {
   }
 
   /**
-   * The orderBy keys that name a joined column the query does not
-   * project, each mapped to `[field, operator, path]`. `$lookup` leaves
-   * the joined rows in an array, so the key sorts on a computed `field`:
-   * the smallest value at `path` for `ASC`, the largest for `DESC`, NULLs
-   * skipped. That is the MIN / MAX the SQL translators order a grouped
-   * query by. The inclusion `$project` drops the field again.
+   * For a grouped query, the orderBy keys that name a joined column the
+   * query does not project, each mapped to `[field, operator, path]`.
+   * Such a column is no group key, so the key sorts on a `field` the
+   * `$group` accumulates: the group's smallest value at `path` for `ASC`,
+   * its largest for `DESC`, NULLs skipped, as the SQL translators order
+   * by MIN / MAX. The field takes a `_` prefix while an aggregate or a
+   * projected key has its name, and the inclusion `$project` drops it.
    */
   private __joinedSorts(
     q: Query<'SELECT'>,
+    aggregates: Record<string, unknown>,
   ): Record<string, [string, string, string]> {
+    const taken = new Set([
+      ...Object.keys(aggregates),
+      ...Object.keys(q.projection).map((k) => k.slice(1).split('.@')[0]),
+    ]);
     const out: Record<string, [string, string, string]> = {};
     Object.entries(q.orderBy ?? {}).forEach(([key, dir], i) => {
       if (key.includes('.@') && !(key in q.projection)) {
+        let field = `__sort_${i}`;
+        while (taken.has(field)) field = `_${field}`;
         out[key] = [
-          `__sort_${i}`,
+          field,
           dir === 'ASC' ? '$min' : '$max',
           `$${key.slice(1).replace('.@', '.')}`,
         ];
@@ -1261,10 +1269,10 @@ export class MongoTranslator {
     if (q.where && deferMatch) {
       this.__pushMatch(pipeline, q.where, columns);
     }
-    const joinedSorts = this.__joinedSorts(q);
     const aggregates = this.__aggregatesOf(q);
-    let grouped = false;
-    if (Object.keys(aggregates).length > 0) {
+    const grouped = Object.keys(aggregates).length > 0;
+    const joinedSorts = grouped ? this.__joinedSorts(q, aggregates) : {};
+    if (grouped) {
       const groupId: Record<string, unknown> = {};
       const groupBody: Record<string, unknown> = { _id: groupId };
       const groupedKeys: string[] = [];
@@ -1319,13 +1327,11 @@ export class MongoTranslator {
           };
         }
       }
-      // The joined arrays do not survive $group, so the sort values are
-      // accumulated in it: the inner operator reduces one document's
-      // array, the outer one the group.
+      // An unprojected joined column is no group key, so its sort value
+      // is accumulated in the group.
       for (const [field, op, path] of Object.values(joinedSorts)) {
-        groupBody[field] = { [op]: { [op]: path } };
+        groupBody[field] = { [op]: path };
       }
-      grouped = true;
       if (groupedKeys.length > 0) {
         pipeline.push({ $group: groupBody });
       } else {
@@ -1359,15 +1365,6 @@ export class MongoTranslator {
     // $sort before $project: orderBy names source fields, which an
     // alias or an unprojected column would no longer have after it.
     if (q.orderBy && Object.keys(q.orderBy).length > 0) {
-      if (!grouped && Object.keys(joinedSorts).length > 0) {
-        pipeline.push({
-          $addFields: Object.fromEntries(
-            Object.values(joinedSorts).map((
-              [field, op, path],
-            ) => [field, { [op]: path }]),
-          ),
-        });
-      }
       pipeline.push({ $sort: this.__buildSort(q.orderBy, joinedSorts) });
     }
     const projection = this.__buildProjection(q);

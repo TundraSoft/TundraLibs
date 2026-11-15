@@ -686,9 +686,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // The joined rows are an array under `o`, so the sort value is
-    // computed from it. The inclusion $project drops `__sort_0` again.
-    name: 'SELECT ORDER BY an unprojected joined column → computed sort field',
+    // One row per joined row, as on SQL, so the sort reads the column.
+    name:
+      'SELECT ORDER BY an unprojected joined column → sorts the joined rows',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -722,16 +722,15 @@ const CASES: Case[] = [
           {
             $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
           },
-          { $addFields: { __sort_0: { $max: '$o.amount' } } },
-          { $sort: { __sort_0: -1, name: 1 } },
+          { $sort: { 'o.amount': -1, name: 1 } },
           { $project: { id: 1 } },
         ],
       },
     },
   },
   {
-    // $group discards the joined array, so the sort value rides through
-    // it as an accumulator.
+    // An unprojected joined column is no group key, so its MIN rides
+    // through the $group as an accumulator, as SQL orders by MIN.
     name:
       'SELECT ORDER BY an unprojected joined column with aggregates → accumulated in $group',
     method: 'select',
@@ -772,12 +771,62 @@ const CASES: Case[] = [
             $group: {
               _id: { team: '$team' },
               n: { $sum: 1 },
-              __sort_1: { $min: { $min: '$o.amount' } },
+              __sort_1: { $min: '$o.amount' },
             },
           },
           { $addFields: { team: '$_id.team' } },
           { $sort: { team: -1, __sort_1: 1 } },
           { $project: { team: 1, n: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The accumulated sort field takes another name when an aggregate
+    // has its own, where the two would share one `$group` field.
+    name: 'SELECT ORDER BY a joined column beside an aggregate named __sort_0',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { __sort_0: { $$_aggregate: 'COUNT' } },
+      projection: { '@id': true, '@__sort_0': true },
+      orderBy: { '@o.@amount': 'DESC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              __sort_0: { $sum: 1 },
+              ___sort_0: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $sort: { ___sort_0: -1 } },
+          { $project: { id: 1, __sort_0: 1 } },
         ],
       },
     },
