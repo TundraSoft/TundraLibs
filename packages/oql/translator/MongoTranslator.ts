@@ -1823,12 +1823,7 @@ export class MongoTranslator {
           'column reference inside an $in / array filter value',
         );
       }
-      // SQL's `IN (…, NULL)` never matches a NULL row, while a null in
-      // Mongo's `$in` matches every null or missing field: drop it.
-      return {
-        spec: { [fieldPath]: { $in: rhs.filter((el) => el !== null) } },
-        exprs,
-      };
+      return { spec: { [fieldPath]: { $in: rhs } }, exprs };
     }
     if (typeof rhs !== 'object' || rhs instanceof Date) {
       const ref = this.__valueFieldRef(rhs, columns);

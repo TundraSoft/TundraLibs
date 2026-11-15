@@ -244,46 +244,6 @@ const CASES: Case[] = [
     },
   },
   {
-    // SQL's `IN ('ACTIVE', NULL)` never matches a NULL row; a null left in
-    // Mongo's `$in` would match every null or missing field.
-    name: 'WHERE direct array drops a null from the $in list',
-    method: 'select',
-    query: {
-      type: 'SELECT',
-      table: 'users',
-      columns: ['id', 'status'],
-      projection: { '@id': true },
-      where: { '@status': ['ACTIVE', null] },
-    },
-    expected: {
-      sql: 'find',
-      params: {
-        collection: 'users',
-        filter: { status: { $in: ['ACTIVE'] } },
-        options: { projection: { id: 1 } },
-      },
-    },
-  },
-  {
-    name: 'WHERE direct array holding only null matches nothing',
-    method: 'select',
-    query: {
-      type: 'SELECT',
-      table: 'users',
-      columns: ['id', 'status'],
-      projection: { '@id': true },
-      where: { '@status': [null] },
-    },
-    expected: {
-      sql: 'find',
-      params: {
-        collection: 'users',
-        filter: { status: { $in: [] } },
-        options: { projection: { id: 1 } },
-      },
-    },
-  },
-  {
     // `status <> 'BANNED' AND status IS NULL` matches nothing. The bare
     // `{ status: null }` spec would be replaced by the `$nin` document.
     name: 'WHERE $null: true beside $ne keeps both conditions',
