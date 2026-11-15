@@ -228,6 +228,39 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'MODULO and ROUND with a precision over DATE_DIFF',
+    expressions: {
+      weekday: {
+        $$_expression: 'MODULO',
+        args: [{
+          $$_expression: 'ADD',
+          args: [{
+            $$_expression: 'DATE_DIFF',
+            args: { from: '@at', to: '@done', unit: 'DAYS' },
+          }, 1],
+        }, 7],
+      },
+      took: {
+        $$_expression: 'ROUND',
+        args: [{
+          $$_expression: 'DATE_DIFF',
+          args: { from: '@at', to: '@done', unit: 'DAYS' },
+        }, 1],
+      },
+    },
+    exactNumbers: true,
+    expected: [
+      { id: 1, weekday: 4, took: 31 },
+      { id: 2, weekday: 1, took: 364 },
+      { id: 3, weekday: null, took: null },
+      { id: 4, weekday: 1, took: 0 },
+    ],
+    pending: {
+      postgres: 'fix/oql-date-diff-number',
+      maria: 'fix/oql-date-diff-number',
+    },
+  },
+  {
     name: 'DATE_ADD in each unit, clamping to the end of a shorter month',
     expressions: {
       month: dateAdd(1, 'MONTHS'),
