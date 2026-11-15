@@ -17,6 +17,8 @@ changelog has those.
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
+  - [A filter value from a to-one relation that can match several rows needs it projected](#a-filter-value-from-a-to-one-relation-that-can-match-several-rows-needs-it-projected)
+  - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
 
 ## 1.13.0
 
@@ -141,6 +143,38 @@ tested each condition against any matched row there, so
 two orgs each met one condition, and `$ne` held only when no matched row
 had the value. A relation whose key matches one row at most reads as
 before.
+
+### A filter value from a to-one relation that can match several rows needs it projected
+
+A belongsTo or hasOne relation used as a comparison value, as in
+`{ '@id': { $lt: '@Seat.@id' } }`, was joined when the read did not
+project it. Where the join columns on the related entity are not unique
+there, a row came back once for each related row that passed, and
+`count()` and `total` counted it as often. Such a read now throws
+`NormQueryError` with the code `INVALID_PROJECTION`, as it already did
+for a NULL-safe relation. The check reads the schema, not the data: it
+passes when those join columns cover the related entity's primary key or
+one of its `unique` groups.
+
+Project the relation and each row comes back once, kept when at least
+one related row passes the comparison. `count()` and `total: true` count
+without the projection and throw for such a filter. Where the columns
+are unique in fact, declare them in the related entity's `unique`
+option, which the next migration emits as a unique index; a view has no
+such option. [Relation references](NORM-Querying.md#relation-references)
+has the rule.
+
+### A matched relation row whose projected columns are all NULL is kept
+
+A related row that matched, but held NULL in every column the read
+projected from it, was read as no match: a belongsTo or hasOne read
+`null`, and a to-many list left the row out. The to-one relation now
+reads an object whose values are `null`, and the list keeps the row. No
+match still reads `null` and `[]`. Code that took `row.Org === null` to
+mean the projected column was NULL must test the column instead.
+
+One case is unchanged: a view, which has no primary key, joined on
+[NULL-safe](NORM-Schema.md#null-safe-keys) pairs that all hold NULL.
 
 ---
 

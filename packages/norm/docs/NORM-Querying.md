@@ -298,7 +298,9 @@ await db.repo('Links').find({ '@Visits.@country': 'IN' }, {
 
 A relation column may also appear in value position, as the right-hand
 side of an operator, for a cross-column comparison. That plans the join
-for a belongsTo or hasOne alias. An unprojected to-many cannot supply a
+for a belongsTo or hasOne alias whose key matches one row at most: its
+join columns on the related entity cover that entity's primary key or
+one of its `unique` groups. An unprojected to-many cannot supply a
 comparison value, because it runs as an `EXISTS` subquery with nothing
 to compare an outer column against, so that spelling throws rather than
 comparing against the literal text:
@@ -312,11 +314,16 @@ await db.repo('Links').find({ '@createdAt': { $gt: '@Owner.@createdAt' } });
 await db.repo('Owners').find({ '@name': { $gt: '@Items.@label' } });
 ```
 
-A relation matched [NULL-safe](#null-safe-relation-keys) supplies a
-comparison value only when the same read projects it. Unprojected, a
-row would come back once for each target it matches, so the read throws
-`INVALID_PROJECTION`. `count()` and `total: true` count without the
-projection and always throw for such a filter:
+A to-one relation whose key can match several rows supplies a
+comparison value only when the same read projects it. That is a relation
+matched [NULL-safe](#null-safe-relation-keys), and one whose join
+columns on the related entity are neither its primary key nor a declared
+`unique` group: a declared `reverseCardinality: 'hasOne'`, or an FK to
+columns that are no key. Unprojected, a row would come back once for
+each target it matches, so the read throws `INVALID_PROJECTION`.
+Projected, each row comes back once, kept when at least one matched
+target passes the comparison. `count()` and `total: true` count without
+the projection and always throw for such a filter:
 
 ```typescript ignore
 // Grants.Org is nullSafe. Projected — each grant comes back once:
@@ -325,7 +332,7 @@ await db.repo('Grants').find({ '@tenant': '@Org.@tenant' }, {
 });
 
 // Not projected — NormQueryError. Project it, or match on plain
-// equality for this read:
+// equality for this read: Orgs declares tenant + code unique.
 await db.repo('Grants').find({ '@tenant': '@Org.@tenant' });
 await db.repo('Grants').count({ '@tenant': '@Org.@tenant' }, {
   nullSafe: { Org: false },
