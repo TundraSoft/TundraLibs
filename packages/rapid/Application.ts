@@ -1,5 +1,6 @@
 import { ambient } from '@tundralibs/ambient';
 import {
+  ensureDir,
   makeTempDirSync,
   readFileSync,
   remove,
@@ -345,6 +346,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __started = false;
   /** Set by `stop()`; `fetch()` refuses to rebuild a transport on a torn-down app. */
   private __stopped = false;
+  /** Whether a module runtime was booted and has been disposed: such an app cannot serve again. */
+  private __modulesDisposed = false;
 
   /** The resolved `mode` — steers error disclosure and log defaults. */
   get mode(): 'DEVELOPMENT' | 'PRODUCTION' {
@@ -1557,6 +1560,7 @@ export class Application<S extends RapidContextState = RapidContextState>
     const runtime = this.__moduleRuntime;
     if (runtime === undefined) return;
     this.__moduleRuntime = undefined;
+    this.__modulesDisposed = true;
     await runtime.dispose();
   }
 
@@ -2123,13 +2127,29 @@ export class Application<S extends RapidContextState = RapidContextState>
    * Boot the ENABLED transports: HTTP unless `server.enabled` is
    * false; jobs when any are registered and `jobs.enabled` is not
    * false. Emits `start`; a boot failure emits `error`, tears down,
-   * and rethrows.
+   * and rethrows. An app without modules can be started again after
+   * `stop()`.
+   *
+   * @throws {RapidError} RAPID_CONFIG when called after `stop()` on an app
+   *   that booted modules: they were disposed and cannot be revived.
    */
   public async start(): Promise<this> {
     if (this.__started) return this;
+    // stop() disposed the modules, and their routes are still registered:
+    // serving again would answer each of them with a 500.
+    if (this.__modulesDisposed) {
+      throw new RapidError('RAPID_CONFIG', {
+        message:
+          'start() after stop(): the modules of this application were disposed — create a new Application to serve again',
+      });
+    }
     this.__started = true; // set FIRST so a boot failure can tear down
-    this.__stopped = false;
     try {
+      // A restart: stop() removed the upload dir the constructor made.
+      if (this.__stopped && this.__ownedUploadPath !== undefined) {
+        await ensureDir(this.__ownedUploadPath);
+      }
+      this.__stopped = false;
       // `stateMode: 'SHARE'` hands every invocation the SAME state
       // object; a middleware writing a per-invocation value there
       // (one marked with `markStateKeyUser`) corrupts under
