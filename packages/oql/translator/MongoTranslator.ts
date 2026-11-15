@@ -343,7 +343,10 @@ const NO_COLUMNS: ReadonlySet<string> = new Set();
  */
 const DISTINCT_REDUCERS: Readonly<Record<string, (set: string) => unknown>> = {
   COUNT: (set) => ({ $size: { $setDifference: [set, [null]] } }),
-  SUM: (set) => ({ $sum: set }),
+  // `$sum` of no values is 0, SQL's SUM is NULL: `$max` is null exactly then.
+  SUM: (set) => ({
+    $cond: [{ $gt: [{ $max: set }, null] }, { $sum: set }, null],
+  }),
   AVG: (set) => ({ $avg: set }),
 };
 
@@ -1243,7 +1246,12 @@ export class MongoTranslator {
     if (q.expressions) {
       const addFields: Record<string, unknown> = {};
       for (const [name, expr] of Object.entries(q.expressions)) {
-        addFields[name] = this.__translateExpression(expr, columns);
+        const value = this.__translateExpression(expr, columns);
+        // A missing result would leave the key out of the row, where SQL
+        // has NULL.
+        addFields[name] = this.__mayBeMissing(value)
+          ? { $ifNull: [value, null] }
+          : value;
       }
       pipeline.push({ $addFields: addFields });
     }
@@ -1296,6 +1304,8 @@ export class MongoTranslator {
           groupedKeys.push(stripped);
         }
         const flatten: Record<string, unknown> = {};
+        // What each `$group` field holds over no rows at all.
+        const empty: Record<string, unknown> = { _id: groupId };
         for (const [name, agg] of Object.entries(groupAggs)) {
           const { $$_aggregate: fn, column, distinct } = agg as {
             $$_aggregate: string;
@@ -1310,16 +1320,29 @@ export class MongoTranslator {
               $addToSet: this.__columnRef(column, columns),
             };
             flatten[name] = reduce(`$${name}`);
+            empty[name] = [];
             continue;
           }
           // deno-lint-ignore no-explicit-any
           groupBody[name] = this.__translateAggregate(agg as any, columns);
+          empty[name] = fn === 'COUNT' ? 0 : null;
+          if (fn === 'SUM') {
+            // `$sum` of no values is 0, SQL's SUM is NULL. The largest
+            // value is null exactly then, so it rides along to tell.
+            let seen = `__sum_${name}`;
+            while (seen in q.aggregates) seen = `_${seen}`;
+            groupBody[seen] = { $max: this.__columnRef(column, columns) };
+            flatten[name] = {
+              $cond: [{ $gt: [`$${seen}`, null] }, `$${name}`, null],
+            };
+          }
         }
         // Mapped JSON_ROW fields survive the group via $first — each
         // group key tuple identifies the base doc(s); SQL semantics
         // for this mix are group-dependent anyway.
         for (const name of Object.keys(mapFields)) {
           groupBody[name] = { $first: `$${name}` };
+          empty[name] = null;
         }
         // The joined arrays do not survive $group, so the sort values are
         // accumulated in it: the inner operator reduces one document's
@@ -1328,7 +1351,25 @@ export class MongoTranslator {
           groupBody[field] = { [op]: { [op]: path } };
         }
         grouped = true;
-        pipeline.push({ $group: groupBody });
+        if (groupedKeys.length > 0) {
+          pipeline.push({ $group: groupBody });
+        } else {
+          // Without a group key SQL returns one row even when no row
+          // matched, and `$group` returns none. `$facet` always emits one
+          // document, holding the group's row or nothing.
+          pipeline.push(
+            { $facet: { rows: [{ $group: groupBody }] } },
+            {
+              $replaceRoot: {
+                newRoot: {
+                  $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                    $literal: empty,
+                  }],
+                },
+              },
+            },
+          );
+        }
         // After $group, grouped fields live under `_id.<key>`. Flatten
         // them back to top level so the subsequent $match / $sort /
         // $project sees plain field names.
@@ -2471,6 +2512,33 @@ export class MongoTranslator {
       ? v.startsWith('$')
       : typeof v === 'object' && v !== null && !(v instanceof Date);
     return ambiguous ? { $literal: v } : v;
+  }
+
+  /**
+   * Whether a translated expression can evaluate to missing rather than
+   * null: a field path, or an operator that returns one of its operands
+   * as it is. Every other operator returns null for a missing input.
+   */
+  private __mayBeMissing(v: unknown): boolean {
+    if (typeof v === 'string') return v.startsWith('$') && !v.startsWith('$$');
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+    const o = v as Record<string, unknown>;
+    if ('$ifNull' in o) {
+      return this.__mayBeMissing((o.$ifNull as unknown[]).at(-1));
+    }
+    if ('$cond' in o) {
+      const [, then, otherwise] = o.$cond as unknown[];
+      return this.__mayBeMissing(then) || this.__mayBeMissing(otherwise);
+    }
+    if ('$switch' in o) {
+      const s = o.$switch as {
+        branches: { then: unknown }[];
+        default: unknown;
+      };
+      return s.branches.some((b) => this.__mayBeMissing(b.then)) ||
+        this.__mayBeMissing(s.default);
+    }
+    return false;
   }
 
   /**

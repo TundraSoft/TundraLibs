@@ -574,6 +574,25 @@ in SQL. One group's distinct values therefore have to fit in a single
 16 MB document; a column with more distinct values per group than that
 fails on MongoDB.
 
+### Aggregates over no values
+
+SUM, AVG, MIN and MAX of a group with no non-NULL value are `NULL` on
+every dialect, and COUNT is `0`. An aggregate query without group keys
+returns one row even when no row matches the filter, as SQL does; with
+group keys it returns no rows. On MongoDB the ungrouped `$group` runs
+inside a `$facet`, which emits that one row when the group has none.
+ARRAY_AGG and JSON_ROW over no rows are `NULL` on Postgres, MariaDB and
+MongoDB, and an empty array on SQLite.
+
+Earlier releases gave `0` for such a SUM on MongoDB, plain or `distinct`,
+and returned no row for an ungrouped aggregate over no rows there. A
+`count()` query was already `0`.
+
+A projected expression whose result is `NULL` is a key with `null` on
+every dialect. Earlier releases left the key out of the MongoDB row when
+the result was a missing field, for example `NULLIF`, `COALESCE` or a
+`CASE` branch returning a column the document lacks.
+
 ## Filters
 
 All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
