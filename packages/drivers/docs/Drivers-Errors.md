@@ -198,7 +198,7 @@ All **30** codes in `EngineErrorCode`, grouped the way `EngineErrorCodes.ts` gro
 
 | Code                                                          | Group         | Raised when                                                                                                                                                                                                                                             | Metadata                     |
 | ------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation — raised eagerly at construction, before any connection is attempted.                                                                                                                                                       | `option`, `reason`           |
+| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation, usually at construction; also a Postgres or Neon session whose `TimeZone` is not UTC.                                                                                                                                      | `option`, `reason`           |
 | [`MISSING_CONFIG_VALUE`](#missing_config_value)               | Configuration | A required option was not supplied.                                                                                                                                                                                                                     | `option`                     |
 | [`CONNECTION_FAILED`](#connection_failed)                     | Connection    | `connect()` could not establish a connection — bad host/port, network failure, or the server is down.                                                                                                                                                   | —                            |
 | [`DISCONNECTION_FAILED`](#disconnection_failed)               | Connection    | `disconnect()` could not close cleanly.                                                                                                                                                                                                                 | —                            |
@@ -285,7 +285,10 @@ export function classify(err: unknown): Verdict {
 
 #### INVALID_CONFIG_VALUE
 
-Configuration value is invalid or malformed.
+Configuration value is invalid or malformed. Most options are checked at
+construction. The Postgres and Neon engines also raise it later, with
+`option: 'TimeZone'`, when the server reports a session time zone other than
+UTC — see [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone).
 
 **Template:** `Configuration value for "${option}" is invalid - ${reason}`
 

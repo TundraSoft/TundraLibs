@@ -325,7 +325,7 @@ override it for runtime quirks:
 | Engine   | Override                                                                         |
 | -------- | -------------------------------------------------------------------------------- |
 | Postgres | Custom `_standardizeQuery` does positional binary/text encoding (see binary.ts). |
-| MariaDB  | Identity — `npm:mariadb` handles JS values natively.                             |
+| MariaDB  | `Date` → UTC clock `YYYY-MM-DD HH:MM:SS.mmm`, inside arrays too; the rest as-is. |
 | SQLite   | `Date → ISO`, `boolean → 0/1`, `object → JSON`, `undefined → null`.              |
 
 ## Hooks for subclasses

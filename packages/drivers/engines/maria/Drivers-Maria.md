@@ -69,7 +69,16 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 
 Dates are written and read in UTC whatever the host's time zone: each
 connection sets its session `time_zone` to `+00:00`, a `Date` parameter is
-sent as its UTC clock, and a `DATETIME` is read as a UTC clock.
+sent as its UTC clock, and a `DATETIME` is read as a UTC clock. The session
+zone also applies to SQL you write: `NOW()`, `CURDATE()` and
+`CURRENT_TIMESTAMP`, column defaults included, give the UTC clock whatever the
+server's `time_zone`.
+
+Existing rows are not converted. Earlier versions of this driver left the
+session in the server's zone and sent a `Date` as the host's clock. Where
+either was not UTC, a `DATETIME` they wrote holds that clock and is now read
+as UTC, and a `TIMESTAMP` reads as the instant stored, which can differ from
+what those versions returned.
 
 ## Errors
 
