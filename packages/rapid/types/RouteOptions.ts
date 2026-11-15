@@ -9,6 +9,7 @@
 import type { RapidComposeOptions } from './ComposeOptions.ts';
 import type { RapidRouteCache } from './RouteCache.ts';
 import type { RapidRouteOpenApi } from './RouteOpenApi.ts';
+import type { RapidRouteResponse } from './RouteResponse.ts';
 import type { RapidRouteTemplate } from './RouteTemplate.ts';
 import type { RapidTemplate } from './Template.ts';
 import type { RapidLayoutData } from './LayoutData.ts';
@@ -19,6 +20,12 @@ export type RapidRouteOptions = {
   version?: string;
   /** OpenAPI metadata (normally supplied by the decorator mount). */
   openapi?: RapidRouteOpenApi;
+  /**
+   * What this route answers with: a schema for a JSON reply, or a reply
+   * kind for one that is not. The same as `openapi.response`, and wins
+   * over it. Required unless `server.requireResponse` is `false`.
+   */
+  response?: RapidRouteResponse;
   /**
    * Serve this route on the `api` surface ONLY — it is absent from the
    * `ui` surface's route table (a 404 there, byte-identical to a missing

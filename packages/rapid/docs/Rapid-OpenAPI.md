@@ -67,6 +67,13 @@ A per-surface `response: { api, ui }` documents its `api` schema, the
 same way; with no `api` entry the operation documents as if none were
 declared.
 
+A reply kind documents the reply it names in place of the JSON `200`:
+`'none'` a `204`, `'text'` a `text/plain` string, `'bytes'` and `'stream'`
+an `application/octet-stream` binary body (the stream's `200` carries
+`x-stream: true`), and `'redirect'` a `3XX` with a `location` header.
+`rapid sdk` generates a method returning `void`, a `string`, a
+`Uint8Array` or an unread `ReadableStream`, and skips a redirect.
+
 The marker is independent of the runtime `paging` reply key, which is
 what actually sets the headers. A marked route whose reply never sets
 the key warns in DEVELOPMENT — the document promises headers that will

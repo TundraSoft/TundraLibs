@@ -105,17 +105,32 @@ its config. It's async (config loading is), and takes either plain options or a
 config directory. Register a couple of routes and start the listener:
 
 ```ts
+import { Guardian } from '@tundralibs/guardian';
 import { Application } from '@tundralibs/rapid';
 
 const app = await Application.initialize({ name: 'hello' });
 
 // A handler either RETURNS the response payload or sets `ctx.response`.
-app.get('/', () => ({ content: { message: 'hello world' } }));
-app.get('/users/:id:', (ctx) => ({ content: { id: ctx.params.id } }));
+// `response` says what the route answers with.
+app.get(
+  '/',
+  { response: Guardian.object({ message: Guardian.string() }) },
+  () => ({ content: { message: 'hello world' } }),
+);
+app.get(
+  '/users/:id:',
+  { response: Guardian.object({ id: Guardian.string() }) },
+  (ctx) => ({ content: { id: ctx.params.id ?? '' } }),
+);
 
 await app.start();
 console.log(`listening on ${app.address}`);
 ```
+
+> **Every route that answers data must declare its `response`.** A route
+> without one stops the boot in DEVELOPMENT, with every such route named;
+> PRODUCTION logs the same list once as a warning and serves. See
+> [Declaring the response](#declaring-the-response).
 
 Passing plain options is the **programmatic** shape (tests, scripts) — nothing
 is read from disk. In production, hand `initialize` a **config directory**
@@ -176,6 +191,58 @@ route parameters are **colon-wrapped** (`/users/:id:`, not express-style
 `:id`). The five verb helpers (`get`/`post`/`put`/`patch`/`delete`) and the
 generic `route(method, path, ...)` all take an optional chain of route-scoped
 middleware followed by the handler last.
+
+### Declaring the response
+
+**`response` is required on every route that answers data.** It is what
+the OpenAPI document shows, what a generated client (`rapid sdk`) types
+its methods from, and what DEVELOPMENT checks each success reply against
+(`RAPID_RESPONSE_INVALID`, a 500, when the reply does not match). A plain
+route takes it in the options object, a decorated route in the decorator:
+`@GET('/users', { response: Users })`.
+
+A JSON reply declares a schema. A
+[`@tundralibs/guardian`](https://jsr.io/@tundralibs/guardian) schema works
+as it is; rapid itself does not depend on guardian. A reply that is not
+JSON names its kind instead:
+
+| `response`   | The route answers with               | Documented as                     |
+| ------------ | ------------------------------------ | --------------------------------- |
+| a schema     | JSON of that shape                   | `200`, `application/json`         |
+| `'none'`     | no body (`status: 204`, or no reply) | `204`                             |
+| `'text'`     | a string                             | `200`, `text/plain`               |
+| `'bytes'`    | a `Uint8Array`                       | `200`, `application/octet-stream` |
+| `'stream'`   | a stream body                        | the same, marked `x-stream`       |
+| `'redirect'` | the `redirect` reply key             | `3XX` with a `location` header    |
+
+```ts
+import { Guardian } from '@tundralibs/guardian';
+import { Application } from '@tundralibs/rapid';
+
+const app = await Application.initialize({ name: 'files' });
+
+app.get('/report.csv', { response: 'text' }, () => ({
+  content: 'id,total\n1,40\n',
+  headers: { 'content-type': 'text/csv' },
+}));
+app.delete('/cache', { response: 'none' }, () => {});
+// An escape hatch: JSON whose shape is not described. Nothing is checked
+// and a generated client types it `unknown`.
+app.get('/debug', { response: Guardian.unknown() }, () => ({
+  content: { anything: true },
+}));
+```
+
+`Guardian.object()` (any object) and `Guardian.unknown()` (anything)
+satisfy the requirement without describing the reply. Use them sparingly:
+only a real schema gives you the reply check and typed client methods.
+
+Not asked of a `uiOnly` route, a page (`prefer: 'html'`) on an app with no
+api surface, or rapid's own endpoints (`health()`, `ready()`, `metrics()`,
+`openapi()`, `docs()`, the pact `login()` family). To turn the requirement
+off for the whole app, set `server.requireResponse: false`. The shorter
+samples in this README and the guides leave `response` out; in an app each
+of those routes needs one.
 
 ### Versioning
 
@@ -383,7 +450,9 @@ that can `parse` (a guardian schema as-is) and DEVELOPMENT mode enforces it —
 a success reply whose `content` fails the declared shape is a loud
 `RAPID_RESPONSE_INVALID` (500) instead of a response the docs lie about;
 PRODUCTION never runs the check, and an emitter-only `response` stays
-documentation-only. Only the body documents: `auth`/`session`/`cookie` binders are
+documentation-only. A route that does not answer JSON names a reply kind
+instead, and every data route needs one or the other (see
+[Declaring the response](#declaring-the-response)). Only the body documents: `auth`/`session`/`cookie` binders are
 context-derived, not part of the request contract. `security: ['bearerAuth']`
 emits the requirement (the scheme is declared for you); `[]` marks a route
 deliberately public. `operationId` defaults to `<Module>_<method>`.
@@ -792,11 +861,16 @@ drives routes through `app.fetch` with no port — and `harness()`, which boots 
 module system with stubbed dependencies.
 
 ```ts
+import { Guardian } from '@tundralibs/guardian';
 import { Application } from '@tundralibs/rapid';
 import { client } from '@tundralibs/rapid/testing';
 
 const app = await Application.initialize({ name: 'test', mode: 'DEVELOPMENT' });
-app.get('/ping', () => ({ content: { ok: true } }));
+app.get(
+  '/ping',
+  { response: Guardian.object({ ok: Guardian.boolean() }) },
+  () => ({ content: { ok: true } }),
+);
 
 const api = client(app);
 const res = await api.get('/ping');

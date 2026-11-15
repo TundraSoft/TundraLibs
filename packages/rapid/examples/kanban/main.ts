@@ -75,7 +75,7 @@ app.use(secureHeaders());
 // ui data half lives in configs/Application.yaml — per replica.
 app.channel('board');
 
-app.get('/', (ctx) => ctx.redirect('/board/ui'));
+app.get('/', { response: 'redirect' }, (ctx) => ctx.redirect('/board/ui'));
 
 // Stock the store, tap its activity seam for the live channel, THEN
 // boot the module (its inject(STORE) resolves during construction).

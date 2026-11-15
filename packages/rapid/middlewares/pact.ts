@@ -18,6 +18,7 @@
  * @module
  */
 
+import { builtInHandler } from '../utils/routeResponse.ts';
 import {
   type Pact,
   PACT_AUTH_FAILURE_CODES,
@@ -864,5 +865,12 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     };
   };
 
-  return { binding, authorize, login, logout, refresh, me };
+  return {
+    binding,
+    authorize,
+    login: () => builtInHandler(login()),
+    logout: () => builtInHandler(logout()),
+    refresh: () => builtInHandler(refresh()),
+    me: () => builtInHandler(me()),
+  };
 }

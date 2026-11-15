@@ -91,6 +91,7 @@ server:
   autoHead: true # a HEAD route for every GET
   methodNotAllowed: false # 405 + Allow instead of 404 on a wrong method
   ignoreTrailingSlash: true # /users and /users/ are the same route
+  requireResponse: true # every data route declares what it answers with (a schema or a reply kind); false turns the requirement off
   socketPath: /ws # websocket upgrade path for app.socket() commands and channels
   socketOrigins: [] # browser origins (https://spa.example) allowed to open the socket besides this host
   # static: # framework-served files on route miss (ui surface only); routes always win
@@ -172,14 +173,25 @@ logger: # @tundralibs/slogger options behind app.log / this.log (appName is the 
 #     timeout: 2 # seconds a part may take before it answers a 504 envelope
 `;
 
-const MAIN_PLAIN = `import { Application } from '@tundralibs/rapid';
+const PLAIN_ROUTE = `app.get('/', { response: Home }, () => ({
+  content: { app: '{{name}}', ok: true },
+}));`;
+
+const MAIN_PLAIN = `import { Guardian } from '@tundralibs/guardian';
+import { Application } from '@tundralibs/rapid';
 import { health } from '@tundralibs/rapid/endpoints';
 
 const configDir = new URL('./configs', import.meta.url).pathname;
 // Exported for \`rapid access\` and \`rapid sdk\`, which read the app.
 export const app = await Application.initialize(configDir);
 
-app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));
+// What the route answers with: checked in DEVELOPMENT, shown in the docs.
+const Home = Guardian.object({
+  app: Guardian.string(),
+  ok: Guardian.boolean(),
+});
+
+${PLAIN_ROUTE}
 app.get('/healthz', health()); // liveness — what \`rapid health\` probes
 
 // Listen only when run directly: importing this file never starts a server.
@@ -208,18 +220,21 @@ if (import.meta.main) {
 }
 `;
 
-const MODULE_SAMPLE =
-  `import { GET, param } from '@tundralibs/rapid/decorators';
+const MODULE_SAMPLE = `import { Guardian } from '@tundralibs/guardian';
+import { GET, param } from '@tundralibs/rapid/decorators';
 import { event, RapidModule } from '@tundralibs/rapid/modules';
 
 const EVENTS = { Greeted: event<{ name: string }>() };
+
+// What the route answers with: checked in DEVELOPMENT, shown in the docs.
+const Greeting = Guardian.object({ hello: Guardian.string() });
 
 export class Greeter extends RapidModule<typeof EVENTS> {
   readonly name = 'Greeter';
   readonly namespace = 'greeter';
   protected readonly events = EVENTS;
 
-  @GET('/hello/:name:', { bind: [param('name')] })
+  @GET('/hello/:name:', { bind: [param('name')], response: Greeting })
   async hello(name: string) {
     await this.emit('Greeted', { name });
     this.log.info('greeted', { name });
@@ -349,6 +364,7 @@ const DENO_JSON = `{
     "check": "deno check {{checkTargets}}"
   },
   "imports": {
+    "@tundralibs/guardian": "jsr:@tundralibs/guardian@^1",
     "@tundralibs/rapid": "jsr:@tundralibs/rapid{{rapidSpec}}"{{normDenoImports}}
   },
   "fmt": {
@@ -371,6 +387,7 @@ const PACKAGE_JSON = `{
     "test": "node --import tsx --test"
   },
   "dependencies": {
+    "@tundralibs/guardian": "npm:@jsr/tundralibs__guardian@^1",
     "@tundralibs/rapid": "npm:@jsr/tundralibs__rapid{{rapidSpec}}",
     "tsx": "^4"{{normPackageDeps}}
   }
@@ -452,8 +469,13 @@ helpers) and \`@tundralibs/rapid/cli\`.
 - **Routes are radrouter-native.** Path params are COLON-WRAPPED: \`/users/:id:\`,
   never express-style \`:id\`. \`app.get/post/put/patch/delete(path, [options],
   ...middleware, handler)\` — the handler is always last; \`options\` is
-  \`{ version?, access?, cache?, apiOnly?, uiOnly?, template?, layout?,
-  compose?, openapi? }\`. \`app.route(method, path, …)\` for other methods.
+  \`{ response, version?, access?, cache?, apiOnly?, uiOnly?, template?,
+  layout?, compose?, openapi? }\`. \`app.route(method, path, …)\` for other methods.
+  **Every route that answers data declares \`response\`** — a guardian schema
+  for JSON, or \`'none'\` / \`'text'\` / \`'bytes'\` / \`'stream'\` / \`'redirect'\`
+  for a reply that is not JSON. A route without one stops the boot in
+  DEVELOPMENT (\`server.requireResponse: false\` turns that off). Not asked
+  of a \`uiOnly\` route or a \`prefer: 'html'\` page with no \`server.api\`.
   With \`server.api\` configured, every route answers on BOTH surfaces
   unless it says \`apiOnly: true\` / \`uiOnly: true\` (\`onlyApi()\` only scopes
   where middleware runs — it is not access control). A \`HEAD\` route is synthesised for every \`GET\`; a trailing
@@ -852,7 +874,7 @@ handler. Route options: \`bind\`, \`version\`, \`paging\`, \`apiOnly\`, \`uiOnly
 \`compose\`, \`cache\`, \`summary\`, \`description\`, \`tags\`, \`operationId\`,
 \`security\`, \`access\` (the auth binding's string — ENFORCED on the request
 AND on \`invoke()\`; one method, one string; emitted as \`x-access\` in
-OpenAPI), \`response\` (a schema, or \`{ api, ui }\` per surface; ENFORCED in DEVELOPMENT), \`template\`,
+OpenAPI), \`response\` (REQUIRED on a data route: a schema, a reply kind such as \`'none'\` or \`'stream'\`, or \`{ api, ui }\` per surface; ENFORCED in DEVELOPMENT), \`template\`,
 \`layout\`, \`middleware\` (route-scoped chain, HTTP-typed; \`@SOCKET\` takes a
 socket-typed one). \`@Module(name, { middleware })\` prepends a universal
 chain to every route and command in the class — app \`use()\` → module →
@@ -1436,8 +1458,7 @@ export { Home } from './Home.ts';
           "import { html, template } from '@tundralibs/rapid/ui';",
       )
       .replace(
-        `app.get('/', () => ({ content: { app: '{{name}}', ok: true } }));`
-          .replace('{{name}}', answers.name),
+        PLAIN_ROUTE.replace('{{name}}', answers.name),
         `const HomePage = template<{ app: string; ok: boolean }>(
   (d) =>
     html\`\${
@@ -1456,7 +1477,10 @@ export { Home } from './Home.ts';
 
 app.get(
   '/',
-  { template: { render: HomePage, prefer: 'html', title: 'Welcome' } },
+  {
+    template: { render: HomePage, prefer: 'html', title: 'Welcome' },
+    response: Home,
+  },
   () => ({ content: { app: '${answers.name}', ok: true } }),
 );`,
       );

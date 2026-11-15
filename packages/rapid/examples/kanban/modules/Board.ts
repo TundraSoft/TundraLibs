@@ -28,7 +28,7 @@ import type {
   RapidContextResponse,
 } from '@tundralibs/rapid/types';
 import { STORE } from '../store.ts';
-import type { Task } from '../types.ts';
+import { LANES, type Task } from '../types.ts';
 import {
   ActivityView,
   AppView,
@@ -56,6 +56,50 @@ const TaskBody = Guardian.object({
     'tag must be feature, bug or ops',
   ).optional(),
 });
+
+// What each route answers with — checked against the reply in
+// DEVELOPMENT, shown in the OpenAPI document, typed by `rapid sdk`.
+const TaskShape = Guardian.object({
+  id: Guardian.string(),
+  title: Guardian.string(),
+  owner: Guardian.string(),
+  tag: Guardian.enum(['bug', 'feature', 'ops'] as const),
+  lane: Guardian.enum(LANES),
+  updatedAt: Guardian.string(),
+}).describe({ title: 'Task' });
+const BoardShape = Guardian.object({
+  lanes: Guardian.object({
+    todo: Guardian.array(TaskShape),
+    doing: Guardian.array(TaskShape),
+    review: Guardian.array(TaskShape),
+    done: Guardian.array(TaskShape),
+  }),
+  owners: Guardian.array(Guardian.string()),
+  owner: Guardian.string().optional(),
+}).describe({ title: 'Board' });
+const StatsShape = Guardian.object({
+  counts: Guardian.object({
+    todo: Guardian.number(),
+    doing: Guardian.number(),
+    review: Guardian.number(),
+    done: Guardian.number(),
+  }),
+});
+const ActivityShape = Guardian.object({
+  rows: Guardian.array(
+    Guardian.object({ at: Guardian.string(), text: Guardian.string() }),
+  ),
+});
+// The composer's union: a clean form, or `formState()`'s error arm.
+const ComposerShape = Guardian.discriminatedUnion('state', [
+  Guardian.object({ state: Guardian.literal('clean') }),
+  Guardian.object({
+    state: Guardian.literal('error'),
+    message: Guardian.string(),
+    fields: Guardian.record(Guardian.string()),
+    values: Guardian.record(Guardian.string()),
+  }),
+]);
 
 // `layout` is the module's TIER-2 chrome, nesting inside the app core
 // (main.ts's `ui: { core: BoardCore }`); /print below opts out of it.
@@ -89,6 +133,7 @@ export class Board extends RapidModule {
     bind: [query()],
     description: 'The board: tasks per lane, owners, active filter.',
     template: BoardView,
+    response: BoardShape,
   })
   list(query: RapidContextQuery): RapidContextResponse {
     return { content: this.__board(query) };
@@ -131,6 +176,7 @@ export class Board extends RapidModule {
   @GET('/stats', {
     description: 'Lane tallies (the stats rail).',
     template: StatsView,
+    response: StatsShape,
   })
   stats(): RapidContextResponse {
     return { content: { counts: this._store.counts() } };
@@ -139,6 +185,7 @@ export class Board extends RapidModule {
   @GET('/activity', {
     description: 'Newest-first activity feed.',
     template: ActivityView,
+    response: ActivityShape,
   })
   activity(): RapidContextResponse {
     return { content: { rows: this._store.activity() } };
@@ -159,6 +206,7 @@ export class Board extends RapidModule {
     bind: [payload()],
     description: 'File a card. Fields: title, owner, tag.',
     template: ComposerView,
+    response: ComposerShape,
   })
   async addTask(body: unknown): Promise<RapidContextResponse> {
     const form = await formState(TaskBody, body);
@@ -180,6 +228,7 @@ export class Board extends RapidModule {
     bind: [param('id'), param('dir'), query()],
     description: 'Advance a card one lane (`fwd`) or pull it back.',
     template: BoardView,
+    response: BoardShape,
   })
   move(id: string, dir: string, query: RapidContextQuery): RapidContextResponse {
     if (dir !== 'fwd' && dir !== 'back') {

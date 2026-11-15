@@ -8,6 +8,7 @@
  *
  * @module
  */
+import { builtInHandler } from '../utils/routeResponse.ts';
 import type { HTTPContext } from '../context/mod.ts';
 import type { RapidContextState, RapidHTTPHandler } from '../types/mod.ts';
 
@@ -29,7 +30,7 @@ export type ReadyOptions<S extends RapidContextState = RapidContextState> = {
 export function ready<S extends RapidContextState = RapidContextState>(
   options: ReadyOptions<S> = {},
 ): RapidHTTPHandler<S> {
-  return async (ctx) => {
+  return builtInHandler<RapidHTTPHandler<S>>(async (ctx) => {
     if (ctx.app.stopping) {
       return { status: 503, content: { status: 'draining' } };
     }
@@ -46,5 +47,5 @@ export function ready<S extends RapidContextState = RapidContextState>(
       }
     }
     return { content: { status: 'ready', instance: ctx.app.instanceId } };
-  };
+  });
 }

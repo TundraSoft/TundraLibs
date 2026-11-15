@@ -93,6 +93,17 @@ export type RapidApplicationServerOptions = {
    */
   autoHead?: boolean;
   /**
+   * Every route that answers data must declare its `response`: a schema,
+   * or a reply kind (`'none'`, `'text'`, `'bytes'`, `'stream'`,
+   * `'redirect'`) for one that is not JSON. A route without one stops the
+   * boot in DEVELOPMENT, with every such route named; PRODUCTION logs
+   * the same list once as a warning and serves. Not asked of a `uiOnly`
+   * route, a page (`prefer: 'html'`) on an app with no api surface, or
+   * rapid's own endpoints. `false` turns the requirement off.
+   * @default true
+   */
+  requireResponse?: boolean;
+  /**
    * When a request's PATH matches a route but its METHOD doesn't, answer
    * with `405 Method Not Allowed` + an `Allow` header (and answer a generic
    * `OPTIONS` on that path with `204` + `Allow`) instead of `404`. Off →

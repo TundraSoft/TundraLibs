@@ -45,6 +45,7 @@
  * @module
  */
 
+import { Guardian } from '@tundralibs/guardian';
 import { Application, RapidError } from '@tundralibs/rapid';
 import {
   html,
@@ -241,7 +242,26 @@ const app = await Application.initialize({
 
 const tallies = () => [...votes.entries()] as [string, number][];
 
-app.get('/', (ctx) => ctx.redirect('/poll/ui'));
+// What each route answers with: checked in DEVELOPMENT, documented.
+const Tallies = Guardian.array(
+  Guardian.tuple([Guardian.string(), Guardian.number()]),
+);
+const Poll = Guardian.object({ tallies: Tallies });
+const Totals = Guardian.object({ tallies: Tallies, total: Guardian.number() });
+const Suggested = Guardian.discriminatedUnion('state', [
+  Guardian.object({
+    state: Guardian.literal('error'),
+    message: Guardian.string(),
+    value: Guardian.string(),
+  }),
+  Guardian.object({
+    state: Guardian.literal('added'),
+    tallies: Tallies,
+    total: Guardian.number(),
+  }),
+]);
+
+app.get('/', { response: 'redirect' }, (ctx) => ctx.redirect('/poll/ui'));
 app.get('/poll/ui', { template: { render: PageView, prefer: 'html' } }, () => ({
   content: { tallies: tallies(), total: total() },
 }));
@@ -250,11 +270,11 @@ app.get('/poll/about', {
 }, () => ({ content: {} }));
 
 // The tallies — JSON to curl, the fragment to any HX-Request.
-app.get('/poll', { template: PollView }, () => ({
+app.get('/poll', { template: PollView, response: Poll }, () => ({
   content: { tallies: tallies() },
 }));
 
-app.post('/poll/vote/:dish:', { template: VoteView }, (ctx) => {
+app.post('/poll/vote/:dish:', { template: VoteView, response: Totals }, (ctx) => {
   const dish = String(ctx.args.params['dish'] ?? '');
   if (!votes.has(dish)) {
     // A thrown code takes the ERROR path (JSON envelope / errorTemplate)
@@ -265,7 +285,7 @@ app.post('/poll/vote/:dish:', { template: VoteView }, (ctx) => {
   return { content: { tallies: tallies(), total: total() } };
 });
 
-app.post('/poll/suggest', { template: SuggestView }, async (ctx) => {
+app.post('/poll/suggest', { template: SuggestView, response: Suggested }, async (ctx) => {
   const body = (await ctx.payload ?? {}) as { dish?: string };
   const dish = (body.dish ?? '').trim();
   if (dish === '') {
@@ -285,7 +305,7 @@ app.post('/poll/suggest', { template: SuggestView }, async (ctx) => {
 
 // A reply `redirect` on a swap becomes 200 + HX-Redirect — htmx
 // navigates; a no-JS form POST here would get the real 302 (PRG).
-app.post('/poll/reset', (ctx) => {
+app.post('/poll/reset', { response: 'redirect' }, (ctx) => {
   for (const dish of votes.keys()) votes.set(dish, 0);
   return ctx.redirect('/poll/ui');
 });
