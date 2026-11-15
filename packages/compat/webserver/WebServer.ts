@@ -2234,7 +2234,15 @@ export class WebServer<T = unknown> {
     // microtask. The optional callback is invoked once on the `listening`
     // event — we use it to resolve the readiness promise so callers
     // don't race the bind.
-    const ready = new Promise<void>((resolve) => {
+    const ready = new Promise<void>((resolve, reject) => {
+      // A bind that fails (EADDRINUSE, EACCES, ...) is an `error` event and
+      // never reaches the listen callback. The listener is dropped once
+      // listening, so a later runtime error is not taken for a start failure.
+      server.once('error', reject);
+      const listening = () => {
+        server.off('error', reject);
+        resolve();
+      };
       if (this.mode === 'TCP') {
         const tcpOptions = this.options as ServerOptions<'TCP'>;
         // Options-object form (not the positional one) so `reusePort` can be
@@ -2264,11 +2272,11 @@ export class WebServer<T = unknown> {
           if (bound !== null && typeof bound === 'object') {
             this.__boundPort = bound.port;
           }
-          resolve();
+          listening();
         });
       } else {
         const unixOptions = this.options as ServerOptions<'UNIX'>;
-        server.listen(unixOptions.unixSocketPath, () => resolve());
+        server.listen(unixOptions.unixSocketPath, listening);
       }
     });
 
