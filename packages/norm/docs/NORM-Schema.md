@@ -135,7 +135,8 @@ carries. A date-time string that names no offset
 (`'2026-01-15T10:00:00'`, or with a space for the `T`) is read as UTC,
 so it is the same instant on every host; a string that names an offset
 keeps it. Any other format is parsed as the runtime's `Date` parses it.
-Filter values are not converted: filter with a `Date`.
+A filter value on these columns and on `time` is converted too: see
+[Date and time values](NORM-Querying.md#date-and-time-values).
 
 `json`, `boolean`, `blob`, `binary`, `varbinary`, and `bit` are the
 base builder: they carry the [common modifiers](#common-modifiers) and

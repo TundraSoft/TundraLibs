@@ -227,6 +227,39 @@ await db.repo('Users').find({
 });
 ```
 
+### Date and time values
+
+A filter value on a date or time column is converted the way a write
+converts it, so the same filter matches the same rows on every engine:
+
+| Column                                       | The value compared                                                |
+| -------------------------------------------- | ----------------------------------------------------------------- |
+| `date()`                                     | The UTC day of a `Date`, or of a date or date-time string.        |
+| `time()`                                     | `'HH:MM:SS'`, from a time string or from a `Date`'s UTC clock.    |
+| `datetime()`, `timestamp()`, `timestamptz()` | A `Date`. A date-time string that names no offset is read as UTC. |
+
+This applies to the equality shorthand, a list of values, `$eq`, `$ne`,
+`$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, and `$between`, on the
+entity's own columns and through `'@Alias.@col'`. `null`, a column
+reference, an expression, and a string that does not start with an
+ISO 8601 date (on `time()`, one that is not a time) reach the engine
+unchanged. Nothing inside a
+[hand-written `$exists`](#hand-written-exists--nexists-advanced) is
+converted.
+
+On a `date()` column a value stands for its UTC day, whatever its time:
+
+```typescript ignore
+const afternoon = new Date('2026-11-14T15:00:00Z');
+await db.repo('Invoices').find({ '@dueOn': afternoon }); // due on Nov 14
+await db.repo('Invoices').find({ '@dueOn': { $gt: afternoon } }); // after Nov 14
+await db.repo('Invoices').find({ '@dueOn': { $gte: afternoon } }); // Nov 14 or later
+```
+
+`FilterOf` types a date column's value as `Date` and a `time()`
+column's as `string`. The other forms are for a filter that arrives as
+JSON, where a date is a string.
+
 ### Relation references
 
 A `'@Alias.@col'` key filters through a foreign-key alias or a reverse
