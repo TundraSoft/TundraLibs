@@ -30,7 +30,7 @@ import type {
   RapidRouteTemplate,
   RapidUiComposeOptions,
 } from '../types/mod.ts';
-import { cached, type CacheHost } from './cache.ts';
+import { cached, type CacheHost, storableReply } from './cache.ts';
 import { extractBind } from './mountModule.ts';
 import { normalizeRouteTemplate } from './routeTemplate.ts';
 
@@ -363,6 +363,34 @@ async function runPart(
     const raw = ctx.args.params[part.params[binder.name!]!];
     return binder.validate ? binder.validate(raw) : raw;
   };
+  // The target route's cache, keyed by the SAME action and params a
+  // direct visit uses and storing the same reply — one entry for both.
+  // It wraps the method call alone: the part's `access` and its `@Use`
+  // chain have already let this caller through when the store is read.
+  // A part never reads the page context itself (its binders did, and the
+  // key covers them), so no read check.
+  const cache = part.cache;
+  const around = cache === undefined
+    ? undefined
+    : (call: () => unknown): Promise<unknown> =>
+      cached<unknown>(
+        ctx,
+        run.host,
+        {
+          source: part.action,
+          cache,
+          params: Object.fromEntries(
+            Object.entries(part.params).map((
+              [target, page],
+            ) => [target, ctx.args.params[page]]),
+          ),
+          bind,
+          checkReads: false,
+        },
+        async () => await call(),
+        (reply) => isReply(reply) ? storableReply(reply) : undefined,
+        (stored) => stored,
+      );
   const invoke = async (): Promise<Outcome> => {
     const args = await Promise.all(part.binds.map(bind));
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -383,6 +411,7 @@ async function runPart(
       part.method as never,
       args as never,
       { requestId: ctx.requestId, state: ctx.state, auth: ctx.auth },
+      around,
     );
     // A part that outlives its budget keeps running (nothing cancels an
     // in-flight module method); its late result is simply never read.
@@ -426,36 +455,7 @@ async function runPart(
     };
   };
   try {
-    if (part.cache === undefined) return await invoke();
-    // The target route's cache, keyed by the SAME action and params a
-    // direct visit uses — one entry for both. A part never reads the
-    // page context itself (its binders did, and the key covers them), so
-    // no read check.
-    return await cached<Outcome>(
-      ctx,
-      run.host,
-      {
-        source: part.action,
-        cache: part.cache,
-        params: Object.fromEntries(
-          Object.entries(part.params).map((
-            [target, page],
-          ) => [target, ctx.args.params[page]]),
-        ),
-        bind,
-        checkReads: false,
-      },
-      invoke,
-      (out) =>
-        out.ok
-          ? {
-            status: out.status,
-            content: out.content,
-            ...(out.paging !== undefined ? { paging: out.paging } : {}),
-          }
-          : undefined,
-      (stored) => ({ ...(stored as Omit<Outcome, 'ok'>), ok: true }),
-    );
+    return await invoke();
   } catch (error) {
     return failed(ctx, run.mode, part, error);
   }

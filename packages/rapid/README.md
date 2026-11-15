@@ -230,15 +230,19 @@ app.post('/orgs/:code:/people', async (ctx) => {
 });
 ```
 
-The key is route · surface · every path param, extended (never replaced) by
-the `key` binders — `query()`, `paging()`, `header()`, `cookie()`, `auth()`,
-`config()`. The lookup runs **after** `access`, so a denied caller never
-reaches the store and the policy's answer is not in the key; only a 2xx
-data reply without cookies is stored; each request still renders its own
-representation. A route whose binders read a channel the key does not carry
-fails at mount, and a plain handler that does so at run time is served
-uncached (a warning; a throw in DEVELOPMENT). That includes a `ctx.state` key
-this request's middleware set, such as a tenant or the rows it loaded: put
+The key is route · version · surface · every path param, extended (never
+replaced) by the `key` binders — `query()`, `paging()`, `header()`,
+`cookie()`, `auth()`, `config()`. The lookup runs **after** `access`, so a
+denied caller never reaches the store and the policy's answer is not in the
+key; only a 2xx data reply without cookies is stored, with its headers; each
+request still renders its own representation. A route whose binders read a
+channel the key does not carry fails at mount, and a handler that does so at
+run time — through `ctx.url` and `ctx.request` too — is served uncached (a
+warning; a throw in DEVELOPMENT). A header or a cookie is covered by name:
+`header('accept-language')` in the key does not cover a read of
+`authorization`. Reading the session reads its cookie, so put `cookie('sid')` in the key.
+The same goes for a `ctx.state` key this
+request's middleware set, such as a tenant or the rows it loaded: put
 `state('key')` in the key. A value already in the app's default state is
 shared, not per request, and needs no key. A composed tile inherits its
 route's cache, keyed by the action, so the page and a direct visit share one

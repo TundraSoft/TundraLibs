@@ -320,7 +320,14 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
       };
     };
     let loading: Promise<RapidSession> | undefined;
-    (ctx as unknown as WithSession)[SESSION] = () => (loading ??= load());
+    // Every read of the session is a read of its cookie — the load is
+    // memoised, so a cached route's handler would otherwise not be seen
+    // reading what an earlier middleware already loaded.
+    (ctx as unknown as WithSession)[SESSION] = () => {
+      (ctx as { _noteCookieRead?: (cookie: string) => void })
+        ._noteCookieRead?.(name);
+      return loading ??= load();
+    };
 
     // RUN — the SAVE phase runs whether or not the handler threw, so a
     // handler that calls destroy() (logout) or set() and THEN throws

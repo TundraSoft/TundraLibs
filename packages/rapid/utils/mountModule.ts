@@ -322,7 +322,7 @@ function buildInvoker<S extends RapidContextState>(
       method,
       args,
       state: ctx.state as Record<string, unknown>,
-      auth: ctx.auth,
+      auth: () => ctx.auth,
     });
   // No binds (e.g. `@GET('/health')`) → skip the per-request `binds.map` array
   // AND the `Promise.all([])` microtask; call the method with no arguments.

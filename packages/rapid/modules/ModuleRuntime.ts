@@ -136,23 +136,23 @@ export function _seedRequestFrame(seed: {
   method: string;
   args: readonly unknown[];
   state: Record<string, unknown>;
-  auth: Record<string, unknown> | undefined;
+  /** Read only when the frame's identity is asked for. */
+  auth: () => Record<string, unknown> | undefined;
 }): void {
   const bag = ambient.get() as Bag | undefined;
   if (bag === undefined) return;
-  pinHidden(
-    bag,
-    CURRENT,
-    new InvokeContext({
-      requestId: seed.requestId,
-      action: seed.action,
-      state: seed.state,
-      target: seed.target,
-      method: seed.method,
-      args: seed.args,
-      ...(seed.auth !== undefined ? { auth: seed.auth } : {}),
-    }),
-  );
+  const frame = new InvokeContext({
+    requestId: seed.requestId,
+    action: seed.action,
+    state: seed.state,
+    target: seed.target,
+    method: seed.method,
+    args: seed.args,
+  });
+  // Lazily: the request's own `auth` getter is what a cached route's read
+  // check watches, and seeding must not count as the handler reading it.
+  Object.defineProperty(frame, 'auth', { get: seed.auth, enumerable: true });
+  pinHidden(bag, CURRENT, frame);
 }
 
 /** An explicit `reply()` passes through; `undefined` is 204; anything else is 200 content. */
@@ -561,6 +561,10 @@ export class ModuleRuntime {
    * envelope — a throw inside the invocation is disclosed, never
    * propagated.
    *
+   * @param around - Wraps the method call itself, inside the `@Use`
+   *   chain and the `access` check — where the composer puts a part's
+   *   cache, so a stored reply is only ever reached by a caller the
+   *   method would have run for. @internal
    * @returns Rejects with RAPID_CONFIG only for a programming error
    *   (target not mounted here, no such invokable method, runtime
    *   disposed).
@@ -573,6 +577,7 @@ export class ModuleRuntime {
     method: K,
     args: Parameters<Extract<T[K], AnyFn>>,
     seed?: RapidModuleInvokeSeed,
+    around?: (call: () => unknown) => unknown,
   ): Promise<RapidModuleInvokeResultOf<ReturnType<Extract<T[K], AnyFn>>>> {
     type Result = RapidModuleInvokeResultOf<ReturnType<Extract<T[K], AnyFn>>>;
     if (this.__disposed) return Promise.reject(this.__disposedError('invoke'));
@@ -618,7 +623,8 @@ export class ModuleRuntime {
     });
     const holder: Holder = { pending: undefined, settled: false };
     const run = (): void | Promise<void> => {
-      const out = entry.fn.apply(mounted.instance, args);
+      const call = (): unknown => entry.fn.apply(mounted.instance, args);
+      const out = around === undefined ? call() : around(call);
       if (isThenable(out)) {
         holder.pending = out.then(
           (value) => {
