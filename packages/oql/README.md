@@ -332,8 +332,10 @@ alias), values are outer column refs — or literals when the name does
 not resolve in the outer scope. The optional `where` filters the
 subquery table locally (literals only); expression objects are
 rejected in `on`. Emits native `EXISTS (SELECT 1 …)` on
-Postgres/MariaDB/SQLite; **MongoDB throws** `DialectUnsupportedError`
-(no correlated-subquery form). See
+Postgres/MariaDB/SQLite. On MongoDB a SELECT or COUNT runs it as a
+`$lookup` stage and returns the same rows; an UPDATE or DELETE
+**throws** `DialectUnsupportedError`, because `updateMany` and
+`deleteMany` cannot carry a pipeline stage. See
 [Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility).
 
 ### JOIN Support
