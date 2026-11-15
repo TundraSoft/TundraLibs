@@ -318,8 +318,8 @@ type QueryFilter<
 
 The `$exists` / `$nexists` payload — a correlated
 `EXISTS (SELECT 1 FROM <table> AS __exists__ WHERE …)` /
-`NOT EXISTS (…)` subquery predicate (SQL dialects only; the Mongo
-translator throws).
+`NOT EXISTS (…)` subquery predicate. The Mongo translator runs it as
+a `$lookup` stage on SELECT and COUNT, and throws on UPDATE and DELETE.
 
 ```typescript ignore
 type ExistsFilter<PT, FPT> = {
