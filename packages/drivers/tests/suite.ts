@@ -9,10 +9,6 @@
  * {@linkcode runLiveSuite} an engine. A new case goes in {@linkcode CASES}
  * once and runs everywhere.
  *
- * A case an engine is known to get wrong carries that engine in `pending`
- * with the branch that fixes it. It still runs, and passes only while it
- * FAILS, so the fix cannot land without removing the mark.
- *
  * @module
  */
 
@@ -20,6 +16,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import type { Query } from '@tundralibs/oql/types';
 import type { EngineQueryResult } from '../types/mod.ts';
+import { liveAvailable } from './liveAvailable.ts';
 
 /** The engines the suite runs on. */
 export type LiveEngineName = 'postgres' | 'maria' | 'mongo' | 'sqlite';
@@ -46,8 +43,6 @@ type Case = {
   expected: Row[];
   /** Compare a 64-bit integer as it arrives, not as a number. */
   exactNumbers?: true;
-  /** Engines that fail this case today, and the branch that fixes each. */
-  pending?: Partial<Record<LiveEngineName, string>>;
 };
 
 const TABLE = `oql_expressions_live_${Date.now()}`;
@@ -406,11 +401,6 @@ const CASES: Case[] = [
     expected: [{ id: 2, upper: 'BOB' }, { id: 4, upper: 'CY' }],
   },
   {
-    name: 'a list filter holding null does not match the NULL row',
-    where: { '@status': ['ACTIVE', null] },
-    expected: [{ id: 1 }, { id: 4 }],
-  },
-  {
     name: 'a string literal starting with $ stays text',
     expressions: {
       label: { $$_expression: 'COALESCE', args: ['@nick', '$name'] },
@@ -444,14 +434,17 @@ async function reachable(engine: LiveEngine): Promise<boolean> {
 
 /**
  * Register the suite for one engine. Skipped when the engine `create`
- * returns cannot be reached. `cleanup` runs after the engine disconnects.
+ * returns cannot be reached; with `LIVE_DB_REQUIRED=true` that also fails
+ * the run. `cleanup` runs after the engine disconnects.
  */
 export async function runLiveSuite(
   name: LiveEngineName,
   create: () => LiveEngine,
   cleanup?: () => Promise<void>,
 ): Promise<void> {
-  const available = await reachable(create());
+  const reached = await reachable(create());
+  // SQLite runs in-process: there is no service to require.
+  const available = name === 'sqlite' ? reached : liveAvailable(name, reached);
 
   async function rows(engine: LiveEngine, c: Case): Promise<Row[]> {
     const aliases = Object.keys(c.expressions ?? {});
@@ -534,20 +527,8 @@ export async function runLiveSuite(
       });
 
       for (const c of CASES) {
-        const branch = c.pending?.[name];
-        if (branch === undefined) {
-          it(c.name, async () => {
-            asserts.assertEquals(await rows(engine, c), c.expected);
-          });
-          continue;
-        }
-        it(`${c.name} — KNOWN FAILURE on ${name}, fixed by ${branch}`, async () => {
-          await asserts.assertRejects(
-            async () => asserts.assertEquals(await rows(engine, c), c.expected),
-            Error,
-            undefined,
-            `${name} now passes this case: remove it from the case's pending list`,
-          );
+        it(c.name, async () => {
+          asserts.assertEquals(await rows(engine, c), c.expected);
         });
       }
     },

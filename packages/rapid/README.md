@@ -317,7 +317,9 @@ request's middleware set, such as a tenant or the rows it loaded: put
 `state('key')` in the key. A value already in the app's default state is
 shared, not per request, and needs no key. A composed tile inherits its
 route's cache, keyed by the action, so the page and a direct visit share one
-entry. `rapid access` lists every cached route's policy; OpenAPI carries
+entry. Requests that miss the same key at the same moment, in one process,
+share one run of the handler; a reply that is not stored is shared with no
+one. `rapid access` lists every cached route's policy; OpenAPI carries
 `x-cache`. A store bound to nothing a route needs is fine; a route with
 `cache` and no `app.cache()` is `RAPID_CACHE_UNBOUND` at boot.
 

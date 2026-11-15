@@ -105,7 +105,7 @@ describe('oql.types.Expressions', () => {
     const { sql } = translate(query);
     asserts.assertStringIncludes(
       sql,
-      '("price" + ("quantity" * ("price" / :p_0:)))',
+      '("price" + ("quantity" * (CAST("price" AS DOUBLE PRECISION) / :p_0:)))',
     );
   });
 

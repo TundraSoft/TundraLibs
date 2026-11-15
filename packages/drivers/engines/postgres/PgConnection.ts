@@ -134,6 +134,8 @@ export class PgConnection {
     password?: string;
     applicationName?: string;
     statementTimeoutMs?: number;
+    /** Session `TimeZone` to ask for; unset leaves the server's default. */
+    timeZone?: string;
     /** Whether the underlying socket is TLS-encrypted. Cleartext-password
      * auth over a non-TLS socket warns (and is refused when
      * `allowCleartextPassword` is explicitly `false`). */
@@ -156,6 +158,7 @@ export class PgConnection {
     if (opts.statementTimeoutMs !== undefined) {
       params.statement_timeout = String(opts.statementTimeoutMs);
     }
+    if (opts.timeZone) params.TimeZone = opts.timeZone;
     await this.__write(buildStartupMessage(params));
 
     // Once SCRAM begins, `scramExpectedSignature` is populated when we send

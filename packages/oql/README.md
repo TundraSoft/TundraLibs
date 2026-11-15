@@ -281,7 +281,8 @@ const filters: QueryFilter<User> = {
 
 **Null inside operator values is rejected.** `$eq: null` / `$ne: null` /
 `$in: [null, …]` / `$gt: null` etc. all throw — SQL `= NULL` is always
-unknown. Use `$null: true` / `$null: false` instead. The shorthand
+unknown. A null in a shorthand list (`'@col': ['a', null]`) throws too.
+Use `$null: true` / `$null: false` instead. The shorthand
 `'@col': null` is still accepted and means `IS NULL`.
 
 **A comparison never matches a NULL, on MongoDB too.**
@@ -331,8 +332,10 @@ alias), values are outer column refs — or literals when the name does
 not resolve in the outer scope. The optional `where` filters the
 subquery table locally (literals only); expression objects are
 rejected in `on`. Emits native `EXISTS (SELECT 1 …)` on
-Postgres/MariaDB/SQLite; **MongoDB throws** `DialectUnsupportedError`
-(no correlated-subquery form). See
+Postgres/MariaDB/SQLite. On MongoDB a SELECT or COUNT runs it as a
+`$lookup` stage and returns the same rows; an UPDATE or DELETE
+**throws** `DialectUnsupportedError`, because `updateMany` and
+`deleteMany` cannot carry a pipeline stage. See
 [Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility).
 
 ### JOIN Support

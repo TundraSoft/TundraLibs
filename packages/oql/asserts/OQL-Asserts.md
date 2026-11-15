@@ -603,7 +603,7 @@ const valid = isOperators(operators);
 - Operator values match expected types per slot.
 - Array operators (`$in`, `$nin`, `$between`) require non-empty arrays.
 - `$between` requires exactly two elements.
-- **`null` is rejected** in operator-form values: `$eq: null`, `$ne: null`, `$in: [null, …]`, `$nin: [null, …]`, and comparison-op values like `$gt: null` all throw. Use `$null: true` / `$null: false` for null comparisons.
+- **`null` is rejected** in operator-form values: `$eq: null`, `$ne: null`, `$in: [null, …]`, `$nin: [null, …]`, and comparison-op values like `$gt: null` all throw, and so does a `null` in a shorthand list (`['a', null]`). Use `$null: true` / `$null: false` for null comparisons.
 - **Expressions accepted** in comparison/string operator values: any non-Date object with a `$$_expression` discriminator passes (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`).
 - `$like`/`$nlike`/etc. only valid on string-typed columns.
 - `$gt`/`$gte`/`$lt`/`$lte`/`$between` only valid on numeric/bigint/date columns.

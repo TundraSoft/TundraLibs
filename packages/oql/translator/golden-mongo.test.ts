@@ -244,46 +244,6 @@ const CASES: Case[] = [
     },
   },
   {
-    // SQL's `IN ('ACTIVE', NULL)` never matches a NULL row; a null left in
-    // Mongo's `$in` would match every null or missing field.
-    name: 'WHERE direct array drops a null from the $in list',
-    method: 'select',
-    query: {
-      type: 'SELECT',
-      table: 'users',
-      columns: ['id', 'status'],
-      projection: { '@id': true },
-      where: { '@status': ['ACTIVE', null] },
-    },
-    expected: {
-      sql: 'find',
-      params: {
-        collection: 'users',
-        filter: { status: { $in: ['ACTIVE'] } },
-        options: { projection: { id: 1 } },
-      },
-    },
-  },
-  {
-    name: 'WHERE direct array holding only null matches nothing',
-    method: 'select',
-    query: {
-      type: 'SELECT',
-      table: 'users',
-      columns: ['id', 'status'],
-      projection: { '@id': true },
-      where: { '@status': [null] },
-    },
-    expected: {
-      sql: 'find',
-      params: {
-        collection: 'users',
-        filter: { status: { $in: [] } },
-        options: { projection: { id: 1 } },
-      },
-    },
-  },
-  {
     // `status <> 'BANNED' AND status IS NULL` matches nothing. The bare
     // `{ status: null }` spec would be replaced by the `$nin` document.
     name: 'WHERE $null: true beside $ne keeps both conditions',
@@ -2492,7 +2452,9 @@ const CASES: Case[] = [
     throws: true,
   },
   {
-    name: '$exists filter throws (no correlated-subquery equivalent)',
+    // The `$gt: null` guard is SQL's `=`: a NULL key on either side
+    // matches nothing, where aggregation `$eq` alone pairs null with null.
+    name: '$exists filter runs as a $lookup, matched non-empty and unset',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -2501,10 +2463,297 @@ const CASES: Case[] = [
       projection: { '@id': true },
       where: { $exists: { table: 'orders', on: { '@userId': '@id' } } },
     },
-    throws: true,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '__exists_0',
+            },
+          },
+          { $match: { __exists_0: { $ne: [] } } },
+          { $unset: ['__exists_0'] },
+          { $project: { id: 1 } },
+        ],
+      },
+    },
   },
   {
-    name: '$nexists filter throws (no correlated-subquery equivalent)',
+    name: 'COUNT with a $nexists filter and a sub-where is a pipeline count',
+    method: 'count',
+    query: {
+      type: 'COUNT',
+      table: 'users',
+      columns: ['id'],
+      where: {
+        $nexists: {
+          table: 'orders',
+          on: { '@userId': '@id' },
+          where: { '@status': 'paid' },
+        },
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $match: { status: 'paid' } },
+                { $limit: 1 },
+              ],
+              as: '__exists_0',
+            },
+          },
+          { $match: { __exists_0: { $size: 0 } } },
+          { $unset: ['__exists_0'] },
+          { $group: { _id: {}, __count__: { $sum: 1 } } },
+          { $project: { __count__: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    name: '$exists / $nexists inside $or each test their own lookup field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'role'],
+      projection: { '@id': true },
+      where: {
+        $or: [
+          { '@role': 'admin' },
+          { $exists: { table: 'orders', on: { '@userId': '@id' } } },
+          { $nexists: { table: 'bans', on: { '@userId': '@id' } } },
+        ],
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '__exists_0',
+            },
+          },
+          {
+            $lookup: {
+              from: 'bans',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '__exists_1',
+            },
+          },
+          {
+            $match: {
+              $or: [
+                { role: 'admin' },
+                { __exists_0: { $ne: [] } },
+                { __exists_1: { $size: 0 } },
+              ],
+            },
+          },
+          { $unset: ['__exists_0', '__exists_1'] },
+          { $project: { id: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The nested node runs inside the outer lookup's own pipeline, after
+    // the key match and before the `$limit`.
+    name: 'nested $exists is a lookup inside the lookup',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      projection: { '@id': true },
+      where: {
+        $exists: {
+          table: 'orders',
+          on: { '@userId': '@id' },
+          where: {
+            $exists: {
+              table: 'items',
+              on: { '@orderId': 1 },
+              where: { '@sku': 'A' },
+            },
+          },
+        },
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                {
+                  $lookup: {
+                    from: 'items',
+                    pipeline: [
+                      { $match: { $expr: { $eq: ['$orderId', 1] } } },
+                      { $match: { sku: 'A' } },
+                      { $limit: 1 },
+                    ],
+                    as: '__exists_0',
+                  },
+                },
+                { $match: { __exists_0: { $ne: [] } } },
+                { $unset: ['__exists_0'] },
+                { $limit: 1 },
+              ],
+              as: '__exists_0',
+            },
+          },
+          { $match: { __exists_0: { $ne: [] } } },
+          { $unset: ['__exists_0'] },
+          { $project: { id: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // One of each `on` value: a column, a NULL-safe column, null, and an
+    // `@` string that names no outer column and so is data.
+    name: '$exists keys: column, nullSafe column, null and literal',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'code'],
+      projection: { '@id': true },
+      where: {
+        $exists: {
+          table: 'orders',
+          on: {
+            '@userId': '@id',
+            '@code': '@code',
+            '@note': null,
+            '@status': '@open',
+          },
+          nullSafe: ['@code'],
+        },
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id', v1: '$code' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                        {
+                          $eq: [
+                            { $ifNull: ['$code', null] },
+                            { $ifNull: ['$$v1', null] },
+                          ],
+                        },
+                        { $in: [{ $type: '$note' }, ['null', 'missing']] },
+                        { $eq: ['$status', '@open'] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '__exists_0',
+            },
+          },
+          { $match: { __exists_0: { $ne: [] } } },
+          { $unset: ['__exists_0'] },
+          { $project: { id: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    name: '$nexists filter on DELETE throws (deleteMany takes no pipeline)',
     method: 'delete',
     query: {
       type: 'DELETE',
@@ -2841,6 +3090,49 @@ describe('oql.translator.MongoTranslator', () => {
       asserts.assertEquals(result, c.expected);
     });
   }
+});
+
+describe('oql.translator.MongoTranslator — $exists refusals', () => {
+  const orders = { table: 'orders', on: { '@userId': '@id' } };
+
+  it('names where the node runs when an UPDATE filter carries it', () => {
+    const err = asserts.assertThrows(
+      () =>
+        t.update({
+          type: 'UPDATE',
+          table: 'users',
+          columns: ['id', 'role'],
+          data: { role: 'member' },
+          where: { $exists: orders },
+        } as unknown as Query<'UPDATE'>),
+      DialectUnsupportedError,
+    );
+    asserts.assertStringIncludes(err.feature, 'outside a SELECT or COUNT');
+  });
+
+  it('refuses a key bound to a joined column, naming the column', () => {
+    const err = asserts.assertThrows(
+      () =>
+        t.select({
+          type: 'SELECT',
+          table: 'users',
+          columns: ['id'],
+          joins: {
+            P: {
+              table: 'profiles',
+              columns: ['id', 'userId'],
+              on: { '@P.@userId': '@id' },
+            },
+          },
+          projection: { '@id': true },
+          where: {
+            $exists: { table: 'orders', on: { '@profileId': '@P.@id' } },
+          },
+        } as unknown as Query<'SELECT'>),
+      DialectUnsupportedError,
+    );
+    asserts.assertStringIncludes(err.feature, '@P.@id');
+  });
 });
 
 describe('oql.translator.MongoTranslator — DATE_TRUNC unit', () => {

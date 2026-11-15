@@ -235,16 +235,32 @@ export async function parseBody(
   request: Request,
   options: ParseBodyOptions,
 ): Promise<ParseBodyResult> {
+  return parseBodyBytes(
+    await readCapped(request.body, bodyCapFor(request, options)),
+    request.headers.get('content-type'),
+    options,
+  );
+}
+
+/**
+ * {@link parseBody} over bytes already read under the cap — what
+ * `ctx.payload` holds after `ctx.rawPayload`, so the body is not wrapped
+ * in a second `Request` and streamed again to be parsed.
+ *
+ * @throws {RapidError} As {@link parseBody}, bar the byte cap on the body.
+ */
+export async function parseBodyBytes(
+  bytes: Uint8Array,
+  rawContentType: string | null,
+  options: ParseBodyOptions,
+): Promise<ParseBodyResult> {
   const files: string[] = [];
   // Strip parameters (charset, boundary): match the media type only.
-  const rawContentType = request.headers.get('content-type');
   const contentType = (rawContentType ?? '')
     .split(';')[0]!.trim().toLowerCase();
   const isMultipart = contentType === 'multipart/form-data';
   const isForm = isMultipart ||
     contentType === 'application/x-www-form-urlencoded';
-
-  const bytes = await readCapped(request.body, bodyCapFor(request, options));
 
   if (isForm) {
     const response = new Response(

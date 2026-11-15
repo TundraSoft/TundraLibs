@@ -20,27 +20,48 @@ const TIME_OF_DAY =
  * time-of-day strings. */
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T/;
 
-/** A date, then `T` or a space, then `HH:MM[:SS[.f]]`, and no offset. */
-const ZONELESS_DATETIME =
-  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)(?:(\.\d{1,3})\d*)?$/;
-
-/** `YYYY-MM-DD`, then optionally a time as in {@link ZONELESS_DATETIME}
- * and `Z` or a `+HH:MM` offset. */
+/** `YYYY-MM-DD`, then optionally `T` or a space, `HH:MM[:SS[.f]]`, and
+ * `Z` or an offset written `+HH:MM`, `+HHMM` or `+HH`. */
 const DATE_TEXT =
-  /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?)(?:(\.\d{1,3})\d*)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/;
+  /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?)(?:(\.\d{1,3})\d*)?(?:(Z)|([+-](?:[01]\d|2[0-3]))(?::?([0-5]\d))?)?)?$/;
+
+/** A leading `YYYY-MM-DD`, alone or followed by `HH:MM[:SS]`. */
+const WRITTEN_DAY = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?))?/;
+
+/** The offset a {@link DATE_TEXT} match names, as `Z` or `+HH:MM`. */
+function offsetOf(m: RegExpExecArray): string | undefined {
+  return m[5] === undefined ? m[4] : `${m[5]}:${m[6] ?? '00'}`;
+}
 
 /**
- * A date-time string that names no offset, marked as UTC; anything else
- * as it came. Left unmarked, `new Date()` reads it in the host's zone,
- * so the same string would be a different instant on another host.
+ * A date-time string that names no offset, marked as UTC, and one whose
+ * offset has no colon (`-0800`, `-08`) with it written `-08:00`;
+ * anything else as it came. Left unmarked, `new Date()` reads the first
+ * in the host's zone, so the same string would be a different instant on
+ * another host.
  */
 export function asUtc(v: string): string;
 /** A value that is not a string comes back as it came. */
 export function asUtc(v: unknown): unknown;
 export function asUtc(v: unknown): unknown {
   if (typeof v !== 'string') return v;
-  const m = ZONELESS_DATETIME.exec(v);
-  return m === null ? v : `${m[1]}T${m[2]}${m[3] ?? ''}Z`;
+  const m = DATE_TEXT.exec(v);
+  if (m === null || m[2] === undefined) return v;
+  const offset = offsetOf(m) ?? 'Z';
+  return v.endsWith(offset) ? v : `${m[1]}T${m[2]}${m[3] ?? ''}${offset}`;
+}
+
+/**
+ * Whether `text` starts with a day or clock no calendar has that
+ * `new Date()` moves to a later day instead of refusing: `2026-02-30`
+ * is read as March 2, and `24:00` as the next midnight.
+ */
+export function rollsOver(text: string): boolean {
+  const m = WRITTEN_DAY.exec(text);
+  if (m === null) return false;
+  const wall = new Date(`${m[1]}T${m[2] ?? '00:00'}Z`).getTime();
+  return !Number.isNaN(wall) &&
+    new Date(wall).toISOString().slice(0, 10) !== m[1];
 }
 
 /** UTC midnight of the day `d` falls on. */
@@ -170,8 +191,8 @@ export function zonedTimeOfDay(d: Date, timeZone: string): string {
  * The instant at which the clock in `timeZone` reads `text`:
  * `'2026-11-14'` in `Asia/Kolkata` is `2026-11-13T18:30:00.000Z`. `text`
  * is `YYYY-MM-DD`, alone for midnight or followed by `T` or a space and
- * `HH:MM[:SS[.fff]]`. Text that ends in `Z` or a `+HH:MM` offset keeps
- * that offset and `timeZone` is not applied.
+ * `HH:MM[:SS[.fff]]`. Text that ends in `Z` or an offset (`+HH:MM`,
+ * `+HHMM` or `+HH`) keeps that offset and `timeZone` is not applied.
  *
  * A time the zone's clock skips is moved forward by the length of the
  * skip, and a time it shows twice is the earlier instant, as with
@@ -186,16 +207,13 @@ export function zonedInstant(text: string, timeZone: string): Date {
   const zone = zoneFormat(timeZone);
   const m = DATE_TEXT.exec(text);
   const invalid = `'${text}' is not a date or date-time.`;
-  if (m === null) throw invalidDate(invalid);
+  // An engine that rolls `02-30` over to March would otherwise accept it.
+  if (m === null || rollsOver(text)) throw invalidDate(invalid);
   const stamp = `${m[1]}T${m[2] ?? '00:00'}${m[3] ?? ''}`;
   const wall = new Date(`${stamp}Z`).getTime();
-  // An engine that rolls `02-30` over to March would otherwise accept it.
-  if (
-    Number.isNaN(wall) || new Date(wall).toISOString().slice(0, 10) !== m[1]
-  ) {
-    throw invalidDate(invalid);
-  }
-  if (m[4] !== undefined) return new Date(stamp + m[4]);
+  if (Number.isNaN(wall)) throw invalidDate(invalid);
+  const offset = offsetOf(m);
+  if (offset !== undefined) return new Date(stamp + offset);
   // The zone's offset a day either side: equal away from a clock change,
   // otherwise the offsets before and after it.
   const before = wallClock(zone, wall - DAY_MS) - (wall - DAY_MS);

@@ -143,8 +143,9 @@ for its own grammar gaps, for example:
 - **SQLite** — `ALTER COLUMN`, `ALTER CONSTRAINT`, `CREATE_VIEW` with
   `orReplace`, and a rename-only `ALTER_VIEW` (supply a `query` to redefine).
 - **MongoDB** — `CREATE_SCHEMA` (databases are implicit), `distinct` on
-  `SELECT` / `COUNT`, `STRING_AGG`, correlated `$exists` filters, and column
-  references or expressions in positions a Mongo find-filter cannot take.
+  `SELECT` / `COUNT`, `STRING_AGG`, an `$exists` / `$nexists` filter on
+  `UPDATE` or `DELETE`, and column references or expressions in positions a
+  Mongo find-filter cannot take.
 
 **Fix:** read `err.dialect` and `err.feature` — the `feature` string is
 written for a human and usually names the workaround inline. The full
@@ -208,8 +209,8 @@ predicate's meaning, so OQL refuses instead.
 **Triggered by** a correlated `$exists` inside a `CREATE_INDEX` partial-index
 predicate — the only filter position OQL translates without a surrounding
 query. Correlated `$exists` in a `SELECT` / `COUNT` / `UPDATE` / `DELETE`
-`where` is fully supported: those call sites pass the query's own table as
-the correlation context.
+`where` is fully supported on the SQL dialects: those call sites pass the
+query's own table as the correlation context.
 
 **Fix:** drop the correlation from the index predicate — a partial index can
 only test columns of the table it indexes. If you need the correlated

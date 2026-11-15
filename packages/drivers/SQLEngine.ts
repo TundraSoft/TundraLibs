@@ -1333,9 +1333,10 @@ export abstract class SQLConnectionEngine<
     const supplied = query.params ?? {};
     const missing: string[] = [];
     // Placeholder names must start with a letter or underscore and contain
-    // only word characters thereafter. Keeps the regex from misfiring on
-    // time literals like '00:00:00' and on Postgres-style `::cast`.
-    const placeholderRe = /:([A-Za-z_]\w*):/g;
+    // only word characters thereafter, which keeps the regex from misfiring
+    // on time literals like '00:00:00'. A colon that follows a colon never
+    // opens one, so the `:date:` inside `x::date::text` stays two casts.
+    const placeholderRe = /(?<!:):([A-Za-z_]\w*):/g;
     const matches = sqlBody.match(placeholderRe);
     if (matches) {
       for (const match of matches) {
