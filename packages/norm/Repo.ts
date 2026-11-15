@@ -120,22 +120,59 @@ const CLOCKS: ReadonlySet<string> = new Set([
 /** Expressions oql's `DATE_TRUNC` takes as its `date`. */
 const DAY_SOURCES: ReadonlySet<string> = new Set([...CLOCKS, 'DATE_ADD']);
 
+/** Milliseconds in each `DATE_ADD` unit of a fixed length. */
+const UNIT_MS: ReadonlyMap<unknown, number> = new Map([
+  ['DAYS', 86_400_000],
+  ['HOURS', 3_600_000],
+  ['MINUTES', 60_000],
+  ['SECONDS', 1000],
+]);
+
+/** A `DATE_ADD` of a whole amount to a `Date`, computed in UTC as oql
+ * computes it on every engine: a day the target month lacks is that
+ * month's last day, so 31 January plus one month is 28 February.
+ * `undefined` for any other `DATE_ADD`. */
+function addedDate(args: unknown): Date | undefined {
+  const { date, amount, unit } = (args ?? {}) as Record<string, unknown>;
+  if (!(date instanceof Date) || !Number.isInteger(amount)) return undefined;
+  const by = amount as number;
+  const out = new Date(date);
+  const ms = UNIT_MS.get(unit);
+  if (ms !== undefined) {
+    out.setTime(date.getTime() + by * ms);
+  } else if (unit === 'MONTHS' || unit === 'YEARS') {
+    const months = date.getUTCMonth() + (unit === 'YEARS' ? by * 12 : by);
+    out.setUTCFullYear(date.getUTCFullYear(), months, 1);
+    const month = out.getUTCMonth();
+    out.setUTCDate(date.getUTCDate());
+    if (out.getUTCMonth() !== month) out.setUTCDate(0);
+  } else {
+    return undefined;
+  }
+  return Number.isNaN(out.getTime()) ? undefined : out;
+}
+
 /** The UTC day of a clock or `DATE_ADD` expression, reduced by the engine
  * that computes it. `CURRENT_DATE` is written as the day of `NOW`, the
  * same day in the form a stored day has. Any other expression is returned
  * as given.
  *
- * A Mongo insert document (`insertDocument`) cannot evaluate `DATE_TRUNC`.
- * oql computes `CURRENT_DATE` as the UTC day when it builds the document,
- * so a clock is written as that. */
+ * A Mongo insert document (`insertDocument`) cannot evaluate `DATE_TRUNC`
+ * or `DATE_ADD`. oql computes `CURRENT_DATE` as the UTC day when it builds
+ * the document, so a clock is written as that, and a `DATE_ADD` to a
+ * `Date` is computed here. */
 function dayOf(
   expr: ExpressionDefault,
   insertDocument: boolean,
-): ExpressionDefault {
+): ExpressionDefault | Date {
   if (insertDocument) {
-    return CLOCKS.has(expr.$$_expression)
-      ? { $$_expression: 'CURRENT_DATE' }
-      : expr;
+    if (CLOCKS.has(expr.$$_expression)) {
+      return { $$_expression: 'CURRENT_DATE' };
+    }
+    const added = expr.$$_expression === 'DATE_ADD'
+      ? addedDate(expr.args)
+      : undefined;
+    return added === undefined ? expr : utcDay(added);
   }
   const date = expr.$$_expression === 'CURRENT_DATE'
     ? { $$_expression: 'NOW' }
@@ -2914,6 +2951,7 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'insert');
+    this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow so an encrypted (.encrypt()/.hash())
     // scope column is stored as ciphertext WITH its digest sibling. A raw
@@ -3428,6 +3466,9 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
+    // A column `updateOnConflict` names must be in the row on every
+    // engine, so one the caller left out stays out.
+    this.__fillNulls(rows, opts.updateOnConflict as readonly string[]);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow (same as insert()) so an encrypted
     // scope column stores ciphertext + its digest sibling, never
@@ -4239,6 +4280,18 @@ export class Repo<
         `unique per scope, or run the upsert on an unscoped handle.`,
       { entity: c.key, code: 'SCOPE_VIOLATION' },
     );
+  }
+
+  /** Write `null` for each nullable column a row leaves out, on MongoDB:
+   * a document holds only the fields written, where SQL stores NULL. */
+  private __fillNulls(rows: Row[], except: readonly string[] = []): void {
+    if (this._executor.capabilities.dialect !== 'mongo') return;
+    const c = this._compiled;
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    for (const col of c.columnNames) {
+      if (specs[col]!.nullable !== true || except.includes(col)) continue;
+      for (const row of rows) row[col] ??= null;
+    }
   }
 
   /** Insert/upsert write pipeline up to (and including) encryption. */
