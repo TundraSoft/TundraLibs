@@ -70,6 +70,8 @@ mode: DEVELOPMENT
 stateMode: CLONE
 # Graceful-shutdown drain window in SECONDS (1-30) before force-close — app.stop()
 shutdownTimeout: 25
+# Signals that stop the app, draining in-flight requests for shutdownTimeout
+shutdownSignals: [SIGTERM, SIGINT]
 
 headers: # header NAMES the core reads and stamps — one place, shared by custom middleware too
   requestId: x-request-id # inbound correlation id adopted per request (ctx.requestId), echoed on every response
@@ -472,9 +474,9 @@ helpers) and \`@tundralibs/rapid/cli\`.
   \`ctx.args.query\` (\`filters: { status: { $eq: 'active' } }\`, \`sorting\`;
   ops \`eq/ne/gt/gte/lt/lte/like/ilike/null/in/nin\`, \`field=[a,b]\` = \`$in\`)
   — map it onto your query instead of parsing the URL.
-- **Shutdown, DI, uploads.** rapid installs no signal handler: add
-  \`onSignal('SIGTERM', () => void app.stop())\` (from
-  \`@tundralibs/compat/runtime\`); \`stop()\` drains for \`shutdownTimeout\`.
+- **Shutdown, DI, uploads.** \`shutdownSignals\` in Application.yaml (set
+  to SIGTERM and SIGINT here) makes a signal call \`app.stop()\`, which
+  drains for \`shutdownTimeout\`; without the key rapid binds no signal.
   Scope implementations per app with \`app.container.stock(Token, impl)\` and
   resolve them with \`inject(Token)\` (\`@tundralibs/doctor\`) inside handlers.
   Uploads are refused (415) until \`uploads.allowedExtensions\` lists the

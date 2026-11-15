@@ -4,6 +4,7 @@
  * @module
  */
 
+import type { Signal } from '@tundralibs/compat/runtime';
 import type { SloggerOptions } from '@tundralibs/slogger';
 import type { SpanExporter, TracerOptions } from '@tundralibs/tracer';
 import type { RapidApplicationExporterConfig } from './ExporterConfig.ts';
@@ -63,6 +64,15 @@ export type RapidApplicationOptions = {
    * @default 25
    */
   shutdownTimeout?: number;
+  /**
+   * OS signals that make a started app `stop()` and so drain: the
+   * usual pair is `['SIGTERM', 'SIGINT']`. Bound by `start()` and released
+   * by `stop()`. Off by default, so an app embedded in another process or
+   * built many times in a test run installs no handler unasked. Ignored
+   * where there are no signals (Workers, the browser).
+   * @default []
+   */
+  shutdownSignals?: readonly Signal[];
 
   /** Web server + request-cycle configuration. */
   server?: RapidApplicationServerOptions;

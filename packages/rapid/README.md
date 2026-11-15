@@ -779,8 +779,10 @@ const app = await Application.initialize({
 });
 ```
 
-Call `stop()` from your platform's termination signal (a `SIGTERM` handler on
-Deno/Bun/Node) for zero-drop rolling deploys.
+For zero-drop rolling deploys, name the termination signals and `start()`
+binds them to `stop()`: `shutdownSignals: ['SIGTERM', 'SIGINT']`. It is off
+by default, so an embedded app or a test installs no handler unasked; the
+scaffold turns it on.
 
 ## Testing
 
