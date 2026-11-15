@@ -12,6 +12,7 @@ import { Guardian } from '@tundralibs/guardian';
 import { Application } from '../../Application.ts';
 import {
   GET,
+  header,
   Module,
   param,
   payload,
@@ -59,6 +60,16 @@ class Users {
     throw new RapidError('RAPID_NOT_FOUND', { details: { id } });
   }
 
+  @GET('/tenant', { bind: [header('x-tenant')] })
+  tenant(tenant: string | null): RapidContextResponse {
+    return { content: { tenant } };
+  }
+
+  @GET('/paged', { paging: true })
+  paged(): RapidContextResponse {
+    return { content: [] };
+  }
+
   @POST('/', { bind: [payload(NewUser)], response: User })
   create(body: { name: string; role: 'admin' | 'user' }): RapidContextResponse {
     return { content: { id: UUID, ...body } };
@@ -88,6 +99,7 @@ type Client = {
   usersList(query?: { role?: string }): Promise<unknown>;
   usersFind(id: string): Promise<unknown>;
   usersCreate(body: unknown): Promise<unknown>;
+  usersTenant(headers?: Record<string, unknown>): Promise<unknown>;
   vaultToken(): Promise<unknown>;
   vaultKeys(): Promise<unknown>;
 };
@@ -175,6 +187,16 @@ describe('rapid.cli sdk generateSdk', () => {
         { id: UUID, name: 'Ada', role: 'admin' },
       ]);
       asserts.assertEquals(sent, ['POST ', 'GET ?role=admin']);
+
+      // A header() bind is a headers argument, and reaches the route.
+      asserts.assertEquals(await client.usersTenant({ 'x-tenant': 'acme' }), {
+        tenant: 'acme',
+      });
+      asserts.assertEquals(
+        (await failure(client.usersTenant({ 'x-tenant': {} }))).code,
+        'REQUEST_INVALID',
+      );
+      sent.length = 2;
 
       // Invalid arguments never reach the network.
       for (
@@ -416,6 +438,24 @@ describe('rapid.cli sdk generateSdk', () => {
       Error,
       'rename the scheme',
     );
+  });
+
+  it('a paged route asks for its page through query, not through a headers argument', async () => {
+    const app = await Application.initialize({
+      name: 'sdk-paged',
+      logger: { handlers: [] },
+    });
+    app.module(new Users());
+    try {
+      const schemas = generateSdk(
+        assembleOpenApi(app, {}, new Map(), ''),
+      ).files['schemas.ts'] ?? '';
+      asserts.assertStringIncludes(schemas, 'export type UsersPagedQuery');
+      asserts.assertStringIncludes(schemas, 'export type UsersTenantHeaders');
+      asserts.assert(!schemas.includes('UsersPagedHeaders'));
+    } finally {
+      await app.stop();
+    }
   });
 
   it('skips an HTML-only operation, names an operation without an id from its route, and refuses a name clash', () => {
