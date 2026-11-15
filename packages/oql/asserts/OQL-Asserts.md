@@ -131,7 +131,7 @@ const valid = isSelect(query); // Returns boolean
 - WHERE may reference pre-declared `expressions` by their `@key`; the translator substitutes the expression body.
 - JOIN conditions reference declared join columns.
 - Aggregates have valid `$$_aggregate` discriminators and column refs.
-- ORDER BY keys must be projection keys, joined columns, or declared `columns`. An unprojected column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped.
+- ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
 - `limit`, if provided, must be a **positive integer** (`>= 1`; `0` is rejected).
 - `offset`, if provided, must be a **non-negative integer** (`>= 0`).
 - `distinct`, if provided, must be a boolean. `distinct: true` is rejected when combined with `aggregates` or a join-alias projection (`JSON_ROW` auto-expand) — the automatic GROUP BY those trigger already deduplicates rows.
