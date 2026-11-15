@@ -882,6 +882,79 @@ h87g/qBXJrxZ7o+w+KxL/Q==
       }
     });
 
+    it('should reject with ServerError when the port is already bound', async () => {
+      // `reusePort: false` is explicit: left unset, Bun binds a port that
+      // another Bun server holds instead of failing.
+      const options = {
+        mode: 'TCP',
+        hostname: '127.0.0.1',
+        reusePort: false,
+        handler: () => new Response('OK'),
+      } as const;
+      activeServer = new WebServer('Holder', { ...options, port: 0 });
+      await activeServer.start();
+      const second = new WebServer('Second', {
+        ...options,
+        port: activeServer.port as number,
+      });
+
+      // Bounded: before the Node adapter listened for `error`, this start
+      // never settled.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const outcome = await Promise.race([
+        second.start().then(() => 'started', (error: unknown) => error),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve('pending'), 2000);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (second.state === 'RUNNING') await second.stop(false);
+
+      if (!(outcome instanceof ServerError)) {
+        throw new Error(`Expected ServerError, got ${outcome}`);
+      }
+      const cause = outcome.cause as { code?: string } | undefined;
+      if (
+        outcome.operation !== 'start' ||
+        !outcome.message.startsWith('Failed to start: ') ||
+        cause?.code !== 'EADDRINUSE'
+      ) {
+        throw new Error(
+          `Unexpected error: ${outcome.operation} / ${outcome.message} / ${cause?.code}`,
+        );
+      }
+      if (second.state !== 'STOPPED') {
+        throw new Error(`Expected state 'STOPPED', got '${second.state}'`);
+      }
+    });
+
+    it({
+      name: 'should leave no error listener on the Node server once listening',
+      deno: false,
+      bun: false,
+      fn: async () => {
+        activeServer = new WebServer('Test', {
+          mode: 'TCP',
+          port: 0,
+          hostname: '127.0.0.1',
+          handler: () => new Response('OK'),
+        });
+        // Twice, so a listener carried over a stop and start would show.
+        await activeServer.start();
+        await activeServer.stop(false);
+        await activeServer.start();
+
+        const client = (activeServer as unknown as {
+          _client: import('node:http').Server;
+        })._client;
+        if (client.listenerCount('error') !== 0) {
+          throw new Error(
+            `Expected no error listener, got ${client.listenerCount('error')}`,
+          );
+        }
+      },
+    });
+
     it('should fire onStart event', async () => {
       const port = getNextPort();
       let eventFired = false;
