@@ -32,9 +32,15 @@ Finds and returns an available TCP port within the specified range.
 
 **Returns:** `Promise<number>` - Resolves to an available port number
 
+Ports on the [WHATWG Fetch "bad port" list](https://fetch.spec.whatwg.org/#port-blocking)
+(6000, 6665–6669, 10080 and others; port 0 aside) are never returned, as if
+they were in `exclude`: `fetch` on Deno and Node refuses to call them, so a
+server bound there would be unreachable from a test or client.
+
 **Throws:** `PortError` if:
 
 - Invalid port range specified (min/max out of bounds or max < min)
+- Every port in the range is excluded or blocked by `fetch`
 - No free port found within constraints after exhausting attempts
 
 ### `PortError`
@@ -172,17 +178,18 @@ The port allocation uses the following strategy:
    uniformly within `[min, max]` (not a linear scan), to reduce
    collision probability
 2. **Availability Check**: Each candidate port is tested by attempting
-   to bind a TCP listener; excluded picks are skipped without a bind
-   attempt
+   to bind a TCP listener; excluded and fetch-blocked picks are skipped
+   without a bind attempt
 3. **Immediate Release**: A successful bind is closed immediately and
    the port number returned — see the race-condition caveat below
 4. **Bounded Attempts**: `maxAttempts = clamp((max - min + 1) * 10, 100, 10000)`
    — a wide range gets proportionally more tries, capped at 10,000; a
    narrow one still gets at least 100. Exhausting `maxAttempts` throws
    `PortError`.
-5. **Exclusion Filtering**: `exclude` is deduped and checked against
-   the range up front — if every port in `[min, max]` is excluded, it
-   throws immediately rather than spending attempts
+5. **Exclusion Filtering**: `exclude` and the fetch-blocked ports are
+   deduped and checked against the range up front — if every port in
+   `[min, max]` is excluded or blocked, it throws immediately rather
+   than spending attempts
 
 This approach balances randomization (good for parallel processes) with deterministic termination.
 
@@ -367,7 +374,7 @@ bad range or an exhausted search. The exact messages:
 | `Minimum port must be between 0 and 65535`                      | `min` outside 0-65535                              | Use a valid `min`                 |
 | `Maximum port must be between 0 and 65535`                      | `max` outside 0-65535                              | Use a valid `max`                 |
 | `Maximum port must be greater than minimum port`                | `max < min`                                        | Correct parameter order           |
-| `All ports in range are excluded`                               | Every port in `[min, max]` is in `exclude`         | Widen the range or trim `exclude` |
+| `All ports in range are excluded`                               | Every port is in `exclude` or blocked by `fetch`   | Widen the range or trim `exclude` |
 | `No free port found in range ${min}-${max} after ${n} attempts` | Range is real but every attempt lost the bind race | Widen range or retry              |
 
 ## Related

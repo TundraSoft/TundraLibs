@@ -7,6 +7,17 @@
 
 import { listen } from '@tundralibs/compat/net';
 
+// WHATWG Fetch bad ports, less port 0: https://fetch.spec.whatwg.org/#port-blocking
+// deno-fmt-ignore
+const FETCH_BLOCKED_PORTS = [
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79,
+  87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137,
+  139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+  540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+  2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+  6679, 6697, 10080,
+];
+
 /**
  * Range and exclusions for {@link getFreePort}.
  *
@@ -41,13 +52,16 @@ export class PortError extends Error {
 /**
  * Find a random free TCP port by randomly picking values in `[min, max]`
  * and trial-binding them with `compat/net.listen`. The first port that
- * binds successfully is returned.
+ * binds successfully is returned. Ports on the WHATWG Fetch "bad port" list
+ * are skipped like `exclude` entries, because `fetch` on Deno and Node refuses
+ * to call them.
  *
  * @param options - {@link GetFreePortOptions} controlling range and exclusions.
  * @returns A free port within the requested range.
  *
- * @throws {@link PortError} If the range is invalid, every port is excluded,
- *   or no free port is found within ~`(max-min+1) * 10` attempts.
+ * @throws {@link PortError} If the range is invalid, every port is excluded
+ *   or blocked by `fetch`, or no free port is found within ~`(max-min+1) * 10`
+ *   attempts.
  *
  * @example
  * ```typescript
@@ -80,9 +94,9 @@ export const getFreePort = async (
   // ports first: counting duplicates could push the tally to/over the range
   // size and wrongly report the range as fully excluded when free ports remain.
   const availableRange = max - min + 1;
-  const excludedInRange = new Set(
-    exclude.filter((port) => port >= min && port <= max),
-  ).size;
+  const skipped = new Set([...FETCH_BLOCKED_PORTS, ...exclude]);
+  const excludedInRange =
+    [...skipped].filter((port) => port >= min && port <= max).length;
 
   if (excludedInRange >= availableRange) {
     throw new PortError('All ports in range are excluded');
@@ -100,8 +114,8 @@ export const getFreePort = async (
     const port = min +
       Math.floor(randomArray[0]! / (0xFFFFFFFF + 1) * (max - min + 1));
 
-    // Skip excluded ports
-    if (exclude.includes(port)) {
+    // Skip excluded and fetch-blocked ports
+    if (skipped.has(port)) {
       continue;
     }
 
