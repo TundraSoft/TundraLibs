@@ -20,7 +20,7 @@ const CONFIG = {
     ? `${env.get('DB_SCHEMA')}_drivers`
     : env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USER') || 'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
 await runLiveSuite('postgres', () => new PostgresEngine('oql-live', CONFIG));

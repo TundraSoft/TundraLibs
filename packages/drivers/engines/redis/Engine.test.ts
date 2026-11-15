@@ -28,6 +28,8 @@ const env = envArgs('./packages/drivers/');
 const TEST_CONFIG = {
   host: env.get('REDIS_HOST') || env.get('MEMCACHED_HOST') || 'localhost',
   port: Number.parseInt(env.get('REDIS_PORT') || '6379', 10),
+  username: env.get('REDIS_USERNAME') || undefined,
+  password: env.get('REDIS_PASSWORD') || undefined,
 };
 
 async function isRedisAvailable(): Promise<boolean> {
@@ -128,17 +130,21 @@ describe({
 
       it({
         name: 'should fail to connect with bad password',
-        // Skipped by default — many test Redis instances run without
-        // requirepass, and the server holds the auth-failure socket open
-        // long enough that this test can hang.
-        ignore: true,
+        // Runs against a Redis that requires a password, set in
+        // REDIS_PASSWORD. One without requirepass rejects any AUTH, so a
+        // pass there would not show the password was checked.
+        ignore: TEST_CONFIG.password === undefined,
         fn: async () => {
           const engine = new RedisEngine('life-3', {
             ...TEST_CONFIG,
             password: 'definitely-wrong-password',
             pool: { min: 1, acquireTimeoutSeconds: 2 },
           });
-          await asserts.assertRejects(() => engine.connect(), EngineError);
+          const err = await asserts.assertRejects(
+            () => engine.connect(),
+            EngineError,
+          );
+          asserts.assertEquals(err.code, 'INVALID_AUTH');
         },
       });
     });
