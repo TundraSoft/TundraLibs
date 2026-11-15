@@ -2086,6 +2086,108 @@ const CASES: Case[] = [
     },
   },
   {
+    // A filter on a projected to-many join keeps the joined rows it
+    // matches, as on SQL: here the base rows with none, whose JSON_ROW
+    // holds one row of NULLs.
+    name:
+      'SELECT JSON_ROW of a join filtered on its rows → $match before $group',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id'],
+      joins: {
+        I: {
+          table: 'items',
+          columns: ['id', 'orderId', 'sku'],
+          type: 'LEFT',
+          on: { '@I.@orderId': '@id' },
+        },
+      },
+      aggregates: {
+        Items: { $$_aggregate: 'JSON_ROW', columns: { sku: '@I.@sku' } },
+      },
+      projection: { '@id': true, '@Items': true },
+      where: { '@I.@id': null },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'items',
+              localField: 'id',
+              foreignField: 'orderId',
+              pipeline: [{ $match: { orderId: { $ne: null } } }],
+              as: 'I',
+            },
+          },
+          { $unwind: { path: '$I', preserveNullAndEmptyArrays: true } },
+          { $match: { 'I.id': null } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              Items: { $push: { sku: { $ifNull: ['$I.sku', null] } } },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $project: { id: 1, Items: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // An expression argument naming a joined column reads that row's
+    // value, not the joined array.
+    name: 'SELECT expression over a joined column → computed per joined row',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          type: 'INNER',
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      expressions: { t: { $$_expression: 'UPPER', args: '@P.@title' } },
+      projection: { '@id': true, '@t': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          {
+            $addFields: {
+              t: {
+                $cond: [{ $gt: ['$P.title', null] }, {
+                  $toUpper: '$P.title',
+                }, null],
+              },
+            },
+          },
+          { $project: { id: 1, t: 1 } },
+        ],
+      },
+    },
+  },
+  {
     // A composite join key. Every `on` entry is a condition (SQL ANDs
     // them all), so a single-field localField/foreignField `$lookup`
     // would silently drop the tenant correlation and over-match. The
@@ -4005,6 +4107,56 @@ const CASES: Case[] = [
       conflictKeys: ['@id'],
     },
     throws: true,
+  },
+  {
+    // A view over a join reads a joined column as one value per row,
+    // under the key SQL gives it.
+    name: 'CREATE_VIEW over a join projects each joined column as a value',
+    method: 'createView',
+    query: {
+      type: 'CREATE_VIEW',
+      view: 'tags_of_posts',
+      query: {
+        type: 'SELECT',
+        table: 'post_tags',
+        columns: ['postId', 'tagId'],
+        joins: {
+          T: {
+            table: 'tags',
+            columns: ['id', 'name'],
+            type: 'INNER',
+            on: { '@T.@id': '@tagId' },
+          },
+        },
+        projection: { '@postId': true, '@T.@name': 'name' },
+      },
+    },
+    expected: {
+      sql: 'createView',
+      params: {
+        view: 'tags_of_posts',
+        viewOn: 'post_tags',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'tags',
+              localField: 'tagId',
+              foreignField: 'id',
+              pipeline: [{ $match: { id: { $ne: null } } }],
+              as: 'T',
+            },
+          },
+          { $unwind: '$T' },
+          {
+            $project: {
+              postId: 1,
+              name: { $ifNull: ['$T.name', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
   },
   {
     // Round-4 finding 2: a plain-`find` source SELECT feeding CREATE_VIEW must

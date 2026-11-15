@@ -1263,7 +1263,7 @@ export class MongoTranslator {
       }
       pipeline.push({ $addFields: addFields });
     }
-    // Deferred $match — runs AFTER every $lookup (joined arrays exist) and
+    // Deferred $match — runs AFTER every $lookup (joined rows exist) and
     // AFTER the expressions $addFields (alias fields exist), but BEFORE any
     // $group, mirroring SQL's WHERE-then-GROUP-BY evaluation order.
     if (q.where && deferMatch) {
@@ -1528,8 +1528,7 @@ export class MongoTranslator {
    * node correlates only through literals.
    *
    * @throws {DialectUnsupportedError} For an `on` value that names a
-   *   joined column — `$lookup` leaves the joined rows in an array, and
-   *   there is no row of the join to correlate with.
+   *   joined column.
    */
   private __buildExistsLookup(
     spec: ExistsFilter,
@@ -1774,7 +1773,7 @@ export class MongoTranslator {
    * join aliases — `'@<Alias>.@<col>'` — in EITHER position:
    *   - a filter KEY (`{ '@Author.@name': … }`), or
    *   - a VALUE (`{ '@createdAt': { $gt: '@Author.@joinedAt' } }`).
-   * Both need the joined array to exist, so the aggregate builder uses
+   * Both need the joined row to exist, so the aggregate builder uses
    * this to run `$match` AFTER `$lookup`. Scanning only keys (the original
    * bug) routed a value-position joined ref to the early `$match`, where
    * the missing path sorts below all BSON types and the comparison

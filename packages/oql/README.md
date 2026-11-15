@@ -397,13 +397,10 @@ orders each group by its smallest value for `ASC` and its largest for
 `DESC`. Where `NULL` sorts depends on the engine; see
 [Ordering by a joined column](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#ordering-by-a-joined-column).
 
-> **MongoDB ignores the declared join `type` entirely.** `INNER`,
-> `LEFT`, `RIGHT`, and `FULL` all compile to the same LEFT-equivalent
-> `$lookup` on Mongo — `RIGHT` is not reversed and `FULL` does not
-> throw, they both silently behave like `LEFT`. This is a translator
-> gap, not documented degradation. See the
-> [JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins)
-> before relying on join `type` on a Mongo-backed query.
+A join returns one row per joined row on every dialect, MongoDB
+included. On MongoDB a `RIGHT` or `FULL` join behaves like `LEFT`: the
+tables are not reversed and `FULL` does not throw. See the
+[JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins).
 
 ### JSON Column Filtering
 
