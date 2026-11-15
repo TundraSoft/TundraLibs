@@ -617,17 +617,17 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS REAL) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
       postgres: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS DOUBLE PRECISION) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
       maria: {
         sql:
-          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (`score` / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
+          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (CAST(`score` AS DOUBLE) / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
     },
@@ -3421,12 +3421,12 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          'SELECT __base__."team" AS "team", COUNT(1) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
+          'SELECT __base__."team" AS "team", CAST(COUNT(1) AS DOUBLE PRECISION) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
         params: {},
       },
       maria: {
         sql:
-          'SELECT __base__.`team` AS `team`, COUNT(1) AS `n` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`team` ORDER BY __base__.`team` ASC, MAX(`o`.`amount`) DESC',
+          'SELECT __base__.`team` AS `team`, CAST(COUNT(1) AS DOUBLE) AS `n` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`team` ORDER BY __base__.`team` ASC, MAX(`o`.`amount`) DESC',
         params: {},
       },
     },
