@@ -588,6 +588,7 @@ const CASES: Case[] = [
               as: 'profile',
             },
           },
+          { $unwind: '$profile' },
           { $match: { 'profile.name': 'bob' } },
           { $project: { id: 1 } },
         ],
@@ -718,6 +719,9 @@ const CASES: Case[] = [
               as: 'o',
             },
           },
+          {
+            $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
+          },
           { $addFields: { __sort_0: { $max: '$o.amount' } } },
           { $sort: { __sort_0: -1, name: 1 } },
           { $project: { id: 1 } },
@@ -760,6 +764,9 @@ const CASES: Case[] = [
               pipeline: [{ $match: { userId: { $ne: null } } }],
               as: 'o',
             },
+          },
+          {
+            $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
           },
           {
             $group: {
@@ -1355,6 +1362,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           {
             $addFields: {
               shown: { $ifNull: ['$label', '@nope'] },
@@ -1498,7 +1506,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1809,6 +1826,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           { $project: { perm: 1 } },
         ],
       },
@@ -1845,7 +1863,116 @@ const CASES: Case[] = [
               as: 'Profile',
             },
           },
-          { $project: { id: 1, bio: '$Profile.bio', _id: 0 } },
+          {
+            $unwind: { path: '$Profile', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A to-many join gives one row per joined row, as SQL does: the
+    // filter tests each joined row on its own, and a joined column is a
+    // key of the row named as SQL names it.
+    name: 'SELECT a to-many join → $unwind, then the filter per joined row',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'sku', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@o.@sku': true },
+      where: { '@o.@sku': 'A', '@o.@amount': { $gt: 5 } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          { $match: { 'o.sku': 'A', 'o.amount': { $gt: 5 } } },
+          { $project: { id: 1, sku: { $ifNull: ['$o.sku', null] } } },
+        ],
+      },
+    },
+  },
+  {
+    // JSON_ROW and ARRAY_AGG collect the joined rows of each group, NULL
+    // for a row without a match, as on SQL. A projected join alias is the
+    // JSON_ROW of the join's columns.
+    name: 'SELECT JSON_ROW, ARRAY_AGG and a join alias → $group of joined rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          type: 'LEFT',
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      aggregates: {
+        Posts: { $$_aggregate: 'JSON_ROW', columns: { name: '@P.@title' } },
+        titles: { $$_aggregate: 'ARRAY_AGG', column: '@P.@title' },
+      },
+      projection: { '@id': true, '@Posts': true, '@titles': true, '@P': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: { path: '$P', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              Posts: { $push: { name: { $ifNull: ['$P.title', null] } } },
+              titles: { $push: { $ifNull: ['$P.title', null] } },
+              P: {
+                $push: {
+                  userId: { $ifNull: ['$P.userId', null] },
+                  title: { $ifNull: ['$P.title', null] },
+                },
+              },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $project: { id: 1, Posts: 1, titles: 1, P: 1 } },
         ],
       },
     },
@@ -1897,7 +2024,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1938,7 +2074,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1986,7 +2131,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -2040,6 +2194,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           { $project: { perm: 1 } },
         ],
       },
@@ -2077,6 +2232,9 @@ const CASES: Case[] = [
               foreignField: 'org',
               as: 'P',
             },
+          },
+          {
+            $unwind: { path: '$P', preserveNullAndEmptyArrays: true },
           },
           { $project: { perm: 1 } },
         ],
@@ -3653,6 +3811,9 @@ const CASES: Case[] = [
               pipeline: [{ $match: { id: { $ne: null } } }],
               as: 'Author',
             },
+          },
+          {
+            $unwind: { path: '$Author', preserveNullAndEmptyArrays: true },
           },
           {
             $match: {
