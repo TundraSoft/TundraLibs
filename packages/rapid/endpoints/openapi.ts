@@ -125,6 +125,43 @@ export function assembleOpenApi<S extends RapidContextState>(
   return doc;
 }
 
+/** The document options `rapid sdk` reads back from the app. */
+type MountedOptions = Pick<
+  OpenApiDocumentOptions,
+  'servers' | 'securitySchemes'
+>;
+
+/** Per `openapi()` handler, and per app `docs()` mounted on. */
+const MOUNTED = new WeakMap<object, MountedOptions>();
+
+/** Record the options of an `openapi()` handler, or of the app `docs()` mounted on. */
+export function recordDocumentOptions(
+  owner: object,
+  options: MountedOptions,
+): void {
+  MOUNTED.set(owner, options);
+}
+
+/**
+ * The `servers` and `securitySchemes` the app's mounted `openapi()` and
+ * `docs()` declare, merged — a route names a scheme and the app names no
+ * server, so only those two define what `rapid sdk` needs.
+ */
+export function mountedDocumentOptions<S extends RapidContextState>(
+  app: Application<S>,
+): Required<MountedOptions> {
+  const servers = new Map<string, OpenApiServer>();
+  const securitySchemes = {};
+  for (const owner of [app, ...app.routes.map((route) => route.handler)]) {
+    const options = MOUNTED.get(owner);
+    for (const server of options?.servers ?? []) {
+      if (!servers.has(server.url)) servers.set(server.url, server);
+    }
+    Object.assign(securitySchemes, options?.securitySchemes);
+  }
+  return { servers: [...servers.values()], securitySchemes };
+}
+
 const HTTP_METHODS = new Set([
   'get',
   'put',
@@ -210,7 +247,7 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
   }
   const expose = options.expose ?? 'DEVELOPMENT';
   const cache = new Map<string, Record<string, unknown>>();
-  return (ctx) => {
+  const handler: RapidHTTPHandler = (ctx) => {
     if (expose !== 'ALL' && expose !== ctx.app.mode) {
       // Indistinguishable from an unrouted path — same envelope, same
       // requestId, same disclosure.
@@ -223,4 +260,6 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
       content,
     }));
   };
+  recordDocumentOptions(handler, options);
+  return handler;
 }

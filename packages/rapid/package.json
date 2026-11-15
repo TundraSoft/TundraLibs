@@ -42,6 +42,7 @@
     "@tundralibs/utils": "workspace:*"
   },
   "devDependencies": {
-    "@tundralibs/guardian": "workspace:*"
+    "@tundralibs/guardian": "workspace:*",
+    "@tundralibs/restler": "workspace:*"
   }
 }

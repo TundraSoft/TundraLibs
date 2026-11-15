@@ -113,9 +113,11 @@ from the transport's `started` — unify on the latter.
   also watches `modules/` and regenerates the barrel on change. Open build
   calls: core-vs-CLI home, latency percentiles, the in-core request ring,
   repaint cadence, a zero-dep renderer.
-- **SDK generator (via RESTler)** — a typed client SDK generated from the
-  OpenAPI/decorator metadata — one typed method per route, schemas reused.
-  Downstream of OpenAPI; likely its own tool/package.
+- **SDK generator follow-ups** — `rapid sdk` writes the client; still to
+  do: header-bound arguments, the paging totals of a collection reply,
+  one shared type for a schema several routes reuse, a version selector
+  for header-versioned routes, and a token-refresh hook for the `auth`
+  option.
 
 ### Scaling & ops
 

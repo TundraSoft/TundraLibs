@@ -29,6 +29,7 @@ import {
 import { healthCommand } from './commands/health.ts';
 import { initCommand } from './commands/init.ts';
 import { accessCommand, formatAccessReport } from './commands/access.ts';
+import { sdkCommand } from './commands/sdk.ts';
 
 /**
  * A stubbed version lookup: the real one fetches jsr.io on every
@@ -42,6 +43,44 @@ import { MIDDLEWARE_CATALOG, PACKAGE_DOCS, scaffold } from './templates.ts';
 // writes in one process corrupts Node 22's node:test reporter channel
 // ('Unable to deserialize cloned data'), failing an unrelated file.
 const quiet = (): void => {};
+
+describe('rapid.cli sdk', () => {
+  it("writes the client for the entry module's app, and exits 1 when the entry cannot be loaded", async () => {
+    const dir = await makeTempDir({ prefix: 'rapid-cli-sdk-' });
+    const entry = `${dir}/entry.mts`;
+    const application = new URL('../Application.ts', import.meta.url).href;
+    await writeTextFile(
+      entry,
+      [
+        `import { Application } from '${application}';`,
+        `export const app = await Application.initialize({ name: 'cli-sdk', logger: { handlers: [] } });`,
+        `app.get('/orders/:id:', () => ({ content: {} }));`,
+      ].join('\n'),
+    );
+    try {
+      const lines: string[] = [];
+      asserts.assertEquals(
+        await sdkCommand(
+          entry,
+          { out: `${dir}/sdk`, name: 'Shop' },
+          (line) => void lines.push(line),
+        ),
+        0,
+      );
+      asserts.assertStringIncludes(lines.join('\n'), '1 methods written');
+      asserts.assertStringIncludes(
+        await readTextFile(`${dir}/sdk/Shop.ts`),
+        'public async getOrdersId(id: string): Promise<unknown>',
+      );
+      for (const file of ['mod.ts', 'errors.ts', 'schemas.ts']) {
+        asserts.assert(await pathExists(`${dir}/sdk/${file}`), file);
+      }
+      asserts.assertEquals(await sdkCommand(`${dir}/missing.ts`, {}, quiet), 1);
+    } finally {
+      await removeDir(dir, { recursive: true });
+    }
+  });
+});
 
 describe('rapid.cli access audit', () => {
   it('formatAccessReport prints one line per action, `public` for an undeclared one, and the totals', () => {

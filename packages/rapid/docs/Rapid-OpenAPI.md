@@ -38,8 +38,9 @@ and its page.)
 Every registered HTTP route becomes an operation. A plain `app.get()` route
 contributes its path, method and path parameters; a decorated module route
 adds what its declarations say — `summary`, `description`, `tags`,
-`operationId`, `security`, the request body from `payload(Schema)` and the
-response shape from `response` (see [Modules](./Rapid-Modules.md), "OpenAPI
+`operationId`, `security`, the request body from `payload(Schema)`, one
+query parameter per key of `query(Schema)` and the response shape from
+`response` (see [Modules](./Rapid-Modules.md), "OpenAPI
 from the declarations"). Every operation references one shared `RapidError`
 component for its `400`/`401`/`403`/`404`/`500` responses, so the error
 envelope is documented once.
@@ -408,6 +409,77 @@ stylesheet) — with `secureHeaders()`, extend its `contentSecurityPolicy`.
   assembled on the first request per version and cached, not at mount. A
   route registered after the _first request_ is not (register everything
   before `start()`).
+
+---
+
+## A typed client (`rapid sdk`)
+
+`rapid sdk ./main.ts --out ./sdk --name Shop` reads the same document and
+writes a client built on [`@tundralibs/restler`](../../restler/README.md).
+The entry exports the application as `default` or `app`, as for
+`rapid access`; the app is read, never started.
+
+| File         | Holds                                                                                |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `Shop.ts`    | The client class: one method per operation, named from its `operationId`.            |
+| `schemas.ts` | A type and a guardian schema for each request body, query and reply.                 |
+| `errors.ts`  | `ShopError` and its codes: rapid's own (`RAPID_NOT_FOUND`, …) plus the client's six. |
+| `mod.ts`     | The barrel.                                                                          |
+
+A method takes the path parameters in path order, then `body`, then
+`query`:
+
+```ts ignore
+import { Shop, ShopError } from './sdk/mod.ts';
+
+const shop = new Shop({ baseURL: 'https://shop.example' });
+
+const order = await shop.ordersFind('6f1c2f6e-8a57-4a39-9d1b-3f6a0c9a2b11');
+const page = await shop.ordersList({ status: 'open', page: 2 });
+try {
+  await shop.ordersCreate({ sku: 'A-1', quantity: 0 });
+} catch (error) {
+  if (error instanceof ShopError && error.code === 'REQUEST_INVALID') {
+    // rejected by the client's own schema; nothing was sent
+  }
+}
+```
+
+- **Arguments are validated before the request** with the schemas the
+  routes declare; a failure throws `REQUEST_INVALID` and nothing is sent.
+  A reply that breaks the route's declared `response` throws
+  `RESPONSE_INVALID`.
+- **An error reply throws `ShopError`** with the envelope's `code`; `status`,
+  `details` and `requestId` are read with `getContextValue()`. A code the
+  document does not list becomes `UNKNOWN_ERROR` and keeps the server's
+  under `originalCode`. `TIMEOUT`, `NETWORK_ERROR` and `RATE_LIMITED` cover
+  the transport; `transient` says whether a retry can help.
+- **`auth` carries the schemes the routes require.** Each scheme a route
+  names in `security` is looked up in the `securitySchemes` given to the
+  app's mounted `openapi()` or `docs()`: an http bearer, `oauth2` or
+  `openIdConnect` scheme accepts `{ type: 'BEARER', token }`, http basic
+  accepts `{ type: 'BASIC', username, password }`, and each `apiKey` scheme
+  adds a field of its own name to `{ type: 'CUSTOM', … }`, sent in the
+  header, query parameter or cookie the scheme declares (a browser will not
+  send the cookie). Getting and refreshing a token is yours. A scheme that
+  is not declared, or another http scheme, is reported and left out. With no
+  `security` on any route the option is RESTler's own `auth`.
+- **`baseURL` defaults to the first declared server.** The `servers` given
+  to `openapi()` or `docs()` are exported as `SHOP_SERVERS`, and
+  `new Shop()` calls the first; any other `baseURL` is still accepted. With
+  `--strict-servers` the constructor throws restler's `RESTlerConfigError`
+  for a `baseURL` outside the list. With no `servers`, `baseURL` is
+  required, and the flag is refused.
+- **What a schema cannot say stays `unknown`.** A route with no `response`
+  returns `unknown`; a `payload()` or `query()` bound to a plain function
+  gives the generator nothing to read. Transforms and custom refinements are
+  not carried over, so a generated schema can be looser than the server's,
+  never stricter.
+- **Not generated:** arguments for `header()` binds, socket commands, and
+  operations that answer HTML only (listed as skipped). The client imports
+  `@tundralibs/restler`, `@tundralibs/guardian` and `@tundralibs/utils`; add
+  them to the project that uses it. The output is unformatted: run your
+  formatter over it.
 
 ---
 

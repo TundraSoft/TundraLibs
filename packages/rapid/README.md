@@ -53,13 +53,14 @@ npx jsr add @tundralibs/rapid
 
 ## CLI
 
-| Command                                                                   | Does                                                                                                                     |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `init [name] [--module] [--norm] [--ui] [--with bootstrap\|pico] [--yes]` | Scaffold a project (interactive unless `--yes`).                                                                         |
-| `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                             |
-| `modules [dir] [--check] [--force]`                                       | (Re)generate the barrel's `// rapid:start` to `// rapid:end` region (`--check`: fail when stale; no markers: `--force`). |
-| `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                          |
-| `access <entry.ts> [--fail-on-undeclared] [--json]`                       | List every action with its `access` string; undeclared = public. `--fail-on-undeclared` exits 1 for CI.                  |
+| Command                                                                   | Does                                                                                                                                         |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init [name] [--module] [--norm] [--ui] [--with bootstrap\|pico] [--yes]` | Scaffold a project (interactive unless `--yes`).                                                                                             |
+| `upgrade [--dir .]`                                                       | Bump every `@tundralibs/*` dependency to its latest release.                                                                                 |
+| `modules [dir] [--check] [--force]`                                       | (Re)generate the barrel's `// rapid:start` to `// rapid:end` region (`--check`: fail when stale; no markers: `--force`).                     |
+| `health [url] [--path /healthz]`                                          | Hit a running app's health path; exit 0 on 2xx.                                                                                              |
+| `access <entry.ts> [--fail-on-undeclared] [--json]`                       | List every action with its `access` string; undeclared = public. `--fail-on-undeclared` exits 1 for CI.                                      |
+| `sdk <entry.ts> [--out ./sdk] [--name ClientName] [--strict-servers]`     | Write a typed client for the app's HTTP API ([guide](https://github.com/TundraSoft/TundraLibs/wiki/Rapid-OpenAPI#a-typed-client-rapid-sdk)). |
 
 `init` has **no runtime prompt** — both `deno.json` and `package.json` are
 always written (every package in this monorepo ships both), so the scaffold
