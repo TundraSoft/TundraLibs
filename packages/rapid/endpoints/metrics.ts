@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { builtInHandler } from '../utils/routeResponse.ts';
 import type { RapidHTTPHandler } from '../types/mod.ts';
 
 /** Options for {@link metrics}. */
@@ -17,7 +18,7 @@ export type MetricsOptions = {
 /** An endpoint handler serving `app.meter.collect(...)`. */
 export function metrics(options: MetricsOptions = {}): RapidHTTPHandler {
   const format = options.format ?? 'prometheus';
-  return (ctx) => {
+  return builtInHandler<RapidHTTPHandler>((ctx) => {
     const meter = ctx.meter;
     if (meter === undefined) {
       // A plain operational 503 (like `health`) — NOT a framework
@@ -36,5 +37,5 @@ export function metrics(options: MetricsOptions = {}): RapidHTTPHandler {
       content: meter.collect('PROMETHEUS'),
       headers: { 'content-type': 'text/plain; version=0.0.4; charset=utf-8' },
     };
-  };
+  });
 }

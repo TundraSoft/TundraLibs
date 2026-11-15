@@ -94,6 +94,13 @@ The reply is checked against the schema of the surface it answers on, a
 surface with none is not checked, and the OpenAPI document shows the `api`
 schema. Any other shape is a `RAPID_CONFIG` at registration.
 
+A route that does not answer JSON names its reply kind in place of a
+schema: `'none'`, `'text'`, `'bytes'`, `'stream'` or `'redirect'`.
+DEVELOPMENT rejects a success reply of another kind the same way. Every
+route that answers data needs a schema or a kind unless
+`server.requireResponse` is `false`: the boot stops in DEVELOPMENT and
+names each route without one.
+
 One strict body schema can serve both surfaces the same way: a page form
 carries keys the resource does not (`_csrf`), so drop them on `ui` and
 reject them on `api`.

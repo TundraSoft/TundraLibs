@@ -1,6 +1,7 @@
 name: rapid-kanban-example
 mode: DEVELOPMENT
 server:
+  requireResponse: false # this example's routes declare no `response` yet
   port: 8004
   hostname: localhost
   static:

@@ -228,7 +228,8 @@ const Shell = template<{ body: Html; title?: string }>((data) =>
 // ── the app: htmx headers ARE the whole adaptation ───────────────────
 const app = await Application.initialize({
   name: 'htmx-demo',
-  server: { port: 8003 },
+  // This example's routes declare no `response` yet.
+  server: { port: 8003, requireResponse: false },
   ui: {
     layout: Shell,
     // The contract headers are DATA — a config-driven app would put

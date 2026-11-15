@@ -448,7 +448,7 @@ describe('rapid.ui.app', () => {
     const app = await Application.initialize({
       name: 'ui-test-dev',
       mode: 'DEVELOPMENT',
-      server: { port: 0, hostname: '127.0.0.1' },
+      server: { port: 0, hostname: '127.0.0.1', requireResponse: false },
       logger: { handlers: [] },
     });
     app.get('/boom', { template: Bomb }, () => ({ content: {} }));
@@ -469,7 +469,7 @@ describe('rapid.ui.app', () => {
     const dev = await Application.initialize({
       name: 'ui-dev-overlay',
       mode: 'DEVELOPMENT',
-      server: { port: 0, hostname: '127.0.0.1' },
+      server: { port: 0, hostname: '127.0.0.1', requireResponse: false },
       logger: { handlers: [] },
     });
     dev.ui({});

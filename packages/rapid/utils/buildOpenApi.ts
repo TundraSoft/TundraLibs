@@ -13,7 +13,7 @@
 
 import { RAPID_ERROR_CODES, RapidError } from '../errors/mod.ts';
 import type { RapidRouteEntry } from '../types/mod.ts';
-import { responseFor } from './routeResponse.ts';
+import { isResponseKind, responseFor } from './routeResponse.ts';
 
 /** Document metadata + servers. */
 export type OpenApiInfo = {
@@ -373,7 +373,10 @@ export function buildOpenApi(
     // documented schema is exactly what DEVELOPMENT validates the reply
     // against. Undeclared, the shape is a guess, and the only honest
     // guess comes from the collection marker.
-    const declared = responseFor(meta?.response, 'api');
+    const entry = responseFor(meta?.response, 'api');
+    // A reply kind is documented as that kind, never as JSON.
+    const kind = isResponseKind(entry) ? entry : undefined;
+    const declared = isResponseKind(entry) ? undefined : entry;
     const responseSchema = declared?.toOpenAPI?.() ??
       declared?.toJSONSchema?.() ??
       (paged
@@ -457,28 +460,50 @@ export function buildOpenApi(
         }
         : {}),
       responses: {
-        '200': {
-          description: 'OK',
-          // Only where the route says it answers with a collection —
-          // documenting them everywhere would promise a total on routes
-          // that never have one.
-          ...(paged
-            ? { headers: pagingHeadersFor(options.pagingHeaders ?? {}) }
-            : {}),
-          // An API-first templated route serves BOTH representations —
-          // JSON by default, a fragment on a swap; a PAGE (`prefer:
-          // 'html'`) is a page or a fragment on the ui surface and JSON
-          // on the api surface (see ./ui).
-          content: route.template === undefined ||
-              (page && options.apiSurface === true)
-            ? { 'application/json': { schema: responseSchema } }
-            : page
-            ? { 'text/html': { schema: { type: 'string' } } }
-            : {
-              'application/json': { schema: responseSchema },
-              'text/html': { schema: { type: 'string' } },
+        ...(kind === 'none'
+          ? { '204': { description: 'No content' } }
+          : kind === 'redirect'
+          ? {
+            '3XX': {
+              description: 'Redirect',
+              headers: { location: { schema: { type: 'string' } } },
             },
-        },
+          }
+          : {
+            '200': {
+              description: 'OK',
+              // Only where the route says it answers with a collection —
+              // documenting them everywhere would promise a total on routes
+              // that never have one.
+              ...(paged
+                ? { headers: pagingHeadersFor(options.pagingHeaders ?? {}) }
+                : {}),
+              // An API-first templated route serves BOTH representations —
+              // JSON by default, a fragment on a swap; a PAGE (`prefer:
+              // 'html'`) is a page or a fragment on the ui surface and JSON
+              // on the api surface (see ./ui).
+              // A stream and a byte body share a media type; the mark tells
+              // a client generator which one to read as it arrives.
+              ...(kind === 'stream' ? { 'x-stream': true } : {}),
+              content: kind === 'text'
+                ? { 'text/plain': { schema: { type: 'string' } } }
+                : kind !== undefined
+                ? {
+                  'application/octet-stream': {
+                    schema: { type: 'string', format: 'binary' },
+                  },
+                }
+                : route.template === undefined ||
+                    (page && options.apiSurface === true)
+                ? { 'application/json': { schema: responseSchema } }
+                : page
+                ? { 'text/html': { schema: { type: 'string' } } }
+                : {
+                  'application/json': { schema: responseSchema },
+                  'text/html': { schema: { type: 'string' } },
+                },
+            },
+          }),
         '400': errorResponse('Bad request'),
         '401': errorResponse('Unauthenticated'),
         '403': errorResponse('Forbidden'),

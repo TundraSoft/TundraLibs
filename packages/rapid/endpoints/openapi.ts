@@ -9,6 +9,7 @@
  *
  * @module
  */
+import { builtInHandler } from '../utils/routeResponse.ts';
 import type { Application } from '../Application.ts';
 import type { HTTPContext } from '../context/HTTPContext.ts';
 import { RapidError } from '../errors/mod.ts';
@@ -261,5 +262,5 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
     }));
   };
   recordDocumentOptions(handler, options);
-  return handler;
+  return builtInHandler(handler);
 }

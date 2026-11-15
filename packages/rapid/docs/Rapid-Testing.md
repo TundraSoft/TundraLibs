@@ -23,6 +23,7 @@ and how to keep a suite green on Deno, Bun and Node at once.
 ## Setup
 
 ```ts
+import { Guardian } from '@tundralibs/guardian';
 import { Application } from '@tundralibs/rapid';
 import { client, describe, it } from '@tundralibs/rapid/testing';
 import * as asserts from '@std/assert';
@@ -34,7 +35,11 @@ describe('users', () => {
       mode: 'DEVELOPMENT', // disclosed errors — read the real message in a failure
       logger: { handlers: [] }, // silent
     });
-    app.get('/ping', () => ({ content: { ok: true } }));
+    app.get(
+      '/ping',
+      { response: Guardian.object({ ok: Guardian.boolean() }) },
+      () => ({ content: { ok: true } }),
+    );
 
     const api = client(app);
     const res = await api.get('/ping');
@@ -47,6 +52,9 @@ describe('users', () => {
 
 `mode: 'DEVELOPMENT'` is worth setting in tests: a 500 then carries the
 thrown message and `debug` in its body instead of `Internal server error`.
+In DEVELOPMENT every data route must declare its `response`, as in the
+app itself; a test that is not about replies can set
+`server: { requireResponse: false }`.
 `logger: { handlers: [] }` keeps the output quiet; drop it when you want to
 see the access lines.
 

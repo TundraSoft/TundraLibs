@@ -7,6 +7,7 @@
  *
  * @module
  */
+import { builtInHandler } from '../utils/routeResponse.ts';
 import type { HTTPContext } from '../context/mod.ts';
 import type { RapidContextState, RapidHTTPHandler } from '../types/mod.ts';
 
@@ -24,7 +25,7 @@ export type HealthOptions<S extends RapidContextState = RapidContextState> = {
 export function health<S extends RapidContextState = RapidContextState>(
   options: HealthOptions<S> = {},
 ): RapidHTTPHandler<S> {
-  return async (ctx) => {
+  return builtInHandler<RapidHTTPHandler<S>>(async (ctx) => {
     if (options.check !== undefined) {
       try {
         await options.check(ctx);
@@ -39,5 +40,5 @@ export function health<S extends RapidContextState = RapidContextState>(
       }
     }
     return { content: { status: 'ok', instance: ctx.app.instanceId } };
-  };
+  });
 }

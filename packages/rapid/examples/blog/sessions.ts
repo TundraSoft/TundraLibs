@@ -13,7 +13,8 @@ const app = await Application.initialize({
   name: 'sessions-example',
   secret: 'test-secret-0123456789-abcdefghijklmnop',
   mode: 'DEVELOPMENT',
-  server: { port: 0, hostname: '127.0.0.1' },
+  // This example's routes declare no `response` yet.
+  server: { port: 0, hostname: '127.0.0.1', requireResponse: false },
   logger: { handlers: [] },
 });
 

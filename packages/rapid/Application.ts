@@ -65,7 +65,10 @@ import {
   planCompose,
   type StaticMount,
 } from './utils/mod.ts';
-import { assertRouteResponse } from './utils/routeResponse.ts';
+import {
+  assertRouteResponse,
+  routesWithoutResponse,
+} from './utils/routeResponse.ts';
 import {
   isAbsolute as _pathIsAbsolute,
   join as joinPath,
@@ -314,6 +317,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __staticMounts: readonly StaticMount[] = [];
   /** `server.api`, normalised at construction; `undefined` = no api surface. */
   private __apiSurface?: ApiSurface;
+  /** `server.requireResponse` passed, or PRODUCTION already warned. */
+  private __responsesChecked = false;
   /** The in-progress `stop()`, so a concurrent second call joins it. */
   private __stopping?: Promise<this>;
   /**
@@ -1229,7 +1234,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       opts.template === undefined && opts.layout === undefined &&
       opts.apiOnly === undefined && opts.uiOnly === undefined &&
       opts.access === undefined && opts.compose === undefined &&
-      opts.cache === undefined
+      opts.cache === undefined && opts.response === undefined
     ) {
       throw new RapidError('RAPID_CONFIG', {
         message:
@@ -1265,8 +1270,13 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (opts.access !== undefined) {
       assertAccess(`${method} ${path}`, opts.access);
     }
-    if (opts.openapi?.response !== undefined) {
-      assertRouteResponse(`${method} ${path}`, opts.openapi.response);
+    // `response` beside the chain is the plain route's spelling of
+    // `openapi.response`, and wins over it.
+    const openapi = opts.response !== undefined
+      ? { ...opts.openapi, response: opts.response }
+      : opts.openapi;
+    if (openapi?.response !== undefined) {
+      assertRouteResponse(`${method} ${path}`, openapi.response);
     }
     if (opts.compose !== undefined) {
       // Shape only, here — the actions resolve against the mounted modules
@@ -1319,7 +1329,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       middlewares,
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
       ...(version !== undefined ? { version } : {}),
-      ...(opts.openapi !== undefined ? { openapi: opts.openapi } : {}),
+      ...(openapi !== undefined ? { openapi } : {}),
       ...(template !== undefined ? { template } : {}),
       ...(opts.apiOnly === true ? { apiOnly: true } : {}),
       ...(opts.uiOnly === true ? { uiOnly: true } : {}),
@@ -2097,9 +2107,42 @@ export class Application<S extends RapidContextState = RapidContextState>
     });
   }
 
+  /**
+   * `server.requireResponse`: every route that answers data declares what
+   * it answers with. DEVELOPMENT refuses to boot and names them all;
+   * PRODUCTION warns once and serves.
+   */
+  private __assertResponsesDeclared(): void {
+    if (this.option('server')?.requireResponse === false) return;
+    if (this.__responsesChecked) return;
+    const missing = routesWithoutResponse(
+      this.__routes as unknown as readonly RapidRouteEntry[],
+      {
+        uiPrefer: this.uiPrefer,
+        api: this.__apiSurface !== undefined || !this.uiEnabled,
+      },
+    );
+    this.__responsesChecked = missing.length === 0 ||
+      this.mode !== 'DEVELOPMENT';
+    if (missing.length === 0) return;
+    const message = `${missing.length} route${
+      missing.length === 1 ? ' declares' : 's declare'
+    } no response: ${
+      missing.join(', ')
+    } — give each a schema or a reply kind ('none', 'text', 'bytes', 'stream', 'redirect'), or set server.requireResponse: false`;
+    if (this.mode === 'DEVELOPMENT') {
+      throw new RapidError('RAPID_CONFIG', {
+        message,
+        details: { routes: missing },
+      });
+    }
+    this.log.warn(message);
+  }
+
   private __assertBootConfig(): void {
     this.__assertAuthBound();
     this.__assertCacheBound();
+    this.__assertResponsesDeclared();
     this.__planCompose();
     this.__logAccessSummary();
     if (this.option('stateMode') === 'SHARE') {
@@ -2489,7 +2532,14 @@ export class Application<S extends RapidContextState = RapidContextState>
       socketPath,
       socketOrigins,
       versioning,
+      requireResponse,
     } = this._getOption('server') ?? {};
+    if (requireResponse !== undefined && typeof requireResponse !== 'boolean') {
+      throw new RapidError('RAPID_CONFIG', {
+        message: 'server.requireResponse must be a boolean',
+        details: { key: 'server.requireResponse', value: requireResponse },
+      });
+    }
     if (
       trustProxy !== undefined && typeof trustProxy !== 'boolean' &&
       (!Number.isInteger(trustProxy) || trustProxy < 0)

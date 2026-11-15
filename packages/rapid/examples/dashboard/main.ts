@@ -425,7 +425,8 @@ const APP_JS = `(() => {
 // ── the app: every region is API-first (JSON unless swapped) ─────────
 const app = await Application.initialize({
   name: 'sales-dashboard',
-  server: { port: 8002 },
+  // This example's routes declare no `response` yet.
+  server: { port: 8002, requireResponse: false },
   ui: { core: Shell }, // one bag: data + code halves (programmatic app)
 });
 
