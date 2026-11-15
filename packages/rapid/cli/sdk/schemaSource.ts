@@ -17,6 +17,9 @@ export type SchemaSource = {
 
 type Json = Record<string, unknown>;
 
+/** Stands in for a schema's source, or `undefined` to write it out. */
+export type SchemaResolver = (schema: Json) => SchemaSource | undefined;
+
 const UNKNOWN: SchemaSource = { guard: 'Guardian.unknown()', type: 'unknown' };
 
 /** `format` values guardian emits that have a string validator of their own. */
@@ -45,13 +48,17 @@ const bounds = (schema: Json, calls: Record<string, string>): string =>
     typeof schema[keyword] === 'number' ? `.${method}(${schema[keyword]})` : ''
   ).join('');
 
-function objectSource(schema: Json, defs: Json): SchemaSource {
+function objectSource(
+  schema: Json,
+  defs: Json,
+  resolve?: SchemaResolver,
+): SchemaSource {
   const extra = schema.additionalProperties;
   if (!isJson(schema.properties)) {
     // A bare `{ type: 'object' }` is rapid's placeholder for "no schema
     // declared", not a promise that the value is an object.
     if (extra === undefined) return UNKNOWN;
-    const value = extra === true ? UNKNOWN : schemaSource(extra, defs);
+    const value = extra === true ? UNKNOWN : schemaSource(extra, defs, resolve);
     return {
       guard: `Guardian.record(Guardian.string(), ${value.guard})`,
       type: `Record<string, ${value.type}>`,
@@ -63,7 +70,7 @@ function objectSource(schema: Json, defs: Json): SchemaSource {
   const guards: string[] = [];
   const types: string[] = [];
   for (const [name, child] of Object.entries(schema.properties)) {
-    const source = schemaSource(child, defs);
+    const source = schemaSource(child, defs, resolve);
     const optional = !required.has(name);
     guards.push(
       `${key(name)}: ${source.guard}${optional ? '.optional()' : ''}`,
@@ -81,15 +88,21 @@ function objectSource(schema: Json, defs: Json): SchemaSource {
   };
 }
 
-function arraySource(schema: Json, defs: Json): SchemaSource {
+function arraySource(
+  schema: Json,
+  defs: Json,
+  resolve?: SchemaResolver,
+): SchemaSource {
   if (Array.isArray(schema.prefixItems)) {
-    const items = schema.prefixItems.map((item) => schemaSource(item, defs));
+    const items = schema.prefixItems.map((item) =>
+      schemaSource(item, defs, resolve)
+    );
     return {
       guard: `Guardian.tuple([${items.map((i) => i.guard).join(', ')}])`,
       type: `[${items.map((i) => i.type).join(', ')}]`,
     };
   }
-  const item = schemaSource(schema.items, defs);
+  const item = schemaSource(schema.items, defs, resolve);
   return {
     guard: `Guardian.array(${item.guard})${
       bounds(schema, { minItems: 'minLength', maxItems: 'maxLength' })
@@ -98,20 +111,26 @@ function arraySource(schema: Json, defs: Json): SchemaSource {
   };
 }
 
-function coreSource(schema: Json, defs: Json): SchemaSource {
+function coreSource(
+  schema: Json,
+  defs: Json,
+  resolve?: SchemaResolver,
+): SchemaSource {
   if (typeof schema.$ref === 'string') {
     const name = schema.$ref.startsWith('#/$defs/')
       ? schema.$ref.slice('#/$defs/'.length)
       : undefined;
     return name !== undefined && name in defs
-      ? schemaSource(defs[name], defs)
+      ? schemaSource(defs[name], defs, resolve)
       : UNKNOWN;
   }
   const tag = isJson(schema.discriminator)
     ? schema.discriminator.propertyName
     : undefined;
   if (Array.isArray(schema.oneOf) && typeof tag === 'string') {
-    const members = schema.oneOf.map((member) => schemaSource(member, defs));
+    const members = schema.oneOf.map((member) =>
+      schemaSource(member, defs, resolve)
+    );
     if (members.includes(UNKNOWN)) return UNKNOWN;
     return {
       guard: `Guardian.discriminatedUnion(${literal(tag)}, [${
@@ -163,9 +182,9 @@ function coreSource(schema: Json, defs: Json): SchemaSource {
     case 'boolean':
       return { guard: 'Guardian.boolean()', type: 'boolean' };
     case 'array':
-      return arraySource(schema, defs);
+      return arraySource(schema, defs, resolve);
     case 'object':
-      return objectSource(schema, defs);
+      return objectSource(schema, defs, resolve);
     default:
       return UNKNOWN;
   }
@@ -175,17 +194,25 @@ function coreSource(schema: Json, defs: Json): SchemaSource {
  * The guardian expression and TypeScript type for one JSON Schema (or
  * OpenAPI 3.0 schema object: `nullable: true` is read as well as a
  * `'null'` entry in `type`). `$ref` resolves against the schema's own
- * `$defs` only.
+ * `$defs` only. `resolve` is asked first about every schema in the tree,
+ * and about a nullable one again without its null; what it returns
+ * stands in for that schema.
  */
-export function schemaSource(schema: unknown, defs: Json = {}): SchemaSource {
+export function schemaSource(
+  schema: unknown,
+  defs: Json = {},
+  resolve?: SchemaResolver,
+): SchemaSource {
   if (!isJson(schema)) return UNKNOWN;
+  const whole = resolve?.(schema);
+  if (whole !== undefined) return whole;
   const scope = isJson(schema.$defs) ? { ...defs, ...schema.$defs } : defs;
   const types = Array.isArray(schema.type) ? schema.type : [schema.type];
-  const core = coreSource(
-    { ...schema, type: types.find((t) => t !== 'null') },
-    scope,
-  );
   const nullable = schema.nullable === true || types.includes('null');
+  const { nullable: _flag, ...bare } = schema;
+  bare.type = types.find((t) => t !== 'null');
+  const core = (nullable ? resolve?.(bare) : undefined) ??
+    coreSource(bare, scope, resolve);
   if (!nullable || core === UNKNOWN) return core;
   return {
     guard: `${core.guard}.nullable()`,

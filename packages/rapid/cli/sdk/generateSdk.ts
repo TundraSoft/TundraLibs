@@ -7,11 +7,8 @@
  * error class carrying the server's error envelope.
  * @module
  */
-import {
-  isUnknownSource,
-  type SchemaSource,
-  schemaSource,
-} from './schemaSource.ts';
+import { schemaRegistry } from './schemaRegistry.ts';
+import { schemaSource } from './schemaSource.ts';
 
 /** What {@link generateSdk} produces. */
 export type GeneratedSdk = {
@@ -56,19 +53,6 @@ const jsonSchemaOf = (holder: unknown): unknown => {
   const json = isJson(content) ? content['application/json'] : undefined;
   return isJson(json) ? json.schema : undefined;
 };
-
-/** A schema declaration pair, or nothing when the schema says nothing. */
-const declare = (
-  name: string,
-  what: string,
-  source: SchemaSource,
-): string =>
-  isUnknownSource(source) ? '' : `/** ${what} */
-export type ${name} = ${source.type};
-/** Validates {@link ${name}}. */
-export const ${name}Schema: BaseGuardian<${name}> = ${source.guard};
-
-`;
 
 /** The client's `auth` option, as source, for the schemes its routes require. */
 type AuthSource = {
@@ -233,7 +217,7 @@ function clientFile(
  * @module
  */
 import {
-  type BaseGuardian,
+  type FinishedGuardian,
   Guardian,
   GuardianError,
 } from '@tundralibs/guardian';
@@ -365,7 +349,7 @@ ${methods.join('\n')}${
   }
 
   /** Validate one argument; a failure never reaches the network. */
-  private __check<T>(what: string, value: unknown, guard: BaseGuardian<T>): T {
+  private __check<T>(what: string, value: unknown, guard: FinishedGuardian<T>): T {
     try {
       return guard.parse(value);
     } catch (error) {
@@ -378,7 +362,7 @@ ${methods.join('\n')}${
   }
 
   /** A validated path parameter, encoded as one path segment. */
-  private __segment<T>(what: string, value: T, guard: BaseGuardian<T>): string {
+  private __segment<T>(what: string, value: T, guard: FinishedGuardian<T>): string {
     return encodeURIComponent(String(this.__check(what, value, guard)));
   }
 
@@ -386,7 +370,7 @@ ${methods.join('\n')}${
   private __body<T>(
     what: string,
     value: T,
-    guard?: BaseGuardian<T>,
+    guard?: FinishedGuardian<T>,
   ): Record<string, unknown> {
     return (guard === undefined
       ? value
@@ -397,7 +381,7 @@ ${methods.join('\n')}${
   private __strings<T>(
     what: string,
     value: T | undefined,
-    guard: BaseGuardian<T>,
+    guard: FinishedGuardian<T>,
   ): Record<string, string> {
     const strings: Record<string, string> = {};
     if (value === undefined) return strings;
@@ -412,7 +396,7 @@ ${methods.join('\n')}${
   private async __send<B>(
     operation: string,
     endpoint: RESTlerEndpoint,
-    guard?: BaseGuardian<B>,
+    guard?: FinishedGuardian<B>,
     skipAuth = false,
   ): Promise<RESTlerResponse<B>> {
     try {
@@ -435,7 +419,7 @@ ${methods.join('\n')}${
   private async __call<B>(
     operation: string,
     endpoint: RESTlerEndpoint,
-    guard?: BaseGuardian<B>,
+    guard?: FinishedGuardian<B>,
     skipAuth = false,
   ): Promise<B> {
     return (await this.__send(operation, endpoint, guard, skipAuth))
@@ -447,7 +431,7 @@ ${
   private async __page<B>(
     operation: string,
     endpoint: RESTlerEndpoint,
-    guard?: BaseGuardian<B>,
+    guard?: FinishedGuardian<B>,
     skipAuth = false,
   ): Promise<{ items: B; paging: ${name}Paging | undefined }> {
     const response = await this.__send(operation, endpoint, guard, skipAuth);
@@ -544,7 +528,24 @@ export function generateSdk(
   };
   let paged = false;
 
-  const schemas: string[] = [];
+  // Names the generated files already use, or that a type would shadow.
+  const used = new Set([
+    'Guardian',
+    'FinishedGuardian',
+    'ObjectGuardian',
+    'GuardianError',
+    'Partial',
+    'Pick',
+    'Omit',
+    'Record',
+    'ResponseBody',
+    'EventOptionKeys',
+    ...['', 'Error', 'ErrorCode', 'ErrorMetadata', 'Auth', 'Options', 'Paging']
+      .map((suffix) => `${name}${suffix}`),
+  ]);
+  const registry = schemaRegistry((title) =>
+    used.has(title) || title.startsWith('RESTler') || title in globalThis
+  );
   const schemaImports: string[] = [];
   const methods: string[] = [];
   const names: string[] = [];
@@ -576,11 +577,12 @@ export function generateSdk(
       }
       names.push(method);
       const type = upperFirst(method);
-      const use = (suffix: string, what: string, source: SchemaSource) => {
-        if (isUnknownSource(source)) return undefined;
-        schemas.push(declare(`${type}${suffix}`, what, source));
-        schemaImports.push(`type ${type}${suffix}`, `${type}${suffix}Schema`);
-        return `${type}${suffix}`;
+      const use = (suffix: string, what: string, schema: unknown) => {
+        const used = registry.use(`${type}${suffix}`, what, schema);
+        if (used !== undefined) {
+          schemaImports.push(`type ${used}`, `${used}Schema`);
+        }
+        return used;
       };
 
       const parameters =
@@ -609,7 +611,7 @@ export function generateSdk(
         const body = use(
           'Body',
           `Request body of \`${method}\`.`,
-          schemaSource(jsonSchemaOf(operation.requestBody)),
+          jsonSchemaOf(operation.requestBody),
         );
         args.push(`body: ${body ?? 'unknown'}`);
         docs.push('@param body - Request body.');
@@ -637,13 +639,13 @@ export function generateSdk(
         const shape = use(
           suffix,
           `${what} of \`${method}\`.`,
-          schemaSource({
+          {
             type: 'object',
             properties: Object.fromEntries(
               declared.map((p) => [String(p.name), p.schema]),
             ),
             required: required.map((p) => String(p.name)),
-          }),
+          },
         ) as string;
         args.push(`${arg}${required.length === 0 ? '?' : ''}: ${shape}`);
         docs.push(`@param ${arg} - ${what}.`);
@@ -655,11 +657,9 @@ export function generateSdk(
       const response = use(
         'Response',
         `Reply of \`${method}\`.`,
-        schemaSource(
-          content['application/json'] === undefined
-            ? undefined
-            : (content['application/json'] as Json).schema,
-        ),
+        content['application/json'] === undefined
+          ? undefined
+          : (content['application/json'] as Json).schema,
       );
 
       const security =
@@ -754,6 +754,16 @@ ${
     strict: options.strictServers === true,
   };
 
+  // A schema declared under its title: the methods use that name.
+  const declared = registry.finish();
+  const titles = [...declared.renamed.keys()].join('|');
+  const retitle = (text: string): string =>
+    titles === '' ? text : text.replace(
+      new RegExp(`\\b(${titles})(Schema)?\\b`, 'g'),
+      (_, route: string, suffix = '') =>
+        `${declared.renamed.get(route)}${suffix}`,
+    );
+
   return {
     files: {
       'mod.ts': `/**
@@ -773,8 +783,8 @@ export * from './schemas.ts';
       [`${name}.ts`]: clientFile(
         name,
         title,
-        schemaImports,
-        methods,
+        [...new Set(schemaImports.map(retitle))],
+        methods.map(retitle),
         auth,
         servers,
         paged ? paging : undefined,
@@ -785,9 +795,18 @@ export * from './schemas.ts';
  * by \`rapid sdk\` — regenerate rather than edit.
  * @module
  */
-import { type BaseGuardian, Guardian } from '@tundralibs/guardian';
+import {
+${
+        [
+          [/FinishedGuardian</, 'type FinishedGuardian'],
+          [/(^|[^A-Za-z])Guardian\./, 'Guardian'],
+          [/ObjectGuardian</, 'type ObjectGuardian'],
+        ].filter(([sign]) => (sign as RegExp).test(declared.source))
+          .map(([, name]) => `  ${name},`).join('\n')
+      }
+} from '@tundralibs/guardian';
 
-${schemas.join('')}`,
+${declared.source}`,
     },
     methods: names,
     skipped,
