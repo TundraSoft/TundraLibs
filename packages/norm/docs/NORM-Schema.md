@@ -950,8 +950,10 @@ Two things follow from matching on NULL:
   holds NULL, so nothing guarantees the matching target exists.
 - A unique constraint lets several rows hold NULL, so a NULL key can
   match more than one target. A projected belongsTo then carries one of
-  them, and a filter or `orderBy` through it returns the row once per
-  match.
+  them. A filter on a column of the relation keeps the row when any of
+  them passes it, and the row is returned and counted once. On the SQL
+  engines a filter that takes its comparison value from the relation
+  (`'@tenant': '@Org.@tenant'`) still returns the row once per match.
 
 ### Referential actions
 

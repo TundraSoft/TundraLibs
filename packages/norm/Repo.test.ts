@@ -1364,4 +1364,89 @@ describe('norm.Repo — nullSafe relation keys', () => {
       await norm.disconnect();
     }
   });
+
+  it('a filter through a NULL-safe to-one relation lifts to $exists, and joins on MongoDB', async () => {
+    const { db, exec } = mock();
+    const viaOrg = { '@Org.@id': 1 };
+    const lifted = {
+      $exists: {
+        table: 'ns_orgs',
+        on: { '@tenant': '@tenant', '@code': '@orgCode' },
+        nullSafe: ['@code'],
+        where: { '@id': 1 },
+      },
+    };
+    await db.repo('SafeGrants').find(viaOrg);
+    await db.repo('SafeGrants').count(viaOrg);
+    for (const type of ['SELECT', 'COUNT']) {
+      const q = exec.lastOf(type) as unknown as Record<string, unknown>;
+      asserts.assertEquals(q.where, lifted);
+      asserts.assertEquals(q.joins, undefined);
+    }
+    // Plain equality matches one target at most: it joins.
+    await db.repo('SafeGrants').find(viaOrg, { nullSafe: false });
+    asserts.assertEquals(joinKeys(exec, 'Org'), undefined);
+
+    Object.assign(exec.capabilities, { dialect: 'mongo' });
+    await db.repo('SafeGrants').find(viaOrg);
+    asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+  });
+
+  it('live SQLite: a row whose NULL key matches several rows is returned and counted once', async () => {
+    const Seats = Entity('ns_seats', grantColumns(), {
+      pk: ['id'],
+      fk: {
+        Org: {
+          model: 'Orgs',
+          on: { tenant: 'tenant', orgCode: 'code' },
+          reverseAs: 'Seat',
+          reverseCardinality: 'hasOne',
+          nullSafe: true,
+        },
+      },
+    });
+    const norm = new Norm({
+      database: { dialect: 'sqlite', path: ':memory:' },
+    });
+    const db = norm.use(Schema('NS', { Orgs, Seats }));
+    await norm.connect();
+    try {
+      await db.raw(
+        'CREATE TABLE ns_orgs (id INTEGER PRIMARY KEY, tenant INTEGER NOT NULL, code TEXT)',
+      );
+      await db.raw(
+        'CREATE TABLE ns_seats (id INTEGER PRIMARY KEY, tenant INTEGER NOT NULL, orgCode TEXT, perm TEXT NOT NULL)',
+      );
+      // Orgs 1 and 2 share a NULL code, as seats 10 and 12 do.
+      await db.repo('Orgs').insert([
+        { id: 1, tenant: 1, code: null },
+        { id: 2, tenant: 1, code: null },
+        { id: 3, tenant: 1, code: 'a' },
+      ]);
+      await db.repo('Seats').insert([
+        { id: 10, tenant: 1, orgCode: null, perm: 'read' },
+        { id: 11, tenant: 1, orgCode: 'a', perm: 'read' },
+        { id: 12, tenant: 1, orgCode: null, perm: 'read' },
+      ]);
+
+      const viaOrg = { '@Org.@tenant': 1 } as const;
+      const page = await db.repo('Seats').find(viaOrg, {
+        orderBy: { '@id': 'ASC' },
+        limit: 2,
+        total: true,
+      });
+      asserts.assertEquals(page.data.map((r) => r.id), [10, 11]);
+      asserts.assertEquals(page.total, 3);
+      asserts.assertEquals((await db.repo('Seats').count(viaOrg)).count, 3);
+
+      const viaSeat = { '@Seat.@perm': 'read' } as const;
+      const orgs = await db.repo('Orgs').find(viaSeat, {
+        orderBy: { '@id': 'ASC' },
+      });
+      asserts.assertEquals(orgs.data.map((r) => r.id), [1, 2, 3]);
+      asserts.assertEquals((await db.repo('Orgs').count(viaSeat)).count, 3);
+    } finally {
+      await norm.disconnect();
+    }
+  });
 });

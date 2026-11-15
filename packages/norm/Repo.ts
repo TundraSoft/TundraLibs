@@ -209,9 +209,9 @@ type ProjectionPlan = {
    * refs to unprojected to-many relations lifted into `$exists`
    * subqueries (identical reference when nothing needed lifting). */
   where: Row | undefined;
-  /** Aliases of unprojected to-many relations whose filters were lifted
-   * into `$exists` correlated subqueries. Empty for a plain read. A
-   * lifted `$exists` is a cross-table dependency that never surfaces in
+  /** Aliases of unprojected to-many or NULL-safe relations whose
+   * filters were lifted into `$exists` correlated subqueries. Empty for
+   * a plain read. A lifted `$exists` is a cross-table dependency that never surfaces in
    * `oqlJoins`, so — like a join — it makes the read non-cacheable
    * (per-table pruning cannot invalidate it when the related table is
    * written). */
@@ -1853,8 +1853,21 @@ export class ReadRepo<
     }
 
     // Pass 2: filter/orderBy refs may need filter-only joins.
-    // Lifted alias → its NULL-safe source columns.
+    // Lifted alias → its NULL-safe columns on the related table.
     const existsAliases = new Map<string, readonly string[]>();
+    // A NULL-safe key can match several rows of a to-one relation, so a
+    // filter-only ref to it is lifted like a to-many one: the FK-holder
+    // columns to lift on, none when the ref joins. MongoDB joins: its
+    // `$lookup` never repeats the base row, and it has no `$exists`.
+    const liftedSafeCols = (
+      alias: string,
+      mode: 'where' | 'orderBy',
+      position: 'key' | 'value',
+    ): readonly string[] =>
+      this._executor.capabilities.dialect !== 'mongo' &&
+        !(alias in oqlJoins) && mode === 'where' && position === 'key'
+        ? nullSafeCols(alias)
+        : [];
     const visitAliasRef = (
       alias: string,
       col: string,
@@ -1877,6 +1890,11 @@ export class ReadRepo<
               code: 'INVALID_PROJECTION',
             },
           );
+        }
+        const safe = liftedSafeCols(alias, mode, position);
+        if (safe.length > 0) {
+          existsAliases.set(alias, safe.map((c) => fks[alias]!.on[c]!));
+          return;
         }
         if (!joined) ensureBtJoin(alias);
         addCols(alias, [col]);
@@ -1943,6 +1961,11 @@ export class ReadRepo<
           existsAliases.set(alias, nullSafeCols(alias));
           return;
         }
+        const safe = liftedSafeCols(alias, mode, position);
+        if (safe.length > 0) {
+          existsAliases.set(alias, safe);
+          return;
+        }
         if (!joined) ensureRevJoin(alias);
         addCols(alias, [col]);
         return;
@@ -1982,9 +2005,9 @@ export class ReadRepo<
     };
   }
 
-  /** Rewrite refs to UNPROJECTED to-many relations into correlated
-   * `$exists` subqueries — the fan-out-free form of "base rows with
-   * at least one matching related row". Same-alias refs within one
+  /** Rewrite refs to UNPROJECTED to-many or NULL-safe relations into
+   * correlated `$exists` subqueries — the fan-out-free form of "base
+   * rows with at least one matching related row". Same-alias refs within one
    * AND-node share ONE subquery (a single related row must satisfy
    * all of them); refs inside `$or` branches become branch-local
    * EXISTS. Pure: shares unchanged subtrees, never mutates — the
@@ -2000,7 +2023,10 @@ export class ReadRepo<
       return node.map((n) => this.__liftToExists(n, aliases));
     }
     if (typeof node !== 'object') return node;
-    const reverseEntries = this._runtime.reverseMap.get(this._compiled.key)!;
+    const reverseEntries = this._runtime.reverseMap.get(this._compiled.key);
+    const fks =
+      (this._compiled.def as { foreignKeys?: Record<string, unknown> })
+        .foreignKeys as Record<string, EmittedForeignKey> | undefined ?? {};
     const out: Row = {};
     const perAlias = new Map<string, Row>();
     for (const [key, value] of Object.entries(node as Row)) {
@@ -2026,17 +2052,32 @@ export class ReadRepo<
     if (perAlias.size === 0) return out;
     const existsNodes: Row[] = [];
     for (const [alias, sub] of perAlias) {
-      const rel = reverseEntries.get(alias)!;
       const on: Record<string, string> = {};
-      for (const [targetCol, sourceCol] of Object.entries(rel.on)) {
-        on[`@${sourceCol}`] = `@${targetCol}`;
+      let table: string;
+      let schema: string | undefined;
+      const fk = fks[alias];
+      if (fk !== undefined) {
+        const tDef = this._runtime.compiled.get(fk.model)!.def as {
+          name: string;
+          dbSchema?: string;
+        };
+        table = tDef.name;
+        schema = tDef.dbSchema;
+        for (const [localCol, remoteCol] of Object.entries(fk.on)) {
+          on[`@${remoteCol}`] = `@${localCol}`;
+        }
+      } else {
+        const rel = reverseEntries!.get(alias)!;
+        table = rel.sourceTableName;
+        schema = rel.sourceDbSchema;
+        for (const [targetCol, sourceCol] of Object.entries(rel.on)) {
+          on[`@${sourceCol}`] = `@${targetCol}`;
+        }
       }
-      const safe = aliases.get(alias)!.map((sourceCol) => `@${sourceCol}`);
+      const safe = aliases.get(alias)!.map((col) => `@${col}`);
       existsNodes.push({
-        table: rel.sourceTableName,
-        ...(rel.sourceDbSchema !== undefined
-          ? { schema: rel.sourceDbSchema }
-          : {}),
+        table,
+        ...(schema !== undefined ? { schema } : {}),
         on,
         ...(safe.length > 0 ? { nullSafe: safe } : {}),
         ...(Object.keys(sub).length > 0 ? { where: sub } : {}),
