@@ -261,13 +261,18 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
     let destroyed = false;
     let loaded = false; // only a COMPLETED load may reach the save phase
     let evict: string | undefined; // an old id to drop after regenerate()
+    // The cookie as verified at load: its signature is the one `issue`
+    // would compute for the same id, so re-issuing it signs nothing.
+    let verified: { id: string; signed: string } | undefined;
 
     // LOAD — verify the signed id, fetch + validate the record, build the
     // wrapper. Memoized: every getSession() call shares one promise.
     const load = async (): Promise<RapidSession> => {
       const secret = ctx.app.secret;
-      id = await verifySignedValue(ctx.cookies[name], secret, name);
+      const cookie = ctx.cookies[name];
+      id = await verifySignedValue(cookie, secret, name);
       if (id !== undefined) {
+        verified = { id, signed: cookie! };
         const rec = await hooks.getSession(id);
         if (rec !== undefined && Date.now() - rec.createdAt < absoluteMs) {
           // CLONED, never aliased: handing out the in-memory hooks' own
@@ -360,14 +365,14 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
           // a session-authenticated route is covered by construction.
           if (loaded) {
             const http = ctx as HTTPContext;
-            const vary = http.responseHeaders.get('vary');
+            const vary = http._outboundHeader('vary');
             const names = vary === null
               ? []
               : vary.split(',').map((v) => v.trim()).filter((v) => v !== '');
             if (!names.some((v) => v.toLowerCase() === 'cookie')) {
               http.setHeader('vary', [...names, 'Cookie'].join(', '));
             }
-            if (http.responseHeaders.get('cache-control') === null) {
+            if (http._outboundHeader('cache-control') === null) {
               http.setHeader('cache-control', 'private');
             }
           }
@@ -377,7 +382,9 @@ export function session(options: SessionOptions = {}): RapidMiddleware {
           // one and re-issue the cookie, erasing the session over a
           // blip. A failed load saves nothing.
           const issue = async (sid: string): Promise<void> => {
-            const signed = await signValue(sid, ctx.app.secret, name);
+            const signed = verified?.id === sid
+              ? verified.signed
+              : await signValue(sid, ctx.app.secret, name);
             ctx.setCookie(name, signed, {
               httpOnly: true,
               secure: options.secure ?? true,

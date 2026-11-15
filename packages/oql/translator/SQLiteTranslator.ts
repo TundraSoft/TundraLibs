@@ -166,8 +166,22 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    ['DIVIDE', (a) => `(${a.join(' / ')})`],
-    ['MODULO', (a) => `(${a.join(' % ')})`],
+    // Two integers divide to an integer here, so the first operand is a
+    // real: 7 / 2 is 3.5, as on MariaDB and MongoDB.
+    ['DIVIDE', (a) => `(CAST(${a[0]} AS REAL) / ${a.slice(1).join(' / ')})`],
+    // `%` casts both operands to integers, so 2.5 % 2 is 0. `mod()` keeps
+    // the fraction but computes in doubles, which is wrong for an integer
+    // past 2^53, so two whole numbers keep `%`. The test is on the value,
+    // not `typeof`, because Node binds every JS number as a real.
+    [
+      'MODULO',
+      (a) =>
+        a.slice(1).reduce(
+          (x, y) =>
+            `(CASE WHEN ${x} = CAST(${x} AS INTEGER) AND ${y} = CAST(${y} AS INTEGER) THEN ${x} % ${y} ELSE mod(${x}, ${y}) END)`,
+          a[0]!,
+        ),
+    ],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],
     ['ABS', (a) => `ABS(${a[0]})`],

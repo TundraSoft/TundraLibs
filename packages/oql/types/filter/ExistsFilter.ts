@@ -13,6 +13,10 @@ import type { QueryFilter } from './QueryFilter.ts';
  * aliased `__exists__` internally, so its columns never collide with
  * the outer query's tables.
  *
+ * MongoDB runs the node as a `$lookup` stage on SELECT and COUNT and
+ * returns the same rows. UPDATE and DELETE throw there, as does an
+ * `on` value naming a joined column.
+ *
  * **`on` — the correlation map.** Follows the join `on` conventions:
  * each KEY is a column of the subquery `table` (single-segment
  * `@column` refs — no alias prefix, the `__exists__` alias is

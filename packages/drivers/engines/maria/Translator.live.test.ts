@@ -18,6 +18,7 @@ import { envArgs } from '@tundralibs/utils';
 import type { Query } from '@tundralibs/oql/types';
 import { DialectUnsupportedError } from '@tundralibs/oql/translator';
 import { MariaEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -46,7 +47,7 @@ async function isMariaAvailable(): Promise<boolean> {
   }
 }
 
-const mariaAvailable = await isMariaAvailable();
+const mariaAvailable = liveAvailable('MariaDB', await isMariaAvailable());
 const tableName = `oql_translator_live_${Date.now()}`;
 
 describe('drivers.MariaTranslator.live', () => {

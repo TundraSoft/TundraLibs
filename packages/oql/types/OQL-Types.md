@@ -318,8 +318,8 @@ type QueryFilter<
 
 The `$exists` / `$nexists` payload — a correlated
 `EXISTS (SELECT 1 FROM <table> AS __exists__ WHERE …)` /
-`NOT EXISTS (…)` subquery predicate (SQL dialects only; the Mongo
-translator throws).
+`NOT EXISTS (…)` subquery predicate. The Mongo translator runs it as
+a `$lookup` stage on SELECT and COUNT, and throws on UPDATE and DELETE.
 
 ```typescript ignore
 type ExistsFilter<PT, FPT> = {
@@ -401,7 +401,8 @@ applicability, so a boolean filter built dynamically (bypassing the
 type checker) will not be caught by `assertQuery` either.
 
 **Null inside operator values is disallowed.** `$eq: null`, `$ne: null`,
-`$in: [null, …]`, `$nin: [null, …]` are rejected at both the type and
+`$in: [null, …]`, `$nin: [null, …]` and a null in a shorthand list
+(`'@col': ['a', null]`) are rejected at both the type and
 runtime levels — SQL `= NULL` / `<> NULL` are always unknown. Use
 `$null: true` / `$null: false` for null comparisons. The shorthand
 `'@col': null` is still accepted (and means `IS NULL`).

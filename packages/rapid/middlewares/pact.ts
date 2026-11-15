@@ -471,7 +471,7 @@ export function pactAuth<B extends PermissionBits, M extends string>(
     ctx.response = {
       content: json,
       headers: {
-        'content-type': ctx.responseHeaders.get('content-type') ??
+        'content-type': ctx._outboundHeader('content-type') ??
           'application/json',
       },
     };

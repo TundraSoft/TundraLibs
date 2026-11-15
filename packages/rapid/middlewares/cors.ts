@@ -153,7 +153,7 @@ function validate(options: CorsOptions): void {
  * already there (and without listing it twice).
  */
 function appendVary(ctx: HTTPContext, name: string): void {
-  const current = ctx.responseHeaders.get('vary');
+  const current = ctx._outboundHeader('vary');
   if (current === null || current.trim() === '') {
     ctx.setHeader('vary', name);
     return;
