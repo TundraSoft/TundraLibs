@@ -154,6 +154,32 @@ describe('rapid.Application', () => {
         await app.stop();
       }
     });
+
+    it('a restarted app takes uploads again: stop() removed the upload dir, start() puts it back', async () => {
+      const app = await Application.initialize({
+        name: 'restart-uploads',
+        logger: { handlers: [] },
+        server: { port: 0 },
+        uploads: { allowedExtensions: ['.txt'] },
+      });
+      app.post('/up', async (ctx) => ({
+        content: { files: Object.keys((await ctx.payload) ?? {}) },
+      }));
+      await app.start();
+      await app.stop();
+      await app.start();
+      try {
+        const form = new FormData();
+        form.append('f', new File(['x'], 'x.txt', { type: 'text/plain' }));
+        const reply = await app.fetch(
+          new Request('http://app/up', { method: 'POST', body: form }),
+        );
+        asserts.assertEquals(reply.status, 200);
+        asserts.assertEquals(await reply.json(), { files: ['f'] });
+      } finally {
+        await app.stop();
+      }
+    });
   });
 
   describe("job handlers see the app's typed state, like HTTP/SOCKET (B11 gap)", () => {
@@ -2544,6 +2570,14 @@ describe('rapid.Application', () => {
       asserts.assert(a.runtime.disposed);
       asserts.assert(a.modules.Audit.disposed);
       asserts.assertEquals(started.moduleRuntime, undefined);
+      // Its routes are still registered but its modules are gone: a
+      // second start() is refused, where it used to serve a 500 per route.
+      const refused = await asserts.assertRejects(
+        () => started.start(),
+        RapidError,
+      );
+      asserts.assertEquals(refused.code, 'RAPID_CONFIG');
+      asserts.assertStringIncludes(refused.message, 'create a new Application');
 
       const fetchOnly = await make('mods-stop-fetch');
       const b = await fetchOnly.modules({ modules: [{ Users, Audit }] });
