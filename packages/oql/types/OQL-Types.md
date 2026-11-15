@@ -798,7 +798,8 @@ arguments, so declare them in `expressions` and project them.
   when `else` is omitted. On MongoDB, `when` supports `$and`, `$or` and
   every column operator; `$exists` and `$nexists` throw
   `DialectUnsupportedError`, and so does a pattern operator whose value
-  is a column.
+  is a column, or a `$like`, `$nlike`, `$ilike` or `$nilike` whose value
+  is an expression.
 
 ```ts
 import type { Query } from '@tundralibs/oql';
