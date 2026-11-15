@@ -3221,12 +3221,12 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          'SELECT __base__."team" AS "team", COUNT(1) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
+          'SELECT __base__."team" AS "team", CAST(COUNT(1) AS DOUBLE PRECISION) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
         params: {},
       },
       maria: {
         sql:
-          'SELECT __base__.`team` AS `team`, COUNT(1) AS `n` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`team` ORDER BY __base__.`team` ASC, MAX(`o`.`amount`) DESC',
+          'SELECT __base__.`team` AS `team`, CAST(COUNT(1) AS DOUBLE) AS `n` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`team` ORDER BY __base__.`team` ASC, MAX(`o`.`amount`) DESC',
         params: {},
       },
     },
