@@ -68,6 +68,29 @@ describe('rapid session()', () => {
     asserts.assertEquals((await r2.json()).hits, 2);
   });
 
+  it('re-issues the cookie it verified for the same id, and a freshly signed one after regenerate()', async () => {
+    const app = await makeApp();
+    const sid = sidFrom(
+      await app.fetch(new Request('http://app/hit', { method: 'POST' })),
+    )!;
+    const send = (path: string, method: string) =>
+      app.fetch(
+        new Request(`http://app${path}`, {
+          method,
+          headers: { cookie: `sid=${sid}` },
+        }),
+      );
+    asserts.assertEquals(sidFrom(await send('/read', 'GET')), sid);
+    asserts.assertEquals(sidFrom(await send('/hit', 'POST')), sid);
+    const rotated = sidFrom(await send('/login', 'POST'))!;
+    asserts.assertNotEquals(rotated, sid);
+    // The rotated cookie carries a signature the app accepts.
+    const after = await app.fetch(
+      new Request('http://app/read', { headers: { cookie: `sid=${rotated}` } }),
+    );
+    asserts.assertEquals((await after.json()).hits, 2);
+  });
+
   it('does not set a cookie for a read-only request with no session', async () => {
     const app = await makeApp();
     const r = await app.fetch(new Request('http://app/read'));
