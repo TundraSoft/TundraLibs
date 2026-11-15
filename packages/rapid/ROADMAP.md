@@ -46,11 +46,6 @@ updated **2026-11-15**.
 
 ### UI follow-ups
 
-- **`live: 'sse'`** — a Server-Sent-Events variant of the live bridge
-  (server: one `ctx.sse()` endpoint fanning in from `app.channel()`s;
-  client: `EventSource`, same `rapid:push`/`rapid:live` events) so live
-  updates work on Cloudflare Workers, where the rpc WebSocket cannot
-  listen. Documented as a known limit in docs/Rapid-UI.md until then.
 - **`cores` registry** (YAML `ui.core: <name>` selecting the document
   per replica) — deferred from the tiers round: chrome moved to the
   module tier, thinning the per-replica case; purely additive when a
@@ -129,6 +124,14 @@ hit/miss header on a cached reply, and a hit/miss counter on the meter.
     pipeline, a `/metrics` aggregator, leader designation + `onlyIfCronLeader`,
     and the views. **Rejected:** worker-side leader election / peer mesh /
     cacher-lease — the static master removes the need.
+  - **`live: 'sse'`** — a Server-Sent-Events variant of the live bridge
+    (one `ctx.sse()` endpoint; client: `EventSource`, same
+    `rapid:push`/`rapid:live` events) so live updates work on Cloudflare
+    Workers, where the rpc WebSocket cannot listen. Waits on this item:
+    `app.publish()` reaches only the process that holds the socket, and on
+    Workers the request that publishes and the one that streams are
+    different isolates, so the endpoint needs the cross-process publish
+    chosen here. Documented as a known limit in docs/Rapid-UI.md until then.
   - Later: drain-aware rolling deploys, fleet cron pause / remote trigger,
     config & feature-flag broadcast, alerting webhooks, a TUI `reqId`→trace
     jump, multi-master HA via rpc's Redis `PubSubAdapter`.
