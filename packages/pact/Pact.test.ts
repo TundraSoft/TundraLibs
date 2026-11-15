@@ -458,12 +458,27 @@ describe('Pact MFA hardening', () => {
   });
 
   it('refuses an earlier step once a later one is accepted', async () => {
-    const { pact, seed } = await enrolled();
     const now = Date.now();
-    const current = await generateTOTP(seed, { epoch: now });
-    const previous = await generateTOTP(seed, { epoch: now - 30_000 });
-    asserts.assert(await pact.verifyMFA('m1', current));
-    asserts.assertFalse(await pact.verifyMFA('m1', previous));
+    const codeAt = (seed: string, offset: number) =>
+      generateTOTP(seed, { epoch: now + offset * 30_000 });
+    // A seed can give the previous step the code of a later one. Sharing the
+    // current step's, it is refused as that step and not as an earlier one;
+    // sharing a later step's, it is accepted as that step. Draw another seed
+    // then. Two steps ahead covers the clock crossing a step, as in wrongCode.
+    const reused = async (seed: string) => {
+      const previous = await codeAt(seed, -1);
+      for (const offset of [0, 1, 2]) {
+        if (await codeAt(seed, offset) === previous) return true;
+      }
+      return false;
+    };
+    let user = await enrolled();
+    for (let draw = 0; draw < 5 && await reused(user.seed); draw++) {
+      user = await enrolled();
+    }
+    const { pact, seed } = user;
+    asserts.assert(await pact.verifyMFA('m1', await codeAt(seed, 0)));
+    asserts.assertFalse(await pact.verifyMFA('m1', await codeAt(seed, -1)));
   });
 
   it('delegates the step claim to claimTotpStep', async () => {
