@@ -1429,7 +1429,7 @@ describe('norm.Repo — nullSafe relation keys', () => {
     }
   });
 
-  it('a filter through a NULL-safe to-one relation lifts to $exists, and joins on MongoDB', async () => {
+  it('a filter through a NULL-safe to-one relation lifts to $exists on every dialect', async () => {
     const { db, exec } = mock();
     const viaOrg = { '@Org.@id': 1 };
     const lifted = {
@@ -1451,9 +1451,13 @@ describe('norm.Repo — nullSafe relation keys', () => {
     await db.repo('SafeGrants').find(viaOrg, { nullSafe: false });
     asserts.assertEquals(joinKeys(exec, 'Org'), undefined);
 
+    // MongoDB lifts too: a join there tests each condition against any
+    // matched row, where one row has to meet them all.
     Object.assign(exec.capabilities, { dialect: 'mongo' });
     await db.repo('SafeGrants').find(viaOrg);
-    asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+    const q = exec.lastOf('SELECT') as unknown as Record<string, unknown>;
+    asserts.assertEquals(q.where, lifted);
+    asserts.assertEquals(q.joins, undefined);
   });
 
   it('live SQLite: a row whose NULL key matches several rows is returned and counted once', async () => {

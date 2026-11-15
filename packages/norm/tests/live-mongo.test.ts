@@ -170,16 +170,14 @@ if (!available) {
     },
     // The CERTAIN dialect gaps (client-side facts — translator throws
     // / capability flags). The live run may add readback-shaped ones.
-    // The Mongo limitations ($exists/$nexists, transactions, migrations)
-    // are the skip reasons below.
+    // The Mongo limitations (VIEW join projection, transactions,
+    // migrations) are the skip reasons below.
     skip: {
       '18c': 'FK ON DELETE CASCADE — no foreign keys in MongoDB',
       '08r': 'raw SQL — db.raw throws NormUnsupportedError on Mongo ' +
         '(no SQL surface; use db.query with OQL IR instead)',
-      '08e': 'filter-only to-many lifts to $exists — MongoTranslator ' +
-        'throws (no correlated-subquery form in find filters)',
-      '13b': 'M2M view read filters through $exists — same ' +
-        '$exists/$nexists gap',
+      '13b': 'a joined column in a VIEW projection reads back as an ' +
+        'array (tags_of_posts.name is ["deno"]), so the tag names differ',
       '17': 'no transactions (capabilities.transactions=false; ' +
         'db.transaction throws NormUnsupportedError by design)',
       '17b': 'no transactions — savepoint nesting is moot without them',

@@ -14,12 +14,13 @@ changelog has those.
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
+  - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
 
 ## 1.13.0
 
 norm 1.13.0, with drivers 1.9.0 and oql 1.6.0, makes dates, times and
 NULL behave the same on every engine and on every host.
-[Dates and time zones](NORM-Dates.md) describes the result. Seven of the
+[Dates and time zones](NORM-Dates.md) describes the result. Eight of the
 fixes change what an app written against an earlier version sees. Where
 the app host and the database both run on UTC, the first, second and
 fifth change nothing.
@@ -96,6 +97,18 @@ Recheck any threshold compared against a `DATE_DIFF`, and drop code that
 handles a `bigint` result.
 [DATE_DIFF units](../../oql/docs/OQL-Compatibility.md#date_diff-units)
 has worked examples.
+
+### A MongoDB filter through a NULL-safe relation is met by one row
+
+A [NULL-safe](NORM-Schema.md#null-safe-keys) to-one relation can match
+several rows. When the read filters through one without projecting it,
+MongoDB now returns a row only when one related row meets every
+condition on that relation, as the SQL engines do. Earlier versions
+tested each condition against any matched row there, so
+`{ '@Org.@name': 'x', '@Org.@tier': { $gt: 5 } }` returned a row whose
+two orgs each met one condition, and `$ne` held only when no matched row
+had the value. A relation whose key matches one row at most reads as
+before.
 
 ---
 

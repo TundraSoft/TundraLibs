@@ -1949,15 +1949,13 @@ export class ReadRepo<
     const existsAliases = new Map<string, readonly string[]>();
     // A NULL-safe key can match several rows of a to-one relation, so a
     // filter-only ref to it is lifted like a to-many one: the FK-holder
-    // columns to lift on, none when the ref joins. MongoDB joins: its
-    // `$lookup` never repeats the base row, and it has no `$exists`.
+    // columns to lift on, none when the ref joins.
     const liftedSafeCols = (
       alias: string,
       mode: 'where' | 'orderBy',
       position: 'key' | 'value',
     ): readonly string[] =>
-      this._executor.capabilities.dialect !== 'mongo' &&
-        !(alias in oqlJoins) && mode === 'where' && position === 'key'
+      !(alias in oqlJoins) && mode === 'where' && position === 'key'
         ? nullSafeCols(alias)
         : [];
     const visitAliasRef = (
