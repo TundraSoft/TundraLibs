@@ -15,6 +15,7 @@ import {
   header,
   Module,
   param,
+  PATCH,
   payload,
   POST,
   query,
@@ -34,7 +35,7 @@ const User = Guardian.object({
   id: Guardian.string().uuid(),
   name: Guardian.string().minLength(2),
   role: Guardian.enum(['admin', 'user'] as const),
-});
+}).describe({ title: 'User' });
 const NewUser = Guardian.object({
   name: Guardian.string().minLength(2),
   role: Guardian.enum(['admin', 'user'] as const),
@@ -75,6 +76,14 @@ class Users {
     return { content: [] };
   }
 
+  @PATCH('/:id:', {
+    bind: [param('id'), payload(NewUser.partial())],
+    response: Guardian.object({ user: User.nullable() }),
+  })
+  update(_id: string, _changes: unknown): RapidContextResponse {
+    return { content: { user: null } };
+  }
+
   @POST('/', { bind: [payload(NewUser)], response: User })
   create(body: { name: string; role: 'admin' | 'user' }): RapidContextResponse {
     return { content: { id: UUID, ...body } };
@@ -109,6 +118,7 @@ type Client = {
   usersList(query?: { role?: string }): Promise<unknown>;
   usersFind(id: string): Promise<unknown>;
   usersCreate(body: unknown): Promise<unknown>;
+  usersUpdate(id: string, body: unknown): Promise<unknown>;
   usersTenant(headers?: Record<string, unknown>): Promise<unknown>;
   usersPaged(query?: Record<string, unknown>): Promise<unknown>;
   usersUnwindowed(): Promise<unknown>;
@@ -220,6 +230,17 @@ describe('rapid.cli sdk generateSdk', () => {
         items: [],
         paging: undefined,
       });
+      sent.length = 2;
+
+      // Schemas written as guardian operations on a shared one validate
+      // like the route's own: a partial body, and a nullable reply.
+      asserts.assertEquals(await client.usersUpdate(UUID, {}), {
+        user: null,
+      });
+      asserts.assertEquals(
+        (await failure(client.usersUpdate(UUID, { name: 'A' }))).code,
+        'REQUEST_INVALID',
+      );
       sent.length = 2;
 
       // Invalid arguments never reach the network.

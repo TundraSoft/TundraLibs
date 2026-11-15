@@ -472,6 +472,12 @@ try {
   `--strict-servers` the constructor throws restler's `RESTlerConfigError`
   for a `baseURL` outside the list. With no `servers`, `baseURL` is
   required, and the flag is refused.
+- **A schema is declared once.** One that several routes use is declared
+  under the first route's name and aliased for the others; one that carries
+  a title, `User.describe({ title: 'User' })`, is declared as `User` and
+  `UserSchema`. An object that is exactly another declared object with keys
+  left out, made optional or added is written as guardian's `omit` / `pick`,
+  `partial` or `extend` on it; anything short of exact is written out.
 - **What a schema cannot say stays `unknown`.** A route with no `response`
   returns `unknown`; a `payload()` or `query()` bound to a plain function
   gives the generator nothing to read. Transforms and custom refinements are

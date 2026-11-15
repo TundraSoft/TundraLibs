@@ -114,9 +114,8 @@ from the transport's `started` — unify on the latter.
   calls: core-vs-CLI home, latency percentiles, the in-core request ring,
   repaint cadence, a zero-dep renderer.
 - **SDK generator follow-ups** — `rapid sdk` writes the client; still to
-  do: one shared type for a schema several routes reuse, a version
-  selector for header-versioned routes, and a token-refresh hook for the
-  `auth` option.
+  do: a version selector for header-versioned routes, and a token-refresh
+  hook for the `auth` option.
 
 ### Scaling & ops
 
