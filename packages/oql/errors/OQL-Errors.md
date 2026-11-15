@@ -208,8 +208,8 @@ predicate's meaning, so OQL refuses instead.
 **Triggered by** a correlated `$exists` inside a `CREATE_INDEX` partial-index
 predicate — the only filter position OQL translates without a surrounding
 query. Correlated `$exists` in a `SELECT` / `COUNT` / `UPDATE` / `DELETE`
-`where` is fully supported: those call sites pass the query's own table as
-the correlation context.
+`where` is fully supported on the SQL dialects: those call sites pass the
+query's own table as the correlation context.
 
 **Fix:** drop the correlation from the index predicate — a partial index can
 only test columns of the table it indexes. If you need the correlated
