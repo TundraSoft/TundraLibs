@@ -14,6 +14,7 @@ changelog has those.
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
+  - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
 
 ## 1.13.0
@@ -96,6 +97,19 @@ To keep those rows, ask for them:
 `{ $or: [{ '@status': { $ne: 'BANNED' } }, { '@status': null }] }`.
 [NULL in a filter](../../oql/docs/OQL-Compatibility.md#null-in-a-filter)
 has the full rule.
+
+### A MongoDB insert stores `null` for a nullable column left out
+
+An insert or upsert that leaves out a nullable column with no default
+now stores `null` in the new document, and the row reads back with
+`null`, as on the SQL engines. Earlier versions left the field out of the
+document, so the row read back without the key. An upsert that updates a
+document already stored leaves its other fields as they are.
+
+A document an earlier version wrote still lacks the field and still reads
+back without the key; a filter for `null` matches it either way. Treat a
+missing key as `null` where the column is read, or write `null` to those
+documents once.
 
 ### `DATE_DIFF` counts complete units and returns a number
 
