@@ -9,7 +9,14 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import * as asserts from '@std/asserts';
 import '@tundralibs/norm/engines/sqlite';
-import { Column, Entity, Norm, Schema } from './mod.ts';
+import {
+  Column,
+  Entity,
+  Norm,
+  NormQueryError,
+  NormValidationError,
+  Schema,
+} from './mod.ts';
 import { Migrator } from './migrations/mod.ts';
 
 const Slots = Entity('slots', {
@@ -224,6 +231,33 @@ describe('norm — date and time filter values (live SQLite)', () => {
     );
     asserts.assertEquals(await ids({ '@day': 'tomorrow' }), []);
     asserts.assertEquals(await ids({ '@at': 'noon' }), []);
+  });
+
+  it('refuses a day or time no calendar has, in a write and in a filter', async () => {
+    const written = await asserts.assertRejects(
+      () => open().repo('Slots').insert({ id: 9, day: '2026-02-30' as never }),
+      NormValidationError,
+    );
+    asserts.assertEquals(written.context.issues.map((i) => i.path), ['day']);
+
+    const filters: [Filter, string][] = [
+      [{ '@day': '2026-02-30' }, 'day'],
+      [{ '@day': { $in: ['2020-01-14', '2026-02-29'] } }, 'day'],
+      [{ '@ts': { $gte: '2026-04-31 10:00:00' } }, 'ts'],
+      [{ '@tstz': '2026-01-01T24:00:00Z' }, 'tstz'],
+    ];
+    for (const [filter, column] of filters) {
+      const e = await asserts.assertRejects(() => ids(filter), NormQueryError);
+      asserts.assertEquals(e.code, 'INVALID_DATE');
+      asserts.assertEquals(e.context.subject, column);
+    }
+    const asOf = await asserts.assertRejects(
+      () => open().repo('Fees').find({ '@AsOf': '2099-02-30' } as Filter),
+      NormQueryError,
+    );
+    asserts.assertEquals(asOf.code, 'INVALID_DATE');
+    // A leap day is on the calendar.
+    asserts.assertEquals(await ids({ '@day': '2024-02-29' }), []);
   });
 
   it('count, update and delete filter the same way', async () => {
