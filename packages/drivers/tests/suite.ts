@@ -205,7 +205,6 @@ const CASES: Case[] = [
       { id: 3, ...NULL_UNITS },
       { id: 4, SECONDS: 0, MINUTES: 0, HOURS: 0, DAYS: 0, MONTHS: 0, YEARS: 0 },
     ],
-    pending: { postgres: 'fix/oql-pg-date-diff-date-columns' },
   },
   {
     name: 'DATE_DIFF is a JavaScript number',
@@ -222,10 +221,6 @@ const CASES: Case[] = [
       { id: 3, days: null },
       { id: 4, days: 0 },
     ],
-    pending: {
-      postgres: 'fix/oql-date-diff-number',
-      maria: 'fix/oql-date-diff-number',
-    },
   },
   {
     name: 'MODULO and ROUND with a precision over DATE_DIFF',
@@ -255,10 +250,6 @@ const CASES: Case[] = [
       { id: 3, weekday: null, took: null },
       { id: 4, weekday: 1, took: 0 },
     ],
-    pending: {
-      postgres: 'fix/oql-date-diff-number',
-      maria: 'fix/oql-date-diff-number',
-    },
   },
   {
     name: 'DATE_ADD in each unit, clamping to the end of a shorter month',
@@ -384,7 +375,6 @@ const CASES: Case[] = [
       { id: 3, stock: 'some' },
       { id: 4, stock: 'some' },
     ],
-    pending: { mongo: 'fix/oql-mongo-case-null' },
   },
   {
     name: 'UPPER and LOWER of NULL are NULL',
@@ -398,7 +388,6 @@ const CASES: Case[] = [
       { id: 3, upper: null, lower: null },
       { id: 4, upper: 'CY', lower: 'cy' },
     ],
-    pending: { mongo: 'fix/oql-mongo-null-gaps' },
   },
   {
     name: '$ne leaves out the NULL row',
@@ -415,13 +404,11 @@ const CASES: Case[] = [
     expressions: { upper: { $$_expression: 'UPPER', args: '@name' } },
     where: { '@upper': { $ne: 'ADA' } },
     expected: [{ id: 2, upper: 'BOB' }, { id: 4, upper: 'CY' }],
-    pending: { mongo: 'fix/oql-mongo-null-gaps' },
   },
   {
     name: 'a list filter holding null does not match the NULL row',
     where: { '@status': ['ACTIVE', null] },
     expected: [{ id: 1 }, { id: 4 }],
-    pending: { mongo: 'fix/oql-mongo-null-gaps' },
   },
   {
     name: 'a string literal starting with $ stays text',
@@ -441,7 +428,6 @@ const CASES: Case[] = [
       { id: 3, label: '$name', root: '$status' },
       { id: 4, label: '', root: '$status' },
     ],
-    pending: { mongo: 'fix/oql-mongo-dollar-literal' },
   },
 ];
 
