@@ -67,6 +67,11 @@ class Users {
 
   @GET('/paged', { paging: true })
   paged(): RapidContextResponse {
+    return { content: [{ n: 1 }], paging: { total: 41 } };
+  }
+
+  @GET('/unwindowed', { paging: true })
+  unwindowed(): RapidContextResponse {
     return { content: [] };
   }
 
@@ -105,6 +110,8 @@ type Client = {
   usersFind(id: string): Promise<unknown>;
   usersCreate(body: unknown): Promise<unknown>;
   usersTenant(headers?: Record<string, unknown>): Promise<unknown>;
+  usersPaged(query?: Record<string, unknown>): Promise<unknown>;
+  usersUnwindowed(): Promise<unknown>;
   vaultToken(): Promise<unknown>;
   vaultKeys(): Promise<unknown>;
   vaultOpen(): Promise<unknown>;
@@ -202,6 +209,17 @@ describe('rapid.cli sdk generateSdk', () => {
         (await failure(client.usersTenant({ 'x-tenant': {} }))).code,
         'REQUEST_INVALID',
       );
+      sent.length = 2;
+
+      // A collection returns its items and the window the reply reports.
+      asserts.assertEquals(await client.usersPaged({ page: 2, limit: 5 }), {
+        items: [{ n: 1 }],
+        paging: { page: 2, size: 5, total: 41 },
+      });
+      asserts.assertEquals(await client.usersUnwindowed(), {
+        items: [],
+        paging: undefined,
+      });
       sent.length = 2;
 
       // Invalid arguments never reach the network.

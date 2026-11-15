@@ -481,6 +481,11 @@ try {
   string under the header's own name:
   `shop.ordersList({}, { 'x-tenant': 'acme' })`. The two paging request
   headers are left out; `page` and `limit` in `query` ask for the same.
+- **A collection returns `{ items, paging }`.** A route marked
+  `paging: true` answers with its array as `items` and
+  `paging: { page, size, total? }` read from the paging reply headers;
+  `paging` is `undefined` when the reply carries none, and `total` is
+  absent when the handler did not count.
 - **Not generated:** socket commands, and
   operations that answer HTML only (listed as skipped). The client imports
   `@tundralibs/restler`, `@tundralibs/guardian` and `@tundralibs/utils`; add
