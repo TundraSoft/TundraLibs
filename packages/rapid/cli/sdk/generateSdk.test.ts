@@ -72,6 +72,11 @@ class Vault {
     return { content: {} };
   }
 
+  @GET('/open', { security: [] })
+  open(): RapidContextResponse {
+    return { content: {} };
+  }
+
   @GET('/keys', { security: ['headerKey', 'queryKey', 'cookieKey'] })
   keys(): RapidContextResponse {
     return { content: {} };
@@ -90,6 +95,7 @@ type Client = {
   usersCreate(body: unknown): Promise<unknown>;
   vaultToken(): Promise<unknown>;
   vaultKeys(): Promise<unknown>;
+  vaultOpen(): Promise<unknown>;
 };
 
 let builds = 0;
@@ -289,6 +295,9 @@ describe('rapid.cli sdk generateSdk', () => {
           cookieKey: 'c d',
         },
       }).vaultKeys();
+      // A route that declares itself public gets no credential.
+      await connect({ baseURL, auth: { type: 'BEARER', token: 't0k' } })
+        .vaultOpen();
       asserts.assertEquals(sent, [
         { authorization: 'BEARER t0k', key: null, cookie: null, search: '' },
         {
@@ -297,6 +306,7 @@ describe('rapid.cli sdk generateSdk', () => {
           cookie: 'sid=c%20d',
           search: '?key=q',
         },
+        { authorization: null, key: null, cookie: null, search: '' },
       ]);
 
       // The option is narrowed to the declared schemes: BASIC is not one.

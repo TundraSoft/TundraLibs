@@ -463,7 +463,9 @@ try {
   header, query parameter or cookie the scheme declares (a browser will not
   send the cookie). Getting and refreshing a token is yours. A scheme that
   is not declared, or another http scheme, is reported and left out. With no
-  `security` on any route the option is RESTler's own `auth`.
+  `security` on any route the option is RESTler's own `auth`. A route that
+  declares `security: []` is public and is called without the credential; a
+  route that declares nothing still gets it.
 - **`baseURL` defaults to the first declared server.** The `servers` given
   to `openapi()` or `docs()` are exported as `SHOP_SERVERS`, and
   `new Shop()` calls the first; any other `baseURL` is still accepted. With
