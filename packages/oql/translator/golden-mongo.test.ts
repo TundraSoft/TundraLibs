@@ -948,7 +948,10 @@ const CASES: Case[] = [
                 $switch: {
                   branches: [{
                     case: {
-                      $in: ['$label', [{ $literal: '$0.00' }, 'free']],
+                      $and: [
+                        { $in: ['$label', [{ $literal: '$0.00' }, 'free']] },
+                        { $gt: ['$label', null] },
+                      ],
                     },
                     then: { $literal: '$$ROOT' },
                   }],
