@@ -342,8 +342,9 @@ export class D1Engine extends SQLConnectionEngine<
 
     const rewritten = sqlBody.replaceAll(
       // Letter-or-underscore-first identifiers only — keeps us from misfiring
-      // on time literals like '00:00:00' or on `::cast`.
-      /:([A-Za-z_]\w*):/g,
+      // on time literals like '00:00:00'. A colon that follows a colon never
+      // opens one, so `x::date::text` stays two casts.
+      /(?<!:):([A-Za-z_]\w*):/g,
       (_full, key: string) => {
         if (!Object.hasOwn(supplied, key)) {
           missing.push(key);
