@@ -308,6 +308,26 @@ await db.repo('Links').find({ '@createdAt': { $gt: '@Owner.@createdAt' } });
 await db.repo('Owners').find({ '@name': { $gt: '@Items.@label' } });
 ```
 
+A relation matched [NULL-safe](#null-safe-relation-keys) supplies a
+comparison value only when the same read projects it. Unprojected, a
+row would come back once for each target it matches, so the read throws
+`INVALID_PROJECTION`. `count()` and `total: true` count without the
+projection and always throw for such a filter:
+
+```typescript ignore
+// Grants.Org is nullSafe. Projected — each grant comes back once:
+await db.repo('Grants').find({ '@tenant': '@Org.@tenant' }, {
+  project: { '@id': true, '@Org': true },
+});
+
+// Not projected — NormQueryError. Project it, or match on plain
+// equality for this read:
+await db.repo('Grants').find({ '@tenant': '@Org.@tenant' });
+await db.repo('Grants').count({ '@tenant': '@Org.@tenant' }, {
+  nullSafe: { Org: false },
+});
+```
+
 ### Hand-written `$exists` / `$nexists` (advanced)
 
 The lift above is norm generating an `$exists` node from an
@@ -330,9 +350,12 @@ await db.repo('Owners').find({
 ```
 
 This is a raw escape hatch rather than a typed norm feature. `table` is
-the physical table name, the columns inside `on` and `where` are not
-validated against any entity, and none of norm's rewrites (hashed
-column to digest, scope filters) apply inside it. Prefer the
+the physical table name. The subquery's own columns, which are the keys
+of `on` and everything in `where`, are not validated against any entity,
+and none of norm's rewrites (hashed column to digest, scope filters)
+apply to them. The outer column of an `on` pair belongs to the entity
+being read, and one that is not filterable throws
+`NON_FILTERABLE_COLUMN`. Prefer the
 `'@Alias.@col'` auto-lift, which is typed and validated and needs no
 physical names. Reach for a hand-written `$exists` only for a
 correlation OQL can express but norm's relation graph cannot, such as

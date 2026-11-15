@@ -304,6 +304,10 @@ type ProjectionPlan = {
     whole: boolean;
     cardinality: 'belongsTo' | 'hasOne' | 'hasMany';
     columnFqns: Record<string, string>;
+    /** To-one only, when several target rows can match: the keys the
+     * target's primary key sits under in each candidate, and those of
+     * them fetched only to pick by. */
+    pickBy?: { keys: readonly string[]; strip: readonly string[] };
   }>;
   /** Hidden GROUP-BY anchors added by eager synthesis (all-hidden
    * entities): fetched for the aggregate, stripped from results. */
@@ -1101,14 +1105,11 @@ export class ReadRepo<
   }
 
   /** Recursive worker behind {@linkcode _prepareWhere}. Async because
-   * rewriting a hashed ref has to digest the comparand. `convert` is
-   * off inside a hand-written `$exists`, whose columns belong to
-   * another table.
+   * rewriting a hashed ref has to digest the comparand. A hand-written
+   * `$exists` names another table's columns and is left as written;
+   * only the outer side of its `on` is this entity's, and guarded.
    * @internal */
-  private async __rewriteWhereNode(
-    node: unknown,
-    convert = true,
-  ): Promise<unknown> {
+  private async __rewriteWhereNode(node: unknown): Promise<unknown> {
     if (node === null || node === undefined) return node;
     // Date is `typeof 'object'` with NO enumerable keys — without this
     // short-circuit the object walk below flattens it to {}.
@@ -1122,7 +1123,7 @@ export class ReadRepo<
     if (Array.isArray(node)) {
       const out: unknown[] = [];
       for (const item of node) {
-        out.push(await this.__rewriteWhereNode(item, convert));
+        out.push(await this.__rewriteWhereNode(item));
       }
       return out;
     }
@@ -1133,11 +1134,18 @@ export class ReadRepo<
     // overwrite them.
     const legacy: Row[] = [];
     for (const [key, value] of Object.entries(node as Row)) {
+      if (key === '$exists' || key === '$nexists') {
+        const on = (value as { on?: unknown } | null)?.on;
+        for (const outer of Object.values(on ?? {})) {
+          if (typeof outer === 'string' && outer.startsWith('@')) {
+            this.__checkFilterRef(outer.slice(1));
+          }
+        }
+        out[key] = value;
+        continue;
+      }
       if (!key.startsWith('@')) {
-        out[key] = await this.__rewriteWhereNode(
-          value,
-          convert && key !== '$exists' && key !== '$nexists',
-        );
+        out[key] = await this.__rewriteWhereNode(value);
         continue;
       }
       // Virtual temporal point-in-time key: `@AsOf: T` → the version in
@@ -1147,7 +1155,7 @@ export class ReadRepo<
         const range = await this.__rewriteWhereNode({
           [`@${temporal.from}`]: { $lte: value },
           [`@${temporal.to}`]: { $gt: value },
-        }, convert) as Row;
+        }) as Row;
         Object.assign(out, range);
         continue;
       }
@@ -1165,10 +1173,9 @@ export class ReadRepo<
         continue;
       }
       const cond = await this.__rewriteWhereNode(value);
-      out[key] =
-        convert && (ref.plainType === 'TIME' || DATE_TYPES.has(ref.plainType))
-          ? temporalCondition(ref.plainType, cond)
-          : cond;
+      out[key] = ref.plainType === 'TIME' || DATE_TYPES.has(ref.plainType)
+        ? temporalCondition(ref.plainType, cond)
+        : cond;
     }
     if (legacy.length > 0) {
       const existing = out.$and;
@@ -1736,6 +1743,7 @@ export class ReadRepo<
         : undefined;
       const outputKey = typeof value === 'string' ? value : name;
       const colFqns: Record<string, string> = {};
+      const aggCols: Record<string, string | Row> = {};
 
       if (subProj === undefined) {
         // Whole-relation expansion PINS the TARGET's default
@@ -1744,7 +1752,6 @@ export class ReadRepo<
         // `columns` array, leaking hidden() columns whenever a
         // filter/orderBy adds one to the same join.
         addCols(name, target.projectedColumns);
-        const aggCols: Record<string, string | Row> = {};
         for (const col of target.projectedColumns) {
           aggCols[col] = relCol(name, target, col);
           colFqns[col] = `${targetKey}.${col}`;
@@ -1761,7 +1768,6 @@ export class ReadRepo<
         oqlAggregates[name] = { $$_aggregate: 'JSON_ROW', columns: aggCols };
         oqlProjection[`@${name}`] = value === true ? true : (value as string);
       } else {
-        const aggCols: Record<string, string | Row> = {};
         const need: string[] = [];
         const targetColumns = target.def.columns as Record<string, unknown>;
         for (const [subKey, subVal] of Object.entries(subProj)) {
@@ -1810,12 +1816,45 @@ export class ReadRepo<
         oqlProjection[`@${name}`] = true;
       }
 
+      // A to-one relation can match several rows (a NULL-safe key, a
+      // hasOne with more than one child). The target's primary key
+      // rides along so the read picks the same one on every engine; a
+      // join on the whole key matches one row at most and needs none.
+      let pickBy: ProjectionPlan['relations'][number]['pickBy'];
+      const pk = (target.def as { primaryKeys?: readonly string[] })
+        .primaryKeys ?? [];
+      const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
+        ref.slice(name.length + 3)
+      );
+      if (
+        cardinality !== 'hasMany' && pk.length > 0 &&
+        !pk.every((col) => onCols.includes(col))
+      ) {
+        const keys: string[] = [];
+        const strip: string[] = [];
+        for (const col of pk) {
+          const fqn = `${targetKey}.${col}`;
+          let key = Object.keys(colFqns).find((k) => colFqns[k] === fqn);
+          if (key === undefined) {
+            key = `__pk_${col}`;
+            while (key in aggCols) key = `_${key}`;
+            addCols(name, [col]);
+            aggCols[key] = relCol(name, target, col);
+            colFqns[key] = fqn;
+            strip.push(key);
+          }
+          keys.push(key);
+        }
+        pickBy = { keys, strip };
+      }
+
       relations.push({
         outputKey,
         targetKey,
         whole: subProj === undefined,
         cardinality,
         columnFqns: colFqns,
+        ...(pickBy !== undefined ? { pickBy } : {}),
       });
     };
 
@@ -1960,6 +1999,24 @@ export class ReadRepo<
         !(alias in oqlJoins) && mode === 'where' && position === 'key'
         ? nullSafeCols(alias)
         : [];
+    // A filter-only join on a NULL-safe key repeats the base row once
+    // per match, and a value-position ref cannot be lifted out of it.
+    const refuseSafeValueRef = (alias: string, col: string): void => {
+      if (alias in oqlJoins || nullSafeCols(alias).length === 0) return;
+      throw new NormQueryError(
+        `Filter value '@${alias}.@${col}' references NULL-safe relation ` +
+          `'${alias}' on '${compiled.key}', which is not projected — a ` +
+          `row can match several '${alias}' rows there and would come ` +
+          `back once per match. Project '${alias}' (each row then comes ` +
+          `back once), or turn NULL-safe matching off for this read ` +
+          `(nullSafe: { ${alias}: false }).`,
+        {
+          entity: compiled.key,
+          subject: `${alias}.${col}`,
+          code: 'INVALID_PROJECTION',
+        },
+      );
+    };
     const visitAliasRef = (
       alias: string,
       col: string,
@@ -1987,6 +2044,9 @@ export class ReadRepo<
         if (safe.length > 0) {
           existsAliases.set(alias, safe.map((c) => fks[alias]!.on[c]!));
           return;
+        }
+        if (mode === 'where' && position === 'value') {
+          refuseSafeValueRef(alias, col);
         }
         if (!joined) ensureBtJoin(alias);
         addCols(alias, [col]);
@@ -2057,6 +2117,9 @@ export class ReadRepo<
         if (safe.length > 0) {
           existsAliases.set(alias, safe);
           return;
+        }
+        if (mode === 'where' && position === 'value') {
+          refuseSafeValueRef(alias, col);
         }
         if (!joined) ensureRevJoin(alias);
         addCols(alias, [col]);
@@ -2477,7 +2540,8 @@ export class ReadRepo<
   }
 
   /** Drop all-null LEFT-JOIN placeholders; unwrap belongsTo/hasOne to
-   * object-or-null; keep hasMany as arrays. */
+   * object-or-null, the candidate lowest by primary key when several
+   * matched; keep hasMany as arrays. */
   protected _unwrapRelations(rows: Row[], plan: ProjectionPlan): void {
     for (const row of rows) {
       for (const rel of plan.relations) {
@@ -2487,6 +2551,7 @@ export class ReadRepo<
           continue;
         }
         const arr = Array.isArray(val) ? val : [val];
+        const by = rel.pickBy;
         const filtered: Row[] = [];
         for (const item of arr) {
           if (item === null || item === undefined) continue;
@@ -2497,14 +2562,30 @@ export class ReadRepo<
           const obj = item as Row;
           const keys = Object.keys(obj);
           if (keys.length === 0) continue;
-          if (keys.every((k) => obj[k] === null)) continue;
+          if (
+            keys.every((k) => obj[k] === null || by?.strip.includes(k))
+          ) continue;
           filtered.push(obj);
         }
         if (rel.cardinality === 'hasMany') {
           row[rel.outputKey] = filtered;
-        } else {
-          row[rel.outputKey] = filtered[0] ?? null;
+          continue;
         }
+        if (by !== undefined && filtered.length > 1) {
+          filtered.sort((a, b) => {
+            for (const key of by.keys) {
+              const [x, y] = [a[key] as number, b[key] as number];
+              if (x < y) return -1;
+              if (x > y) return 1;
+            }
+            return 0;
+          });
+        }
+        const picked = filtered[0] ?? null;
+        if (by !== undefined && picked !== null) {
+          for (const key of by.strip) delete picked[key];
+        }
+        row[rel.outputKey] = picked;
       }
     }
   }
