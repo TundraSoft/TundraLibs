@@ -61,6 +61,7 @@ export {
   type CacheHost,
   cachePrefix,
   describeCache,
+  storableReply,
 } from './cache.ts';
 export { memoryStore } from './memoryStore.ts';
 export {

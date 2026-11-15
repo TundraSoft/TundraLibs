@@ -31,6 +31,7 @@ import {
   selectParts,
   serveStaticFile,
   socketOutcome,
+  storableReply,
   stripApiPrefix,
 } from '../utils/mod.ts';
 import { isStreamBody } from '../utils/streams.ts';
@@ -880,37 +881,36 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
 
   /**
    * The handler through the route cache (see `cached`): a 2xx data reply
-   * without cookies is what is stored — `status`, `content`, `paging`.
+   * without cookies is what is stored — `status`, `content`, `paging`
+   * and its headers, those the handler set on the context included.
    */
   private __cached(
     ctx: HTTPContext<S>,
     entry: RapidRouteEntry<S>,
   ): Promise<RapidContextResponse | void> {
+    let set: [string, string][] = [];
     return cached<RapidContextResponse | void>(
       ctx as unknown as HTTPContext<RapidContextState>,
       this._app,
       {
-        source: entry.source ?? `${entry.method} ${entry.path}`,
+        // The auto-HEAD sibling shares its GET's entries, so one
+        // invalidation drops both.
+        source: entry.source ?? `GET ${entry.path}`,
+        ...(entry.version !== undefined ? { version: entry.version } : {}),
         cache: entry.cache!,
         params: ctx.params,
         bind: (binder) => extractBind(binder, ctx),
         checkReads: true,
       },
-      async () => await entry.handler(ctx),
-      (reply) =>
-        reply !== undefined && reply !== null && reply.redirect === undefined &&
-          reply.cookies === undefined &&
-          (reply.status === undefined ||
-            (reply.status >= 200 && reply.status < 300)) &&
-          !(reply.content instanceof Uint8Array) && !isStreamBody(reply.content)
-          ? {
-            content: reply.content,
-            ...(reply.status !== undefined ? { status: reply.status } : {}),
-            ...(reply.paging !== undefined ? { paging: reply.paging } : {}),
-            // A cached page keeps its handler's choice of parts.
-            ...(reply.compose !== undefined ? { compose: reply.compose } : {}),
-          }
-          : undefined,
+      async () => {
+        const before = new Map(ctx._outboundHeaders());
+        const reply = await entry.handler(ctx);
+        set = ctx._outboundHeaders().filter(([name, value]) =>
+          name !== 'set-cookie' && before.get(name) !== value
+        );
+        return reply;
+      },
+      (reply) => storableReply(reply, set),
       (stored) => stored as RapidContextResponse,
     );
   }

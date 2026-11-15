@@ -13,9 +13,11 @@ import type { Slogger } from '@tundralibs/slogger';
 import { CTX_READ } from '../context/Context.ts';
 import type { HTTPContext } from '../context/HTTPContext.ts';
 import { RapidError } from '../errors/mod.ts';
+import { isStreamBody } from './streams.ts';
 import type {
   RapidBinder,
   RapidCacheStore,
+  RapidContextResponse,
   RapidContextState,
   RapidRouteCache,
 } from '../types/mod.ts';
@@ -58,6 +60,19 @@ const NAMES: readonly [number, string][] = [
 
 const nameOf = (channels: number): string =>
   NAMES.filter(([bit]) => (channels & bit) !== 0).map(([, n]) => n).join(', ');
+
+/** A header name compares case-insensitively; a cookie name does not. */
+const nameIn = (source: 'header' | 'cookie', name: string | undefined) =>
+  source === 'header' ? String(name).toLowerCase() : String(name);
+
+/** The header or cookie names a key carries. */
+const namesOf = (
+  key: readonly RapidBinder[],
+  source: 'header' | 'cookie',
+): Set<string> =>
+  new Set(
+    key.filter((b) => b.source === source).map((b) => nameIn(source, b.name)),
+  );
 
 /** The channels a key covers. */
 const covered = (key: readonly RapidBinder[]): number =>
@@ -119,6 +134,21 @@ export function assertRouteCache(
       { missing: `state('${unkeyed.name}')` },
     );
   }
+  // A header or cookie is one value of many on its channel: like state,
+  // it must be in the key by NAME, or `header('accept-language')` would
+  // pass for a route that binds `header('authorization')`.
+  for (const source of ['header', 'cookie'] as const) {
+    const names = namesOf(key, source);
+    const loose = binds.find((b) =>
+      b.source === source && !names.has(nameIn(source, b.name))
+    );
+    if (loose !== undefined) {
+      fail(
+        `cache.key must carry ${source}('${loose.name}') — the route binds it, so the cached reply would serve one caller's value to the next`,
+        { missing: `${source}('${loose.name}')` },
+      );
+    }
+  }
   const missing = binds.reduce(
     (mask, b) => mask | (BIND_CHANNEL.get(b.source) ?? 0),
     0,
@@ -164,10 +194,12 @@ export async function cached<T>(
   host: CacheHost,
   spec: {
     source: string;
+    /** The route's version: two versions of one path never share an entry. */
+    version?: string;
     cache: RapidRouteCache;
     params: Readonly<Record<string, unknown>>;
     bind: (binder: RapidBinder) => unknown | Promise<unknown>;
-    /** Whether `work` itself reads through `ctx` (a plain handler) — then its reads are checked. */
+    /** Whether `work` reads through `ctx` (a route's handler) — then its reads are checked against the key. */
     checkReads: boolean;
   },
   work: () => Promise<T>,
@@ -184,12 +216,27 @@ export async function cached<T>(
   }
   const key = spec.cache.key ?? [];
   const extras = await Promise.all(key.map((b) => spec.bind(b)));
+  // A BigInt (pact's grant masks, in an `auth()` key) has no JSON form.
   const id = `${cachePrefix(spec.source)}${ctx.surface}:${
-    JSON.stringify([
-      Object.entries(spec.params).sort(([a], [b]) => a.localeCompare(b)),
-      extras,
-    ])
+    JSON.stringify(
+      [
+        Object.entries(spec.params).sort(([a], [b]) => a.localeCompare(b)),
+        extras,
+        ...(spec.version !== undefined ? [spec.version] : []),
+      ],
+      (_, value) => typeof value === 'bigint' ? `${value}n` : value,
+    )
   }`;
+  const write = async (projection: unknown): Promise<void> => {
+    try {
+      await store.write(id, projection, spec.cache.seconds);
+    } catch (error) {
+      host.log.warn(`cache write failed for ${spec.source}`, {
+        requestId: ctx.requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
   let hit: unknown;
   try {
     hit = await store.read(id);
@@ -200,29 +247,51 @@ export async function cached<T>(
     });
   }
   if (hit !== undefined) return fromStore(hit);
+  if (!spec.checkReads) {
+    const value = await work();
+    const projection = storable(value);
+    if (projection !== undefined) await write(projection);
+    return value;
+  }
   ctx._resetReads();
   let value: T;
   let stateReads: string[];
+  let named: { headers: string[]; cookies: string[] };
   try {
     value = await work();
   } finally {
     stateReads = ctx._takeStateReads();
+    named = ctx._takeNamedReads();
   }
   const projection = storable(value);
   if (projection === undefined) return value;
-  const uncovered = spec.checkReads ? ctx._readChannels & ~covered(key) : 0;
+  // Headers and cookies are judged by name below; every other channel by
+  // whether the key carries it at all.
+  const uncovered = ctx._readChannels & ~covered(key) &
+    ~(CTX_READ.HEADERS | CTX_READ.COOKIES);
+  const keyedHeaders = namesOf(key, 'header');
+  const keyedCookies = namesOf(key, 'cookie');
+  const unkeyedNames = [
+    ...named.headers.filter((n) => !keyedHeaders.has(n)).map((n) =>
+      n === '*' ? 'every header' : `header('${n}')`
+    ),
+    ...named.cookies.filter((n) => !keyedCookies.has(n)).map((n) =>
+      n === '*' ? 'every cookie' : `cookie('${n}')`
+    ),
+  ];
   // A request-scoped state key (one this request's middleware set — a
   // tenant, the rows it loaded) is per caller like ctx.auth: read raw, it
   // must be in the key by NAME, or one caller's reply serves the next.
   const keyedState = new Set(
     key.filter((b) => b.source === 'state').map((b) => b.name),
   );
-  const unkeyedState = spec.checkReads
-    ? stateReads.filter((k) => !keyedState.has(k))
-    : [];
-  if (uncovered !== 0 || unkeyedState.length > 0) {
+  const unkeyedState = stateReads.filter((k) => !keyedState.has(k));
+  if (
+    uncovered !== 0 || unkeyedState.length > 0 || unkeyedNames.length > 0
+  ) {
     const read = [
       ...(uncovered !== 0 ? [nameOf(uncovered)] : []),
+      ...unkeyedNames,
       ...unkeyedState.map((k) => `state('${k}')`),
     ].join(', ');
     const message =
@@ -239,13 +308,39 @@ export async function cached<T>(
     }
     return value;
   }
-  try {
-    await store.write(id, projection, spec.cache.seconds);
-  } catch (error) {
-    host.log.warn(`cache write failed for ${spec.source}`, {
-      requestId: ctx.requestId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  await write(projection);
   return value;
+}
+
+/**
+ * What a reply keeps in the store, or `undefined` when it is not one to
+ * replay: only a 2xx data reply without cookies or a redirect. `extra`
+ * headers (set on the context while the handler ran) are kept under the
+ * reply's own.
+ */
+export function storableReply(
+  reply: RapidContextResponse | void | null,
+  extra: readonly [string, string][] = [],
+): RapidContextResponse | undefined {
+  if (
+    reply === undefined || reply === null || reply.redirect !== undefined ||
+    reply.cookies !== undefined ||
+    (reply.status !== undefined &&
+      (reply.status < 200 || reply.status >= 300)) ||
+    reply.content instanceof Uint8Array || isStreamBody(reply.content)
+  ) return undefined;
+  const headers = Object.fromEntries([
+    ...extra,
+    ...(reply.headers instanceof Headers
+      ? reply.headers
+      : Object.entries(reply.headers ?? {})),
+  ]);
+  return {
+    content: reply.content,
+    ...(reply.status !== undefined ? { status: reply.status } : {}),
+    ...(reply.paging !== undefined ? { paging: reply.paging } : {}),
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    // A cached page keeps its handler's choice of parts.
+    ...(reply.compose !== undefined ? { compose: reply.compose } : {}),
+  };
 }

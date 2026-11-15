@@ -207,8 +207,10 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   extends Context<S, Response> {
   /** The transport discriminator — always `'HTTP'`. */
   public readonly type = 'HTTP';
-  /** The inbound Fetch-standard request. */
-  public readonly request: Request;
+  /** The inbound request, unrecorded — what the context itself reads. */
+  private readonly __req: Request;
+  /** Header and cookie names read while a cached handler runs (see {@link _resetReads}). */
+  private __named?: { headers: Set<string>; cookies: Set<string> };
   /** Transport-reported peer address, unresolved — see {@link remoteAddress}. */
   private readonly __rawRemoteAddress: string;
   /**
@@ -279,10 +281,70 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   /** Outbound headers accumulated by `setHeader`/`appendHeader`/`deleteHeader`. */
   protected readonly _headers: Headers = new Headers();
 
+  /**
+   * The inbound Fetch-standard request. In a cached route, reading its
+   * `url` or `headers` counts as reading the query or those headers.
+   */
+  get request(): Request {
+    const named = this.__named;
+    if (named === undefined) return this.__req;
+    return new Proxy(this.__req, {
+      get: (target, key) => {
+        if (key === 'headers') return this.headers;
+        if (key === 'url') this._reads |= CTX_READ.QUERY;
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+  }
+
   /** The inbound request headers. */
   get headers(): Headers {
     this._reads |= CTX_READ.HEADERS;
-    return this.request.headers;
+    const named = this.__named;
+    if (named === undefined) return this.__req.headers;
+    // `get` / `has` name what they read; anything else reads them all.
+    return new Proxy(this.__req.headers, {
+      get: (target, key) => {
+        const value = Reflect.get(target, key, target);
+        if (typeof value !== 'function') return value;
+        return (...args: unknown[]) => {
+          named.headers.add(
+            key === 'get' || key === 'has'
+              ? String(args[0]).toLowerCase()
+              : '*',
+          );
+          return value.apply(target, args);
+        };
+      },
+    });
+  }
+
+  /** Also start naming the headers and cookies read. @internal */
+  public override _resetReads(): void {
+    super._resetReads();
+    this.__named = { headers: new Set(), cookies: new Set() };
+  }
+
+  /** The header and cookie names read since {@link _resetReads} (`*` = all of them); stops naming. @internal */
+  public _takeNamedReads(): { headers: string[]; cookies: string[] } {
+    const named = this.__named;
+    this.__named = undefined;
+    return {
+      headers: [...named?.headers ?? []],
+      cookies: [...named?.cookies ?? []],
+    };
+  }
+
+  /** Note a read of one inbound cookie — a session load is one. @internal */
+  public _noteCookieRead(name: string): void {
+    this._reads |= CTX_READ.COOKIES;
+    this.__named?.cookies.add(name);
+  }
+
+  /** The outbound headers set so far, as pairs. @internal */
+  public _outboundHeaders(): [string, string][] {
+    return [...this._headers];
   }
 
   /**
@@ -337,12 +399,13 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   get method(): HTTPMethod {
     // Uppercased at read; the fetch layer guarantees a valid verb, so
     // the assertion narrows string → the compat union.
-    return this.request.method.trim().toUpperCase() as HTTPMethod;
+    return this.__req.method.trim().toUpperCase() as HTTPMethod;
   }
 
   /** The full request URL. */
   get url(): string {
-    return this.request.url;
+    this._reads |= CTX_READ.QUERY;
+    return this.__req.url;
   }
 
   /** Wrap the inbound request; default {@link Context.action} to method + pathname when unmatched. */
@@ -355,7 +418,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
         }`,
       requestId: init.requestId,
     });
-    this.request = request;
+    this.__req = request;
     this.params = init.params ?? {};
     this.routeTemplate = init.template;
     this.matched = init.matched ?? false;
@@ -378,6 +441,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
 
   /** The full observed address chain (socket peer + trusted XFF hops). */
   get remoteAddrList(): readonly string[] {
+    this._reads |= CTX_READ.ADDRESS;
     return this.__resolveAddress().chain;
   }
 
@@ -385,7 +449,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   private __resolveAddress(): ResolvedClientAddress {
     return this.__resolvedAddress ??= resolveClientAddress(
       this.__rawRemoteAddress,
-      this.request.headers,
+      this.__req.headers,
       this.app.option('server')!.trustProxy,
     );
   }
@@ -408,7 +472,7 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     // one cheap allocation per request.
     return this.__args ??= new HTTPArgs(
       this.params,
-      this.request,
+      this.__req,
       this.app.option('server')!,
       (channel) => {
         this._reads |= channel;
@@ -440,11 +504,11 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     // `payload` — a body-bound middleware never depends on its position
     // relative to one that parsed first.
     const raw = await this.rawPayload;
-    const source = new Request(this.request.url, {
-      method: this.request.method === 'GET' || this.request.method === 'HEAD'
+    const source = new Request(this.__req.url, {
+      method: this.__req.method === 'GET' || this.__req.method === 'HEAD'
         ? 'POST'
-        : this.request.method,
-      headers: this.request.headers,
+        : this.__req.method,
+      headers: this.__req.headers,
       body: raw === null ? undefined : (raw as unknown as BodyInit),
     });
     const { value, files } = await parseBody(source, this.__parseOptions());
@@ -484,10 +548,10 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
 
   /** The single capped read of the request stream behind {@link rawPayload}. */
   private async __readRaw(): Promise<Uint8Array | null> {
-    if (this.request.body === null) return null;
+    if (this.__req.body === null) return null;
     const bytes = await readCapped(
-      this.request.body,
-      bodyCapFor(this.request, this.__parseOptions()),
+      this.__req.body,
+      bodyCapFor(this.__req, this.__parseOptions()),
     );
     this.app.meter?.requestBytes('HTTP', bytes.byteLength);
     return bytes;
@@ -502,10 +566,10 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   public _replacePayload(bytes: Uint8Array): void {
     const options = this.__parseOptions();
     this.__payloadPromise = parseBody(
-      new Request(this.request.url, {
-        method: this.request.method === 'GET' || this.request.method === 'HEAD'
+      new Request(this.__req.url, {
+        method: this.__req.method === 'GET' || this.__req.method === 'HEAD'
           ? 'POST'
-          : this.request.method,
+          : this.__req.method,
         body: bytes as unknown as BodyInit,
       }),
       options,
@@ -685,7 +749,18 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    */
   public get cookies(): Readonly<Record<string, string>> {
     this._reads |= CTX_READ.COOKIES;
-    return this.__cookies ??= parseCookies(this.request.headers.get('cookie'));
+    const cookies = this.__cookies ??= parseCookies(
+      this.__req.headers.get('cookie'),
+    );
+    const named = this.__named;
+    if (named === undefined) return cookies;
+    const note = (key: string | symbol): void =>
+      void named.cookies.add(typeof key === 'string' ? key : '*');
+    return new Proxy(cookies, {
+      get: (target, key) => (note(key), Reflect.get(target, key)),
+      has: (target, key) => (note(key), Reflect.has(target, key)),
+      ownKeys: (target) => (note(Symbol.iterator), Reflect.ownKeys(target)),
+    });
   }
 
   /**

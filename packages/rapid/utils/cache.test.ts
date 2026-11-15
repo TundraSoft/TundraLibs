@@ -9,8 +9,19 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { auth, GET, paging, param, query, state } from '../decorators/mod.ts';
+import type { HTTPContext } from '../context/HTTPContext.ts';
+import {
+  auth,
+  cookie,
+  GET,
+  header,
+  paging,
+  param,
+  query,
+  state,
+} from '../decorators/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import { getSession, session } from '../middlewares/session.ts';
 import { RapidModule } from '../modules/mod.ts';
 import type {
   RapidAuthBinding,
@@ -425,5 +436,284 @@ describe('rapid.cache: the declaration and the store', () => {
       paths: Record<string, Record<string, Record<string, unknown>>>;
     };
     asserts.assertEquals(doc.paths['/items/{id}']!['get']!['x-cache'], 30);
+  });
+});
+
+class Vault extends RapidModule {
+  readonly name = 'Vault';
+  readonly namespace = 'org';
+  protected readonly events = {};
+  static runs = 0;
+  static down = false;
+
+  @GET('/vault/:code:/secret', {
+    bind: [param('code')],
+    template: STATS,
+    cache: { seconds: 60 },
+    access: 'Admin',
+  })
+  secret(code: string) {
+    Vault.runs++;
+    return { content: { code: `secret-${code}`, n: 1 } };
+  }
+
+  @GET('/vault/:code:/health', {
+    bind: [param('code')],
+    template: STATS,
+    cache: { seconds: 60 },
+  })
+  health(code: string) {
+    Vault.runs++;
+    return Vault.down
+      ? { status: 503, content: { code: 'down', n: 0 } }
+      : { content: { code, n: Vault.runs } };
+  }
+
+  @GET('/vault/:code:', {
+    bind: [param('code')],
+    template: template<{ parts: Record<string, RapidComposeSlot> }>((d) =>
+      html`<main>${d.parts.secret?.html}${d.parts.health?.html}</main>`
+    ),
+    compose: { secret: 'org:Vault:secret', health: 'org:Vault:health' },
+  })
+  page(_code: string) {
+    return { content: {} };
+  }
+}
+
+describe('rapid.cache: what a stored reply may reach', () => {
+  const vault = async (mode: 'DEVELOPMENT' | 'PRODUCTION' = 'PRODUCTION') => {
+    Vault.runs = 0;
+    Vault.down = false;
+    const app = await Application.initialize({
+      name: 'cache-vault',
+      mode,
+      ...QUIET,
+      ui: { prefer: 'html' },
+    });
+    app.auth(binding);
+    app.cache(memoryStore());
+    await app.modules({ modules: [{ Vault }] });
+    return app;
+  };
+  const text = async (app: Application, path: string, user?: string) =>
+    await (await get(app, path, user)).text();
+
+  it("a composed part's stored reply is reached only by a caller its access lets through", async () => {
+    const app = await vault();
+    asserts.assertStringIncludes(
+      await text(app, '/vault/acme', 'admin'),
+      '<b>secret-acme:1</b>',
+    );
+    for (const [user, status] of [['member', 403], [undefined, 401]] as const) {
+      const page = await text(app, '/vault/acme', user);
+      asserts.assertStringIncludes(
+        page,
+        `data-part="secret" data-status="${status}"`,
+      );
+      asserts.assertEquals(page.includes('secret-acme'), false);
+    }
+    // The admin still reads the stored tile: neither method ran again.
+    const runs = Vault.runs;
+    asserts.assertStringIncludes(
+      await text(app, '/vault/acme', 'admin'),
+      '<b>secret-acme:1</b>',
+    );
+    asserts.assertEquals(Vault.runs, runs);
+  });
+
+  it('a part stores only what a direct visit would, and the two share the entry in both directions', async () => {
+    const app = await vault('DEVELOPMENT');
+    // Direct visit first: stored, and the page then reads that entry.
+    asserts.assertStringIncludes(await text(app, '/vault/a/health'), 'a:1');
+    asserts.assertStringIncludes(
+      await text(app, '/vault/a', 'admin'),
+      'data-part="health" data-status="200"><b>a:1</b>',
+    );
+    // A 503 from the part is shown but never stored.
+    Vault.down = true;
+    asserts.assertStringIncludes(await text(app, '/vault/b', 'admin'), 'down');
+    Vault.down = false;
+    asserts.assertEquals((await get(app, '/vault/b/health')).status, 200);
+  });
+
+  it('a session read in a cached handler needs the session cookie in the key, though the session was loaded before the handler ran', async () => {
+    for (const mode of ['PRODUCTION', 'DEVELOPMENT'] as const) {
+      const app = await Application.initialize({
+        name: 'cache-session',
+        mode,
+        secret: 'x'.repeat(40),
+        ...QUIET,
+      });
+      app.preAuth(session());
+      app.auth({
+        authenticate: async (ctx) => {
+          const user = (await getSession(ctx))?.get('user');
+          return user === undefined ? undefined : { subject: user };
+        },
+        authorize: () => true,
+      });
+      app.cache(memoryStore());
+      app.get('/login/:user:', async (ctx) => {
+        (await getSession(ctx))!.set('user', ctx.args.params.user);
+        return { content: {} };
+      });
+      const me = async (ctx: HTTPContext) => ({
+        content: { me: (await getSession(ctx))?.get('user') },
+      });
+      app.get('/me', { cache: { seconds: 60 } }, me);
+      app.get(
+        '/me/keyed',
+        { cache: { seconds: 60, key: [cookie('sid')] } },
+        me,
+      );
+      const as = async (user: string, path: string) => {
+        const login = await app.fetch(new Request(`http://app/login/${user}`));
+        const sid = login.headers.getSetCookie().map((c) => c.split(';')[0])
+          .join('; ');
+        return await app.fetch(
+          new Request(`http://app${path}`, { headers: { cookie: sid } }),
+        );
+      };
+      await as('alice', '/me');
+      const bob = await as('bob', '/me');
+      if (mode === 'PRODUCTION') {
+        asserts.assertEquals(await bob.json(), { me: 'bob' });
+      } else {
+        asserts.assertStringIncludes(
+          (await bob.json()).message,
+          "cookie('sid')",
+        );
+      }
+      await as('alice', '/me/keyed');
+      asserts.assertEquals(await (await as('bob', '/me/keyed')).json(), {
+        me: 'bob',
+      });
+    }
+  });
+
+  it('reads through ctx.url and ctx.request are seen, and a header or cookie is covered by name, not by any binder of its kind', async () => {
+    const app = await boot();
+    const who = (via: 'headers' | 'request') => (c: HTTPContext) => {
+      return {
+        content: {
+          who: (via === 'headers' ? c.headers : c.request.headers).get('x-who'),
+          q: new URL(via === 'headers' ? c.url : c.request.url).searchParams
+            .get('q'),
+        },
+      };
+    };
+    app.get('/a', { cache: { seconds: 60 } }, who('headers'));
+    app.get('/b', { cache: { seconds: 60 } }, who('request'));
+    // A header binder for ANOTHER header, and query(), are in the key.
+    app.get(
+      '/c',
+      { cache: { seconds: 60, key: [header('accept-language'), query()] } },
+      who('headers'),
+    );
+    app.get(
+      '/d',
+      { cache: { seconds: 60, key: [header('X-Who'), query()] } },
+      who('headers'),
+    );
+    const ask = async (path: string, name: string) =>
+      await (await app.fetch(
+        new Request(`http://app${path}?q=${name}`, {
+          headers: { 'x-who': name },
+        }),
+      )).json();
+    for (const path of ['/a', '/b', '/c', '/d']) {
+      await ask(path, 'alice');
+      asserts.assertEquals(await ask(path, 'bob'), { who: 'bob', q: 'bob' });
+    }
+
+    class Token extends RapidModule {
+      readonly name = 'Token';
+      readonly namespace = 'org';
+      protected readonly events = {};
+      @GET('/token', {
+        bind: [header('authorization')],
+        cache: { seconds: 60, key: [header('accept-language')] },
+      })
+      token(value: string | null) {
+        return { content: { value } };
+      }
+    }
+    const error = await asserts.assertRejects(
+      async () => (await boot()).modules({ modules: [{ Token }] }),
+      RapidError,
+    );
+    asserts.assertStringIncludes(error.message, "header('authorization')");
+  });
+
+  it('two versions of one path never share an entry, HEAD shares its GET entry, and one invalidation drops them all', async () => {
+    const app = await Application.initialize({
+      name: 'cache-versions',
+      mode: 'PRODUCTION',
+      ...QUIET,
+      server: { versioning: { mode: 'path' } },
+    });
+    app.cache(memoryStore());
+    let runs = 0;
+    for (const version of ['v1', 'v2']) {
+      app.get('/v', { version, cache: { seconds: 60 } }, () => ({
+        content: `${version}:${++runs}`,
+      }));
+    }
+    const ask = async (path: string, method = 'GET') => {
+      const reply = await app.fetch(
+        new Request(`http://app${path}`, { method }),
+      );
+      return method === 'GET'
+        ? await reply.text()
+        : reply.headers.get('content-length');
+    };
+    asserts.assertEquals(await ask('/v1/v'), 'v1:1');
+    asserts.assertEquals(await ask('/v2/v'), 'v2:2');
+    asserts.assertEquals(await ask('/v1/v', 'HEAD'), '4');
+    asserts.assertEquals(runs, 2);
+    await app.invalidateCache('GET /v');
+    asserts.assertEquals(await ask('/v2/v'), 'v2:3');
+    asserts.assertEquals(await ask('/v1/v'), 'v1:4');
+  });
+
+  it("a hit replays the reply's headers and those the handler set on the context", async () => {
+    const app = await boot();
+    app.get('/csv', { cache: { seconds: 60 } }, (ctx) => {
+      ctx.setHeader('x-rows', '2');
+      return { content: 'a,b', headers: { 'content-type': 'text/csv' } };
+    });
+    for (const _ of [1, 2]) {
+      const reply = await get(app, '/csv');
+      asserts.assertEquals(reply.headers.get('content-type'), 'text/csv');
+      asserts.assertEquals(reply.headers.get('x-rows'), '2');
+    }
+  });
+
+  it('a BigInt in a key value is keyed, not a 500', async () => {
+    const app = await Application.initialize({
+      name: 'cache-bigint',
+      mode: 'PRODUCTION',
+      ...QUIET,
+    });
+    app.auth({
+      authenticate: (ctx) =>
+        ctx.type === 'HTTP'
+          ? { grants: BigInt(ctx.headers.get('x-grants') ?? '0') }
+          : undefined,
+      authorize: () => true,
+    });
+    app.cache(memoryStore());
+    let runs = 0;
+    app.get('/g', { cache: { seconds: 60, key: [auth()] } }, () => ({
+      content: { runs: ++runs },
+    }));
+    const ask = async (grants: string) =>
+      await (await app.fetch(
+        new Request('http://app/g', { headers: { 'x-grants': grants } }),
+      )).json();
+    asserts.assertEquals(await ask('1'), { runs: 1 });
+    asserts.assertEquals(await ask('1'), { runs: 1 });
+    asserts.assertEquals(await ask('2'), { runs: 2 });
   });
 });
