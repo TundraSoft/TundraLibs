@@ -58,18 +58,19 @@ export type PostgresEngineOptions = SQLEngineOptions & {
    */
   allowMd5Password?: boolean;
   /**
-   * Connect even when the database session's `TimeZone` is not UTC. Default
-   * `false`: the driver throws `INVALID_CONFIG_VALUE` when the server reports
-   * any other zone at startup.
+   * Keep the session in the server's own `TimeZone`. Default `false`: the
+   * driver asks for `TimeZone=UTC` in the startup message, so a database or
+   * role set to another zone still runs in UTC, and throws
+   * `INVALID_CONFIG_VALUE` when the server reports another zone anyway.
    *
    * Postgres converts a `Date` sent for a `date` or `timestamp` column, and
    * evaluates `date_trunc`, `EXTRACT` and casts, in the session zone, so in
    * any other zone those store and filter the wrong day and clock time. A
    * `timestamptz` column keeps the right instant in every zone, but those
-   * functions and casts still use the session zone on it. Set the zone with
-   * `ALTER DATABASE <name> SET timezone TO 'UTC'` (or `ALTER ROLE`); turn this
-   * on only when the application keeps every instant in `timestamptz` and
-   * wants the session zone's days and clock times.
+   * functions and casts still use the session zone on it. Turn this on only
+   * when the application keeps every instant in `timestamptz` and wants the
+   * session zone's days and clock times; the startup message then asks for
+   * no zone.
    */
   allowNonUtcTimeZone?: boolean;
 };

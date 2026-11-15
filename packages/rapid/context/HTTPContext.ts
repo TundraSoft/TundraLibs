@@ -29,6 +29,7 @@ import {
   pagingFromHeaders,
   pagingFromQuery,
   parseBody,
+  parseBodyBytes,
   parseCookies,
   parsePaging,
   parseQueryFilters,
@@ -513,14 +514,11 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     // `payload` — a body-bound middleware never depends on its position
     // relative to one that parsed first.
     const raw = await this.rawPayload;
-    const source = new Request(this.__req.url, {
-      method: this.__req.method === 'GET' || this.__req.method === 'HEAD'
-        ? 'POST'
-        : this.__req.method,
-      headers: this.__req.headers,
-      body: raw === null ? undefined : (raw as unknown as BodyInit),
-    });
-    const { value, files } = await parseBody(source, this.__parseOptions());
+    const { value, files } = await parseBodyBytes(
+      raw ?? new Uint8Array(0),
+      this.__req.headers.get('content-type'),
+      this.__parseOptions(),
+    );
     // Track written uploads so cleanup() removes them post-response.
     this._fileUploads.push(...files);
     this.app.meter?.uploads(files.length);

@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import type { Query } from '@tundralibs/oql/types';
 import { PostgresEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -41,7 +42,7 @@ async function isPostgresAvailable(): Promise<boolean> {
   }
 }
 
-const pgAvailable = await isPostgresAvailable();
+const pgAvailable = liveAvailable('Postgres', await isPostgresAvailable());
 const tableName = `oql_translator_live_${Date.now()}`;
 
 describe('drivers.PostgresTranslator.live', () => {

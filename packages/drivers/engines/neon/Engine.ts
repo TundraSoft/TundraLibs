@@ -184,7 +184,7 @@ export class NeonHttpEngine extends SQLConnectionEngine<
       await this.__assertUtcSession(this._resource as NeonHttpClient);
       return true;
     } catch (error) {
-      if (error instanceof EngineError) throw error;
+      if ((error as EngineError).code === 'INVALID_CONFIG_VALUE') throw error;
       return false;
     }
   }
@@ -197,7 +197,8 @@ export class NeonHttpEngine extends SQLConnectionEngine<
    * would return. The first call also runs the UTC session check.
    *
    * @throws {EngineError} `INVALID_CONFIG_VALUE` when the session `TimeZone`
-   *   is not UTC and `allowNonUtcTimeZone` is not set.
+   *   is not UTC and `allowNonUtcTimeZone` is not set; `OPERATION_FAILED` when
+   *   the request that reads it fails.
    */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
@@ -340,8 +341,9 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
     const rewritten = sqlBody.replaceAll(
       // Letter-or-underscore-first identifiers only — keeps us from misfiring
-      // on time literals like '00:00:00' or on `::cast`.
-      /:([A-Za-z_]\w*):/g,
+      // on time literals like '00:00:00'. A colon that follows a colon never
+      // opens one, so `x::date::text` stays two casts.
+      /(?<!:):([A-Za-z_]\w*):/g,
       (_full, key: string) => {
         if (!Object.hasOwn(supplied, key)) {
           missing.push(key);
@@ -498,7 +500,8 @@ export class NeonHttpEngine extends SQLConnectionEngine<
    * a pass is kept until the engine closes, a failure is checked again on the
    * next call. A server that reports no zone is not checked.
    *
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` unless `allowNonUtcTimeZone` is set.
+   * @throws {EngineError} `INVALID_CONFIG_VALUE` unless `allowNonUtcTimeZone`
+   *   is set; `OPERATION_FAILED` when the zone could not be read.
    */
   private async __assertUtcSession(client: NeonHttpClient): Promise<void> {
     if (this._getOption('allowNonUtcTimeZone') === true) return;
@@ -513,10 +516,20 @@ export class NeonHttpEngine extends SQLConnectionEngine<
   /**
    * One request for the session `TimeZone`.
    *
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` when the zone is not UTC.
+   * @throws {EngineError} `INVALID_CONFIG_VALUE` when the zone is not UTC;
+   *   `OPERATION_FAILED`, with the request's error as `cause`, when the
+   *   request fails, so it is not reported as the caller's query failing.
    */
   private async __readZone(client: NeonHttpClient): Promise<void> {
-    const res = await client.sql<{ zone?: string | null }>(ZONE_QUERY);
+    const res = await client.sql<{ zone?: string | null }>(ZONE_QUERY).catch(
+      (error: unknown) => {
+        throw new EngineError('OPERATION_FAILED', {
+          instanceId: this.instanceId,
+          operation: 'session time zone check',
+          reason: error instanceof Error ? error.message : String(error),
+        }, error as Error);
+      },
+    );
     const zone = res.rows[0]?.zone;
     if (typeof zone !== 'string' || UTC_ZONE.test(zone)) return;
     throw new EngineError('INVALID_CONFIG_VALUE', {

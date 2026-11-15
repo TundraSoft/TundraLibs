@@ -79,6 +79,7 @@ export {
 export {
   bodyCapFor,
   parseBody,
+  parseBodyBytes,
   type ParseBodyOptions,
   type ParseBodyResult,
   readCapped,

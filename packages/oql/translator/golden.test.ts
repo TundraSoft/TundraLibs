@@ -499,11 +499,11 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          'SELECT UPPER("name") AS "label", COUNT(1) AS "total" FROM "users" GROUP BY UPPER("name")',
+          'SELECT UPPER("name") AS "label", CAST(COUNT(1) AS DOUBLE PRECISION) AS "total" FROM "users" GROUP BY UPPER("name")',
       },
       maria: {
         sql:
-          'SELECT UPPER(`name`) AS `label`, COUNT(1) AS `total` FROM `users` GROUP BY UPPER(`name`)',
+          'SELECT UPPER(`name`) AS `label`, CAST(COUNT(1) AS DOUBLE) AS `total` FROM `users` GROUP BY UPPER(`name`)',
       },
     },
   },
@@ -1363,6 +1363,41 @@ const CASES: Case[] = [
         sql:
           'SELECT `userId` AS `userId`, SUM(`amount`) AS `total` FROM `orders` GROUP BY `userId` HAVING SUM(`amount`) >= :p_0:',
         params: { p_0: 100 },
+      },
+    },
+  },
+  {
+    // COUNT is a bigint on Postgres and MariaDB, so the projected value is
+    // cast to reach JS as a number. The cast goes around the whole call,
+    // DISTINCT included; HAVING and ORDER BY compare the count itself.
+    name: 'SELECT COUNT aggregate is projected as a double',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      aggregates: {
+        sizes: { $$_aggregate: 'COUNT', column: '@amount', distinct: true },
+      },
+      projection: { '@userId': true, '@sizes': 'sizes' },
+      having: { '@sizes': { $gte: 2 } },
+      orderBy: { '@sizes': 'DESC' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT "userId" AS "userId", COUNT(DISTINCT "amount") AS "sizes" FROM "orders" GROUP BY "userId" HAVING COUNT(DISTINCT "amount") >= :p_0: ORDER BY COUNT(DISTINCT "amount") DESC',
+        params: { p_0: 2 },
+      },
+      postgres: {
+        sql:
+          'SELECT "userId" AS "userId", CAST(COUNT(DISTINCT "amount") AS DOUBLE PRECISION) AS "sizes" FROM "orders" GROUP BY "userId" HAVING COUNT(DISTINCT "amount") >= :p_0: ORDER BY COUNT(DISTINCT "amount") DESC',
+        params: { p_0: 2 },
+      },
+      maria: {
+        sql:
+          'SELECT `userId` AS `userId`, CAST(COUNT(DISTINCT `amount`) AS DOUBLE) AS `sizes` FROM `orders` GROUP BY `userId` HAVING COUNT(DISTINCT `amount`) >= :p_0: ORDER BY COUNT(DISTINCT `amount`) DESC',
+        params: { p_0: 2 },
       },
     },
   },
@@ -2406,9 +2441,9 @@ const CASES: Case[] = [
 
   {
     // Postgres has no `%` and no two-argument ROUND for a double, which is
-    // what DATE_DIFF returns. `weekday` and `took` are built on one, so
-    // they go through NUMERIC and come back a double. `slot` and `tenth`
-    // are not, and keep the bare form and the type it has always given.
+    // what DATE_DIFF returns, and the translator cannot tell a double
+    // column from an integer one. Every operand goes through NUMERIC and
+    // comes back a double: `slot` and `tenth` the same as the other two.
     name: 'MODULO / ROUND with a precision over DATE_DIFF',
     method: 'select',
     query: {
@@ -2448,8 +2483,45 @@ const CASES: Case[] = [
         sql:
           `SELECT CAST((CAST((${PG_DATE_DIFF} + :p_1:) AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "weekday", ` +
           `CAST(ROUND(CAST(${PG_DATE_DIFF} AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "took", ` +
-          `("id" % :p_2:) AS "slot", ROUND("id", :p_1:) AS "tenth" FROM "orders"`,
+          `CAST((CAST("id" AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "slot", ` +
+          `CAST(ROUND(CAST("id" AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "tenth" FROM "orders"`,
         params: { p_0: 'DAYS', p_1: 1, p_2: 7 },
+      },
+    },
+  },
+  {
+    // 7 / 2 is 3.5 and 2.5 % 2 is 0.5 on every dialect. The first operand
+    // of DIVIDE is cast because two integers otherwise divide to an integer
+    // on SQLite and Postgres, and to a four-place DECIMAL on MariaDB.
+    // SQLite's `%` drops the fraction, so only two whole numbers use it.
+    name: 'DIVIDE and MODULO keep the fraction',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'total', 'qty'],
+      expressions: {
+        each: { $$_expression: 'DIVIDE', args: ['@total', '@qty'] },
+        rest: { $$_expression: 'MODULO', args: ['@total', 2] },
+      },
+      projection: { '@each': 'each', '@rest': 'rest' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql: 'SELECT (CAST("total" AS REAL) / "qty") AS "each", ' +
+          '(CASE WHEN "total" = CAST("total" AS INTEGER) AND :p_0: = CAST(:p_0: AS INTEGER) ' +
+          'THEN "total" % :p_0: ELSE mod("total", :p_0:) END) AS "rest" FROM "orders"',
+        params: { p_0: 2 },
+      },
+      postgres: {
+        sql: 'SELECT (CAST("total" AS DOUBLE PRECISION) / "qty") AS "each", ' +
+          'CAST((CAST("total" AS NUMERIC) % CAST(:p_0: AS NUMERIC)) AS DOUBLE PRECISION) AS "rest" FROM "orders"',
+        params: { p_0: 2 },
+      },
+      maria: {
+        sql:
+          'SELECT (CAST(`total` AS DOUBLE) / `qty`) AS `each`, (`total` % :p_0:) AS `rest` FROM `orders`',
+        params: { p_0: 2 },
       },
     },
   },
@@ -2481,12 +2553,12 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT date_trunc('month', "createdAt") AS "month", COUNT(1) AS "total" FROM "orders" GROUP BY date_trunc('month', "createdAt") ORDER BY date_trunc('month', "createdAt") ASC`,
+          `SELECT date_trunc('month', "createdAt") AS "month", CAST(COUNT(1) AS DOUBLE PRECISION) AS "total" FROM "orders" GROUP BY date_trunc('month', "createdAt") ORDER BY date_trunc('month', "createdAt") ASC`,
         params: {},
       },
       maria: {
         sql:
-          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) AS `month`, COUNT(1) AS `total` FROM `orders` GROUP BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ORDER BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ASC",
+          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) AS `month`, CAST(COUNT(1) AS DOUBLE) AS `total` FROM `orders` GROUP BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ORDER BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ASC",
         params: {},
       },
     },
@@ -3177,12 +3249,12 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          'SELECT __base__."id" AS "id", UPPER(__base__."name") AS "upperName", COUNT(1) AS "total" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", UPPER(__base__."name") ORDER BY UPPER(__base__."name") ASC, COUNT(1) DESC',
+          'SELECT __base__."id" AS "id", UPPER(__base__."name") AS "upperName", CAST(COUNT(1) AS DOUBLE PRECISION) AS "total" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", UPPER(__base__."name") ORDER BY UPPER(__base__."name") ASC, COUNT(1) DESC',
         params: {},
       },
       maria: {
         sql:
-          'SELECT __base__.`id` AS `id`, UPPER(__base__.`name`) AS `upperName`, COUNT(1) AS `total` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`id`, UPPER(__base__.`name`) ORDER BY UPPER(__base__.`name`) ASC, COUNT(1) DESC',
+          'SELECT __base__.`id` AS `id`, UPPER(__base__.`name`) AS `upperName`, CAST(COUNT(1) AS DOUBLE) AS `total` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`id`, UPPER(__base__.`name`) ORDER BY UPPER(__base__.`name`) ASC, COUNT(1) DESC',
         params: {},
       },
     },

@@ -263,6 +263,9 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
 - Converts to MongoDB aggregation pipeline
 - Maps OQL operators to MongoDB operators
 - Handles joins via $lookup
+- Runs `$exists` / `$nexists` filters on SELECT and COUNT as a `$lookup`
+  with a sub-pipeline (see
+  [Compatibility](../docs/OQL-Compatibility.md#exists--nexists-filters))
 - Supports aggregates via $group
 - Converts expressions to $project stages
 - Evaluates expressions in writes: an UPDATE or UPSERT holding one becomes
@@ -289,6 +292,12 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
   references a declared expression alias. A pure primary-table filter still
   gets the efficient early `$match`. (Matching a not-yet-materialised field
   silently compares against `missing` and returns wrong rows.)
+- An `$exists` / `$nexists` node puts its `$lookup` directly before the
+  `$match` that carries the filter and writes to a temporary
+  `__exists_<n>` field. The `$match` tests that field and an `$unset`
+  removes it straight after, ahead of any `$sort` or `$project`. The
+  filter stays one `$match`, so an `$or` across a column test and an
+  `$exists` is evaluated as a whole.
 - `insertQuery` (INSERT … SELECT) emits an aggregation over the source
   collection ending in **`$merge`** (append) — never `$out`, which would
   replace the whole target collection. The source SELECT's WHERE /

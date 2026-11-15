@@ -150,6 +150,9 @@ export class MariaTranslator extends AbstractTranslator {
   protected override readonly _offsetOnlyLimit: string | null =
     '18446744073709551615';
 
+  /** `COUNT` is a `BIGINT` here, which the driver returns as a BigInt. */
+  protected override readonly _countCast: string | null = 'DOUBLE';
+
   /**
    * MariaDB expression emitters. Crypto is native but not interchangeable
    * with the other dialects': `HASH` is `SHA2(…, 256)` and
@@ -163,7 +166,9 @@ export class MariaTranslator extends AbstractTranslator {
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    ['DIVIDE', (a) => `(${a.join(' / ')})`],
+    // Two integers divide to a DECIMAL of four places here, so the first
+    // operand is a double: 1 / 3 is 0.3333333333333333, not 0.3333.
+    ['DIVIDE', (a) => `(CAST(${a[0]} AS DOUBLE) / ${a.slice(1).join(' / ')})`],
     ['MODULO', (a) => `(${a.join(' % ')})`],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],

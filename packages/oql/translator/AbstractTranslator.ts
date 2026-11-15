@@ -199,6 +199,13 @@ export abstract class AbstractTranslator {
    */
   protected readonly _offsetOnlyLimit: string | null = null;
 
+  /**
+   * SQL type a projected `COUNT` aggregate is cast to, so it reaches JS as
+   * a number on every dialect. `null` — the default — means the dialect's
+   * `COUNT` already does (SQLite).
+   */
+  protected readonly _countCast: string | null = null;
+
   // =========================================================================
   // Public API — one method per query type
   // =========================================================================
@@ -1598,18 +1605,19 @@ export abstract class AbstractTranslator {
     exprCache: Map<string, string>,
   ): string {
     if (q.aggregates && stripped in q.aggregates) {
-      const sql = this._translateAggregate(
-        q.aggregates[stripped]!,
-        scope,
-        params,
-        hasJoins,
-      );
+      const agg = q.aggregates[stripped]!;
+      const sql = this._translateAggregate(agg, scope, params, hasJoins);
       // Cache for __buildOrderBy so an aggregate alias referenced in
       // ORDER BY reuses the body instead of re-translating (which would
       // re-append the aggregate's literal params, e.g. a STRING_AGG
       // separator, a second time).
       exprCache.set(stripped, sql);
-      return sql;
+      // Only the projected value is cast: HAVING and ORDER BY compare the
+      // exact count, and the engine already converts a `count()` query's.
+      return agg.$$_aggregate === 'COUNT' && this._countCast !== null &&
+          stripped !== COUNT_ALIAS
+        ? `CAST(${sql} AS ${this._countCast})`
+        : sql;
     }
     if (q.expressions && stripped in q.expressions) {
       const sql = this._translateExpression(
