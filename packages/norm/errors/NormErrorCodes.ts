@@ -69,6 +69,13 @@ export type NormErrorCode =
    * start of the version it would supersede (it must fall strictly
    * inside the open period). */
   | 'TEMPORAL_OVERLAP'
+  // ── Date and time helpers ({@link NormError}) ──────────────────────
+  /** A zoned helper was given a time zone name the runtime does not
+   * know. */
+  | 'INVALID_TIME_ZONE'
+  /** A zoned helper was given an invalid `Date`, or text that is not a
+   * date or date-time. */
+  | 'INVALID_DATE'
   // ── Definition / registry ({@link NormDefinitionError}) ────────────
   /** Two registry keys map to the same database object, or a key is
    * provided by more than one composed schema. */
