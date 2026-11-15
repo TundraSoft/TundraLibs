@@ -59,6 +59,7 @@ import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
 import {
   asUtc,
+  isDateText,
   readTimeOfDay,
   rollsOver,
   toTimeOfDay,
@@ -3341,7 +3342,8 @@ export class Repo<
       : new Date(asUtc(supplied) as string);
     if (
       Number.isNaN(d.getTime()) ||
-      (typeof supplied === 'string' && rollsOver(supplied))
+      (typeof supplied === 'string' &&
+        (!isDateText(supplied) || rollsOver(supplied)))
     ) {
       throw new NormQueryError(
         `${this._compiled.key}.insert(): '${t.from}' is not a valid date.`,
