@@ -335,6 +335,118 @@ const CASES: Case[] = [
     },
   },
   {
+    // `$between` emits `$gte` / `$lte` too. Merged into one document the
+    // later bound replaced the earlier, so the second operator stands as
+    // its own condition under `$and`.
+    name: 'WHERE $gte / $lte beside $between keep both ranges',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'qty'],
+      projection: { '@id': true },
+      where: { '@qty': { $gte: 2, $lte: 8, $between: [1, 9] } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'orders',
+        filter: {
+          qty: { $gte: 2, $lte: 8 },
+          $and: [{ qty: { $gte: 1, $lte: 9 } }],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Every pattern operator emits `$regex`. Each later one keeps its own
+    // document, so `$ilike`'s `i` option stays off the other patterns.
+    name: 'WHERE several pattern operators on one field all apply',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      projection: { '@id': true },
+      where: {
+        '@name': {
+          $ilike: 'a%',
+          $like: '%z',
+          $startsWith: 'A',
+          $endsWith: 'z',
+          $contains: 'd',
+        },
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          name: { $regex: '^a.*$', $options: 'i' },
+          $and: [
+            { name: { $regex: '^.*z$' } },
+            { name: { $regex: '^A' } },
+            { name: { $regex: 'z$' } },
+            { name: { $regex: 'd' } },
+          ],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    name: 'WHERE $nlike beside $nilike keeps both patterns',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      projection: { '@id': true },
+      where: { '@name': { $nlike: 'A%', $nilike: 'b%' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          name: { $not: { $regex: '^A.*$' }, $ne: null },
+          $and: [{
+            name: { $not: { $regex: '^b.*$', $options: 'i' }, $ne: null },
+          }],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // The clashing condition joins the filter's own `$and`.
+    name: 'WHERE a clashing operator joins an explicit $and',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'qty'],
+      projection: { '@id': true },
+      where: {
+        '@qty': { $between: [1, 9], $gte: 2 },
+        $and: [{ '@id': 1 }],
+      },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'orders',
+        filter: {
+          qty: { $gte: 1, $lte: 9 },
+          $and: [{ qty: { $gte: 2 } }, { $and: [{ id: 1 }] }],
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
     // $in with a column reference can't be expressed in a Mongo $match — throw
     // rather than silently treat the @ref as a literal.
     name: 'WHERE $in with a @col value throws (unsupported in Mongo)',
@@ -731,6 +843,30 @@ const CASES: Case[] = [
     },
   },
   {
+    // SQL's NOT LIKE skips a NULL; `$not` alone would keep a null or
+    // missing field, so each negated pattern also asks for `$ne: null`.
+    name: 'SELECT $nlike / $nilike skip a null or missing field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      projection: { '@id': true },
+      where: { '@name': { $nlike: 'John%' }, '@nick': { $nilike: 'j_' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          name: { $not: { $regex: '^John.*$' }, $ne: null },
+          nick: { $not: { $regex: '^j.$', $options: 'i' }, $ne: null },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
     name: 'SELECT $startsWith escapes regex specials',
     method: 'select',
     query: {
@@ -789,6 +925,50 @@ const CASES: Case[] = [
             },
           },
           { $project: { id: 1, prefix: '$prefix', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // `$substrCP` has no "to the end" length and rejects -1; the string's
+    // own length takes the rest, as SQL's two-argument SUBSTR does.
+    name: 'SELECT SUBSTR without a length takes the rest of the string',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        rest: {
+          $$_expression: 'SUBSTR',
+          args: { string: '@name', start: 2 },
+        },
+      },
+      projection: { '@id': true, '@rest': 'rest' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              rest: {
+                $cond: [
+                  { $gt: ['$name', null] },
+                  {
+                    $substrCP: [
+                      '$name',
+                      { $subtract: [2, 1] },
+                      { $strLenCP: '$name' },
+                    ],
+                  },
+                  null,
+                ],
+              },
+            },
+          },
+          { $project: { id: 1, rest: '$rest', _id: 0 } },
         ],
       },
     },
@@ -1110,6 +1290,86 @@ const CASES: Case[] = [
     },
   },
   {
+    // As on the SQL dialects, which bind an `@` string that names no
+    // column in scope as text. An expression alias is not in scope.
+    name: 'SELECT expression argument naming no column is text',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'label', 'meta'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      expressions: {
+        shown: { $$_expression: 'COALESCE', args: ['@label', '@nope'] },
+        deep: { $$_expression: 'COALESCE', args: ['@meta.@tag', '@nope.@tag'] },
+        joined: { $$_expression: 'COALESCE', args: ['@P.@title', '@P.@nope'] },
+        again: { $$_expression: 'COALESCE', args: ['@shown', '-'] },
+      },
+      where: {
+        '@label': {
+          $ne: { $$_expression: 'COALESCE', args: ['@id', '@nope'] },
+        },
+      },
+      projection: {
+        '@shown': 'shown',
+        '@deep': 'deep',
+        '@joined': 'joined',
+        '@again': 'again',
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $ne: ['$label', { $ifNull: ['$id', '@nope'] }] },
+                  { $gt: ['$label', null] },
+                  { $gt: [{ $ifNull: ['$id', '@nope'] }, null] },
+                ],
+              },
+            },
+          },
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          {
+            $addFields: {
+              shown: { $ifNull: ['$label', '@nope'] },
+              deep: { $ifNull: ['$meta.tag', '@nope.@tag'] },
+              joined: { $ifNull: ['$P.title', '@P.@nope'] },
+              again: { $ifNull: ['@shown', '-'] },
+            },
+          },
+          {
+            $project: {
+              shown: '$shown',
+              deep: '$deep',
+              joined: '$joined',
+              again: '$again',
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
     // An object argument is data as well: bare, MongoDB would evaluate
     // its `'$'` as a field path.
     name: 'WHERE Expression operand keeps $ and object arguments literal',
@@ -1261,8 +1521,31 @@ const CASES: Case[] = [
     },
   },
   {
-    // A pattern operator has no aggregation-expression equivalent here.
-    name: 'CASE with a $like condition throws',
+    name: 'UPDATE expression argument naming no column is text',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'label'],
+      data: {
+        label: { $$_expression: 'COALESCE', args: ['@label', '@none'] },
+      },
+      where: { '@id': 1 },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: { id: 1 },
+        data: [{ $set: { label: { $ifNull: ['$label', '@none'] } } }],
+        options: { multiple: true },
+      },
+    },
+  },
+  {
+    // A find filter's `$regex` has no place in `$switch`; `$regexMatch`
+    // takes the same pattern.
+    name: 'CASE with a $like condition → $regexMatch',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -1276,7 +1559,28 @@ const CASES: Case[] = [
       },
       projection: { '@tier': 'tier' },
     },
-    throws: true,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              tier: {
+                $switch: {
+                  branches: [{
+                    case: { $regexMatch: { input: '$name', regex: '^a.*$' } },
+                    then: 1,
+                  }],
+                  default: null,
+                },
+              },
+            },
+          },
+          { $project: { tier: '$tier', _id: 0 } },
+        ],
+      },
+    },
   },
   {
     name: 'SELECT with aggregates → aggregate pipeline',
@@ -1995,7 +2299,8 @@ const CASES: Case[] = [
   {
     // Mongo has no "last index of", so `$endsWith` compares the trailing
     // slice. `$let` binds both operands once; `$ifNull` keeps a missing
-    // field from raising a `$strLenCP` type error (it just doesn't match).
+    // field from raising a `$strLenCP` type error, and the `$gt` guard
+    // keeps a null or missing field from ending with an empty suffix.
     name: 'WHERE $endsWith with an Expression value → $expr slice compare',
     method: 'select',
     query: {
@@ -2021,6 +2326,7 @@ const CASES: Case[] = [
                 },
                 in: {
                   $and: [
+                    { $gt: ['$name', null] },
                     {
                       $gte: [
                         { $strLenCP: '$$subject' },
@@ -2249,6 +2555,51 @@ const CASES: Case[] = [
     },
   },
   {
+    // The row being inserted has no column to read, so `'@name'` in its
+    // value is text; updateSet runs against the stored row and reads it.
+    name: 'UPSERT reads a column in updateSet, not in the inserted row',
+    method: 'upsert',
+    query: {
+      type: 'UPSERT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      data: {
+        id: 1,
+        nick: { $$_expression: 'CONCAT', args: ['@name', '!'] },
+      },
+      conflictKeys: ['@id'],
+      updateSet: {
+        nick: { $$_expression: 'CONCAT', args: ['@name', '@nope'] },
+      },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: { id: 1 },
+        data: [{
+          $set: {
+            id: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $literal: 1 },
+                '$id',
+              ],
+            },
+            nick: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $concat: ['@name', '!'] },
+                { $concat: ['$name', '@nope'] },
+              ],
+            },
+          },
+        }],
+        options: { upsert: true },
+      },
+    },
+  },
+  {
     name: 'UPDATE with an expression is a pipeline; literals are $literal',
     method: 'update',
     query: {
@@ -2397,6 +2748,75 @@ const CASES: Case[] = [
           },
           { $addFields: { userId: '$_id.userId' } },
           { $project: { userId: 1, c: '$c', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // `COUNT(DISTINCT col)`: the group collects its distinct values, and
+    // the count is the size of that set without the null SQL never counts.
+    name: 'SELECT COUNT(column) with distinct → $addToSet, sized after $group',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'scores',
+      columns: ['userId', 'score'],
+      aggregates: {
+        c: { $$_aggregate: 'COUNT', column: '@score', distinct: true },
+      },
+      projection: { '@userId': true, '@c': 'c' },
+      having: { '@c': { $gte: 2 } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'scores',
+        pipeline: [
+          {
+            $group: { _id: { userId: '$userId' }, c: { $addToSet: '$score' } },
+          },
+          {
+            $addFields: {
+              c: { $size: { $setDifference: ['$c', [null]] } },
+              userId: '$_id.userId',
+            },
+          },
+          { $match: { c: { $gte: 2 } } },
+          { $project: { userId: 1, c: '$c', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // MIN and MAX of a set are those of its rows: `distinct` changes nothing.
+    name: 'SELECT SUM / AVG with distinct reduce the set, MIN keeps $min',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'scores',
+      columns: ['userId', 'score'],
+      aggregates: {
+        s: { $$_aggregate: 'SUM', column: '@score', distinct: true },
+        a: { $$_aggregate: 'AVG', column: '@score', distinct: true },
+        lo: { $$_aggregate: 'MIN', column: '@score', distinct: true },
+      },
+      projection: { '@s': 's', '@a': 'a', '@lo': 'lo' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'scores',
+        pipeline: [
+          {
+            $group: {
+              _id: {},
+              s: { $addToSet: '$score' },
+              a: { $addToSet: '$score' },
+              lo: { $min: '$score' },
+            },
+          },
+          { $addFields: { s: { $sum: '$s' }, a: { $avg: '$a' } } },
+          { $project: { s: '$s', a: '$a', lo: '$lo', _id: 0 } },
         ],
       },
     },
@@ -3310,6 +3730,9 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
       },
       projection: { '@c': 'c' },
     })[0];
+  const LOWER_B = {
+    $cond: [{ $gt: ['$b', null] }, { $toLower: '$b' }, null],
+  };
   const switchOn = (condition: unknown) => ({
     $addFields: {
       c: {
@@ -3342,6 +3765,11 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         },
       },
       {
+        name: 'reads an operand naming no column as text, unguarded',
+        when: { '@a': { $ne: '@nope' } },
+        expected: { $and: [{ $ne: ['$a', '@nope'] }, present('$a')] },
+      },
+      {
         name: 'guards an expression operand',
         when: { '@a': { $lt: { $$_expression: 'ADD', args: ['@b', 1] } } },
         expected: {
@@ -3358,6 +3786,16 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         expected: { $and: [{ $in: ['$a', [1, 2]] }, present('$a')] },
       },
       {
+        name: 'reads a direct list as $in',
+        when: { '@a': [1, 2] },
+        expected: { $and: [{ $in: ['$a', [1, 2]] }, present('$a')] },
+      },
+      {
+        name: 'reads a list entry naming no column as text',
+        when: { '@a': ['@b', '@nope'] },
+        expected: { $and: [{ $in: ['$a', ['$b', '@nope']] }, present('$a')] },
+      },
+      {
         name: 'guards the field of $nin',
         when: { '@a': { $nin: [1, 2] } },
         expected: {
@@ -3372,6 +3810,65 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
             { $and: [{ $gte: ['$a', '$b'] }, { $lte: ['$a', 9] }] },
             present('$a'),
             present('$b'),
+          ],
+        },
+      },
+      {
+        name: 'matches $ilike with the i option',
+        when: { '@a': { $ilike: 'x_' } },
+        expected: {
+          $regexMatch: { input: '$a', regex: '^x.$', options: 'i' },
+        },
+      },
+      {
+        name: 'guards the field of $nlike',
+        when: { '@a': { $nlike: 'x%' } },
+        expected: {
+          $and: [
+            { $not: [{ $regexMatch: { input: '$a', regex: '^x.*$' } }] },
+            present('$a'),
+          ],
+        },
+      },
+      {
+        name: 'guards the field of $nilike',
+        when: { '@a': { $nilike: 'x%' } },
+        expected: {
+          $and: [
+            {
+              $not: [{
+                $regexMatch: { input: '$a', regex: '^x.*$', options: 'i' },
+              }],
+            },
+            present('$a'),
+          ],
+        },
+      },
+      {
+        name: 'escapes the literal of $startsWith, $endsWith and $contains',
+        when: {
+          $and: [
+            { '@a': { $startsWith: 'a.b' } },
+            { '@a': { $endsWith: 'a.b' } },
+            { '@a': { $contains: 'a.b' } },
+          ],
+        },
+        expected: {
+          $and: [
+            { $regexMatch: { input: '$a', regex: '^a\\.b' } },
+            { $regexMatch: { input: '$a', regex: 'a\\.b$' } },
+            { $regexMatch: { input: '$a', regex: 'a\\.b' } },
+          ],
+        },
+      },
+      {
+        name: 'searches for a computed $contains operand as a literal',
+        when: { '@a': { $contains: { $$_expression: 'LOWER', args: '@b' } } },
+        expected: {
+          $cond: [
+            { $gt: [LOWER_B, null] },
+            { $gte: [{ $indexOfCP: ['$a', LOWER_B] }, 0] },
+            false,
           ],
         },
       },
@@ -3405,6 +3902,15 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
       asserts.assertEquals(stageOf(c.when), switchOn(c.expected));
     });
   }
+
+  // The filter path refuses a column as a pattern; so does a CASE.
+  it('refuses a column as the pattern of $like', () => {
+    asserts.assertThrows(
+      () => stageOf({ '@a': { $like: '@b' } }),
+      DialectUnsupportedError,
+      'column reference',
+    );
+  });
 
   it('guards a CASE stored by UPDATE', () => {
     const out = t.update({
