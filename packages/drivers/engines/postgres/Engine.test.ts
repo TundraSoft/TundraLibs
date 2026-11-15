@@ -328,6 +328,17 @@ describe({
         asserts.assertEquals(r.data, [{ a: 'hello', a2: 'hello' }]);
         await engine.disconnect();
       });
+
+      it('runs a cast chain and binds a parameter that is cast twice', async () => {
+        const engine = new PostgresEngine('casts', TEST_CONFIG);
+        const r = await engine.execute<{ d: string; n: string }>({
+          sql:
+            `SELECT '2026-01-15 20:00:00+00'::timestamptz::date::text AS d, :n:::int::text AS n`,
+          params: { n: '7' },
+        });
+        asserts.assertEquals(r.data, [{ d: '2026-01-15', n: '7' }]);
+        await engine.disconnect();
+      });
     });
   },
 });

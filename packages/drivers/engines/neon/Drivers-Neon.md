@@ -137,7 +137,9 @@ than one per request. A zone other than UTC rejects the query with
 `INVALID_CONFIG_VALUE` before it is sent, and the next query checks again.
 `ping()` rejects with the same error rather than returning `false`, so a
 health check cannot pass while every query is refused. `connect()` does not
-check.
+check. When the zone request itself fails, the query rejects with
+`OPERATION_FAILED` for the operation `session time zone check`, the request's
+error on `cause`, and `ping()` returns `false`.
 
 Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`). Set
 `allowNonUtcTimeZone: true` only when the application keeps every instant in

@@ -4,6 +4,7 @@ import {
   assertEquals,
   assertInstanceOf,
   assertRejects,
+  assertStrictEquals,
   assertThrows,
 } from '@std/asserts';
 import { NeonHttpEngine } from './Engine.ts';
@@ -231,6 +232,16 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
         EngineError,
       );
       assertEquals((err as EngineError).code, 'MISSING_PARAMETERS');
+    });
+
+    it('leaves a cast chain alone, beside a parameter that is cast', () => {
+      const eng = makeEngine();
+      const q = eng.std({
+        sql: 'SELECT x::date::text, :n:::int::text',
+        params: { n: '7' },
+      });
+      assertEquals(q.sql, 'SELECT x::date::text, $1::int::text;');
+      assertEquals(q.__params, ['7']);
     });
   });
 
@@ -610,6 +621,24 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
       eng.stub.zone = null;
       await eng.execute({ sql: 'SELECT 1' });
       assertEquals(eng.stub.callCount, 1);
+    });
+
+    it('reports a failed zone request as the check failing, not the query', async () => {
+      const eng = makeEngine();
+      eng.stub.zoneError = neonError('42501');
+      const err = await assertRejects(
+        () => eng.execute({ sql: 'SELECT secret FROM vault' }),
+        EngineError,
+      );
+      assertEquals(err.code, 'OPERATION_FAILED');
+      assert(err.message.includes('session time zone check'));
+      assert(!JSON.stringify(err.context).includes('vault'));
+      assertStrictEquals(err.cause, eng.stub.zoneError);
+      assertEquals(eng.stub.callCount, 0);
+
+      eng.stub.zoneError = null;
+      await eng.execute({ sql: 'SELECT 1' });
+      assertEquals(eng.stub.zoneCalls, 2);
     });
 
     it('ping() rejects a non-UTC session with the error a query gets', async () => {

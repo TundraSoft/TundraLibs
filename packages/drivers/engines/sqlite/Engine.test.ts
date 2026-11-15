@@ -276,6 +276,16 @@ describe({
         await b.disconnect();
       });
 
+      it('binds -0 as 0', async () => {
+        const engine = new SQLiteEngine('neg-zero', TEST_CONFIG);
+        const r = await engine.execute<{ v: number }>({
+          sql: 'SELECT :v: AS v',
+          params: { v: -0 },
+        });
+        asserts.assertStrictEquals(r.data[0]!.v, 0);
+        await engine.disconnect();
+      });
+
       it('UNIQUE constraint violation maps to DUPLICATE_KEY', async () => {
         const engine = new SQLiteEngine('uniq-1', TEST_CONFIG);
         await engine.execute({

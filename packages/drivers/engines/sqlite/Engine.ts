@@ -368,10 +368,12 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
 
   /**
    * SQLite-friendly value encoding: `Date` → ISO string, `boolean` → 0/1,
-   * non-buffer objects → JSON, `undefined` → `null`.
+   * non-buffer objects → JSON, `undefined` → `null`, `-0` → `0`.
    */
   protected override _encodeValue(value: unknown): unknown {
     if (value === undefined) return null;
+    // Deno's binding refuses to bind `-0` (`Invalid FFI i32 type`).
+    if (Object.is(value, -0)) return 0;
     if (value instanceof Date) {
       // An Invalid Date (`new Date('nope')`) has a NaN time; `toISOString()`
       // below throws a raw, contextless `RangeError: Invalid time value`. This
