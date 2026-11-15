@@ -743,6 +743,50 @@ const CASES: Case[] = [
     },
   },
   {
+    // `$substrCP` has no "to the end" length and rejects -1; the string's
+    // own length takes the rest, as SQL's two-argument SUBSTR does.
+    name: 'SELECT SUBSTR without a length takes the rest of the string',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        rest: {
+          $$_expression: 'SUBSTR',
+          args: { string: '@name', start: 2 },
+        },
+      },
+      projection: { '@id': true, '@rest': 'rest' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              rest: {
+                $cond: [
+                  { $gt: ['$name', null] },
+                  {
+                    $substrCP: [
+                      '$name',
+                      { $subtract: [2, 1] },
+                      { $strLenCP: '$name' },
+                    ],
+                  },
+                  null,
+                ],
+              },
+            },
+          },
+          { $project: { id: 1, rest: '$rest', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     // `$toUpper` / `$toLower` turn a null or missing field into '' and
     // `$strLenCP` throws on one. SQL returns NULL for all three, so the
     // `<>` below must not match a row whose status is NULL.

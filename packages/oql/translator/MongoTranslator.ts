@@ -2359,8 +2359,9 @@ export class MongoTranslator {
         return orNull(r(a.string), {
           $substrCP: a.length !== undefined
             ? [r(a.string), start, r(a.length)]
-            // -1 in $substrCP means "to the end"
-            : [r(a.string), start, -1],
+            // No length: the rest of the string. `$substrCP` takes no
+            // "to the end" marker, and the string's own length is enough.
+            : [r(a.string), start, { $strLenCP: r(a.string) }],
         });
       }
       case 'REPLACE': {
