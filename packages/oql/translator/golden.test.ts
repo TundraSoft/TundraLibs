@@ -947,9 +947,8 @@ const CASES: Case[] = [
     },
   },
   {
-    // The LIKE family also accepts an Expression operand. There is no
-    // literal to escape, so no ESCAPE clause — the computed value is
-    // spliced into the pattern by the dialect's own concat form. The
+    // The LIKE family also accepts an Expression operand. Its wildcards
+    // are escaped in SQL, so it matches verbatim as a literal does. The
     // Mongo translator has a matching case (`$expr` + `$indexOfCP`).
     name: 'SELECT $startsWith with an Expression value',
     method: 'select',
@@ -964,18 +963,46 @@ const CASES: Case[] = [
     },
     expected: {
       sqlite: {
-        sql:
-          'SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (LOWER("nick") || \'%\')',
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (REPLACE(REPLACE(REPLACE(LOWER("nick"), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\'`,
         params: {},
       },
       postgres: {
-        sql:
-          'SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (LOWER("nick") || \'%\')',
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (REPLACE(REPLACE(REPLACE(CAST(LOWER("nick") AS TEXT), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\'`,
         params: {},
       },
       maria: {
         sql:
-          "SELECT `id` AS `id` FROM `users` WHERE `name` LIKE CONCAT(LOWER(`nick`), '%')",
+          "SELECT `id` AS `id` FROM `users` WHERE `name` LIKE CONCAT(REPLACE(REPLACE(REPLACE(LOWER(`nick`), '\\\\', '\\\\\\\\'), '%', '\\\\%'), '_', '\\\\_'), '%') ESCAPE '\\\\'",
+        params: {},
+      },
+    },
+  },
+  {
+    name: 'SELECT $contains / $endsWith with a column value',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      projection: { '@id': true },
+      where: { '@name': { $contains: '@nick', $endsWith: '@nick' } },
+    },
+    expected: {
+      sqlite: {
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE ('%' || REPLACE(REPLACE(REPLACE("nick", '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\' AND "name" LIKE ('%' || REPLACE(REPLACE(REPLACE("nick", '\', '\\'), '%', '\%'), '_', '\_')) ESCAPE '\'`,
+        params: {},
+      },
+      postgres: {
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE ('%' || REPLACE(REPLACE(REPLACE(CAST("nick" AS TEXT), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\' AND "name" LIKE ('%' || REPLACE(REPLACE(REPLACE(CAST("nick" AS TEXT), '\', '\\'), '%', '\%'), '_', '\_')) ESCAPE '\'`,
+        params: {},
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE `name` LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(`nick`, '\\\\', '\\\\\\\\'), '%', '\\\\%'), '_', '\\\\_'), '%') ESCAPE '\\\\' AND `name` LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(`nick`, '\\\\', '\\\\\\\\'), '%', '\\\\%'), '_', '\\\\_')) ESCAPE '\\\\'",
         params: {},
       },
     },
@@ -2297,6 +2324,118 @@ const CASES: Case[] = [
       sqlite: {
         sql:
           `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:, CASE WHEN :p_1: IN ('MONTHS', 'YEARS') AND :p_0: = CAST(:p_0: AS INTEGER) AND strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) <> strftime('%d', "createdAt") THEN '-' || strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) || ' days' ELSE '+0 days' END) AS "due" FROM "orders"`,
+      },
+    },
+  },
+
+  {
+    // One 'HH:MM:SS' UTC string on every dialect. Postgres' own CURRENT_TIME
+    // carries a fraction and the session zone, MariaDB's is session-local.
+    name: 'CURRENT_TIME is the UTC clock time to the second',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'shifts',
+      columns: ['id', 'startsAt'],
+      expressions: { clock: { $$_expression: 'CURRENT_TIME' } },
+      projection: { '@id': true, '@clock': 'clock' },
+      where: { '@startsAt': { $lte: { $$_expression: 'CURRENT_TIME' } } },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id", time('now') AS "clock" FROM "shifts" WHERE "startsAt" <= time('now')`,
+        params: {},
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id", CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME) AS "clock" FROM "shifts" ` +
+          `WHERE "startsAt" <= CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)`,
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT `id` AS `id`, UTC_TIME() AS `clock` FROM `shifts` WHERE `startsAt` <= UTC_TIME()',
+        params: {},
+      },
+    },
+  },
+
+  {
+    // MariaDB binds a Date as text, and TIMESTAMPADD over text returns text:
+    // the cast makes the result a DATETIME. On Postgres the cast is for the
+    // view below, the bound value is a timestamptz already.
+    name: 'DATE_ADD on a Date value casts it on Postgres and MariaDB',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id'],
+      expressions: {
+        due: {
+          $$_expression: 'DATE_ADD',
+          args: {
+            date: new Date('2026-01-31T10:20:30.123Z'),
+            amount: 1,
+            unit: 'MONTHS',
+          },
+        },
+      },
+      projection: { '@id': true, '@due': 'due' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      postgres: {
+        sql:
+          `SELECT "id" AS "id", (:p_0:::timestamptz + (:p_1:::text || ' ' || :p_2:)::interval) AS "due" FROM "orders"`,
+        params: {
+          p_0: new Date('2026-01-31T10:20:30.123Z'),
+          p_1: 1,
+          p_2: 'MONTHS',
+        },
+      },
+      maria: {
+        sql:
+          'SELECT `id` AS `id`, TIMESTAMPADD(MONTH, :p_1:, CAST(:p_0: AS DATETIME(6))) AS `due` FROM `orders`',
+        params: { p_0: new Date('2026-01-31T10:20:30.123Z'), p_1: 1 },
+      },
+    },
+  },
+
+  {
+    // A view body carries the Date as a string literal. Untyped, Postgres
+    // reads `'…' + interval` as interval + interval and rejects the view.
+    name: 'CREATE_VIEW with DATE_ADD on a Date types the inlined literal',
+    method: 'createView',
+    query: {
+      type: 'CREATE_VIEW',
+      view: 'due_dates',
+      query: {
+        type: 'SELECT',
+        table: 'orders',
+        columns: ['id'],
+        expressions: {
+          due: {
+            $$_expression: 'DATE_ADD',
+            args: {
+              date: new Date('2026-01-31T10:20:30.123Z'),
+              amount: 1,
+              unit: 'MONTHS',
+            },
+          },
+        },
+        projection: { '@id': true, '@due': 'due' },
+      },
+    } satisfies Query<'CREATE_VIEW'>,
+    expected: {
+      postgres: {
+        sql:
+          `CREATE VIEW "due_dates" AS SELECT "id" AS "id", ('2026-01-31T10:20:30.123Z'::timestamptz + (1::text || ' ' || 'MONTHS')::interval) AS "due" FROM "orders"`,
+        params: {},
+      },
+      maria: {
+        sql:
+          "CREATE VIEW `due_dates` AS SELECT `id` AS `id`, TIMESTAMPADD(MONTH, 1, CAST('2026-01-31T10:20:30.123Z' AS DATETIME(6))) AS `due` FROM `orders`",
+        params: {},
       },
     },
   },

@@ -31,6 +31,7 @@ import { AbstractTranslator } from './AbstractTranslator.ts';
 import type {
   AggregateMap,
   DialectSupport,
+  ExpressionEmitter,
   ExpressionMap,
   FilterOperatorMap,
   IdentifierQuote,
@@ -160,7 +161,7 @@ export class MariaTranslator extends AbstractTranslator {
    */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
-    (args: string[]) => string
+    ExpressionEmitter
   >([
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
@@ -212,11 +213,19 @@ export class MariaTranslator extends AbstractTranslator {
     ],
     ['NOW', () => 'NOW()'],
     ['CURRENT_DATE', () => 'CURRENT_DATE()'],
-    ['CURRENT_TIME', () => 'CURRENT_TIME()'],
+    // UTC, as on the other dialects: CURRENT_TIME() is session-local.
+    ['CURRENT_TIME', () => 'UTC_TIME()'],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP()'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
     // `unit` arrives as the keyword itself — see `_timeUnitArg`.
-    ['DATE_ADD', (a) => `TIMESTAMPADD(${a[2]}, ${a[1]}, ${a[0]})`],
+    // A Date value binds as text, and TIMESTAMPADD over text returns text.
+    // Cast to DATETIME, the result reaches JS as a Date.
+    ['DATE_ADD', (a, e) => {
+      const date = e.$$_expression === 'DATE_ADD' && e.args.date instanceof Date
+        ? `CAST(${a[0]} AS DATETIME(6))`
+        : a[0];
+      return `TIMESTAMPADD(${a[2]}, ${a[1]}, ${date})`;
+    }],
     // TIMESTAMPDIFF is BIGINT, which reaches JS as a bigint. DOUBLE
     // reaches it as a number, and holds every whole count exactly.
     [

@@ -95,9 +95,9 @@ type ConditionalArg<
  * `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
  *
  * **Date** (returns Date; ISO 8601 UTC text on SQLite): `NOW`,
- * `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`,
- * `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC` — and
- * `UNIX_TIMESTAMP`, which returns a 64-bit INTEGER, not a Date.
+ * `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
+ * `DATE_TRUNC` — and two that do not return a Date: `CURRENT_TIME`, an
+ * `'HH:MM:SS'` UTC string, and `UNIX_TIMESTAMP`, a 64-bit INTEGER.
  *
  * **Cryptographic (platform-dependent)**: `ENCRYPT`, `DECRYPT`,
  * `HASH`.
@@ -189,8 +189,7 @@ export type Expressions<
 } | {
   /**
    * Date addition: add a number of time units to a date. Negative
-   * `amount` subtracts. Returns text, not a Date, on SQLite, and on
-   * MariaDB when `date` is a literal.
+   * `amount` subtracts. Returns text, not a Date, on SQLite.
    */
   $$_expression: 'DATE_ADD';
   args: {
@@ -236,7 +235,7 @@ export type Expressions<
   /** Current date without the time component. */
   $$_expression: 'CURRENT_DATE';
 } | {
-  /** Current time without the date component. */
+  /** Current UTC clock time as an `'HH:MM:SS'` string on every dialect. */
   $$_expression: 'CURRENT_TIME';
 } | {
   /** Current timestamp — alias for `NOW`. */

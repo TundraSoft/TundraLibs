@@ -1898,6 +1898,33 @@ const CASES: Case[] = [
       },
     },
   },
+  {
+    // Mongo has no time-only type. The UTC clock time is the 'HH:MM:SS'
+    // string the SQL dialects return, where `$$NOW` alone is a full Date.
+    name: 'CURRENT_TIME is the UTC clock time as a string',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'shifts',
+      columns: ['id'],
+      expressions: { clock: { $$_expression: 'CURRENT_TIME' } },
+      projection: { '@id': true, '@clock': 'clock' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'shifts',
+        pipeline: [
+          {
+            $addFields: {
+              clock: { $dateToString: { date: '$$NOW', format: '%H:%M:%S' } },
+            },
+          },
+          { $project: { id: 1, clock: '$clock', _id: 0 } },
+        ],
+      },
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // LIKE family with an Expression operand
@@ -3558,6 +3585,18 @@ describe('oql.translator.MongoTranslator — insert expressions', () => {
     asserts.assertEquals(
       (rows[1]!.day as Date).toISOString(),
       at.toISOString().slice(0, 10) + 'T00:00:00.000Z',
+    );
+  });
+
+  it('computes CURRENT_TIME as the UTC clock string, not a Date', () => {
+    const row = insert({
+      id: 1,
+      at: { $$_expression: 'NOW' },
+      ref: { $$_expression: 'CURRENT_TIME' },
+    }) as Record<string, unknown>;
+    asserts.assertEquals(
+      row.ref,
+      (row.at as Date).toISOString().slice(11, 19),
     );
   });
 

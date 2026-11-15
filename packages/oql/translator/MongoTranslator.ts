@@ -1603,8 +1603,9 @@ export class MongoTranslator {
       case 'NOW':
       case 'CURRENT_TIMESTAMP':
       case 'CURRENT_TIMESTAMPTZ':
-      case 'CURRENT_TIME':
         return now;
+      case 'CURRENT_TIME':
+        return now.toISOString().slice(11, 19);
       case 'CURRENT_DATE':
         return new Date(
           Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -2144,9 +2145,10 @@ export class MongoTranslator {
    * into an aggregation `$expr` fragment.
    *
    * `$startsWith` / `$endsWith` / `$contains` carry *literal* substring
-   * semantics on the SQL side (the bound value's `%` / `_` are escaped
-   * with an `ESCAPE` clause), so they map onto Mongo's literal
-   * string-search operators — no regex, hence nothing to escape.
+   * semantics on the SQL side (the `%` / `_` of a bound value and of a
+   * computed one are escaped, with an `ESCAPE` clause), so they map onto
+   * Mongo's literal string-search operators — no regex, hence nothing to
+   * escape.
    *
    * `$like` / `$nlike` / `$ilike` / `$nilike` are the opposite: their
    * value IS a wildcard pattern, and translating that grammar to a regex
@@ -2575,9 +2577,9 @@ export class MongoTranslator {
           : { $toLong: { $floor: { $divide: [{ $toLong: '$$NOW' }, 1000] } } };
       }
       case 'CURRENT_TIME':
-        // Mongo has no time-only type; emit NOW and let the caller
-        // decide how to extract.
-        return '$$NOW';
+        // Mongo has no time-only type: the UTC clock time as 'HH:MM:SS',
+        // the string the SQL dialects return.
+        return { $dateToString: { date: '$$NOW', format: '%H:%M:%S' } };
       case 'DATE_ADD': {
         const a = args as { date: unknown; amount: unknown; unit: unknown };
         return {
