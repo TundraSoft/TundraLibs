@@ -21,6 +21,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import { SQLiteTranslator } from './SQLiteTranslator.ts';
 import { PostgresTranslator } from './PostgresTranslator.ts';
 import { MariaTranslator } from './MariaTranslator.ts';
+import { MongoTranslator } from './MongoTranslator.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type { Query } from '../types/mod.ts';
 import type {
@@ -232,6 +233,55 @@ describe('oql.translator.guards', () => {
         DialectUnsupportedError,
       );
       asserts.assertStringIncludes(err.message, "filter operator '$gte'");
+    });
+  });
+
+  describe('DATE_ADD / DATE_DIFF unit', () => {
+    // Same gap as DATE_TRUNC above: a filter operand is not asserted.
+    // Postgres and SQLite bind the unit, so without the translator's check
+    // an unknown one reaches the database as data.
+    const operands = (unit: string) => [
+      { $$_expression: 'DATE_ADD', args: { date: '@at', amount: 1, unit } },
+      { $$_expression: 'DATE_DIFF', args: { from: '@at', to: '@at', unit } },
+    ];
+    const withOperand = (operand: unknown) =>
+      ({
+        type: 'SELECT',
+        table: 'orders',
+        columns: ['id', 'at'],
+        projection: { '@id': true },
+        where: { '@at': { $gte: operand } },
+      }) as unknown as Query<'SELECT'>;
+
+    it('refuses an unknown unit with the same error on every engine', () => {
+      for (const unit of ['WEEKS', 'days']) {
+        for (const operand of operands(unit)) {
+          const messages = [
+            new SQLiteTranslator(),
+            new PostgresTranslator(),
+            new MariaTranslator(),
+            new MongoTranslator(),
+          ].map((t) => {
+            const err = asserts.assertThrows(
+              () => t.select(withOperand(operand)),
+              OqlError,
+            );
+            asserts.assertEquals((err as OqlError).code, 'INVALID_TIME_UNIT');
+            return (err as OqlError).message;
+          });
+          asserts.assertEquals(new Set(messages).size, 1);
+        }
+      }
+    });
+
+    it('binds the unit when it is valid', () => {
+      // Control: same query shape — proves the unit is what is rejected.
+      for (const operand of operands('DAYS')) {
+        for (const t of [new SQLiteTranslator(), new PostgresTranslator()]) {
+          const { params } = t.select(withOperand(operand));
+          asserts.assert(Object.values(params ?? {}).includes('DAYS'));
+        }
+      }
     });
   });
 
