@@ -946,7 +946,10 @@ Every FK from `A → B` gives `B` a reverse relation.
   `hasMany`. In `Profiles` above the FK column (`userId`) is the whole
   pk, so `Users` sees `@Profile` as an object-or-null with no explicit
   cardinality needed. Views have no pk, so their reverses are always
-  `hasMany` unless you declare otherwise.
+  `hasMany` unless you declare otherwise. A declared `hasOne` that
+  matches several rows carries the one lowest by primary key; a view has
+  no key to order by, so there it is whichever row the engine returns
+  first.
 
 A reverse name must be free on the target: it cannot collide with one
 of the target's columns, with a foreign-key alias (those resolve first,
@@ -1022,11 +1025,13 @@ Two things follow from matching on NULL:
 - The database does not check an FK constraint for a row whose key
   holds NULL, so nothing guarantees the matching target exists.
 - A unique constraint lets several rows hold NULL, so a NULL key can
-  match more than one target. A projected belongsTo then carries one of
-  them. A filter on a column of the relation keeps the row when any of
-  them passes it, and the row is returned and counted once. On the SQL
-  engines a filter that takes its comparison value from the relation
-  (`'@tenant': '@Org.@tenant'`) still returns the row once per match.
+  match more than one target. A projected belongsTo then carries the
+  one lowest by primary key. A filter on a column of the relation keeps
+  the row when any of them passes it, and the row is returned and
+  counted once. A filter that takes its comparison value from the
+  relation (`'@tenant': '@Org.@tenant'`) needs the relation
+  [projected in the same read](NORM-Querying.md#relation-references),
+  and throws without it.
 
 ### Referential actions
 

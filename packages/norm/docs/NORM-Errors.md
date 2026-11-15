@@ -127,12 +127,15 @@ never a database failure. Two of the ten (`TEMPORAL_PAST`,
 | `TEMPORAL_PAST`         | A `temporal` entity's `insert({ EffectiveFrom })` supplied a value that does not parse, or is in the past beyond a small clock-skew tolerance. History is immutable.                                                                                                    | Omit `EffectiveFrom` (norm stamps "now") or pass a value at/after now. See [Temporal](NORM-Temporal.md).                                                                 |
 | `TEMPORAL_OVERLAP`      | A `temporal` entity's `insert({ EffectiveFrom })` falls at or before the currently active version's own `EffectiveFrom`. A new version must start strictly after the one it supersedes.                                                                                 | Pass a later `EffectiveFrom`, or omit it to use "now". See [Temporal](NORM-Temporal.md).                                                                                 |
 
-Two refusals reuse an existing code rather than getting one of their
+Three refusals reuse an existing code rather than getting one of their
 own: ordering by, or supplying a filter value from, an unprojected
 to-many relation raises `INVALID_PROJECTION` (an unprojected to-many
 runs as an `EXISTS` subquery, so project it or move the condition to
-key position); and a scoped upsert whose scope column is encrypted with
-no `.hash()` sibling raises `SCOPE_VIOLATION`.
+key position); supplying a filter value from an unprojected
+[NULL-safe](NORM-Querying.md#null-safe-relation-keys) relation raises
+it too, because the row would come back once per match; and a scoped
+upsert whose scope column is encrypted with no `.hash()` sibling raises
+`SCOPE_VIOLATION`.
 
 ## Crypto codes
 
