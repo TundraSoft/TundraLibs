@@ -13,7 +13,8 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { assertSelectQuery, isSelectQuery } from './select.ts';
+import { assertSelectQuery, isGroupedSelect, isSelectQuery } from './select.ts';
+import { OqlError } from '../../../errors/mod.ts';
 
 // orders with a join to users, for the orderBy-through-a-join cases.
 const ORDERS_WITH_USER = {
@@ -225,20 +226,6 @@ describe('oql.asserts.Query.DML.Select', () => {
       };
       assertSelectQuery(query);
     });
-
-    it('treats an empty aggregates object as ungrouped', () => {
-      // Grouped queries refuse `distinct` and an unprojected base column in
-      // `orderBy`; with no aggregate declared, both are allowed.
-      const query = {
-        type: 'SELECT',
-        table: 'users',
-        columns: ['id', 'name'],
-        aggregates: {},
-        projection: { '@id': true },
-      };
-      assertSelectQuery({ ...query, distinct: true });
-      assertSelectQuery({ ...query, orderBy: { '@name': 'ASC' } });
-    });
   });
 
   describe('invalid aggregates', () => {
@@ -269,6 +256,21 @@ describe('oql.asserts.Query.DML.Select', () => {
           }),
         TypeError,
         'must be an object',
+      );
+    });
+
+    it('aggregates is empty object', () => {
+      asserts.assertThrows(
+        () =>
+          assertSelectQuery({
+            type: 'SELECT',
+            table: 'users',
+            columns: ['id'],
+            projection: { '@id': true },
+            aggregates: {},
+          }),
+        TypeError,
+        'cannot be an empty object',
       );
     });
 
@@ -1445,6 +1447,57 @@ describe('oql.asserts.Query.DML.Select', () => {
         asserts.assertEquals(query.type, 'SELECT');
         asserts.assertEquals(query.table, 'users');
       }
+    });
+  });
+
+  describe('joined column spelling', () => {
+    const query = {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'meta'],
+      joins: {
+        P: {
+          type: 'LEFT',
+          table: 'profiles',
+          columns: ['userId', 'label'],
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+    };
+
+    it('refuses @Alias.col without its second @, as a key and as a value', () => {
+      for (
+        const where of [{ '@P.label': 'x' }, { '@name': { $eq: '@P.label' } }]
+      ) {
+        const err = asserts.assertThrows(
+          () => assertSelectQuery({ ...query, where }),
+          OqlError,
+          "A joined column is written '@P.@label'",
+        );
+        asserts.assertEquals(err.code, 'INVALID_COLUMN_REF');
+      }
+    });
+
+    it('leaves a reference whose root is not a join alias alone', () => {
+      assertSelectQuery({ ...query, where: { '@name': { $eq: '@meta.a' } } });
+      assertSelectQuery({ ...query, where: { '@P.@label': 'x' } });
+    });
+  });
+
+  describe('isGroupedSelect', () => {
+    it('groups on an aggregate or a projected join alias only', () => {
+      const count = { n: { $$_aggregate: 'COUNT' } };
+      const joins = { P: {} };
+      asserts.assertEquals(
+        [
+          isGroupedSelect({ aggregates: count, projection: { '@n': true } }),
+          isGroupedSelect({ projection: { '@P': true }, joins }),
+          isGroupedSelect({ aggregates: {}, projection: { '@id': true } }),
+          isGroupedSelect({ projection: { '@P.@id': true }, joins }),
+        ],
+        [true, true, false, false],
+      );
     });
   });
 });

@@ -1,6 +1,6 @@
 /**
  * Shared DML validators: pre-declared expressions, per-row data entries,
- * the UPDATE and DELETE relation-filter refusal.
+ * the UPDATE and DELETE relation-filter refusal, joined-column spelling.
  *
  * @module asserts/Query/DML/Common
  */
@@ -228,4 +228,45 @@ export const assertNoRelationFilter = (
       { code: 'RELATION_FILTER_UNSUPPORTED', key },
     );
   }
+};
+
+/**
+ * Refuses a reference `'@Alias.x'` whose `Alias` is a join of the query and
+ * whose column lacks its `@`, in any key or value of the query. SQL read it
+ * as a base column literally named `Alias.x` and MongoDB as the joined
+ * field, so one query gave an engine error on one and rows on the other. A
+ * root that is not a join alias, such as `'@meta.a'`, is left alone.
+ *
+ * @throws {OqlError} `INVALID_COLUMN_REF` for the first such reference.
+ */
+export const assertJoinedColumnRefs = (
+  query: Record<string, unknown>,
+  context: 'SELECT' | 'COUNT',
+): void => {
+  const joins = query.joins;
+  if (typeof joins !== 'object' || joins === null) return;
+  const aliases = Object.keys(joins);
+  if (aliases.length === 0) return;
+  const check = (ref: string): void => {
+    if (!ref.startsWith('@')) return;
+    const dot = ref.indexOf('.');
+    if (dot < 0) return;
+    const alias = ref.slice(1, dot);
+    const column = ref.slice(dot + 1);
+    if (!aliases.includes(alias) || column.startsWith('@')) return;
+    throw new OqlError(
+      `Invalid ${context} query: '${ref}' names the join '${alias}' without an '@' before the column. A joined column is written '@${alias}.@${column}'`,
+      { code: 'INVALID_COLUMN_REF', ref },
+    );
+  };
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') return check(value);
+    if (typeof value !== 'object' || value === null) return;
+    if (value instanceof Date) return;
+    for (const [key, inner] of Object.entries(value)) {
+      if (!Array.isArray(value)) check(key);
+      visit(inner);
+    }
+  };
+  visit(query);
 };

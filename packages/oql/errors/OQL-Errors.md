@@ -20,23 +20,25 @@ means, what triggers it, and how to keep it from happening.
 ## Overview
 
 OQL validates a query in three passes. The last one produces every
-`OqlError` but one:
+`OqlError` but three:
 
 | Pass         | Enforced by                                    | Raises                              |
 | ------------ | ---------------------------------------------- | ----------------------------------- |
 | **Shape**    | the types in `@tundralibs/oql/types`           | a compile-time type error           |
-| **Scoping**  | `assertQuery` (`@tundralibs/oql/asserts`)      | `TypeError`, with two exceptions    |
+| **Scoping**  | `assertQuery` (`@tundralibs/oql/asserts`)      | `TypeError`, with three exceptions  |
 | **Emission** | the translators (`@tundralibs/oql/translator`) | `OqlError` — the codes on this page |
 
 The types validate a query's **shape**; `assertQuery` validates the rules that
 span sibling properties (a `having` key naming a declared aggregate, every
 referenced column appearing in `columns`) — see
 [the shape-vs-scoping note in the type docs](../types/OQL-Types.md). Those
-asserts throw plain `TypeError`s, **not** `OqlError`s, with two exceptions. A
-date expression's `unit`: the asserts refuse a bad one with
+asserts throw plain `TypeError`s, **not** `OqlError`s, with three
+exceptions. A date expression's `unit`: the asserts refuse a bad one with
 [`INVALID_TIME_UNIT`](#invalid_time_unit), the code the translators use for
-the same mistake. And an `UPDATE` or `DELETE` filter through a join, refused
-with [`RELATION_FILTER_UNSUPPORTED`](#relation_filter_unsupported). Every
+the same mistake. An `UPDATE` or `DELETE` filter through a join, refused
+with [`RELATION_FILTER_UNSUPPORTED`](#relation_filter_unsupported). And a
+joined column written without its second `@`, refused with
+[`INVALID_COLUMN_REF`](#invalid_column_ref). Every
 other code below is raised from `packages/oql/translator` while SQL (or a
 Mongo pipeline) is being emitted.
 
@@ -104,7 +106,7 @@ message text.
 | ----------------------------- | ------------------------- | ------------------------------------------------------------------------------ |
 | `UNKNOWN`                     | —                         | Never thrown. The `.code` getter's fallback for a missing/unrecognised code.   |
 | `DIALECT_UNSUPPORTED`         | `DialectUnsupportedError` | The dialect has no way to express this query, expression, or aggregate.        |
-| `INVALID_COLUMN_REF`          | `OqlError`                | A column reference lacked its `@` sigil or named an expression, not a column.  |
+| `INVALID_COLUMN_REF`          | `OqlError`                | A column reference lacked an `@`, or named an expression, not a column.        |
 | `FILTER_DEPTH_EXCEEDED`       | `OqlError`                | A filter nested deeper than 50 levels of `$and` / `$or` / `$exists`.           |
 | `EXISTS_NO_OUTER_TABLE`       | `OqlError`                | A correlated `$exists` was used where there is no outer table to correlate to. |
 | `INSERT_COLUMN_NOT_IN_SCHEMA` | `OqlError`                | INSERT `data` named a column that is not in the query's `columns`.             |
@@ -184,6 +186,12 @@ rather than a column, such as `CONCAT('@total', '!')` with `total` declared.
 The SQL dialects read it as a column the table lacks and the database fails;
 MongoDB throws here, before anything is written. **Fix:** write the
 expression itself where its value is needed.
+
+The `SELECT` and `COUNT` asserts also raise it for `'@Profile.bio'`, a join
+alias of the query followed by a column without its `@`, in any key or
+value of the query. SQL read that as a base column named `Profile.bio` and
+failed in the database, while MongoDB read the joined field. A root that is
+not a join alias, such as `'@meta.a'`, is not refused.
 
 **Extra context:** `ref` — the offending string.
 

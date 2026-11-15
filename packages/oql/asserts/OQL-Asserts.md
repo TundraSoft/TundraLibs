@@ -25,7 +25,7 @@ Runtime validators for OQL queries.
 
 The asserts module provides runtime validation for OQL queries. All validators follow the Guardian pattern with two variants:
 
-- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it. An `UPDATE` or `DELETE` filter key that reaches through a join throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`
+- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it. An `UPDATE` or `DELETE` filter key that reaches through a join throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`. A `SELECT` or `COUNT` reference that names a join alias without the column's `@`, such as `'@Profile.bio'`, throws `OqlError` with code `INVALID_COLUMN_REF`
 - **Type guard functions** - Return `boolean` without throwing
 
 This ensures queries are structurally valid before translation and execution.
@@ -131,10 +131,10 @@ const valid = isSelect(query); // Returns boolean
 - WHERE may reference pre-declared `expressions` by their `@key`; the translator substitutes the expression body.
 - JOIN conditions reference declared join columns.
 - Aggregates have valid `$$_aggregate` discriminators and column refs.
-- ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, at least one aggregate, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
+- ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
 - `limit`, if provided, must be a **positive integer** (`>= 1`; `0` is rejected).
 - `offset`, if provided, must be a **non-negative integer** (`>= 0`).
-- `distinct`, if provided, must be a boolean. `distinct: true` is rejected when combined with at least one aggregate or a join-alias projection (`JSON_ROW` auto-expand) — the automatic GROUP BY those trigger already deduplicates rows.
+- `distinct`, if provided, must be a boolean. `distinct: true` is rejected when combined with `aggregates` or a join-alias projection (`JSON_ROW` auto-expand) — the automatic GROUP BY those trigger already deduplicates rows.
 
 ### INSERT Query
 

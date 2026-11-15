@@ -16,14 +16,14 @@ import {
   assertSchemaName,
   assertTableName,
 } from '../common.ts';
-import { validateExpressions } from './common.ts';
+import { assertJoinedColumnRefs, validateExpressions } from './common.ts';
 
 const DEPRECATED_PROPS = ['groupBy', 'returnColumns'] as const;
 
 /**
  * Whether a SELECT gets an automatic GROUP BY: it declares at least one
  * aggregate, or projects a join alias whole. The one rule the validator
- * and the translators share; `aggregates: {}` is not grouped.
+ * and the translators share.
  */
 export const isGroupedSelect = (query: {
   aggregates?: unknown;
@@ -95,6 +95,12 @@ const validateAggregates = (
   }
 
   const aggregates = query.aggregates as Record<string, unknown>;
+  if (Object.keys(aggregates).length === 0) {
+    throw new TypeError(
+      `Invalid SELECT query: 'aggregates' cannot be an empty object`,
+    );
+  }
+
   for (const [key, value] of Object.entries(aggregates)) {
     if (typeof key !== 'string' || key.trim().length === 0) {
       throw new TypeError(
@@ -404,6 +410,7 @@ export const assertSelectQuery: <
   assertTableName(query, 'SELECT');
   assertSchemaName(query, 'SELECT');
   const columnList = assertColumns(query, 'SELECT');
+  assertJoinedColumnRefs(query, 'SELECT');
   const availableKeys: string[] = columnList.map((c) => `@${c}`);
 
   // Pre-collect joined-column names so aggregate / expression validation

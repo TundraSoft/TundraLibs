@@ -21,7 +21,10 @@ import { describe, it } from '@tundralibs/compat/test';
 import { SQLiteTranslator } from './SQLiteTranslator.ts';
 import { PostgresTranslator } from './PostgresTranslator.ts';
 import { MariaTranslator } from './MariaTranslator.ts';
-import { MongoTranslator } from './MongoTranslator.ts';
+import {
+  type MongoAggregateAction,
+  MongoTranslator,
+} from './MongoTranslator.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type { Query } from '../types/mod.ts';
 import type {
@@ -342,56 +345,6 @@ describe('oql.translator.guards', () => {
     });
   });
 
-  describe('index predicate', () => {
-    const index = (operand: unknown) =>
-      ({
-        type: 'CREATE_INDEX',
-        index: 'idx_due',
-        table: 'orders',
-        columns: ['@id'],
-        where: { '@due': { $gte: operand } },
-      }) as Query<'CREATE_INDEX'>;
-    const dateAdd = {
-      $$_expression: 'DATE_ADD',
-      args: { date: new Date('2026-03-15T00:00:00Z'), amount: 1, unit: 'DAYS' },
-    };
-    const add = { $$_expression: 'ADD', args: ['@due', 1] };
-
-    it('refuses DATE_ADD where the engine cannot hold it, with one error', () => {
-      // Postgres builds the interval from text, which is not IMMUTABLE; a
-      // MongoDB partial filter takes no $expr. SQLite can hold it.
-      const features = [new PostgresTranslator(), new MongoTranslator()].map(
-        (t) => {
-          const err = asserts.assertThrows(
-            () => t.createIndex(index(dateAdd)),
-            DialectUnsupportedError,
-          );
-          return err.feature;
-        },
-      );
-      asserts.assertEquals(features, [
-        'the computed expression DATE_ADD in an index predicate',
-        'the computed expression DATE_ADD in an index predicate',
-      ]);
-      asserts.assertStringIncludes(
-        new SQLiteTranslator().createIndex(index(dateAdd)).sql,
-        'WHERE "due" >= strftime(',
-      );
-    });
-
-    it('refuses any expression on MongoDB only', () => {
-      asserts.assertThrows(
-        () => new MongoTranslator().createIndex(index(add)),
-        DialectUnsupportedError,
-        'the computed expression ADD in an index predicate',
-      );
-      asserts.assertEquals(
-        new PostgresTranslator().createIndex(index(add)).sql,
-        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("due" + 1)',
-      );
-    });
-  });
-
   describe('param inlining', () => {
     it('refuses to inline a non-named placeholder format', () => {
       const err = asserts.assertThrows(
@@ -488,6 +441,124 @@ describe('oql.translator.guards', () => {
       asserts.assertEquals(maria.literal('a\\b'), `'a\\\\b'`);
       asserts.assertEquals(sqlite.literal('a\\b'), `'a\\b'`);
       asserts.assertEquals(postgres.literal('a\\b'), `'a\\b'`);
+    });
+  });
+
+  describe('index predicate', () => {
+    const index = (operand: unknown) =>
+      ({
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where: { '@due': { $gte: operand } },
+      }) as Query<'CREATE_INDEX'>;
+    const dateAdd = {
+      $$_expression: 'DATE_ADD',
+      args: { date: new Date('2026-03-15T00:00:00Z'), amount: 1, unit: 'DAYS' },
+    };
+    const add = { $$_expression: 'ADD', args: ['@due', 1] };
+
+    it('refuses DATE_ADD where the engine cannot hold it, with one error', () => {
+      // Postgres builds the interval from text, which is not IMMUTABLE; a
+      // MongoDB partial filter takes no $expr. SQLite can hold it.
+      const features = [new PostgresTranslator(), new MongoTranslator()].map(
+        (t) => {
+          const err = asserts.assertThrows(
+            () => t.createIndex(index(dateAdd)),
+            DialectUnsupportedError,
+          );
+          return err.feature;
+        },
+      );
+      asserts.assertEquals(features, [
+        'the computed expression DATE_ADD in an index predicate',
+        'the computed expression DATE_ADD in an index predicate',
+      ]);
+      asserts.assertStringIncludes(
+        new SQLiteTranslator().createIndex(index(dateAdd)).sql,
+        'WHERE "due" >= strftime(',
+      );
+    });
+
+    it('refuses any expression on MongoDB only', () => {
+      asserts.assertThrows(
+        () => new MongoTranslator().createIndex(index(add)),
+        DialectUnsupportedError,
+        'the computed expression ADD in an index predicate',
+      );
+      asserts.assertEquals(
+        new PostgresTranslator().createIndex(index(add)).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("due" + 1)',
+      );
+    });
+  });
+
+  describe('joined column spelling', () => {
+    const withJoin = (extra: Record<string, unknown>) =>
+      ({
+        type: 'SELECT',
+        table: 'users',
+        columns: ['id', 'name', 'meta'],
+        joins: {
+          P: {
+            type: 'LEFT',
+            table: 'profiles',
+            columns: ['userId', 'label'],
+            on: { '@P.@userId': '@id' },
+          },
+        },
+        projection: { '@id': true },
+        ...extra,
+      }) as unknown as Query<'SELECT'>;
+    const misspelled = [
+      withJoin({ where: { '@P.label': 'x' } }),
+      withJoin({ where: { '@name': '@P.label' } }),
+      withJoin({
+        expressions: {
+          c: { $$_expression: 'COALESCE', args: ['@P.label', 'none'] },
+        },
+        projection: { '@id': true, '@c': 'c' },
+      }),
+    ];
+    const refuses = (t: { select(q: Query<'SELECT'>): unknown }) => {
+      for (const q of misspelled) {
+        const err = asserts.assertThrows(() => t.select(q), OqlError);
+        asserts.assertEquals(err.code, 'INVALID_COLUMN_REF');
+      }
+    };
+
+    it('refuses @Alias.col on every SQL dialect; @meta.a stays text', () => {
+      for (
+        const t of [
+          new SQLiteTranslator(),
+          new PostgresTranslator(),
+          new MariaTranslator(),
+        ]
+      ) {
+        refuses(t);
+        const { params } = t.select(
+          withJoin({ where: { '@name': '@meta.a' } }),
+        );
+        asserts.assertEquals(Object.values(params ?? {}), ['@meta.a']);
+      }
+    });
+
+    it('refuses @Alias.col on MongoDB; @meta.a stays text', () => {
+      const t = new MongoTranslator();
+      refuses(t);
+      const { params } = t.select(
+        withJoin({
+          expressions: {
+            c: { $$_expression: 'COALESCE', args: ['@meta.a', 'none'] },
+          },
+          projection: { '@id': true, '@c': 'c' },
+        }),
+      ) as MongoAggregateAction;
+      asserts.assertEquals(
+        params.pipeline.find((stage) => '$addFields' in stage),
+        { $addFields: { c: { $ifNull: ['@meta.a', 'none'] } } },
+      );
     });
   });
 });
