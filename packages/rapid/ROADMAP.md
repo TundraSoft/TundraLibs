@@ -39,8 +39,7 @@ updated **2026-11-15**.
   `utils/compose.ts` → utils (`ModuleRuntime` keeps its own sync-through
   onion on purpose: invoke contexts are not `Context`s and a sync `@Use`
   chain must stay promise-free); `utils/streams.ts` → a compat stream
-  subpath; `parseCookies`/`serializeCookie` in `utils/cookies.ts` →
-  compat/http; `utils/pickEncoding.ts` → compat/http beside `negotiate`; the
+  subpath; `utils/pickEncoding.ts` → compat/http beside `negotiate`; the
   TC39 decorator-metadata side-table in `decorators/registry.ts` → utils;
   `pinHidden` (`utils/hiddenSlot.ts`) → ambient.
 
@@ -64,10 +63,34 @@ updated **2026-11-15**.
 
 The route `cache` option, `app.cache(store)` and `app.invalidateCache(action)`
 shipped in a different shape from the middleware pinned on 2026-09-08.
-Parts of that design the shipped cache does not have, none decided: purge
-by tag and a whole-cache reset (today a write names each action it
-invalidates), coalescing concurrent misses per replica, an `age` and a
-hit/miss header on a cached reply, and a hit/miss counter on the meter.
+
+- **Coalesce concurrent misses** — 50 concurrent cold requests for one
+  entry run the handler 50 times (measured 2026-11-15); one should run it
+  and the rest wait for its result, per replica.
+- Parts of the pinned design the shipped cache does not have, none
+  decided: purge by tag and a whole-cache reset (today a write names each
+  action it invalidates), an `age` and a hit/miss header on a cached
+  reply, and a hit/miss counter on the meter.
+
+### Operations & hardening
+
+From the 2026-11-15 review; none designed yet.
+
+- **Shared-store adapters** — the route cache, `rateLimit`, `session` and
+  `idempotency` each take hooks, and a multi-replica app writes a
+  `@tundralibs/cacher` adapter for each by hand. The in-memory defaults
+  are per replica. Ship ready-made adapters, including an invalidation by
+  prefix that does not clear the whole store.
+- **Signal handling** — `stop()` drains, but nothing binds SIGTERM or
+  SIGINT, and the scaffolded `main.ts` does not either, so a generated
+  app drops in-flight requests on every deploy. An opt-in on `start()`,
+  and the scaffold using it.
+- **Reject unknown config keys** — a misspelt key (`server.trustproxy`)
+  boots clean and the option keeps its default; only `ui` and
+  `server.metrics` are closed sets today.
+- **Secret rotation** — `secret` is one string, so replacing it
+  invalidates every session, CSRF token and signed cookie at once. Accept
+  previous secrets for verification.
 
 ### Tooling & DX
 
@@ -83,11 +106,21 @@ hit/miss header on a cached reply, and a hit/miss counter on the meter.
   (DEV+TTY on by default, PROD+TTY `--console`, no-TTY plain, `--no-console`
   forces plain); it **tees** (handlers still get the full stream). Reads
   `app.cluster ?? app.metrics`, so a clustered node shows the fleet for free.
-  Built on compat (`isTTY`/`consoleSize`/raw stdin) + three new `compat/cli`
-  primitives (alt-screen escapes, keypress reader, size polling). In DEV it
+  Built on compat (`isTTY`/`consoleSize`) + four new `compat/cli`
+  primitives (raw stdin, which is private to `prompt.ts` today; alt-screen
+  escapes; keypress reader; size polling). In DEV it
   also watches `modules/` and regenerates the barrel on change. Open build
   calls: core-vs-CLI home, latency percentiles, the in-core request ring,
   repaint cadence, a zero-dep renderer.
+- **Route deprecation** — a `deprecated` route option that reaches the
+  OpenAPI operation (the docs page already renders `deprecated`) and sets
+  `Deprecation` / `Sunset` reply headers.
+- **Test helpers** — `client()` has no cookie jar, and a socket command
+  can only be tested through a real listener and an rpc `Client`; add a
+  jar and an in-process socket driver to `@tundralibs/rapid/testing`.
+- **Upgrade notes** — a guide page listing what each release removed or
+  changed for consumers, so an upgrade does not mean reading the raw
+  changelog.
 - **SDK generator follow-ups** — `rapid sdk` writes the client; still to
   do: a version selector for header-versioned routes, and a token-refresh
   hook for the `auth` option.
