@@ -15,12 +15,25 @@
  * @since 1.0.0
  */
 
+import { asUtc, isDateText, rollsOver } from '../calendar.ts';
 import {
   type ColumnSpec,
   DIGEST_LENGTHS,
   isExpressionValue,
 } from '../definition/Column.ts';
 import { type DefinitionIssue, NormDefinitionError } from '../errors/mod.ts';
+import { DATE_TYPES } from '../guardians.ts';
+
+/** The first `@column` reference anywhere inside `v`, as oql reads one. */
+function columnReference(v: unknown): string | undefined {
+  if (typeof v === 'string') return v.startsWith('@') ? v : undefined;
+  if (typeof v !== 'object' || v === null) return undefined;
+  for (const x of Object.values(v)) {
+    const ref = columnReference(x);
+    if (ref !== undefined) return ref;
+  }
+  return undefined;
+}
 
 /** Every per-column rule, as aggregatable issues. `model` is the
  * entity name (or registry key) used in issue provenance. */
@@ -136,6 +149,40 @@ export function columnSpecIssues(
         `mask columns are computed — defaults/beforeWrite are ` +
           `meaningless.`,
       );
+    }
+  }
+
+  // The row being inserted is not there yet for an insert default to read.
+  const insertDefault = spec.default?.insert;
+  const ref = isExpressionValue(insertDefault)
+    ? columnReference(insertDefault)
+    : undefined;
+  if (ref !== undefined) {
+    at(
+      `columns.${colName}.default.insert`,
+      `an insert default cannot read a column of the row being inserted ` +
+        `(it reads '${ref}'). Compute the value in a beforeInsert hook.`,
+    );
+  }
+
+  // A literal date default gets the calendar check a written value gets.
+  if (DATE_TYPES.has(spec.type)) {
+    for (
+      const [slot, v] of [
+        ['insert', spec.default?.insert],
+        ['update', spec.default?.update],
+      ] as const
+    ) {
+      if (
+        typeof v === 'string' &&
+        (!isDateText(v) || rollsOver(v) ||
+          Number.isNaN(Date.parse(asUtc(v))))
+      ) {
+        at(
+          `columns.${colName}.default.${slot}`,
+          `Cannot coerce "${v}" to Date`,
+        );
+      }
     }
   }
 

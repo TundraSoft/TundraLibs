@@ -44,6 +44,13 @@ export type NormErrorCode =
   /** A relation alias in a filter/orderBy/projection resolves to
    * neither a foreign key nor a reverse relation. */
   | 'UNKNOWN_RELATION'
+  /** A supplied `EffectiveFrom` on a temporal insert is in the past —
+   * history is immutable; versions can only start now or in the future. */
+  | 'TEMPORAL_PAST'
+  /** A supplied `EffectiveFrom` on a temporal insert is at/before the
+   * start of the version it would supersede (it must fall strictly
+   * inside the open period). */
+  | 'TEMPORAL_OVERLAP'
   // ── Crypto surface ({@link NormCryptoError}) ───────────────────────
   /** Encryption / decryption was requested but no `secret` was
    * supplied to `new Norm({ secret })`. */
@@ -62,13 +69,6 @@ export type NormErrorCode =
    * TTL is invalid, out of range, or would cache the plaintext of
    * encrypted columns on a non-MEMORY engine. */
   | 'INVALID_CACHE_CONFIG'
-  /** A supplied `EffectiveFrom` on a temporal insert is in the past —
-   * history is immutable; versions can only start now or in the future. */
-  | 'TEMPORAL_PAST'
-  /** A supplied `EffectiveFrom` on a temporal insert is at/before the
-   * start of the version it would supersede (it must fall strictly
-   * inside the open period). */
-  | 'TEMPORAL_OVERLAP'
   // ── Date and time helpers ({@link NormError}) ──────────────────────
   /** A zoned helper was given a time zone name the runtime does not
    * know. */

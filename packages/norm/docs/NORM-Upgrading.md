@@ -13,6 +13,8 @@ changelog has those.
   - [`time()` reads a string](#time-reads-a-string)
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
+  - [An insert default that reads a column is refused](#an-insert-default-that-reads-a-column-is-refused)
+  - [An `updateOnConflict` column with no value is a validation error](#an-updateonconflict-column-with-no-value-is-a-validation-error)
   - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
@@ -86,10 +88,27 @@ March 2. Such a string now fails:
 | A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`   | `NormValidationError`, with the column's path |
 | A filter value on one of those columns, or `@AsOf` on a temporal entity | `NormQueryError` with code `INVALID_DATE`     |
 | A supplied `EffectiveFrom` on a temporal entity                         | `NormQueryError` with code `TEMPORAL_PAST`    |
+| A literal `.default()` or `.defaultOnUpdate()` on one of those columns  | `NormDefinitionError` from `Entity()`         |
 
 A `Date` is never refused, and a row an earlier version stored keeps the
 shifted day. Validate a date that arrives as text before it reaches norm,
-or catch the error.
+or catch the error. A literal default that is not a date at all also
+fails `Entity()` now; earlier versions failed each insert that used it.
+
+### An insert default that reads a column is refused
+
+A `.default()` expression that reads a column of the row, such as
+`DATE_ADD` of `'@startsOn'`, now fails `Entity()` with
+`NormDefinitionError`. Earlier versions accepted the definition, and
+every insert that left the column out threw a plain `TypeError`. Compute
+the value in a `beforeInsert` hook instead.
+
+### An `updateOnConflict` column with no value is a validation error
+
+An `upsert()` whose `updateOnConflict` names a column that a row neither
+passes nor fills by default now throws `NormValidationError` with that
+column's path. Earlier versions threw a plain `TypeError` from oql. Pass
+the column in every row, or leave it out of `updateOnConflict`.
 
 ### Date text that is not ISO 8601 is refused
 
@@ -101,7 +120,8 @@ that form throws a `NormQueryError` with code `TEMPORAL_PAST`. Earlier
 versions handed the text to the runtime's `Date` parser, which read it
 in the host's zone and moved `'Feb 30 2026'` to March, so the stored
 value depended on the host. A column with its own `.guard()` refuses it
-before the guard runs. A `Date` and `time()` columns are unchanged, and
+before the guard runs, and a literal default in that form fails
+`Entity()` with `NormDefinitionError`. A `Date` and `time()` columns are unchanged, and
 a filter value in that form still reaches the engine as it is, as
 [Date and time values](NORM-Querying.md#date-and-time-values) says.
 Send `YYYY-MM-DD`, or that with a time and an optional offset, or a
