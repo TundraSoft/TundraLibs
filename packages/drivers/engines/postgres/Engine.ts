@@ -152,6 +152,12 @@ export class PostgresEngine
     const allowCleartextPassword =
       this._getOption('allowCleartextPassword') !== false;
     const allowMd5Password = this._getOption('allowMd5Password') === true;
+    // Ask for a UTC session, so a database or role whose default zone is not
+    // UTC still connects; `__assertUtcSession` catches a server that did not
+    // honour it.
+    const timeZone = this._getOption('allowNonUtcTimeZone') === true
+      ? undefined
+      : 'UTC';
 
     // First attempt: plain TCP, then SSL upgrade if configured. `tlsActive`
     // tracks whether the socket ended up encrypted — used to gate
@@ -189,6 +195,7 @@ export class PostgresEngine
         password: this._getOption('password'),
         applicationName: this._getOption('applicationName') ?? this.Name,
         statementTimeoutMs: this._getOption('statementTimeoutMs'),
+        timeZone,
         tlsActive,
         allowCleartextPassword,
         allowMd5Password,
@@ -227,6 +234,7 @@ export class PostgresEngine
             password: this._getOption('password'),
             applicationName: this._getOption('applicationName') ?? this.Name,
             statementTimeoutMs: this._getOption('statementTimeoutMs'),
+            timeZone,
             // Plaintext fallback — the socket is unencrypted.
             tlsActive: false,
             allowCleartextPassword,
@@ -249,7 +257,8 @@ export class PostgresEngine
 
   /**
    * Refuses a session whose `TimeZone`, as the server reported it at startup,
-   * is not UTC. Postgres converts a `Date` sent for a `date` or `timestamp`
+   * is not UTC: one that did not take the `TimeZone` the startup message
+   * asked for. Postgres converts a `Date` sent for a `date` or `timestamp`
    * column, and evaluates `date_trunc`, `EXTRACT` and casts, in that zone, so
    * any other zone stores and filters the wrong day and clock time. A server
    * that reports no `TimeZone` is not checked.
