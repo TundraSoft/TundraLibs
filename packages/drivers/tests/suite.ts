@@ -406,11 +406,6 @@ const CASES: Case[] = [
     expected: [{ id: 2, upper: 'BOB' }, { id: 4, upper: 'CY' }],
   },
   {
-    name: 'a list filter holding null does not match the NULL row',
-    where: { '@status': ['ACTIVE', null] },
-    expected: [{ id: 1 }, { id: 4 }],
-  },
-  {
     name: 'a string literal starting with $ stays text',
     expressions: {
       label: { $$_expression: 'COALESCE', args: ['@nick', '$name'] },

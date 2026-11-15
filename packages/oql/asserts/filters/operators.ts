@@ -132,10 +132,15 @@ export const assertOperators: <T extends _ColumnTypes = _ColumnTypes>(
     // Validate all array elements are primitive values
     for (let i = 0; i < x.length; i++) {
       const elem = x[i];
+      if (elem === null) {
+        throw new TypeError(
+          `Invalid Operators: Array element at index ${i} cannot be null — use '$null: true' / '$null: false' for null comparisons`,
+        );
+      }
       if (
         typeof elem !== 'string' && typeof elem !== 'number' &&
         typeof elem !== 'boolean' && typeof elem !== 'bigint' &&
-        !(elem instanceof Date) && elem !== null
+        !(elem instanceof Date)
       ) {
         throw new TypeError(
           `Invalid Operators: Array element at index ${i} must be a primitive value, got ${typeof elem}`,

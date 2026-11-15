@@ -281,7 +281,8 @@ const filters: QueryFilter<User> = {
 
 **Null inside operator values is rejected.** `$eq: null` / `$ne: null` /
 `$in: [null, …]` / `$gt: null` etc. all throw — SQL `= NULL` is always
-unknown. Use `$null: true` / `$null: false` instead. The shorthand
+unknown. A null in a shorthand list (`'@col': ['a', null]`) throws too.
+Use `$null: true` / `$null: false` instead. The shorthand
 `'@col': null` is still accepted and means `IS NULL`.
 
 **A comparison never matches a NULL, on MongoDB too.**

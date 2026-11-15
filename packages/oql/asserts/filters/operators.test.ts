@@ -182,6 +182,14 @@ describe('oql.asserts.Filters.Operators', () => {
       );
     });
 
+    it('invalid: array holding null (use $null instead)', () => {
+      asserts.assertThrows(
+        () => assertOperators<{ status: string | null }>(['a', null] as any),
+        TypeError,
+        'Array element at index 1 cannot be null',
+      );
+    });
+
     it('invalid: non-object type', () => {
       asserts.assertThrows(
         () => assertOperators<{ id: number }>(Symbol() as any),
