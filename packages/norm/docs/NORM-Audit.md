@@ -114,6 +114,7 @@ every write to it, driven by `Users`'s own writes, and a caller writing
 directly would corrupt the trail.
 
 ```ts ignore
+const sentinel = new Date('2099-12-31T23:59:59.999Z'); // the default
 await db.repo('UserAudit').find({ '@Id': id }); // every version
 await db.repo('UserAudit').find({ '@Id': id, '@EffectiveTo': sentinel }); // current
 await db.repo('UserAudit').find({ '@Id': id, '@AsOf': someDate }); // as of a point in time
@@ -172,6 +173,9 @@ audit: {
   sentinel: '2099-12-31T23:59:59.999Z', // optional — the open-end marker
 }
 ```
+
+`sentinel` needs an offset, for the reason
+[Temporal → Options](NORM-Temporal.md#options) gives.
 
 `AuditPK` is a full `Column` builder, with its own type, length, and
 generator, because norm generates every version id itself. It must

@@ -1018,17 +1018,20 @@ export const Column = {
    * clock. */
   time: (): ColumnBuilder<string> =>
     new ColumnBuilder<string>({ type: 'TIME' }),
-  /** `DATETIME` — for engines/schemas that distinguish it from
-   * TIMESTAMP (MariaDB famously does). Values ride as `Date`. */
+  /** An instant: `DATETIME` on MariaDB, `TIMESTAMP` on Postgres. Values
+   * ride as `Date`. */
   datetime: (): DateColumnBuilder =>
     new DateColumnBuilder({ type: 'DATETIME' }),
-  /** `TIMESTAMP` — wall-clock, no zone. Values ride as `Date`. */
+  /** An instant, as `TIMESTAMP`. On MariaDB that is the type
+   * {@linkcode Column.timestamptz} has too, and its range is limited; use
+   * {@linkcode Column.datetime} for a far-future value. Values ride as
+   * `Date`. */
   timestamp: (): DateColumnBuilder =>
     new DateColumnBuilder({ type: 'TIMESTAMP' }),
-  /** `TIMESTAMPTZ` — timestamp WITH time zone. `TIMESTAMPTZ` on Postgres,
-   * tz-aware `TIMESTAMP` on MariaDB (stored UTC), ISO-8601-with-offset
-   * `TEXT` on SQLite. Values ride as `Date`; prefer this over
-   * {@linkcode Column.timestamp} whenever the instant matters. */
+  /** An instant: `TIMESTAMPTZ` on Postgres, `TIMESTAMP` on MariaDB, ISO
+   * 8601 `TEXT` on SQLite. Values ride as `Date`. On Postgres prefer this
+   * over {@linkcode Column.timestamp} for a column that other clients
+   * read or write. */
   timestamptz: (): DateColumnBuilder =>
     new DateColumnBuilder({ type: 'TIMESTAMPTZ' }),
   /**
