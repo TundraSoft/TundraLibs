@@ -461,6 +461,76 @@ describe('rapid.endpoints.docs', () => {
     await app.stop();
   });
 
+  it('try-it sends a stored credential to a secured and to an undeclared operation, never to a public one', async () => {
+    const app = await secured();
+    app.route(
+      'GET',
+      '/open',
+      { openapi: { security: [] } },
+      () => ({ content: {} }),
+    );
+    docs(app, { tryIt: true });
+    const { flat } = await page(app);
+    const form = (path: string): string =>
+      flat.match(new RegExp(`<form[^>]*data-path="${path}"[^>]*>`))?.[0] ?? '';
+    asserts.assertStringIncludes(form('/open'), ' data-public');
+    asserts.assertEquals(form('/posts').includes('data-public'), false);
+    asserts.assertEquals(form('/posts/{id}').includes('data-public'), false);
+
+    // Run the served script against the least DOM its submit path reads.
+    const source = await (await app.fetch(
+      new Request('http://app/__rapid/docs.js'),
+    )).text();
+    class HTMLFormElement {}
+    const listeners: Record<string, ((e: unknown) => unknown)[]> = {};
+    const bearer = {
+      dataset: { docsCredential: 'bearerAuth', docsType: 'http' },
+    };
+    const sent: (string | null)[] = [];
+    new Function(
+      'window',
+      'document',
+      'sessionStorage',
+      'location',
+      'fetch',
+      'HTMLFormElement',
+      source,
+    )(
+      {},
+      {
+        body: { dataset: {} },
+        cookie: '',
+        addEventListener: (type: string, fn: (e: unknown) => unknown) =>
+          (listeners[type] ??= []).push(fn),
+        querySelectorAll: () => [bearer],
+        querySelector: () => bearer,
+      },
+      { getItem: () => JSON.stringify({ bearerAuth: 't0k' }) },
+      { origin: 'http://app', href: 'http://app/docs' },
+      (_url: URL, init: { headers: Headers }) => {
+        sent.push(init.headers.get('authorization'));
+        return Promise.resolve(new Response('{}'));
+      },
+      HTMLFormElement,
+    );
+    const submit = async (attributes: Record<string, string>) => {
+      const target = Object.assign(new HTMLFormElement(), {
+        hasAttribute: (name: string) => name in attributes,
+        dataset: { path: '/x', security: attributes['data-security'] ?? '' },
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      });
+      for (const fn of listeners.submit ?? []) {
+        await fn({ target, preventDefault: () => {} });
+      }
+    };
+    await submit({ 'data-docs-try': '', 'data-security': 'bearerAuth' });
+    await submit({ 'data-docs-try': '' });
+    await submit({ 'data-docs-try': '', 'data-public': '' });
+    asserts.assertEquals(sent, ['Bearer t0k', 'Bearer t0k', null]);
+    await app.stop();
+  });
+
   it('tryIt: credential box per scheme + login form, per-operation forms, and the rapid-served script', async () => {
     const app = await secured();
     docs(app, {

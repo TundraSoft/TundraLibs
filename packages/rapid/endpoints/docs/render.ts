@@ -234,7 +234,9 @@ export function DocsOperation(
       html`
         <form class="docs-try" data-docs-try data-method="${method
           .toUpperCase()}"
-          data-path="${path}" data-security="${security}">
+          data-path="${path}" data-security="${security}" ${// `security: []` is the route saying it is public: try-it sends
+          // it no credential.
+          op.security?.length === 0 ? ' data-public' : ''}>
             ${each(params, (p) =>
               html`<label>${p.name} <small>(${p.in})</small><input name="${p.name}" data-docs-param="${p.name}" data-docs-in="${p.in}"${
                 p.required ? ' required' : ''

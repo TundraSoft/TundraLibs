@@ -254,7 +254,8 @@ UI runtime, no CDN, so a `script-src 'self'` policy is enough.
 - **A try-it request applies them by type**: `Authorization: Bearer <token>`
   (or the scheme's own word), `Authorization: Basic …`, the header or query
   key; a cookie key is the browser's to send. Only the schemes the operation
-  lists in `security` are applied (all of them when it lists none). The
+  lists in `security` are applied: all of them when it declares none, and
+  none when it declares `security: []`, which marks it public. The
   `csrf` cookie is echoed as `x-csrf-token` like the UI runtime does, so a
   `csrf()`-protected POST works from the page.
 - **The sign-in form** (`tryIt: { login: { path, fields } }`) POSTs
