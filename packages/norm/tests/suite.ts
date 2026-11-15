@@ -768,6 +768,39 @@ export function runLiveSuite(fixture: LiveFixture): void {
       },
     );
 
+    step(
+      '12s a date-time string filters a timestamp column as its instant',
+      async () => {
+        const when = new Date('2030-01-02T03:04:05.000Z');
+        await db.repo('Links').update({ expiresAt: when }, { '@id': 1 });
+        // As a JSON payload carries it: the filter type takes a Date.
+        const at = (v: unknown): Record<string, unknown> => ({
+          '@expiresAt': v,
+        });
+        for (
+          const text of [
+            '2030-01-02T03:04:05Z',
+            '2030-01-02 03:04:05',
+            '2030-01-02T08:34:05+05:30',
+          ]
+        ) {
+          const found = await db.repo('Links').find(at(text));
+          asserts.assertEquals(found.data.map((l) => l.id), [1], text);
+        }
+        const day = await db.repo('Links').count(
+          at({ $between: ['2030-01-02', '2030-01-03T00:00:00'] }),
+        );
+        asserts.assertEquals(day.count, 1);
+        const joined: Record<string, unknown> = {
+          '@id': 1,
+          '@Link.@expiresAt': { $in: ['2030-01-02T08:34:05+05:30'] },
+        };
+        asserts.assertEquals((await db.repo('Visits').count(joined)).count, 1);
+
+        await db.repo('Links').update({ expiresAt: null }, { '@id': 1 });
+      },
+    );
+
     // ── 13 M2M through the junction ───────────────────────────────────
 
     step(

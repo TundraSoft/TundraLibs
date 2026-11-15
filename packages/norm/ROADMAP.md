@@ -64,16 +64,15 @@ before adopting is tooling rather than new query power.
   Mongo, and the fetch-only edge dialects arrived for free through
   `drivers`.
 - **Polymorphic associations / STI / embeddables.**
-- **Filter values are not converted by column type.** A write converts
-  each value by its column; a filter value reaches the engine as given.
-  A `Date` matches a `timestamp` or `date` column on every engine. A
-  date string is not reliable. One with a non-UTC offset
-  (`'2026-01-15T15:30:00+05:30'`) matches the same instant on no
-  engine. SQLite compares text, so only the exact stored form matches:
-  `'2026-01-15T10:00:00.000Z'` does, `'2026-01-15T10:00:00Z'` does not,
-  and neither does `'2026-01-15'` against a `date` column. MongoDB
-  matches no string against a date. Probed 2026-11-13 on Postgres,
-  MariaDB, SQLite, and MongoDB. Until this lands, filter with a `Date`.
+- **Filter values are converted for date and time columns only.** On
+  any other column a filter value reaches the engine as given, so a
+  value that is not of the column's own type depends on the engine. A
+  digit string against an integer or decimal column matches on Postgres,
+  MariaDB, and SQLite but not on MongoDB. `1` against a boolean column
+  matches on MariaDB and SQLite, matches nothing on MongoDB, and is an
+  error on Postgres. A plain column's `.beforeWrite()` transforms what
+  is written, not what is filtered: only a hashed column applies it to
+  a filter value. Probed 2026-11-15 on all four.
 
 ### Ergonomics
 

@@ -56,7 +56,7 @@ import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
-import { asUtc, readTimeOfDay, utcDay } from './calendar.ts';
+import { asUtc, readTimeOfDay, toTimeOfDay, utcDay } from './calendar.ts';
 import type { ObjectGuardian } from '@tundralibs/guardian';
 import {
   canonicalizePlain,
@@ -129,6 +129,49 @@ function toBoolean(v: unknown): unknown {
  * driver runs its session in UTC). */
 function jsonDate(v: unknown): unknown {
   return typeof v === 'string' ? new Date(asUtc(v) as string) : v;
+}
+
+/** A date, alone or followed by a time: the strings a filter on a date
+ * column converts. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/;
+
+/** Filter operators that compare the column with one value. */
+const VALUE_OPERATORS = new Set(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte']);
+
+/** Filter operators that compare the column with a list of values. */
+const LIST_OPERATORS = new Set(['$in', '$nin', '$between']);
+
+/**
+ * One filter value for a temporal column, in the form a write stores:
+ * the canonical time of day for `TIME`, a `Date` for the date types, its
+ * UTC day for `DATE`. Anything a write would not read as one (`null`, a
+ * column reference, an expression, other text) comes back as it came.
+ */
+function temporalValue(type: string, v: unknown): unknown {
+  if (type === 'TIME') return toTimeOfDay(v) ?? v;
+  const d = typeof v === 'string' && ISO_DATE.test(v)
+    ? new Date(asUtc(v) as string)
+    : v;
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return v;
+  return type === 'DATE' ? utcDay(d) : d;
+}
+
+/** {@linkcode temporalValue} over a filter condition: a bare value, the
+ * array shorthand, or the comparison operators of an operator bag.
+ * `cond` is the filter walk's own copy, so a bag is rewritten in place. */
+function temporalCondition(type: string, cond: unknown): unknown {
+  if (Array.isArray(cond)) return cond.map((v) => temporalValue(type, v));
+  if (typeof cond !== 'object' || cond === null || cond instanceof Date) {
+    return temporalValue(type, cond);
+  }
+  const bag = cond as Row;
+  for (const [op, v] of Object.entries(bag)) {
+    if (VALUE_OPERATORS.has(op)) bag[op] = temporalValue(type, v);
+    else if (LIST_OPERATORS.has(op) && Array.isArray(v)) {
+      bag[op] = v.map((item) => temporalValue(type, item));
+    }
+  }
+  return bag;
 }
 
 /** A JSON column's stored TEXT, parsed; anything else as it came. */
@@ -1023,9 +1066,14 @@ export class ReadRepo<
   }
 
   /** Recursive worker behind {@linkcode _prepareWhere}. Async because
-   * rewriting a hashed ref has to digest the comparand.
+   * rewriting a hashed ref has to digest the comparand. `convert` is
+   * off inside a hand-written `$exists`, whose columns belong to
+   * another table.
    * @internal */
-  private async __rewriteWhereNode(node: unknown): Promise<unknown> {
+  private async __rewriteWhereNode(
+    node: unknown,
+    convert = true,
+  ): Promise<unknown> {
     if (node === null || node === undefined) return node;
     // Date is `typeof 'object'` with NO enumerable keys — without this
     // short-circuit the object walk below flattens it to {}.
@@ -1038,7 +1086,9 @@ export class ReadRepo<
     }
     if (Array.isArray(node)) {
       const out: unknown[] = [];
-      for (const item of node) out.push(await this.__rewriteWhereNode(item));
+      for (const item of node) {
+        out.push(await this.__rewriteWhereNode(item, convert));
+      }
       return out;
     }
     if (typeof node !== 'object') return node;
@@ -1049,7 +1099,10 @@ export class ReadRepo<
     const legacy: Row[] = [];
     for (const [key, value] of Object.entries(node as Row)) {
       if (!key.startsWith('@')) {
-        out[key] = await this.__rewriteWhereNode(value);
+        out[key] = await this.__rewriteWhereNode(
+          value,
+          convert && key !== '$exists' && key !== '$nexists',
+        );
         continue;
       }
       // Virtual temporal point-in-time key: `@AsOf: T` → the version in
@@ -1059,7 +1112,7 @@ export class ReadRepo<
         const range = await this.__rewriteWhereNode({
           [`@${temporal.from}`]: { $lte: value },
           [`@${temporal.to}`]: { $gt: value },
-        }) as Row;
+        }, convert) as Row;
         Object.assign(out, range);
         continue;
       }
@@ -1076,7 +1129,11 @@ export class ReadRepo<
         );
         continue;
       }
-      out[key] = await this.__rewriteWhereNode(value);
+      const cond = await this.__rewriteWhereNode(value);
+      out[key] =
+        convert && (ref.plainType === 'TIME' || DATE_TYPES.has(ref.plainType))
+          ? temporalCondition(ref.plainType, cond)
+          : cond;
     }
     if (legacy.length > 0) {
       const existing = out.$and;
