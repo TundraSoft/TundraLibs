@@ -987,7 +987,16 @@ export abstract class AbstractTranslator {
     // node and is never bound as a parameter, so the dialect picks its
     // whole form here rather than branching in SQL like DATE_DIFF must.
     if (expr.$$_expression === 'UNIX_TIMESTAMP') {
-      return this._unixTimestamp(expr.unit ?? 'seconds');
+      const unit: unknown = expr.unit;
+      if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
+        throw new OqlError(
+          `Unknown UNIX_TIMESTAMP unit '${
+            String(unit)
+          }' — expected one of seconds, milliseconds`,
+          { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+        );
+      }
+      return this._unixTimestamp(unit ?? 'seconds');
     }
     // `unit` is a translation-time switch here too. It is matched against
     // the three literals, so nothing a caller supplies reaches the SQL.

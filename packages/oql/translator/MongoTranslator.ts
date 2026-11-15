@@ -1661,7 +1661,7 @@ export class MongoTranslator {
           Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
         );
       case 'UNIX_TIMESTAMP':
-        return (expr as { unit?: string }).unit === 'milliseconds'
+        return this.__unixTimestampUnit(expr) === 'milliseconds'
           ? now.getTime()
           : Math.floor(now.getTime() / 1000);
       case 'UUID':
@@ -2399,6 +2399,25 @@ export class MongoTranslator {
   }
 
   /**
+   * The `unit` of a `UNIX_TIMESTAMP` node, `'seconds'` when absent.
+   *
+   * @throws {OqlError} `INVALID_TIME_UNIT` when the unit is present and is
+   *   neither `'seconds'` nor `'milliseconds'`.
+   */
+  private __unixTimestampUnit(expr: Expressions): 'seconds' | 'milliseconds' {
+    const unit: unknown = (expr as { unit?: unknown }).unit;
+    if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
+      throw new OqlError(
+        `Unknown UNIX_TIMESTAMP unit '${
+          String(unit)
+        }' — expected one of seconds, milliseconds`,
+        { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+      );
+    }
+    return unit ?? 'seconds';
+  }
+
+  /**
    * Map an OQL {@link TimeUnit} to the unit name Mongo's `$dateAdd`
    * expects. See {@link MONGO_TIME_UNITS}.
    *
@@ -2714,8 +2733,7 @@ export class MongoTranslator {
         return { $dateTrunc: { date: '$$NOW', unit: 'day' } };
       case 'UNIX_TIMESTAMP': {
         // A Long (int64) either way: $$NOW is ms since epoch once cast.
-        const unit = (expr as { unit?: string }).unit ?? 'seconds';
-        return unit === 'milliseconds'
+        return this.__unixTimestampUnit(expr) === 'milliseconds'
           ? { $toLong: '$$NOW' }
           : { $toLong: { $floor: { $divide: [{ $toLong: '$$NOW' }, 1000] } } };
       }

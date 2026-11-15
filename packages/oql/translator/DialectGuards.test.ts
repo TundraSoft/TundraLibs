@@ -342,6 +342,86 @@ describe('oql.translator.guards', () => {
     });
   });
 
+  describe('UNIX_TIMESTAMP unit', () => {
+    // Same gap again: `unit` picks the emitted form at translation time, so
+    // an unchecked one silently became seconds. The asserts never see these
+    // positions, so the translators must check it.
+    const stamp = (unit?: unknown) => ({
+      $$_expression: 'UNIX_TIMESTAMP',
+      unit,
+    });
+    const positions: Record<string, (operand: unknown) => Query<'SELECT'>> = {
+      'a filter operand': (operand) =>
+        ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          projection: { '@id': true },
+          where: { '@at': { $gte: operand } },
+        }) as unknown as Query<'SELECT'>,
+      'a nested argument': (operand) =>
+        ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          projection: { '@id': true },
+          where: {
+            '@at': { $gte: { $$_expression: 'ADD', args: ['@id', operand] } },
+          },
+        }) as unknown as Query<'SELECT'>,
+      'a CASE condition': (operand) =>
+        ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          expressions: {
+            e: {
+              $$_expression: 'CASE',
+              args: {
+                cases: [{ when: { '@at': { $gte: operand } }, then: 1 }],
+                else: 0,
+              },
+            },
+          },
+          projection: { '@id': true, '@e': true },
+        }) as unknown as Query<'SELECT'>,
+    };
+    const translators = () => [
+      new SQLiteTranslator(),
+      new PostgresTranslator(),
+      new MariaTranslator(),
+      new MongoTranslator(),
+    ];
+
+    for (const [position, query] of Object.entries(positions)) {
+      it(`refuses an unknown unit with the same error on every engine: ${position}`, () => {
+        for (const unit of ['minutes', 'SECONDS', null]) {
+          const messages = translators().map((t) => {
+            const err = asserts.assertThrows(
+              () => t.select(query(stamp(unit))),
+              OqlError,
+            );
+            asserts.assertEquals(err.code, 'INVALID_TIME_UNIT');
+            return err.message;
+          });
+          asserts.assertEquals(new Set(messages).size, 1);
+        }
+      });
+    }
+
+    it('reads a missing unit as seconds on every engine', () => {
+      // Control: same shapes, so the unit is what the test above rejects.
+      for (const query of Object.values(positions)) {
+        for (const t of translators()) {
+          const out = (unit?: string) =>
+            JSON.stringify(t.select(query(stamp(unit))));
+          asserts.assertEquals(out(), out('seconds'));
+          asserts.assertNotEquals(out(), out('milliseconds'));
+        }
+      }
+    });
+  });
+
   describe('param inlining', () => {
     it('refuses to inline a non-named placeholder format', () => {
       const err = asserts.assertThrows(

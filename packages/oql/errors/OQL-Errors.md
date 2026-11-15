@@ -334,8 +334,7 @@ checked before anything reaches the database:
 - `DATE_TRUNC` takes `DAYS`, `MONTHS` or `YEARS`.
 - `DATE_ADD` / `DATE_DIFF` take OQL's time units (`DAYS`, `HOURS`,
   `MINUTES`, `SECONDS`, `MONTHS`, `YEARS`).
-- `UNIX_TIMESTAMP` takes `seconds` or `milliseconds`. Only the asserts check
-  this one.
+- `UNIX_TIMESTAMP` takes `seconds` or `milliseconds`.
 
 **Triggered by** a hand-built or cast expression node. Under `expressions`,
 and anywhere else the query asserts read an expression, the asserts throw it.
