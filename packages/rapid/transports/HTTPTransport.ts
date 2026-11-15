@@ -34,7 +34,7 @@ import {
   storableReply,
   stripApiPrefix,
 } from '../utils/mod.ts';
-import { isStreamBody } from '../utils/streams.ts';
+import { isStreamBody, toReadableStream } from '../utils/streams.ts';
 import { responseFor } from '../utils/routeResponse.ts';
 import type {
   RapidChannelOptions,
@@ -619,7 +619,18 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       returned: RapidContextResponse | void,
       parts?: Record<string, RapidComposeSlot>,
     ): void | Promise<void> => {
-      if (returned === undefined || ctx.response !== null) return;
+      if (returned === undefined || ctx.response !== null) {
+        // A reply nobody will send — `timeout()` already answered, or the
+        // response was set another way. A stream it carries is released,
+        // or a `ctx.serve()` file handle stays open.
+        if (
+          returned != null && isStreamBody(returned.content) &&
+          ctx.response?.content !== returned.content
+        ) {
+          toReadableStream(returned.content).cancel().catch(() => {});
+        }
+        return;
+      }
       // A `null` return means "no body" (→ 204) on templated routes
       // too — only a real reply is represented.
       const commit = (): void => {
