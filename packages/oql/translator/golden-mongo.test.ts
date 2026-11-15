@@ -1439,24 +1439,6 @@ const CASES: Case[] = [
     },
   },
   {
-    // The filter path refuses a column as a pattern; so does a CASE.
-    name: 'CASE with a $like condition on a @col value throws',
-    method: 'select',
-    query: {
-      type: 'SELECT',
-      table: 'users',
-      columns: ['id', 'name', 'nick'],
-      expressions: {
-        tier: {
-          $$_expression: 'CASE',
-          args: { cases: [{ when: { '@name': { $like: '@nick' } }, then: 1 }] },
-        },
-      },
-      projection: { '@tier': 'tier' },
-    },
-    throws: true,
-  },
-  {
     name: 'SELECT with aggregates → aggregate pipeline',
     method: 'select',
     query: {
@@ -3417,6 +3399,15 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
       asserts.assertEquals(stageOf(c.when), switchOn(c.expected));
     });
   }
+
+  // The filter path refuses a column as a pattern; so does a CASE.
+  it('refuses a column as the pattern of $like', () => {
+    asserts.assertThrows(
+      () => stageOf({ '@a': { $like: '@b' } }),
+      DialectUnsupportedError,
+      'column reference',
+    );
+  });
 
   it('guards a CASE stored by UPDATE', () => {
     const out = t.update({
