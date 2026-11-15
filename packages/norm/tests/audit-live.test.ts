@@ -7,7 +7,7 @@
  * carried into the replica, decrypted through its own read path) and
  * that the Migrator's snapshot layer captures the generated replica as
  * a real, FK-less table. Engines that are unreachable are skipped, not
- * failed.
+ * failed, unless `LIVE_DB_REQUIRED=true`.
  *
  * @module
  */
@@ -27,6 +27,7 @@ import {
 } from '../mod.ts';
 import { buildSnapshot } from '../migrations/snapshot.ts';
 import { runtimeOf } from '../Norm.ts';
+import { requireLive } from './requireLive.ts';
 
 const env = envArgs('./packages/norm/');
 const SENTINEL = new Date('2099-12-31T23:59:59.999Z');
@@ -199,6 +200,7 @@ for (const fx of FIXTURES) {
 
     it('the Migrator snapshot captures the replica as a real, FK-less table', () => {
       if (db === undefined) {
+        requireLive(reason);
         console.warn(`  (skipped) ${reason}`);
         return;
       }
@@ -221,6 +223,7 @@ for (const fx of FIXTURES) {
 
     it('insert/update/upsert/truncate/delete all mirror, ciphertext intact', async () => {
       if (db === undefined) {
+        requireLive(reason);
         console.warn(`  (skipped) ${reason}`);
         return;
       }

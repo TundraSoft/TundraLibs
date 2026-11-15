@@ -5,7 +5,7 @@
  * behaviour on every engine, and (on the SQL engines) that the Migrator
  * creates the injected `EffectiveFrom`/`EffectiveTo` columns + the
  * one-current `UNIQUE`. Engines that are unreachable are skipped, not
- * failed.
+ * failed, unless `LIVE_DB_REQUIRED=true`.
  *
  * @module
  */
@@ -25,6 +25,7 @@ import {
   NormUnsupportedError,
   Schema,
 } from '../mod.ts';
+import { requireLive } from './requireLive.ts';
 
 const env = envArgs('./packages/norm/');
 const SENTINEL = '2099-12-31T23:59:59.999Z';
@@ -162,6 +163,7 @@ for (const fx of FIXTURES) {
 
     it('supersede timeline, @AsOf, update/upsert/truncate/delete-disabled, supplied-from', async () => {
       if (db === undefined) {
+        requireLive(reason);
         console.warn(`  (skipped) ${reason}`);
         return;
       }
