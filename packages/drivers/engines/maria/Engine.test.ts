@@ -307,6 +307,19 @@ describe({
         asserts.assertEquals(typeof r.data[0]?.n, 'bigint');
         await engine.disconnect();
       });
+
+      it('leaves a placeholder inside a string or comment as text', async () => {
+        const engine = new MariaEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT ':a:' AS t, :a: AS v, 'it\\'s :zz:' AS d, ` +
+            `TO_CHAR(:ts:, 'HH24:MI:SS') AS c # :zz:`,
+          params: { a: 1, ts: new Date('2026-01-15T20:04:05Z') },
+        });
+        asserts.assertEquals(r.data, [
+          { t: ':a:', v: 1, d: "it's :zz:", c: '20:04:05' },
+        ]);
+        await engine.disconnect();
+      });
     });
   },
 });

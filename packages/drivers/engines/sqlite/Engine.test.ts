@@ -286,6 +286,18 @@ describe({
         await engine.disconnect();
       });
 
+      it('leaves a placeholder inside a string, identifier or comment as text', async () => {
+        const engine = new SQLiteEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql:
+            `SELECT ':a:' AS t, :a: AS v, replace(:s:, ':sep:', '-') AS d, ` +
+            `1 AS [:zz:] -- :zz:`,
+          params: { a: 1, s: 'x:sep:y' },
+        });
+        asserts.assertEquals(r.data, [{ t: ':a:', v: 1, d: 'x-y', ':zz:': 1 }]);
+        await engine.disconnect();
+      });
+
       it('UNIQUE constraint violation maps to DUPLICATE_KEY', async () => {
         const engine = new SQLiteEngine('uniq-1', TEST_CONFIG);
         await engine.execute({
