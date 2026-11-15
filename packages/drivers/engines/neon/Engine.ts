@@ -336,6 +336,9 @@ export class NeonHttpEngine extends SQLConnectionEngine<
         // A `Date` travels as ISO text, which Postgres reads as an untyped
         // literal: `date_trunc('day', $1)`, `$1 - $2` and `$1 IS NULL` cannot
         // resolve it. Type it `timestamptz`, as the socket engine binds it.
+        // The type then holds everywhere, as it does there: `d = $1` on a
+        // `date` column matches only a `Date` at midnight UTC, and a `text`
+        // column stores `2026-01-15 20:00:00+00` and cannot be compared with it.
         return (supplied as Record<string, unknown>)[key] instanceof Date
           ? `$${idx}::timestamptz`
           : `$${idx}`;

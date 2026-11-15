@@ -119,7 +119,11 @@ A `Date` parameter is sent as ISO-8601 text with its placeholder typed
 `timestamptz`, so it works where Postgres has no column to infer a type from
 (`date_trunc('day', :at:)`, `:to: - :from:`, `:at: IS NULL`). Bound to a
 `timestamp` or `date` column it is converted in the session's `TimeZone`,
-which is why the engine insists on UTC.
+which is why the engine insists on UTC. The type holds everywhere, as on the
+socket engine: `d = :at:` on a `date` column matches only a `Date` at midnight
+UTC, a `text` column stores `2026-01-15 20:00:00+00`, and `t = :at:` on one
+fails with "operator does not exist". Pass an ISO string where that is not
+wanted.
 
 ### Time zone
 
@@ -134,8 +138,9 @@ before it is sent, and the next query checks again. `connect()` and `ping()`
 do not check.
 
 Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`). Set
-`allowNonUtcTimeZone: true` only when the application uses `timestamptz`
-alone; it also drops the extra request.
+`allowNonUtcTimeZone: true` only when the application keeps every instant in
+`timestamptz` and wants the session zone's days and clock times, which
+`date_trunc`, `EXTRACT` and casts still use; it also drops the extra request.
 
 ## Limitations
 

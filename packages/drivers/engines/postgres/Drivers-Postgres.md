@@ -218,8 +218,10 @@ that refuse startup parameters:
 ALTER DATABASE app SET timezone TO 'UTC';
 ```
 
-Set `allowNonUtcTimeZone: true` only when the application uses `timestamptz`
-alone. A server that reports no `TimeZone` is not checked.
+Set `allowNonUtcTimeZone: true` only when the application keeps every instant
+in `timestamptz` and wants the session zone's days and clock times:
+`date_trunc`, `EXTRACT` and casts still use that zone on a `timestamptz`. A
+server that reports no `TimeZone` is not checked.
 
 ## Performance
 
