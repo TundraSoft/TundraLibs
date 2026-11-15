@@ -1146,6 +1146,86 @@ const CASES: Case[] = [
     },
   },
   {
+    // As on the SQL dialects, which bind an `@` string that names no
+    // column in scope as text. An expression alias is not in scope.
+    name: 'SELECT expression argument naming no column is text',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'label', 'meta'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      expressions: {
+        shown: { $$_expression: 'COALESCE', args: ['@label', '@nope'] },
+        deep: { $$_expression: 'COALESCE', args: ['@meta.@tag', '@nope.@tag'] },
+        joined: { $$_expression: 'COALESCE', args: ['@P.@title', '@P.@nope'] },
+        again: { $$_expression: 'COALESCE', args: ['@shown', '-'] },
+      },
+      where: {
+        '@label': {
+          $ne: { $$_expression: 'COALESCE', args: ['@id', '@nope'] },
+        },
+      },
+      projection: {
+        '@shown': 'shown',
+        '@deep': 'deep',
+        '@joined': 'joined',
+        '@again': 'again',
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $ne: ['$label', { $ifNull: ['$id', '@nope'] }] },
+                  { $gt: ['$label', null] },
+                  { $gt: [{ $ifNull: ['$id', '@nope'] }, null] },
+                ],
+              },
+            },
+          },
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          {
+            $addFields: {
+              shown: { $ifNull: ['$label', '@nope'] },
+              deep: { $ifNull: ['$meta.tag', '@nope.@tag'] },
+              joined: { $ifNull: ['$P.title', '@P.@nope'] },
+              again: { $ifNull: ['@shown', '-'] },
+            },
+          },
+          {
+            $project: {
+              shown: '$shown',
+              deep: '$deep',
+              joined: '$joined',
+              again: '$again',
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
     // An object argument is data as well: bare, MongoDB would evaluate
     // its `'$'` as a field path.
     name: 'WHERE Expression operand keeps $ and object arguments literal',
@@ -1292,6 +1372,28 @@ const CASES: Case[] = [
         data: [{
           $set: { label: { $ifNull: ['$label', { $literal: '$none' }] } },
         }],
+        options: { multiple: true },
+      },
+    },
+  },
+  {
+    name: 'UPDATE expression argument naming no column is text',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'label'],
+      data: {
+        label: { $$_expression: 'COALESCE', args: ['@label', '@none'] },
+      },
+      where: { '@id': 1 },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: { id: 1 },
+        data: [{ $set: { label: { $ifNull: ['$label', '@none'] } } }],
         options: { multiple: true },
       },
     },
@@ -2300,6 +2402,51 @@ const CASES: Case[] = [
     },
   },
   {
+    // The row being inserted has no column to read, so `'@name'` in its
+    // value is text; updateSet runs against the stored row and reads it.
+    name: 'UPSERT reads a column in updateSet, not in the inserted row',
+    method: 'upsert',
+    query: {
+      type: 'UPSERT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      data: {
+        id: 1,
+        nick: { $$_expression: 'CONCAT', args: ['@name', '!'] },
+      },
+      conflictKeys: ['@id'],
+      updateSet: {
+        nick: { $$_expression: 'CONCAT', args: ['@name', '@nope'] },
+      },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: { id: 1 },
+        data: [{
+          $set: {
+            id: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $literal: 1 },
+                '$id',
+              ],
+            },
+            nick: {
+              $cond: [
+                { $eq: [{ $type: '$_id' }, 'missing'] },
+                { $concat: ['@name', '!'] },
+                { $concat: ['$name', '@nope'] },
+              ],
+            },
+          },
+        }],
+        options: { upsert: true },
+      },
+    },
+  },
+  {
     name: 'UPDATE with an expression is a pipeline; literals are $literal',
     method: 'update',
     query: {
@@ -3133,6 +3280,11 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         },
       },
       {
+        name: 'reads an operand naming no column as text, unguarded',
+        when: { '@a': { $ne: '@nope' } },
+        expected: { $and: [{ $ne: ['$a', '@nope'] }, present('$a')] },
+      },
+      {
         name: 'guards an expression operand',
         when: { '@a': { $lt: { $$_expression: 'ADD', args: ['@b', 1] } } },
         expected: {
@@ -3152,6 +3304,11 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         name: 'reads a direct list as $in',
         when: { '@a': [1, 2] },
         expected: { $and: [{ $in: ['$a', [1, 2]] }, present('$a')] },
+      },
+      {
+        name: 'reads a list entry naming no column as text',
+        when: { '@a': ['@b', '@nope'] },
+        expected: { $and: [{ $in: ['$a', ['$b', '@nope']] }, present('$a')] },
       },
       {
         name: 'guards the field of $nin',
