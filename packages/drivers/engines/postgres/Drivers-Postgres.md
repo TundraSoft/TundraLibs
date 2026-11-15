@@ -211,8 +211,11 @@ evaluates `date_trunc`, `EXTRACT` and casts, in the session's `TimeZone`. In
 any zone but UTC those store and filter the wrong day and clock time;
 `timestamptz` is correct in every zone. The driver therefore refuses a
 connection whose server reports a non-UTC `TimeZone` at startup, with
-`INVALID_CONFIG_VALUE`. Fix it on the database, which also works behind poolers
-that refuse startup parameters:
+`INVALID_CONFIG_VALUE`. Any fixed zero offset counts as UTC, such as `Etc/UTC`,
+`GMT`, `UTC0` or `+00:00`; a regional zone such as `Europe/London` does not.
+A role's own `timezone` setting overrides its database's, so fix the zone with
+`ALTER ROLE` when the role has one. Otherwise fix it on the database, which
+also works behind poolers that refuse startup parameters:
 
 ```sql
 ALTER DATABASE app SET timezone TO 'UTC';
