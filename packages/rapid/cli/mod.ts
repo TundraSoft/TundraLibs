@@ -41,7 +41,7 @@ const HELP = `rapid <command>
         with the \`access\` it declares; an action with none is PUBLIC.
         The entry exports the Application (or a factory) as default/app.
         --fail-on-undeclared exits 1 when any action is public
-  sdk <entry.ts> [--out ./sdk] [--name ClientName]
+  sdk <entry.ts> [--out ./sdk] [--name ClientName] [--strict-servers]
         write a typed client for the app's HTTP API: a @tundralibs/restler
         class with one method per route, arguments and replies validated
         with @tundralibs/guardian. The entry exports the Application as
@@ -87,6 +87,7 @@ export function run(args: ParsedArgs = argv()): Promise<number> {
       return sdkCommand(entry, {
         out: rest.out as string | undefined,
         name: rest.name as string | undefined,
+        strictServers: rest['strict-servers'] === true,
       });
     }
     case undefined:

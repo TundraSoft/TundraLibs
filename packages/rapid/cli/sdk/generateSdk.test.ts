@@ -20,7 +20,7 @@ import {
 } from '../../decorators/mod.ts';
 import {
   assembleOpenApi,
-  mountedSecuritySchemes,
+  mountedDocumentOptions,
   openapi,
 } from '../../endpoints/openapi.ts';
 import { RapidError } from '../../errors/mod.ts';
@@ -98,39 +98,42 @@ let builds = 0;
 async function build(
   app: Application,
   fetch: Fetch,
+  strictServers = false,
 ): Promise<{
   client: Client;
-  connect: (auth: Record<string, unknown>) => Client;
+  /** A client bound to `fetch`; no `baseURL` leaves the generated default. */
+  connect: (options: Record<string, unknown>) => Client;
+  servers: unknown;
   entry: string;
   dispose: () => Promise<void>;
 }> {
   const dir = new URL(`./tmp/sdk-${Date.now()}-${++builds}/`, import.meta.url);
   const sdk = generateSdk(
-    assembleOpenApi(
-      app,
-      { securitySchemes: mountedSecuritySchemes(app) },
-      new Map(),
-      '',
-    ),
-    { name: 'Demo' },
+    assembleOpenApi(app, mountedDocumentOptions(app), new Map(), ''),
+    { name: 'Demo', strictServers },
   );
   await makeDir(dir.pathname, { recursive: true });
   for (const [file, source] of Object.entries(sdk.files)) {
     await writeTextFile(new URL(file, dir).pathname, source);
   }
   const mod = await import(new URL('mod.ts', dir).href) as {
-    Demo: new (options: { baseURL: string; auth?: unknown }) => Client;
+    Demo: new (options: Record<string, unknown>) => Client;
+    DEMO_SERVERS?: unknown;
   };
   // `_fetch` is RESTler's protected transport seam.
   class Bound extends mod.Demo {
-    constructor(auth?: Record<string, unknown>) {
-      super({ baseURL: 'http://rapid.test', auth });
+    constructor(options: Record<string, unknown>) {
+      super(options);
       (this as unknown as { _fetch: Fetch })._fetch = fetch;
     }
   }
   return {
-    client: new Bound(),
-    connect: (auth) => new Bound(auth),
+    // Lazy: a strict build refuses this URL.
+    get client() {
+      return new Bound({ baseURL: 'http://rapid.test' });
+    },
+    connect: (options) => new Bound(options),
+    servers: mod.DEMO_SERVERS,
     entry: new URL('mod.ts', dir).pathname,
     dispose: () =>
       removeDir(new URL('./tmp/', import.meta.url).pathname, {
@@ -274,12 +277,17 @@ describe('rapid.cli sdk generateSdk', () => {
       },
     );
     try {
-      await connect({ type: 'BEARER', token: 't0k' }).vaultToken();
+      const baseURL = 'http://rapid.test';
+      await connect({ baseURL, auth: { type: 'BEARER', token: 't0k' } })
+        .vaultToken();
       await connect({
-        type: 'CUSTOM',
-        headerKey: 'h',
-        queryKey: 'q',
-        cookieKey: 'c d',
+        baseURL,
+        auth: {
+          type: 'CUSTOM',
+          headerKey: 'h',
+          queryKey: 'q',
+          cookieKey: 'c d',
+        },
       }).vaultKeys();
       asserts.assertEquals(sent, [
         { authorization: 'BEARER t0k', key: null, cookie: null, search: '' },
@@ -315,7 +323,56 @@ describe('rapid.cli sdk generateSdk', () => {
     }
   });
 
-  it("notes a required scheme the client cannot send, and keeps RESTler's own auth option when no route requires one", () => {
+  it('the first declared server is the default baseURL, and --strict-servers refuses any other', async () => {
+    const app = await Application.initialize({
+      name: 'sdk-servers',
+      logger: { handlers: [] },
+    });
+    app.module(new Users());
+    app.get(
+      '/openapi.json',
+      openapi({
+        servers: [{ url: 'http://one.test/' }, { url: 'http://two.test' }],
+      }),
+    );
+    const hosts: string[] = [];
+    const fetch: Fetch = async (input, init) => {
+      const request = new Request(input as string, init);
+      hosts.push(new URL(request.url).host);
+      return await app.fetch(request);
+    };
+    const loose = await build(app, fetch);
+    const strict = await build(app, fetch, true);
+    try {
+      asserts.assertEquals(loose.servers, [
+        'http://one.test',
+        'http://two.test',
+      ]);
+      await loose.connect({}).usersList();
+      await loose.connect({ baseURL: 'http://other.test' }).usersList();
+      await strict.connect({ baseURL: 'http://two.test/' }).usersList();
+      asserts.assertEquals(hosts, ['one.test', 'other.test', 'two.test']);
+
+      const refused = asserts.assertThrows(() =>
+        strict.connect({ baseURL: 'http://other.test' })
+      ) as Failure & { name: string };
+      asserts.assertEquals(refused.name, 'RESTlerConfigError');
+      asserts.assertEquals(refused.getContextValue('key'), 'baseURL');
+
+      if (isDeno) {
+        const check = await new Deno.Command(Deno.execPath(), {
+          args: ['check', strict.entry],
+          stderr: 'piped',
+        }).output();
+        asserts.assert(check.success, new TextDecoder().decode(check.stderr));
+      }
+    } finally {
+      await loose.dispose();
+      await app.stop();
+    }
+  });
+
+  it("notes a required scheme the client cannot send, and keeps RESTler's own auth option when it can narrow to nothing", () => {
     const get = (security: string[]) => ({
       get: {
         responses: { '200': { content: { 'application/json': {} } } },
@@ -335,6 +392,16 @@ describe('rapid.cli sdk generateSdk', () => {
     asserts.assertStringIncludes(
       sdk.files['Api.ts'] ?? '',
       'export type ApiOptions = RESTlerOptions;',
+    );
+    // A server RESTler could not use as a baseURL is left out and said so.
+    const relative = { paths: {}, servers: [{ url: '/api' }] };
+    asserts.assertEquals(generateSdk(relative).notes, [
+      'server "/api" is not an absolute http(s) URL: left out of the client\'s list',
+    ]);
+    asserts.assertThrows(
+      () => generateSdk(relative, { strictServers: true }),
+      Error,
+      '--strict-servers needs a `servers` list',
     );
     asserts.assertThrows(
       () =>

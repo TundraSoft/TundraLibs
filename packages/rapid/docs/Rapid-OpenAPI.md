@@ -464,6 +464,12 @@ try {
   send the cookie). Getting and refreshing a token is yours. A scheme that
   is not declared, or another http scheme, is reported and left out. With no
   `security` on any route the option is RESTler's own `auth`.
+- **`baseURL` defaults to the first declared server.** The `servers` given
+  to `openapi()` or `docs()` are exported as `SHOP_SERVERS`, and
+  `new Shop()` calls the first; any other `baseURL` is still accepted. With
+  `--strict-servers` the constructor throws restler's `RESTlerConfigError`
+  for a `baseURL` outside the list. With no `servers`, `baseURL` is
+  required, and the flag is refused.
 - **What a schema cannot say stays `unknown`.** A route with no `response`
   returns `unknown`; a `payload()` or `query()` bound to a plain function
   gives the generator nothing to read. Transforms and custom refinements are

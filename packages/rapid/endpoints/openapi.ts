@@ -125,32 +125,41 @@ export function assembleOpenApi<S extends RapidContextState>(
   return doc;
 }
 
-/** The schemes given to each `openapi()` handler and each app `docs()` mounted on. */
-const MOUNTED_SCHEMES = new WeakMap<object, OpenApiSecuritySchemes>();
+/** The document options `rapid sdk` reads back from the app. */
+type MountedOptions = Pick<
+  OpenApiDocumentOptions,
+  'servers' | 'securitySchemes'
+>;
 
-/** Record the `securitySchemes` of an `openapi()` handler, or of the app `docs()` mounted on. */
-export function recordSecuritySchemes(
+/** Per `openapi()` handler, and per app `docs()` mounted on. */
+const MOUNTED = new WeakMap<object, MountedOptions>();
+
+/** Record the options of an `openapi()` handler, or of the app `docs()` mounted on. */
+export function recordDocumentOptions(
   owner: object,
-  schemes: OpenApiSecuritySchemes | undefined,
+  options: MountedOptions,
 ): void {
-  if (schemes !== undefined) {
-    MOUNTED_SCHEMES.set(owner, { ...MOUNTED_SCHEMES.get(owner), ...schemes });
-  }
+  MOUNTED.set(owner, options);
 }
 
 /**
- * The security schemes the app's mounted `openapi()` and `docs()` declare,
- * merged — what `rapid sdk` builds the client's `auth` option
- * from, since a route names a scheme and only those handlers define it.
+ * The `servers` and `securitySchemes` the app's mounted `openapi()` and
+ * `docs()` declare, merged — a route names a scheme and the app names no
+ * server, so only those two define what `rapid sdk` needs.
  */
-export function mountedSecuritySchemes<S extends RapidContextState>(
+export function mountedDocumentOptions<S extends RapidContextState>(
   app: Application<S>,
-): OpenApiSecuritySchemes {
-  const schemes = { ...MOUNTED_SCHEMES.get(app) };
-  for (const route of app.routes) {
-    Object.assign(schemes, MOUNTED_SCHEMES.get(route.handler));
+): Required<MountedOptions> {
+  const servers = new Map<string, OpenApiServer>();
+  const securitySchemes = {};
+  for (const owner of [app, ...app.routes.map((route) => route.handler)]) {
+    const options = MOUNTED.get(owner);
+    for (const server of options?.servers ?? []) {
+      if (!servers.has(server.url)) servers.set(server.url, server);
+    }
+    Object.assign(securitySchemes, options?.securitySchemes);
   }
-  return schemes;
+  return { servers: [...servers.values()], securitySchemes };
 }
 
 const HTTP_METHODS = new Set([
@@ -251,6 +260,6 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
       content,
     }));
   };
-  recordSecuritySchemes(handler, options.securitySchemes);
+  recordDocumentOptions(handler, options);
   return handler;
 }

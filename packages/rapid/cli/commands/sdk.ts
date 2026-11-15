@@ -2,8 +2,9 @@
  * @fileoverview `rapid sdk <entry>` — write a typed client for the
  * application's HTTP API: a `@tundralibs/restler` class with one method
  * per route, `@tundralibs/guardian` validation of arguments and replies,
- * an `auth` option matching the security schemes given to `openapi()` /
- * `docs()`, and an error class for the server's error envelope.
+ * an `auth` option and a default `baseURL` from the security schemes and
+ * servers given to `openapi()` / `docs()`, and an error class for the
+ * server's error envelope.
  *
  * The entry module must export the application, or a function (sync or
  * async, no arguments) returning it, as `default` or `app`. The app is
@@ -15,7 +16,7 @@ import { join } from '@tundralibs/compat/path';
 import type { Application } from '../../Application.ts';
 import {
   assembleOpenApi,
-  mountedSecuritySchemes,
+  mountedDocumentOptions,
 } from '../../endpoints/openapi.ts';
 import { generateSdk } from '../sdk/generateSdk.ts';
 import { loadApp } from './access.ts';
@@ -26,7 +27,7 @@ import { loadApp } from './access.ts';
  */
 export async function sdkCommand(
   entry: string,
-  opts: { out?: string; name?: string } = {},
+  opts: { out?: string; name?: string; strictServers?: boolean } = {},
   log: (line: string) => void = console.log,
 ): Promise<number> {
   const out = opts.out ?? './sdk';
@@ -35,11 +36,14 @@ export async function sdkCommand(
     const sdk = generateSdk(
       assembleOpenApi(
         app,
-        { securitySchemes: mountedSecuritySchemes(app) },
+        mountedDocumentOptions(app),
         new Map(),
         '',
       ),
-      opts.name === undefined ? {} : { name: opts.name },
+      {
+        ...(opts.name === undefined ? {} : { name: opts.name }),
+        strictServers: opts.strictServers === true,
+      },
     );
     await makeDir(out, { recursive: true });
     for (const [file, source] of Object.entries(sdk.files)) {
