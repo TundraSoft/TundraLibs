@@ -236,6 +236,34 @@ describe('rapid.cache: a cached route', () => {
     asserts.assertEquals((await keyed.as('acme')).runs, 1);
   });
 
+  it('requests that miss one key together share one run — and a run that stores nothing is shared with no one', async () => {
+    const app = await boot();
+    const runs = { kept: 0, gone: 0 };
+    app.get('/kept', { cache: { seconds: 60 } }, async () => {
+      const n = ++runs.kept;
+      await sleep(20);
+      return { content: { n } };
+    });
+    app.get('/gone', { cache: { seconds: 60 } }, async () => {
+      const n = ++runs.gone;
+      await sleep(20);
+      return { status: 404, content: { n } };
+    });
+    const together = (path: string) =>
+      Promise.all(Array.from({ length: 20 }, () => get(app, path)));
+    const kept = await together('/kept');
+    asserts.assertEquals(runs.kept, 1);
+    for (const res of kept) asserts.assertEquals(await res.json(), { n: 1 });
+    const gone = await together('/gone');
+    asserts.assertEquals(runs.gone, 20);
+    asserts.assertEquals(
+      (await Promise.all(gone.map((res) => res.json()))).map((b) => b.n).sort(
+        (x, y) => x - y,
+      ),
+      Array.from({ length: 20 }, (_, i) => i + 1),
+    );
+  });
+
   it('only a 2xx data reply without cookies is stored', async () => {
     const app = await boot();
     const runs = { miss: 0, redirect: 0, cookie: 0 };

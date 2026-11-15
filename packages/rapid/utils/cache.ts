@@ -175,6 +175,15 @@ export const cachePrefix = (source: string): string => `rapid:${source}:`;
 /** Routes whose uncovered reads were already reported — one warning per route per process. */
 const warned = new Set<string>();
 
+/** The misses being filled right now, per store: key → what gets stored. */
+const FLIGHTS = new WeakMap<RapidCacheStore, Map<string, Promise<unknown>>>();
+
+const flightsOf = (store: RapidCacheStore): Map<string, Promise<unknown>> => {
+  let flights = FLIGHTS.get(store);
+  if (flights === undefined) FLIGHTS.set(store, flights = new Map());
+  return flights;
+};
+
 /**
  * Run `work` through the cache: a stored value serves as is; otherwise
  * `work` runs, `storable` projects what to keep (`undefined` = not
@@ -185,6 +194,8 @@ const warned = new Set<string>();
  * `auth()` key binder, …) is served uncached — a warning in PRODUCTION,
  * a `RAPID_CONFIG` throw in DEVELOPMENT, so the mistake surfaces where
  * it is made. Store failures are logged and never fail the request.
+ * Requests that miss one key at the same moment share one run of `work`,
+ * per store and per process: the others answer from what that run stored.
  *
  * @throws {RapidError} RAPID_CACHE_UNBOUND when no store is bound (the
  *   boot check makes this unreachable in a started app).
@@ -247,69 +258,91 @@ export async function cached<T>(
     });
   }
   if (hit !== undefined) return fromStore(hit);
-  if (!spec.checkReads) {
-    const value = await work();
-    const projection = storable(value);
-    if (projection !== undefined) await write(projection);
-    return value;
+  // A miss another request is already filling: wait for what that one
+  // stores and answer from it, exactly as a hit a moment later would.
+  // When it stores nothing (it failed, or its reply is not one to keep),
+  // run our own — a reply that was never stored is never shared.
+  const flights = flightsOf(store);
+  const flying = flights.get(id);
+  if (flying !== undefined) {
+    const stored = await flying;
+    return stored !== undefined ? fromStore(stored) : (await fill()).value;
   }
-  ctx._resetReads();
-  let value: T;
-  let stateReads: string[];
-  let named: { headers: string[]; cookies: string[] };
+  const filling = fill();
+  const flight = filling.then((filled) => filled.stored, () => undefined);
+  flights.set(id, flight);
   try {
-    value = await work();
+    return (await filling).value;
   } finally {
-    stateReads = ctx._takeStateReads();
-    named = ctx._takeNamedReads();
+    flights.delete(id);
   }
-  const projection = storable(value);
-  if (projection === undefined) return value;
-  // Headers and cookies are judged by name below; every other channel by
-  // whether the key carries it at all.
-  const uncovered = ctx._readChannels & ~covered(key) &
-    ~(CTX_READ.HEADERS | CTX_READ.COOKIES);
-  const keyedHeaders = namesOf(key, 'header');
-  const keyedCookies = namesOf(key, 'cookie');
-  const unkeyedNames = [
-    ...named.headers.filter((n) => !keyedHeaders.has(n)).map((n) =>
-      n === '*' ? 'every header' : `header('${n}')`
-    ),
-    ...named.cookies.filter((n) => !keyedCookies.has(n)).map((n) =>
-      n === '*' ? 'every cookie' : `cookie('${n}')`
-    ),
-  ];
-  // A request-scoped state key (one this request's middleware set — a
-  // tenant, the rows it loaded) is per caller like ctx.auth: read raw, it
-  // must be in the key by NAME, or one caller's reply serves the next.
-  const keyedState = new Set(
-    key.filter((b) => b.source === 'state').map((b) => b.name),
-  );
-  const unkeyedState = stateReads.filter((k) => !keyedState.has(k));
-  if (
-    uncovered !== 0 || unkeyedState.length > 0 || unkeyedNames.length > 0
-  ) {
-    const read = [
-      ...(uncovered !== 0 ? [nameOf(uncovered)] : []),
-      ...unkeyedNames,
-      ...unkeyedState.map((k) => `state('${k}')`),
-    ].join(', ');
-    const message =
-      `${spec.source} is cached but its handler read ctx ${read} with no matching cache.key binder — served uncached; add the binder to the key`;
-    if (host.mode === 'DEVELOPMENT') {
-      throw new RapidError('RAPID_CONFIG', {
-        message,
-        details: { action: spec.source, read },
-      });
+
+  /** Run `work`; `stored` is what was written under the key, if anything. */
+  async function fill(): Promise<{ value: T; stored?: unknown }> {
+    if (!spec.checkReads) {
+      const value = await work();
+      const projection = storable(value);
+      if (projection !== undefined) await write(projection);
+      return { value, stored: projection };
     }
-    if (!warned.has(spec.source)) {
-      warned.add(spec.source);
-      host.log.warn(message, { action: spec.source });
+    ctx._resetReads();
+    let value: T;
+    let stateReads: string[];
+    let named: { headers: string[]; cookies: string[] };
+    try {
+      value = await work();
+    } finally {
+      stateReads = ctx._takeStateReads();
+      named = ctx._takeNamedReads();
     }
-    return value;
+    const projection = storable(value);
+    if (projection === undefined) return { value };
+    // Headers and cookies are judged by name below; every other channel by
+    // whether the key carries it at all.
+    const uncovered = ctx._readChannels & ~covered(key) &
+      ~(CTX_READ.HEADERS | CTX_READ.COOKIES);
+    const keyedHeaders = namesOf(key, 'header');
+    const keyedCookies = namesOf(key, 'cookie');
+    const unkeyedNames = [
+      ...named.headers.filter((n) => !keyedHeaders.has(n)).map((n) =>
+        n === '*' ? 'every header' : `header('${n}')`
+      ),
+      ...named.cookies.filter((n) => !keyedCookies.has(n)).map((n) =>
+        n === '*' ? 'every cookie' : `cookie('${n}')`
+      ),
+    ];
+    // A request-scoped state key (one this request's middleware set — a
+    // tenant, the rows it loaded) is per caller like ctx.auth: read raw, it
+    // must be in the key by NAME, or one caller's reply serves the next.
+    const keyedState = new Set(
+      key.filter((b) => b.source === 'state').map((b) => b.name),
+    );
+    const unkeyedState = stateReads.filter((k) => !keyedState.has(k));
+    if (
+      uncovered !== 0 || unkeyedState.length > 0 || unkeyedNames.length > 0
+    ) {
+      const read = [
+        ...(uncovered !== 0 ? [nameOf(uncovered)] : []),
+        ...unkeyedNames,
+        ...unkeyedState.map((k) => `state('${k}')`),
+      ].join(', ');
+      const message =
+        `${spec.source} is cached but its handler read ctx ${read} with no matching cache.key binder — served uncached; add the binder to the key`;
+      if (host.mode === 'DEVELOPMENT') {
+        throw new RapidError('RAPID_CONFIG', {
+          message,
+          details: { action: spec.source, read },
+        });
+      }
+      if (!warned.has(spec.source)) {
+        warned.add(spec.source);
+        host.log.warn(message, { action: spec.source });
+      }
+      return { value };
+    }
+    await write(projection);
+    return { value, stored: projection };
   }
-  await write(projection);
-  return value;
 }
 
 /**
