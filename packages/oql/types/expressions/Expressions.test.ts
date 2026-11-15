@@ -139,7 +139,10 @@ describe('oql.types.Expressions', () => {
     assertQuery(query);
 
     const { sql } = translate(query);
-    asserts.assertStringIncludes(sql, '("price" / NULLIF("quantity", :p_0:))');
+    asserts.assertStringIncludes(
+      sql,
+      '(CAST("price" AS DOUBLE PRECISION) / NULLIF("quantity", :p_0:))',
+    );
     asserts.assertStringIncludes(
       sql,
       'ABS((CASE WHEN "quantity" < :p_0: THEN :p_0: ELSE COALESCE("quantity", :p_0:) END))',

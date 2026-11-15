@@ -617,17 +617,17 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS REAL) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
       postgres: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS DOUBLE PRECISION) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
       maria: {
         sql:
-          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (`score` / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
+          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (CAST(`score` AS DOUBLE) / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
     },
