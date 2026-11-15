@@ -387,6 +387,13 @@ join's `nullSafe` array (`nullSafe: ['@orders.@userId']`); the
 [JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins)
 gives the operator each dialect uses.
 
+`orderBy` takes a joined column whether or not it is projected:
+`orderBy: { '@orders.@total': 'DESC' }`. In a query grouped by
+`aggregates` or by a projected join alias, an unprojected joined column
+orders each group by its smallest value for `ASC` and its largest for
+`DESC`. Where `NULL` sorts depends on the engine; see
+[Ordering by a joined column](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#ordering-by-a-joined-column).
+
 > **MongoDB ignores the declared join `type` entirely.** `INNER`,
 > `LEFT`, `RIGHT`, and `FULL` all compile to the same LEFT-equivalent
 > `$lookup` on Mongo — `RIGHT` is not reversed and `FULL` does not

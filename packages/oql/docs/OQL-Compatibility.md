@@ -591,6 +591,35 @@ A `null` value in `on` is a NULL check on the joined column (`IS NULL`;
 null or missing on MongoDB) and cannot be listed in `nullSafe`, nor can
 a literal — `assertJoinDetails` rejects both with a `TypeError`.
 
+### Ordering by a joined column
+
+`orderBy` accepts `'@Alias.@col'` for a column in a join's `columns`,
+projected or not. An alias the query does not join, or a column the
+join does not list, is a `TypeError`. With `distinct: true` the column
+must be projected.
+
+An unprojected joined column sorts on this value:
+
+| Query                                                | Postgres, MariaDB, SQLite                   | MongoDB                                                                       |
+| ---------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| not grouped                                          | the column, one result row per joined row   | smallest value among the document's joined rows for `ASC`, largest for `DESC` |
+| grouped by `aggregates` or by a projected join alias | `MIN(col)` for `ASC`, `MAX(col)` for `DESC` | the same, over the joined rows of the group                                   |
+
+The smallest and largest skip `NULL`. A row or group with no joined
+row, or whose joined values are all `NULL`, sorts as `NULL`.
+
+On MongoDB a projected joined column sorts on the joined array itself.
+An ascending sort then counts a `NULL` among the joined values rather
+than skipping it.
+
+`NULL` placement is the engine's own, for a joined column as for any
+other `orderBy` key, and oql does not change it:
+
+| Direction | Postgres     | MariaDB      | SQLite       | MongoDB      |
+| --------- | ------------ | ------------ | ------------ | ------------ |
+| `ASC`     | `NULL` last  | `NULL` first | `NULL` first | `NULL` first |
+| `DESC`    | `NULL` first | `NULL` last  | `NULL` last  | `NULL` last  |
+
 ## When to expect a throw vs a silent fallback
 
 We **throw** (as `DialectUnsupportedError`) when:
