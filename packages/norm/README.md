@@ -678,12 +678,12 @@ walkthrough.
 | Aggregates (GROUP BY)         | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅      |
 | Migrations                    | ✅         | ⚠️⁵  | ✅            | ✅     | ⚠️⁵   | ⚠️⁵ | ⚠️¹     |
 | Transactions                  | ✅         | ❌⁶  | ✅            | ✅     | ❌⁶   | ❌⁶ | ❌²     |
-| `$exists` to-many filter lift | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ❌³     |
+| `$exists` to-many filter lift | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ✅³     |
 | Raw SQL (`db.raw`)            | ✅         | ✅   | ✅            | ✅     | ✅    | ✅  | ❌⁴     |
 
 ¹ MongoDB is schemaless, so the Migrator does not own its schema; create
 indexes directly. ² MongoDB transactions require a replica set and are
-not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
+not exposed. ³ On MongoDB the lift runs as a `$lookup` stage.
 ⁴ MongoDB has no SQL surface; use `db.query()` with OQL IR. ⁵ Neon,
 Turso, and D1 migrate without the advisory lock and without transactional
 DDL, so a version that fails halfway resumes from its checkpoint, as on
