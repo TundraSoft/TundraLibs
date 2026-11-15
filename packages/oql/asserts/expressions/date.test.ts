@@ -1,5 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { OqlError } from '../../errors/mod.ts';
 import {
   assertCurrentDateExpression,
   assertCurrentTimeExpression,
@@ -276,7 +277,7 @@ describe('oql.asserts.Expressions.Date', () => {
             $$_expression: 'DATE_ADD',
             args: { date: new Date(), amount: 7, unit: 'WEEKS' },
           } as any),
-        TypeError,
+        OqlError,
         'Invalid time unit',
       );
     });
@@ -477,7 +478,7 @@ describe('oql.asserts.date — UNIX_TIMESTAMP', () => {
           $$_expression: 'UNIX_TIMESTAMP',
           unit: 'minutes',
         }),
-      TypeError,
+      OqlError,
       "got 'minutes'",
     );
     asserts.assertThrows(
@@ -512,12 +513,12 @@ describe('oql.asserts.date — DATE_TRUNC', () => {
   it('rejects a unit outside DAYS / MONTHS / YEARS, naming the offending value', () => {
     asserts.assertThrows(
       () => assertDateTruncExpression(trunc('@createdAt', 'HOURS')),
-      TypeError,
+      OqlError,
       "got 'HOURS'",
     );
     asserts.assertThrows(
       () => assertDateTruncExpression(trunc('@createdAt')),
-      TypeError,
+      OqlError,
       "got 'undefined'",
     );
   });

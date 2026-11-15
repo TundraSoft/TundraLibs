@@ -6,6 +6,7 @@
  * @module asserts/Query/DML/Select
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import type { Query, TableType } from '../../../types/mod.ts';
 import { assertJoins, assertQueryFilter } from '../../filters/mod.ts';
 import { assertAggregate } from '../../aggregates.ts';
@@ -100,6 +101,7 @@ const validateAggregates = (
     try {
       assertAggregate(value, columnList);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid SELECT query: aggregates['${key}'] is invalid - ${
           error instanceof Error ? error.message : String(error)
@@ -172,6 +174,7 @@ const validateJoinsBlock = (
   try {
     assertJoins(query.joins, [...columnList, ...joinedColumns]);
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid SELECT query: 'joins' is invalid - ${
         error instanceof Error ? error.message : String(error)

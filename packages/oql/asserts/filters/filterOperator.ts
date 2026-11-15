@@ -22,7 +22,7 @@ import {
   JSON_PATH_ALLOWED_OPERATORS,
   jsonPathRootOf,
 } from './jsonPath.ts';
-import { isOperators } from './operators.ts';
+import { assertOperators } from './operators.ts';
 
 /**
  * Asserts that a value is a valid FilterOperator.
@@ -113,9 +113,13 @@ export const assertFilterOperator: <T extends TableType = TableType>(
     }
 
     // Value must be valid Operators
-    if (!isOperators(value)) {
+    try {
+      assertOperators(value);
+    } catch (error) {
       throw new TypeError(
-        `Invalid FilterOperator: Value for '${key}' must be valid Operators (direct value, array, or operator object)`,
+        `Invalid FilterOperator: Value for '${key}' must be valid Operators - ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
 

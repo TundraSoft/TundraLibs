@@ -19,23 +19,24 @@ means, what triggers it, and how to keep it from happening.
 
 ## Overview
 
-OQL validates a query in three passes, and only the last one produces an
-`OqlError`:
+OQL validates a query in three passes. The last one produces every
+`OqlError` but one:
 
 | Pass         | Enforced by                                    | Raises                              |
 | ------------ | ---------------------------------------------- | ----------------------------------- |
 | **Shape**    | the types in `@tundralibs/oql/types`           | a compile-time type error           |
-| **Scoping**  | `assertQuery` (`@tundralibs/oql/asserts`)      | `TypeError`                         |
+| **Scoping**  | `assertQuery` (`@tundralibs/oql/asserts`)      | `TypeError`, with one exception     |
 | **Emission** | the translators (`@tundralibs/oql/translator`) | `OqlError` — the codes on this page |
 
 The types validate a query's **shape**; `assertQuery` validates the rules that
 span sibling properties (a `having` key naming a declared aggregate, every
 referenced column appearing in `columns`) — see
 [the shape-vs-scoping note in the type docs](../types/OQL-Types.md). Those
-asserts throw plain `TypeError`s, **not** `OqlError`s. Nothing in
-`packages/oql/asserts` ever throws an `OqlError`; every code below is raised
-from `packages/oql/translator` while SQL (or a Mongo pipeline) is being
-emitted.
+asserts throw plain `TypeError`s, **not** `OqlError`s. The one exception is a
+date expression's `unit`: the asserts refuse a bad one with
+[`INVALID_TIME_UNIT`](#invalid_time_unit), the code the translators use for
+the same mistake. Every other code below is raised from
+`packages/oql/translator` while SQL (or a Mongo pipeline) is being emitted.
 
 That split is the single most useful thing to know when handling these
 errors. A query that passed `assertQuery` can still fail translation, but
@@ -326,19 +327,22 @@ view should say — usually a `NULL` or a sentinel you write yourself.
 
 ### `INVALID_TIME_UNIT`
 
-A date expression carried a `unit` outside its allowed set. Every dialect
-checks the unit at translation time, so nothing reaches the database:
+A date expression carried a `unit` outside its allowed set. The unit is
+checked before anything reaches the database:
 
 - `DATE_TRUNC` takes `DAYS`, `MONTHS` or `YEARS`.
 - `DATE_ADD` / `DATE_DIFF` take OQL's time units (`DAYS`, `HOURS`,
   `MINUTES`, `SECONDS`, `MONTHS`, `YEARS`).
+- `UNIX_TIMESTAMP` takes `seconds` or `milliseconds`. Only the asserts check
+  this one.
 
-**Triggered by** a hand-built or cast expression node used as a filter
-operand, which the query asserts do not check. Under `expressions` the same
-node fails the asserts first, with a `TypeError`. **Fix:** use a unit from
-the expression's allowed set.
+**Triggered by** a hand-built or cast expression node. Under `expressions`,
+and anywhere else the query asserts read an expression, the asserts throw it.
+As a filter operand, which the asserts do not check, the translator throws
+it. A `DATE_ADD` or `DATE_DIFF` with no `unit` at all is a `TypeError` from
+the asserts. **Fix:** use a unit from the expression's allowed set.
 
-**Extra context:** `dialect`, `unit`.
+**Extra context:** `unit`, and `dialect` when a translator threw it.
 
 ## Handling Errors
 
@@ -417,8 +421,8 @@ try {
 ```
 
 Validate first, and the surface you have to handle shrinks to the dialect
-gaps. `assertQuery` throws `TypeError`, so the two layers are easy to keep
-apart:
+gaps. `assertQuery` throws `TypeError` for everything but a bad time unit, so
+the two layers are easy to keep apart:
 
 ```typescript
 import { assertQuery } from '@tundralibs/oql/asserts';
@@ -430,7 +434,8 @@ const build = (query: Query<'SELECT'>): string => {
   try {
     assertQuery(query);
   } catch (err) {
-    // TypeError — malformed or badly scoped. A caller bug, not a dialect gap.
+    // Malformed or badly scoped: a TypeError, or INVALID_TIME_UNIT for a bad
+    // unit. A caller bug, not a dialect gap.
     throw new Error(`invalid query: ${(err as Error).message}`, { cause: err });
   }
 

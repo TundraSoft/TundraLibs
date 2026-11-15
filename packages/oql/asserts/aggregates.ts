@@ -18,6 +18,7 @@
  * @module asserts/Aggregates
  */
 
+import { OqlError } from '../errors/mod.ts';
 import type { AggregateFunction, Aggregates } from '../types/mod.ts';
 import { isColumnIdentifier } from './columnIdentifier.ts';
 import {
@@ -121,6 +122,7 @@ const validateColumnOrExpression = (
       assertExpression(column, columnList);
     }
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid ${aggregateType} aggregate: Invalid expression - ${
         error instanceof Error ? error.message : String(error)
