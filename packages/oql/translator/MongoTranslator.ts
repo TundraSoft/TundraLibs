@@ -1996,9 +1996,9 @@ export class MongoTranslator {
       case '$endsWith': {
         // Mongo has no "last index of", so compare the trailing slice.
         // `$let` binds both operands once — the subject `$ifNull`-coerced
-        // so a missing field yields no match instead of a `$strLenCP`
-        // type error, the suffix so the expression isn't re-evaluated
-        // three times.
+        // so a missing field is no `$strLenCP` type error, the suffix so
+        // the expression isn't re-evaluated three times. The coerced ''
+        // would end with an empty suffix, hence the guard on the field.
         const subject = '$$subject';
         const suffix = '$$suffix';
         const subjectLen = { $strLenCP: subject };
@@ -2008,6 +2008,7 @@ export class MongoTranslator {
             vars: { subject: { $ifNull: [lhs, ''] }, suffix: operand },
             in: {
               $and: [
+                { $gt: [lhs, null] },
                 { $gte: [subjectLen, suffixLen] },
                 {
                   $eq: [

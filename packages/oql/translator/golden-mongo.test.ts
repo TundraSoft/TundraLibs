@@ -1868,7 +1868,8 @@ const CASES: Case[] = [
   {
     // Mongo has no "last index of", so `$endsWith` compares the trailing
     // slice. `$let` binds both operands once; `$ifNull` keeps a missing
-    // field from raising a `$strLenCP` type error (it just doesn't match).
+    // field from raising a `$strLenCP` type error, and the `$gt` guard
+    // keeps a null or missing field from ending with an empty suffix.
     name: 'WHERE $endsWith with an Expression value → $expr slice compare',
     method: 'select',
     query: {
@@ -1894,6 +1895,7 @@ const CASES: Case[] = [
                 },
                 in: {
                   $and: [
+                    { $gt: ['$name', null] },
                     {
                       $gte: [
                         { $strLenCP: '$$subject' },
