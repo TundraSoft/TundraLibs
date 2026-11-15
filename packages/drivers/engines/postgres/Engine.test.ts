@@ -3,6 +3,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import { listen } from '@tundralibs/compat/net';
 import { envArgs, getFreePort } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 import { PgServerError } from './PgServerError.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EngineQuery } from '../../types/mod.ts';
@@ -53,7 +54,7 @@ async function isPgAvailable(): Promise<boolean> {
   }
 }
 
-const pgAvailable = await isPgAvailable();
+const pgAvailable = liveAvailable('Postgres', await isPgAvailable());
 
 let _t = 0;
 const tableName = (label: string): string =>
