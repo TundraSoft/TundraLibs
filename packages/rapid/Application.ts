@@ -2478,10 +2478,10 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /**
-   * The per-invocation state, built by `stateMode` — contexts read this
-   * ONCE at construction (the app is the state factory; policy and
-   * mechanism live in one place). See {@link RapidApplicationOptions.stateMode}
-   * for the mode semantics.
+   * The per-invocation state, built by `stateMode` — a context reads this
+   * ONCE, the first time its `state` is used (the app is the state
+   * factory; policy and mechanism live in one place). See
+   * {@link RapidApplicationOptions.stateMode} for the mode semantics.
    */
   public get state(): S {
     return buildState(this._state, this.option('stateMode') ?? 'CLONE');

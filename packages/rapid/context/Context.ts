@@ -52,8 +52,8 @@ export abstract class Context<
 > {
   /** The owning application — config, publish, and the id factory flow through it. */
   public readonly app: Application<S>;
-  /** Backing slot for {@link state}. */
-  private __state!: S;
+  /** Backing slot for {@link state}; unset until the first read. */
+  private __state?: S;
   /**
    * `state` as the invocation began — what tells a REQUEST-scoped key (set
    * by this invocation's middleware) from an app-wide one (a shared
@@ -67,13 +67,23 @@ export abstract class Context<
 
   /** The invocation's state bag, loaded from {@link Application.state}. */
   public get state(): S {
-    return this.__stateView ?? this.__state;
+    return this.__stateView ?? this.__loadState();
   }
 
   public set state(value: S) {
     this.__state = value;
     this.__stateBase = { ...(value as Record<string, unknown>) };
     this.__stateView = undefined;
+  }
+
+  /**
+   * The state bag, built from the app on first use — the app is the state
+   * factory (`stateMode`), and an invocation that never reads `state`
+   * pays for no copy.
+   */
+  private __loadState(): S {
+    if (this.__state === undefined) this.state = this.app.state;
+    return this.__state!;
   }
   /**
    * The invocation's correlation id — a ULID by default (sortable in
@@ -133,11 +143,9 @@ export abstract class Context<
     return this.app.log;
   }
 
-  /** Bind the application, load the per-invocation state, and adopt or mint the requestId. */
+  /** Bind the application and adopt or mint the requestId. */
   constructor(app: Application<S>, init: ContextInit) {
     this.app = app;
-    // The app is the state factory (stateMode: CLONE/EMPTY/SHARE).
-    this.state = app.state;
     this.action = init.action;
     // Transport-supplied, or minted by the app — the id FACTORY lives on
     // the Application (policy in one place), contexts only carry.
@@ -197,24 +205,27 @@ export abstract class Context<
       if (typeof key === 'string') reads.add(key);
     };
     this.__stateReads = reads;
-    this.__stateView = new Proxy(this.__state as Record<string, unknown>, {
-      get(target, key) {
-        record(key);
-        return Reflect.get(target, key);
+    this.__stateView = new Proxy(
+      this.__loadState() as Record<string, unknown>,
+      {
+        get(target, key) {
+          record(key);
+          return Reflect.get(target, key);
+        },
+        has(target, key) {
+          record(key);
+          return Reflect.has(target, key);
+        },
+        ownKeys(target) {
+          const keys = Reflect.ownKeys(target);
+          keys.forEach(record);
+          return keys;
+        },
+        set(target, key, value) {
+          return Reflect.set(target, key, value);
+        },
       },
-      has(target, key) {
-        record(key);
-        return Reflect.has(target, key);
-      },
-      ownKeys(target) {
-        const keys = Reflect.ownKeys(target);
-        keys.forEach(record);
-        return keys;
-      },
-      set(target, key, value) {
-        return Reflect.set(target, key, value);
-      },
-    }) as S;
+    ) as S;
   }
 
   /**
@@ -226,7 +237,7 @@ export abstract class Context<
     const reads = this.__stateReads ?? new Set<string>();
     this.__stateReads = undefined;
     this.__stateView = undefined;
-    const now = this.__state as Record<string, unknown>;
+    const now = this.__loadState() as Record<string, unknown>;
     return [...reads].filter((key) =>
       key in now && (!(key in this.__stateBase) ||
         this.__stateBase[key] !== now[key])
