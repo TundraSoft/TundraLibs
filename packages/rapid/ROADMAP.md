@@ -80,9 +80,6 @@ From the 2026-11-15 review; none designed yet.
   SIGINT, and the scaffolded `main.ts` does not either, so a generated
   app drops in-flight requests on every deploy. An opt-in on `start()`,
   and the scaffold using it.
-- **Reject unknown config keys** — a misspelt key (`server.trustproxy`)
-  boots clean and the option keeps its default; only `ui` and
-  `server.metrics` are closed sets today.
 - **Secret rotation** — `secret` is one string, so replacing it
   invalidates every session, CSRF token and signed cookie at once. Accept
   previous secrets for verification.

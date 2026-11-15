@@ -66,6 +66,7 @@ import {
   planCompose,
   type StaticMount,
 } from './utils/mod.ts';
+import { unknownConfigKeys } from './utils/configKeys.ts';
 import {
   assertRouteResponse,
   routesWithoutResponse,
@@ -110,6 +111,12 @@ import type {
   RapidUiOptions,
   RapidUiTemplateOptions,
 } from './types/mod.ts';
+
+/** What an unknown application option is reported as, in either mode. */
+const unknownKeysMessage = (keys: readonly string[]): string =>
+  `unknown application option${keys.length === 1 ? '' : 's'}: ${
+    keys.join(', ')
+  } — check the spelling; a setting of your own belongs in its own config file, read through app.config`;
 
 /**
  * Adopted correlation ids are ATTACKER-CONTROLLED: cap the length and
@@ -321,6 +328,8 @@ export class Application<S extends RapidContextState = RapidContextState>
   private __staticMounts: readonly StaticMount[] = [];
   /** `server.api`, normalised at construction; `undefined` = no api surface. */
   private __apiSurface?: ApiSurface;
+  /** Options the app does not have, still to be warned about in PRODUCTION. */
+  private __unknownKeys: string[] = [];
   /** `server.requireResponse` passed, or PRODUCTION already warned. */
   private __responsesChecked = false;
   /** The in-progress `stop()`, so a concurrent second call joins it. */
@@ -587,6 +596,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       options.uploads?.path === undefined && !isWorkers && !isBrowser
         ? makeTempDirSync({ prefix: 'rapid-' })
         : undefined;
+    let unknownKeys: string[] = [];
     try {
       // Group defaults merge UNDER the user's partial groups BEFORE
       // _setOptions — its top-level merge would otherwise let a partial
@@ -651,6 +661,15 @@ export class Application<S extends RapidContextState = RapidContextState>
         shutdownSignals: [],
       });
       this.__validate();
+      // A key the options do not have is a typo that would be ignored.
+      // DEVELOPMENT refuses it; PRODUCTION serves and warns at boot.
+      unknownKeys = unknownConfigKeys(options);
+      if (unknownKeys.length > 0 && this.mode === 'DEVELOPMENT') {
+        throw new RapidError('RAPID_CONFIG', {
+          message: unknownKeysMessage(unknownKeys),
+          details: { keys: unknownKeys },
+        });
+      }
       // server.static → ordered mounts, boot-loud. Relative roots anchor
       // to the config directory (a deployment's YAML means the same
       // thing from any working directory), else the CWD.
@@ -716,6 +735,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       }],
       contextProvider: this.__logContext,
     });
+    this.__unknownKeys = unknownKeys;
   }
 
   /** The tracer instance, when tracing is configured. */
@@ -2147,6 +2167,11 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   private __assertBootConfig(): void {
+    // PRODUCTION's half of the unknown-option check: said once.
+    if (this.__unknownKeys.length > 0) {
+      this.log.warn(unknownKeysMessage(this.__unknownKeys));
+      this.__unknownKeys = [];
+    }
     this.__assertAuthBound();
     this.__assertCacheBound();
     this.__assertResponsesDeclared();
