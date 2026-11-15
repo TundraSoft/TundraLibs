@@ -1821,7 +1821,12 @@ export class MongoTranslator {
           'column reference inside an $in / array filter value',
         );
       }
-      return { spec: { [fieldPath]: { $in: rhs } }, exprs };
+      // SQL's `IN (…, NULL)` never matches a NULL row, while a null in
+      // Mongo's `$in` matches every null or missing field: drop it.
+      return {
+        spec: { [fieldPath]: { $in: rhs.filter((el) => el !== null) } },
+        exprs,
+      };
     }
     if (typeof rhs !== 'object' || rhs instanceof Date) {
       const ref = this.__valueFieldRef(rhs, columns);
@@ -1920,6 +1925,11 @@ export class MongoTranslator {
           excluded.push(...(val as unknown[]));
           continue;
         }
+      } else if (op === '$null' && val && Object.keys(rhs).length > 1) {
+        // The bare `{ field: null }` spec and another operator's document
+        // would replace one another, so beside one it goes in `$expr`.
+        exprs.push({ $in: [{ $type: lhs }, ['null', 'missing']] });
+        continue;
       }
       mergeLiteral(this.__translateOperator(fieldPath, op, val));
     }
@@ -1969,13 +1979,18 @@ export class MongoTranslator {
     expr: Expressions,
   ): unknown {
     const operand = this.__translateExpression(expr);
+    // SQL matches nothing against a NULL operand; `$indexOfCP` and
+    // `$strLenCP` throw on one.
+    const whenSet = (match: unknown): unknown => ({
+      $cond: [{ $gt: [operand, null] }, match, false],
+    });
     switch (op) {
       case '$startsWith':
         // `$indexOfCP` returns -1 for "not found" and null when the field
         // is missing; both compare false against 0.
-        return { $eq: [{ $indexOfCP: [lhs, operand] }, 0] };
+        return whenSet({ $eq: [{ $indexOfCP: [lhs, operand] }, 0] });
       case '$contains':
-        return { $gte: [{ $indexOfCP: [lhs, operand] }, 0] };
+        return whenSet({ $gte: [{ $indexOfCP: [lhs, operand] }, 0] });
       case '$endsWith': {
         // Mongo has no "last index of", so compare the trailing slice.
         // `$let` binds both operands once — the subject `$ifNull`-coerced
@@ -1986,7 +2001,7 @@ export class MongoTranslator {
         const suffix = '$$suffix';
         const subjectLen = { $strLenCP: subject };
         const suffixLen = { $strLenCP: suffix };
-        return {
+        return whenSet({
           $let: {
             vars: { subject: { $ifNull: [lhs, ''] }, suffix: operand },
             in: {
@@ -2007,7 +2022,7 @@ export class MongoTranslator {
               ],
             },
           },
-        };
+        });
       }
       default:
         throw new DialectUnsupportedError(
@@ -2266,6 +2281,12 @@ export class MongoTranslator {
   private __translateExpression(expr: Expressions): unknown {
     const args = ('args' in expr) ? expr.args : undefined;
     const r = (v: unknown): unknown => this.__resolveExpressionRef(v);
+    // SQL returns NULL for a NULL input. `$toLower`, `$toUpper` and
+    // `$substrCP` return '' for a null or missing one and `$strLenCP`
+    // throws; `$gt: null` is true for every value except those two.
+    const orNull = (input: unknown, result: unknown): unknown => ({
+      $cond: [{ $gt: [input, null] }, result, null],
+    });
     switch (expr.$$_expression) {
       // Math
       case 'ADD':
@@ -2301,13 +2322,13 @@ export class MongoTranslator {
       case 'CONCAT':
         return { $concat: (args as unknown[]).map(r) };
       case 'LENGTH':
-        return { $strLenCP: r(args) };
+        return orNull(r(args), { $strLenCP: r(args) });
       case 'TO_STRING':
         return { $toString: r(args) };
       case 'LOWER':
-        return { $toLower: r(args) };
+        return orNull(r(args), { $toLower: r(args) });
       case 'UPPER':
-        return { $toUpper: r(args) };
+        return orNull(r(args), { $toUpper: r(args) });
       case 'TRIM':
         return { $trim: { input: r(args) } };
       case 'LTRIM':
@@ -2320,12 +2341,12 @@ export class MongoTranslator {
         // `$substrCP` is 0-based, so shift down by one. `$subtract`
         // handles literal and column-ref starts uniformly.
         const start = { $subtract: [r(a.start), 1] };
-        return {
+        return orNull(r(a.string), {
           $substrCP: a.length !== undefined
             ? [r(a.string), start, r(a.length)]
             // -1 in $substrCP means "to the end"
             : [r(a.string), start, -1],
-        };
+        });
       }
       case 'REPLACE': {
         const a = args as {

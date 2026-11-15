@@ -45,6 +45,11 @@ const calendarPosition = (date: string) => ({
   ],
 });
 
+// LOWER('@nick'): null for a null or missing nick, as in SQL.
+const LOWER_NICK = {
+  $cond: [{ $gt: ['$nick', null] }, { $toLower: '$nick' }, null],
+};
+
 const CASES: Case[] = [
   // ---------------------------------------------------------------------------
   // SELECT → find
@@ -234,6 +239,70 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: { $nin: ['BANNED', 'DELETED', 'DRAFT', null] } },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // SQL's `IN ('ACTIVE', NULL)` never matches a NULL row; a null left in
+    // Mongo's `$in` would match every null or missing field.
+    name: 'WHERE direct array drops a null from the $in list',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'status'],
+      projection: { '@id': true },
+      where: { '@status': ['ACTIVE', null] },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { status: { $in: ['ACTIVE'] } },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    name: 'WHERE direct array holding only null matches nothing',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'status'],
+      projection: { '@id': true },
+      where: { '@status': [null] },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { status: { $in: [] } },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // `status <> 'BANNED' AND status IS NULL` matches nothing. The bare
+    // `{ status: null }` spec would be replaced by the `$nin` document.
+    name: 'WHERE $null: true beside $ne keeps both conditions',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'status'],
+      projection: { '@id': true },
+      where: { '@status': { $ne: 'BANNED', $null: true } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          status: { $nin: ['BANNED', null] },
+          $expr: { $in: [{ $type: '$status' }, ['null', 'missing']] },
+        },
         options: { projection: { id: 1 } },
       },
     },
@@ -659,10 +728,70 @@ const CASES: Case[] = [
         pipeline: [
           {
             $addFields: {
-              prefix: { $substrCP: ['$name', { $subtract: [1, 1] }, 3] },
+              prefix: {
+                $cond: [
+                  { $gt: ['$name', null] },
+                  { $substrCP: ['$name', { $subtract: [1, 1] }, 3] },
+                  null,
+                ],
+              },
             },
           },
           { $project: { id: 1, prefix: '$prefix', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // `$toUpper` / `$toLower` turn a null or missing field into '' and
+    // `$strLenCP` throws on one. SQL returns NULL for all three, so the
+    // `<>` below must not match a row whose status is NULL.
+    name: 'SELECT UPPER / LOWER / LENGTH return null for a null input',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'status'],
+      expressions: {
+        u: { $$_expression: 'UPPER', args: '@status' },
+        l: { $$_expression: 'LOWER', args: '@status' },
+        n: { $$_expression: 'LENGTH', args: '@status' },
+      },
+      projection: { '@id': true, '@u': 'u', '@l': 'l', '@n': 'n' },
+      where: { '@u': { $ne: 'BANNED' } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              u: {
+                $cond: [
+                  { $gt: ['$status', null] },
+                  { $toUpper: '$status' },
+                  null,
+                ],
+              },
+              l: {
+                $cond: [
+                  { $gt: ['$status', null] },
+                  { $toLower: '$status' },
+                  null,
+                ],
+              },
+              n: {
+                $cond: [
+                  { $gt: ['$status', null] },
+                  { $strLenCP: '$status' },
+                  null,
+                ],
+              },
+            },
+          },
+          { $match: { u: { $nin: ['BANNED', null] } } },
+          { $project: { id: 1, u: '$u', l: '$l', n: '$n', _id: 0 } },
         ],
       },
     },
@@ -1428,7 +1557,9 @@ const CASES: Case[] = [
   {
     // `$startsWith` carries LITERAL substring semantics (SQL escapes the
     // bound value's wildcards), so a computed operand maps onto Mongo's
-    // literal string search rather than a regex — nothing to escape.
+    // literal string search rather than a regex — nothing to escape. The
+    // `$cond` keeps a NULL operand from matching, or from raising a type
+    // error in `$indexOfCP`: SQL matches nothing against one.
     name: 'WHERE $startsWith with an Expression value → $expr $indexOfCP',
     method: 'select',
     query: {
@@ -1445,7 +1576,13 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: {
-          $expr: { $eq: [{ $indexOfCP: ['$name', { $toLower: '$nick' }] }, 0] },
+          $expr: {
+            $cond: [
+              { $gt: [LOWER_NICK, null] },
+              { $eq: [{ $indexOfCP: ['$name', LOWER_NICK] }, 0] },
+              false,
+            ],
+          },
         },
         options: { projection: { id: 1 } },
       },
@@ -1469,7 +1606,11 @@ const CASES: Case[] = [
         collection: 'users',
         filter: {
           $expr: {
-            $gte: [{ $indexOfCP: ['$name', { $toLower: '$nick' }] }, 0],
+            $cond: [
+              { $gt: [LOWER_NICK, null] },
+              { $gte: [{ $indexOfCP: ['$name', LOWER_NICK] }, 0] },
+              false,
+            ],
           },
         },
         options: { projection: { id: 1 } },
@@ -1497,39 +1638,41 @@ const CASES: Case[] = [
         collection: 'users',
         filter: {
           $expr: {
-            $let: {
-              vars: {
-                subject: { $ifNull: ['$name', ''] },
-                suffix: { $toLower: '$nick' },
+            $cond: [{ $gt: [LOWER_NICK, null] }, {
+              $let: {
+                vars: {
+                  subject: { $ifNull: ['$name', ''] },
+                  suffix: LOWER_NICK,
+                },
+                in: {
+                  $and: [
+                    {
+                      $gte: [
+                        { $strLenCP: '$$subject' },
+                        { $strLenCP: '$$suffix' },
+                      ],
+                    },
+                    {
+                      $eq: [
+                        {
+                          $substrCP: [
+                            '$$subject',
+                            {
+                              $subtract: [
+                                { $strLenCP: '$$subject' },
+                                { $strLenCP: '$$suffix' },
+                              ],
+                            },
+                            { $strLenCP: '$$suffix' },
+                          ],
+                        },
+                        '$$suffix',
+                      ],
+                    },
+                  ],
+                },
               },
-              in: {
-                $and: [
-                  {
-                    $gte: [
-                      { $strLenCP: '$$subject' },
-                      { $strLenCP: '$$suffix' },
-                    ],
-                  },
-                  {
-                    $eq: [
-                      {
-                        $substrCP: [
-                          '$$subject',
-                          {
-                            $subtract: [
-                              { $strLenCP: '$$subject' },
-                              { $strLenCP: '$$suffix' },
-                            ],
-                          },
-                          { $strLenCP: '$$suffix' },
-                        ],
-                      },
-                      '$$suffix',
-                    ],
-                  },
-                ],
-              },
-            },
+            }, false],
           },
         },
         options: { projection: { id: 1 } },
