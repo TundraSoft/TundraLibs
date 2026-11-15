@@ -116,6 +116,9 @@ jobs:
     env:
       IS_RELEASE_PLEASE_BRANCH: ${{ startsWith(github.ref_name, 'release-please--branches--') }}
       DB_SCHEMA: ci
+      # A drivers live suite whose service below cannot be reached fails
+      # instead of skipping.
+      LIVE_DB_REQUIRED: 'true'
       POSTGRES_HOST: localhost
       POSTGRES_PORT: '5432'
       POSTGRES_USER: postgres

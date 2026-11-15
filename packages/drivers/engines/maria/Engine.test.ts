@@ -2,6 +2,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { MariaEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EngineQuery } from '../../types/mod.ts';
 
@@ -51,7 +52,7 @@ async function isMariaAvailable(): Promise<boolean> {
   }
 }
 
-const mariaAvailable = await isMariaAvailable();
+const mariaAvailable = liveAvailable('MariaDB', await isMariaAvailable());
 
 let _t = 0;
 const tableName = (label: string): string =>
