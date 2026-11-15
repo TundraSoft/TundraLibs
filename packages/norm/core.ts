@@ -32,6 +32,14 @@ export {
 } from './engines/mod.ts';
 export { coerceCount, type NormResult, ulid } from './result.ts';
 export {
+  asUtc,
+  toTimeOfDay,
+  utcDay,
+  zonedDay,
+  zonedInstant,
+  zonedTimeOfDay,
+} from './calendar.ts';
+export {
   rotateKey,
   type RotateKeyEntityReport,
   type RotateKeyOptions,

@@ -18,6 +18,7 @@ compose.
 - [Overview](#overview)
 - [Column builders](#column-builders)
   - [Factories](#factories)
+  - [Dates in a time zone](#dates-in-a-time-zone)
   - [Common modifiers](#common-modifiers)
   - [Validation and transforms](#validation-and-transforms)
   - [Whole-row Guardians (insert/update)](#whole-row-guardians-insertupdate)
@@ -141,6 +142,64 @@ Filter values are not converted: filter with a `Date`.
 base builder: they carry the [common modifiers](#common-modifiers) and
 `encrypt()`, but none of the value validators, since there is nothing
 to range-check on a boolean.
+
+### Dates in a time zone
+
+A `Date` is an instant and needs no helper: a `timestamp` column stores
+it, and a `date` column stores its UTC day. When the day or the clock
+you mean is the one a time zone shows, convert first:
+
+| Helper                       | Returns                                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `zonedDay(date, zone)`       | The calendar day `date` falls on in `zone`, as the UTC-midnight `Date` a `date` column stores. |
+| `zonedTimeOfDay(date, zone)` | The clock time of `date` in `zone`, as the `'HH:MM:SS'` string a `time` column stores.         |
+| `zonedInstant(text, zone)`   | The instant at which the clock in `zone` reads `text`: `'2026-11-14'` or `'2026-11-14T09:30'`. |
+
+`zone` is an IANA name such as `Asia/Kolkata`.
+
+```typescript
+import '@tundralibs/norm/engines/sqlite';
+import {
+  Column,
+  Entity,
+  Norm,
+  Schema,
+  zonedDay,
+  zonedInstant,
+} from '@tundralibs/norm';
+
+const Visits = Entity('visits', {
+  id: Column.ulid(),
+  day: Column.date(),
+  at: Column.timestamp(),
+}, { pk: ['id'] });
+const db = new Norm({ database: { dialect: 'sqlite', path: './data' } })
+  .use(Schema('Clinic', { Visits }));
+
+// Today in Kolkata: at 2026-11-14T20:00Z that is November 15.
+const now = new Date();
+await db.repo('Visits').insert({
+  day: zonedDay(now, 'Asia/Kolkata'),
+  at: now,
+});
+
+// Kolkata's November 14, from its midnight to the next.
+await db.repo('Visits').find({
+  '@at': {
+    $gte: zonedInstant('2026-11-14', 'Asia/Kolkata'),
+    $lt: zonedInstant('2026-11-15', 'Asia/Kolkata'),
+  },
+});
+```
+
+`zonedInstant` keeps the offset of text that names one. A time the
+zone's clock skips moves forward by the length of the skip, and a time
+it shows twice is the earlier instant. An unknown zone or a value that
+is not a date throws a `NormError`; see
+[Date and time helper codes](NORM-Errors.md#date-and-time-helper-codes).
+
+`utcDay`, `toTimeOfDay`, and `asUtc` are the conversions norm applies
+to a written value, exported for code that needs the same result.
 
 ### Common modifiers
 

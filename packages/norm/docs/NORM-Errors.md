@@ -17,6 +17,7 @@ parsing a message.
 - [Query surface codes](#query-surface-codes)
 - [Crypto codes](#crypto-codes)
 - [Instance and configuration codes](#instance-and-configuration-codes)
+- [Date and time helper codes](#date-and-time-helper-codes)
 - [Definition and registry codes](#definition-and-registry-codes)
 - [Migration codes](#migration-codes)
 - [Handling errors](#handling-errors)
@@ -70,7 +71,7 @@ failures.
 
 | Class                   | Thrown by                                                                                                                                                                                                                                                                                            | Carries a code                                        |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `NormError`             | The instance and configuration surface: `new Norm({...})`, dialect resolution, `runtimeOf()`. Also the base class.                                                                                                                                                                                   | Yes, the four instance codes.                         |
+| `NormError`             | The instance and configuration surface: `new Norm({...})`, dialect resolution, `runtimeOf()`; and the zoned date helpers. Also the base class.                                                                                                                                                       | Yes: four instance codes, two date helper codes.      |
 | `NormQueryError`        | The read/write surface, before any engine call: filters, projections, aggregates, upserts, scopes. An unknown local column is OQL's `TypeError`, not this; see [caveats](#guarantees-and-caveats).                                                                                                   | Yes, all nine query-surface codes.                    |
 | `NormCryptoError`       | The crypto path: a cell that would not decrypt or decode, or a request needing a `secret` that was never configured.                                                                                                                                                                                 | Only for `MISSING_SECRET`; read-path failures do not. |
 | `NormDefinitionError`   | `Entity()` / `Schema()` / `use()` and the compile pass. Aggregates every finding on `context.issues`.                                                                                                                                                                                                | Yes, the five definition codes.                       |
@@ -103,7 +104,7 @@ in one process are told apart without parsing anything. Definition
 errors from `Entity()` / `Schema()` are raised before any instance
 exists and carry no `norm`.
 
-There are 30 codes in the `NormErrorCode` union, grouped below by the
+There are 35 codes in the `NormErrorCode` union, grouped below by the
 surface that raises them.
 
 ## Query surface codes
@@ -165,6 +166,17 @@ else, so a bare `@tundralibs/norm` import still needs its own
 also what you meet on an edge runtime if you import
 `@tundralibs/norm/core` without registering the engine you asked for;
 see [Choosing an entry point](../README.md#choosing-an-entry-point).
+
+## Date and time helper codes
+
+Both are thrown as a plain `NormError` by `zonedDay`, `zonedTimeOfDay`,
+and `zonedInstant`; see
+[Dates in a time zone](NORM-Schema.md#dates-in-a-time-zone).
+
+| Code                | Raised when                                                                                                                                      | What to do                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `INVALID_TIME_ZONE` | The runtime does not know the time zone name.                                                                                                    | Pass an IANA name such as `America/New_York`.             |
+| `INVALID_DATE`      | The `Date` is an Invalid Date, or the text is not `YYYY-MM-DD` with an optional `HH:MM[:SS[.fff]]` time, or names a day or time no calendar has. | Validate the input before converting, or catch the error. |
 
 ## Definition and registry codes
 
