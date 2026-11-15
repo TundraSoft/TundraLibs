@@ -25,10 +25,18 @@ const Slots = Entity('slots', {
     .nullable(),
 }, { pk: ['id'] });
 
+const NOW = { $$_expression: 'NOW' } as const;
+const Stamps = Entity('stamps', {
+  id: Column.int(),
+  day: Column.date().default(NOW),
+  today: Column.date().default({ $$_expression: 'CURRENT_DATE' }),
+  due: Column.date().nullable(),
+}, { pk: ['id'] });
+
 let dir = '';
 let migDir = '';
 let norm: Norm;
-const open = () => norm.use(Schema('App', { Slots }));
+const open = () => norm.use(Schema('App', { Slots, Stamps }));
 
 describe('norm — date() and time() columns (live SQLite)', () => {
   beforeAll(async () => {
@@ -68,6 +76,30 @@ describe('norm — date() and time() columns (live SQLite)', () => {
       found.data[0]!.sealedDay?.toISOString(),
       '2026-01-15T00:00:00.000Z',
     );
+  });
+
+  it('date(): an expression default or value stores the UTC day, as a written Date does', async () => {
+    const db = open();
+    const repo = db.repo('Stamps');
+    await repo.insert({ id: 1 });
+    await repo.update({ due: NOW } as never, { '@id': 1 });
+    await repo.upsert({ id: 2, due: NOW } as never, { conflictKeys: ['id'] });
+    const raw = await db.raw<{ day: string; today: string; due: string }>(
+      'SELECT day, today, due FROM stamps ORDER BY id',
+    );
+    for (const row of raw.data) {
+      for (const stored of [row.day, row.today, row.due]) {
+        asserts.assertMatch(stored, /^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/);
+      }
+    }
+    // The stored day is what a Date filter compares against.
+    const { day, today, due } = raw.data[0]!;
+    const found = await repo.find({
+      '@day': new Date(day),
+      '@today': new Date(today),
+      '@due': new Date(due),
+    }, { orderBy: { '@id': 'ASC' } });
+    asserts.assertEquals(found.data.map((r) => r.id), [1, 2]);
   });
 
   it('time(): reads back the HH:MM:SS string of a string or a Date', async () => {

@@ -421,13 +421,16 @@ const updatedAt = Column.timestamp()
 ```
 
 An `ExpressionDefault` is `{ $$_expression: string, args?: unknown }`.
-It is passed through to the query untouched and never validated as a
-JS value.
+It is never validated as a JS value and is passed through to the query
+as given, except on a `date()` column where norm stores the day (SQLite
+and MongoDB): there a clock or `DATE_ADD` expression is reduced to its
+UTC day.
 
 On MongoDB an insert document cannot evaluate expressions, so the clock
 expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `UNIX_TIMESTAMP`)
 and `UUID` are computed when the insert is built, the clock ones at one
-instant per statement. Any other expression default fails the insert with
+instant per statement. A `date()` column given one of them holds the UTC
+day of that instant. Any other expression default fails the insert with
 `DialectUnsupportedError`; use a local generator instead. Updates and
 upserts evaluate expressions in the database on every dialect.
 

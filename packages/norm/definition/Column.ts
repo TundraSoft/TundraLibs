@@ -82,8 +82,9 @@ export const DIGEST_LENGTHS: Readonly<Record<DigestAlgorithm, number>> = {
 };
 
 /** DB-evaluated expression marker (e.g. `{ $$_expression: 'NOW' }`).
- * Passed through to the OQL data slot untouched; never validated as a
- * JS value. */
+ * Passed through to the OQL data slot, reduced to its UTC day on a
+ * `date()` column norm stores the day of; never validated as a JS
+ * value. */
 export type ExpressionDefault = {
   readonly $$_expression: string;
   readonly args?: unknown;
