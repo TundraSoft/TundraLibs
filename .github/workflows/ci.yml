@@ -306,6 +306,18 @@ jobs:
           # already emit root-relative paths when run from the repo root.
           sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" lcov/deno.lcov
 
+      # Runners sit in UTC, where a date handled in the host's zone looks the
+      # same as one handled in UTC, so the run above cannot fail on that bug.
+      # Re-run the two suites that own date handling in a zone with a
+      # half-hour offset, against the same live databases: the MariaDB
+      # assertions only run with a database behind them. One runtime — all
+      # three fail on the same tests.
+      - name: Run drivers and norm tests in a non-UTC time zone (deno)
+        if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
+        env:
+          TZ: Asia/Kolkata
+        run: deno test --allow-all --parallel packages/drivers packages/norm
+
       - name: Run tests (bun)
         if: matrix.runtime == 'bun' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: |
