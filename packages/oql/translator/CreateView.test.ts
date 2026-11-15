@@ -133,6 +133,47 @@ describe('oql.translator.createView — param inlining', () => {
     // Boolean form is dialect-dependent; make sure it didn't leave a placeholder.
     asserts.assertEquals(/:p_\d+:/.test(out.sql), false);
   });
+
+  it('Postgres: a Date stays an uncast literal in a view filter and an index predicate', () => {
+    // A `::timestamptz` cast would make the result follow the session time
+    // zone on DATE and TIMESTAMP columns, and Postgres refuses it in a
+    // partial index there as not IMMUTABLE. See OQL-Compatibility.md.
+    const t = new PostgresTranslator();
+    const where = { '@d': { $gte: new Date('2026-03-15T00:00:00Z') } };
+    const view = t.createView(
+      {
+        type: 'CREATE_VIEW',
+        view: 'v',
+        query: {
+          type: 'SELECT',
+          table: 't',
+          columns: ['id', 'd'],
+          projection: { '@id': true },
+          where,
+        },
+      } as Query<'CREATE_VIEW'>,
+    );
+    const index = t.createIndex(
+      {
+        type: 'CREATE_INDEX',
+        table: 't',
+        index: 'ix',
+        columns: ['@id'],
+        where,
+      } as Query<'CREATE_INDEX'>,
+    );
+    for (const out of [view, index]) {
+      asserts.assertEquals(out.params, {});
+      asserts.assertStringIncludes(
+        out.sql,
+        `WHERE "d" >= '2026-03-15T00:00:00.000Z'`,
+      );
+      asserts.assertEquals(
+        out.sql.endsWith(`'2026-03-15T00:00:00.000Z'`),
+        true,
+      );
+    }
+  });
 });
 
 describe('oql.translator.dropView — materialized targets', () => {

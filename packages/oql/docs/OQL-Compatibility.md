@@ -94,6 +94,16 @@ view definitions, and the `CREATE_INDEX` `TranslatedQuery` returns
 `params: {}`. Quote escaping and non-finite-number rejection follow
 the same rules as `CREATE_VIEW`.
 
+**A `Date` in a Postgres view or index definition is an uncast literal**,
+such as `'2026-03-15T00:00:00.000Z'`, which Postgres reads as the column's
+own type. That reads the same in every session time zone and keeps a partial
+index creatable on `DATE`, `TIMESTAMP` and `TIMESTAMPTZ` columns; a
+`timestamptz` cast would follow the session zone on the first two, where
+Postgres also refuses it in an index as not `IMMUTABLE`. Against a `DATE`
+column Postgres keeps only the UTC day of the literal, so a `Date` with a
+time of day compares differently than the same filter in a `SELECT` or on
+the other dialects: pass a UTC-midnight `Date` for a `DATE` column there.
+
 **`method: 'FULLTEXT'` is an index KIND, not a `USING` clause**: only
 MariaDB honours it, emitting `CREATE FULLTEXT INDEX … ON …` (its
 `index_type` grammar accepts only `USING {BTREE | HASH}`, so `USING
