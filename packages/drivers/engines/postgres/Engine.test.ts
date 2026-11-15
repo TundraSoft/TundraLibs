@@ -1,6 +1,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { envArgs } from '@tundralibs/utils';
+import { listen } from '@tundralibs/compat/net';
+import { envArgs, getFreePort } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
 import { PgServerError } from './PgServerError.ts';
 import { EngineError } from '../../errors/mod.ts';
@@ -174,6 +175,64 @@ describe('drivers.PostgresEngine.error-mapping (no DB)', () => {
   });
 });
 
+describe('drivers.PostgresEngine session time zone (no DB)', () => {
+  // Connects to a server that reports `zone` whatever the startup message
+  // asked for, as a pooler that drops the parameter would.
+  const connectTo = async (zone: string, options: Record<string, unknown>) => {
+    const enc = new TextEncoder();
+    const frame = (type: string, body: string): Uint8Array => {
+      const payload = enc.encode(body);
+      const out = new Uint8Array(5 + payload.length);
+      out[0] = type.charCodeAt(0);
+      new DataView(out.buffer).setUint32(1, payload.length + 4);
+      out.set(payload, 5);
+      return out;
+    };
+    const port = await getFreePort();
+    const listener = await listen({ port, hostname: '127.0.0.1' });
+    const served = listener.accept().then(async (conn) => {
+      const startup = new TextDecoder().decode((await conn.read())!);
+      // AuthenticationOk, ParameterStatus, ReadyForQuery.
+      await conn.write(frame('R', '\0\0\0\0'));
+      await conn.write(frame('S', `TimeZone\0${zone}\0`));
+      await conn.write(frame('Z', 'I'));
+      return { conn, startup };
+    });
+    const engine = new PostgresEngine('tz-fake', {
+      host: '127.0.0.1',
+      port,
+      database: 'app',
+      username: 'app',
+      ...options,
+    });
+    let error: unknown;
+    await engine.connect().catch((e: unknown) => {
+      error = e;
+    });
+    const { conn, startup } = await served;
+    await engine.disconnect();
+    conn.close();
+    listener.close();
+    return { startup, error };
+  };
+
+  it('asks for UTC at startup, and still refuses a server that reports another zone', async () => {
+    const { startup, error } = await connectTo('Asia/Kolkata', {});
+    asserts.assertStringIncludes(startup, 'TimeZone\0UTC\0');
+    asserts.assertInstanceOf(error, EngineError);
+    asserts.assertEquals(error.code, 'INVALID_CONFIG_VALUE');
+    asserts.assertStringIncludes(error.message, 'Asia/Kolkata');
+  });
+
+  it('allowNonUtcTimeZone asks for no zone and accepts the one reported', async () => {
+    const { startup, error } = await connectTo('Asia/Kolkata', {
+      allowNonUtcTimeZone: true,
+    });
+    asserts.assert(!startup.includes('TimeZone'));
+    asserts.assertStrictEquals(error, undefined);
+  });
+});
+
 describe({
   name: 'drivers.PostgresEngine.engine-specific',
   ignore: !pgAvailable,
@@ -224,7 +283,7 @@ describe({
     });
 
     describe('session time zone', () => {
-      it('refuses a non-UTC session unless allowNonUtcTimeZone is set', async () => {
+      it('runs a role whose zone is not UTC in UTC, unless allowNonUtcTimeZone is set', async () => {
         const admin = new PostgresEngine('tz-admin', TEST_CONFIG);
         await admin.connect();
         const role = `tz_probe_${crypto.randomUUID().slice(0, 8)}`;
@@ -252,12 +311,7 @@ describe({
           }
         };
         try {
-          const err = await asserts.assertRejects(
-            () => zoneAs({}),
-            EngineError,
-          );
-          asserts.assertEquals(err.code, 'INVALID_CONFIG_VALUE');
-          asserts.assertStringIncludes(err.message, 'Asia/Kolkata');
+          asserts.assertEquals(await zoneAs({}), 'UTC');
           asserts.assertEquals(
             await zoneAs({ allowNonUtcTimeZone: true }),
             'Asia/Kolkata',
