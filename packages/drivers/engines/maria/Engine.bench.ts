@@ -14,10 +14,10 @@ const TEST_CONFIG = {
   port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
   database: env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USER') || 'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
-// Engine CONSTRUCTION throws on missing config (empty password), so it
+// Engine CONSTRUCTION throws on an invalid config, so it
 // lives inside the guard too — unconfigured means skip, same contract
 // as the memcached/redis siblings, never a module-scope crash.
 const engines = (() => {
@@ -50,7 +50,10 @@ if (engines !== undefined) {
 }
 
 if (!serverAvailable) {
-  console.warn('MariaDB unreachable or unconfigured; skipping benchmarks.');
+  console.warn(
+    'MariaDB unreachable or unconfigured; skipping benchmarks.' +
+      (TEST_CONFIG.password === undefined ? ' MARIA_PASSWORD is not set.' : ''),
+  );
 } else {
   const { single, pooled } = engines!;
   // Seed.

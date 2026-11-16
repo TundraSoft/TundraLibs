@@ -25,14 +25,14 @@ const HOST = env.get('POSTGRES_HOST') || 'localhost';
 const PORT = Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10);
 const DB = env.get('POSTGRES_DB') || 'postgres';
 const USER = env.get('POSTGRES_USER') || 'postgres';
-const PASS = env.get('POSTGRES_PASSWORD') || '';
+const PASS = env.get('POSTGRES_PASSWORD') || undefined;
 
 const POOL_SIZE = 8;
 const TABLE = 'tundra_bench_compare';
 
 // --- Construct each client ------------------------------------------------
 
-// Construction itself throws on missing config (empty password) — a
+// Construction itself throws on an invalid config — a
 // guarded skip, never a module-scope crash.
 const tundra = (() => {
   try {
@@ -113,6 +113,7 @@ try {
   console.warn(
     'Postgres unreachable or unconfigured; skipping comparison benchmarks.',
     (e as Error).message,
+    PASS === undefined ? 'POSTGRES_PASSWORD is not set.' : '',
   );
 }
 
