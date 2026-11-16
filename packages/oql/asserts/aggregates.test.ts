@@ -226,6 +226,15 @@ describe('oql.asserts.Aggregates', () => {
       );
     });
 
+    it('valid: SUM, AVG, MIN and MAX directly over a conditional', () => {
+      const conditional = { $$_expression: 'COALESCE', args: ['@qty', 0] };
+      for (const agg of ['SUM', 'AVG', 'MIN', 'MAX']) {
+        assertAggregate({ $$_aggregate: agg, column: conditional } as any, [
+          'qty',
+        ]);
+      }
+    });
+
     it('invalid: non-numeric expression', () => {
       asserts.assertThrows(
         () =>

@@ -271,11 +271,43 @@ describe('oql.asserts.Query', () => {
                 },
               },
             }),
+          'where value': (u) => select({ where: { '@at': { $lt: add(u) } } }),
+          'where value in $or': (u) =>
+            select({ where: { $or: [{ '@n': { $gt: diff(u) } }] } }),
+          'having value': (u) =>
+            select({
+              projection: { '@at': true, '@c': true },
+              aggregates: { c: { $$_aggregate: 'COUNT' } },
+              having: { '@c': { $gt: diff(u) } },
+            }),
+          'CASE when value': (u) =>
+            select({
+              expressions: {
+                e: {
+                  $$_expression: 'CASE',
+                  args: {
+                    cases: [{ when: { '@at': { $eq: add(u) } }, then: 1 }],
+                  },
+                },
+              },
+            }),
           'COUNT expressions': (u) => ({
             type: 'COUNT',
             table: 'orders',
             columns: ['id', 'at'],
             expressions: { e: diff(u) },
+          }),
+          'COUNT where value': (u) => ({
+            type: 'COUNT',
+            table: 'orders',
+            columns: ['id', 'at'],
+            where: { '@at': { $ne: add(u) } },
+          }),
+          'DELETE where value': (u) => ({
+            type: 'DELETE',
+            table: 'orders',
+            columns: ['id', 'at'],
+            where: { '@at': { $gte: add(u) } },
           }),
           'COUNT join on': (u) => ({
             type: 'COUNT',
@@ -302,6 +334,13 @@ describe('oql.asserts.Query', () => {
             columns: ['id', 'at'],
             data: { at: add(u) },
             where: { '@id': 1 },
+          }),
+          'UPDATE where value': (u) => ({
+            type: 'UPDATE',
+            table: 'orders',
+            columns: ['id', 'at'],
+            data: { id: 2 },
+            where: { '@at': { $lte: add(u) } },
           }),
           'UPSERT data': (u) => ({
             type: 'UPSERT',
@@ -363,20 +402,18 @@ describe('oql.asserts.Query', () => {
           });
         });
 
-        it('a missing unit is still a TypeError', () => {
-          assertThrows(
-            () =>
-              assertQuery(select({
-                expressions: {
-                  e: {
-                    $$_expression: 'DATE_DIFF',
-                    args: { from: '@at', to: '@at' },
-                  },
-                },
-              })),
-            TypeError,
-            "Missing 'unit' property",
-          );
+        it('a missing unit throws INVALID_TIME_UNIT', () => {
+          for (const e of [diff(undefined), add(undefined)]) {
+            delete (e.args as { unit?: unknown }).unit;
+            const err = assertThrows(
+              () => assertQuery(select({ expressions: { e } })),
+              OqlError,
+            );
+            assertEquals(err.context, {
+              code: 'INVALID_TIME_UNIT',
+              unit: undefined,
+            });
+          }
         });
       });
     });

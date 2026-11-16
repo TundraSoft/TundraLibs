@@ -1466,9 +1466,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // An object argument is data as well: bare, MongoDB would evaluate
-    // its `'$'` as a field path.
-    name: 'WHERE Expression operand keeps $ and object arguments literal',
+    // The validator refuses an object argument, so only a string reaches
+    // here: bare, MongoDB would evaluate its `'$'` as a field path.
+    name: 'WHERE Expression operand keeps a $ argument literal',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -1479,9 +1479,6 @@ const CASES: Case[] = [
         '@label': {
           $eq: { $$_expression: 'CONCAT', args: ['$0', '.00'] },
         },
-        '@meta': {
-          $ne: { $$_expression: 'COALESCE', args: ['@meta', { unit: '$' }] },
-        },
       },
     },
     expected: {
@@ -1491,31 +1488,9 @@ const CASES: Case[] = [
         filter: {
           $expr: {
             $and: [
-              {
-                $and: [
-                  {
-                    $eq: ['$label', { $concat: [{ $literal: '$0' }, '.00'] }],
-                  },
-                  { $gt: ['$label', null] },
-                  { $gt: [{ $concat: [{ $literal: '$0' }, '.00'] }, null] },
-                ],
-              },
-              {
-                $and: [
-                  {
-                    $ne: ['$meta', {
-                      $ifNull: ['$meta', { $literal: { unit: '$' } }],
-                    }],
-                  },
-                  { $gt: ['$meta', null] },
-                  {
-                    $gt: [
-                      { $ifNull: ['$meta', { $literal: { unit: '$' } }] },
-                      null,
-                    ],
-                  },
-                ],
-              },
+              { $eq: ['$label', { $concat: [{ $literal: '$0' }, '.00'] }] },
+              { $gt: ['$label', null] },
+              { $gt: [{ $concat: [{ $literal: '$0' }, '.00'] }, null] },
             ],
           },
         },

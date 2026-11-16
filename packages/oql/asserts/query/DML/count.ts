@@ -152,6 +152,7 @@ export const assertCountQuery: <PT extends TableType = TableType>(
       undefined,
       undefined,
       jsonPathRoots,
+      [...columnList, ...joinedColumns],
     );
   }
 };

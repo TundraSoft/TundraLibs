@@ -604,7 +604,7 @@ const valid = isOperators(operators);
 - Array operators (`$in`, `$nin`, `$between`) require non-empty arrays.
 - `$between` requires exactly two elements.
 - **`null` is rejected** in operator-form values: `$eq: null`, `$ne: null`, `$in: [null, …]`, `$nin: [null, …]`, and comparison-op values like `$gt: null` all throw, and so does a `null` in a shorthand list (`['a', null]`). Use `$null: true` / `$null: false` for null comparisons.
-- **Expressions accepted** in comparison/string operator values: any non-Date object with a `$$_expression` discriminator passes (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`).
+- **Expressions accepted** in comparison/string operator values (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`), and validated as a projected expression is: a malformed one throws `Invalid Operators: '<op>' operator value is an invalid Expression - <reason>`, and a bad `unit` throws `OqlError` `INVALID_TIME_UNIT`. `assertOperators(x, columnType?, columnList?)` checks its column references against `columnList`; inside a query that is the projected-expression scope, the declared and joined columns, so an expression or aggregate alias as an argument is refused there as it is in `expressions`.
 - `$like`/`$nlike`/etc. only valid on string-typed columns.
 - `$gt`/`$gte`/`$lt`/`$lte`/`$between` only valid on numeric/bigint/date columns.
 
@@ -752,7 +752,7 @@ import {
 Each pair has the signature `(x, columnList?)`.
 
 - **`assertCountAggregate` / `isCountAggregate`** — `column` is optional. Without it the aggregate is `COUNT(*)` and `distinct` must be absent; with it, optional `distinct: true` makes `COUNT(DISTINCT column)`.
-- **`assertSumAggregate` / `isSumAggregate`**, **`assertAvgAggregate` / `isAvgAggregate`**, **`assertMinAggregate` / `isMinAggregate`**, **`assertMaxAggregate` / `isMaxAggregate`** — require a `column` (column identifier or a nested **numeric** expression); optional boolean `distinct`.
+- **`assertSumAggregate` / `isSumAggregate`**, **`assertAvgAggregate` / `isAvgAggregate`**, **`assertMinAggregate` / `isMinAggregate`**, **`assertMaxAggregate` / `isMaxAggregate`** — require a `column` (column identifier, a nested **numeric** expression, or a `COALESCE`, `NULLIF` or `CASE`); optional boolean `distinct`.
 - **`assertStringAggAggregate` / `isStringAggAggregate`** — requires a `column`; optional `separator` must be a string; optional boolean `distinct`.
 - **`assertArrayAggAggregate` / `isArrayAggAggregate`** — requires a `column`; optional boolean `distinct`.
 - **`assertJsonRowAggregate` / `isJsonRowAggregate`** — requires a `columns: Record<string, ColumnOrExpression>` map (each key becomes a JSON property); `distinct` is not supported.
@@ -779,8 +779,9 @@ Signature: `assertExpressions(x, columnList?, depth?, maxDepth?)` / `isExpressio
 
 - Value is a valid base expression with a recognized `$$_expression` type
 - Delegates the category-specific shape (numeric / string / date) to the matching validator
-- A numeric operand may be a nested numeric expression or a nested `COALESCE`, `NULLIF` or `CASE`. String and date expressions do not take nested conditionals
-- A `unit` outside the expression's allowed set throws `OqlError` with code `INVALID_TIME_UNIT`. It applies to `DATE_ADD`, `DATE_DIFF`, `DATE_TRUNC` and `UNIX_TIMESTAMP`
+- A numeric operand may be a nested numeric expression, a `UNIX_TIMESTAMP`, or a nested `COALESCE`, `NULLIF` or `CASE`. A `COALESCE`, `NULLIF` or `CASE` also stands wherever a date or string expression takes a column: `DATE_ADD` `date` and `amount`, `DATE_DIFF` `from` and `to`, `DATE_TRUNC` `date`, the args of `CONCAT`, `LENGTH`, `LOWER`, `UPPER`, `TRIM`, `LTRIM` and `RTRIM`
+- `ABS`, `CEIL`, `FLOOR` and `SQRT` take exactly one operand and `ROUND` one or two, its precision second; any other count throws `'args' must be an array with …`
+- A `unit` outside the expression's allowed set, or a missing one where it is required, throws `OqlError` with code `INVALID_TIME_UNIT`. It applies to `DATE_ADD`, `DATE_DIFF`, `DATE_TRUNC` and `UNIX_TIMESTAMP`, whose `unit` alone is optional
 - An unrecognized type throws `Invalid Expression type: Unknown expression type '<type>'`
 - Nesting beyond `maxDepth` throws to guard against runaway recursion
 

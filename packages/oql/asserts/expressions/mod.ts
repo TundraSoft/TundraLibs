@@ -83,4 +83,8 @@ export {
   isUUIDExpression,
 } from './string.ts';
 
-export { assertExpression, isExpression } from './expression.ts';
+export {
+  assertExpression,
+  CONDITIONAL_TYPES,
+  isExpression,
+} from './expression.ts';

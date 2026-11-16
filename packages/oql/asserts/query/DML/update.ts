@@ -92,6 +92,7 @@ export const assertUpdateQuery: <PT extends TableType = TableType>(
       undefined,
       undefined,
       jsonPathRoots,
+      columnList,
     );
   }
 };

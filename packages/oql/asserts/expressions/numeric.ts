@@ -23,15 +23,16 @@ import { OqlError } from '../../errors/mod.ts';
 import type { Expressions, NumericExpressions } from '../../types/mod.ts';
 import { isColumnIdentifier } from '../columnIdentifier.ts';
 import { assertBaseExpression, validateTimeUnits } from './base.ts';
-import { assertExpression, CONDITIONAL_TYPES } from './expression.ts';
+import { assertUnixTimestampExpression } from './date.ts';
+import { assertConditionalOperand } from './expression.ts';
 
 /**
  * One unified arg validator for numeric / string / date contexts. Each
  * `kind` defines what literal types are accepted; column references
- * (`@col`) are always allowed.
+ * (`@col`) and a COALESCE, NULLIF or CASE are always allowed.
  *
  * - `numeric`: number, bigint, column ref, or a nested numeric or
- *              conditional expression. Used by ADD, SUB, MUL, DIV, MOD,
+ *              UNIX_TIMESTAMP expression. Used by ADD, SUB, MUL, DIV, MOD,
  *              ABS, CEIL, FLOOR, ROUND, POWER, SQRT.
  * - `string`:  any string (literal or column ref). Used by LENGTH.
  * - `date`:    Date instance or column ref. Used by DATE_DIFF.
@@ -53,6 +54,16 @@ const validateExprArg = (
   // that aren't in the list, which become literals (string context)
   // or get rejected as wrong-type (numeric/date context).
   if (isColumnIdentifier(arg, columnList)) return;
+  if (
+    assertConditionalOperand(
+      arg,
+      argName,
+      expressionType,
+      columnList,
+      depth,
+      maxDepth,
+    )
+  ) return;
 
   if (kind === 'string') {
     if (typeof arg !== 'string') {
@@ -80,13 +91,13 @@ const validateExprArg = (
     }
     return;
   }
-  // numeric: literal number / bigint / nested numeric expression, or a
-  // conditional one, whose result type is only known to the database.
+  // numeric: literal number / bigint / nested numeric expression, or
+  // UNIX_TIMESTAMP, the date expression that returns an integer.
   if (typeof arg === 'number' || typeof arg === 'bigint') return;
   if (typeof arg === 'object' && arg !== null && '$$_expression' in arg) {
     try {
-      if (CONDITIONAL_TYPES.has(arg.$$_expression as string)) {
-        assertExpression(arg, columnList, depth + 1, maxDepth);
+      if (arg.$$_expression === 'UNIX_TIMESTAMP') {
+        assertUnixTimestampExpression(arg);
       } else {
         assertNumericExpression(arg, columnList, depth + 1, maxDepth);
       }
@@ -118,6 +129,7 @@ const validateExprArg = (
  * @param minArgs - Minimum number of arguments required (default: 1)
  * @param depth - Current recursion depth (internal use, default: 0)
  * @param maxDepth - Maximum allowed recursion depth (default: 10)
+ * @param maxArgs - Maximum number of arguments allowed (default: no limit)
  * @throws {TypeError} If the expression structure is invalid
  * @internal
  */
@@ -128,6 +140,7 @@ const assertArrayNumericExpression = (
   minArgs = 1,
   depth = 0,
   maxDepth = 10,
+  maxArgs = Infinity,
 ): void => {
   assertBaseExpression(x, type);
   if (!('args' in x)) {
@@ -135,9 +148,17 @@ const assertArrayNumericExpression = (
       `Invalid Expression definition: Missing 'args' property for ${type} expression`,
     );
   }
-  if (!Array.isArray(x.args) || x.args.length < minArgs) {
+  if (
+    !Array.isArray(x.args) || x.args.length < minArgs ||
+    x.args.length > maxArgs
+  ) {
+    const count = maxArgs === Infinity
+      ? `at least ${minArgs}`
+      : maxArgs === minArgs
+      ? `exactly ${minArgs}`
+      : `${minArgs} to ${maxArgs}`;
     throw new TypeError(
-      `Invalid Expression definition: 'args' must be an array with at least ${minArgs} element(s) for ${type} expression`,
+      `Invalid Expression definition: 'args' must be an array with ${count} element(s) for ${type} expression`,
     );
   }
   for (let i = 0; i < x.args.length; i++) {
@@ -508,7 +529,7 @@ export const isModuloExpression: (
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid ABS expression
- * @throws {TypeError} If args is not an array with at least one element
+ * @throws {TypeError} If args is not an array with exactly one element
  *
  * @example
  * ```ts
@@ -530,7 +551,7 @@ export const assertAbsExpression: (
   depth = 0,
   maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'ABS' }> => {
-  assertArrayNumericExpression(x, 'ABS', columnList, 1, depth, maxDepth);
+  assertArrayNumericExpression(x, 'ABS', columnList, 1, depth, maxDepth, 1);
 };
 
 /**
@@ -577,7 +598,7 @@ export const isAbsExpression: (
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid CEIL expression
- * @throws {TypeError} If args is not an array with at least one element
+ * @throws {TypeError} If args is not an array with exactly one element
  *
  * @example
  * ```ts
@@ -599,7 +620,7 @@ export const assertCeilExpression: (
   depth = 0,
   maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'CEIL' }> => {
-  assertArrayNumericExpression(x, 'CEIL', columnList, 1, depth, maxDepth);
+  assertArrayNumericExpression(x, 'CEIL', columnList, 1, depth, maxDepth, 1);
 };
 
 /**
@@ -646,7 +667,7 @@ export const isCeilExpression: (
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid FLOOR expression
- * @throws {TypeError} If args is not an array with at least one element
+ * @throws {TypeError} If args is not an array with exactly one element
  *
  * @example
  * ```ts
@@ -668,7 +689,7 @@ export const assertFloorExpression: (
   depth = 0,
   maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'FLOOR' }> => {
-  assertArrayNumericExpression(x, 'FLOOR', columnList, 1, depth, maxDepth);
+  assertArrayNumericExpression(x, 'FLOOR', columnList, 1, depth, maxDepth, 1);
 };
 
 /**
@@ -715,7 +736,7 @@ export const isFloorExpression: (
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid ROUND expression
- * @throws {TypeError} If args is not an array with at least one element
+ * @throws {TypeError} If args is not an array with one or two elements
  *
  * @example
  * ```ts
@@ -737,7 +758,7 @@ export const assertRoundExpression: (
   depth = 0,
   maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'ROUND' }> => {
-  assertArrayNumericExpression(x, 'ROUND', columnList, 1, depth, maxDepth);
+  assertArrayNumericExpression(x, 'ROUND', columnList, 1, depth, maxDepth, 2);
 };
 
 /**
@@ -894,7 +915,7 @@ export const isPowerExpression: (
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid SQRT expression
- * @throws {TypeError} If args is not an array with at least one element
+ * @throws {TypeError} If args is not an array with exactly one element
  *
  * @example
  * ```ts
@@ -916,7 +937,7 @@ export const assertSqrtExpression: (
   depth = 0,
   maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'SQRT' }> => {
-  assertArrayNumericExpression(x, 'SQRT', columnList, 1, depth, maxDepth);
+  assertArrayNumericExpression(x, 'SQRT', columnList, 1, depth, maxDepth, 1);
 };
 
 /**
@@ -959,7 +980,8 @@ export const isSqrtExpression: (
  *
  * The LENGTH expression returns the number of characters in a string.
  * While this returns a numeric value, it operates on string inputs.
- * The argument can be a string literal or column identifier.
+ * The argument can be a string literal, column identifier, or COALESCE,
+ * NULLIF or CASE expression.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -1049,7 +1071,7 @@ export const isLengthExpression: (
  * @throws {TypeError} If the expression structure is invalid
  * @throws {TypeError} If required properties are missing
  * @throws {TypeError} If date arguments are invalid
- * @throws {OqlError} `INVALID_TIME_UNIT` if unit is not a valid TimeUnit
+ * @throws {OqlError} `INVALID_TIME_UNIT` if unit is missing or not a valid TimeUnit
  *
  * @example
  * ```ts
@@ -1112,12 +1134,7 @@ export const assertDateDiffExpression: (
     maxDepth,
   );
 
-  if (!('unit' in x.args)) {
-    throw new TypeError(
-      `Invalid Expression definition: Missing 'unit' property in args for DATE_DIFF expression`,
-    );
-  }
-  validateTimeUnits(x.args.unit);
+  validateTimeUnits((x.args as { unit?: unknown }).unit);
 };
 
 /**

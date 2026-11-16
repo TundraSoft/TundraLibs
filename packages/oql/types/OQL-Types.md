@@ -522,15 +522,17 @@ type Expressions<
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
 > =
   // numeric — NumericExpressionArg is a numeric column, a number, a bigint, a
-  // nested numeric expression (LENGTH and DATE_DIFF included), or a
-  // COALESCE, NULLIF or CASE, whose result type only the database knows
+  // nested numeric expression (LENGTH and DATE_DIFF included), a
+  // UNIX_TIMESTAMP, or a COALESCE, NULLIF or CASE, whose result type only
+  // the database knows. ConditionalExpressionArg below is that COALESCE,
+  // NULLIF or CASE alone
   | { $$_expression: 'ADD'; args: Array<NumericExpressionArg<T, FT>> } // 1 or more
   | { $$_expression: 'SUBTRACT'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
   | { $$_expression: 'MULTIPLY'; args: Array<NumericExpressionArg<T, FT>> } // 1 or more
   | { $$_expression: 'DIVIDE'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
   | { $$_expression: 'MODULO'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
-  // ABS, CEIL, FLOOR and SQRT read args[0]; ROUND reads args[0] and the
-  // precision args[1]. Each takes 1 or more, and the rest are ignored.
+  // ABS, CEIL, FLOOR and SQRT take exactly 1; ROUND takes 1 or 2, the
+  // second its precision. Any other count is refused.
   | { $$_expression: 'ABS'; args: Array<NumericExpressionArg<T, FT>> }
   | { $$_expression: 'CEIL'; args: Array<NumericExpressionArg<T, FT>> }
   | { $$_expression: 'FLOOR'; args: Array<NumericExpressionArg<T, FT>> }
@@ -544,13 +546,19 @@ type Expressions<
     };
   }
   // LENGTH takes a string column or any string; DATE_DIFF a Date column
-  // or a Date, no nested expression
-  | { $$_expression: 'LENGTH'; args: GetColumnByType<FT, string> | string }
+  // or a Date; either also a ConditionalExpressionArg
+  | {
+    $$_expression: 'LENGTH';
+    args:
+      | GetColumnByType<FT, string>
+      | string
+      | ConditionalExpressionArg<T, FT>;
+  }
   | {
     $$_expression: 'DATE_DIFF';
     args: {
-      from: GetColumnByType<FT, Date> | Date;
-      to: GetColumnByType<FT, Date> | Date;
+      from: GetColumnByType<FT, Date> | Date | ConditionalExpressionArg<T, FT>;
+      to: GetColumnByType<FT, Date> | Date | ConditionalExpressionArg<T, FT>;
       unit: TimeUnit;
     };
   }
@@ -558,21 +566,27 @@ type Expressions<
   | {
     $$_expression: 'DATE_ADD';
     args: {
-      // a Date column, a Date, or a nested NOW / CURRENT_TIMESTAMP(TZ)
+      // a Date column, a Date, a nested NOW / CURRENT_TIMESTAMP(TZ),
+      // or a COALESCE, NULLIF or CASE
       date:
         | GetColumnByType<FT, Date>
         | Date
         | {
           $$_expression: 'NOW' | 'CURRENT_TIMESTAMP' | 'CURRENT_TIMESTAMPTZ';
-        };
-      amount: GetColumnByType<FT, number> | number;
+        }
+        | ConditionalExpressionArg<T, FT>;
+      amount:
+        | GetColumnByType<FT, number>
+        | number
+        | ConditionalExpressionArg<T, FT>;
       unit: TimeUnit;
     };
   }
   | {
     $$_expression: 'DATE_TRUNC';
     args: {
-      // a Date column, or a nested DATE_ADD / NOW / CURRENT_TIMESTAMP(TZ)
+      // a Date column, or a nested DATE_ADD / NOW / CURRENT_TIMESTAMP(TZ) /
+      // COALESCE / NULLIF / CASE
       date: GetColumnByType<FT, Date> | Expressions<T, FT>;
       unit: 'DAYS' | 'MONTHS' | 'YEARS';
     };
@@ -586,6 +600,8 @@ type Expressions<
   // utility
   | { $$_expression: 'UUID' }
   // string
+  // CONCAT, LOWER, UPPER, TRIM, LTRIM and RTRIM also take a
+  // ConditionalExpressionArg
   | {
     $$_expression: 'CONCAT';
     args: Array<GetColumnByType<FT, string> | string>;
@@ -929,12 +945,16 @@ type Aggregates<
     column: keyof FT | Expressions<T, FT>;
     distinct?: boolean;
   }
-  // SUM / MIN / MAX / AVG — numeric/date columns or numeric expressions
+  // SUM / MIN / MAX / AVG — numeric/date columns, numeric expressions, or
+  // a COALESCE, NULLIF or CASE
   | {
     $$_aggregate: 'SUM' | 'MIN' | 'MAX' | 'AVG';
     column:
       | GetColumnByType<FT, number | bigint | Date>
-      | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
+      | Extract<
+        Expressions<T, FT>,
+        { $$_expression: NumericExpressions | ConditionalExpressions }
+      >;
     distinct?: boolean;
   }
   // STRING_AGG — concatenate with a delimiter
@@ -960,8 +980,8 @@ type Aggregates<
 
 - `COUNT(*)` is its own branch where `column` is `never` (must be
   omitted). `COUNT` with a `column` accepts an optional `distinct`.
-- `SUM`/`MIN`/`MAX`/`AVG` accept a numeric/Date column or a numeric
-  expression.
+- `SUM`/`MIN`/`MAX`/`AVG` accept a numeric/Date column, a numeric
+  expression, or a `COALESCE`, `NULLIF` or `CASE`.
 - `STRING_AGG` carries an optional `separator` (default `','`).
 - `JSON_ROW` takes a `columns` **record** (`key → column/expression`),
   not a flat list.

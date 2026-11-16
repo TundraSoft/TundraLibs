@@ -24,6 +24,7 @@ import { isColumnIdentifier } from './columnIdentifier.ts';
 import {
   assertExpression,
   assertNumericExpression,
+  CONDITIONAL_TYPES,
 } from './expressions/mod.ts';
 
 /** All recognised aggregate function names. @internal */
@@ -88,7 +89,8 @@ const narrowAggregate = (
  * Validate a `column` reference (column identifier or nested expression).
  *
  * `requireNumeric` switches the nested-expression validator from any
- * expression to a numeric-only expression — used by SUM / AVG / MIN /
+ * expression to a numeric or conditional one (COALESCE, NULLIF, CASE,
+ * whose result type only the database knows) — used by SUM / AVG / MIN /
  * MAX whose semantics demand numeric input.
  *
  * @internal
@@ -116,7 +118,12 @@ const validateColumnOrExpression = (
     );
   }
   try {
-    if (requireNumeric) {
+    if (
+      requireNumeric &&
+      !CONDITIONAL_TYPES.has(
+        (column as { $$_expression?: string }).$$_expression!,
+      )
+    ) {
       assertNumericExpression(column, columnList);
     } else {
       assertExpression(column, columnList);

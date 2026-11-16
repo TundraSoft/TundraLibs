@@ -633,6 +633,61 @@ const CASES: Case[] = [
     },
   },
   {
+    // A single-argument string expression holding an expression is not a
+    // named-argument node. MariaDB casts the conditional date, as it
+    // casts a Date: TIMESTAMPADD over its text result returns text.
+    name: 'SELECT COALESCE and NULLIF as string and date operands',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nickname', 'joined'],
+      expressions: {
+        shout: {
+          $$_expression: 'UPPER',
+          args: { $$_expression: 'COALESCE', args: ['@nickname', '@name'] },
+        },
+        size: {
+          $$_expression: 'LENGTH',
+          args: { $$_expression: 'NULLIF', args: ['@name', ''] },
+        },
+        renewal: {
+          $$_expression: 'DATE_ADD',
+          args: {
+            date: {
+              $$_expression: 'COALESCE',
+              args: ['@joined', new Date('2026-01-01T00:00:00.000Z')],
+            },
+            amount: 1,
+            unit: 'YEARS',
+          },
+        },
+      },
+      projection: { '@shout': 'shout', '@size': 'size', '@renewal': 'renewal' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      postgres: {
+        sql:
+          `SELECT UPPER(COALESCE("nickname", "name")) AS "shout", LENGTH(NULLIF("name", :p_0:)) AS "size", (COALESCE("joined", :p_1:) + (:p_2:::text || ' ' || :p_3:)::interval) AS "renewal" FROM "users"`,
+        params: {
+          p_0: '',
+          p_1: new Date('2026-01-01T00:00:00.000Z'),
+          p_2: 1,
+          p_3: 'YEARS',
+        },
+      },
+      maria: {
+        sql:
+          'SELECT UPPER(COALESCE(`nickname`, `name`)) AS `shout`, CHAR_LENGTH(NULLIF(`name`, :p_0:)) AS `size`, TIMESTAMPADD(YEAR, :p_2:, CAST(COALESCE(`joined`, :p_1:) AS DATETIME(6))) AS `renewal` FROM `users`',
+        params: {
+          p_0: '',
+          p_1: new Date('2026-01-01T00:00:00.000Z'),
+          p_2: 1,
+        },
+      },
+    },
+  },
+  {
     // Decision: OQL `SUBSTR` `start` is 1-based on every dialect. The SQL
     // dialects are natively 1-based, so `start: 1` passes straight through
     // and selects from the first character. (The Mongo golden pins the

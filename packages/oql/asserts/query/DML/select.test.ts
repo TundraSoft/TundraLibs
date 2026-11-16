@@ -1001,6 +1001,50 @@ describe('oql.asserts.Query.DML.Select', () => {
         'not in the provided column list',
       );
     });
+
+    it('an Expression filter value is validated as a projected one is', () => {
+      const query = (filter: Record<string, unknown>) => ({
+        ...ORDERS_WITH_USER,
+        columns: ['id', 'userId', 'total'],
+        expressions: { bonus: { $$_expression: 'ADD', args: ['@total', 1] } },
+        aggregates: { n: { $$_aggregate: 'COUNT' } },
+        projection: { '@userId': true, '@n': true },
+        ...filter,
+      });
+      const add = (...args: unknown[]) => ({ $$_expression: 'ADD', args });
+      // Columns and joined columns, in WHERE and in HAVING.
+      assertSelectQuery(query({
+        where: { '@total': { $lt: add('@id', '@User.@id') } },
+        having: { '@n': { $gt: add('@userId', 1) } },
+      }));
+      const refused: Record<string, Record<string, unknown>> = {
+        'a malformed one': { where: { '@total': { $gt: add('oops') } } },
+        'an expression alias as an argument': {
+          where: { '@total': { $gt: add('@bonus', 1) } },
+        },
+        'an aggregate alias as an argument': {
+          having: { '@n': { $gt: add('@n', 1) } },
+        },
+        'a plain object as an argument': {
+          where: {
+            '@total': {
+              $ne: { $$_expression: 'COALESCE', args: ['@total', { a: '$' }] },
+            },
+          },
+        },
+        'an unknown expression type': {
+          where: { '@total': { $like: { $$_expression: 'NOPE' } } },
+        },
+      };
+      for (const [name, filter] of Object.entries(refused)) {
+        asserts.assertThrows(
+          () => assertSelectQuery(query(filter)),
+          TypeError,
+          'operator value is an invalid Expression',
+          name,
+        );
+      }
+    });
   });
 
   describe('invalid ORDER BY', () => {

@@ -357,11 +357,11 @@ checked before anything reaches the database:
   `MINUTES`, `SECONDS`, `MONTHS`, `YEARS`).
 - `UNIX_TIMESTAMP` takes `seconds` or `milliseconds`.
 
-**Triggered by** a hand-built or cast expression node. Under `expressions`,
-and anywhere else the query asserts read an expression, the asserts throw it.
-As a filter operand, which the asserts do not check, the translator throws
-it. A `DATE_ADD` or `DATE_DIFF` with no `unit` at all is a `TypeError` from
-the asserts. **Fix:** use a unit from the expression's allowed set.
+**Triggered by** a hand-built or cast expression node, in any position the
+query asserts read, a filter operand included: the asserts throw it, and a
+translator called past them throws it too. A `DATE_ADD` or `DATE_DIFF` with
+no `unit` at all throws it as well. **Fix:** use a unit from the
+expression's allowed set.
 
 **Extra context:** `unit`, and `dialect` when a translator threw it.
 

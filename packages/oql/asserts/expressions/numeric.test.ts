@@ -555,8 +555,8 @@ describe('oql.asserts.Expressions.Numeric', () => {
             $$_expression: 'DATE_DIFF',
             args: { from: date1, to: date2 },
           } as any),
-        TypeError,
-        'unit',
+        OqlError,
+        'got undefined',
       );
     });
 
@@ -800,6 +800,17 @@ describe('oql.asserts.Expressions.Numeric', () => {
             } as any,
             columns,
           );
+          assertNumericExpression(
+            { $$_expression: 'LENGTH', args: nested } as any,
+            columns,
+          );
+          assertNumericExpression(
+            {
+              $$_expression: 'DATE_DIFF',
+              args: { from: nested, to: nested, unit: 'DAYS' },
+            } as any,
+            columns,
+          );
         });
       }
 
@@ -820,6 +831,55 @@ describe('oql.asserts.Expressions.Numeric', () => {
 
       it('invalid: a conditional alone is not a numeric expression', () => {
         asserts.assert(!isNumericExpression(conditionals.COALESCE as any));
+      });
+    });
+
+    describe('operand count', () => {
+      it('invalid: ABS, CEIL, FLOOR and SQRT take exactly one operand', () => {
+        for (const op of ['ABS', 'CEIL', 'FLOOR', 'SQRT']) {
+          asserts.assertThrows(
+            () =>
+              assertNumericExpression(
+                { $$_expression: op, args: [4, 2] } as any,
+              ),
+            TypeError,
+            `exactly 1 element(s) for ${op} expression`,
+          );
+        }
+      });
+
+      it('valid: ROUND takes a precision, invalid: a third operand', () => {
+        assertRoundExpression({ $$_expression: 'ROUND', args: [3.14159, 2] });
+        asserts.assertThrows(
+          () =>
+            assertRoundExpression({
+              $$_expression: 'ROUND',
+              args: [3.14159, 2, 1],
+            }),
+          TypeError,
+          '1 to 2 element(s) for ROUND expression',
+        );
+      });
+    });
+
+    describe('UNIX_TIMESTAMP operand', () => {
+      it('valid: an integer-valued date expression in a numeric position', () => {
+        assertNumericExpression({
+          $$_expression: 'SUBTRACT',
+          args: [{ $$_expression: 'UNIX_TIMESTAMP', unit: 'seconds' }, 60],
+        } as any);
+      });
+
+      it('invalid: its unit is still checked', () => {
+        const err = asserts.assertThrows(
+          () =>
+            assertNumericExpression({
+              $$_expression: 'ADD',
+              args: [1, { $$_expression: 'UNIX_TIMESTAMP', unit: 'hours' }],
+            } as any),
+          OqlError,
+        );
+        asserts.assertEquals(err.code, 'INVALID_TIME_UNIT');
       });
     });
 
