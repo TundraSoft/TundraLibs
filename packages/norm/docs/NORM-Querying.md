@@ -319,11 +319,12 @@ When the to-one relation can match several rows, the read groups by the
 row's primary key, so each row comes back once, kept when at least one
 matched row passes the comparison. `count()` and `total: true` count
 distinct primary keys. Key-position conditions on the same relation
-then join with it, so one related row has to meet them all. Two reads
+then join with it, so one related row has to meet them all. Three reads
 throw instead: an entity with no primary key, a view, raises
-`INVALID_PROJECTION`, as it has nothing to tell its rows apart by; and
-`aggregates` raise `AGGREGATE_MISUSE`, as each match would be aggregated
-as a row.
+`INVALID_PROJECTION`, as it has nothing to tell its rows apart by; so
+does a projected to-many relation in the same read, whose list would
+hold each row once per match; and `aggregates` raise
+`AGGREGATE_MISUSE`, as each match would be aggregated as a row.
 
 ```typescript ignore
 // Grants.Org is nullSafe — each grant comes back, and is counted, once:
@@ -680,9 +681,10 @@ Ordering by a to-many relation requires projecting it: an unprojected
 to-many runs as an `EXISTS` subquery, which has no ordering scope.
 Ordering by a belongsTo or hasOne that can match several rows returns
 each row once, placed by its smallest related value for `ASC` and its
-largest for `DESC`. On an entity with no primary key it throws
-`INVALID_PROJECTION`, and with `aggregates` `AGGREGATE_MISUSE`, as a
-comparison value from such a relation does.
+largest for `DESC`. On an entity with no primary key, or beside a
+projected to-many relation, it throws `INVALID_PROJECTION`, and with
+`aggregates` `AGGREGATE_MISUSE`, as a comparison value from such a
+relation does.
 
 ## Writes
 

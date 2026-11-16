@@ -211,6 +211,8 @@ back once, placed by its smallest related value for `ASC` and its
 largest for `DESC`. On an entity with no primary key the comparison
 and the `orderBy` throw `INVALID_PROJECTION`, and with `aggregates`
 they throw `AGGREGATE_MISUSE`, where they counted each match as a row.
+Beside a projected to-many relation they throw `INVALID_PROJECTION`,
+where its list held each related row once per match.
 
 ### A matched relation row whose projected columns are all NULL is kept
 

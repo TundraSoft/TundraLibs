@@ -1647,9 +1647,22 @@ export class ReadRepo<
    * group by when it projects no relation.
    *
    * @throws {@link NormQueryError} `INVALID_PROJECTION` for such a join
-   *   on an entity with no primary key. */
+   *   on an entity with no primary key, or beside a projected to-many,
+   *   whose list would hold each row once per match. */
   private __groupByBaseRow(plan: ProjectionPlan): void {
     if (plan.relations.length === 0 && plan.fanOut.length === 0) return;
+    const list = plan.relations.find((r) => r.cardinality === 'hasMany');
+    if (plan.fanOut.length > 0 && list !== undefined) {
+      const c = this._compiled;
+      throw new NormQueryError(
+        `'${c.key}' projects to-many relation '${list.outputKey}' and ` +
+          `joins relation '${plan.fanOut[0]}', which can match several ` +
+          `rows, for a filter or orderBy: the list would hold each row ` +
+          `once per match. Filter through '${plan.fanOut[0]}' in key ` +
+          `position, or read the list in a separate query.`,
+        { entity: c.key, subject: plan.fanOut[0], code: 'INVALID_PROJECTION' },
+      );
+    }
     const pk = this.__rowKey(plan);
     const taken = new Set(
       Object.entries(plan.oqlProjection).map(([k, v]) =>

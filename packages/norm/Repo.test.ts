@@ -1753,6 +1753,16 @@ describe('norm.Repo — nullSafe relation keys', () => {
       "relation 'Seat'",
     );
     asserts.assertEquals(err.context.code, 'AGGREGATE_MISUSE');
+    // A projected to-many list would hold each row once per match.
+    const list = await asserts.assertRejects(
+      () =>
+        db.repo('Orgs').find(below, {
+          project: { '@id': true, '@Seats': { '@id': true } },
+        }),
+      NormQueryError,
+      "projects to-many relation 'Seats'",
+    );
+    asserts.assertEquals(list.context.code, 'INVALID_PROJECTION');
     // Ordering joins it the same way.
     await db.repo('Orgs').find(undefined, { orderBy: { '@Seat.@id': 'ASC' } });
     asserts.assertEquals(
