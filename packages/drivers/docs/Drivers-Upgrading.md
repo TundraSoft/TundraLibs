@@ -13,8 +13,8 @@ not listed; the changelog has those.
   - [MariaDB sessions and `Date` values are UTC](#mariadb-sessions-and-date-values-are-utc)
   - [A `:name:` in quoted text or a comment is text](#a-name-in-quoted-text-or-a-comment-is-text)
   - [A colon after a colon never opens a placeholder](#a-colon-after-a-colon-never-opens-a-placeholder)
-  - [Error messages name the key or column](#error-messages-name-the-key-or-column)
-  - [SQLite binds `-0` as `0`](#sqlite-binds--0-as-0)
+  - [Error codes and messages](#error-codes-and-messages)
+  - [SQLite binds `-0` as `0` and whole numbers as integers](#sqlite-binds--0-as-0-and-whole-numbers-as-integers)
 
 ## 1.9.0
 
@@ -88,11 +88,12 @@ Every SQL engine now skips quoted text and comments when it looks for
 placeholders, by the dialect's own quoting rules, listed under
 [Named parameters](Drivers-SQLEngine.md#named-parameters).
 
-| Statement, with `{ a: 1 }` | drivers 1.8.0                                    | Now      |
-| -------------------------- | ------------------------------------------------ | -------- |
-| `SELECT ':a:'`             | `'$1'` on Postgres, `':a'` on MariaDB and SQLite | `':a:'`  |
-| `SELECT ':zz:'`            | `MISSING_PARAMETERS` for `zz`                    | `':zz:'` |
-| `SELECT :a: -- :b:`        | `MISSING_PARAMETERS` for `b`                     | `1`      |
+| Statement, with `{ a: 1 }`                 | drivers 1.8.0                                    | Now                                                   |
+| ------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------- |
+| `SELECT ':a:'`                             | `'$1'` on Postgres, `':a'` on MariaDB and SQLite | `':a:'`                                               |
+| `SELECT ':zz:'`                            | `MISSING_PARAMETERS` for `zz`                    | `':zz:'`                                              |
+| `SELECT :a: -- :b:`                        | `MISSING_PARAMETERS` for `b`                     | `1`                                                   |
+| `SELECT :a: /* x /* y */ :b: */`, Postgres | `MISSING_PARAMETERS` for `b`                     | `1`, the nested comment ends where the server ends it |
 
 ### A colon after a colon never opens a placeholder
 
@@ -103,25 +104,37 @@ fails with `type "hi" does not exist`, so write `arr[:lo:: :hi:]`, which
 both versions accept. `:a::b:` with only `a` supplied fails at the server
 with a syntax error, where 1.8.0 threw `MISSING_PARAMETERS` for `b`.
 
-### Error messages name the key or column
+### Error codes and messages
 
-Error codes are unchanged. Messages that ended in a raw placeholder now
-name what the server reported, and set the matching `context` field:
+| Error                                                                                | drivers 1.8.0            | Now                 |
+| ------------------------------------------------------------------------------------ | ------------------------ | ------------------- |
+| a CHECK failure on MariaDB                                                           | `QUERY_EXECUTION_FAILED` | `CHECK_VIOLATION`   |
+| access denied to a database on MariaDB, errno 1044, as on `CREATE DATABASE` or `USE` | `INVALID_AUTH`           | `PERMISSION_DENIED` |
+| an insert naming a column the table lacks, on SQLite, Turso and D1                   | `QUERY_EXECUTION_FAILED` | `COLUMN_NOT_FOUND`  |
 
-| Error                                                                                                                  | drivers 1.8.0           | Now                                            |
-| ---------------------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------------- |
-| `DUPLICATE_KEY` on MariaDB and MongoDB                                                                                 | ends in `${constraint}` | the key or index name, on `context.constraint` |
-| `COLUMN_NOT_FOUND` on Postgres, Neon and MariaDB                                                                       | ends in `${column}`     | the column, on `context.column`                |
-| `FOREIGN_KEY_VIOLATION` on MariaDB and SQLite, MariaDB `NOT_NULL_VIOLATION`, `TABLE_NOT_FOUND` on Postgres and MariaDB | ends in a placeholder   | ends at the instance id                        |
+Messages that ended in a raw placeholder such as `${constraint}` now end
+with the name the server reported, which also lands on `context`:
 
-The non-UTC refusal on Postgres and Neon also says to set the zone for
-the role a pooler signs in as.
+| Error                                                       | Now ends with, for example                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------- |
+| `DUPLICATE_KEY` on MariaDB and MongoDB                      | the key or index, `orders_ref_u`                              |
+| `COLUMN_NOT_FOUND` on Postgres, Neon and MariaDB            | the column, `nope`                                            |
+| `FOREIGN_KEY_VIOLATION` and `NOT_NULL_VIOLATION` on MariaDB | the key or column                                             |
+| `TABLE_NOT_FOUND` on Postgres and MariaDB                   | the table, `users`, on MariaDB with its database, `app.users` |
 
-### SQLite binds `-0` as `0`
+A SQLite foreign-key failure names no key, so its message ends at the
+instance id. The non-UTC refusal on Postgres and Neon also says to set
+the zone for the role a pooler signs in as.
+
+### SQLite binds `-0` as `0` and whole numbers as integers
 
 A bound `-0` reads back as `0` on every runtime. drivers 1.8.0 failed
 on Deno with `Invalid FFI i32 type, expected integer`, and read back `-0`
 on Bun and Node.
+
+On Node a whole number or a boolean was bound as `REAL`, so `:v: / 2`
+with `v` 5 was `2.5` and a column with no type stored a `REAL`. It is
+now `INTEGER`, as on Deno and Bun, so the same query returns `2`.
 
 ---
 
