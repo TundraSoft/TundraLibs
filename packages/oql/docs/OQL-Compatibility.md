@@ -374,8 +374,8 @@ SQL.
 to run a lookup in, so an UPDATE or DELETE carrying the node throws on
 MongoDB, as does a partial-index predicate. Select the keys with the
 same filter first, then update or delete by `$in` on them. An `on`
-value that names a joined column (`'@Alias.@col'`) also throws on
-MongoDB.
+value that names a joined column, `'@Alias.@col'`, reads that column
+of the row, as on SQL.
 
 ## Expressions
 

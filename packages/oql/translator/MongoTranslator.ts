@@ -1696,12 +1696,10 @@ export class MongoTranslator {
    *
    * `on` values resolve against `columns`, the outer scope, exactly as
    * the SQL translators resolve them: a column reference is bound in
-   * `let`, anything else is data. The sub-`where` sees the subquery
-   * table alone, so no outer column is in scope there, and a nested
-   * node correlates only through literals.
-   *
-   * @throws {DialectUnsupportedError} For an `on` value that names a
-   *   joined column.
+   * `let`, a joined column included, as it holds the value of the
+   * unwound row, and anything else is data. The sub-`where` sees the
+   * subquery table alone, so no outer column is in scope there, and a
+   * nested node correlates only through literals.
    */
   private __buildExistsLookup(
     spec: ExistsFilter,
@@ -1715,12 +1713,6 @@ export class MongoTranslator {
       const foreignField = `$${key.slice(1)}`;
       const outer = this.__valueFieldRef(value, columns);
       if (outer !== null) {
-        if (outer.includes('.')) {
-          throw new DialectUnsupportedError(
-            this.Dialect,
-            `an '$exists' / '$nexists' key bound to the joined column '${value}'`,
-          );
-        }
         const varName = `v${Object.keys(letVars).length}`;
         letVars[varName] = outer;
         conditions.push(
