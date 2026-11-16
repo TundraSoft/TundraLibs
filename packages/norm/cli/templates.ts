@@ -64,8 +64,8 @@ NORM_DB:
 # -- postgres --
 #   port: 5432
 #   # also: applicationName, statementTimeoutMs, allowCleartextPassword
-#   # a session TimeZone other than UTC is refused at connect; set the
-#   # database to UTC, or accept it: allowNonUtcTimeZone: true
+#   # the driver asks for a UTC session at connect; to keep the server's
+#   # zone: allowNonUtcTimeZone: true
 
 # -- maria (MySQL / MariaDB) --
 #   port: 3306
@@ -77,8 +77,6 @@ NORM_DB:
 
 # -- neon (Postgres over HTTP — edge/Workers-safe) --
 #   # host is required, port is unused
-#   # a session TimeZone other than UTC is refused on the first query;
-#   # set the database to UTC, or accept it: allowNonUtcTimeZone: true
 #   # or, instead of username/password/database above:
 #   # connectionString: \${NEON_CONNECTION_STRING}
 

@@ -7,7 +7,7 @@ changelog has those.
 ## Table of Contents
 
 - [1.13.0](#1130)
-  - [A Postgres session runs in UTC, and Neon refuses another zone](#a-postgres-session-runs-in-utc-and-neon-refuses-another-zone)
+  - [A Postgres session runs in UTC](#a-postgres-session-runs-in-utc)
   - [MariaDB dates are written and read in UTC](#mariadb-dates-are-written-and-read-in-utc)
   - [`date()` holds the UTC day on SQLite and MongoDB](#date-holds-the-utc-day-on-sqlite-and-mongodb)
   - [`time()` reads a string](#time-reads-a-string)
@@ -33,7 +33,7 @@ below change what an app written against an earlier version sees. Where
 the app host and the database both run on UTC, the first, second and
 fifth change nothing.
 
-### A Postgres session runs in UTC, and Neon refuses another zone
+### A Postgres session runs in UTC
 
 The Postgres driver now asks for `TimeZone=UTC` when it connects, so a
 database or role set to another zone runs norm's sessions in UTC.
@@ -57,14 +57,10 @@ SET starts_at = (starts_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC';
 A `date()` column holds the day in the old zone, and has no time to
 convert from.
 
-Behind a pooler that does not pass the zone on, `connect()` rejects with
-`INVALID_CONFIG_VALUE` when the zone the pooler reports is not UTC, and a
-pooler that rejects a `TimeZone` startup parameter fails the connection.
-On Neon the first query or `ping()` rejects with `INVALID_CONFIG_VALUE`.
-Earlier versions connected. `allowNonUtcTimeZone: true` keeps the earlier
-behaviour on both engines, and
+A pooler that rejects a `TimeZone` startup parameter fails the
+connection. `allowNonUtcTimeZone: true` keeps the earlier behaviour, and
 [The database session](NORM-Dates.md#the-database-session) shows how to
-fix the zone instead.
+set the zone on the server where the driver cannot ask for it.
 
 ### MariaDB dates are written and read in UTC
 

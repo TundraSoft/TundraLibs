@@ -65,11 +65,11 @@ import { PgServerError } from './PgServerError.ts';
 import { type EncodedParam, encodeParam } from './binary.ts';
 import { buildSSLRequest } from './protocol.ts';
 import {
+  pgRefusedStartupParameter,
   pgSqlStateToCode,
   pgUndefinedColumn,
   pgUndefinedTable,
 } from './sqlState.ts';
-import { nonUtcReason, UTC_ZONE } from './timeZone.ts';
 import type { PostgresEngineOptions } from './types/mod.ts';
 
 const POSTGRES_DEFAULTS: Partial<PostgresEngineOptions> = {
@@ -158,8 +158,7 @@ export class PostgresEngine
       this._getOption('allowCleartextPassword') !== false;
     const allowMd5Password = this._getOption('allowMd5Password') === true;
     // Ask for a UTC session, so a database or role whose default zone is not
-    // UTC still connects; `__assertUtcSession` catches a server that did not
-    // honour it.
+    // UTC still runs in UTC.
     const timeZone = this._getOption('allowNonUtcTimeZone') === true
       ? undefined
       : 'UTC';
@@ -205,7 +204,6 @@ export class PostgresEngine
         allowCleartextPassword,
         allowMd5Password,
       });
-      this.__assertUtcSession(pg);
       return pg;
     } catch (e) {
       try {
@@ -245,7 +243,6 @@ export class PostgresEngine
             allowCleartextPassword,
             allowMd5Password,
           });
-          this.__assertUtcSession(pgPlain);
           return pgPlain;
         } catch (retryErr) {
           try {
@@ -258,29 +255,6 @@ export class PostgresEngine
       }
       throw this.__mapPgError(e, 'connect');
     }
-  }
-
-  /**
-   * Refuses a session whose `TimeZone`, as the server reported it at startup,
-   * is not UTC: one that did not take the `TimeZone` the startup message
-   * asked for. Postgres converts a `Date` sent for a `date` or `timestamp`
-   * column, and evaluates `date_trunc`, `EXTRACT` and casts, in that zone, so
-   * any other zone stores and filters the wrong day and clock time. A server
-   * that reports no `TimeZone` is not checked.
-   *
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` unless `allowNonUtcTimeZone` is set.
-   */
-  private __assertUtcSession(conn: PgConnection): void {
-    const zone = conn.serverParams.get('TimeZone');
-    if (
-      zone === undefined || UTC_ZONE.test(zone) ||
-      this._getOption('allowNonUtcTimeZone') === true
-    ) return;
-    throw new EngineError('INVALID_CONFIG_VALUE', {
-      instanceId: this.instanceId,
-      option: 'TimeZone',
-      reason: nonUtcReason(zone),
-    });
   }
 
   /**
@@ -487,7 +461,9 @@ export class PostgresEngine
    * Translates a thrown value into an {@link EngineError}: `PgServerError`
    * SQLSTATEs go through {@link pgSqlStateToCode} and carry through the
    * server's table/column/constraint fields; anything else becomes a generic
-   * connect- or query-failure.
+   * connect- or query-failure. A server error during startup or login with
+   * no code of its own is `CONNECTION_FAILED`, and one that refuses a startup
+   * parameter names it on `context.parameter`.
    *
    * @param op - `'connect'` or `'query'`, selecting the fallback code.
    */
@@ -498,12 +474,24 @@ export class PostgresEngine
   ): EngineError {
     if (error instanceof EngineError) return error;
     if (error instanceof PgServerError) {
-      const code = pgSqlStateToCode(error.code);
+      let code = pgSqlStateToCode(error.code);
       const meta: Record<string, unknown> = {
         instanceId: this.instanceId,
         reason: error.fields.get('M') ?? error.message,
         sqlState: error.code,
       };
+      if (op === 'connect') {
+        if (code === 'QUERY_EXECUTION_FAILED') code = 'CONNECTION_FAILED';
+        const parameter = pgRefusedStartupParameter(meta.reason as string);
+        if (parameter !== undefined) {
+          meta.parameter = parameter;
+          meta.reason = `the server refused the startup parameter ` +
+            `${parameter}; add it to the pooler's ignore_startup_parameters` +
+            (parameter === 'statement_timeout'
+              ? ', or leave statementTimeoutMs unset behind a pooler'
+              : '');
+        }
+      }
       if (sql) meta.sql = sql;
       if (error.fields.has('t')) meta.table = error.fields.get('t');
       if (error.fields.has('c')) meta.column = error.fields.get('c');

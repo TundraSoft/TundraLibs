@@ -8,7 +8,6 @@ not listed; the changelog has those.
 
 - [1.9.0](#190)
   - [A Postgres session runs in UTC](#a-postgres-session-runs-in-utc)
-  - [Neon refuses a session that is not in UTC](#neon-refuses-a-session-that-is-not-in-utc)
   - [Neon types a `Date` parameter as `timestamptz`](#neon-types-a-date-parameter-as-timestamptz)
   - [MariaDB sessions and `Date` values are UTC](#mariadb-sessions-and-date-values-are-utc)
   - [A `:name:` in quoted text or a comment is text](#a-name-in-quoted-text-or-a-comment-is-text)
@@ -40,24 +39,10 @@ SET starts_at = (starts_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC';
 
 A `date` column holds the old zone's day, with no time to convert from.
 
-When the server still reports a zone that is not UTC, for example behind
-a pooler that does not pass the parameter on, `connect()` throws
-`EngineError` `INVALID_CONFIG_VALUE`; 1.8.0 connected. A pooler that
-rejects a `TimeZone` startup parameter fails the connection.
-`allowNonUtcTimeZone: true` sends no `TimeZone` and checks nothing, as
-1.8.0 did. [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone)
+A pooler that rejects a `TimeZone` startup parameter fails the
+connection. `allowNonUtcTimeZone: true` sends no `TimeZone`, as 1.8.0
+did. [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone)
 has the fixes.
-
-### Neon refuses a session that is not in UTC
-
-The first query or `ping()` on a connected engine reads the session zone
-in one extra request. A zone that is not UTC rejects the query with
-`INVALID_CONFIG_VALUE`, and `ping()` rejects with it rather than
-returning `false`. When the zone request itself fails, bad credentials
-included, the query rejects with `OPERATION_FAILED` and `ping()` returns
-`false`. drivers 1.8.0 checked nothing. `allowNonUtcTimeZone: true`
-skips the request. See
-[Neon → Time zone](../engines/neon/Drivers-Neon.md#time-zone).
 
 ### Neon types a `Date` parameter as `timestamptz`
 
@@ -106,11 +91,13 @@ with a syntax error, where 1.8.0 threw `MISSING_PARAMETERS` for `b`.
 
 ### Error codes and messages
 
-| Error                                                                                | drivers 1.8.0            | Now                 |
-| ------------------------------------------------------------------------------------ | ------------------------ | ------------------- |
-| a CHECK failure on MariaDB                                                           | `QUERY_EXECUTION_FAILED` | `CHECK_VIOLATION`   |
-| access denied to a database on MariaDB, errno 1044, as on `CREATE DATABASE` or `USE` | `INVALID_AUTH`           | `PERMISSION_DENIED` |
-| an insert naming a column the table lacks, on SQLite, Turso and D1                   | `QUERY_EXECUTION_FAILED` | `COLUMN_NOT_FOUND`  |
+| Error                                                                                | drivers 1.8.0            | Now                                  |
+| ------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------ |
+| a CHECK failure on MariaDB                                                           | `QUERY_EXECUTION_FAILED` | `CHECK_VIOLATION`                    |
+| access denied to a database on MariaDB, errno 1044, as on `CREATE DATABASE` or `USE` | `INVALID_AUTH`           | `PERMISSION_DENIED`                  |
+| an insert naming a column the table lacks, on SQLite, Turso and D1                   | `QUERY_EXECUTION_FAILED` | `COLUMN_NOT_FOUND`                   |
+| a Postgres server error during startup or login that has no code of its own          | `QUERY_EXECUTION_FAILED` | `CONNECTION_FAILED`                  |
+| a MariaDB login with a wrong password, or to an unknown database                     | `CONNECTION_FAILED`      | `INVALID_AUTH`, `DATABASE_NOT_FOUND` |
 
 Messages that ended in a raw placeholder such as `${constraint}` now end
 with the name the server reported, which also lands on `context`:
@@ -123,8 +110,15 @@ with the name the server reported, which also lands on `context`:
 | `TABLE_NOT_FOUND` on Postgres and MariaDB                   | the table, `users`, on MariaDB with its database, `app.users` |
 
 A SQLite foreign-key failure names no key, so its message ends at the
-instance id. The non-UTC refusal on Postgres and Neon also says to set
-the zone for the role a pooler signs in as.
+instance id.
+
+A `CONNECTION_FAILED` message now ends with the reason when the engine
+reports one, which Postgres, MariaDB and MongoDB do:
+`Failed to connect to POSTGRES::app: connect ECONNREFUSED 127.0.0.1:5432`.
+Behind PgBouncer, `statementTimeoutMs` still fails the login, now as
+`CONNECTION_FAILED` with a message that names `statement_timeout` and says how
+to allow it. See
+[Postgres → Behind PgBouncer](../engines/postgres/Drivers-Postgres.md#behind-pgbouncer--pgcat--rds-proxy).
 
 ### SQLite binds `-0` as `0` and whole numbers as integers
 

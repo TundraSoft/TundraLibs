@@ -79,16 +79,15 @@ authentication mechanism — a `connectionString`, the
 `username`+`password`+`database` components, or a bearer `token`. The
 constructor throws `MISSING_CONFIG_VALUE` otherwise.
 
-| Option                | Type      | Default | Notes                                                                                                                                                                  |
-| --------------------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `host`                | `string`  | —       | Required. Neon endpoint host, e.g. `ep-cool-name-a1b2c3.us-east-2.aws.neon.tech`. The request URL is `https://<host>/sql`.                                             |
-| `connectionString`    | `string`  | —       | Full `postgresql://user:password@host/db`. Sent in the `Neon-Connection-String` header; the password in it authenticates. Takes precedence over components.            |
-| `username`            | `string`  | —       | Component auth: assembled into a connection string with `password` + `database`.                                                                                       |
-| `password`            | `string`  | —       | Component auth (see `username`).                                                                                                                                       |
-| `database`            | `string`  | —       | Component auth (see `username`).                                                                                                                                       |
-| `token`               | `string`  | —       | Bearer JWT for Neon Authorize / row-level security. Sent as `Authorization: Bearer <token>`. May accompany a connection string or stand alone.                         |
-| `timeout`             | `number`  | `30`    | Per-request timeout in seconds (1–120), passed through to RESTler. Must be a positive number.                                                                          |
-| `allowNonUtcTimeZone` | `boolean` | `false` | Run queries when the session `TimeZone` is not UTC, and skip the request that checks it. Refused with `INVALID_CONFIG_VALUE` by default (see [Time zone](#time-zone)). |
+| Option             | Type     | Default | Notes                                                                                                                                                       |
+| ------------------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`             | `string` | —       | Required. Neon endpoint host, e.g. `ep-cool-name-a1b2c3.us-east-2.aws.neon.tech`. The request URL is `https://<host>/sql`.                                  |
+| `connectionString` | `string` | —       | Full `postgresql://user:password@host/db`. Sent in the `Neon-Connection-String` header; the password in it authenticates. Takes precedence over components. |
+| `username`         | `string` | —       | Component auth: assembled into a connection string with `password` + `database`.                                                                            |
+| `password`         | `string` | —       | Component auth (see `username`).                                                                                                                            |
+| `database`         | `string` | —       | Component auth (see `username`).                                                                                                                            |
+| `token`            | `string` | —       | Bearer JWT for Neon Authorize / row-level security. Sent as `Authorization: Bearer <token>`. May accompany a connection string or stand alone.              |
+| `timeout`          | `number` | `30`    | Per-request timeout in seconds (1–120), passed through to RESTler. Must be a positive number.                                                               |
 
 The pool-related fields on `SQLEngineOptions` (`pool`) are inert — this engine
 is pool-free (one stateless HTTP client, no socket pool).
@@ -119,7 +118,7 @@ A `Date` parameter is sent as ISO-8601 text with its placeholder typed
 `timestamptz`, so it works where Postgres has no column to infer a type from
 (`date_trunc('day', :at:)`, `:to: - :from:`, `:at: IS NULL`). Bound to a
 `timestamp` or `date` column it is converted in the session's `TimeZone`,
-which is why the engine insists on UTC. The type holds everywhere, as on the
+so run the database in UTC (see [Time zone](#time-zone)). The type holds everywhere, as on the
 socket engine: `d = :at:` on a `date` column matches only a `Date` at midnight
 UTC, a `text` column stores `2026-01-15 20:00:00+00`, and `t = :at:` on one
 fails with "operator does not exist". Pass an ISO string where that is not
@@ -127,27 +126,13 @@ wanted.
 
 ### Time zone
 
-The engine refuses a database whose session `TimeZone` is not UTC, for the
-reason given under
-[Postgres → Time zone](../postgres/Drivers-Postgres.md#time-zone).
+Queries run in the database's session `TimeZone`, Neon's default being GMT.
 `PostgresEngine` asks for UTC in its startup message; HTTP has no startup
-message to ask in or to read the zone from, so the first query or `ping()` on a
-connected engine first sends `SELECT current_setting('TimeZone')`: one extra
-request per engine instance, so on Workers keep one engine per isolate rather
-than one per request. A zone other than UTC rejects the query with
-`INVALID_CONFIG_VALUE` before it is sent, and the next query checks again.
-`ping()` rejects with the same error rather than returning `false`, so a
-health check cannot pass while every query is refused. `connect()` does not
-check. When the zone request itself fails, the query rejects with
-`OPERATION_FAILED` for the operation `session time zone check`, the request's
-error on `cause`, and `ping()` returns `false`.
-
-Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`).
-Through a pooled endpoint the zone is the one the pooler's server connection
-opened with, so the fix applies once the pooler opens a new one. Set
-`allowNonUtcTimeZone: true` only when the application keeps every instant in
-`timestamptz` and wants the session zone's days and clock times, which
-`date_trunc`, `EXTRACT` and casts still use; it also drops the extra request.
+message, so this engine cannot, and it does not check the zone. For the reason
+given under [Postgres → Time zone](../postgres/Drivers-Postgres.md#time-zone),
+set the zone on the database: `ALTER DATABASE app SET timezone TO 'UTC'`.
+It applies to server connections opened after it, so through a pooled
+endpoint the old zone holds until the pooler opens new ones.
 
 ## Limitations
 

@@ -165,11 +165,11 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 | `username`               | `string`  | —       | Required.                                                                                                                                                                                                                    |
 | `password`               | `string`  | —       | Optional (e.g. local trust auth).                                                                                                                                                                                            |
 | `applicationName`        | `string`  | `Name`  | Sent in StartupMessage as `application_name`.                                                                                                                                                                                |
-| `statementTimeoutMs`     | `number`  | —       | Sent as `statement_timeout` GUC.                                                                                                                                                                                             |
+| `statementTimeoutMs`     | `number`  | —       | Sent in StartupMessage as `statement_timeout`. PgBouncer refuses it (see [Behind PgBouncer](#behind-pgbouncer--pgcat--rds-proxy)).                                                                                           |
 | `ssl`                    | various   | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration).                                                                                                                                                               |
 | `allowCleartextPassword` | `boolean` | `true`  | Permit cleartext-password auth over an **unencrypted** connection. Permitted by default but warns via `notice` on every such handshake; set `false` to throw `INVALID_AUTH` instead (see [Authentication](#authentication)). |
 | `allowMd5Password`       | `boolean` | `false` | Answer MD5 password auth. Refused with `INVALID_AUTH` by default; set `true` only for a peer that offers nothing better, such as Cloudflare Hyperdrive (see [MD5](#md5)).                                                    |
-| `allowNonUtcTimeZone`    | `boolean` | `false` | Keep the server's session `TimeZone`. By default the driver asks for UTC at startup and refuses a session that is not UTC with `INVALID_CONFIG_VALUE` (see [Time zone](#time-zone)).                                         |
+| `allowNonUtcTimeZone`    | `boolean` | `false` | Keep the server's session `TimeZone`. By default the driver asks for UTC at startup (see [Time zone](#time-zone)).                                                                                                           |
 
 ## Behind PgBouncer / pgcat / RDS Proxy
 
@@ -188,6 +188,20 @@ On auth: PgBouncer's `auth_type = md5` needs `allowMd5Password: true` (see
 to the pooler is unencrypted every connection emits the cleartext-auth
 warning described under [Authentication](#authentication); set
 `allowCleartextPassword: false` if you would rather that be a hard failure.
+
+On startup parameters: the driver sends `user`, `database`,
+`client_encoding` and `application_name` in its startup message, `TimeZone`
+unless `allowNonUtcTimeZone` is set, and `statement_timeout` when
+`statementTimeoutMs` is set. PgBouncer takes the first five and refuses
+`statement_timeout`, so with `statementTimeoutMs` set, even to `0`,
+`connect()` throws `CONNECTION_FAILED` and the message names the parameter.
+Leave `statementTimeoutMs` unset behind a pooler, or add `statement_timeout`
+to the pooler's `ignore_startup_parameters`. PgBouncer's manual says a
+parameter listed there is accepted and ignored, so the timeout then has to
+come from the server, for example
+`ALTER ROLE app SET statement_timeout = '5s'`. The driver does not fall back
+to a `SET` after connect: under transaction pooling the next statement can run
+on another backend, where the setting would not hold.
 
 ## Type round-trips
 
@@ -211,28 +225,20 @@ evaluates `date_trunc`, `EXTRACT` and casts, in the session's `TimeZone`. In
 any zone but UTC those store and filter the wrong day and clock time;
 `timestamptz` is correct in every zone. The driver therefore sends
 `TimeZone=UTC` in the startup message, so the session runs in UTC whatever
-zone the database or the role is set to, and `RESET` returns to UTC.
-
-A check on the zone the server reports is the safety net: a connection whose
-server still reports a non-UTC `TimeZone` at startup is refused with
-`INVALID_CONFIG_VALUE`. Any fixed zero offset counts as UTC, such as `Etc/UTC`,
-`GMT`, `UTC0` or `+00:00`; a regional zone such as `Europe/London` does not. A
-server that reports no `TimeZone` is not checked. If a pooler in between does
-not pass the parameter on, fix the zone on the server. A role's own `timezone`
-setting overrides its database's, so use `ALTER ROLE` when the role has one,
-otherwise the database. Behind a pooler, the role is the one the pooler signs
-in as, and the setting applies once the pooler opens a new server connection:
+zone the database or the role is set to, and `RESET` returns to UTC. The
+driver does not check the zone the server reports: a pooler that does not pass
+the parameter on leaves the session in the zone the server gives it. Set the
+zone on the server for that case. A role's own `timezone` setting overrides
+its database's, so use `ALTER ROLE` when the role has one, otherwise the
+database:
 
 ```sql
 ALTER DATABASE app SET timezone TO 'UTC';
 ```
 
-`allowNonUtcTimeZone: true` sends no `TimeZone` and accepts whatever zone the
-server reports. Set it when the application keeps every instant in
-`timestamptz` and wants the session zone's days and clock times: `date_trunc`,
-`EXTRACT` and casts still use that zone on a `timestamptz`. Set it also behind
-a pooler that rejects the startup parameter, after fixing the zone on the
-server, since nothing checks it then.
+`allowNonUtcTimeZone: true` sends no `TimeZone`, so the session keeps the zone
+the server gives it. Set it when the application wants the session zone's days
+and clock times, or behind a pooler that rejects the startup parameter.
 
 ## Performance
 

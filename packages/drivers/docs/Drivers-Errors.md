@@ -149,7 +149,7 @@ import { EngineErrorCodes } from '@tundralibs/drivers/errors';
 
 // Look up the raw template for a code
 EngineErrorCodes['CONNECTION_FAILED'];
-// => 'Failed to connect to ${instanceId}'
+// => 'Failed to connect to ${instanceId}: ${reason}'
 ```
 
 **Type:** `Record<EngineErrorCode, string>`
@@ -198,9 +198,9 @@ All **30** codes in `EngineErrorCode`, grouped the way `EngineErrorCodes.ts` gro
 
 | Code                                                          | Group         | Raised when                                                                                                                                                                                                                                             | Metadata                     |
 | ------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation, usually at construction; also a Postgres or Neon session whose `TimeZone` is not UTC.                                                                                                                                      | `option`, `reason`           |
+| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation — raised eagerly at construction, before any connection is attempted.                                                                                                                                                       | `option`, `reason`           |
 | [`MISSING_CONFIG_VALUE`](#missing_config_value)               | Configuration | A required option was not supplied.                                                                                                                                                                                                                     | `option`                     |
-| [`CONNECTION_FAILED`](#connection_failed)                     | Connection    | `connect()` could not establish a connection — bad host/port, network failure, or the server is down.                                                                                                                                                   | —                            |
+| [`CONNECTION_FAILED`](#connection_failed)                     | Connection    | `connect()` could not establish a connection — bad host/port, network failure, or the server is down. Also a Postgres server error during startup or login that has no code of its own, such as a pooler refusing a startup parameter.                  | `reason`                     |
 | [`DISCONNECTION_FAILED`](#disconnection_failed)               | Connection    | `disconnect()` could not close cleanly.                                                                                                                                                                                                                 | —                            |
 | [`NO_CONNECTION`](#no_connection)                             | Connection    | Internal safety net — a pooled connection was written to after it was already marked closed, or (Mongo only) the shared client was still `null` immediately after `connect()` resolved. **Not** the "you forgot to call `connect()`" error — see below. | —                            |
 | [`CONNECTION_LOST`](#connection_lost)                         | Connection    | An established connection dropped mid-flight — also mapped from Postgres `08xxx` / `57Pxx` SQLSTATEs.                                                                                                                                                   | `reason`                     |
@@ -209,7 +209,7 @@ All **30** codes in `EngineErrorCode`, grouped the way `EngineErrorCodes.ts` gro
 | [`POOL_RESOURCE_FAILED`](#pool_resource_failed)               | Pool          | Reserved for a failure to create a new pool resource. **No throw site raises it today** — the pool reports that as `CONNECTION_FAILED`.                                                                                                                 | —                            |
 | [`OPERATION_FAILED`](#operation_failed)                       | Operation     | Catch-all for a named engine operation that failed (cache `get`/`set`/`delete`, Mongo commands, HTTP round-trips).                                                                                                                                      | `operation`, `reason`        |
 | [`UNSUPPORTED_OPERATION`](#unsupported_operation)             | Operation     | The engine has no implementation for the operation — e.g. transactions on the fetch-only HTTP engines.                                                                                                                                                  | `operation`                  |
-| [`INVALID_AUTH`](#invalid_auth)                               | Auth          | Credentials were rejected — Postgres auth handshake, Redis `AUTH`, or SQLSTATE `28000` / `28P01`.                                                                                                                                                       | `reason`                     |
+| [`INVALID_AUTH`](#invalid_auth)                               | Auth          | Credentials were rejected — Postgres auth handshake, MariaDB login, Redis `AUTH`, or SQLSTATE `28000` / `28P01`.                                                                                                                                        | `reason`                     |
 | [`PERMISSION_DENIED`](#permission_denied)                     | Auth          | Authenticated, but not authorized — SQLSTATE `42501`, MariaDB access denied to a database, table or column, SQLite `SQLITE_READONLY`, Redis `NOPERM`, or Mongo `Unauthorized`.                                                                          | `reason`                     |
 | [`MISSING_PARAMETERS`](#missing_parameters)                   | Query         | The SQL names `:param:` placeholders that `params` does not supply. Raised before the query is sent.                                                                                                                                                    | `missing`                    |
 | [`QUERY_EXECUTION_FAILED`](#query_execution_failed)           | Query         | The server rejected the statement for a reason with no more specific code. The default for unmapped SQLSTATEs.                                                                                                                                          | `reason`                     |
@@ -287,10 +287,8 @@ export function classify(err: unknown): Verdict {
 
 #### INVALID_CONFIG_VALUE
 
-Configuration value is invalid or malformed. Most options are checked at
-construction. The Postgres and Neon engines also raise it later, with
-`option: 'TimeZone'`, when the server reports a session time zone other than
-UTC — see [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone).
+Configuration value is invalid or malformed. Options are checked at
+construction.
 
 **Template:** `Configuration value for "${option}" is invalid - ${reason}`
 
@@ -332,11 +330,16 @@ Required configuration value is not provided.
 
 Failed to establish connection to the database.
 
-**Template:** `Failed to connect to ${instanceId}`
+**Template:** `Failed to connect to ${instanceId}: ${reason}`
+
+The message ends at the instance id when the engine reports no reason.
 
 **Metadata:**
 
 - `instanceId` - Engine instance identifier
+- `reason` - What the engine or the server reported, when it did
+- `sqlState` - Postgres: the SQLSTATE of a server error during startup or login
+- `parameter` - Postgres: the startup parameter the server refused
 
 **Common Causes:**
 
@@ -344,6 +347,14 @@ Failed to establish connection to the database.
 - Network unreachable
 - Database not running
 - Authentication failure (may also throw `INVALID_AUTH`)
+- Postgres: a server error during startup or login whose SQLSTATE has no code
+  of its own. PgBouncer 1.26 sends `08P01` for a wrong password and for an
+  unknown database, so behind it both arrive as `CONNECTION_FAILED`.
+- Postgres behind a pooler: the pooler refused a startup parameter. PgBouncer
+  refuses `statement_timeout`, which `statementTimeoutMs` sends. The message
+  names the parameter and says to add it to the pooler's
+  `ignore_startup_parameters` or to leave `statementTimeoutMs` unset. See
+  [Postgres → Behind PgBouncer](../engines/postgres/Drivers-Postgres.md#behind-pgbouncer--pgcat--rds-proxy).
 
 **Example:**
 

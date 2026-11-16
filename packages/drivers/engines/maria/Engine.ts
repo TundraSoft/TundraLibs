@@ -53,6 +53,13 @@ const MARIA_DEFAULTS: Partial<MariaEngineOptions> = {
   port: 3306,
 };
 
+/** The codes a refused login or database keeps at connect. */
+const LOGIN_CODES: ReadonlySet<string> = new Set([
+  'INVALID_AUTH',
+  'DATABASE_NOT_FOUND',
+  'PERMISSION_DENIED',
+]);
+
 /** Column types the server returns as a day or a wall clock. */
 const DATE_COLUMN_TYPES: ReadonlySet<string> = new Set([
   'DATE',
@@ -127,12 +134,26 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
 
   //#region BaseEngine hooks
 
-  /** Open one fresh `mariadb` connection. */
+  /**
+   * Open one fresh `mariadb` connection.
+   *
+   * @throws {EngineError} `INVALID_AUTH`, `DATABASE_NOT_FOUND` or
+   *   `PERMISSION_DENIED` when the server refuses the login or the
+   *   database; `CONNECTION_FAILED` for any other failure.
+   */
   protected async _createResource(): Promise<Connection> {
-    const conn = await createConnection(
-      this.__buildMariaConfig() as Parameters<typeof createConnection>[0],
-    );
-    return conn;
+    try {
+      return await createConnection(
+        this.__buildMariaConfig() as Parameters<typeof createConnection>[0],
+      );
+    } catch (e) {
+      const error = this._wrapDriverError(e, { sql: '' });
+      if (LOGIN_CODES.has(error.code)) throw error;
+      throw new EngineError('CONNECTION_FAILED', {
+        instanceId: this.instanceId,
+        reason: error.context.reason,
+      }, e as Error);
+    }
   }
 
   /** Close one `mariadb` connection. */

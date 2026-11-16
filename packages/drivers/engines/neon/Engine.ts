@@ -15,7 +15,6 @@
  *   mapping (bigint/bool/int/float/bytea/json/date). Pure, wire-free.
  * - `../postgres/sqlState.ts` → {@link pgSqlStateToCode} — SQLSTATE → engine
  *   error code. Pure, wire-free.
- * - `../postgres/timeZone.ts` → the UTC session rule. Pure, wire-free.
  *
  * ## Honest capabilities (one-shot HTTP)
  * Each `sql()` is a standalone HTTP request, so there is no session to carry a
@@ -58,13 +57,9 @@ import {
   pgUndefinedColumn,
   pgUndefinedTable,
 } from '../postgres/sqlState.ts';
-import { nonUtcReason, UTC_ZONE } from '../postgres/timeZone.ts';
 import { NeonHttpClient } from './NeonHttpClient.ts';
 import { NeonHttpError } from './NeonHttpError.ts';
 import type { NeonHttpEngineOptions } from './types/mod.ts';
-
-/** Reads the session `TimeZone` for the UTC check. */
-const ZONE_QUERY = "SELECT current_setting('TimeZone') AS zone";
 
 /**
  * Postgres over Neon's SQL-over-HTTP endpoint, for edge and serverless
@@ -103,9 +98,6 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
   /** Emits Postgres-dialect SQL, shared with {@link PostgresEngine}. */
   protected readonly _translator: PostgresTranslator = new PostgresTranslator();
-
-  /** The UTC check in flight or passed; cleared when it fails and on close. */
-  private __utcCheck: Promise<void> | undefined;
 
   /**
    * Validates options. No request is made here.
@@ -160,7 +152,6 @@ export class NeonHttpEngine extends SQLConnectionEngine<
   /** Drop the client reference. There is no socket to close. */
   protected override _close(): void {
     this._resource = undefined;
-    this.__utcCheck = undefined;
   }
 
   /** Liveness probe: a trivial `SELECT 1` round-trip. */
@@ -175,35 +166,12 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
   //#endregion ConnectionEngine seams
 
-  /**
-   * Liveness check that also runs the UTC session check, so a health check
-   * cannot pass on a session whose every query is refused.
-   *
-   * @returns `false` when the engine is closed or a request fails.
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` when the session `TimeZone`
-   *   is not UTC and `allowNonUtcTimeZone` is not set.
-   */
-  public override async ping(): Promise<boolean> {
-    if (!(await super.ping())) return false;
-    try {
-      await this.__assertUtcSession(this._resource as NeonHttpClient);
-      return true;
-    } catch (error) {
-      if ((error as EngineError).code === 'INVALID_CONFIG_VALUE') throw error;
-      return false;
-    }
-  }
-
   //#region SQLConnectionEngine hooks
 
   /**
    * Issues one HTTP request and decodes each cell from Postgres text using the
    * column OID, so values match what the socket-based {@link PostgresEngine}
-   * would return. The first call also runs the UTC session check.
-   *
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` when the session `TimeZone`
-   *   is not UTC and `allowNonUtcTimeZone` is not set; `OPERATION_FAILED` when
-   *   the request that reads it fails.
+   * would return.
    */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
@@ -212,7 +180,6 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     // `_standardizeQuery` rewrote `:name:` → `$N` and stashed the ordered,
     // JSON-serializable params in `__params`.
     const params = (query.__params as ReadonlyArray<unknown> | undefined) ?? [];
-    await this.__assertUtcSession(client);
     const res = await client.sql<Record<string, unknown>>(query.sql, params);
 
     // Decode every cell from raw Postgres text using the column's OID — the
@@ -502,52 +469,6 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     if (v === undefined) return false;
     if (typeof v === 'string') return v.trim().length > 0;
     return true;
-  }
-
-  /**
-   * Refuses a session whose `TimeZone` is not UTC, for the reason
-   * {@link PostgresEngine} does. HTTP has no startup handshake to read the
-   * zone from, so the first query or `ping()` asks for it in one extra request;
-   * a pass is kept until the engine closes, a failure is checked again on the
-   * next call. A server that reports no zone is not checked.
-   *
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` unless `allowNonUtcTimeZone`
-   *   is set; `OPERATION_FAILED` when the zone could not be read.
-   */
-  private async __assertUtcSession(client: NeonHttpClient): Promise<void> {
-    if (this._getOption('allowNonUtcTimeZone') === true) return;
-    await (this.__utcCheck ??= this.__readZone(client).catch(
-      (error: unknown) => {
-        this.__utcCheck = undefined;
-        throw error;
-      },
-    ));
-  }
-
-  /**
-   * One request for the session `TimeZone`.
-   *
-   * @throws {EngineError} `INVALID_CONFIG_VALUE` when the zone is not UTC;
-   *   `OPERATION_FAILED`, with the request's error as `cause`, when the
-   *   request fails, so it is not reported as the caller's query failing.
-   */
-  private async __readZone(client: NeonHttpClient): Promise<void> {
-    const res = await client.sql<{ zone?: string | null }>(ZONE_QUERY).catch(
-      (error: unknown) => {
-        throw new EngineError('OPERATION_FAILED', {
-          instanceId: this.instanceId,
-          operation: 'session time zone check',
-          reason: error instanceof Error ? error.message : String(error),
-        }, error as Error);
-      },
-    );
-    const zone = res.rows[0]?.zone;
-    if (typeof zone !== 'string' || UTC_ZONE.test(zone)) return;
-    throw new EngineError('INVALID_CONFIG_VALUE', {
-      instanceId: this.instanceId,
-      option: 'TimeZone',
-      reason: nonUtcReason(zone),
-    });
   }
 
   /** Builds the shared `UNSUPPORTED_OPERATION` error for the transaction seams. */

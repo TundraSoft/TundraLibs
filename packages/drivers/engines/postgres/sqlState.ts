@@ -89,3 +89,13 @@ export function pgUndefinedTable(message: string): string | undefined {
       .exec(message);
   return m === null ? undefined : m[1] ?? m[2];
 }
+
+/**
+ * The startup parameter a pooler refused, from PgBouncer's
+ * `unsupported startup parameter: statement_timeout`. PgBouncer sends it
+ * with SQLSTATE `08P01`, which it also uses for its other login failures,
+ * so the message is the only place the parameter is named.
+ */
+export function pgRefusedStartupParameter(message: string): string | undefined {
+  return /^unsupported startup parameter: (\S+)/.exec(message)?.[1];
+}
