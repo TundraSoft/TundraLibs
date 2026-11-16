@@ -53,7 +53,11 @@ import type {
   SQLEngineEvents,
 } from '../../types/mod.ts';
 import { decodeTextValue } from '../postgres/values.ts';
-import { pgSqlStateToCode, pgUndefinedColumn } from '../postgres/sqlState.ts';
+import {
+  pgSqlStateToCode,
+  pgUndefinedColumn,
+  pgUndefinedTable,
+} from '../postgres/sqlState.ts';
 import { nonUtcReason, UTC_ZONE } from '../postgres/timeZone.ts';
 import { NeonHttpClient } from './NeonHttpClient.ts';
 import { NeonHttpError } from './NeonHttpError.ts';
@@ -413,6 +417,10 @@ export class NeonHttpEngine extends SQLConnectionEngine<
       if (code === 'COLUMN_NOT_FOUND' && meta.column === undefined) {
         const column = pgUndefinedColumn(error.message);
         if (column !== undefined) meta.column = column;
+      }
+      if (code === 'TABLE_NOT_FOUND' && meta.table === undefined) {
+        const table = pgUndefinedTable(error.message);
+        if (table !== undefined) meta.table = table;
       }
       if (fields?.constraint) meta.constraint = fields.constraint;
       if (fields?.detail) meta.detail = fields.detail;

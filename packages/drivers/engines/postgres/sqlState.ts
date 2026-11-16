@@ -76,3 +76,16 @@ export function pgUndefinedColumn(message: string): string | undefined {
       .exec(message);
   return m === null ? undefined : m[1] ?? m[2];
 }
+
+/**
+ * The table an `undefined_table` (42P01) message names, as written:
+ * `relation "t" does not exist`, `table "t" does not exist` from a `DROP`,
+ * `view "v" does not exist`, or `missing FROM-clause entry for table "t"`.
+ * The server sends no table field for this error.
+ */
+export function pgUndefinedTable(message: string): string | undefined {
+  const m =
+    /^(?:(?:[a-z]+ )+"(.*)" does not exist|missing FROM-clause entry for table "(.*)")/
+      .exec(message);
+  return m === null ? undefined : m[1] ?? m[2];
+}
