@@ -860,6 +860,10 @@ export class ReadRepo<
       );
     }
 
+    // 4c. A MongoDB document holds only the fields written: read each
+    //     projected column it lacks as the `null` SQL returns.
+    this._fillMissing(rows, plan);
+
     // 5. JSON-parse relation values (SQLite returns aggregates as text),
     //    then decode the BIGINT / date / JSON columns inside them.
     this._parseJoinJson(rows, plan);
@@ -2300,6 +2304,24 @@ export class ReadRepo<
       out['$and'] = [...and, ...existsNodes.map((e) => ({ $exists: e }))];
     }
     return out;
+  }
+
+  /** Set `null` for each projected column a MongoDB document does not
+   * carry, top-level and inside relation rows, as SQL returns a NULL.
+   * Runs before the all-null placeholder drop, so a relation row with
+   * none of its projected fields is still dropped as on SQL. */
+  protected _fillMissing(rows: Row[], plan: ProjectionPlan): void {
+    if (this._executor.capabilities.dialect !== 'mongo') return;
+    for (const row of rows) {
+      for (const key of plan.aliasMap.keys()) row[key] ??= null;
+      for (const rel of plan.relations) {
+        const val = row[rel.outputKey];
+        for (const item of Array.isArray(val) ? val : [val]) {
+          if (item === null || typeof item !== 'object') continue;
+          for (const key in rel.columnFqns) (item as Row)[key] ??= null;
+        }
+      }
+    }
   }
 
   /** JSON-parse relation values that came back as strings. */
@@ -4615,6 +4637,13 @@ export class Repo<
     decrypt: boolean,
   ): Promise<ReadRowOf<D>[]> {
     const c = this._compiled;
+    // An upsert onto a MongoDB document returns it as stored, without
+    // the fields it never had; SQL RETURNING carries a NULL for each.
+    if (this._executor.capabilities.dialect === 'mongo') {
+      for (const row of rows) {
+        for (const col of c.columnNames) row[col] ??= null;
+      }
+    }
     this._decodeDateColumns(rows);
     this._decodeJsonColumns(rows);
     this._decodeScalarColumns(rows);

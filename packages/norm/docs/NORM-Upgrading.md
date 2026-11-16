@@ -107,10 +107,11 @@ now stores `null` in the new document, and the row reads back with
 document, so the row read back without the key. An upsert that updates a
 document already stored leaves its other fields as they are.
 
-A document an earlier version wrote still lacks the field and still reads
-back without the key; a filter for `null` matches it either way. Treat a
-missing key as `null` where the column is read, or write `null` to those
-documents once.
+A document an earlier version or another writer stored without a field
+still lacks it, and now reads back with `null` for that column, top-level
+and inside relation rows, as does a row an upsert returns unchanged.
+Earlier versions returned the row without the key. A filter for `null`
+matches the document either way.
 
 ### `DATE_DIFF` counts complete units and returns a number
 

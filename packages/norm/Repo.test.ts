@@ -1081,6 +1081,56 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     asserts.assertEquals(sent('UPSERT'), [{ id: 1 }]);
   });
 
+  it('a column a MongoDB document lacks reads as null', async () => {
+    const { db, exec } = makeDb();
+    Object.assign(exec.capabilities, { dialect: 'mongo' });
+    // deno-lint-ignore no-explicit-any
+    const read = async (repo: any, stored: Row[], project?: Row) => {
+      exec.selectQueue.push(stored);
+      return (await repo.find(undefined, { project })).data;
+    };
+    asserts.assertEquals(
+      await read(db.repo('Guarded'), [{ id: 1 }]),
+      [{ id: 1, label: null }],
+    );
+    exec.selectQueue.push([{ id: 1 }]);
+    asserts.assertEquals(
+      (await db.repo('Guarded').findOne({ '@id': 1 })).data,
+      { id: 1, label: null },
+    );
+    // Under the name the projection gives it.
+    asserts.assertEquals(
+      await read(db.repo('Guarded'), [{ id: 1 }], {
+        '@id': true,
+        '@label': 'text',
+      }),
+      [{ id: 1, text: null }],
+    );
+    // Relation rows, to-one and to-many. A row with none of its projected
+    // fields is still the unmatched placeholder, as an all-NULL row is.
+    asserts.assertEquals(
+      await read(db.repo('Items'), [{ id: 7, Owner: { id: 1 } }], {
+        '@id': true,
+        '@Owner': { '@id': true, '@name': 'who' },
+      }),
+      [{ id: 7, Owner: { id: 1, who: null } }],
+    );
+    asserts.assertEquals(
+      await read(db.repo('Owners'), [{ id: 1, Items: [{ id: 7 }, {}] }], {
+        '@id': true,
+        '@Items': { '@id': true, '@label': true },
+      }),
+      [{ id: 1, Items: [{ id: 7, label: null }] }],
+    );
+    // An upsert that leaves the stored document in place returns it.
+    exec.selectQueue.push([{ id: 1 }]);
+    asserts.assertEquals(
+      (await db.repo('Guarded').upsert({ id: 1 }, { conflictKeys: ['id'] }))
+        .data,
+      [{ id: 1, label: null }],
+    );
+  });
+
   it('truncate() refuses on a scoped handle (regression)', async () => {
     // TRUNCATE carries no WHERE, so on a scoped handle it would silently
     // empty EVERY scope's rows. It must refuse rather than perform an
