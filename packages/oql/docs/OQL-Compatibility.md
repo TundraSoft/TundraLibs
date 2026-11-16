@@ -359,8 +359,7 @@ to run a lookup in, so an UPDATE or DELETE carrying the node throws on
 MongoDB, as does a partial-index predicate. Select the keys with the
 same filter first, then update or delete by `$in` on them. An `on`
 value that names a joined column (`'@Alias.@col'`) also throws on
-MongoDB: a join there is an array on the document, with no single row
-to bind the key to.
+MongoDB.
 
 ## Expressions
 
@@ -691,39 +690,37 @@ missing `a`.
 
 ## JOINs
 
-> **MongoDB does not honour the declared join `type` at all.** Verified
-> against `MongoTranslator.__buildLookup`
-> (`packages/oql/translator/MongoTranslator.ts`): it reads a join's
-> `table`, `columns`, and `on`, but never reads `.type`. Every join —
-> `INNER`, `LEFT`, `RIGHT`, or `FULL` — compiles to the **identical**
-> `$lookup` stage, and the pipeline never `$unwind`s or filters on the
-> result, so the behaviour is uniformly LEFT-outer: a local document with
-> no match still comes through, carrying an empty array for the join
-> alias. Concretely:
->
-> - **`INNER`** does **not** filter out non-matching local documents —
->   despite the ✅ below, it silently behaves like `LEFT`.
-> - **`RIGHT`** does **not** reverse the collections. Documents that exist
->   only on the joined ("right") side, with no match on the primary
->   ("left") side, are silently absent from the result — exactly like
->   `LEFT`, not a true RIGHT JOIN.
-> - **`FULL`** does **not** throw. It silently compiles to the same
->   LEFT-equivalent `$lookup`, so right-only rows are silently missing.
->
-> This is an unimplemented differentiation, not a documented design
-> choice — earlier revisions of this table claimed RIGHT was emulated by
-> reversing collections and FULL threw; neither is true of the current
-> source. If correctness depends on RIGHT or FULL semantics on MongoDB,
-> do not rely on the `type` field: restructure the query yourself (e.g.
-> swap which table is primary for a RIGHT, or run two queries and merge
-> client-side for a FULL).
+A join returns one row per joined row on every dialect. On MongoDB each
+join is a `$lookup` followed by an `$unwind` of the looked-up rows, so a
+result row carries one joined row and a joined column holds one value.
+`where`, the group, `having`, `orderBy`, `limit` and `offset` then run
+over those rows in SQL's order.
 
-| Join type | Postgres | MariaDB   | SQLite (3.39+) | MongoDB                                                 |
-| --------- | -------- | --------- | -------------- | ------------------------------------------------------- |
-| INNER     | ✅       | ✅        | ✅             | ⚠️ compiles, but behaves like LEFT (see callout)        |
-| LEFT      | ✅       | ✅        | ✅             | ✅                                                      |
-| RIGHT     | ✅       | ✅        | ✅             | ⚠️ compiles, but behaves like LEFT — **not** reversed   |
-| FULL      | ✅       | ❌ throws | ✅             | ⚠️ compiles, but behaves like LEFT — does **not** throw |
+| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB                                       |
+| ----------------- | -------- | --------- | -------------- | --------------------------------------------- |
+| INNER, by default | ✅       | ✅        | ✅             | ✅                                            |
+| LEFT              | ✅       | ✅        | ✅             | ✅                                            |
+| RIGHT             | ✅       | ✅        | ✅             | ⚠️ behaves like LEFT, the tables not reversed |
+| FULL              | ✅       | ❌ throws | ✅             | ⚠️ behaves like LEFT, does **not** throw      |
+
+An INNER join drops a row with no joined row. A LEFT join keeps it, and
+its joined columns are `NULL`. On MongoDB a RIGHT or FULL join compiles
+to the LEFT form, so rows that exist only on the joined side are
+missing. Swap the two tables for a RIGHT join, or run two queries and
+merge them for a FULL one.
+
+What a join returns, on every dialect:
+
+- A projected joined column is a key named after the column,
+  `'@orders.@total': true` gives `total`, or after its alias. It is
+  `NULL` in a row without a joined row.
+- A filter, an expression argument or a filter value naming a joined
+  column reads the column of that row.
+- Aggregates run over the joined rows, so `COUNT` counts them.
+- A projected join alias, `'@orders': true`, is the JSON_ROW of every
+  column the join declares, and groups the query like any aggregate.
+- JSON_ROW and ARRAY_AGG collect the joined rows of each group. A row
+  without a joined row adds one entry of `NULL`s.
 
 Every entry in a join's `on` map is a condition, and they AND together
 on every dialect. On MongoDB that means two `$lookup` shapes:
@@ -769,19 +766,12 @@ projected or not. An alias the query does not join, or a column the
 join does not list, is a `TypeError`. With `distinct: true` the column
 must be projected.
 
-An unprojected joined column sorts on this value:
-
-| Query                                                | Postgres, MariaDB, SQLite                   | MongoDB                                                                       |
-| ---------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
-| not grouped                                          | the column, one result row per joined row   | smallest value among the document's joined rows for `ASC`, largest for `DESC` |
-| grouped by `aggregates` or by a projected join alias | `MIN(col)` for `ASC`, `MAX(col)` for `DESC` | the same, over the joined rows of the group                                   |
-
-The smallest and largest skip `NULL`. A row or group with no joined
+A query that is not grouped sorts each joined row on its column. In a
+query grouped by `aggregates` or by a projected join alias, a projected
+joined column is a group key and sorts as one; an unprojected one sorts
+each group on `MIN(col)` for `ASC` and `MAX(col)` for `DESC`, on every
+dialect. The smallest and largest skip `NULL`. A group with no joined
 row, or whose joined values are all `NULL`, sorts as `NULL`.
-
-On MongoDB a projected joined column sorts on the joined array itself.
-An ascending sort then counts a `NULL` among the joined values rather
-than skipping it.
 
 `NULL` placement is the engine's own, for a joined column as for any
 other `orderBy` key, and oql does not change it:
@@ -790,6 +780,30 @@ other `orderBy` key, and oql does not change it:
 | --------- | ------------ | ------------ | ------------ | ------------ |
 | `ASC`     | `NULL` last  | `NULL` first | `NULL` first | `NULL` first |
 | `DESC`    | `NULL` first | `NULL` last  | `NULL` last  | `NULL` last  |
+
+### MongoDB join results in earlier releases
+
+Earlier releases left the looked-up rows as an array on each base
+document and never unwound it. These MongoDB results change:
+
+| Query                                      | Earlier releases                                      | Now                                        |
+| ------------------------------------------ | ----------------------------------------------------- | ------------------------------------------ |
+| to-many join                               | one row per base document                             | one row per joined row                     |
+| INNER join, a row with no match            | kept, with an empty array                             | dropped                                    |
+| projected joined column, `'@o.@sku': true` | `o: [{ sku: 'A' }, …]`                                | `sku: 'A'`, `null` without a match         |
+| aliased joined column, `'@o.@sku': 'item'` | `item: ['A', …]`                                      | `item: 'A'`                                |
+| projected join alias, `'@o': true`         | the raw looked-up documents                           | JSON_ROW of the declared columns, grouped  |
+| JSON_ROW over a join                       | one row per base document, `[]` without a match       | grouped, `[{ col: null }]` without a match |
+| row of a JSON_ROW query over a join        | `_id` is the document id                              | `_id` is the group key                     |
+| filter on a joined column                  | any joined row matching kept the document, all rows   | only the matching joined rows              |
+| `'@o.@id': null`                           | matched nothing                                       | the rows without a joined row              |
+| joined column as a filter value            | matched nothing                                       | compared per row                           |
+| joined column as an expression argument    | an array, `['A']` or `[]`                             | the value or `null`                        |
+| aggregates over a join                     | COUNT counted base documents, SUM was 0, MIN an array | run over the joined rows                   |
+| joined column projected beside aggregates  | failed, a dotted group key                            | a group key                                |
+| `orderBy` a joined column                  | sorted on the array or its smallest or largest value  | sorts each row on its value                |
+| ARRAY_AGG or JSON_ROW over a missing field | skipped it                                            | collects `null`                            |
+| view projecting a joined column            | an array                                              | the value                                  |
 
 ## When to expect a throw vs a silent fallback
 
@@ -835,11 +849,11 @@ The split is deliberate: silent fallbacks happen when there's a
 reasonable substitute that keeps the query semantically meaningful;
 we throw when emitting anything would actively mislead the caller.
 
-**One entry in this document is not a deliberate fallback**: a declared
-join `type` (`INNER`/`RIGHT`/`FULL`) on MongoDB is silently ignored
-rather than emulated or rejected — see the [JOINs](#joins) callout
-above. Every other row in this document reflects an intentional
-degradation; that one is a translator gap.
+**One entry in this document is not a deliberate fallback**: a `RIGHT`
+or `FULL` join on MongoDB silently behaves like `LEFT` rather than being
+emulated or rejected, see [JOINs](#joins) above. Every other row in this
+document reflects an intentional degradation; that one is a translator
+gap.
 
 ## `LPAD` / `RPAD` on SQLite
 

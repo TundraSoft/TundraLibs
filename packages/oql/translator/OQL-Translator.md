@@ -273,15 +273,11 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
   itself (see
   [Compatibility](../docs/OQL-Compatibility.md#expressions-on-mongodb))
 
-> **Join `type` is not honoured.** `__buildLookup` reads a join's
-> `table`, `columns`, and `on`, but never its `type` — `INNER`, `LEFT`,
-> `RIGHT`, and `FULL` all emit the identical `$lookup` stage (no
-> `$unwind`, no post-filter), which is uniformly LEFT-outer: an
-> unmatched local document still comes through with an empty array for
-> the join alias. `RIGHT` is **not** emulated by reversing collections
-> and `FULL` does **not** throw — both silently behave like `LEFT`. See
-> the [Compatibility Matrix](../docs/OQL-Compatibility.md#joins) for the
-> full breakdown before relying on join `type` on Mongo.
+A join is a `$lookup` followed by an `$unwind`, so the pipeline sees one
+row per joined row, as SQL does. An `INNER` join drops a document with no
+match and a `LEFT` join keeps it. `RIGHT` and `FULL` behave like `LEFT`:
+the collections are not reversed and `FULL` does not throw. See the
+[Compatibility Matrix](../docs/OQL-Compatibility.md#joins).
 
 **Pipeline-ordering guarantees:**
 

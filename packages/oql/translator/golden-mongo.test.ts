@@ -588,6 +588,7 @@ const CASES: Case[] = [
               as: 'profile',
             },
           },
+          { $unwind: '$profile' },
           { $match: { 'profile.name': 'bob' } },
           { $project: { id: 1 } },
         ],
@@ -685,9 +686,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // The joined rows are an array under `o`, so the sort value is
-    // computed from it. The inclusion $project drops `__sort_0` again.
-    name: 'SELECT ORDER BY an unprojected joined column → computed sort field',
+    // One row per joined row, as on SQL, so the sort reads the column.
+    name:
+      'SELECT ORDER BY an unprojected joined column → sorts the joined rows',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -718,16 +719,18 @@ const CASES: Case[] = [
               as: 'o',
             },
           },
-          { $addFields: { __sort_0: { $max: '$o.amount' } } },
-          { $sort: { __sort_0: -1, name: 1 } },
+          {
+            $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
+          },
+          { $sort: { 'o.amount': -1, name: 1 } },
           { $project: { id: 1 } },
         ],
       },
     },
   },
   {
-    // $group discards the joined array, so the sort value rides through
-    // it as an accumulator.
+    // An unprojected joined column is no group key, so its MIN rides
+    // through the $group as an accumulator, as SQL orders by MIN.
     name:
       'SELECT ORDER BY an unprojected joined column with aggregates → accumulated in $group',
     method: 'select',
@@ -762,15 +765,68 @@ const CASES: Case[] = [
             },
           },
           {
+            $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
+          },
+          {
             $group: {
               _id: { team: '$team' },
               n: { $sum: 1 },
-              __sort_1: { $min: { $min: '$o.amount' } },
+              __sort_1: { $min: '$o.amount' },
             },
           },
           { $addFields: { team: '$_id.team' } },
           { $sort: { team: -1, __sort_1: 1 } },
           { $project: { team: 1, n: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The accumulated sort field takes another name when an aggregate
+    // has its own, where the two would share one `$group` field.
+    name: 'SELECT ORDER BY a joined column beside an aggregate named __sort_0',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { __sort_0: { $$_aggregate: 'COUNT' } },
+      projection: { '@id': true, '@__sort_0': true },
+      orderBy: { '@o.@amount': 'DESC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              __sort_0: { $sum: 1 },
+              ___sort_0: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $sort: { ___sort_0: -1 } },
+          { $project: { id: 1, __sort_0: 1 } },
         ],
       },
     },
@@ -1358,6 +1414,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           {
             $addFields: {
               shown: { $ifNull: ['$label', '@nope'] },
@@ -1501,7 +1558,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1812,6 +1878,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           { $project: { perm: 1 } },
         ],
       },
@@ -1848,7 +1915,277 @@ const CASES: Case[] = [
               as: 'Profile',
             },
           },
-          { $project: { id: 1, bio: '$Profile.bio', _id: 0 } },
+          {
+            $unwind: { path: '$Profile', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A to-many join gives one row per joined row, as SQL does: the
+    // filter tests each joined row on its own, and a joined column is a
+    // key of the row named as SQL names it.
+    name: 'SELECT a to-many join → $unwind, then the filter per joined row',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'sku', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@o.@sku': true },
+      where: { '@o.@sku': 'A', '@o.@amount': { $gt: 5 } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          { $match: { 'o.sku': 'A', 'o.amount': { $gt: 5 } } },
+          { $project: { id: 1, sku: { $ifNull: ['$o.sku', null] } } },
+        ],
+      },
+    },
+  },
+  {
+    // JSON_ROW and ARRAY_AGG collect the joined rows of each group, NULL
+    // for a row without a match, as on SQL. A projected join alias is the
+    // JSON_ROW of the join's columns.
+    name: 'SELECT JSON_ROW, ARRAY_AGG and a join alias → $group of joined rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          type: 'LEFT',
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      aggregates: {
+        Posts: { $$_aggregate: 'JSON_ROW', columns: { name: '@P.@title' } },
+        titles: { $$_aggregate: 'ARRAY_AGG', column: '@P.@title' },
+      },
+      projection: { '@id': true, '@Posts': true, '@titles': true, '@P': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: { path: '$P', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              Posts: { $push: { name: { $ifNull: ['$P.title', null] } } },
+              titles: { $push: { $ifNull: ['$P.title', null] } },
+              P: {
+                $push: {
+                  userId: { $ifNull: ['$P.userId', null] },
+                  title: { $ifNull: ['$P.title', null] },
+                },
+              },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $project: { id: 1, Posts: 1, titles: 1, P: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // Aggregates run over the joined rows, so COUNT counts them, and a
+    // joined group key nests under its alias: `_id` takes no dotted name.
+    name: 'SELECT aggregates grouped by a joined column → nested group key',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'team'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'sku', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: {
+        n: { $$_aggregate: 'COUNT' },
+        hi: { $$_aggregate: 'MAX', column: '@o.@amount' },
+      },
+      projection: { '@team': true, '@o.@sku': 'item', '@n': true, '@hi': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { team: '$team', o: { sku: { $ifNull: ['$o.sku', null] } } },
+              n: { $sum: 1 },
+              hi: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { team: '$_id.team', 'o.sku': '$_id.o.sku' } },
+          {
+            $project: {
+              team: 1,
+              item: { $ifNull: ['$o.sku', null] },
+              n: 1,
+              hi: 1,
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A filter on a projected to-many join keeps the joined rows it
+    // matches, as on SQL: here the base rows with none, whose JSON_ROW
+    // holds one row of NULLs.
+    name:
+      'SELECT JSON_ROW of a join filtered on its rows → $match before $group',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id'],
+      joins: {
+        I: {
+          table: 'items',
+          columns: ['id', 'orderId', 'sku'],
+          type: 'LEFT',
+          on: { '@I.@orderId': '@id' },
+        },
+      },
+      aggregates: {
+        Items: { $$_aggregate: 'JSON_ROW', columns: { sku: '@I.@sku' } },
+      },
+      projection: { '@id': true, '@Items': true },
+      where: { '@I.@id': null },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'items',
+              localField: 'id',
+              foreignField: 'orderId',
+              pipeline: [{ $match: { orderId: { $ne: null } } }],
+              as: 'I',
+            },
+          },
+          { $unwind: { path: '$I', preserveNullAndEmptyArrays: true } },
+          { $match: { 'I.id': null } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              Items: { $push: { sku: { $ifNull: ['$I.sku', null] } } },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $project: { id: 1, Items: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // An expression argument naming a joined column reads that row's
+    // value, not the joined array.
+    name: 'SELECT expression over a joined column → computed per joined row',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          type: 'INNER',
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      expressions: { t: { $$_expression: 'UPPER', args: '@P.@title' } },
+      projection: { '@id': true, '@t': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          {
+            $addFields: {
+              t: {
+                $cond: [{ $gt: ['$P.title', null] }, {
+                  $toUpper: '$P.title',
+                }, null],
+              },
+            },
+          },
+          { $project: { id: 1, t: 1 } },
         ],
       },
     },
@@ -1900,7 +2237,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1941,7 +2287,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1989,7 +2344,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -2043,6 +2407,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           { $project: { perm: 1 } },
         ],
       },
@@ -2080,6 +2445,9 @@ const CASES: Case[] = [
               foreignField: 'org',
               as: 'P',
             },
+          },
+          {
+            $unwind: { path: '$P', preserveNullAndEmptyArrays: true },
           },
           { $project: { perm: 1 } },
         ],
@@ -3727,6 +4095,9 @@ const CASES: Case[] = [
             },
           },
           {
+            $unwind: { path: '$Author', preserveNullAndEmptyArrays: true },
+          },
+          {
             $match: {
               $expr: {
                 $and: [
@@ -3808,6 +4179,56 @@ const CASES: Case[] = [
       conflictKeys: ['@id'],
     },
     throws: true,
+  },
+  {
+    // A view over a join reads a joined column as one value per row,
+    // under the key SQL gives it.
+    name: 'CREATE_VIEW over a join projects each joined column as a value',
+    method: 'createView',
+    query: {
+      type: 'CREATE_VIEW',
+      view: 'tags_of_posts',
+      query: {
+        type: 'SELECT',
+        table: 'post_tags',
+        columns: ['postId', 'tagId'],
+        joins: {
+          T: {
+            table: 'tags',
+            columns: ['id', 'name'],
+            type: 'INNER',
+            on: { '@T.@id': '@tagId' },
+          },
+        },
+        projection: { '@postId': true, '@T.@name': 'name' },
+      },
+    },
+    expected: {
+      sql: 'createView',
+      params: {
+        view: 'tags_of_posts',
+        viewOn: 'post_tags',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'tags',
+              localField: 'tagId',
+              foreignField: 'id',
+              pipeline: [{ $match: { id: { $ne: null } } }],
+              as: 'T',
+            },
+          },
+          { $unwind: '$T' },
+          {
+            $project: {
+              postId: 1,
+              name: { $ifNull: ['$T.name', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
   },
   {
     // Round-4 finding 2: a plain-`find` source SELECT feeding CREATE_VIEW must
