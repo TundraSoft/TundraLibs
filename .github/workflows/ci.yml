@@ -281,6 +281,21 @@ jobs:
             done
           done
 
+      # A second Redis that requires a password, for the drivers Redis
+      # bad-password test: the redis service above has none, and a Redis
+      # without requirepass rejects any AUTH, so that test is skipped there.
+      # Service containers take no command line, so this one starts here.
+      - name: Start a Redis that requires a password
+        if: env.IS_RELEASE_PLEASE_BRANCH != 'true'
+        run: |
+          docker run -d --name redis-auth -p 6380:6379 redis:7 \
+            redis-server --requirepass ci-redis-auth
+          for _ in $(seq 1 30); do
+            docker exec redis-auth redis-cli -a ci-redis-auth --no-auth-warning ping | grep -q PONG && exit 0
+            sleep 1
+          done
+          exit 1
+
       # `@db/sqlite` downloads libsqlite3.so on first import, into a shared
       # cache. Under `--parallel` two workers race that download and mmap a
       # half-written file, killing the whole run with SIGBUS/SIGSEGV (exit
@@ -342,6 +357,21 @@ jobs:
           else
             node --import tsx --test 'packages/**/*.test.ts'
           fi
+
+      # The drivers Redis suite again, against the Redis that requires a
+      # password: the bad-password test runs, and every other Redis test signs
+      # in with the password. The run above keeps the passwordless service.
+      - name: Run the drivers Redis tests against a Redis with a password
+        if: env.IS_RELEASE_PLEASE_BRANCH != 'true'
+        env:
+          REDIS_PORT: '6380'
+          REDIS_PASSWORD: ci-redis-auth
+        run: |
+          case '${{ matrix.runtime }}' in
+            deno) deno test --allow-all packages/drivers/engines/redis/Engine.test.ts ;;
+            bun) bun test packages/drivers/engines/redis/Engine.test.ts ;;
+            node) node --import tsx --test packages/drivers/engines/redis/Engine.test.ts ;;
+          esac
 
       # One artifact per runtime with coverage (deno, bun, node-24). node-22
       # runs tests but produces no LCOV, so it is skipped. Push-only — PRs are
