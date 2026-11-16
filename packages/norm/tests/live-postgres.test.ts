@@ -42,8 +42,7 @@ const available = await (async () => {
   const probe = new PostgresEngine('norm-live-pg-probe', CONFIG);
   try {
     await probe.connect();
-    await probe.ping();
-    return true;
+    return await probe.ping();
   } catch {
     return false;
   } finally {
