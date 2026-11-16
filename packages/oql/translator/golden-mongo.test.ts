@@ -1914,6 +1914,101 @@ const CASES: Case[] = [
     },
   },
   {
+    // SQL takes the joined column on either side of an `on` entry.
+    name: 'SELECT with a JOIN on naming the base column first → same $lookup',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        Profile: {
+          table: 'profiles',
+          columns: ['userId', 'bio'],
+          type: 'LEFT',
+          on: { '@id': '@Profile.@userId' },
+        },
+      },
+      projection: { '@id': true, '@Profile.@bio': 'bio' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'profiles',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'Profile',
+            },
+          },
+          {
+            $unwind: { path: '$Profile', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // An entry naming only outer columns is a condition on the outer row.
+    name: 'SELECT with JOIN on entries naming outer columns → let vars',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@pid': '@P.@id', '@perm': 'r', '@P.@org': '@P.@name' },
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              let: { v0: '$pid', v1: '$perm' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id', '$$v0'] },
+                      { $gt: ['$id', null] },
+                      { $eq: ['$$v1', 'r'] },
+                      { $eq: ['$org', '$name'] },
+                      { $gt: ['$org', null] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          { $project: { perm: 1 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT with JOIN → aggregate with $lookup',
     method: 'select',
     query: {

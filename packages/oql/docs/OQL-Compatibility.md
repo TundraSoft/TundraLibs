@@ -730,7 +730,9 @@ What a join returns, on every dialect:
   without a joined row adds one entry of `NULL`s.
 
 Every entry in a join's `on` map is a condition, and they AND together
-on every dialect. On MongoDB that means two `$lookup` shapes:
+on every dialect. An entry may name the joined column on either side:
+`{ '@Profile.@userId': '@id' }` and `{ '@id': '@Profile.@userId' }`
+return the same rows. On MongoDB that means two `$lookup` shapes:
 
 - **One entry whose value is a column ref** → the concise
   `localField` / `foreignField` form.
