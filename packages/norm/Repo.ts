@@ -1995,23 +1995,28 @@ export class ReadRepo<
       // them all, so those carry the first key column only. A target
       // with no primary key (a view) carries its join columns instead,
       // plus its first NOT NULL column when every pair is NULL-safe,
-      // since a match on NULL leaves those all NULL.
+      // since a match on NULL leaves those all NULL. A to-one there
+      // picks by its columns in declared order, all of them but the
+      // encrypted, JSON and mask ones, which do not order alike.
       const pk = (target.def as { primaryKeys?: readonly string[] })
         .primaryKeys ?? [];
       const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
         ref.slice(name.length + 3)
       );
-      const picks = cardinality !== 'hasMany' && pk.length > 0 &&
-        !pk.every((col) => onCols.includes(col));
+      const picks = cardinality !== 'hasMany' &&
+        !(pk.length > 0 && pk.every((col) => onCols.includes(col)));
       const specs = target.def.columns as Record<string, ColumnSpec>;
       const safeRefs = oqlJoins[name]!.nullSafe ?? [];
       const notNull = Object.keys(specs).find((col) =>
         specs[col]!.nullable !== true && !target.masks.has(col)
       );
-      const carried = picks
-        ? pk
-        : pk.length > 0
-        ? pk.slice(0, 1)
+      const carried = pk.length > 0
+        ? picks ? pk : pk.slice(0, 1)
+        : picks
+        ? Object.keys(specs).filter((col) =>
+          !target.localEncrypted.has(col) && !target.masks.has(col) &&
+          specs[col]!.type !== 'JSON' && specs[col]!.type !== 'JSONB'
+        )
         : notNull !== undefined &&
             onCols.every((col) => safeRefs.includes(`@${name}.@${col}`))
         ? [...onCols, notNull]
@@ -2790,9 +2795,8 @@ export class ReadRepo<
         if (by !== undefined && filtered.length > 1) {
           filtered.sort((a, b) => {
             for (const key of by) {
-              const [x, y] = [a[key] as number, b[key] as number];
-              if (x < y) return -1;
-              if (x > y) return 1;
+              const order = comparePick(a[key], b[key]);
+              if (order !== 0) return order;
             }
             return 0;
           });
@@ -5055,6 +5059,25 @@ function visitJoinRef(
   const dotIdx = stripped.indexOf('.@');
   if (dotIdx === -1) return;
   visit(stripped.slice(0, dotIdx), stripped.slice(dotIdx + 2), position);
+}
+
+/** Order two candidate values of a to-one pick the same way on every
+ * engine: NULL after every value; numbers, bigints and dates by value;
+ * strings by UTF-16 code unit; anything else by its JSON text. */
+function comparePick(x: unknown, y: unknown): number {
+  if (x === null || x === undefined) {
+    return y === null || y === undefined ? 0 : 1;
+  }
+  if (y === null || y === undefined) return -1;
+  const [a, b] = [x, y].map((v) => v instanceof Date ? v.getTime() : v);
+  const num = (v: unknown) => typeof v === 'number' || typeof v === 'bigint';
+  const text = (v: unknown) =>
+    typeof v === 'bigint' ? String(v) : JSON.stringify(v);
+  const [p, q] = (num(a) && num(b)) ||
+      (typeof a === 'string' && typeof b === 'string')
+    ? [a, b] as [number, number]
+    : [text(a), text(b)];
+  return p < q ? -1 : p > q ? 1 : 0;
 }
 
 /** Human phrase for the plaintext kind a hashed column accepts —

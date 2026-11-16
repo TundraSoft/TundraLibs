@@ -952,9 +952,10 @@ Every FK from `A → B` gives `B` a reverse relation.
   pk, so `Users` sees `@Profile` as an object-or-null with no explicit
   cardinality needed. Views have no pk, so their reverses are always
   `hasMany` unless you declare otherwise. A declared `hasOne` that
-  matches several rows carries the one lowest by primary key; a view has
-  no key to order by, so there it is whichever row the engine returns
-  first. A filter or ordering through such a `hasOne` returns each row
+  matches several rows carries the one lowest by primary key. A view has
+  no key, so there it carries the one lowest by the view's columns in
+  declared order, a NULL after any value; encrypted, JSON and mask
+  columns are skipped. A filter or ordering through such a `hasOne` returns each row
   once; see [Relation references](NORM-Querying.md#relation-references).
 
 A reverse name must be free on the target: it cannot collide with one

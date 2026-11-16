@@ -23,6 +23,7 @@ changelog has those.
   - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
   - [A to-one relation that can match several rows returns each row once](#a-to-one-relation-that-can-match-several-rows-returns-each-row-once)
   - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
+  - [A to-one relation to a view picks the same row on every engine](#a-to-one-relation-to-a-view-picks-the-same-row-on-every-engine)
 
 ## 1.13.0
 
@@ -225,6 +226,15 @@ One case is unchanged: a view, which has no primary key, joined only on
 column `.nullable()`, when the matched row holds NULL in each column
 the read takes from it. A view that declares a column NOT NULL is read
 right.
+
+### A to-one relation to a view picks the same row on every engine
+
+A belongsTo or hasOne whose target is a view, which has no primary key,
+carried whichever matching row the engine returned first, so one engine
+could return a different row from the others. It now carries the one
+lowest by the view's columns in declared order, a NULL after any value,
+skipping encrypted, JSON and mask columns. A read may get a different
+row than before.
 
 ---
 

@@ -2122,4 +2122,59 @@ describe('norm.Repo — nullSafe relation keys', () => {
     );
     asserts.assertEquals(found.data[0]!.Notes, [{ note: null }]);
   });
+
+  it('a to-one relation to a view picks the row lowest by its columns in declared order', async () => {
+    const Rooms = Entity('ns_rooms', {
+      id: Column.integer(),
+    }, { pk: ['id'] });
+    const Notes = Entity('ns_room_notes', {
+      roomId: Column.integer(),
+      rank: Column.integer().nullable(),
+      note: Column.varchar(20),
+    }, {
+      type: 'VIEW',
+      query: {
+        type: 'SELECT',
+        table: 'ns_desks',
+        columns: ['roomId', 'rank', 'note'],
+        projection: { '@roomId': true, '@rank': true, '@note': true },
+      },
+      fk: {
+        Room: {
+          model: 'Rooms',
+          on: { roomId: 'id' },
+          reverseAs: 'Note',
+          reverseCardinality: 'hasOne',
+        },
+      },
+    });
+    const exec = new MockExec();
+    const rooms = use(Schema('NS', { Rooms, Notes }));
+    const db = new NormDb<typeof rooms>(
+      compileRuntime(rooms, {}, exec, () => {}),
+      exec,
+      undefined,
+    );
+    // A NULL rank sorts after every rank; equal ranks fall to the note.
+    exec.selectQueue.push([{
+      id: 1,
+      Note: [
+        { note: 'c', __pk_roomId: 1, __pk_rank: null },
+        { note: 'b', __pk_roomId: 1, __pk_rank: 2 },
+        { note: 'a', __pk_roomId: 1, __pk_rank: 2 },
+      ],
+    }]);
+    const found = await db.repo('Rooms').find(undefined, {
+      project: { '@id': true, '@Note': { '@note': true } },
+    });
+    asserts.assertEquals(
+      Object.keys(
+        (exec.lastOf('SELECT') as unknown as {
+          aggregates: { Note: { columns: Record<string, unknown> } };
+        }).aggregates.Note.columns,
+      ),
+      ['note', '__pk_roomId', '__pk_rank'],
+    );
+    asserts.assertEquals(found.data[0]!.Note, { note: 'a' });
+  });
 });

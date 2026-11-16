@@ -373,10 +373,20 @@ for (const [i, fx] of FIXTURES.entries()) {
     );
 
     live(
-      'a matched view row whose projected columns are all NULL is kept',
+      'a relation to a view picks the same row on every engine and keeps an all-NULL match',
       async () => {
         const orgs = db!.repo('Orgs');
         const some = { '@id': { $in: [1, 3, 5] } };
+        const one = await orgs.find(some, {
+          project: { '@id': true, '@SeatRow': { '@total': true } },
+          orderBy: { '@id': 'ASC' },
+        });
+        // Org 1 matches seats 10 and 11; the one lowest by the view's
+        // columns, in declared order, is seat 10.
+        asserts.assertEquals(
+          one.data.map((r) => [r.id, r.SeatRow]),
+          [[1, { total: 6 }], [3, { total: 8 }], [5, { total: 1 }]],
+        );
         const all = await orgs.find(some, {
           project: { '@id': true, '@SeatRows': { '@orgcode': true } },
           orderBy: { '@id': 'ASC' },
