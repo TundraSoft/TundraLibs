@@ -678,6 +678,11 @@ page.data[0]!.slug; // 'link-10'
 Order by a stable key when paging so successive windows do not overlap.
 Ordering by a to-many relation requires projecting it: an unprojected
 to-many runs as an `EXISTS` subquery, which has no ordering scope.
+Ordering by a belongsTo or hasOne that can match several rows returns
+each row once, placed by its smallest related value for `ASC` and its
+largest for `DESC`. On an entity with no primary key it throws
+`INVALID_PROJECTION`, and with `aggregates` `AGGREGATE_MISUSE`, as a
+comparison value from such a relation does.
 
 ## Writes
 

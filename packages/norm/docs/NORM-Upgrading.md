@@ -204,9 +204,12 @@ often. The row now comes back and is counted once, kept when at least
 one related row passes. The same holds for such a relation used as a
 comparison value, as in `{ '@id': { $lt: '@Seat.@id' } }`: the read
 groups by the primary key, and `count()` and `total` count distinct
-keys. On an entity with no primary key that comparison throws
-`INVALID_PROJECTION`, and with `aggregates` it throws
-`AGGREGATE_MISUSE`.
+keys. An `orderBy` through such a relation, as in
+`{ '@Org.@cap': 'ASC' }`, repeated rows the same way; each row now comes
+back once, placed by its smallest related value for `ASC` and its
+largest for `DESC`. On an entity with no primary key the comparison
+and the `orderBy` throw `INVALID_PROJECTION`, and with `aggregates`
+they throw `AGGREGATE_MISUSE`, where they counted each match as a row.
 
 ### A matched relation row whose projected columns are all NULL is kept
 

@@ -132,8 +132,8 @@ own: ordering by, or supplying a filter value from, an unprojected
 to-many relation raises `INVALID_PROJECTION` (an unprojected to-many
 runs as an `EXISTS` subquery, so project it or move the condition to
 key position); an entity with no primary key that takes a filter value
-from a to-one relation able to match several rows, one matched
-[NULL-safe](NORM-Querying.md#null-safe-relation-keys) or joined on
+from, or orders by, a to-one relation able to match several rows, one
+matched [NULL-safe](NORM-Querying.md#null-safe-relation-keys) or joined on
 columns that are no declared key of the related entity, raises it too,
 because nothing tells its rows apart; and a scoped
 upsert whose scope column is encrypted with no `.hash()` sibling raises

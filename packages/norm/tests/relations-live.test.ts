@@ -285,5 +285,35 @@ for (const [i, fx] of FIXTURES.entries()) {
         ]);
       },
     );
+
+    // Where NULL sorts differs by engine, so these orderings skip the
+    // seat and the org that have no related row.
+    live(
+      'ordering through such a relation sorts each row once, by its smallest or largest related value',
+      async () => {
+        const seats = db!.repo('Seats');
+        const matched = { '@orgcode': { $null: false } } as const;
+        const asc = await seats.find(matched, {
+          orderBy: { '@Org.@cap': 'ASC', '@id': 'DESC' },
+          limit: 2,
+          total: true,
+        });
+        asserts.assertEquals(ids(asc), [11, 10]);
+        asserts.assertEquals(asc.total, 3);
+        const desc = await seats.find(matched, {
+          orderBy: { '@Org.@cap': 'DESC', '@id': 'ASC' },
+        });
+        asserts.assertEquals(ids(desc), [12, 10, 11]);
+        const orgs = await db!.repo('Orgs').find({ '@tenant': 7 }, {
+          orderBy: { '@Seat.@total': 'DESC', '@id': 'DESC' },
+        });
+        asserts.assertEquals(ids(orgs), [2, 1, 3]);
+        // A key that matches one row sorts by that row.
+        const owned = await seats.find({ '@orgid': { $null: false } }, {
+          orderBy: { '@Owner.@cap': 'DESC', '@id': 'ASC' },
+        });
+        asserts.assertEquals(ids(owned), [11, 12, 10]);
+      },
+    );
   });
 }

@@ -1753,6 +1753,22 @@ describe('norm.Repo — nullSafe relation keys', () => {
       "relation 'Seat'",
     );
     asserts.assertEquals(err.context.code, 'AGGREGATE_MISUSE');
+    // Ordering joins it the same way.
+    await db.repo('Orgs').find(undefined, { orderBy: { '@Seat.@id': 'ASC' } });
+    asserts.assertEquals(
+      (exec.lastOf('SELECT') as unknown as Record<string, unknown>).aggregates,
+      { __rows: { $$_aggregate: 'COUNT' } },
+    );
+    await asserts.assertRejects(
+      () =>
+        db.repo('Orgs').find(undefined, {
+          project: { '@tenant': true },
+          aggregates: { n: { fn: 'COUNT', column: '@id' } },
+          orderBy: { '@Seat.@id': 'ASC' },
+        }),
+      NormQueryError,
+      "relation 'Seat'",
+    );
   });
 
   it('an entity with no primary key refuses a filter value from a relation that can match several rows', async () => {

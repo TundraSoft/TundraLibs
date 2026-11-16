@@ -2205,10 +2205,8 @@ export class ReadRepo<
     // by the base row instead.
     const projectedAliases = new Set(Object.keys(oqlJoins));
     const fanOut = new Set<string>();
-    const joinsMany = (alias: string, mode: 'where' | 'orderBy'): void => {
-      if (
-        mode === 'where' && !projectedAliases.has(alias) && matchesMany(alias)
-      ) {
+    const joinsMany = (alias: string): void => {
+      if (!projectedAliases.has(alias) && matchesMany(alias)) {
         fanOut.add(alias);
       }
     };
@@ -2240,7 +2238,7 @@ export class ReadRepo<
           existsAliases.set(alias, safe.map((c) => fks[alias]!.on[c]!));
           return;
         }
-        joinsMany(alias, mode);
+        joinsMany(alias);
         if (!joined) ensureBtJoin(alias);
         addCols(alias, [col]);
         return;
@@ -2311,7 +2309,7 @@ export class ReadRepo<
           existsAliases.set(alias, safe);
           return;
         }
-        joinsMany(alias, mode);
+        joinsMany(alias);
         if (!joined) ensureRevJoin(alias);
         addCols(alias, [col]);
         return;
