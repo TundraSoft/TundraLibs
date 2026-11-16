@@ -1557,6 +1557,105 @@ const CASES: Case[] = [
     },
   },
   {
+    // A compared value never shares a placeholder with an equal one: on
+    // Postgres one placeholder has one type, and TIME and VARCHAR differ.
+    name: 'SELECT binds one string compared with two columns each time',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'slots',
+      columns: ['id', 'at', 'label'],
+      projection: { '@id': true },
+      where: {
+        '@at': '10:00:00',
+        '@label': { $in: ['10:00:00', 'x'] },
+        $or: [
+          { '@label': { $ne: '10:00:00' } },
+          { '@label': { $contains: 'x' } },
+        ],
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT "id" AS "id" FROM "slots" WHERE "at" = :p_0: AND "label" IN (:p_1:, :p_2:) AND (("label" <> :p_3:) OR ("label" LIKE (\'%\' || :p_4: || \'%\') ESCAPE \'\\\'))',
+        params: {
+          p_0: '10:00:00',
+          p_1: '10:00:00',
+          p_2: 'x',
+          p_3: '10:00:00',
+          p_4: 'x',
+        },
+      },
+      postgres: {
+        sql:
+          'SELECT "id" AS "id" FROM "slots" WHERE "at" = :p_0: AND "label" IN (:p_1:, :p_2:) AND (("label" <> :p_3:) OR ("label" LIKE (\'%\' || :p_4: || \'%\') ESCAPE \'\\\'))',
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `slots` WHERE `at` = :p_0: AND `label` IN (:p_1:, :p_2:) AND ((`label` <> :p_3:) OR (`label` LIKE CONCAT('%', :p_4:, '%') ESCAPE '\\\\'))",
+      },
+    },
+  },
+  {
+    // ...and the same in a join `on` and in `$exists`, nested or not.
+    name: 'SELECT binds one string in a join on and in $exists each time',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'slots',
+      columns: ['id', 'at', 'label'],
+      joins: {
+        n: {
+          table: 'slots',
+          columns: ['id', 'at', 'label'],
+          on: { '@n.@at': '10:00:00', '@n.@label': '10:00:00' },
+        },
+      },
+      projection: { '@id': true },
+      where: {
+        $exists: {
+          table: 'slots',
+          on: { '@at': '10:00:00', '@label': '10:00:00' },
+          where: {
+            $exists: {
+              table: 'slots',
+              on: { '@at': '10:00:00', '@label': '10:00:00' },
+            },
+          },
+        },
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "slots" AS __base__ INNER JOIN "slots" AS "n" ON "n"."at" = :p_0: AND "n"."label" = :p_1: ' +
+          'WHERE EXISTS (SELECT 1 FROM "slots" AS "__exists__" WHERE "__exists__"."at" = :p_2: AND "__exists__"."label" = :p_3: ' +
+          'AND EXISTS (SELECT 1 FROM "slots" AS "__exists_1__" WHERE "__exists_1__"."at" = :p_4: AND "__exists_1__"."label" = :p_5:))',
+        params: {
+          p_0: '10:00:00',
+          p_1: '10:00:00',
+          p_2: '10:00:00',
+          p_3: '10:00:00',
+          p_4: '10:00:00',
+          p_5: '10:00:00',
+        },
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "slots" AS __base__ INNER JOIN "slots" AS "n" ON "n"."at" = :p_0: AND "n"."label" = :p_1: ' +
+          'WHERE EXISTS (SELECT 1 FROM "slots" AS "__exists__" WHERE "__exists__"."at" = :p_2: AND "__exists__"."label" = :p_3: ' +
+          'AND EXISTS (SELECT 1 FROM "slots" AS "__exists_1__" WHERE "__exists_1__"."at" = :p_4: AND "__exists_1__"."label" = :p_5:))',
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`id` AS `id` FROM `slots` AS __base__ INNER JOIN `slots` AS `n` ON `n`.`at` = :p_0: AND `n`.`label` = :p_1: ' +
+          'WHERE EXISTS (SELECT 1 FROM `slots` AS `__exists__` WHERE `__exists__`.`at` = :p_2: AND `__exists__`.`label` = :p_3: ' +
+          'AND EXISTS (SELECT 1 FROM `slots` AS `__exists_1__` WHERE `__exists_1__`.`at` = :p_4: AND `__exists_1__`.`label` = :p_5:))',
+      },
+    },
+  },
+  {
     // HAVING runs before the SELECT list materialises its aliases, so
     // `HAVING "total" >= …` would fail on Postgres (column does not
     // exist). The translator substitutes alias refs in HAVING with the

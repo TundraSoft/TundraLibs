@@ -922,7 +922,8 @@ export abstract class AbstractTranslator {
   /**
    * Add `value` to `params` and return the placeholder text the dialect
    * uses (`:p_3` / `$3` / `?`). `share` is passed to
-   * {@link Parameters.add}: false for a value written to a column.
+   * {@link Parameters.add}: false for a value written to a column or
+   * compared with one in a filter or a join `on`.
    */
   protected _parameterize(
     value: unknown,
@@ -1518,7 +1519,7 @@ export abstract class AbstractTranslator {
         }`;
       }
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**
@@ -1541,7 +1542,7 @@ export abstract class AbstractTranslator {
         this._quoteIdentifier(value.slice(1))
       }`;
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**
@@ -1841,7 +1842,7 @@ export abstract class AbstractTranslator {
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, scope, params, true);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**
@@ -2448,7 +2449,7 @@ export abstract class AbstractTranslator {
         LIKE_WILDCARDS,
         (ch) => `${LIKE_ESCAPE_CHAR}${ch}`,
       );
-      const valueSql = this._parameterize(escaped, params);
+      const valueSql = this._parameterize(escaped, params, false);
       return `${emit(colSql, valueSql)}${this._likeEscapeClause()}`;
     }
     return emit(colSql, render(val));
@@ -2522,7 +2523,7 @@ export abstract class AbstractTranslator {
     }
     return this.__aliasValue(value, scope, params, hasJoins, context) ??
       this.__valueColumnRef(value, scope, hasJoins) ??
-      this._parameterize(value, params);
+      this._parameterize(value, params, false);
   }
 
   /** Walk an Expression's `args` into an ordered array of SQL fragments. */

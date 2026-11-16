@@ -23,7 +23,7 @@ changelog has those.
   - [An `orderBy` key needs its `@` prefixes](#an-orderby-key-needs-its--prefixes)
   - [An unknown `UNIX_TIMESTAMP` unit throws](#an-unknown-unix_timestamp-unit-throws)
   - [Errors that changed](#errors-that-changed)
-  - [Equal values in a write bind separately](#equal-values-in-a-write-bind-separately)
+  - [Equal values bind separately](#equal-values-bind-separately)
 
 ## 1.6.0
 
@@ -215,12 +215,18 @@ The `INVALID_TIME_UNIT` message no longer starts with
 `FilterOperator` message ends with the reason. To match a list or NULL,
 put `{ '@a': null }` beside the list in an `$or`.
 
-### Equal values in a write bind separately
+### Equal values bind separately
 
 On the SQL dialects, equal values written to different columns shared one
 placeholder, as in `VALUES (:p_0:, :p_0:)`. Each now has its own,
 `VALUES (:p_0:, :p_1:)`, so the SQL text and `params` of an INSERT or
 UPDATE change. The rows written do not.
+
+A value compared in a filter, a join `on` or `$exists` has its own
+placeholder too: `"t" = :p_0: AND "s" = :p_0:` is now
+`"t" = :p_0: AND "s" = :p_1:`. The rows are the same, and Postgres no
+longer fails with `operator does not exist` when one string is compared
+with two columns of different types, such as a TIME and a VARCHAR.
 
 ---
 
