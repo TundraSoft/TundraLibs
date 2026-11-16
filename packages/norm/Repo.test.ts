@@ -1410,6 +1410,41 @@ describe('norm.Repo — an expression on a date() column', () => {
       asserts.assertEquals(written(exec, 'INSERT'), expr);
     }
   });
+
+  it('is computed on every date type for a Mongo insert, NOW included', async () => {
+    const add = (date: unknown, unit: string) => ({
+      $$_expression: 'DATE_ADD',
+      args: { date, amount: 1, unit },
+    });
+    const Due = Entity('due', {
+      id: Column.integer(),
+      at: Column.timestamp().default(
+        add(new Date('2026-01-31T05:00:00Z'), 'MONTHS'),
+      ),
+      on: Column.datetime().default(add(NOW, 'DAYS')),
+      tz: Column.timestamptz().default(add(NOW, 'DAYS')),
+      day: Column.date().default(add(NOW, 'DAYS')),
+    }, { pk: ['id'] });
+    const exec = new MockExec();
+    Object.assign(exec.capabilities, { dialect: 'mongo' });
+    const reg = use(Schema('DY', { Due }));
+    const runtime = compileRuntime(reg, {}, exec, () => {});
+    const before = Date.now() + 86_400_000;
+    await new NormDb<typeof reg>(runtime, exec, undefined).repo('Due')
+      .insert([{ id: 1 }, { id: 2 }]);
+    const after = Date.now() + 86_400_000;
+    const { data } = exec.lastOf('INSERT') as unknown as { data: Row[] };
+    for (const row of data) {
+      asserts.assertEquals(row.at, new Date('2026-02-28T05:00:00Z'));
+      const on = (row.on as Date).getTime();
+      asserts.assert(on >= before && on <= after);
+      asserts.assertEquals(row.tz, data[0]!.on, 'one clock reading');
+      asserts.assertEquals(
+        (row.day as Date).toISOString(),
+        new Date(on).toISOString().slice(0, 10) + 'T00:00:00.000Z',
+      );
+    }
+  });
 });
 
 describe('norm.Repo — nullSafe relation keys', () => {

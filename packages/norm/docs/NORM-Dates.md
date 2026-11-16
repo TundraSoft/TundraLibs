@@ -44,9 +44,10 @@ Pick by range and by who else reads the table:
 ## Values you write and filter by
 
 A `Date` is written as the instant it is. A date-time string that names
-no offset is read as UTC, on a write and in a filter, so a JSON payload
-means the same instant on every host. A `date()` column keeps the UTC
-day of the value, and a `time()` column keeps an `'HH:MM:SS'` string.
+no offset is read as UTC, on a write, in a filter and as a literal
+default, so a JSON payload means the same instant on every host. A
+`date()` column keeps the UTC day of the value, and a `time()` column
+keeps an `'HH:MM:SS'` string.
 
 - Writes: [Schema → Factories](NORM-Schema.md#factories).
 - Filters:

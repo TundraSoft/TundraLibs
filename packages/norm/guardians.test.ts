@@ -241,6 +241,15 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     asserts.assertEquals(rehydrateDefault(Specs.int, 7), 7);
   });
 
+  it('rehydrateDefault: a date-time default that names no offset is UTC', () => {
+    // Fails under a non-UTC TZ without the fix.
+    const at = new Date('2026-01-15T10:00:00Z');
+    for (const spec of [Specs.when, Column.timestamp().spec]) {
+      asserts.assertEquals(rehydrateDefault(spec, '2026-01-15T10:00:00'), at);
+      asserts.assertEquals(rehydrateDefault(spec, '2026-01-15 10:00'), at);
+    }
+  });
+
   it('validateRows: batch failures prefix the row index; parsed rows carry defaults', () => {
     const def = Entity('rows', {
       id: Column.integer(),
