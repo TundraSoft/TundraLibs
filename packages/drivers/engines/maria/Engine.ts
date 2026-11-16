@@ -317,6 +317,7 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
       code?: string;
       errno?: number;
       sqlState?: string;
+      sqlMessage?: string;
       message?: string;
     } & Error;
     const message = e.message ?? String(error);
@@ -329,6 +330,15 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     if (e.code) meta.driverCode = e.code;
     if (e.errno !== undefined) meta.driverErrno = e.errno;
     if (e.sqlState) meta.sqlState = e.sqlState;
+    // The server names the key or column only in its message text.
+    const text = e.sqlMessage ?? message;
+    if (code === 'DUPLICATE_KEY') {
+      const key = /for key '([^']+)'/.exec(text)?.[1];
+      if (key !== undefined) meta.constraint = key;
+    } else if (code === 'COLUMN_NOT_FOUND') {
+      const column = /Unknown column '([^']+)'/.exec(text)?.[1];
+      if (column !== undefined) meta.column = column;
+    }
     return new EngineError(code, meta as never, e);
   }
 

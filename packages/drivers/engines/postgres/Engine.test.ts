@@ -158,6 +158,24 @@ describe('drivers.PostgresEngine.error-mapping (no DB)', () => {
     }
   });
 
+  it('names the column an undefined_column message reports', () => {
+    const cases: Array<[string, string]> = [
+      ['column "nosuch" does not exist', 'nosuch'],
+      ['column u.nosuch does not exist', 'u.nosuch'],
+      ['column "nosuch" of relation "users" does not exist', 'nosuch'],
+    ];
+    for (const [text, column] of cases) {
+      const err = engine.wrapError(
+        new PgServerError('42703', new Map([['M', text]])),
+        q,
+      );
+      asserts.assertEquals(
+        err.message,
+        `Column not found on POSTGRES::pg-errmap: ${column}`,
+      );
+    }
+  });
+
   it('maps unknown SQLSTATE to QUERY_EXECUTION_FAILED', () => {
     asserts.assertEquals(codeFor('XX000'), 'QUERY_EXECUTION_FAILED');
   });

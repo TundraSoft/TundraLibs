@@ -204,6 +204,31 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
     }
   });
 
+  it('names the key and the column the server message reports', () => {
+    const wrap = (code: string, sqlMessage: string) =>
+      engine.wrapError(
+        { code, sqlMessage, message: `(conn) ${sqlMessage}` },
+        q,
+      );
+    const dup = wrap(
+      'ER_DUP_ENTRY',
+      "Duplicate entry 'a' for key 'users_email'",
+    );
+    asserts.assertEquals(dup.context.constraint, 'users_email');
+    asserts.assertEquals(
+      dup.message,
+      'Duplicate key violation on MARIA::maria-errmap: users_email',
+    );
+    const col = wrap(
+      'ER_BAD_FIELD_ERROR',
+      "Unknown column 'u.nosuch' in 'SELECT'",
+    );
+    asserts.assertEquals(
+      col.message,
+      'Column not found on MARIA::maria-errmap: u.nosuch',
+    );
+  });
+
   it('maps an unknown driver code to QUERY_EXECUTION_FAILED', () => {
     asserts.assertEquals(codeFor('ER_SOMETHING_NEW'), 'QUERY_EXECUTION_FAILED');
   });

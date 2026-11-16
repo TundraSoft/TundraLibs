@@ -63,3 +63,16 @@ export function pgSqlStateToCode(sqlState: string): EngineErrorCode {
       return 'QUERY_EXECUTION_FAILED';
   }
 }
+
+/**
+ * The column an `undefined_column` (42703) message names, as written:
+ * `column "x" does not exist`, `column t.x does not exist` or
+ * `column "x" of relation "t" does not exist`. The server sends no column
+ * field for this error.
+ */
+export function pgUndefinedColumn(message: string): string | undefined {
+  const m =
+    /^column (?:"([^"]+)"|(\S+)) (?:of relation "[^"]+" )?does not exist/
+      .exec(message);
+  return m === null ? undefined : m[1] ?? m[2];
+}

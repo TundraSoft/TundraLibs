@@ -303,6 +303,10 @@ describe({
               (e as EngineError).code,
               'DUPLICATE_KEY',
             );
+            asserts.assertEquals(
+              (e as EngineError).message,
+              'Duplicate key violation on MONGO::err-1: _id_',
+            );
           }
         } finally {
           await engine.deleteMany(coll, {});
