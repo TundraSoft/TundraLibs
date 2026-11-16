@@ -19,7 +19,11 @@ import type { Query } from '@tundralibs/oql/types';
 import { DialectUnsupportedError } from '@tundralibs/oql/translator';
 import { MariaEngine } from './Engine.ts';
 import { EngineError } from '../../errors/mod.ts';
-import { LIVE_DB_REQUIRED, liveAvailable } from '../../tests/liveAvailable.ts';
+import {
+  LIVE_DB_REQUIRED,
+  liveAvailable,
+  unreachableReason,
+} from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -34,30 +38,16 @@ const CONFIG = {
   password: env.get('MARIA_PASSWORD') || undefined,
 };
 
-async function isMariaAvailable(): Promise<boolean> {
-  const probe = new MariaEngine('translator-probe', CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
-}
-
-const mariaAvailable = liveAvailable('MariaDB', await isMariaAvailable());
+const mariaDown = await unreachableReason(
+  new MariaEngine('translator-probe', CONFIG),
+);
+const mariaAvailable = liveAvailable('MariaDB', mariaDown === '', mariaDown);
 const tableName = `oql_translator_live_${Date.now()}`;
 
 describe('drivers.MariaTranslator.live', () => {
   if (!mariaAvailable) {
     it({
-      name: 'skipped — MariaDB unreachable',
+      name: `skipped — MariaDB unreachable: ${mariaDown}`,
       ignore: true,
       fn: () => {},
     });

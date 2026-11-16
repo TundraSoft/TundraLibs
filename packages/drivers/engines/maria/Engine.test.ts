@@ -2,7 +2,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { MariaEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EngineQuery } from '../../types/mod.ts';
 
@@ -35,24 +35,17 @@ const TEST_CONFIG = {
   password: env.get('MARIA_PASSWORD') || undefined,
 };
 
-async function isMariaAvailable(): Promise<boolean> {
-  const probe = new MariaEngine('maria-probe', TEST_CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
+const mariaDown = await unreachableReason(
+  new MariaEngine('maria-probe', TEST_CONFIG),
+);
+const mariaAvailable = liveAvailable('MariaDB', mariaDown === '', mariaDown);
+if (!mariaAvailable) {
+  it({
+    name: `skipped — MariaDB unreachable: ${mariaDown}`,
+    ignore: true,
+    fn() {},
+  });
 }
-
-const mariaAvailable = liveAvailable('MariaDB', await isMariaAvailable());
 
 let _t = 0;
 const tableName = (label: string): string =>

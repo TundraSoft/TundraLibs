@@ -3,7 +3,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import { listen } from '@tundralibs/compat/net';
 import { envArgs, getFreePort } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 import { PgServerError } from './PgServerError.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EngineQuery } from '../../types/mod.ts';
@@ -37,24 +37,17 @@ const TEST_CONFIG = {
   password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
-async function isPgAvailable(): Promise<boolean> {
-  const probe = new PostgresEngine('pg-probe', TEST_CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
+const pgDown = await unreachableReason(
+  new PostgresEngine('pg-probe', TEST_CONFIG),
+);
+const pgAvailable = liveAvailable('Postgres', pgDown === '', pgDown);
+if (!pgAvailable) {
+  it({
+    name: `skipped — Postgres unreachable: ${pgDown}`,
+    ignore: true,
+    fn() {},
+  });
 }
-
-const pgAvailable = liveAvailable('Postgres', await isPgAvailable());
 
 let _t = 0;
 const tableName = (label: string): string =>

@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import type { Query } from '@tundralibs/oql/types';
 import { MongoEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -33,24 +33,10 @@ const CONFIG = {
   authSource: env.get('MONGO_AUTHSOURCE') || undefined,
 };
 
-async function isMongoAvailable(): Promise<boolean> {
-  const probe = new MongoEngine('translator-probe', CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
-}
-
-const mongoAvailable = liveAvailable('MongoDB', await isMongoAvailable());
+const mongoDown = await unreachableReason(
+  new MongoEngine('translator-probe', CONFIG),
+);
+const mongoAvailable = liveAvailable('MongoDB', mongoDown === '', mongoDown);
 const collectionName = `oql_translator_live_${Date.now()}`;
 
 describe({
@@ -65,7 +51,7 @@ describe({
 function suite() {
   if (!mongoAvailable) {
     it({
-      name: 'skipped — MongoDB unreachable',
+      name: `skipped — MongoDB unreachable: ${mongoDown}`,
       ignore: true,
       fn: () => {},
     });

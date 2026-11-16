@@ -2,7 +2,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { RedisEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 import { RespError, type RespValue } from './resp.ts';
 import { RedisConnection } from './RedisConnection.ts';
 import { EngineError } from '../../errors/mod.ts';
@@ -32,24 +32,17 @@ const TEST_CONFIG = {
   password: env.get('REDIS_PASSWORD') || undefined,
 };
 
-async function isRedisAvailable(): Promise<boolean> {
-  const probe = new RedisEngine('redis-probe', TEST_CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
+const redisDown = await unreachableReason(
+  new RedisEngine('redis-probe', TEST_CONFIG),
+);
+const redisAvailable = liveAvailable('Redis', redisDown === '', redisDown);
+if (!redisAvailable) {
+  it({
+    name: `skipped — Redis unreachable: ${redisDown}`,
+    ignore: true,
+    fn() {},
+  });
 }
-
-const redisAvailable = liveAvailable('Redis', await isRedisAvailable());
 
 let keyCounter = 0;
 const k = (label: string) =>

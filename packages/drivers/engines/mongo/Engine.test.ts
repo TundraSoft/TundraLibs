@@ -2,7 +2,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { MongoEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { MongoEngineOptions } from './types/mod.ts';
 
@@ -38,24 +38,17 @@ const TEST_CONFIG = {
     : env.get('MONGO_DB') || 'tundra_test',
 };
 
-async function isMongoAvailable(): Promise<boolean> {
-  const probe = new MongoEngine('mongo-probe', TEST_CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
+const mongoDown = await unreachableReason(
+  new MongoEngine('mongo-probe', TEST_CONFIG),
+);
+const mongoAvailable = liveAvailable('MongoDB', mongoDown === '', mongoDown);
+if (!mongoAvailable) {
+  it({
+    name: `skipped — MongoDB unreachable: ${mongoDown}`,
+    ignore: true,
+    fn() {},
+  });
 }
-
-const mongoAvailable = liveAvailable('MongoDB', await isMongoAvailable());
 
 let collCounter = 0;
 const colName = (label: string) =>

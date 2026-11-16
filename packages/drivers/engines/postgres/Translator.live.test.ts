@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import type { Query } from '@tundralibs/oql/types';
 import { PostgresEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -28,30 +28,16 @@ const CONFIG = {
   password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
-async function isPostgresAvailable(): Promise<boolean> {
-  const probe = new PostgresEngine('translator-probe', CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
-}
-
-const pgAvailable = liveAvailable('Postgres', await isPostgresAvailable());
+const pgDown = await unreachableReason(
+  new PostgresEngine('translator-probe', CONFIG),
+);
+const pgAvailable = liveAvailable('Postgres', pgDown === '', pgDown);
 const tableName = `oql_translator_live_${Date.now()}`;
 
 describe('drivers.PostgresTranslator.live', () => {
   if (!pgAvailable) {
     it({
-      name: 'skipped — Postgres unreachable',
+      name: `skipped — Postgres unreachable: ${pgDown}`,
       ignore: true,
       fn: () => {},
     });

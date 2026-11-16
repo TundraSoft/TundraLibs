@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import type { Query } from '@tundralibs/oql/types';
 import type { EngineQueryResult } from '../types/mod.ts';
-import { liveAvailable } from './liveAvailable.ts';
+import { liveAvailable, unreachableReason } from './liveAvailable.ts';
 
 /** The engines the suite runs on. */
 export type LiveEngineName = 'postgres' | 'maria' | 'mongo' | 'sqlite';
@@ -801,17 +801,6 @@ function plain(value: unknown, c: Case): unknown {
   return value;
 }
 
-async function reachable(engine: LiveEngine): Promise<boolean> {
-  try {
-    await engine.connect();
-    return await engine.ping();
-  } catch {
-    return false;
-  } finally {
-    await engine.disconnect().catch(() => {});
-  }
-}
-
 /**
  * Register the suite for one engine. Skipped when the engine `create`
  * returns cannot be reached; with `LIVE_DB_REQUIRED=true` that also fails
@@ -822,9 +811,11 @@ export async function runLiveSuite(
   create: () => LiveEngine,
   cleanup?: () => Promise<void>,
 ): Promise<void> {
-  const reached = await reachable(create());
+  const down = await unreachableReason(create());
   // SQLite runs in-process: there is no service to require.
-  const available = name === 'sqlite' ? reached : liveAvailable(name, reached);
+  const available = name === 'sqlite'
+    ? down === ''
+    : liveAvailable(name, down === '', down);
 
   async function rows(engine: LiveEngine, c: Case): Promise<Row[]> {
     if (c.query) {
@@ -867,7 +858,11 @@ export async function runLiveSuite(
     sanitizeOps: false,
     fn: () => {
       if (!available) {
-        it({ name: `SKIPPED — ${name} unreachable`, ignore: true, fn() {} });
+        it({
+          name: `SKIPPED — ${name} unreachable: ${down}`,
+          ignore: true,
+          fn() {},
+        });
         return;
       }
 

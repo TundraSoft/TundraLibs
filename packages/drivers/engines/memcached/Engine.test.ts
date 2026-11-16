@@ -3,7 +3,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import type { Connection } from '@tundralibs/compat';
 import { envArgs } from '@tundralibs/utils';
 import { MemcachedEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { liveAvailable, unreachableReason } from '../../tests/liveAvailable.ts';
 import { EngineError } from '../../errors/mod.ts';
 
 // Wave-note: emission/option accessors are protected now — tests reach
@@ -39,27 +39,21 @@ const TEST_CONFIG = {
  * the server is unreachable so unit tests can still run in environments
  * without Memcached available.
  */
-async function isMemcachedAvailable(): Promise<boolean> {
-  const probe = new MemcachedEngine('memcached-probe', TEST_CONFIG);
-  try {
-    await probe.connect();
-    const ok = await probe.ping();
-    await probe.disconnect();
-    return ok;
-  } catch {
-    try {
-      await probe.disconnect();
-    } catch {
-      // ignore
-    }
-    return false;
-  }
-}
-
+const memcachedDown = await unreachableReason(
+  new MemcachedEngine('memcached-probe', TEST_CONFIG),
+);
 const memcachedAvailable = liveAvailable(
   'Memcached',
-  await isMemcachedAvailable(),
+  memcachedDown === '',
+  memcachedDown,
 );
+if (!memcachedAvailable) {
+  it({
+    name: `skipped — Memcached unreachable: ${memcachedDown}`,
+    ignore: true,
+    fn() {},
+  });
+}
 
 /** Generate a unique key prefix per test to avoid cross-test contamination. */
 let keyCounter = 0;

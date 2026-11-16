@@ -29,6 +29,7 @@ import {
   openPgConnection,
   startNeonPgProxy,
 } from './_neonPgProxy.ts';
+import { unreachableReason } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -49,25 +50,21 @@ const NEON_HTTP_ENDPOINT = env.get('NEON_HTTP_ENDPOINT');
 const useRealEndpoint = !!NEON_HTTP_ENDPOINT;
 
 /** Probe: a `PgConnection` connect + `SELECT 1` against the CI Postgres. */
-async function isPgAvailable(): Promise<boolean> {
-  try {
-    const pg = await openPgConnection(TEST_CONFIG);
-    try {
-      const r = await pg.queryRaw('SELECT 1 AS one');
-      return r.rows.length === 1;
-    } finally {
-      await pg.close();
-    }
-  } catch {
-    return false;
-  }
+function pgDownReason(): Promise<string> {
+  let pg: Awaited<ReturnType<typeof openPgConnection>> | undefined;
+  return unreachableReason({
+    connect: async () => {
+      pg = await openPgConnection(TEST_CONFIG);
+    },
+    ping: async () => (await pg!.queryRaw('SELECT 1 AS one')).rows.length === 1,
+    disconnect: async () => await pg?.close(),
+  });
 }
 
 // Only probe local Postgres when we actually need the in-process proxy.
 const runtimeCanHost = canHostNeonPgProxy();
-const pgAvailable = (!useRealEndpoint && runtimeCanHost)
-  ? await isPgAvailable()
-  : false;
+const pgDown = (!useRealEndpoint && runtimeCanHost) ? await pgDownReason() : '';
+const pgAvailable = !useRealEndpoint && runtimeCanHost && pgDown === '';
 
 const runSuite = useRealEndpoint || (runtimeCanHost && pgAvailable);
 const skipReason = runSuite
@@ -75,7 +72,7 @@ const skipReason = runSuite
   : !runtimeCanHost
   ? 'requires the Deno runtime (Deno.serve-backed /sql proxy); ' +
     'set NEON_HTTP_ENDPOINT to run against a real endpoint on any runtime'
-  : 'Postgres not reachable';
+  : `Postgres unreachable: ${pgDown}`;
 
 if (!runSuite) {
   console.warn(`[neon.Engine.live] skipped: ${skipReason}`);
