@@ -688,18 +688,18 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS REAL) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
-        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_1:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_2: THEN :p_3: ELSE :p_4: END)) AS "scaled", (CAST("score" AS REAL) / NULLIF("age", :p_5:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+        params: { p_0: 0, p_1: 0, p_2: 18, p_3: 2, p_4: 1, p_5: 0 },
       },
       postgres: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS DOUBLE PRECISION) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
-        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_1:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_2: THEN :p_3: ELSE :p_4: END)) AS "scaled", (CAST("score" AS DOUBLE PRECISION) / NULLIF("age", :p_5:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+        params: { p_0: 0, p_1: 0, p_2: 18, p_3: 2, p_4: 1, p_5: 0 },
       },
       maria: {
         sql:
-          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (CAST(`score` AS DOUBLE) / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
-        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_1:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_2: THEN :p_3: ELSE :p_4: END)) AS `scaled`, (CAST(`score` AS DOUBLE) / NULLIF(`age`, :p_5:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
+        params: { p_0: 0, p_1: 0, p_2: 18, p_3: 2, p_4: 1, p_5: 0 },
       },
     },
   },
@@ -1652,6 +1652,38 @@ const CASES: Case[] = [
           'SELECT __base__.`id` AS `id` FROM `slots` AS __base__ INNER JOIN `slots` AS `n` ON `n`.`at` = :p_0: AND `n`.`label` = :p_1: ' +
           'WHERE EXISTS (SELECT 1 FROM `slots` AS `__exists__` WHERE `__exists__`.`at` = :p_2: AND `__exists__`.`label` = :p_3: ' +
           'AND EXISTS (SELECT 1 FROM `slots` AS `__exists_1__` WHERE `__exists_1__`.`at` = :p_4: AND `__exists_1__`.`label` = :p_5:))',
+      },
+    },
+  },
+  {
+    // ...and as an argument of an expression: Postgres cannot match a
+    // COALESCE over a TIME column with one over a VARCHAR column when both
+    // take the same placeholder.
+    name: 'SELECT binds one string passed to two expressions each time',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'slots',
+      columns: ['id', 'at', 'label'],
+      expressions: {
+        a: { $$_expression: 'COALESCE', args: ['@at', '10:00:00'] },
+        l: { $$_expression: 'COALESCE', args: ['@label', '10:00:00'] },
+      },
+      projection: { '@a': true, '@l': true },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT COALESCE("at", :p_0:) AS "a", COALESCE("label", :p_1:) AS "l" FROM "slots"',
+        params: { p_0: '10:00:00', p_1: '10:00:00' },
+      },
+      postgres: {
+        sql:
+          'SELECT COALESCE("at", :p_0:) AS "a", COALESCE("label", :p_1:) AS "l" FROM "slots"',
+      },
+      maria: {
+        sql:
+          'SELECT COALESCE(`at`, :p_0:) AS `a`, COALESCE(`label`, :p_1:) AS `l` FROM `slots`',
       },
     },
   },
@@ -2938,10 +2970,20 @@ const CASES: Case[] = [
       postgres: {
         sql:
           `SELECT CAST((CAST((${PG_DATE_DIFF} + :p_1:) AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "weekday", ` +
-          `CAST(ROUND(CAST(${PG_DATE_DIFF} AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "took", ` +
-          `CAST((CAST("id" AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "slot", ` +
-          `CAST(ROUND(CAST("id" AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "tenth" FROM "orders"`,
-        params: { p_0: 'DAYS', p_1: 1, p_2: 7 },
+          `CAST(ROUND(CAST(${
+            PG_DATE_DIFF.replaceAll(':p_0:', ':p_3:')
+          } AS NUMERIC), :p_4:) AS DOUBLE PRECISION) AS "took", ` +
+          `CAST((CAST("id" AS NUMERIC) % CAST(:p_5: AS NUMERIC)) AS DOUBLE PRECISION) AS "slot", ` +
+          `CAST(ROUND(CAST("id" AS NUMERIC), :p_6:) AS DOUBLE PRECISION) AS "tenth" FROM "orders"`,
+        params: {
+          p_0: 'DAYS',
+          p_1: 1,
+          p_2: 7,
+          p_3: 'DAYS',
+          p_4: 1,
+          p_5: 7,
+          p_6: 1,
+        },
       },
     },
   },

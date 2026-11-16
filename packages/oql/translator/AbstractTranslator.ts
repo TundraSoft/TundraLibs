@@ -922,8 +922,9 @@ export abstract class AbstractTranslator {
   /**
    * Add `value` to `params` and return the placeholder text the dialect
    * uses (`:p_3` / `$3` / `?`). `share` is passed to
-   * {@link Parameters.add}: false for a value written to a column or
-   * compared with one in a filter or a join `on`.
+   * {@link Parameters.add}: false for a value written to a column,
+   * compared with one in a filter or a join `on`, or passed to an
+   * expression.
    */
   protected _parameterize(
     value: unknown,
@@ -2621,12 +2622,12 @@ export abstract class AbstractTranslator {
       if (this.__columnInScope(value.slice(1), scope, hasJoins)) {
         return this._resolveColumnRef(value, hasJoins);
       }
-      return this._parameterize(value, params);
+      return this._parameterize(value, params, false);
     }
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, scope, params, hasJoins);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**

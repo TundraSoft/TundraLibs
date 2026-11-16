@@ -3,7 +3,8 @@
  * `add(value)` returns a stable param name; calling it twice with the same
  * value returns the same name. Callers shouldn't care about that — it's a
  * payload optimisation, not a semantic guarantee. `add(value, false)` opts
- * out, for a value written to a column or compared with one.
+ * out, for a value written to a column, compared with one or passed to
+ * an expression.
  *
  * `Date`, `bigint` and `string` use string-keyed dedup so identical
  * values dedupe correctly across calls; everything else dedupes by JS Map
@@ -64,9 +65,10 @@ export class Parameters {
   /**
    * Register `value` and return its param name. Same value → same name,
    * unless `share` is false: then the value gets a name of its own, which
-   * no later `add` returns. A value written to a column or compared with
-   * one needs that on Postgres, which gives one placeholder one type, so
-   * one string bound to a TIME and a VARCHAR column fails.
+   * no later `add` returns. A value written to a column, compared with
+   * one or passed to an expression needs that on Postgres, which gives
+   * one placeholder one type, so one string bound to a TIME and a VARCHAR
+   * column fails.
    */
   public add(value: unknown, share = true): string {
     const key = share ? this.__dedupKey(value) : Symbol();

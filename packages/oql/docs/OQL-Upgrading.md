@@ -222,11 +222,13 @@ placeholder, as in `VALUES (:p_0:, :p_0:)`. Each now has its own,
 `VALUES (:p_0:, :p_1:)`, so the SQL text and `params` of an INSERT or
 UPDATE change. The rows written do not.
 
-A value compared in a filter, a join `on` or `$exists` has its own
-placeholder too: `"t" = :p_0: AND "s" = :p_0:` is now
-`"t" = :p_0: AND "s" = :p_1:`. The rows are the same, and Postgres no
-longer fails with `operator does not exist` when one string is compared
-with two columns of different types, such as a TIME and a VARCHAR.
+A value compared in a filter, a join `on` or `$exists`, or passed to an
+expression, has its own placeholder too: `"t" = :p_0: AND "s" = :p_0:` is
+now `"t" = :p_0: AND "s" = :p_1:`. The rows are the same, and Postgres no
+longer fails with `operator does not exist` or `COALESCE types … cannot be
+matched` when one string meets two columns of different types, such as a
+TIME and a VARCHAR. Only a STRING_AGG separator and a JSON_ROW key still
+share a placeholder with an equal one.
 
 ---
 

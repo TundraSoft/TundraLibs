@@ -145,7 +145,7 @@ describe('oql.types.Expressions', () => {
     );
     asserts.assertStringIncludes(
       sql,
-      'ABS((CASE WHEN "quantity" < :p_1: THEN :p_0: ELSE COALESCE("quantity", :p_0:) END))',
+      'ABS((CASE WHEN "quantity" < :p_1: THEN :p_2: ELSE COALESCE("quantity", :p_3:) END))',
     );
   });
 
