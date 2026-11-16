@@ -57,6 +57,7 @@ compares on transport, edge-safety, and capabilities.
 | [Turso (HTTP)](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Turso)                 | SQLite-over-HTTP edge driver — fetch-only, no native binding. **Edge/serverless-safe.**           | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Turso)         |
 | [Cloudflare D1 (HTTP)](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-D1)            | SQLite-over-HTTP (D1 REST) edge driver — fetch-only, no native binding. **Edge/serverless-safe.** | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-D1)            |
 | [Compatibility matrix](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Compatibility) | Every engine's kind, dialect, transport, edge-safety, and declared capabilities                   | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Compatibility) |
+| [Upgrade notes](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Upgrading)            | Stored values, results and errors that changed between releases                                   | [Docs](https://github.com/TundraSoft/TundraLibs/wiki/Drivers-Upgrading)     |
 
 ## Installation
 
