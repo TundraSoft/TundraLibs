@@ -618,7 +618,8 @@ by twelve slots the complete years.
 Month and year boundaries are read in UTC on SQLite and MongoDB, and in the
 session time zone on Postgres and MariaDB, so keep that session on UTC.
 [@tundralibs/drivers](https://jsr.io/@tundralibs/drivers) sets it on
-MariaDB and refuses a non-UTC session by default on Postgres and Neon.
+MariaDB, asks for it on Postgres, and by default refuses a session still
+not on UTC on Postgres and Neon.
 
 MongoDB does not reject a numeric operand for the fixed-length units, so
 pass dates.

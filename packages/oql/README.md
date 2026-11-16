@@ -831,6 +831,7 @@ breakdown.
 - [Translators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Translator) - SQL/NoSQL translation
 - [Errors](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Errors) - Error classes and stable error codes
 - [Compatibility](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility) - Database compatibility matrix
+- [Upgrade notes](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Upgrading) - Results and errors that changed between releases
 
 ## Performance
 
