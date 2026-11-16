@@ -65,6 +65,7 @@ import { PgServerError } from './PgServerError.ts';
 import { type EncodedParam, encodeParam } from './binary.ts';
 import { buildSSLRequest } from './protocol.ts';
 import {
+  pgRefusedStartupParameter,
   pgSqlStateToCode,
   pgUndefinedColumn,
   pgUndefinedTable,
@@ -487,7 +488,9 @@ export class PostgresEngine
    * Translates a thrown value into an {@link EngineError}: `PgServerError`
    * SQLSTATEs go through {@link pgSqlStateToCode} and carry through the
    * server's table/column/constraint fields; anything else becomes a generic
-   * connect- or query-failure.
+   * connect- or query-failure. A server error during startup or login with
+   * no code of its own is `CONNECTION_FAILED`, and one that refuses a startup
+   * parameter names it on `context.parameter`.
    *
    * @param op - `'connect'` or `'query'`, selecting the fallback code.
    */
@@ -498,12 +501,24 @@ export class PostgresEngine
   ): EngineError {
     if (error instanceof EngineError) return error;
     if (error instanceof PgServerError) {
-      const code = pgSqlStateToCode(error.code);
+      let code = pgSqlStateToCode(error.code);
       const meta: Record<string, unknown> = {
         instanceId: this.instanceId,
         reason: error.fields.get('M') ?? error.message,
         sqlState: error.code,
       };
+      if (op === 'connect') {
+        if (code === 'QUERY_EXECUTION_FAILED') code = 'CONNECTION_FAILED';
+        const parameter = pgRefusedStartupParameter(meta.reason as string);
+        if (parameter !== undefined) {
+          meta.parameter = parameter;
+          meta.reason = `the server refused the startup parameter ` +
+            `${parameter}; add it to the pooler's ignore_startup_parameters` +
+            (parameter === 'statement_timeout'
+              ? ', or leave statementTimeoutMs unset behind a pooler'
+              : '');
+        }
+      }
       if (sql) meta.sql = sql;
       if (error.fields.has('t')) meta.table = error.fields.get('t');
       if (error.fields.has('c')) meta.column = error.fields.get('c');

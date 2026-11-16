@@ -165,7 +165,7 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 | `username`               | `string`  | —       | Required.                                                                                                                                                                                                                    |
 | `password`               | `string`  | —       | Optional (e.g. local trust auth).                                                                                                                                                                                            |
 | `applicationName`        | `string`  | `Name`  | Sent in StartupMessage as `application_name`.                                                                                                                                                                                |
-| `statementTimeoutMs`     | `number`  | —       | Sent as `statement_timeout` GUC.                                                                                                                                                                                             |
+| `statementTimeoutMs`     | `number`  | —       | Sent in StartupMessage as `statement_timeout`. PgBouncer refuses it (see [Behind PgBouncer](#behind-pgbouncer--pgcat--rds-proxy)).                                                                                           |
 | `ssl`                    | various   | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration).                                                                                                                                                               |
 | `allowCleartextPassword` | `boolean` | `true`  | Permit cleartext-password auth over an **unencrypted** connection. Permitted by default but warns via `notice` on every such handshake; set `false` to throw `INVALID_AUTH` instead (see [Authentication](#authentication)). |
 | `allowMd5Password`       | `boolean` | `false` | Answer MD5 password auth. Refused with `INVALID_AUTH` by default; set `true` only for a peer that offers nothing better, such as Cloudflare Hyperdrive (see [MD5](#md5)).                                                    |
@@ -188,6 +188,20 @@ On auth: PgBouncer's `auth_type = md5` needs `allowMd5Password: true` (see
 to the pooler is unencrypted every connection emits the cleartext-auth
 warning described under [Authentication](#authentication); set
 `allowCleartextPassword: false` if you would rather that be a hard failure.
+
+On startup parameters: the driver sends `user`, `database`,
+`client_encoding` and `application_name` in its startup message, `TimeZone`
+unless `allowNonUtcTimeZone` is set, and `statement_timeout` when
+`statementTimeoutMs` is set. PgBouncer takes the first five and refuses
+`statement_timeout`, so with `statementTimeoutMs` set, even to `0`,
+`connect()` throws `CONNECTION_FAILED` and the message names the parameter.
+Leave `statementTimeoutMs` unset behind a pooler, or add `statement_timeout`
+to the pooler's `ignore_startup_parameters`. PgBouncer's manual says a
+parameter listed there is accepted and ignored, so the timeout then has to
+come from the server, for example
+`ALTER ROLE app SET statement_timeout = '5s'`. The driver does not fall back
+to a `SET` after connect: under transaction pooling the next statement can run
+on another backend, where the setting would not hold.
 
 ## Type round-trips
 
