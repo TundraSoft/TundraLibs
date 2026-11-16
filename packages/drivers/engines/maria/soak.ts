@@ -27,7 +27,7 @@ const TEST_CONFIG = {
   port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
   database: env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USER') || 'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
   pool: { min: 2, max: 8, acquireTimeoutSeconds: 10 },
 };
 
@@ -73,7 +73,14 @@ function record(scenario: string, ms: number, error?: Error): void {
 }
 
 async function setup(engine: MariaEngine): Promise<void> {
-  await engine.connect();
+  await engine.connect().catch((e: Error) => {
+    if (TEST_CONFIG.password !== undefined) throw e;
+    console.error(
+      `${e.message}. MARIA_PASSWORD is not set: set it in ` +
+        'packages/drivers/.env or the environment.',
+    );
+    exit(1);
+  });
   await engine.execute({ sql: `DROP TABLE IF EXISTS ${TABLE}` });
   await engine.execute({
     sql: `CREATE TABLE ${TABLE} (
