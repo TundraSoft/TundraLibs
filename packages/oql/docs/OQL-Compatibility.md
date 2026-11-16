@@ -703,18 +703,21 @@ result row carries one joined row and a joined column holds one value.
 `where`, the group, `having`, `orderBy`, `limit` and `offset` then run
 over those rows in SQL's order.
 
-| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB                                       |
-| ----------------- | -------- | --------- | -------------- | --------------------------------------------- |
-| INNER, by default | ✅       | ✅        | ✅             | ✅                                            |
-| LEFT              | ✅       | ✅        | ✅             | ✅                                            |
-| RIGHT             | ✅       | ✅        | ✅             | ⚠️ behaves like LEFT, the tables not reversed |
-| FULL              | ✅       | ❌ throws | ✅             | ⚠️ behaves like LEFT, does **not** throw      |
+| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB |
+| ----------------- | -------- | --------- | -------------- | ------- |
+| INNER, by default | ✅       | ✅        | ✅             | ✅      |
+| LEFT              | ✅       | ✅        | ✅             | ✅      |
+| RIGHT             | ✅       | ✅        | ✅             | ✅      |
+| FULL              | ✅       | ❌ throws | ✅             | ✅      |
 
 An INNER join drops a row with no joined row. A LEFT join keeps it, and
-its joined columns are `NULL`. On MongoDB a RIGHT or FULL join compiles
-to the LEFT form, so rows that exist only on the joined side are
-missing. Swap the two tables for a RIGHT join, or run two queries and
-merge them for a FULL one.
+its joined columns are `NULL`. A RIGHT join keeps each joined row that
+no row matches, with the base columns and the columns of earlier joins
+`NULL`; a FULL join keeps both kinds. On MongoDB those joined rows come
+from a `$unionWith` over the joined collection, MongoDB 4.4 or later,
+which keeps each document that no row built by the earlier joins meets
+the `on` map with. With a RIGHT or FULL join the `where` runs after
+every join, as SQL's does, even when it names only base columns.
 
 What a join returns, on every dialect:
 
@@ -859,12 +862,6 @@ We **silently fall back / passthrough** for:
 The split is deliberate: silent fallbacks happen when there's a
 reasonable substitute that keeps the query semantically meaningful;
 we throw when emitting anything would actively mislead the caller.
-
-**One entry in this document is not a deliberate fallback**: a `RIGHT`
-or `FULL` join on MongoDB silently behaves like `LEFT` rather than being
-emulated or rejected, see [JOINs](#joins) above. Every other row in this
-document reflects an intentional degradation; that one is a translator
-gap.
 
 ## `LPAD` / `RPAD` on SQLite
 

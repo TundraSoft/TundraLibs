@@ -275,8 +275,9 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
 
 A join is a `$lookup` followed by an `$unwind`, so the pipeline sees one
 row per joined row, as SQL does. An `INNER` join drops a document with no
-match and a `LEFT` join keeps it. `RIGHT` and `FULL` behave like `LEFT`:
-the collections are not reversed and `FULL` does not throw. See the
+match and a `LEFT` join keeps it. `RIGHT` and `FULL` add the joined
+documents that no row matches through a `$unionWith`, with the base
+columns `NULL`, and run the `where` after every join. See the
 [Compatibility Matrix](../docs/OQL-Compatibility.md#joins).
 
 **Pipeline-ordering guarantees:**
@@ -285,8 +286,9 @@ the collections are not reversed and `FULL` does not throw. See the
   every field it references — after `$lookup` when it references a joined
   field in **either** key or value position (e.g. `{ '@createdAt': { $gt:
   '@Author.@joinedAt' } }`), and after the expressions `$addFields` when it
-  references a declared expression alias. A pure primary-table filter still
-  gets the efficient early `$match`. (Matching a not-yet-materialised field
+  references a declared expression alias, and after every join when one is
+  `RIGHT` or `FULL`. Otherwise a pure primary-table filter gets the
+  efficient early `$match`. (Matching a not-yet-materialised field
   silently compares against `missing` and returns wrong rows.)
 - An `$exists` / `$nexists` node puts its `$lookup` directly before the
   `$match` that carries the filter and writes to a temporary

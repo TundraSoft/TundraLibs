@@ -1960,6 +1960,207 @@ const CASES: Case[] = [
     },
   },
   {
+    // The joined rows no user matches come in through `$unionWith`, with
+    // the user columns NULL; the base filter runs after, as SQL's WHERE.
+    name: 'SELECT with a RIGHT JOIN → $unionWith of the unmatched rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        Profile: {
+          table: 'profiles',
+          columns: ['userId', 'bio'],
+          type: 'RIGHT',
+          on: { '@Profile.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@Profile.@bio': 'bio' },
+      where: { '@name': 'a' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'profiles',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'Profile',
+            },
+          },
+          { $unwind: '$Profile' },
+          {
+            $unionWith: {
+              coll: 'profiles',
+              pipeline: [
+                { $replaceRoot: { newRoot: { Profile: '$$ROOT' } } },
+                {
+                  $lookup: {
+                    from: 'users',
+                    let: { joined: '$Profile' },
+                    pipeline: [{
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $eq: ['$$joined.userId', '$id'] },
+                            { $gt: ['$$joined.userId', null] },
+                          ],
+                        },
+                      },
+                    }, { $limit: 1 }],
+                    as: '__matches',
+                  },
+                },
+                { $match: { __matches: { $size: 0 } } },
+                {
+                  $replaceRoot: {
+                    newRoot: { id: null, name: null, Profile: '$Profile' },
+                  },
+                },
+              ],
+            },
+          },
+          { $match: { name: 'a' } },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // FULL keeps the users without a profile too; the unmatched profiles
+    // are found by the rows of the joins before it.
+    name: 'SELECT with a FULL JOIN after a LEFT JOIN → $unionWith over both',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'org'],
+      joins: {
+        O: {
+          table: 'orgs',
+          columns: ['id', 'name'],
+          type: 'LEFT',
+          on: { '@O.@id': '@org' },
+        },
+        P: {
+          table: 'profiles',
+          columns: ['userId', 'org', 'bio'],
+          type: 'FULL',
+          on: { '@P.@userId': '@id', '@P.@org': '@O.@name', '@P.@bio': 'x' },
+        },
+      },
+      projection: { '@id': true, '@P.@bio': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orgs',
+              localField: 'org',
+              foreignField: 'id',
+              pipeline: [{ $match: { id: { $ne: null } } }],
+              as: 'O',
+            },
+          },
+          { $unwind: { path: '$O', preserveNullAndEmptyArrays: true } },
+          {
+            $lookup: {
+              from: 'profiles',
+              let: { v0: '$id', v1: '$O.name' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$userId', '$$v0'] },
+                      { $gt: ['$userId', null] },
+                      { $eq: ['$org', '$$v1'] },
+                      { $gt: ['$org', null] },
+                      { $eq: ['$bio', 'x'] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $unwind: { path: '$P', preserveNullAndEmptyArrays: true } },
+          {
+            $unionWith: {
+              coll: 'profiles',
+              pipeline: [
+                { $replaceRoot: { newRoot: { P: '$$ROOT' } } },
+                {
+                  $lookup: {
+                    from: 'users',
+                    let: { joined: '$P' },
+                    pipeline: [
+                      {
+                        $lookup: {
+                          from: 'orgs',
+                          localField: 'org',
+                          foreignField: 'id',
+                          pipeline: [{ $match: { id: { $ne: null } } }],
+                          as: 'O',
+                        },
+                      },
+                      {
+                        $unwind: {
+                          path: '$O',
+                          preserveNullAndEmptyArrays: true,
+                        },
+                      },
+                      {
+                        $match: {
+                          $expr: {
+                            $and: [
+                              { $eq: ['$$joined.userId', '$id'] },
+                              { $gt: ['$$joined.userId', null] },
+                              { $eq: ['$$joined.org', '$O.name'] },
+                              { $gt: ['$$joined.org', null] },
+                              { $eq: ['$$joined.bio', 'x'] },
+                            ],
+                          },
+                        },
+                      },
+                      { $limit: 1 },
+                    ],
+                    as: '__matches',
+                  },
+                },
+                { $match: { __matches: { $size: 0 } } },
+                {
+                  $replaceRoot: {
+                    newRoot: { id: null, org: null, P: '$P' },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$P.bio', null] },
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
     // An entry naming only outer columns is a condition on the outer row.
     name: 'SELECT with JOIN on entries naming outer columns → let vars',
     method: 'select',

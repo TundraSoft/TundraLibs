@@ -1276,7 +1276,12 @@ export class MongoTranslator {
       q.where,
       q.expressions,
     );
-    const deferMatch = filterTouchesJoins || filterTouchesExpr;
+    // A RIGHT or FULL join adds rows whose base columns are NULL, and a
+    // filter on a base column must see those too.
+    const outerJoin = Object.values(q.joins ?? {}).some((def) =>
+      def?.type === 'RIGHT' || def?.type === 'FULL'
+    );
+    const deferMatch = filterTouchesJoins || filterTouchesExpr || outerJoin;
     if (q.where && !deferMatch) {
       this.__pushMatch(pipeline, q.where, columns);
     }
@@ -1285,16 +1290,20 @@ export class MongoTranslator {
         if (!def) continue;
         const lookup = this.__buildLookup(alias, def, columns);
         if (lookup === null) continue;
+        const type = def.type ?? 'INNER';
+        const rows = pipeline.slice();
         // One row per joined row, as a SQL join returns: the alias holds
         // a single joined document. A row without a match keeps going
-        // with the alias missing, its columns NULL, except on INNER,
-        // SQL's default. RIGHT and FULL keep it too, as LEFT does.
+        // with the alias missing, its columns NULL, on LEFT and FULL.
         pipeline.push(
           lookup,
-          (def.type ?? 'INNER') === 'INNER' ? { $unwind: `$${alias}` } : {
+          type === 'INNER' || type === 'RIGHT' ? { $unwind: `$${alias}` } : {
             $unwind: { path: `$${alias}`, preserveNullAndEmptyArrays: true },
           },
         );
+        if (type === 'RIGHT' || type === 'FULL') {
+          pipeline.push(this.__unmatchedJoinRows(q, alias, def, rows, columns));
+        }
       }
     }
     if (q.expressions) {
@@ -1511,6 +1520,63 @@ export class MongoTranslator {
     }];
     lookup.as = alias;
     return { $lookup: lookup };
+  }
+
+  /**
+   * The `$unionWith` stage that adds a RIGHT or FULL join's rows without
+   * a match: each document of the joined collection that no row of
+   * `rows`, the stages of the joins before it, meets the `on` map with.
+   * The document sits under its alias as on a matched row, and every
+   * base column is NULL.
+   */
+  private __unmatchedJoinRows(
+    q: Query<'SELECT'>,
+    alias: string,
+    def: NonNullable<NonNullable<Query<'SELECT'>['joins']>[string]>,
+    rows: Record<string, unknown>[],
+    columns: ReadonlySet<string>,
+  ): Record<string, unknown> {
+    let matches = '__matches';
+    while (matches === alias) matches = `_${matches}`;
+    const conditions = this.__joinConditions(
+      alias,
+      def,
+      columns,
+      (operand) => operand,
+      (field) => `$$joined.${field}`,
+    );
+    const base = Array.isArray(q.columns) ? q.columns.map(String) : [];
+    return {
+      $unionWith: {
+        coll: String(def.table),
+        pipeline: [
+          { $replaceRoot: { newRoot: { [alias]: '$$ROOT' } } },
+          {
+            $lookup: {
+              from: q.table,
+              let: { joined: `$${alias}` },
+              pipeline: [...rows, {
+                $match: {
+                  $expr: conditions.length === 1
+                    ? conditions[0]
+                    : { $and: conditions },
+                },
+              }, { $limit: 1 }],
+              as: matches,
+            },
+          },
+          { $match: { [matches]: { $size: 0 } } },
+          {
+            $replaceRoot: {
+              newRoot: {
+                ...Object.fromEntries(base.map((column) => [column, null])),
+                [alias]: `$${alias}`,
+              },
+            },
+          },
+        ],
+      },
+    };
   }
 
   /**
