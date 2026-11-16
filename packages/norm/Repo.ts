@@ -2080,21 +2080,45 @@ export class ReadRepo<
     // Pass 2: filter/orderBy refs may need filter-only joins.
     // Lifted alias → its NULL-safe columns on the related table.
     const existsAliases = new Map<string, readonly string[]>();
-    // A NULL-safe key can match several rows of a to-one relation, so a
-    // filter-only ref to it is lifted like a to-many one: the FK-holder
-    // columns to lift on, none when the ref joins.
-    const liftedSafeCols = (
+    // A to-one relation can match several rows when its key is NULL-safe
+    // or its join columns on the related entity cover neither that
+    // entity's primary key nor one of its declared unique groups.
+    const coversKey = (target: CompiledEntity, cols: readonly string[]) => {
+      const def = target.def as {
+        primaryKeys?: readonly string[];
+        uniques?: Record<string, readonly string[]>;
+      };
+      return [def.primaryKeys ?? [], ...Object.values(def.uniques ?? {})]
+        .some((set) => set.length > 0 && set.every((c) => cols.includes(c)));
+    };
+    const matchesMany = (alias: string): boolean => {
+      if (nullSafeCols(alias).length > 0) return true;
+      if (alias in fks) {
+        const fk = fks[alias]!;
+        return !coversKey(
+          runtime.compiled.get(fk.model)!,
+          Object.values(fk.on),
+        );
+      }
+      const rel = reverseEntries!.get(alias)!;
+      return rel.cardinality === 'hasMany' ||
+        !coversKey(runtime.compiled.get(rel.sourceKey)!, Object.values(rel.on));
+    };
+    // A filter-only ref to such a relation is lifted like a to-many one,
+    // so each base row comes back once: the FK-holder columns matched
+    // NULL-safe, or undefined when the ref joins.
+    const lifted = (
       alias: string,
       mode: 'where' | 'orderBy',
       position: 'key' | 'value',
-    ): readonly string[] =>
-      !(alias in oqlJoins) && mode === 'where' && position === 'key'
+    ): readonly string[] | undefined =>
+      !(alias in oqlJoins) && mode === 'where' && position === 'key' &&
+        matchesMany(alias)
         ? nullSafeCols(alias)
-        : [];
+        : undefined;
     // A filter-only join to a to-one relation that can match several
-    // rows (a NULL-safe key, or a key that is no declared unique key of
-    // the related table) repeats the base row once per match, and a
-    // value-position ref cannot be lifted out of it.
+    // rows repeats the base row once per match, and a value-position ref
+    // cannot be lifted out of it.
     const projectedAliases = new Set(Object.keys(oqlJoins));
     const refuseManyValueRef = (
       alias: string,
@@ -2104,14 +2128,9 @@ export class ReadRepo<
     ): void => {
       if (projectedAliases.has(alias)) return;
       const safe = nullSafeCols(alias).length > 0;
-      const def = target.def as {
-        primaryKeys?: readonly string[];
-        uniques?: Record<string, readonly string[]>;
-      };
-      const pk = def.primaryKeys ?? [];
-      const unique = [pk, ...Object.values(def.uniques ?? {})].some((set) =>
-        set.length > 0 && set.every((c) => targetCols.includes(c))
-      );
+      const pk = (target.def as { primaryKeys?: readonly string[] })
+        .primaryKeys ?? [];
+      const unique = coversKey(target, targetCols);
       if (unique && !safe) return;
       throw new NormQueryError(
         `Filter value '@${alias}.@${col}' references ` +
@@ -2156,8 +2175,8 @@ export class ReadRepo<
             },
           );
         }
-        const safe = liftedSafeCols(alias, mode, position);
-        if (safe.length > 0) {
+        const safe = lifted(alias, mode, position);
+        if (safe !== undefined) {
           existsAliases.set(alias, safe.map((c) => fks[alias]!.on[c]!));
           return;
         }
@@ -2229,8 +2248,8 @@ export class ReadRepo<
           existsAliases.set(alias, nullSafeCols(alias));
           return;
         }
-        const safe = liftedSafeCols(alias, mode, position);
-        if (safe.length > 0) {
+        const safe = lifted(alias, mode, position);
+        if (safe !== undefined) {
           existsAliases.set(alias, safe);
           return;
         }

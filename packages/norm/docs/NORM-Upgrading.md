@@ -21,6 +21,7 @@ changelog has those.
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
   - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
+  - [A to-one relation that can match several rows returns each row once](#a-to-one-relation-that-can-match-several-rows-returns-each-row-once)
   - [A filter value from a to-one relation that can match several rows needs it projected](#a-filter-value-from-a-to-one-relation-that-can-match-several-rows-needs-it-projected)
   - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
 
@@ -191,6 +192,17 @@ projected columns were equal into one row holding all their related
 rows. Each row now comes back once with its own related rows, so such a
 read can return more rows, and `total` already counted them. An entity
 with no primary key, a view, still merges them.
+
+### A to-one relation that can match several rows returns each row once
+
+A belongsTo or hasOne whose join columns on the related entity are
+neither its primary key nor one of its `unique` groups, a declared
+`reverseCardinality: 'hasOne'` for example, can match several rows. A
+filter through such a relation that the read did not project, as in
+`{ '@Org.@cap': { $lt: 8 } }`, was joined, so a row came back once for
+each related row that passed, and `count()` and `total` counted it as
+often. The row now comes back and is counted once, kept when at least
+one related row passes.
 
 ### A filter value from a to-one relation that can match several rows needs it projected
 

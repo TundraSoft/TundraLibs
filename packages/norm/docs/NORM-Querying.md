@@ -280,7 +280,10 @@ await db.repo('Visits').count({ '@Link.@slug': 'link-00' });
 Filtering through a to-many relation that is not projected is lifted
 into a correlated `$exists` subquery, so it never fans out. A base row
 matching N related rows still comes back once, and `count()` does not
-over-count:
+over-count. The same holds for a belongsTo or hasOne whose key can
+match several rows: one matched
+[NULL-safe](#null-safe-relation-keys), or joined on columns that are
+neither the related entity's primary key nor one of its `unique` groups:
 
 ```typescript ignore
 // Every link with at least one visit from 'IN' — each link ONCE:

@@ -195,5 +195,48 @@ for (const [i, fx] of FIXTURES.entries()) {
         asserts.assertEquals(orgs.total, 4);
       },
     );
+
+    // Seats 10 and 11 each match orgs 1 and 2; orgs 1, 2 and 3 each
+    // match one or two seats.
+    const ids = (r: { data: Array<{ id: number }> }) => r.data.map((x) => x.id);
+    const counted = async (
+      repo: 'Orgs' | 'Seats',
+      filter: Record<string, unknown>,
+      options: Record<string, unknown> = {},
+    ) => {
+      // deno-lint-ignore no-explicit-any
+      const r = db!.repo(repo) as any;
+      const all = await r.find(filter, {
+        orderBy: { '@id': 'ASC' },
+        ...options,
+      });
+      const page = await r.find(filter, {
+        orderBy: { '@id': 'ASC' },
+        limit: 1,
+        offset: 1,
+        total: true,
+        ...options,
+      });
+      return {
+        ids: ids(all),
+        count: (await r.count(filter)).count,
+        page: ids(page),
+        total: page.total,
+      };
+    };
+
+    live(
+      'a filter through a to-one relation whose key is not unique returns and counts each row once',
+      async () => {
+        asserts.assertEquals(
+          await counted('Seats', { '@Org.@cap': { $lt: 8 } }),
+          { ids: [10, 11], count: 2, page: [11], total: 2 },
+        );
+        asserts.assertEquals(
+          await counted('Orgs', { '@Seat.@total': { $gt: 5 } }),
+          { ids: [1, 2, 3], count: 3, page: [2], total: 3 },
+        );
+      },
+    );
   });
 }
