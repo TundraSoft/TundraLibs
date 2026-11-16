@@ -14,6 +14,8 @@
  *   `Engine.test.ts` / `NeonHttpClient.test.ts`).
  * - `NEON_HTTP_ENDPOINT` escape hatch: when set, the engine is pointed straight
  *   at that real endpoint (no proxy, any runtime) — for running against Neon.
+ *   `POSTGRES_*` then hold that database's host, name and login, and the login
+ *   must be allowed to create a role: the time zone test makes one.
  *
  * @module
  */
@@ -133,30 +135,34 @@ describe({
     describe('session time zone', () => {
       it({
         name: 'refuses a non-UTC session unless allowNonUtcTimeZone is set',
-        // Needs a second proxy logged in as the non-UTC role.
-        ignore: useRealEndpoint,
         fn: async () => {
           const admin = makeEngine('neon-live-tz-admin');
           const role = `tz_probe_${crypto.randomUUID().slice(0, 8)}`;
+          // Random, and mixed enough for the password rule Neon applies.
+          const password = `Tz-${crypto.randomUUID()}`;
           await admin.execute({
-            sql: `CREATE ROLE ${role} LOGIN PASSWORD 'tz-probe'`,
+            sql: `CREATE ROLE ${role} LOGIN PASSWORD '${password}'`,
           });
           await admin.execute({
             sql: `ALTER ROLE ${role} SET timezone TO 'Asia/Kolkata'`,
           });
           let roleProxy: NeonPgProxy | undefined;
           try {
-            roleProxy = await startNeonPgProxy({
-              ...TEST_CONFIG,
-              username: role,
-              password: 'tz-probe',
-            });
+            // A real endpoint signs each request in from its own credentials.
+            // The local proxy holds one login, so the role gets its own proxy.
+            if (!useRealEndpoint) {
+              roleProxy = await startNeonPgProxy({
+                ...TEST_CONFIG,
+                username: role,
+                password,
+              });
+            }
             const zoneAs = async (options: Record<string, unknown>) => {
               const engine = new NeonHttpEngine('neon-live-tz', {
                 host: TEST_CONFIG.host,
-                endpoint: roleProxy!.url,
+                endpoint: roleProxy?.url ?? endpoint,
                 username: role,
-                password: 'tz-probe',
+                password,
                 database: TEST_CONFIG.database,
                 ...options,
               });
