@@ -1571,8 +1571,13 @@ export class MongoTranslator {
 
     if (onEntries.length === 1) {
       const [key, value] = onEntries[0]!;
-      const [joined, other] = this.__joinPair(key, value, alias);
-      const localField = this.__joinedColumn(other, alias) === null
+      const [joined, other, isColumn] = this.__joinPair(
+        key,
+        value,
+        alias,
+        columns,
+      );
+      const localField = isColumn && this.__joinedColumn(other, alias) === null
         ? this.__joinLocalPath(other)
         : null;
       if (joined !== null && localField !== null) {
@@ -1691,12 +1696,17 @@ export class MongoTranslator {
     const nullSafe = (def.nullSafe ?? []) as string[];
     const conditions: unknown[] = [];
     for (const [key, value] of Object.entries(def.on)) {
-      const [field, other] = this.__joinPair(key, value, alias);
+      const [field, other, isColumn] = this.__joinPair(
+        key,
+        value,
+        alias,
+        columns,
+      );
       const left = field !== null
         ? joined(field)
         : outer(`$${this.__joinLocalPath(key)}`);
-      const otherField = this.__joinedColumn(other, alias);
-      const localPath = this.__joinLocalPath(other);
+      const otherField = isColumn ? this.__joinedColumn(other, alias) : null;
+      const localPath = isColumn ? this.__joinLocalPath(other) : null;
       if (otherField !== null) {
         conditions.push(
           ...this.__keyEquals(left, joined(otherField), nullSafe.includes(key)),
@@ -1727,22 +1737,29 @@ export class MongoTranslator {
   }
 
   /**
-   * One `on` entry as `[joined column, other side]`. SQL takes the
-   * joined column on either side, so a key naming an outer column and
-   * a value naming the joined one swap. With neither side naming the
-   * joined collection, the joined column is `null` and the key stays
-   * an outer column compared with the value.
+   * One `on` entry as `[joined column, other side, whether the other
+   * side is a column]`. SQL takes the joined column on either side, so
+   * a key naming an outer column and a value naming the joined one
+   * swap. With neither side naming the joined collection, the joined
+   * column is `null` and the key stays an outer column compared with
+   * the value.
+   *
+   * A key is a column. A value is one only when it names a column in
+   * `columns`, the rule the SQL translators apply: any other `@` string
+   * is text.
    */
   private __joinPair(
     key: string,
     value: unknown,
     alias: string,
-  ): [string | null, unknown] {
+    columns: ReadonlySet<string>,
+  ): [string | null, unknown, boolean] {
     const keyField = this.__joinedColumn(key, alias);
-    if (keyField !== null) return [keyField, value];
-    const valueField = this.__joinedColumn(value, alias);
-    if (valueField !== null) return [valueField, key];
-    return [null, value];
+    const isColumn = this.__valueFieldRef(value, columns) !== null;
+    if (keyField !== null) return [keyField, value, isColumn];
+    const valueField = isColumn ? this.__joinedColumn(value, alias) : null;
+    if (valueField !== null) return [valueField, key, true];
+    return [null, value, isColumn];
   }
 
   /**
@@ -1870,12 +1887,10 @@ export class MongoTranslator {
   }
 
   /**
-   * The local-side field path from an `on` value, or `null` when the
-   * value isn't a column reference (literal / `null` / Expression).
-   *
-   * Unlike a filter value position, a join `on` value that starts with
-   * `@` is a column reference by construction — the assert layer has
-   * already validated it against the declared column lists.
+   * The field path of an `on` key or value that is a column reference,
+   * or `null` for a value that is no `@` string (literal / `null` /
+   * Expression). {@link MongoTranslator.__joinPair} tells whether an `@`
+   * value names a column at all.
    */
   private __joinLocalPath(value: unknown): string | null {
     if (typeof value !== 'string' || !value.startsWith('@')) return null;

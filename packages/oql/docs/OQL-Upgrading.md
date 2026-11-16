@@ -153,6 +153,7 @@ dialects are unchanged.
 | DIVIDE, MODULO or SUBTRACT with three or more operands                       | failed                                             | folded left to right      |
 | a join                                                                       | one row per base document, joined rows in an array | one row per joined row    |
 | a join `on` naming the base column first                                     | every joined row matched                           | as the other order        |
+| a join `on` value that names no declared column, `'@admin'`                  | a field lookup                                     | the text `'@admin'`       |
 | a RIGHT or FULL join                                                         | LEFT rows                                          | SQL's rows                |
 | any row                                                                      | carried `_id`, the group key in a grouped query    | no `_id` unless projected |
 | INSERT_FROM_QUERY                                                            | copied the source `_id`                            | new ids                   |

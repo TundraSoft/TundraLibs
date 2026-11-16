@@ -811,6 +811,11 @@ return the same rows. On MongoDB that means two `$lookup` shapes:
   `$expr: { $and: [ … ] }`. A composite key therefore correlates on
   _all_ of its parts, matching the SQL `ON a = b AND c = d`.
 
+An `on` value that starts with `@` is a column when it names a column the
+query declares, on the base table or on a join. Any other string is text
+on every dialect: `{ '@P.@role': '@admin' }` compares `role` with the
+text `'@admin'`.
+
 ### NULL in a join condition
 
 A column or Expression pair in `on` is plain equality: it never matches

@@ -2297,6 +2297,90 @@ const CASES: Case[] = [
     },
   },
   {
+    // As on SQL, an `@` value is a column only when the query knows it.
+    name: 'SELECT with a JOIN on value naming no known column → text',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'role'],
+          type: 'INNER',
+          on: { '@P.@role': '@admin' },
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              pipeline: [{ $match: { $expr: { $eq: ['$role', '@admin'] } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          { $project: { perm: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    name:
+      'SELECT with JOIN on values naming undeclared columns beside a column pair → text',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'role'],
+          type: 'INNER',
+          on: { '@P.@id': '@pid', '@P.@role': '@owner', '@perm': '@P.@org' },
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              let: { v0: '$pid', v1: '$perm' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id', '$$v0'] },
+                      { $gt: ['$id', null] },
+                      { $eq: ['$role', '@owner'] },
+                      { $eq: ['$$v1', '@P.@org'] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          { $project: { perm: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT with JOIN → aggregate with $lookup',
     method: 'select',
     query: {
