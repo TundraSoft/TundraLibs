@@ -180,9 +180,10 @@ key, an aggregate's `column`, an order-by entry. **Fix:** prefix it with `@`
 `columnIdentifier` asserts already reject this, so a validated query cannot
 reach it.
 
-**Also triggered by**, on MongoDB, an UPDATE or DELETE whose filter value or
-expression argument is an `@key` naming one of its declared `expressions`
-rather than a column, such as `CONCAT('@total', '!')` with `total` declared.
+**Also triggered by**, on MongoDB, an UPDATE or DELETE whose expression
+argument is an `@key` naming one of its declared `expressions` rather than
+a column, such as `CONCAT('@total', '!')` with `total` declared. A filter
+value naming one compares the expression's value instead.
 The SQL dialects read it as a column the table lacks and the database fails;
 MongoDB throws here, before anything is written. **Fix:** write the
 expression itself where its value is needed.

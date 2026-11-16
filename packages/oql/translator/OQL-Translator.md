@@ -285,7 +285,8 @@ the collections are not reversed and `FULL` does not throw. See the
   every field it references — after `$lookup` when it references a joined
   field in **either** key or value position (e.g. `{ '@createdAt': { $gt:
   '@Author.@joinedAt' } }`), and after the expressions `$addFields` when it
-  references a declared expression alias. A pure primary-table filter still
+  references a declared expression alias, as a key or a value. A pure
+  primary-table filter still
   gets the efficient early `$match`. (Matching a not-yet-materialised field
   silently compares against `missing` and returns wrong rows.)
 - An `$exists` / `$nexists` node puts its `$lookup` directly before the

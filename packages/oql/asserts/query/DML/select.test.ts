@@ -969,6 +969,39 @@ describe('oql.asserts.Query.DML.Select', () => {
       );
     });
 
+    it('a value naming an alias where its key is refused', () => {
+      const query = (filter: Record<string, unknown>) => ({
+        type: 'SELECT',
+        table: 'orders',
+        columns: ['userId', 'total'],
+        expressions: { net: { $$_expression: 'ADD', args: ['@total', 1] } },
+        aggregates: {
+          totalSpent: { $$_aggregate: 'SUM', column: '@total' },
+        },
+        projection: { '@userId': true, '@totalSpent': true },
+        ...filter,
+      });
+      asserts.assertThrows(
+        () =>
+          assertSelectQuery(query({
+            where: { $or: [{ '@total': { $in: [1, '@totalSpent'] } }] },
+          })),
+        TypeError,
+        "'where' cannot reference aggregate '@totalSpent' as a value",
+      );
+      asserts.assertThrows(
+        () => assertSelectQuery(query({ having: { '@totalSpent': '@net' } })),
+        TypeError,
+        "'having' cannot reference expression '@net' as a value",
+      );
+      // The aliases they may name: an expression in WHERE, an aggregate
+      // in HAVING.
+      assertSelectQuery(query({
+        where: { '@total': { $lt: '@net' } },
+        having: { '@totalSpent': { $gt: '@totalSpent' } },
+      }));
+    });
+
     it('HAVING present without aggregates', () => {
       asserts.assertThrows(
         () =>

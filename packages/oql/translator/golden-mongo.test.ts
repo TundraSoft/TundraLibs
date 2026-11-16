@@ -3097,6 +3097,105 @@ const CASES: Case[] = [
     },
   },
 
+  {
+    // The value compares the expression itself, so the `$match` may run
+    // anywhere; it waits for `$addFields` as a key naming an alias does.
+    // After `$group` an aggregate is a field, which a HAVING value reads.
+    name: 'SELECT WHERE and HAVING values naming an alias → $expr',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      expressions: {
+        doubled: { $$_expression: 'MULTIPLY', args: ['@userId', 2] },
+      },
+      aggregates: {
+        total: { $$_aggregate: 'SUM', column: '@amount' },
+        most: { $$_aggregate: 'MAX', column: '@amount' },
+      },
+      projection: { '@userId': true, '@total': 'total' },
+      where: { '@amount': { $lt: '@doubled' } },
+      having: { '@total': { $gt: '@most' } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          { $addFields: { doubled: { $multiply: ['$userId', 2] } } },
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $lt: ['$amount', { $multiply: ['$userId', 2] }] },
+                  { $gt: ['$amount', null] },
+                  { $gt: [{ $multiply: ['$userId', 2] }, null] },
+                ],
+              },
+            },
+          },
+          {
+            $group: {
+              _id: { userId: '$userId' },
+              total: { $sum: '$amount' },
+              __sum_total: { $max: '$amount' },
+              most: { $max: '$amount' },
+            },
+          },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+              userId: '$_id.userId',
+            },
+          },
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $gt: ['$total', '$most'] },
+                  { $gt: ['$total', null] },
+                  { $gt: ['$most', null] },
+                ],
+              },
+            },
+          },
+          { $project: { userId: 1, total: '$total', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    name: 'UPDATE where value naming an expression alias → $expr $in',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'qty'],
+      expressions: { d: { $$_expression: 'ADD', args: ['@qty', 1] } },
+      data: { qty: 0 },
+      where: { '@id': { $in: ['@d', 5] } },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $and: [
+              { $in: ['$id', [{ $add: ['$qty', 1] }, 5]] },
+              { $gt: ['$id', null] },
+            ],
+          },
+        },
+        data: { $set: { qty: 0 } },
+        options: { multiple: true },
+      },
+    },
+  },
+
   // ---------------------------------------------------------------------------
   // UPSERT — Mongo-flavoured
   // ---------------------------------------------------------------------------
@@ -3482,6 +3581,48 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: 'active' },
+      },
+    },
+  },
+  {
+    name: 'COUNT where value naming an expression alias → $expr',
+    method: 'count',
+    query: {
+      type: 'COUNT',
+      table: 'users',
+      columns: ['id', 'status'],
+      expressions: { s: { $$_expression: 'UPPER', args: '@status' } },
+      where: { '@status': '@s' },
+    },
+    expected: {
+      sql: 'count',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $and: [
+              {
+                $eq: ['$status', {
+                  $cond: [
+                    { $gt: ['$status', null] },
+                    { $toUpper: '$status' },
+                    null,
+                  ],
+                }],
+              },
+              { $gt: ['$status', null] },
+              {
+                $gt: [{
+                  $cond: [
+                    { $gt: ['$status', null] },
+                    { $toUpper: '$status' },
+                    null,
+                  ],
+                }, null],
+              },
+            ],
+          },
+        },
       },
     },
   },
@@ -4421,8 +4562,22 @@ describe('oql.translator.MongoTranslator — expression alias where a column bel
     }));
   });
 
-  it('as an UPDATE filter value', () => {
-    refuses(update({ where: { '@name': { $ne: '@u' } } }));
+  it('not as an UPDATE filter value, which compares the expression', () => {
+    const upper = {
+      $cond: [{ $gt: ['$name', null] }, { $toUpper: '$name' }, null],
+    };
+    asserts.assertEquals(
+      update({ where: { '@name': { $ne: '@u' } } })().params.filter,
+      {
+        $expr: {
+          $and: [
+            { $ne: ['$name', upper] },
+            { $gt: ['$name', null] },
+            { $gt: [upper, null] },
+          ],
+        },
+      },
+    );
   });
 
   it('in an expression a filter key names', () => {
