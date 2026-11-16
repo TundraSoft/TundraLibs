@@ -85,7 +85,10 @@ predicate: a `DATE_ADD` on Postgres, which builds its interval from text
 and so is not IMMUTABLE, and any expression on MongoDB, whose partial
 filter takes no `$expr`. Both throw `DialectUnsupportedError`, before the
 statement reaches the database. Other non-IMMUTABLE expressions, such as
-`NOW` on Postgres, still fail in the database.
+`NOW` on Postgres, still fail in the database. An `$exists` or
+`$nexists` in the `where` throws `OqlError` `EXISTS_NO_OUTER_TABLE` on
+every dialect, MariaDB included: no engine takes a subquery in an index
+predicate.
 
 **MariaDB DROP INDEX caveat**: `ifExists` and `cascade` are silently
 dropped because MariaDB's `DROP INDEX` grammar does not accept them.
@@ -372,7 +375,8 @@ SQL.
 
 `updateMany` and `deleteMany` take a query filter, which has no stage
 to run a lookup in, so an UPDATE or DELETE carrying the node throws on
-MongoDB, as does a partial-index predicate. Select the keys with the
+MongoDB. A partial-index predicate cannot hold the node on any dialect,
+see [Indexes](#indexes). Select the keys with the
 same filter first, then update or delete by `$in` on them. An `on`
 value that names a joined column, `'@Alias.@col'`, reads that column
 of the row, as on SQL.
