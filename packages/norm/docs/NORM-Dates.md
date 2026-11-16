@@ -78,20 +78,25 @@ and
 norm sends and reads UTC values, so the database session has to run in
 UTC as well.
 
-| Engine                     | What happens                                                                                              |
-| -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Postgres                   | `connect()` throws `EngineError` with code `INVALID_CONFIG_VALUE` when the session `TimeZone` is not UTC. |
-| Neon                       | The first query checks the session, and is rejected with the same error.                                  |
-| MariaDB                    | The driver sets each connection's `time_zone` to `+00:00`. There is nothing to configure.                 |
-| SQLite, Turso, D1, MongoDB | There is no session time zone.                                                                            |
+| Engine                     | What happens                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Postgres                   | The driver asks for `TimeZone=UTC` when it connects, so the session runs in UTC whatever zone the database or role is set to.                          |
+| Postgres behind a pooler   | A pooler may not pass that request on. When the zone the pooler reports is not UTC, `connect()` throws `EngineError` with code `INVALID_CONFIG_VALUE`. |
+| Neon                       | HTTP has no startup message to ask in. The first query or `ping()` reads the session zone, and is rejected with the same error when it is not UTC.     |
+| MariaDB                    | The driver sets each connection's `time_zone` to `+00:00`. There is nothing to configure.                                                              |
+| SQLite, Turso, D1, MongoDB | There is no session time zone.                                                                                                                         |
 
-Fix a refused Postgres or Neon database on the server:
+Fix a refused database on the server. Set the zone on the role when it
+has a `timezone` setting of its own, since that overrides the
+database's. Behind a pooler, that is the role the pooler signs in as,
+and the setting applies once the pooler opens a new server connection:
 
 ```sql
+ALTER ROLE app SET timezone TO 'UTC';
 ALTER DATABASE app SET timezone TO 'UTC';
 ```
 
-To connect without changing the database, pass the driver's
+To keep the database's own zone, pass the driver's
 `allowNonUtcTimeZone` through `database`:
 
 ```typescript
@@ -109,7 +114,7 @@ const norm = new Norm({
 });
 ```
 
-That removes the check and nothing else. With the session in
+The driver then asks for no zone and checks none. With the database in
 `Asia/Kolkata`, a row written with `2026-11-14T20:00:00Z` in every
 column reads back as:
 
@@ -122,7 +127,7 @@ column reads back as:
 Temporal and audit period columns are `datetime()` columns and shift
 the same way. Set the option only for a schema whose instants are all
 `timestamptz()`, with no `date()` column and no temporal or audit
-table. The drivers explain the check:
+table. The drivers have the detail:
 [Postgres → Time zone](../../drivers/engines/postgres/Drivers-Postgres.md#time-zone)
 and [Neon → Time zone](../../drivers/engines/neon/Drivers-Neon.md#time-zone).
 
