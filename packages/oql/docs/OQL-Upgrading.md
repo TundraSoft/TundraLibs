@@ -7,16 +7,14 @@ changelog has those.
 ## Table of Contents
 
 - [1.6.0](#160)
-  - [`DIVIDE` keeps the fraction](#divide-keeps-the-fraction)
   - [`COUNT` is a number](#count-is-a-number)
   - [`MODULO` and `ROUND` results](#modulo-and-round-results)
-  - [`CURRENT_TIME` is a UTC `'HH:MM:SS'` string](#current_time-is-a-utc-hhmmss-string)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
-  - [`DATE_ADD` runs on MariaDB and stops at the month end on SQLite](#date_add-runs-on-mariadb-and-stops-at-the-month-end-on-sqlite)
+  - [`DATE_ADD` runs on MariaDB and takes a negative amount on SQLite](#date_add-runs-on-mariadb-and-takes-a-negative-amount-on-sqlite)
   - [A computed operand of a pattern operator is matched as written](#a-computed-operand-of-a-pattern-operator-is-matched-as-written)
   - [A filter value naming an expression reads its value](#a-filter-value-naming-an-expression-reads-its-value)
   - [A name in a partial-index `where` is a column](#a-name-in-a-partial-index-where-is-a-column)
-  - [SQLite `CURRENT_DATE` and empty `ARRAY_AGG`](#sqlite-current_date-and-empty-array_agg)
+  - [SQLite `CURRENT_DATE`](#sqlite-current_date)
   - [MongoDB returns what SQL returns](#mongodb-returns-what-sql-returns)
   - [`$exists` keys: null, and nested](#exists-keys-null-and-nested)
   - [An `orderBy` key needs its `@` prefixes](#an-orderby-key-needs-its--prefixes)
@@ -29,12 +27,6 @@ changelog has those.
 Each entry compares a query written against oql 1.5.0 with the same query
 now. [Compatibility](OQL-Compatibility.md) states each rule in full.
 
-### `DIVIDE` keeps the fraction
-
-`7 / 2` was `3` on Postgres and SQLite, and `1 / 3` was `0.3333` on
-MariaDB. Every dialect now returns `3.5` and the full double. Wrap the
-expression in `FLOOR` where the integer result was wanted.
-
 ### `COUNT` is a number
 
 A `COUNT` aggregate, plain or `distinct`, was a `bigint` such as `3n` on
@@ -44,26 +36,14 @@ it. A `count()` query is unchanged.
 
 ### `MODULO` and `ROUND` results
 
-| Expression                                      | oql 1.5.0                                    | Now                |
-| ----------------------------------------------- | -------------------------------------------- | ------------------ |
-| `MODULO` with a `BIGINT` operand, Postgres      | a `bigint`, `1n`                             | a `number`, `1`    |
-| `MODULO` with a `DOUBLE` operand, Postgres      | failed: `operator does not exist`            | `2.5 % 2` is `0.5` |
-| `MODULO` with a fraction, SQLite                | the remainder of the truncated operands, `0` | `0.5`              |
-| `ROUND` with a precision on `NUMERIC`, Postgres | a string, `'7.0'`                            | a `number`, `7`    |
+| Expression                                      | oql 1.5.0                         | Now                |
+| ----------------------------------------------- | --------------------------------- | ------------------ |
+| `MODULO` with a `BIGINT` operand, Postgres      | a `bigint`, `1n`                  | a `number`, `1`    |
+| `MODULO` with a `DOUBLE` operand, Postgres      | failed: `operator does not exist` | `2.5 % 2` is `0.5` |
+| `ROUND` with a precision on `NUMERIC`, Postgres | a string, `'7.0'`                 | a `number`, `7`    |
 
 MariaDB still returns a `bigint` for `MODULO` over integer columns, see
 [number results](OQL-Compatibility.md#number-results).
-
-### `CURRENT_TIME` is a UTC `'HH:MM:SS'` string
-
-| Dialect  | oql 1.5.0                                                          | Now                           |
-| -------- | ------------------------------------------------------------------ | ----------------------------- |
-| Postgres | `'07:20:46.17099+00'`, a `TIME WITH TIME ZONE` in the session zone | `'07:20:46'`, a `TIME` in UTC |
-| MariaDB  | the session zone's time                                            | UTC                           |
-| SQLite   | `'07:20:46'`                                                       | unchanged                     |
-| MongoDB  | a `Date`, also when written on insert                              | `'07:20:46'`                  |
-
-Compare it with a string, not a `Date`.
 
 ### `DATE_DIFF` counts complete units and returns a number
 
@@ -82,14 +62,10 @@ handles a `bigint` result.
 [DATE_DIFF units](OQL-Compatibility.md#date_diff-units) has worked
 examples.
 
-### `DATE_ADD` runs on MariaDB and stops at the month end on SQLite
+### `DATE_ADD` runs on MariaDB and takes a negative amount on SQLite
 
 Every `DATE_ADD` failed with a syntax error on MariaDB; it now returns a
-`Date`. On SQLite a negative amount returned `NULL`, and a month or year
-added to a day the target month lacks ran into the next month: 31
-January 2024 plus one month was 2 March. It is now 29 February, as on the
-other dialects. See
-[DATE_ADD month end](OQL-Compatibility.md#date_add-month-end).
+`Date`. On SQLite a negative amount returned `NULL`; it now subtracts.
 
 ### A computed operand of a pattern operator is matched as written
 
@@ -119,47 +95,38 @@ and SQLite created the index with that condition. Both now read the
 column `b`. On MongoDB a value `'@b'` is still the text. See
 [Indexes](OQL-Compatibility.md#indexes).
 
-### SQLite `CURRENT_DATE` and empty `ARRAY_AGG`
+### SQLite `CURRENT_DATE`
 
 `CURRENT_DATE` was `'2026-11-16'` and is now
-`'2026-11-16T00:00:00.000Z'`, as projected and as written. ARRAY_AGG and
-JSON_ROW over no rows were `[]` and are now `NULL`, as on the other
-dialects.
+`'2026-11-16T00:00:00.000Z'`, as projected and as written.
 
 ### MongoDB returns what SQL returns
 
 These MongoDB results change to the rows the SQL dialects return. The SQL
 dialects are unchanged.
 
-| Query                                                                        | oql 1.5.0 on MongoDB                               | Now                       |
-| ---------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------- |
-| `$ne`, `$nin`, `$nlike`, `$nilike` on a null or missing field                | matched it                                         | skips it                  |
-| `{ '@a': '@b' }` with both fields null                                       | matched                                            | no match                  |
-| a comparison against an expression, `{ $lt: ADD('@b', 1) }`                  | matched nothing                                    | compared per row          |
-| `UPPER`, `LOWER` or `SUBSTR` of null                                         | `''`                                               | `null`                    |
-| `LENGTH` of null                                                             | the query failed                                   | `null`                    |
-| `SUBSTR` without a length                                                    | failed                                             | the rest of the string    |
-| a literal string starting with `$` in an expression, `'$s'`                  | the value of field `s`                             | the text `'$s'`           |
-| an `@` argument that names no declared column, `'@nope'`                     | a field lookup, `null`                             | the text `'@nope'`        |
-| `'@meta.@tag'` as an expression argument                                     | the nested field                                   | the text, as on SQL       |
-| COUNT, SUM, AVG or ARRAY_AGG with `distinct: true`                           | not distinct                                       | distinct                  |
-| a `count()` filtered on a declared expression                                | `0`                                                | SQL's count               |
-| STRING_AGG, or `count()` with `distinct`                                     | threw `DialectUnsupportedError`                    | run                       |
-| a column or expression as a pattern operand, a column inside a list or `$in` | threw `DialectUnsupportedError`                    | run                       |
-| SUM over no values                                                           | `0`                                                | `null`                    |
-| an aggregate without group keys over no rows                                 | no row                                             | one row                   |
-| `$exists` and `$nexists` in a SELECT or COUNT                                | threw `DialectUnsupportedError`                    | run                       |
-| an UPDATE or DELETE `where` on a declared expression                         | read a field of that name                          | the rows SQL matches      |
-| DIVIDE, MODULO or SUBTRACT with three or more operands                       | failed                                             | folded left to right      |
-| a join                                                                       | one row per base document, joined rows in an array | one row per joined row    |
-| a join `on` naming the base column first                                     | every joined row matched                           | as the other order        |
-| a RIGHT or FULL join                                                         | LEFT rows                                          | SQL's rows                |
-| any row                                                                      | carried `_id`, the group key in a grouped query    | no `_id` unless projected |
-| INSERT_FROM_QUERY                                                            | copied the source `_id`                            | new ids                   |
+| Query                                                                        | oql 1.5.0 on MongoDB                                              | Now                    |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------- |
+| `$ne`, `$nin`, `$nlike`, `$nilike` on a null or missing field                | matched it                                                        | skips it               |
+| `{ '@a': '@b' }` with both fields null                                       | matched                                                           | no match               |
+| a comparison against an expression, `{ $lt: ADD('@b', 1) }`                  | matched nothing                                                   | compared per row       |
+| `UPPER`, `LOWER` or `SUBSTR` of null                                         | `''`                                                              | `null`                 |
+| `LENGTH` of null                                                             | the query failed                                                  | `null`                 |
+| `SUBSTR` without a length                                                    | failed                                                            | the rest of the string |
+| a literal string starting with `$` in an expression, `'$s'`                  | the value of field `s`                                            | the text `'$s'`        |
+| an `@` argument that names no declared column, `'@nope'`                     | a field lookup, `null`                                            | the text `'@nope'`     |
+| COUNT, SUM, AVG or ARRAY_AGG with `distinct: true`                           | not distinct                                                      | distinct               |
+| a `count()` filtered on a declared expression                                | `0`                                                               | SQL's count            |
+| STRING_AGG, or `count()` with `distinct`                                     | threw `DialectUnsupportedError`                                   | run                    |
+| a column or expression as a pattern operand, a column inside a list or `$in` | threw `DialectUnsupportedError`                                   | run                    |
+| `$exists` and `$nexists` in a SELECT or COUNT                                | threw `DialectUnsupportedError`                                   | run                    |
+| an UPDATE or DELETE `where` on a declared expression                         | read a field of that name                                         | the rows SQL matches   |
+| DIVIDE, MODULO or SUBTRACT with three or more operands                       | failed                                                            | folded left to right   |
+| an INNER join, a document with no joined row                                 | kept, with an empty array                                         | dropped                |
+| a join `on` naming the base column first                                     | every joined row matched                                          | as the other order     |
+| `$like`, `$ilike`, their negations and `$endsWith` on text with a newline    | `%` and `_` stopped at it, and the end matched before a final one | as LIKE matches        |
 
-Joins change in more ways than one row:
-[MongoDB join results in earlier releases](OQL-Compatibility.md#mongodb-join-results-in-earlier-releases)
-lists them. To keep a null row that a `$ne` now skips, ask for it, as
+To keep a null row that a `$ne` now skips, ask for it, as
 [NULL in a filter](OQL-Compatibility.md#null-in-a-filter) shows.
 
 ### `$exists` keys: null, and nested
@@ -186,22 +153,25 @@ still seconds.
 
 ### Errors that changed
 
-| Query                                                                         | oql 1.5.0                                                                      | Now                                      |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------- |
-| a `null` inside a list filter, `{ '@a': [7, null] }`                          | the null was ignored, or matched NULL on MongoDB                               | `TypeError`                              |
-| an unknown time unit under `expressions`                                      | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
-| a lower-case time unit in a filter operand, `'days'`                          | ran on Postgres and SQLite                                                     | `OqlError` `INVALID_TIME_UNIT`           |
-| an UPDATE or DELETE filter through a join                                     | `TypeError`                                                                    | `OqlError` `RELATION_FILTER_UNSUPPORTED` |
-| `'@j.amt'` for a column of the join `j`, as a key or value                    | `TypeError` as a key; as a value, a database error on SQL                      | `OqlError` `INVALID_COLUMN_REF`          |
-| ABS, CEIL, FLOOR or SQRT with more than one operand, ROUND with more than two | the extra operands ignored; ROUND failed on SQLite                             | `TypeError`                              |
-| DATE_ADD or DATE_DIFF without a unit                                          | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
-| a malformed expression as a filter value, `NOPE` or `ADD('@b', 'x')`          | `DialectUnsupportedError`, a database error, or rows                           | `TypeError`                              |
-| a WHERE value naming an aggregate, a HAVING value naming an expression        | the text compared, or a database error on Postgres                             | `TypeError`                              |
-| a Postgres `$like` pattern ending in one backslash                            | `LIKE pattern must not end with escape character`                              | matches a literal backslash              |
-| an index `where` with a `DATE_ADD` on Postgres                                | failed in the database                                                         | `DialectUnsupportedError`                |
-| an index `where` with a clock or UUID, Postgres and SQLite                    | failed at the create or at the next write; SQLite took UUID as one fixed value | `DialectUnsupportedError`                |
-| an index `where` with `$exists`                                               | failed in the database, or `DialectUnsupportedError`                           | `OqlError` `EXISTS_NO_OUTER_TABLE`       |
-| an index `where` with any expression on MongoDB                               | an index whose filter held the expression object as a value                    | `DialectUnsupportedError`                |
+| Query                                                                             | oql 1.5.0                                                                      | Now                                      |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------- |
+| a `null` inside a list filter, `{ '@a': [7, null] }`                              | the null was ignored, or matched NULL on MongoDB                               | `TypeError`                              |
+| an unknown time unit under `expressions`                                          | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
+| a lower-case time unit in a filter operand, `'days'`                              | ran on Postgres and SQLite                                                     | `OqlError` `INVALID_TIME_UNIT`           |
+| an UPDATE or DELETE filter through a join                                         | `TypeError`                                                                    | `OqlError` `RELATION_FILTER_UNSUPPORTED` |
+| `'@j.amt'` for a column of the join `j`, as a key or value                        | `TypeError` as a key; as a value, a database error on SQL                      | `OqlError` `INVALID_COLUMN_REF`          |
+| ABS, CEIL, FLOOR or SQRT with more than one operand, ROUND with more than two     | the extra operands ignored; ROUND failed on SQLite                             | `TypeError`                              |
+| DATE_ADD or DATE_DIFF without a unit                                              | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
+| a malformed expression as a filter value, `NOPE` or `ADD('@b', 'x')`              | `DialectUnsupportedError`, a database error, or rows                           | `TypeError`                              |
+| a WHERE value naming an aggregate, a HAVING value naming an expression            | the text compared, or a database error on Postgres                             | `TypeError`                              |
+| a RIGHT or FULL join on MongoDB                                                   | LEFT rows                                                                      | `DialectUnsupportedError`                |
+| a joined column as a filter value on MongoDB, `{ $gt: '@J.@b' }`                  | compared with the joined array                                                 | `DialectUnsupportedError`                |
+| STRING_AGG with `distinct` on SQLite                                              | failed in the database                                                         | `DialectUnsupportedError`                |
+| a `$exists` inside a CASE condition on SQL, in a SELECT expression or UPDATE data | `OqlError` `EXISTS_NO_OUTER_TABLE`                                             | runs                                     |
+| an index `where` with a `DATE_ADD` on Postgres                                    | failed in the database                                                         | `DialectUnsupportedError`                |
+| an index `where` with a clock or UUID, Postgres and SQLite                        | failed at the create or at the next write; SQLite took UUID as one fixed value | `DialectUnsupportedError`                |
+| an index `where` with `$exists`                                                   | failed in the database, or `DialectUnsupportedError`                           | `OqlError` `EXISTS_NO_OUTER_TABLE`       |
+| an index `where` with any expression on MongoDB                                   | an index whose filter held the expression object as a value                    | `DialectUnsupportedError`                |
 
 The `INVALID_TIME_UNIT` message no longer starts with
 `Invalid SELECT query: expression '<alias>' is invalid:`, and the

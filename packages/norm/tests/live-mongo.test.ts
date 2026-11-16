@@ -178,6 +178,8 @@ if (!available) {
       '17': 'no transactions (capabilities.transactions=false; ' +
         'db.transaction throws NormUnsupportedError by design)',
       '17b': 'no transactions — savepoint nesting is moot without them',
+      '13b': 'a joined column in a VIEW projection reads back as an ' +
+        'array (tags_of_posts.name is ["deno"]), so the tag names differ',
     },
   });
 }

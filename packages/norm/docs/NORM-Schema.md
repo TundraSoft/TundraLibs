@@ -451,10 +451,10 @@ On MongoDB an insert document cannot evaluate expressions, so the clock
 expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`,
 `CURRENT_DATE`, `CURRENT_TIME`, `UNIX_TIMESTAMP`) and `UUID` are computed
 when the insert is built, the clock ones at one instant per statement.
-`CURRENT_TIME` is the UTC time of day of that instant as `'HH:MM:SS'`. A `date()` column given one of them holds the UTC
+`CURRENT_TIME` is that instant, a `Date`; a `time()` column reads it back as its UTC time of day. A `date()` column given one of them holds the UTC
 day of that instant. A `DATE_ADD` of a whole amount to a `Date` or a
-clock is computed by norm, with the month-end rule the SQL engines
-follow and one clock reading per insert call; a `date()` column holds
+clock is computed by norm, with the month-end rule Postgres, MariaDB
+and MongoDB follow and one clock reading per insert call; a `date()` column holds
 the UTC day of the result. Any other expression default fails the insert
 with `DialectUnsupportedError`, a `DATE_ADD` with a fractional amount
 included; use a local generator instead. Updates and upserts evaluate expressions in the
@@ -966,9 +966,7 @@ Every FK from `A → B` gives `B` a reverse relation.
   cardinality needed. Views have no pk, so their reverses are always
   `hasMany` unless you declare otherwise. A declared `hasOne` that
   matches several rows carries the one lowest by primary key. A view has
-  no key, so there it carries the one lowest by the view's columns in
-  declared order, a NULL after any value; encrypted, JSON and mask
-  columns are skipped. A filter or ordering through such a `hasOne` returns each row
+  no key, so there it carries the row the engine returns first. A filter or ordering through such a `hasOne` returns each row
   once; see [Relation references](NORM-Querying.md#relation-references).
 
 A reverse name must be free on the target: it cannot collide with one

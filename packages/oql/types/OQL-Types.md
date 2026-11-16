@@ -861,13 +861,13 @@ SQLite has no date type, so there each of these returns text in place of a
 `2026-02-01T00:00:00.000Z` for `CURRENT_DATE`. The type per engine
 is in [date expression results](../docs/OQL-Compatibility.md#date-expression-results).
 
-`CURRENT_TIME` returns a string on every dialect — see
+`CURRENT_TIME` returns each dialect's own time of day — see
 [CURRENT_TIME](../docs/OQL-Compatibility.md#current_time).
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
   `date` (negative `amount` subtracts). `date` is a column, a `Date`, or a
-  nested `NOW` / `CURRENT_TIMESTAMP(TZ)`. Months and years stop at the
-  target month's last day on every dialect — see
+  nested `NOW` / `CURRENT_TIMESTAMP(TZ)`. Months and years at a month end
+  differ on SQLite — see
   [DATE_ADD month end](../docs/OQL-Compatibility.md#date_add-month-end).
 - `DATE_DIFF` — `args: { from; to; unit }`; complete time units between
   `from` and `to`, the same number on every dialect — see

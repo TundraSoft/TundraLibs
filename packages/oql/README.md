@@ -402,9 +402,9 @@ orders each group by its smallest value for `ASC` and its largest for
 `DESC`. Where `NULL` sorts depends on the engine; see
 [Ordering by a joined column](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#ordering-by-a-joined-column).
 
-A join returns one row per joined row on every dialect, MongoDB
-included, and `RIGHT` and `FULL` keep the joined rows without a match
-there too. MariaDB has no `FULL` join and throws. See the
+On MongoDB a join leaves the joined documents in an array on each base
+document, and `RIGHT` and `FULL` throw. MariaDB has no `FULL` join and
+throws. See the
 [JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins).
 
 ### JSON Column Filtering

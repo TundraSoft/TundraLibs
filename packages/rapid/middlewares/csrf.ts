@@ -34,6 +34,7 @@ import type { RapidMiddleware } from '../types/mod.ts';
 import {
   assertCookieConfig,
   isToken,
+  signingKey,
   signValue,
   verifySignedValue,
 } from '../utils/cookies.ts';
@@ -99,7 +100,10 @@ const bindingOf = async (
   sid: string | undefined,
   secret: string,
 ): Promise<string> =>
-  (await signHMAC(sid ?? '', secret)).slice(0, BINDING_LENGTH);
+  (await signHMAC(sid ?? '', await signingKey(secret))).slice(
+    0,
+    BINDING_LENGTH,
+  );
 
 /** Wire form `<nonce>.<binding>.<sig>`. */
 const issueToken = (binding: string, secret: string): Promise<string> =>

@@ -273,21 +273,18 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
   itself (see
   [Compatibility](../docs/OQL-Compatibility.md#expressions-on-mongodb))
 
-A join is a `$lookup` followed by an `$unwind`, so the pipeline sees one
-row per joined row, as SQL does. An `INNER` join drops a document with no
-match and a `LEFT` join keeps it. `RIGHT` and `FULL` add the joined
-documents that no row matches through a `$unionWith`, with the base
-columns `NULL`, and run the `where` after every join. See the
+A join is a `$lookup`, which leaves the joined documents in an array on
+each base document. An `INNER` join drops a document whose array is empty
+and a `LEFT` join keeps it. `RIGHT` and `FULL` throw
+`DialectUnsupportedError`. See the
 [Compatibility Matrix](../docs/OQL-Compatibility.md#joins).
 
 **Pipeline-ordering guarantees:**
 
 - A `where` `$match` is emitted only **after** the stages that materialise
   every field it references — after `$lookup` when it references a joined
-  field in **either** key or value position (e.g. `{ '@createdAt': { $gt:
-  '@Author.@joinedAt' } }`), and after the expressions `$addFields` when it
-  references a declared expression alias, as a key or a value, and after
-  every join when one is `RIGHT` or `FULL`. Otherwise a pure primary-table
+  field (e.g. `{ '@Author.@joinedAt': { $gt: '@createdAt' } }`), and after the expressions `$addFields` when it
+  references a declared expression alias, as a key or a value. Otherwise a pure primary-table
   filter gets the efficient early `$match`. (Matching a not-yet-materialised field
   silently compares against `missing` and returns wrong rows.)
 - An `$exists` / `$nexists` node puts its `$lookup` directly before the

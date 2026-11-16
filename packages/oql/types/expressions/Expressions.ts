@@ -116,8 +116,8 @@ type ConditionalExpressionArg<
  *
  * **Date** (returns Date; ISO 8601 UTC text on SQLite): `NOW`,
  * `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
- * `DATE_TRUNC` — and two that do not return a Date: `CURRENT_TIME`, an
- * `'HH:MM:SS'` UTC string, and `UNIX_TIMESTAMP`, a 64-bit INTEGER.
+ * `DATE_TRUNC` — and two that do not return a Date: `CURRENT_TIME`, the
+ * dialect's own time of day, and `UNIX_TIMESTAMP`, a 64-bit INTEGER.
  *
  * **Cryptographic (platform-dependent)**: `ENCRYPT`, `DECRYPT`,
  * `HASH`.
@@ -267,7 +267,7 @@ export type Expressions<
   /** Current date without the time component. */
   $$_expression: 'CURRENT_DATE';
 } | {
-  /** Current UTC clock time as an `'HH:MM:SS'` string on every dialect. */
+  /** Current time without the date component. */
   $$_expression: 'CURRENT_TIME';
 } | {
   /** Current timestamp — alias for `NOW`. */

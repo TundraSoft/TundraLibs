@@ -289,9 +289,9 @@ literally, so `$$NOW` would be saved as the string `"$$NOW"`.
   written. The SQL dialects read it as a column the table lacks, and the
   database fails with Column not found. Earlier releases stored or
   compared the text on MongoDB.
-- **A JSON path as an expression argument**, `'@meta.@tag'` or
-  `'@meta.tag'`, is text on every dialect: only a filter key reads into a
-  JSON column. Earlier releases read the nested field on MongoDB.
+- **A JSON path as an expression argument**, `'@meta.@tag'`, reads the
+  nested field on MongoDB. The SQL dialects bind it as text: there only a
+  filter key reads into a JSON column.
 
 ### INSERT … SELECT (`INSERT_FROM_QUERY`)
 
@@ -308,11 +308,8 @@ appends. The emitted pipeline preserves the source SELECT's WHERE /
 projection / limit / sort (a plain-`find` source is expanded to the
 equivalent `$match` → `$project` → `$sort` → `$skip` → `$limit` stages),
 then appends `$merge: { into, whenMatched: 'fail', whenNotMatched:
-'insert' }`. A source row carries no `_id` unless the SELECT projects
-it, so each row is a new document and a primary key the target declares
-refuses a duplicate through its unique index, as on SQL;
-`whenMatched: 'fail'` refuses a projected `_id` the target already
-holds.
+'insert' }` — `whenMatched: 'fail'` mirrors a SQL primary-key violation on
+an `_id` collision.
 
 ### COUNT `having`
 
@@ -325,9 +322,9 @@ silently dropped on MongoDB.)
 
 ### Projected keys
 
-A SELECT row holds the keys its projection names, on every dialect. On
-MongoDB the projection leaves `_id` out unless it names `'@_id'`, so a
-row carries neither the document's id nor a grouped query's group key.
+On MongoDB a row also carries `_id`: the document's id, or the group key
+of a grouped query. A projection that renames a key leaves `_id` out
+unless it names `'@_id'`.
 
 ### `limit` / `offset`
 
@@ -410,12 +407,15 @@ to run a lookup in, so an UPDATE or DELETE carrying the node throws on
 MongoDB. A partial-index predicate cannot hold the node on any dialect,
 see [Indexes](#indexes). Select the keys with the
 same filter first, then update or delete by `$in` on them. An `on`
-value that names a joined column, `'@Alias.@col'`, reads that column
-of the row, as on SQL. A nested node correlated to its parent, an `on`
-value that is a bare `'@name'`, throws on MongoDB.
+value that names a joined column, `'@Alias.@col'`, throws on MongoDB:
+the joined rows are an array there, with no single value to correlate
+on. A nested node correlated to its parent, an `on` value that is a bare
+`'@name'`, throws on MongoDB too.
 
-A `CASE` `when` condition may hold the node in a SELECT's
-`expressions`. On MongoDB its `$lookup` runs just before the stage that
+A `CASE` `when` condition may hold the node. On the SQL dialects that
+works in a SELECT's `expressions` and in UPDATE `data`, correlated to the
+query's own table as in a `where`. On MongoDB it works in a SELECT's
+`expressions` only: its `$lookup` runs just before the stage that
 computes the expressions, and the condition tests the size of the
 looked-up array. Anywhere else a CASE condition is translated, such as
 UPDATE `data`, the node throws `DialectUnsupportedError` on MongoDB.
@@ -448,7 +448,7 @@ The table below summarises the per-dialect emission. The general rule:
 | REPLACE               | native                                                                              | native                                                 | native                                                           | native (`$replaceAll`)                                                              |
 | LPAD / RPAD           | native                                                                              | native                                                 | emulated (`printf` + `replace` + `substr`; custom fill honoured) | passthrough                                                                         |
 | NOW / CURRENT_*       | native                                                                              | native                                                 | native, text, see [date results](#date-expression-results)       | native (`$$NOW`); on INSERT, computed by the translator                             |
-| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native; DATE_ADD adjusted, see [month end](#date_add-month-end)  | native (`$dateAdd`); DATE_DIFF emulated, see [DATE_DIFF units](#date_diff-units)    |
+| DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native; see [DATE_ADD month end](#date_add-month-end)            | native (`$dateAdd`); DATE_DIFF emulated, see [DATE_DIFF units](#date_diff-units)    |
 | DATE_TRUNC            | native (`date_trunc`)                                                               | emulated (`CAST(DATE_FORMAT(…) AS DATETIME)`)          | native (`strftime(…, 'start of …')`, ISO 8601 UTC text)          | native (`$dateTrunc`, UTC)                                                          |
 | UNIX_TIMESTAMP        | native (`FLOOR(EXTRACT(EPOCH …))::BIGINT`) — the driver decodes it as a JS `bigint` | native (`UNIX_TIMESTAMP()`; milliseconds via `NOW(3)`) | native (`strftime('%s')` / `julianday`, cast to INTEGER)         | native (`$toLong` over `$$NOW`); on INSERT, computed by the translator              |
 | **UUID**              | native (`gen_random_uuid()`)                                                        | native (`UUID()`)                                      | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)                                                 |
@@ -457,22 +457,19 @@ The table below summarises the per-dialect emission. The general rule:
 
 ### Number results
 
-`DIVIDE` keeps the fraction on every dialect: `7` divided by `2` is `3.5`,
-a JavaScript `number`. The SQL dialects cast the first operand to a double
-to get there. Earlier releases returned `3` on Postgres and SQLite, and a
-four-place decimal such as `0.3333` on MariaDB.
+`DIVIDE` and `MODULO` are each dialect's own `/` and `%`, so the result
+type follows the dialect. Two integers divide to an integer on Postgres and
+SQLite (`7 / 2` is `3`), to a four-place decimal on MariaDB (`1 / 3` is
+`0.3333`), and to `3.5` on MongoDB. Pass a fractional operand where a
+fractional result is wanted.
 
-`MODULO` keeps the fraction too, so `2.5 % 2` is `0.5`, and the sign of the
-result follows the first operand: `-7 % 2` is `-1` and `7 % -2` is `1`.
-Postgres computes it in `NUMERIC`, which is decimal, so a remainder that a
-double cannot hold exactly differs in its last digits: `2.675 % 2` is
-`0.675` on Postgres and `0.6749999999999998` on the other three. The
-result is cast back to a double, so a `BIGINT` operand gives a `number`
-there, where earlier releases gave a `bigint`.
-
-SQLite calls `mod()` when an operand has a fraction. That is one of
-SQLite's optional math functions: the builds Deno, Bun and Node ship have
-them, and Turso and Cloudflare D1 are untested.
+The sign of a `MODULO` result follows the first operand: `-7 % 2` is `-1`
+and `7 % -2` is `1`. SQLite's `%` works on integers, so `2.5 % 2` is `0`
+there. Postgres has no `%` for a double, so MODULO goes through `NUMERIC`
+there and is cast back to a double: a `BIGINT` operand gives a `number`,
+and a remainder that a double cannot hold exactly differs in its last
+digits, `2.675 % 2` is `0.675` on Postgres and `0.6749999999999998` on
+MariaDB and MongoDB.
 
 A zero divisor is not portable for either one. Postgres and MongoDB fail
 the query, MariaDB and SQLite return `NULL`.
@@ -505,19 +502,17 @@ large values. Convert with `Number()` when the values are known to fit.
 
 ### CURRENT_TIME
 
-`CURRENT_TIME` is the UTC clock time as an `'HH:MM:SS'` string on every
-dialect: in a select, in a filter, and as a written value. It carries no
-fraction and does not follow the session time zone.
+`CURRENT_TIME` is each dialect's own current time:
 
-| Dialect  | Emitted                                                                    |
-| -------- | -------------------------------------------------------------------------- |
-| Postgres | `CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)` |
-| MariaDB  | `UTC_TIME()`                                                               |
-| SQLite   | `time('now')`                                                              |
-| MongoDB  | `$dateToString` of `$$NOW` with `%H:%M:%S`                                 |
+| Dialect  | Emitted          | Value                                                        |
+| -------- | ---------------- | ------------------------------------------------------------ |
+| Postgres | `CURRENT_TIME`   | a `TIME WITH TIME ZONE` in the session zone, with a fraction |
+| MariaDB  | `CURRENT_TIME()` | a `TIME` in the session zone, whole seconds                  |
+| SQLite   | `time('now')`    | UTC `'HH:MM:SS'` text                                        |
+| MongoDB  | `$$NOW`          | a full `Date`; on INSERT, the instant `NOW` gives            |
 
-On Postgres the value is a `TIME`. Comparing it with a text column fails
-there, since Postgres has no operator for the pair.
+Format a time of day in application code when the same text is needed on
+every dialect.
 
 ### Date expression results
 
@@ -525,13 +520,13 @@ What JavaScript receives for a date expression, on Postgres 18, MariaDB 11,
 SQLite and MongoDB 8 through the oql drivers, the same on Deno, Bun and
 Node. SQLite has no date type, so a date result there is ISO 8601 UTC text:
 
-| Expression                                        | Postgres             | MariaDB               | SQLite                                                 | MongoDB              |
-| ------------------------------------------------- | -------------------- | --------------------- | ------------------------------------------------------ | -------------------- |
-| `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ` | `Date`               | `Date`, whole seconds | `'2026-11-15T23:00:24.401Z'`                           | `Date`               |
-| `CURRENT_DATE`                                    | `Date`, midnight UTC | `Date`, midnight UTC  | `'2026-11-15T00:00:00.000Z'`                           | `Date`, midnight UTC |
-| `CURRENT_TIME`                                    | `'23:00:24'`         | `'23:00:24'`          | `'23:00:24'`                                           | `'23:00:24'`         |
-| `DATE_ADD`, `DATE_TRUNC`                          | `Date`               | `Date`                | `'2026-03-16T00:00:00.000Z'`, also for a `DATE` column | `Date`               |
-| `UNIX_TIMESTAMP`                                  | `bigint`             | `bigint`              | `number`                                               | `number`             |
+| Expression                                        | Postgres                          | MariaDB                           | SQLite                                                 | MongoDB              |
+| ------------------------------------------------- | --------------------------------- | --------------------------------- | ------------------------------------------------------ | -------------------- |
+| `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ` | `Date`                            | `Date`, whole seconds             | `'2026-11-15T23:00:24.401Z'`                           | `Date`               |
+| `CURRENT_DATE`                                    | `Date`, midnight UTC              | `Date`, midnight UTC              | `'2026-11-15T00:00:00.000Z'`                           | `Date`, midnight UTC |
+| `CURRENT_TIME`                                    | see [CURRENT_TIME](#current_time) | see [CURRENT_TIME](#current_time) | `'23:00:24'`                                           | `Date`               |
+| `DATE_ADD`, `DATE_TRUNC`                          | `Date`                            | `Date`                            | `'2026-03-16T00:00:00.000Z'`, also for a `DATE` column | `Date`               |
+| `UNIX_TIMESTAMP`                                  | `bigint`                          | `bigint`                          | `number`                                               | `number`             |
 
 On SQLite a UTC-midnight `Date` in a `DATE` column is stored as the same
 text, which is also what norm writes for a `date()` column, so
@@ -558,19 +553,11 @@ numbers, in a smaller unit if you need the precision (`90` `MINUTES`, not
 
 ### DATE_ADD month end
 
-Adding `MONTHS` or `YEARS` to a day the target month does not have stops at
-that month's last day, with the time of day kept:
-
-| Date        | Added         | Result                          |
-| ----------- | ------------- | ------------------------------- |
-| 31 January  | `1` `MONTHS`  | 28 February (29 in a leap year) |
-| 31 March    | `-1` `MONTHS` | 28 February (29 in a leap year) |
-| 29 February | `1` `YEARS`   | 28 February                     |
-
-This is what Postgres, MariaDB, and MongoDB do. SQLite on its own carries the
-extra days into the next month (31 January plus one month is 3 March), so OQL
-steps its result back to the month's last day: one query gives the same date
-on every dialect. A fractional amount on SQLite is left as SQLite computes it.
+Adding `MONTHS` or `YEARS` to a day the target month does not have is not
+portable. Postgres, MariaDB and MongoDB stop at that month's last day:
+31 January plus one month is 28 February (29 in a leap year). SQLite
+carries the extra days into the next month: the same addition is 3 March
+(2 March in a leap year).
 
 ### DATE_DIFF units
 
@@ -676,29 +663,26 @@ siblings in SQL. MongoDB's `$group` has no such accumulator, so the
 translator collects each group's distinct values with `$addToSet` and
 counts, sums or averages that set in the next stage. NULL is left out, as
 in SQL. ARRAY_AGG and STRING_AGG with `distinct` collect with `$addToSet`
-too; ARRAY_AGG keeps one NULL, STRING_AGG skips it. One group's distinct
+too; ARRAY_AGG keeps a NULL value once, STRING_AGG skips it. One group's distinct
 values therefore have to fit in a single 16 MB document; a column with
 more distinct values per group than that fails on MongoDB.
 
 STRING_AGG skips NULL and is `NULL` when no value is left, on every
 dialect. It takes text: over a number column Postgres and MongoDB fail,
 MariaDB and SQLite join the numbers as text. The order of the values in
-STRING_AGG and ARRAY_AGG is not defined on any dialect. SQLite fails on
-STRING_AGG with `distinct`.
+STRING_AGG and ARRAY_AGG is not defined on any dialect. SQLite refuses
+STRING_AGG with `distinct` with `DialectUnsupportedError`: its
+`group_concat` takes `DISTINCT` only without a separator.
 
 ### Aggregates over no values
 
-SUM, AVG, MIN and MAX of a group with no non-NULL value are `NULL` on
-every dialect, and COUNT is `0`. An aggregate query without group keys
-returns one row even when no row matches the filter, as SQL does; with
-group keys it returns no rows. On MongoDB the ungrouped `$group` runs
-inside a `$facet`, which emits that one row when the group has none.
-ARRAY_AGG and JSON_ROW over no rows are `NULL` on every dialect.
-
-Earlier releases gave `0` for such a SUM on MongoDB, plain or `distinct`,
-and returned no row for an ungrouped aggregate over no rows there. A
-`count()` query was already `0`. They also gave an empty array for
-ARRAY_AGG and JSON_ROW over no rows on SQLite.
+COUNT of no values is `0`. AVG, MIN and MAX of a group with no non-NULL
+value are `NULL` on every dialect; SUM is `NULL` on the SQL dialects and
+`0` on MongoDB. An aggregate query without group keys returns one row
+when no row matches the filter on the SQL dialects, and no row on
+MongoDB, whose `$group` emits nothing; a `count()` query is `0` on every
+dialect. ARRAY_AGG and JSON_ROW over no rows are `NULL` on Postgres and
+MariaDB and `'[]'` on SQLite.
 
 A projected expression whose result is `NULL` is a key with `null` on
 every dialect. Earlier releases left the key out of the MongoDB row when
@@ -725,12 +709,10 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
     dialect, so a `%` or `_` in the computed value is a wildcard. MongoDB
     turns the value into a regex when the query runs, by the same rules
     it applies to a literal pattern.
-- **A `$like` pattern ending in a lone backslash**, such as `'a\\'`,
-  matches a backslash in that last place on every dialect. Postgres
-  refuses such a pattern, since the backslash is its escape character, so
-  the translator gives it one more backslash when the trailing run of
-  backslashes is odd. This holds for `$nlike`, `$ilike` and `$nilike`, and
-  for a literal and a computed pattern.
+- **A `$like` pattern ending in a lone backslash**, such as `'a\\'`, fails
+  on Postgres, whose escape character the backslash is; the other dialects
+  match a backslash in that last place. The same holds for `$nlike`,
+  `$ilike` and `$nilike`.
 
 ### NULL in a filter
 
@@ -763,40 +745,22 @@ missing `a`.
 
 ## JOINs
 
-A join returns one row per joined row on every dialect. On MongoDB each
-join is a `$lookup` followed by an `$unwind` of the looked-up rows, so a
-result row carries one joined row and a joined column holds one value.
-`where`, the group, `having`, `orderBy`, `limit` and `offset` then run
-over those rows in SQL's order.
+| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB   |
+| ----------------- | -------- | --------- | -------------- | --------- |
+| INNER, by default | ✅       | ✅        | ✅             | ✅        |
+| LEFT              | ✅       | ✅        | ✅             | ✅        |
+| RIGHT             | ✅       | ✅        | ✅             | ❌ throws |
+| FULL              | ✅       | ❌ throws | ✅             | ❌ throws |
 
-| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB |
-| ----------------- | -------- | --------- | -------------- | ------- |
-| INNER, by default | ✅       | ✅        | ✅             | ✅      |
-| LEFT              | ✅       | ✅        | ✅             | ✅      |
-| RIGHT             | ✅       | ✅        | ✅             | ✅      |
-| FULL              | ✅       | ❌ throws | ✅             | ✅      |
-
-An INNER join drops a row with no joined row. A LEFT join keeps it, and
-its joined columns are `NULL`. A RIGHT join keeps each joined row that
-no row matches, with the base columns and the columns of earlier joins
-`NULL`; a FULL join keeps both kinds. On MongoDB those joined rows come
-from a `$unionWith` over the joined collection, MongoDB 4.4 or later,
-which keeps each document that no row built by the earlier joins meets
-the `on` map with. With a RIGHT or FULL join the `where` runs after
-every join, as SQL's does, even when it names only base columns.
-
-What a join returns, on every dialect:
-
-- A projected joined column is a key named after the column,
-  `'@orders.@total': true` gives `total`, or after its alias. It is
-  `NULL` in a row without a joined row.
-- A filter, an expression argument or a filter value naming a joined
-  column reads the column of that row.
-- Aggregates run over the joined rows, so `COUNT` counts them.
-- A projected join alias, `'@orders': true`, is the JSON_ROW of every
-  column the join declares, and groups the query like any aggregate.
-- JSON_ROW and ARRAY_AGG collect the joined rows of each group. A row
-  without a joined row adds one entry of `NULL`s.
+On MongoDB a join is a `$lookup`, which leaves the joined documents in an
+array on each base document; it is not unwound. A result row is a base
+document, a projected joined column is the array of that column's values,
+and a filter on a joined column holds when any joined document meets it.
+A joined column as a filter value, `{ '@a': { $gt: '@J.@b' } }`, would
+compare with that array, so it throws `DialectUnsupportedError`.
+An INNER join drops a base document whose array is empty; a LEFT join
+keeps it. `$lookup` cannot add the joined documents no base document
+matches, so a RIGHT or FULL join throws `DialectUnsupportedError` there.
 
 Every entry in a join's `on` map is a condition, and they AND together
 on every dialect. An entry may name the joined column on either side:
@@ -844,12 +808,19 @@ projected or not. An alias the query does not join, or a column the
 join does not list, is a `TypeError`. With `distinct: true` the column
 must be projected.
 
-A query that is not grouped sorts each joined row on its column. In a
-query grouped by `aggregates` or by a projected join alias, a projected
-joined column is a group key and sorts as one; an unprojected one sorts
-each group on `MIN(col)` for `ASC` and `MAX(col)` for `DESC`, on every
-dialect. The smallest and largest skip `NULL`. A group with no joined
+An unprojected joined column sorts on this value:
+
+| Query                                                | Postgres, MariaDB, SQLite                   | MongoDB                                                                       |
+| ---------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| not grouped                                          | the column, one result row per joined row   | smallest value among the document's joined rows for `ASC`, largest for `DESC` |
+| grouped by `aggregates` or by a projected join alias | `MIN(col)` for `ASC`, `MAX(col)` for `DESC` | the same, over the joined rows of the group                                   |
+
+The smallest and largest skip `NULL`. A row or group with no joined
 row, or whose joined values are all `NULL`, sorts as `NULL`.
+
+On MongoDB a projected joined column sorts on the joined array itself.
+An ascending sort then counts a `NULL` among the joined values rather
+than skipping it.
 
 `NULL` placement is the engine's own, for a joined column as for any
 other `orderBy` key, and oql does not change it:
@@ -859,30 +830,6 @@ other `orderBy` key, and oql does not change it:
 | `ASC`     | `NULL` last  | `NULL` first | `NULL` first | `NULL` first |
 | `DESC`    | `NULL` first | `NULL` last  | `NULL` last  | `NULL` last  |
 
-### MongoDB join results in earlier releases
-
-Earlier releases left the looked-up rows as an array on each base
-document and never unwound it. These MongoDB results change:
-
-| Query                                      | Earlier releases                                      | Now                                        |
-| ------------------------------------------ | ----------------------------------------------------- | ------------------------------------------ |
-| to-many join                               | one row per base document                             | one row per joined row                     |
-| INNER join, a row with no match            | kept, with an empty array                             | dropped                                    |
-| projected joined column, `'@o.@sku': true` | `o: [{ sku: 'A' }, …]`                                | `sku: 'A'`, `null` without a match         |
-| aliased joined column, `'@o.@sku': 'item'` | `item: ['A', …]`                                      | `item: 'A'`                                |
-| projected join alias, `'@o': true`         | the raw looked-up documents                           | JSON_ROW of the declared columns, grouped  |
-| JSON_ROW over a join                       | one row per base document, `[]` without a match       | grouped, `[{ col: null }]` without a match |
-| row of a JSON_ROW query over a join        | `_id` is the document id                              | no `_id`                                   |
-| filter on a joined column                  | any joined row matching kept the document, all rows   | only the matching joined rows              |
-| `'@o.@id': null`                           | matched nothing                                       | the rows without a joined row              |
-| joined column as a filter value            | matched nothing                                       | compared per row                           |
-| joined column as an expression argument    | an array, `['A']` or `[]`                             | the value or `null`                        |
-| aggregates over a join                     | COUNT counted base documents, SUM was 0, MIN an array | run over the joined rows                   |
-| joined column projected beside aggregates  | failed, a dotted group key                            | a group key                                |
-| `orderBy` a joined column                  | sorted on the array or its smallest or largest value  | sorts each row on its value                |
-| ARRAY_AGG or JSON_ROW over a missing field | skipped it                                            | collects `null`                            |
-| view projecting a joined column            | an array                                              | the value                                  |
-
 ## When to expect a throw vs a silent fallback
 
 We **throw** (as `DialectUnsupportedError`) when:
@@ -891,9 +838,11 @@ We **throw** (as `DialectUnsupportedError`) when:
   with a clock expression or `UUID` in the `where` on every engine, with a
   `DATE_ADD` in the `where` on Postgres, and with any expression in the
   `where` on MongoDB.
-- `FULL JOIN` on MariaDB.
-- A nested `$exists` / `$nexists` correlated to its parent subquery on
-  MongoDB.
+- `FULL JOIN` on MariaDB; `RIGHT JOIN` and `FULL JOIN` on MongoDB.
+- A nested `$exists` / `$nexists` correlated to its parent subquery, or
+  one keyed on a joined column, on MongoDB, and a joined column as a
+  filter value there.
+- `STRING_AGG` with `distinct` on SQLite.
 - `CREATE_SCHEMA` on MongoDB.
 - `ALTER_TABLE` `alterColumns` (as `ALTER COLUMN`) and
   `addForeignKeys` / `dropForeignKeys` (as `ALTER CONSTRAINT`) on

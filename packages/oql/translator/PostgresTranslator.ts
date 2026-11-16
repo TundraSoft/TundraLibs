@@ -76,20 +76,6 @@ const SQL_TYPE_MAP: Record<string, string> = {
  */
 const PG_LENGTH_TYPES = new Set(['CHAR', 'VARCHAR', 'BIT']);
 
-/** A pattern whose escape pairs end in one lone backslash, and its prefix. */
-const LONE_TRAILING_ESCAPE = String.raw`'^((?:[^\\]|\\.)*)\\$'`;
-/** The prefix, then an escaped backslash: two in the replacement text. */
-const ESCAPED_BACKSLASH = String.raw`'\1\\\\'`;
-
-/**
- * The pattern side of LIKE and ILIKE. A pattern ending in a lone backslash,
- * the escape character, is an error on Postgres, where MariaDB matches the
- * backslash itself. A run of backslashes reads as escape pairs, so a run of
- * odd length gets one more backslash and ends in an escaped one.
- */
-const likePattern = (pattern: string): string =>
-  `regexp_replace(CAST(${pattern} AS TEXT), ${LONE_TRAILING_ESCAPE}, ${ESCAPED_BACKSLASH})`;
-
 /** Index methods Postgres recognises in `USING <method>`. */
 const PG_INDEX_METHODS = new Set([
   'BTREE',
@@ -166,12 +152,7 @@ export class PostgresTranslator extends AbstractTranslator {
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    // Two integers divide to an integer here, so the first operand is a
-    // double: 7 / 2 is 3.5, as on MariaDB and MongoDB.
-    [
-      'DIVIDE',
-      (a) => `(CAST(${a[0]} AS DOUBLE PRECISION) / ${a.slice(1).join(' / ')})`,
-    ],
+    ['DIVIDE', (a) => `(${a.join(' / ')})`],
     // Postgres has no `%` and no two-argument ROUND for a double, and the
     // type of an operand is not known here. Every operand goes through
     // NUMERIC and the result is cast back, so it reaches JS as a number.
@@ -228,13 +209,7 @@ export class PostgresTranslator extends AbstractTranslator {
     ],
     ['NOW', () => 'CURRENT_TIMESTAMP'],
     ['CURRENT_DATE', () => 'CURRENT_DATE'],
-    // The UTC clock time as a TIME without fraction or zone: it reaches JS
-    // as 'HH:MM:SS', where CURRENT_TIME gave '18:35:56.811132+00'.
-    [
-      'CURRENT_TIME',
-      () =>
-        `CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)`,
-    ],
+    ['CURRENT_TIME', () => 'CURRENT_TIME'],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP'],
     ['DATE_ADD', (a, e) => {
@@ -321,10 +296,10 @@ export class PostgresTranslator extends AbstractTranslator {
     ['$gte', (c, v) => `${c} >= ${v}`],
     ['$lt', (c, v) => `${c} < ${v}`],
     ['$lte', (c, v) => `${c} <= ${v}`],
-    ['$like', (c, v) => `${c} LIKE ${likePattern(v)}`],
-    ['$nlike', (c, v) => `${c} NOT LIKE ${likePattern(v)}`],
-    ['$ilike', (c, v) => `${c} ILIKE ${likePattern(v)}`],
-    ['$nilike', (c, v) => `${c} NOT ILIKE ${likePattern(v)}`],
+    ['$like', (c, v) => `${c} LIKE ${v}`],
+    ['$nlike', (c, v) => `${c} NOT LIKE ${v}`],
+    ['$ilike', (c, v) => `${c} ILIKE ${v}`],
+    ['$nilike', (c, v) => `${c} NOT ILIKE ${v}`],
     ['$startsWith', (c, v) => `${c} LIKE (${v} || '%')`],
     ['$endsWith', (c, v) => `${c} LIKE ('%' || ${v})`],
     ['$contains', (c, v) => `${c} LIKE ('%' || ${v} || '%')`],

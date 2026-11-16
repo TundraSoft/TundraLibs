@@ -105,7 +105,7 @@ describe('oql.types.Expressions', () => {
     const { sql } = translate(query);
     asserts.assertStringIncludes(
       sql,
-      '("price" + ("quantity" * (CAST("price" AS DOUBLE PRECISION) / :p_0:)))',
+      '("price" + ("quantity" * ("price" / :p_0:)))',
     );
   });
 
@@ -141,7 +141,7 @@ describe('oql.types.Expressions', () => {
     const { sql } = translate(query);
     asserts.assertStringIncludes(
       sql,
-      '(CAST("price" AS DOUBLE PRECISION) / NULLIF("quantity", :p_0:))',
+      '("price" / NULLIF("quantity", :p_0:))',
     );
     asserts.assertStringIncludes(
       sql,

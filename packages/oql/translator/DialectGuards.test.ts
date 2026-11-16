@@ -744,7 +744,7 @@ describe('oql.translator.guards', () => {
       }
     });
 
-    it('refuses @Alias.col on MongoDB; @meta.a stays text', () => {
+    it('refuses @Alias.col on MongoDB; @meta.a reads the field', () => {
       const t = new MongoTranslator();
       refuses(t);
       const { params } = t.select(
@@ -757,7 +757,7 @@ describe('oql.translator.guards', () => {
       ) as MongoAggregateAction;
       asserts.assertEquals(
         params.pipeline.find((stage) => '$addFields' in stage),
-        { $addFields: { c: { $ifNull: ['@meta.a', 'none'] } } },
+        { $addFields: { c: { $ifNull: ['$meta.a', 'none'] } } },
       );
     });
   });
