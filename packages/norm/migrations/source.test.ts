@@ -168,7 +168,7 @@ const PG_SERVER = {
     : env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
     'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 /** A throwaway database, so the history table compared here is not the
  * one the other live Postgres suites share (they run in parallel). */
@@ -182,13 +182,14 @@ const pgAdmin = async <T>(fn: (e: PostgresEngine) => Promise<T>) => {
     await e.disconnect().catch(() => {});
   }
 };
-const pgAvailable = await pgAdmin((e) =>
-  e.execute({ sql: `CREATE DATABASE ${PG_DB}` })
-).then(() => true, () => false);
+// Only a failed connect means Postgres is unavailable. A failed CREATE
+// DATABASE, such as a missing privilege, fails the test below.
+const pgAvailable = await pgAdmin((e) => e.ping()).catch(() => false);
+let pgCreated = false;
 
 describe('norm.migrations sources (Postgres)', () => {
   afterAll(async () => {
-    if (pgAvailable) {
+    if (pgCreated) {
       await pgAdmin((e) => e.execute({ sql: `DROP DATABASE ${PG_DB}` }));
     }
   });
@@ -203,6 +204,8 @@ describe('norm.migrations sources (Postgres)', () => {
           `Postgres at ${PG_SERVER.host}:${PG_SERVER.port} unavailable`,
         );
       }
+      await pgAdmin((e) => e.execute({ sql: `CREATE DATABASE ${PG_DB}` }));
+      pgCreated = true;
       await assertParity(
         { dialect: 'postgres', ...PG_SERVER, database: PG_DB },
         `SELECT c.table_name, c.column_name, c.data_type, c.is_nullable,
