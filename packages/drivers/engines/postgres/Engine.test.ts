@@ -394,6 +394,19 @@ describe({
         asserts.assertEquals(r.data, [{ d: '2026-01-15', n: '7' }]);
         await engine.disconnect();
       });
+
+      it('leaves a placeholder inside a string, dollar quote or comment as text', async () => {
+        const engine = new PostgresEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT ':a:' AS t, :a:::int AS v, $$:zz:$$ AS d, ` +
+            `to_char(:ts:::timestamptz AT TIME ZONE 'UTC', 'HH24:MI:SS') AS c -- :zz:`,
+          params: { a: 1, ts: new Date('2026-01-15T20:04:05Z') },
+        });
+        asserts.assertEquals(r.data, [
+          { t: ':a:', v: 1, d: ':zz:', c: '20:04:05' },
+        ]);
+        await engine.disconnect();
+      });
     });
   },
 });

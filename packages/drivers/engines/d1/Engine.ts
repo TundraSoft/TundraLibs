@@ -90,6 +90,7 @@ import type { EventOptionKeys } from '@tundralibs/utils/Options';
 import { SQLiteTranslator } from '@tundralibs/oql/translator';
 import { SQLConnectionEngine } from '../../SQLEngine.ts';
 import { EngineError } from '../../errors/mod.ts';
+import { replacePlaceholders } from '../../placeholders.ts';
 import type {
   EngineQuery,
   SQLEngineCapabilities,
@@ -340,12 +341,10 @@ export class D1Engine extends SQLConnectionEngine<
     const orderedKeys: string[] = [];
     const missing: string[] = [];
 
-    const rewritten = sqlBody.replaceAll(
-      // Letter-or-underscore-first identifiers only — keeps us from misfiring
-      // on time literals like '00:00:00'. A colon that follows a colon never
-      // opens one, so `x::date::text` stays two casts.
-      /(?<!:):([A-Za-z_]\w*):/g,
-      (_full, key: string) => {
+    const rewritten = replacePlaceholders(
+      sqlBody,
+      this.Dialect,
+      (key) => {
         if (!Object.hasOwn(supplied, key)) {
           missing.push(key);
         }

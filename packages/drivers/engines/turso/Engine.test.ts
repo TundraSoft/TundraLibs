@@ -167,6 +167,15 @@ describe('drivers.engines.turso.TursoEngine', () => {
       );
       assertEquals((err as EngineError).code, 'MISSING_PARAMETERS');
     });
+
+    it('leaves a placeholder inside a string, identifier or comment as text', () => {
+      const eng = makeEngine();
+      const q = eng.std({
+        sql: "SELECT ':a:', `:zz:`, 'HH24:MI:SS', :a: -- :zz:",
+        params: { a: 1 },
+      });
+      assertEquals(q.sql, "SELECT ':a:', `:zz:`, 'HH24:MI:SS', :a -- :zz:;");
+    });
   });
 
   describe('encodeHranaValue', () => {

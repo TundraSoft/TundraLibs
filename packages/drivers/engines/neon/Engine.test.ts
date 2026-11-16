@@ -234,6 +234,16 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
       assertEquals((err as EngineError).code, 'MISSING_PARAMETERS');
     });
 
+    it('leaves a placeholder inside a string, dollar quote or comment as text', () => {
+      const eng = makeEngine();
+      const q = eng.std({
+        sql: "SELECT ':a:', $$:zz:$$, 'HH24:MI:SS', :a: -- :zz:",
+        params: { a: 1 },
+      });
+      assertEquals(q.sql, "SELECT ':a:', $$:zz:$$, 'HH24:MI:SS', $1 -- :zz:;");
+      assertEquals(q.__params, [1]);
+    });
+
     it('leaves a cast chain alone, beside a parameter that is cast', () => {
       const eng = makeEngine();
       const q = eng.std({

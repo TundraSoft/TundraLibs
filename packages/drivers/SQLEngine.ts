@@ -43,6 +43,7 @@ import type { Query } from '@tundralibs/oql/types';
 import { ConnectionEngine } from './ConnectionEngine.ts';
 import { ConnectionPool, type Waiter } from './ConnectionPool.ts';
 import { EngineError } from './errors/mod.ts';
+import { replacePlaceholders } from './placeholders.ts';
 import {
   createEnginePool,
   poolConnect,
@@ -1319,7 +1320,8 @@ export abstract class SQLConnectionEngine<
    * Standardize a query before dispatch:
    *
    * 1. Trim whitespace and ensure trailing semicolon.
-   * 2. Verify every `:name:` placeholder has a matching `params` entry.
+   * 2. Verify every `:name:` placeholder outside quoted text and comments
+   *    has a matching `params` entry.
    * 3. Rewrite `:name:` to the dialect-specific format declared in
    *    `Capabilities.parameterReplacement` (e.g. `:id:` → `:id` for
    *    Maria/SQLite). If `parameterReplacement` is undefined the
@@ -1332,32 +1334,19 @@ export abstract class SQLConnectionEngine<
     const sqlBody = query.sql.trim().replace(/;$/, '') + ';';
     const supplied = query.params ?? {};
     const missing: string[] = [];
-    // Placeholder names must start with a letter or underscore and contain
-    // only word characters thereafter, which keeps the regex from misfiring
-    // on time literals like '00:00:00'. A colon that follows a colon never
-    // opens one, so the `:date:` inside `x::date::text` stays two casts.
-    const placeholderRe = /(?<!:):([A-Za-z_]\w*):/g;
-    const matches = sqlBody.match(placeholderRe);
-    if (matches) {
-      for (const match of matches) {
-        const key = match.substring(1, match.length - 1);
-        if (!Object.hasOwn(supplied, key)) missing.push(key);
-      }
-    }
+    const replacement = this.Capabilities.parameterReplacement;
+    const sql = replacePlaceholders(sqlBody, this.Dialect, (key) => {
+      if (!Object.hasOwn(supplied, key)) missing.push(key);
+      return replacement
+        ? `${replacement.prefix}${key}${replacement.suffix}`
+        : `:${key}:`;
+    });
     if (missing.length > 0) {
       throw new EngineError('MISSING_PARAMETERS', {
         instanceId: this.instanceId,
         missing: Array.from(new Set(missing)).join(', '),
       });
     }
-
-    const replacement = this.Capabilities.parameterReplacement;
-    const sql = replacement
-      ? sqlBody.replaceAll(
-        placeholderRe,
-        (_full, key) => `${replacement.prefix}${key}${replacement.suffix}`,
-      )
-      : sqlBody;
 
     if (!query.params) return { ...query, sql };
 
