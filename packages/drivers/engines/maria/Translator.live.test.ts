@@ -18,7 +18,8 @@ import { envArgs } from '@tundralibs/utils';
 import type { Query } from '@tundralibs/oql/types';
 import { DialectUnsupportedError } from '@tundralibs/oql/translator';
 import { MariaEngine } from './Engine.ts';
-import { liveAvailable } from '../../tests/liveAvailable.ts';
+import { EngineError } from '../../errors/mod.ts';
+import { LIVE_DB_REQUIRED, liveAvailable } from '../../tests/liveAvailable.ts';
 
 const env = envArgs('./packages/drivers/');
 
@@ -27,7 +28,7 @@ const CONFIG = {
   port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
   database: env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USER') || 'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
 async function isMariaAvailable(): Promise<boolean> {
@@ -228,21 +229,32 @@ describe('drivers.MariaTranslator.live', () => {
     });
   });
 
-  it('CREATE_SCHEMA + DROP_SCHEMA round-trip (CREATE/DROP DATABASE)', async () => {
+  it('CREATE_SCHEMA creates a database and DROP_SCHEMA removes it', async () => {
     // MariaDB's "schema" is its database. CREATE_SCHEMA → CREATE DATABASE.
-    // The test user must have CREATE/DROP DATABASE privileges; this test
-    // is skipped silently if not.
     const schemaName = `oql_test_${Date.now()}`;
+    const exists = async () =>
+      (await engine.execute({
+        sql: 'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ' +
+          'WHERE SCHEMA_NAME = :name:',
+        params: { name: schemaName },
+      })).data.length === 1;
     try {
       await engine.createSchema({ type: 'CREATE_SCHEMA', schema: schemaName });
-      await engine.dropSchema({ type: 'DROP_SCHEMA', schema: schemaName });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('access denied') || msg.includes('Access denied')) {
-        return;
+      // An account that may not create a database, error 1044, skips this
+      // test, unless LIVE_DB_REQUIRED says the live tests must run.
+      if (
+        LIVE_DB_REQUIRED || !(err instanceof EngineError) ||
+        (err.context as Record<string, unknown>).driverErrno !== 1044
+      ) {
+        throw err;
       }
-      throw err;
+      console.warn(`  (skipped) ${err.message}`);
+      return;
     }
+    asserts.assert(await exists(), `${schemaName} was not created`);
+    await engine.dropSchema({ type: 'DROP_SCHEMA', schema: schemaName });
+    asserts.assertFalse(await exists(), `${schemaName} was not dropped`);
   });
 
   it('DROP_TABLE removes the test table', async () => {
