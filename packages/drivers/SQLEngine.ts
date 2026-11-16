@@ -1324,8 +1324,8 @@ export abstract class SQLConnectionEngine<
    *    has a matching `params` entry.
    * 3. Rewrite `:name:` to the dialect-specific format declared in
    *    `Capabilities.parameterReplacement` (e.g. `:id:` → `:id` for
-   *    Maria/SQLite). If `parameterReplacement` is undefined the
-   *    placeholders are left as-is.
+   *    SQLite). If `parameterReplacement` is undefined the placeholders
+   *    are left as-is.
    * 4. Encode every param via `_encodeValue` (per-driver override).
    *
    * @throws {EngineError} `MISSING_PARAMETERS` if any placeholder is missing.

@@ -150,12 +150,24 @@ class ProbeMariaEngine extends MariaEngine {
     return this._wrapDriverError(error, query);
   }
 
-  /** The parameter values `query` hands to the `mariadb` driver. */
-  public async sentParams(query: EngineQuery): Promise<unknown> {
-    let sent: unknown;
+  public standardize(query: EngineQuery): EngineQuery {
+    return this._standardizeQuery(query);
+  }
+
+  /**
+   * Every argument `query` hands to the `mariadb` driver's `query`, on a
+   * connection whose server status flags are `status`. The stand-in `escape`
+   * wraps each value it is given in `<…>`, and writes a boxed string as
+   * `boxed`.
+   */
+  public async sent(query: EngineQuery, status = 0): Promise<unknown[]> {
+    let sent: unknown[] = [];
     const client = {
-      query: (_options: unknown, values: unknown) => {
-        sent = values;
+      info: { status },
+      escape: (value: unknown) =>
+        `<${value instanceof String ? 'boxed' : JSON.stringify(value)}>`,
+      query: (...args: unknown[]) => {
+        sent = args;
         return Promise.resolve([]);
       },
     };
@@ -163,6 +175,10 @@ class ProbeMariaEngine extends MariaEngine {
     return sent;
   }
 }
+
+/** Server status flags for the `sql_mode`s that change how quoted text reads. */
+const NO_BACKSLASH_ESCAPES = 1 << 9;
+const ANSI_QUOTES = 1 << 15;
 
 describe('drivers.MariaEngine.error-mapping (no DB)', () => {
   const engine = new ProbeMariaEngine('maria-errmap', TEST_CONFIG);
@@ -306,9 +322,25 @@ describe('drivers.MariaEngine.parameter-encoding (no DB)', () => {
   const at = new Date('2026-01-15T20:00:00.000Z');
   const clock = '2026-01-15 20:00:00.000';
 
+  const failure = async (run: () => unknown): Promise<EngineError> =>
+    await asserts.assertRejects(
+      () => Promise.resolve().then(run),
+      EngineError,
+    );
+
+  it('sends the statement alone, with every value written by escape', async () => {
+    asserts.assertEquals(
+      await engine.sent({
+        sql: 'SELECT :n:, :s:, :none:, :list:, :n:-1, @a := 1',
+        params: { n: 5, s: "it's", none: null, list: [1, 'x', null], spare: 1 },
+      }),
+      [`SELECT <5>, <"it's">, <null>, <1>,<"x">,<null>, <5>-1, @a := 1;`],
+    );
+  });
+
   it('sends a Date inside an array parameter as its UTC clock, at any depth', async () => {
     asserts.assertEquals(
-      await engine.sentParams({
+      await engine.sent({
         sql: 'SELECT :at:, :list:, :nested:, :json:',
         params: {
           at,
@@ -317,24 +349,136 @@ describe('drivers.MariaEngine.parameter-encoding (no DB)', () => {
           json: { at },
         },
       }),
-      {
-        at: clock,
-        list: [clock, 7, null],
-        nested: [[clock, 'x'], [clock]],
-        json: { at },
-      },
+      [
+        `SELECT <"${clock}">, <"${clock}">,<7>,<null>, ` +
+        `<"${clock}">,<"x">,<"${clock}">, <{"at":"2026-01-15T20:00:00.000Z"}>;`,
+      ],
     );
   });
 
   it('rejects an Invalid Date inside an array parameter', async () => {
     await asserts.assertRejects(
       () =>
-        engine.sentParams({
+        engine.sent({
           sql: 'SELECT :list:',
           params: { list: [at, [new Date('nope')]] },
         }),
       EngineError,
       'Invalid Date',
+    );
+  });
+
+  it('writes bytes as a hex literal and a boxed string as its text', async () => {
+    asserts.assertEquals(
+      await engine.sent({
+        sql: 'SELECT :bytes:, :list:, :boxed:',
+        params: {
+          bytes: new Uint8Array([0, 255, 39, 92]),
+          list: [new Uint8Array([1]), new Uint8Array(0)],
+          boxed: new String("b'x"),
+        },
+      }),
+      [`SELECT X<"00ff275c">, X<"01">,X<"">, <"b'x">;`],
+    );
+  });
+
+  it('refuses a value escape would write as something other than a value', async () => {
+    for (const value of [() => 1, Symbol('s'), NaN, -Infinity, [1, [NaN]]]) {
+      const e = await failure(() =>
+        engine.sent({ sql: 'SELECT :v:', params: { v: value } })
+      );
+      asserts.assertEquals(e.code, 'OPERATION_FAILED', String(e.message));
+    }
+  });
+
+  it('reads quoted text the way the connection status flags say', async () => {
+    const backslash = { sql: `SELECT 'a\\' AS t, ':x:' AS u, :b: AS v` };
+    asserts.assertEquals(
+      await engine.sent(
+        { ...backslash, params: { b: 1 } },
+        NO_BACKSLASH_ESCAPES,
+      ),
+      [`SELECT 'a\\' AS t, ':x:' AS u, <1> AS v;`],
+    );
+    // With backslash escapes on, the first string runs to the quote before
+    // `:x:`, which makes `:x:` a placeholder.
+    const e = await failure(() =>
+      engine.sent({ ...backslash, params: { b: 1 } })
+    );
+    asserts.assertEquals(e.code, 'MISSING_PARAMETERS');
+    asserts.assertStringIncludes(e.message, 'maria-encode: x');
+
+    const identifier = {
+      sql: 'SELECT 1 AS "a\\", :b: AS "c"',
+      params: { b: 2 },
+    };
+    asserts.assertEquals(await engine.sent(identifier, ANSI_QUOTES), [
+      'SELECT 1 AS "a\\", <2> AS "c";',
+    ]);
+    asserts.assertEquals(await engine.sent(identifier), [
+      'SELECT 1 AS "a\\", :b: AS "c";',
+    ]);
+    asserts.assertEquals(
+      await engine.sent(identifier, ANSI_QUOTES | NO_BACKSLASH_ESCAPES),
+      ['SELECT 1 AS "a\\", <2> AS "c";'],
+    );
+  });
+
+  it('writes a value inside an executable comment after a space, and none that holds a comment marker', async () => {
+    asserts.assertEquals(
+      await engine.sent({
+        sql: 'SELECT 1 /*!:a:*/ /*M!100000:a: */ /* :zz: */ + :a:',
+        params: { a: 100000 },
+      }),
+      ['SELECT 1 /*! <100000>*/ /*M!100000 <100000> */ /* :zz: */ + <100000>;'],
+    );
+    for (const marker of ['*/ OR 1=1', '/* x']) {
+      asserts.assertEquals(
+        await engine.sent({ sql: 'SELECT :v:', params: { v: marker } }),
+        [`SELECT <${JSON.stringify(marker)}>;`],
+      );
+      const e = await failure(() =>
+        engine.sent({ sql: 'SELECT 1 /*! + :v: */', params: { v: marker } })
+      );
+      asserts.assertEquals(e.code, 'OPERATION_FAILED');
+    }
+  });
+
+  it('reports a missing or undefined parameter before the connection is known', async () => {
+    for (
+      const query of [
+        { sql: 'SELECT :a:, :b:, :a:', params: { c: 1 } },
+        { sql: 'SELECT :a:, :b:', params: { a: undefined, b: undefined } },
+        { sql: `SELECT '\\\\', :a:, :b:` },
+      ]
+    ) {
+      const e = await failure(() => engine.standardize(query));
+      asserts.assertEquals(e.code, 'MISSING_PARAMETERS');
+      asserts.assertStringIncludes(e.message, 'maria-encode: a, b');
+    }
+    // `:x:` is missing only when a backslash escapes, so the connection decides.
+    const ambiguous = { sql: `SELECT 'a\\' AS t, ':x:' AS u` };
+    asserts.assertEquals(
+      engine.standardize(ambiguous).sql,
+      `${ambiguous.sql};`,
+    );
+  });
+
+  it('reads a statement in a transaction by that connection alone', async () => {
+    const tx = new ProbeMariaEngine('maria-encode-tx', TEST_CONFIG);
+    const ambiguous = { sql: `SELECT 'a\\' AS t, ':x:' AS u, :b: AS v` };
+    const missingOn = async (status: number): Promise<string> => {
+      // deno-lint-ignore no-explicit-any
+      (tx as any)._transactions.set('t', { client: { info: { status } } });
+      const e = await failure(() =>
+        tx.standardize({ ...ambiguous, transactionId: 't' })
+      );
+      return e.message;
+    };
+    asserts.assertStringIncludes(await missingOn(0), 'maria-encode-tx: x');
+    asserts.assertStringIncludes(
+      await missingOn(NO_BACKSLASH_ESCAPES),
+      'maria-encode-tx: b',
     );
   });
 });
@@ -386,6 +530,123 @@ describe({
           { t: ':a:', v: 1, d: "it's :zz:", c: '20:04:05' },
         ]);
         await engine.disconnect();
+      });
+
+      it('binds a placeholder next to an operator, beside a user variable and inside an executable comment', async () => {
+        const engine = new MariaEngine('bind-code', TEST_CONFIG);
+        try {
+          const cases: [string, number][] = [
+            ['SELECT @a := :a: AS v', 2],
+            ['SELECT :a:-1 AS v', 1],
+            ['SELECT 1 /*! + :a: */ AS v', 3],
+            ['SELECT 1 /*M! + :a: */ AS v', 3],
+            ['SELECT 1 /*!100000 + :a: */ AS v', 3],
+            ['SELECT 1 /*M!100000 + :a: */ AS v', 3],
+            ['SELECT 1 /*!999999 + :a: */ AS v', 1],
+            ['SELECT 1 /* + :zz: */ AS v', 1],
+          ];
+          for (const [sql, v] of cases) {
+            const r = await engine.execute({ sql, params: { a: 2 } });
+            asserts.assertEquals(Number(r.data[0]?.v), v, sql);
+          }
+          // Without the space the engine writes first, the value would be
+          // read as the comment's version number.
+          const r = await engine.execute({
+            sql: 'SELECT /*!:a:*/ + 1 AS v',
+            params: { a: 100000 },
+          });
+          asserts.assertEquals(Number(r.data[0]?.v), 100001);
+        } finally {
+          await engine.disconnect();
+        }
+      });
+
+      it('stores hostile strings and bytes exactly, with backslash escapes on and off', async () => {
+        const hostile = [
+          `it's "quoted" \`back\``,
+          'C:\\dir\\',
+          'trailing\\',
+          `\\' OR 1=1 -- `,
+          `''; \\''`,
+          'nul\0byte \x1a \b\t\r\n end',
+          `'; DROP TABLE users; --`,
+          ':name: and :zz: /*! :a: */ # --',
+          'multi-byte: é 日本語 😀 \u00a5',
+          '100% _under_ \\% \\_',
+          '',
+        ];
+        const bytes = Uint8Array.from({ length: 256 }, (_, i) => i);
+        const hex = (b: Uint8Array) =>
+          Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+            .toUpperCase();
+        // One connection, so the session's sql_mode holds for every statement.
+        const engine = new MariaEngine('bind-hostile', {
+          ...TEST_CONFIG,
+          pool: { min: 1, max: 1 },
+        });
+        const t = tableName('hostile');
+        try {
+          await engine.execute({
+            sql: `CREATE TABLE ${t} (id INT PRIMARY KEY, ` +
+              `t TEXT CHARACTER SET utf8mb4, b BLOB)`,
+          });
+          for (const mode of ['', ',NO_BACKSLASH_ESCAPES']) {
+            await engine.execute({
+              sql: `SET SESSION sql_mode = CONCAT(@@sql_mode, '${mode}')`,
+            });
+            await engine.execute({ sql: `DELETE FROM ${t}` });
+            for (const [id, text] of hostile.entries()) {
+              await engine.execute({
+                sql: `INSERT INTO ${t} VALUES (:id:, :text:, :bytes:)`,
+                params: { id, text, bytes },
+              });
+            }
+            const stored = await engine.execute<
+              { t: string; h: string; b: string }
+            >({
+              sql: `SELECT t, HEX(t) AS h, HEX(b) AS b FROM ${t} ORDER BY id`,
+            });
+            asserts.assertEquals(stored.data.map((row) => row.t), hostile);
+            asserts.assertEquals(
+              stored.data.map((row) => row.h),
+              hostile.map((text) => hex(new TextEncoder().encode(text))),
+              mode,
+            );
+            asserts.assertEquals(
+              stored.data.map((row) => row.b),
+              hostile.map(() => hex(bytes)),
+              mode,
+            );
+          }
+          // Still in NO_BACKSLASH_ESCAPES: a string may end in a backslash.
+          const r = await engine.execute({
+            sql: `SELECT 'C:\\' AS t, ':x:' AS u, :b: AS v`,
+            params: { b: 1 },
+          });
+          asserts.assertEquals(r.data, [{ t: 'C:\\', u: ':x:', v: 1 }]);
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
+      it('reads an ANSI_QUOTES identifier that ends in a backslash', async () => {
+        const engine = new MariaEngine('bind-ansi', {
+          ...TEST_CONFIG,
+          pool: { min: 1, max: 1 },
+        });
+        try {
+          await engine.execute({
+            sql: `SET SESSION sql_mode = CONCAT(@@sql_mode, ',ANSI_QUOTES')`,
+          });
+          const r = await engine.execute({
+            sql: 'SELECT 1 AS "a\\", :b: AS "c"',
+            params: { b: 2 },
+          });
+          asserts.assertEquals(r.data, [{ 'a\\': 1, c: 2 }]);
+        } finally {
+          await engine.disconnect();
+        }
       });
     });
   },
@@ -976,6 +1237,29 @@ describe({
           asserts.assertEquals(Number((r.data[0] as { n: unknown }).n), 0);
         } finally {
           await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
+      it('a missing parameter leaves the transaction open, read by its own sql_mode', async () => {
+        const engine = new MariaEngine('maria-tx-missing', TEST_CONFIG);
+        const tx = await engine.transaction();
+        try {
+          await tx.execute({
+            sql:
+              `SET SESSION sql_mode = CONCAT(@@sql_mode, ',NO_BACKSLASH_ESCAPES')`,
+          });
+          // With backslash escapes on, `:x:` would be the placeholder.
+          const sql = `SELECT 'a\\' AS t, ':x:' AS u, :b: AS v`;
+          await asserts.assertRejects(
+            () => tx.execute({ sql }),
+            EngineError,
+            'maria-tx-missing: b',
+          );
+          const r = await tx.execute({ sql, params: { b: 1 } });
+          asserts.assertEquals(r.data, [{ t: 'a\\', u: ':x:', v: 1 }]);
+        } finally {
+          await tx.rollback();
           await engine.disconnect();
         }
       });

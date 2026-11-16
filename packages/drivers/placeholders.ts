@@ -47,16 +47,6 @@ const SCANNERS: ReadonlyMap<string, RegExp> = new Map([
     scanner(SINGLE, DOUBLE, DOLLAR_OPEN, LINE_COMMENT, String.raw`\/\*`),
   ],
   [
-    'maria',
-    scanner(
-      SINGLE_BACKSLASH,
-      DOUBLE_BACKSLASH,
-      BACKTICK,
-      MARIA_LINE_COMMENT,
-      BLOCK_COMMENT,
-    ),
-  ],
-  [
     'sqlite',
     scanner(
       SINGLE,
@@ -71,6 +61,29 @@ const SCANNERS: ReadonlyMap<string, RegExp> = new Map([
 const DEFAULT_SCANNER = scanner(SINGLE, DOUBLE, LINE_COMMENT, BLOCK_COMMENT);
 
 /**
+ * A MariaDB scanner for one reading of quoted text. `quoted` finds what can
+ * hide the end of an executable comment: a quoted run or a line comment.
+ */
+const mariaScanner = (single: string, double: string) => ({
+  statement: scanner(
+    single,
+    double,
+    BACKTICK,
+    MARIA_LINE_COMMENT,
+    BLOCK_COMMENT,
+  ),
+  quoted: new RegExp(
+    [single, double, BACKTICK, MARIA_LINE_COMMENT].join('|'),
+    'g',
+  ),
+});
+const MARIA = mariaScanner(SINGLE_BACKSLASH, DOUBLE_BACKSLASH);
+/** `ANSI_QUOTES`: a `"…"` run is an identifier, where a backslash is text. */
+const MARIA_ANSI_QUOTES = mariaScanner(SINGLE_BACKSLASH, DOUBLE);
+/** `NO_BACKSLASH_ESCAPES`: a backslash is text in every quoted run. */
+const MARIA_NO_BACKSLASH = mariaScanner(SINGLE, DOUBLE);
+
+/**
  * Replaces every `:name:` placeholder outside quoted text and comments with
  * what `replace` returns for its name, calling `replace` once per occurrence,
  * left to right. The scanners are shared, so `replace` must not call back in.
@@ -78,19 +91,32 @@ const DEFAULT_SCANNER = scanner(SINGLE, DOUBLE, LINE_COMMENT, BLOCK_COMMENT);
  * @param sql - The statement.
  * @param dialect - The engine's translator dialect; an unknown one gets the
  *   standard SQL quoting rules.
- * @param replace - Returns the text that stands in for one placeholder.
+ * @param replace - Returns the text that stands in for one placeholder. Its
+ *   second argument is true for a placeholder inside a MariaDB executable
+ *   comment, which a server may run or skip.
+ * @param quotes - The MariaDB session's `sql_mode` flags that change how
+ *   quoted text reads; other dialects ignore them.
  * @returns The statement with every placeholder replaced.
  */
 export function replacePlaceholders(
   sql: string,
   dialect: string,
-  replace: (name: string) => string,
+  replace: (name: string, executable: boolean) => string,
+  quotes: { noBackslashEscapes?: boolean; ansiQuotes?: boolean } = {},
 ): string {
-  const re = SCANNERS.get(dialect) ?? DEFAULT_SCANNER;
+  const maria = dialect !== 'maria'
+    ? undefined
+    : quotes.noBackslashEscapes
+    ? MARIA_NO_BACKSLASH
+    : quotes.ansiQuotes
+    ? MARIA_ANSI_QUOTES
+    : MARIA;
+  const re = maria?.statement ?? SCANNERS.get(dialect) ?? DEFAULT_SCANNER;
   const postgres = dialect === 'postgres';
   re.lastIndex = 0;
   let out = '';
   let last = 0;
+  let executableEnd = 0;
   for (let m = re.exec(sql); m !== null; m = re.exec(sql)) {
     const at = m.index;
     if (m[1] !== undefined) {
@@ -99,15 +125,49 @@ export function replacePlaceholders(
         re.lastIndex = at + 1;
         continue;
       }
-      out += sql.slice(last, at) + replace(m[1]);
+      out += sql.slice(last, at) + replace(m[1], at < executableEnd);
       last = re.lastIndex;
     } else if (postgres && sql[at] !== '"') {
       // A quoted identifier, the commonest match in OQL's SQL, needs no more
       // work. The text is read from `sql`, not `m[0]`, which is slow on Bun.
       re.lastIndex = postgresSkipEnd(sql, at, re.lastIndex);
+    } else if (maria && sql[at] === '/') {
+      // `/*!` and `/*M!` open an executable comment, whose body is code.
+      const mark = sql[at + 2] === 'M' ? at + 3 : at + 2;
+      if (sql[mark] !== '!') continue;
+      executableEnd = executableCommentEnd(sql, mark + 1, maria.quoted);
+      if (executableEnd === -1) break;
+      re.lastIndex = mark + 1;
     }
   }
   return last === 0 ? sql : out + sql.slice(last);
+}
+
+/**
+ * The index of the `*` + `/` that closes a MariaDB executable comment whose
+ * body starts at `from`, or -1 when it has no one end. A server that runs the
+ * body reads it as code and one that skips it stops at the first `*` + `/`,
+ * so the two disagree when the body never closes, holds a comment opener or a
+ * line comment, or has a quoted run that reaches past that closer.
+ */
+function executableCommentEnd(
+  sql: string,
+  from: number,
+  quoted: RegExp,
+): number {
+  const end = sql.indexOf('*/', from);
+  const nested = sql.indexOf('/*', from);
+  if (end === -1 || (nested !== -1 && nested < end)) return -1;
+  quoted.lastIndex = from;
+  for (
+    let m = quoted.exec(sql);
+    m !== null && m.index < end;
+    m = quoted.exec(sql)
+  ) {
+    const c = sql[m.index];
+    if (c === '#' || c === '-' || quoted.lastIndex > end) return -1;
+  }
+  return end;
 }
 
 /** Whether the character before `index` can end an identifier. */

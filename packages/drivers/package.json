@@ -48,7 +48,7 @@
     "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*",
     "@tundralibs/id": "workspace:*",
-    "$maria": "npm:mariadb@^3.5.3",
+    "$maria": "npm:mariadb@^3.5.5",
     "$mongo": "npm:mongodb@^6.21.0"
   },
   "devDependencies": {

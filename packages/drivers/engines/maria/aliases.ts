@@ -37,6 +37,5 @@ export class PlanetScaleEngine extends MariaEngine {
     advisoryLock: false, // Vitess GET_LOCK is not cluster-wide
     inPlaceAlter: true,
     referentialActions: false, // Vitess does not enforce FK constraints
-    parameterReplacement: { prefix: ':', suffix: '' },
   };
 }

@@ -7,13 +7,20 @@ import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
 import { replacePlaceholders } from './placeholders.ts';
 
-/** Rewrites every placeholder to `<name>` and returns the names seen, in order. */
-const scan = (sql: string, dialect: string): [string, string[]] => {
+/**
+ * Rewrites every placeholder to `<name>`, or `<name!>` inside an executable
+ * comment, and returns the names seen, in order.
+ */
+const scan = (
+  sql: string,
+  dialect: string,
+  quotes?: Parameters<typeof replacePlaceholders>[3],
+): [string, string[]] => {
   const names: string[] = [];
-  const out = replacePlaceholders(sql, dialect, (name) => {
+  const out = replacePlaceholders(sql, dialect, (name, executable) => {
     names.push(name);
-    return `<${name}>`;
-  });
+    return executable ? `<${name}!>` : `<${name}>`;
+  }, quotes);
   return [out, names];
 };
 
@@ -85,5 +92,53 @@ describe('drivers.replacePlaceholders', () => {
     for (const [dialect, sql, expected, names] of cases) {
       asserts.assertEquals(scan(sql, dialect), [expected, names], sql);
     }
+  });
+
+  it('reads MariaDB quoted text by the session sql_mode', () => {
+    const single = `'C:\\', :b:, ':c:'`;
+    const double = `"C:\\", :b:, ":c:"`;
+    const cases: Array<[string, Parameters<typeof scan>[2], string[]]> = [
+      [single, {}, ['c']],
+      [single, { ansiQuotes: true }, ['c']],
+      [single, { noBackslashEscapes: true }, ['b']],
+      [double, {}, ['c']],
+      [double, { ansiQuotes: true }, ['b']],
+      [double, { noBackslashEscapes: true }, ['b']],
+    ];
+    for (const [sql, quotes, names] of cases) {
+      asserts.assertEquals(scan(sql, 'maria', quotes)[1], names, sql);
+    }
+    // The flags are MariaDB's: another dialect reads the text as before.
+    asserts.assertEquals(
+      scan(single, 'sqlite', { noBackslashEscapes: true }),
+      scan(single, 'sqlite'),
+    );
+  });
+
+  it('reads a MariaDB executable comment as code', () => {
+    const cases: Array<[string, string]> = [
+      ['1 /*! + :a: */ + :b: /* :c: */', '1 /*! + <a!> */ + <b> /* :c: */'],
+      ['/*M!100000 :a: */, :b:', '/*M!100000 <a!> */, <b>'],
+      [`/*!999999 ':x:' \`:y:\` :a: */`, `/*!999999 ':x:' \`:y:\` <a!> */`],
+      // `/*M` without the `!` is an ordinary comment.
+      ['/*M :a: */ :b:', '/*M :a: */ <b>'],
+      // A body with no one end stops the scan: nothing from it on is bound.
+      [':z: /*! :a:', '<z> /*! :a:'],
+      [`:z: /*! 'x*/' :a: */ :b:`, `<z> /*! 'x*/' :a: */ :b:`],
+      [':z: /*! :a: /* x */ */ :b:', '<z> /*! :a: /* x */ */ :b:'],
+      [':z: /*! :a: # x\n */ :b:', '<z> /*! :a: # x\n */ :b:'],
+      [':z: /*! :a: -- x\n */ :b:', '<z> /*! :a: -- x\n */ :b:'],
+    ];
+    for (const [sql, expected] of cases) {
+      asserts.assertEquals(scan(sql, 'maria')[0], expected, sql);
+    }
+    // The body's quoted text follows the session too.
+    const body = `/*! 'C:\\' :a: */`;
+    asserts.assertEquals(scan(body, 'maria')[1], []);
+    asserts.assertEquals(scan(body, 'maria', { noBackslashEscapes: true })[1], [
+      'a',
+    ]);
+    // Only MariaDB has them.
+    asserts.assertEquals(scan('/*! :a: */', 'sqlite')[1], []);
   });
 });

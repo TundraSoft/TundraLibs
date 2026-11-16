@@ -6,9 +6,10 @@
  * rather than reimplement. We use `createConnection` (per-connection) and let
  * `BaseEngine`'s pool own the lifecycle — no double-pooling.
  *
- * Named parameters via `:name:` are rewritten to `:name` (single colon) by
- * `SQLEngine._standardizeQuery`; the underlying driver consumes that natively
- * because we pass `namedPlaceholders: true`.
+ * The engine writes each `:name:` value into the statement itself, as the
+ * literal the connector's `escape` produces, and sends the finished text with
+ * no values. The connector therefore never parses the statement for
+ * placeholders of its own.
  *
  * @module
  *
@@ -40,6 +41,7 @@ import {
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { validateTLS } from '@tundralibs/compat/common';
 import { MariaTranslator } from '@tundralibs/oql/translator';
+import { replacePlaceholders } from '../../placeholders.ts';
 import { SQLEngine } from '../../SQLEngine.ts';
 import { EngineError, type EngineErrorCode } from '../../errors/mod.ts';
 import type {
@@ -52,6 +54,39 @@ import type { MariaEngineOptions } from './types/mod.ts';
 const MARIA_DEFAULTS: Partial<MariaEngineOptions> = {
   port: 3306,
 };
+
+/** Server status bit set while the session runs `NO_BACKSLASH_ESCAPES`. */
+const STATUS_NO_BACKSLASH_ESCAPES = 1 << 9;
+/** Server status bit MariaDB sets while the session runs `ANSI_QUOTES`. */
+const STATUS_ANSI_QUOTES = 1 << 15;
+
+/** Every way a session's `sql_mode` can read a backslash in quoted text. */
+const QUOTE_READINGS = [
+  {},
+  { ansiQuotes: true },
+  { noBackslashEscapes: true },
+] as const;
+
+/** The two hex digits of each byte value. */
+const HEX: readonly string[] = Array.from(
+  { length: 256 },
+  (_, byte) => byte.toString(16).padStart(2, '0'),
+);
+
+/**
+ * How the connection's session reads quoted text, from the status flags the
+ * server sends with every reply. The connector's `escape` reads the same
+ * flags, so the scanner and the escaping cannot disagree.
+ */
+function quoteRules(
+  client: Connection,
+): { noBackslashEscapes: boolean; ansiQuotes: boolean } {
+  const status = client.info?.status ?? 0;
+  return {
+    noBackslashEscapes: (status & STATUS_NO_BACKSLASH_ESCAPES) !== 0,
+    ansiQuotes: (status & STATUS_ANSI_QUOTES) !== 0,
+  };
+}
 
 /** Column types the server returns as a day or a wall clock. */
 const DATE_COLUMN_TYPES: ReadonlySet<string> = new Set([
@@ -80,7 +115,7 @@ function readUtc(field: FieldInfo, next: TypeCastNextFunction): unknown {
  * MariaDB / MySQL engine.
  *
  * Capabilities: transactions, prepared statements, named parameters via
- * `:name:` (rewritten to driver-native `:name`).
+ * `:name:`, each written into the statement as an escaped literal.
  *
  * **TLS:** `ssl: true | { … }` enables TLS via the underlying
  * `npm:mariadb` driver. The engine-only `ssl.enforce` field is
@@ -96,8 +131,8 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
   public readonly Engine: string = 'MARIA';
 
   /**
-   * Full relational feature set. `parameterReplacement` rewrites `:name:` to
-   * the driver's native `:name` form.
+   * Full relational feature set. `parameterReplacement` is left `undefined`
+   * because {@link MariaEngine._execute} writes the values into the statement.
    */
   public readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
@@ -106,7 +141,6 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     advisoryLock: true, // GET_LOCK
     inPlaceAlter: true, // MODIFY COLUMN
     referentialActions: true,
-    parameterReplacement: { prefix: ':', suffix: '' },
   };
 
   /** Emits MariaDB/MySQL-dialect SQL. */
@@ -193,7 +227,6 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
       connectAttributes: {
         program_name: this._getOption('applicationName') ?? this.Name,
       },
-      namedPlaceholders: true,
       supportBigInt: true,
       decimalAsNumber: true,
       // Dates travel as UTC both ways, whatever the host's time zone:
@@ -248,9 +281,9 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
    * HH:MM:SS.mmm`). The session runs in UTC, so a `TIMESTAMP` column stores
    * that instant and a `DATETIME` / `DATE` column its UTC clock or day.
    *
-   * An array is encoded element by element, at any depth: the driver expands
-   * it into a comma-separated list and would write a `Date` left inside it in
-   * the host's time zone.
+   * An array is encoded element by element, at any depth: it is written as a
+   * comma-separated list, where the connector would write a `Date` left
+   * inside it in the host's time zone.
    *
    * @throws {EngineError} `OPERATION_FAILED` for an Invalid Date.
    */
@@ -268,18 +301,165 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
   }
 
   /**
-   * Runs the query with named placeholders. A `SELECT` yields the row array
+   * Trims the statement and encodes the values. The `:name:` placeholders
+   * stay as written: {@link MariaEngine._execute} replaces them once it holds
+   * the connection, whose `sql_mode` decides what is quoted text.
+   *
+   * A statement with a backslash can read differently per `sql_mode`. Outside
+   * a transaction the connection is not known yet, so a placeholder that is
+   * missing under only some readings is reported by `_execute` instead.
+   *
+   * @throws {EngineError} `MISSING_PARAMETERS` if a placeholder has no value.
+   */
+  protected override _standardizeQuery(query: EngineQuery): EngineQuery {
+    const standardized: EngineQuery = {
+      ...query,
+      sql: query.sql.trim().replace(/;$/, '') + ';',
+    };
+    const tx = query.transactionId === undefined
+      ? undefined
+      : this._transactions.get(query.transactionId);
+    const readings = tx
+      ? [quoteRules(tx.client)]
+      : standardized.sql.includes('\\')
+      ? QUOTE_READINGS
+      : QUOTE_READINGS.slice(0, 1);
+    const missing = new Set(
+      readings.map((rules) => this.__scan(standardized, rules).missing),
+    );
+    const [names] = missing;
+    if (missing.size === 1 && names) {
+      throw new EngineError('MISSING_PARAMETERS', {
+        instanceId: this.instanceId,
+        missing: names,
+      });
+    }
+
+    if (!query.params) return standardized;
+    const params: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(query.params)) {
+      params[k] = this._encodeValue(v);
+    }
+    return { ...standardized, params };
+  }
+
+  /**
+   * Replaces each `:name:` placeholder the session's quoting rules find with
+   * what `write` returns for its value, and lists the names that have none.
+   * A value of `undefined` counts as none.
+   */
+  private __scan(
+    query: EngineQuery,
+    rules: { noBackslashEscapes?: boolean; ansiQuotes?: boolean },
+    write?: (value: unknown, executable: boolean) => string,
+  ): { sql: string; missing: string } {
+    const params = query.params ?? {};
+    const missing = new Set<string>();
+    const sql = replacePlaceholders(
+      query.sql,
+      this.Dialect,
+      (name, executable) => {
+        const value = Object.hasOwn(params, name) ? params[name] : undefined;
+        if (value === undefined) missing.add(name);
+        else if (write) return write(value, executable);
+        return '';
+      },
+      rules,
+    );
+    return { sql, missing: Array.from(missing).join(', ') };
+  }
+
+  /**
+   * The statement with every value written in place of its placeholder. This
+   * is the only place a value becomes SQL text, and each one gets there
+   * through {@link MariaEngine.__literal}.
+   *
+   * A server either runs an executable comment or skips to the first `*` +
+   * `/`, so a value written inside one may hold neither comment marker. It
+   * also gets a space before it, so digits that follow the comment's opener
+   * are not read as its version number.
+   *
+   * @throws {EngineError} `MISSING_PARAMETERS` if a placeholder has no value.
+   * @throws {EngineError} `OPERATION_FAILED` for a value that cannot be
+   *   written, or one that holds a comment marker inside an executable comment.
+   */
+  private __bind(query: EngineQuery, client: Connection): string {
+    const { sql, missing } = this.__scan(
+      query,
+      quoteRules(client),
+      (value, executable) => {
+        const literal = this.__literal(value, client);
+        if (!executable) return literal;
+        if (literal.includes('*/') || literal.includes('/*')) {
+          throw this.__unwritable(
+            'a value inside an executable comment holds a comment marker',
+          );
+        }
+        return ` ${literal}`;
+      },
+    );
+    if (missing) {
+      throw new EngineError('MISSING_PARAMETERS', {
+        instanceId: this.instanceId,
+        missing,
+      });
+    }
+    return sql;
+  }
+
+  /**
+   * One value as SQL text, quoted by the connector's `escape`, which follows
+   * the session's `NO_BACKSLASH_ESCAPES`.
+   *
+   * - An array is its elements, comma-separated, at any depth.
+   * - Bytes are a hex literal: `escape` decodes a `Buffer` as text, which
+   *   loses any byte that is not valid in the session's character set.
+   * - A boxed string is its text; `escape` would write it as JSON.
+   *
+   * @throws {EngineError} `OPERATION_FAILED` for a function, a symbol, `NaN`
+   *   or an infinity, none of which `escape` writes as a value.
+   */
+  private __literal(value: unknown, client: Connection): string {
+    if (Array.isArray(value)) {
+      return value.map((v) => this.__literal(v, client)).join(',');
+    }
+    if (value instanceof Uint8Array) {
+      let hex = '';
+      for (let i = 0; i < value.length; i++) hex += HEX[value[i]!];
+      return `X${client.escape(hex)}`;
+    }
+    if (typeof value === 'function' || typeof value === 'symbol') {
+      throw this.__unwritable(`a ${typeof value} is not a value`);
+    }
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw this.__unwritable(`${value} is not a number the server stores`);
+    }
+    return client.escape(value instanceof String ? value.valueOf() : value);
+  }
+
+  /** The error for a value that cannot be written into the statement. */
+  private __unwritable(reason: string): EngineError {
+    return new EngineError('OPERATION_FAILED', {
+      instanceId: this.instanceId,
+      operation: 'encode parameter',
+      reason,
+    });
+  }
+
+  /**
+   * Sends the statement with its values already written in, so the connector
+   * receives no values and parses nothing. A `SELECT` yields the row array
    * and its length; a modification yields no rows and the driver's
    * `affectedRows` as the count.
+   *
+   * @throws {EngineError} `MISSING_PARAMETERS` or `OPERATION_FAILED`, from
+   *   writing the values.
    */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: Connection,
   ): Promise<{ data: R[]; count: number }> {
-    const result = await client.query(
-      { sql: query.sql, namedPlaceholders: true },
-      query.params ?? {},
-    );
+    const result = await client.query(this.__bind(query, client));
     if (Array.isArray(result)) {
       // SELECT etc. returns Array<row>.
       return { data: result as R[], count: result.length };

@@ -11,6 +11,7 @@ not listed; the changelog has those.
   - [Neon refuses a session that is not in UTC](#neon-refuses-a-session-that-is-not-in-utc)
   - [Neon types a `Date` parameter as `timestamptz`](#neon-types-a-date-parameter-as-timestamptz)
   - [MariaDB sessions and `Date` values are UTC](#mariadb-sessions-and-date-values-are-utc)
+  - [MariaDB values are escaped into the statement](#mariadb-values-are-escaped-into-the-statement)
   - [A `:name:` in quoted text or a comment is text](#a-name-in-quoted-text-or-a-comment-is-text)
   - [A colon after a colon never opens a placeholder](#a-colon-after-a-colon-never-opens-a-placeholder)
   - [Error codes and messages](#error-codes-and-messages)
@@ -81,6 +82,37 @@ A row 1.8.0 wrote from a host outside UTC holds that host's clock, and
 reads back shifted by its offset. Convert it once, from the old host's
 zone to UTC. See
 [MariaDB → Type round-trips](../engines/maria/Drivers-Maria.md#type-round-trips).
+
+### MariaDB values are escaped into the statement
+
+The driver now writes each `:name:` value into the statement with the
+connector's own `escape` and sends the text with no values. drivers 1.8.0
+handed the connector a `:name` statement and the values, and the connector
+looked for placeholders a second time by its own rules. A stored value is
+the same as before except where the table says so.
+
+| Statement or value                                                     | drivers 1.8.0                                             | Now                                                    |
+| ---------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------ |
+| `SELECT @a := 1 AS v`                                                  | `QUERY_EXECUTION_FAILED`, `Placeholder '' is not defined` | `1`                                                    |
+| `SELECT :a:-1 AS v` with `{ a: 5 }`                                    | `QUERY_EXECUTION_FAILED`, `Placeholder 'a-1'`             | `4`                                                    |
+| `SELECT 1 /*! + :a: */ AS v` with `{ a: 2 }`, also `/*M! … */`         | `SYNTAX_ERROR`                                            | `3`                                                    |
+| `SELECT 'C:\' AS t, :b: AS v` under `NO_BACKSLASH_ESCAPES`             | `SYNTAX_ERROR`                                            | binds `:b:`                                            |
+| a `Uint8Array` that is not a `Buffer`                                  | stored as JSON text, `{"0":1,"1":2}`                      | its bytes                                              |
+| a parameter set to `undefined`                                         | `QUERY_EXECUTION_FAILED`                                  | `MISSING_PARAMETERS`                                   |
+| `NaN`, `Infinity`, `-Infinity`                                         | `COLUMN_NOT_FOUND`                                        | `OPERATION_FAILED`                                     |
+| a function or a symbol                                                 | `SYNTAX_ERROR`                                            | `OPERATION_FAILED`                                     |
+| a string with a lone surrogate, such as `'a\uD800b'`                   | `a?b`                                                     | `a` U+FFFD `b`, as under `NO_BACKSLASH_ESCAPES` before |
+| the `sql` on the `query` and `slowQuery` events and in error `context` | `:name` placeholders                                      | `:name:` placeholders, as passed in                    |
+
+The text after `sql:` in a server error's `reason` now shows the statement
+with its values written in, cut at 256 characters as before. 1.8.0
+showed the `:name` statement followed by the parameter values.
+
+Values are bound by the driver's own scan, so the connector must escape by
+the session's rules: `package.json` now asks for `mariadb` 3.5.5 or later,
+as `deno.json` did, because `escape` in 3.5.3 ignores
+`NO_BACKSLASH_ESCAPES`. See
+[MariaDB → Parameters](../engines/maria/Drivers-Maria.md#parameters).
 
 ### A `:name:` in quoted text or a comment is text
 

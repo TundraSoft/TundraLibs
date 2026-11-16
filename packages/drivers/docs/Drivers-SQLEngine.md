@@ -294,11 +294,16 @@ declared in `Capabilities.parameterReplacement`:
 | Engine   | Placeholder rewrite                                            |
 | -------- | -------------------------------------------------------------- |
 | Postgres | `$1`, `$2`, ... (positional; PG overrides `_standardizeQuery`) |
-| MariaDB  | `:name`                                                        |
+| MariaDB  | the value, as an escaped literal (see below)                   |
 | SQLite   | `:name`                                                        |
 
 The same name appearing twice maps to the same placeholder index (and the
 value is supplied once).
+
+MariaDB declares no `parameterReplacement`. Its engine writes each value into
+the statement with the connector's `escape` and sends the finished text with
+no values; see
+[MariaDB → Parameters](../engines/maria/Drivers-Maria.md#parameters).
 
 ```typescript
 import { PostgresEngine } from '@tundralibs/drivers/postgres';
@@ -336,11 +341,13 @@ of its dialect:
 A doubled quote inside its own quotes is the quote character. A quote or
 comment left open runs to the end of the statement. A Postgres block comment
 nests, as on the server: `/* a /* b */ :c: */` is one comment. On the other
-dialects a block comment ends at its first `*/`. Two MariaDB limits: the
-rules assume backslash escapes are on, so a server running with
-`NO_BACKSLASH_ESCAPES` reads `'C:\'` differently from the scanner, and a
-placeholder inside an executable comment `/*! … */` or `/*M! … */` is never
-bound.
+dialects a block comment ends at its first `*/`.
+
+MariaDB reads quoted text by the connection's `sql_mode`: with
+`NO_BACKSLASH_ESCAPES` a backslash is an ordinary character, so `'C:\'` is a
+whole string, and with `ANSI_QUOTES` it is ordinary inside `"…"`. An
+executable comment `/*! … */` or `/*M! … */` is code, so a placeholder inside
+one is bound.
 
 ## Value encoding
 

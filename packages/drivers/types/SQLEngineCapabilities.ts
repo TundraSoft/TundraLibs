@@ -19,8 +19,8 @@ export type SQLEngineCapabilities = EngineCapabilities & {
   /**
    * Native placeholder format used for parameter binding.
    * Set this so `SQLEngine._standardizeQuery` can rewrite `:name:` placeholders
-   * into the dialect-specific form. Leave undefined for engines whose native
-   * client already accepts named parameters (e.g. MariaDB driver).
+   * into the dialect-specific form. Leave undefined for an engine that binds
+   * `:name:` itself (e.g. MariaDB, which writes each value into the statement).
    */
   parameterReplacement?: {
     /** Prefix character(s) for the placeholder (e.g. `$` for Postgres). */
