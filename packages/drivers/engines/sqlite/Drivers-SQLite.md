@@ -97,15 +97,17 @@ lifecycle, etc.).
 
 SQLite values are normalized via `_encodeValue`:
 
-| JS                  | SQLite binding |
-| ------------------- | -------------- |
-| `undefined`         | `null`         |
-| `Date`              | ISO string     |
-| `boolean`           | `0` or `1`     |
-| `-0`                | `0`            |
-| `Uint8Array`        | BLOB (raw)     |
-| object (non-buffer) | JSON string    |
-| `string` / `number` | as-is          |
+| JS                                  | SQLite binding           |
+| ----------------------------------- | ------------------------ |
+| `undefined`                         | `null`                   |
+| `Date`                              | ISO string               |
+| `boolean`                           | `0` or `1`               |
+| `-0`                                | `0`                      |
+| `Uint8Array`                        | BLOB (raw)               |
+| object (non-buffer)                 | JSON string              |
+| `string`                            | as-is                    |
+| `number`, whole, within ±(2^53 − 1) | INTEGER on every runtime |
+| `number`, fractional                | REAL                     |
 
 ## In-memory caveat
 

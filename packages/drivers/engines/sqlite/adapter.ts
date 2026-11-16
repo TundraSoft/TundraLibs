@@ -491,15 +491,43 @@ async function _openNodeSqlite(
     }
   }
   const db = new Database(path, { readOnly: options.readonly ?? false });
-  return _wrapNodeStmt(db);
+  return _wrapNodeStmt(db, _wholeNumbersAsBigints);
+}
+
+/**
+ * `node:sqlite` binds every JS number as REAL, whole numbers included, where
+ * the Deno and Bun bindings bind them as INTEGER: `typeof(?)`, `5 / 2` and
+ * what a column without a type stores would differ. A whole number in the
+ * safe integer range is bound as a bigint, so as INTEGER; fractions and
+ * larger magnitudes stay REAL. Named parameters arrive as one object.
+ */
+function _wholeNumbersAsBigints(
+  params: ReadonlyArray<unknown>,
+): ReadonlyArray<unknown> {
+  const bind = (v: unknown): unknown =>
+    typeof v === 'number' && Number.isSafeInteger(v) ? BigInt(v) : v;
+  return params.map((p) => {
+    if (p === null || typeof p !== 'object' || Array.isArray(p)) {
+      return bind(p);
+    }
+    if (Object.getPrototypeOf(p) !== Object.prototype) return p;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(p)) out[k] = bind(v);
+    return out;
+  });
 }
 
 /**
  * Wrap a Node-style SQLite database (better-sqlite3 OR node:sqlite —
  * the surface is intentionally similar across both).
  */
-// deno-lint-ignore no-explicit-any
-function _wrapNodeStmt(db: any): SqliteDb {
+function _wrapNodeStmt(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  bindArgs: (
+    params: ReadonlyArray<unknown>,
+  ) => ReadonlyArray<unknown> = (params) => params,
+): SqliteDb {
   return {
     exec: (sql: string) => db.exec(sql),
     prepare: (sql: string) => {
@@ -512,10 +540,10 @@ function _wrapNodeStmt(db: any): SqliteDb {
       return {
         all: (params) =>
           _downgradeSafeBigints(
-            stmt.all(...params) as Record<string, unknown>[],
+            stmt.all(...bindArgs(params)) as Record<string, unknown>[],
           ),
         run: (params) => {
-          const r = stmt.run(...params);
+          const r = stmt.run(...bindArgs(params));
           // Big-int read mode makes run() metadata bigint too — coerce.
           return {
             changes: Number(r.changes ?? 0),
