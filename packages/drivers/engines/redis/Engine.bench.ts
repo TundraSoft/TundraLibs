@@ -7,7 +7,7 @@
  * packages/drivers/.env (REDIS_HOST / REDIS_PORT). Skipped if unreachable.
  */
 
-import { bench } from '@tundralibs/compat/bench';
+import { bench, runBenches } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { RedisEngine } from './Engine.ts';
 
@@ -161,7 +161,10 @@ if (!serverAvailable) {
     await Promise.all(ops);
   });
 
-  globalThis.addEventListener('unload', () => {
-    Promise.allSettled([single.disconnect(), pooled.disconnect()]);
-  });
+  // An open pool keeps the process alive: run here, then disconnect.
+  try {
+    await runBenches();
+  } finally {
+    await Promise.allSettled([single.disconnect(), pooled.disconnect()]);
+  }
 }
