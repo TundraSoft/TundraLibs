@@ -277,11 +277,9 @@ literally, so `$$NOW` would be saved as the string `"$$NOW"`.
   as well.
 - **An expression alias as a filter value**, `{ '@qty': { $lt: '@d' } }`
   with `d` declared, compares the expression inside `$expr` in a SELECT,
-  COUNT, UPDATE or DELETE, as SQL compares its body. On MongoDB `$like`,
-  `$nlike`, `$ilike` and `$nilike` refuse it with
-  `DialectUnsupportedError`, as they refuse any expression value, and a
-  HAVING value naming an aggregate inside `$in` or `$nin`, or as a LIKE
-  pattern, throws as a column there does. Earlier releases compared the
+  COUNT, UPDATE or DELETE, as SQL compares its body. That holds as a
+  `$like`, `$nlike`, `$ilike` or `$nilike` pattern and inside a list, and
+  for a HAVING value naming an aggregate. Earlier releases compared the
   text, or threw `INVALID_COLUMN_REF` in an UPDATE or DELETE.
 - **An expression alias where a column belongs**: in an UPDATE or
   DELETE, an `@key` naming a declared expression as an expression
