@@ -9,6 +9,8 @@ import {
   GET,
   Module,
   moduleMetaOf,
+  param,
+  payload,
   POST,
 } from '../decorators/mod.ts';
 import type { RapidContextResponse } from '../types/mod.ts';
@@ -17,7 +19,7 @@ import type { RapidContextResponse } from '../types/mod.ts';
 class Widgets {
   private readonly store = new Map<string, { id: string; name: string }>();
 
-  @GET('/:id:')
+  @GET('/:id:', { bind: [param('id')] })
   find(id: string): RapidContextResponse {
     const widget = this.store.get(id);
     if (widget === undefined) {
@@ -26,7 +28,7 @@ class Widgets {
     return { content: widget };
   }
 
-  @POST('/')
+  @POST('/', { bind: [payload(String)] })
   create(name: string): RapidContextResponse {
     const id = String(this.store.size + 1);
     const widget = { id, name };

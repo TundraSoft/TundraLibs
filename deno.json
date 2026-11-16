@@ -1,6 +1,9 @@
 {
   "tasks": {
-    "check": "deno check packages/*/mod.ts packages/*/examples/**/*.ts",
+    "check": {
+      "description": "Type-check every package barrel, example, bench and soak file. The bench and soak globs are quoted so that Deno expands them and skips node_modules. packages/rapid/bench/*-parity-server.ts is left out: express, fastify and @oak/oak are installed only by that directory's package.json.",
+      "command": "deno check packages/*/mod.ts packages/*/examples/**/*.ts 'packages/**/*.bench.ts' 'packages/**/soak.ts' packages/rapid/bench/rapid-server.ts packages/rapid/bench/*-explore.ts"
+    },
     "test": "deno test --allow-all --parallel",
     "test:watch": "deno test --allow-all --watch",
     "test:bun": "bun test packages/",
