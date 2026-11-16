@@ -770,7 +770,9 @@ A conflict never changes the primary key, the conflict keys, an
 `.insertOnly()` or norm-owned column, or a column whose value came only
 from an insert default (a generated id, `CreatedOn`, `Status: 'ACTIVE'`).
 Naming one of them in `updateOnConflict` or `update` throws
-`UPSERT_CONFLICT_KEY`.
+`UPSERT_CONFLICT_KEY`. A column named in `updateOnConflict` needs a value
+in every row, passed or filled by its default; a row without one throws
+`NormValidationError` with that column's path.
 
 When a conflict has nothing to write (you passed only keys and insert-only
 columns, or `updateOnConflict: []`), the row is untouched: no

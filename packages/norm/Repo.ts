@@ -3467,7 +3467,8 @@ export class Repo<
    * @throws {@link NormQueryError} If a conflict key is encrypted, a
    *   payload value contradicts the active `db.scope(...)`, or the
    *   write would collide with a row outside that scope.
-   * @throws {@link NormValidationError} If a value fails its column rules.
+   * @throws {@link NormValidationError} If a value fails its column rules,
+   *   or an `updateOnConflict` column has no value in a row.
    * @throws {TypeError} From `@tundralibs/oql`'s query asserts when a
    *   `conflictKeys` entry names a column the entity does not have.
    */
@@ -3599,9 +3600,24 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
-    // A column `updateOnConflict` names must be in the row on every
-    // engine, so one the caller left out stays out.
-    this.__fillNulls(rows, opts.updateOnConflict as readonly string[]);
+    // A column `updateOnConflict` copies needs a value in every row.
+    const uncopyable: ValidationIssue[] = [];
+    for (const col of opts.updateOnConflict ?? []) {
+      rows.forEach((row, i) => {
+        if (row[col] !== undefined) return;
+        uncopyable.push({
+          model: c.key,
+          op: 'upsert',
+          path: (isBatch ? `[${i}].` : '') + col,
+          message: `updateOnConflict names '${col}', which the row does ` +
+            `not supply and no default fills`,
+        });
+      });
+    }
+    if (uncopyable.length > 0) {
+      throw new NormValidationError({ issues: uncopyable });
+    }
+    this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow (same as insert()) so an encrypted
     // scope column stores ciphertext + its digest sibling, never
@@ -4417,12 +4433,12 @@ export class Repo<
 
   /** Write `null` for each nullable column a row leaves out, on MongoDB:
    * a document holds only the fields written, where SQL stores NULL. */
-  private __fillNulls(rows: Row[], except: readonly string[] = []): void {
+  private __fillNulls(rows: Row[]): void {
     if (this._executor.capabilities.dialect !== 'mongo') return;
     const c = this._compiled;
     const specs = c.def.columns as Record<string, ColumnSpec>;
     for (const col of c.columnNames) {
-      if (specs[col]!.nullable !== true || except.includes(col)) continue;
+      if (specs[col]!.nullable !== true) continue;
       for (const row of rows) row[col] ??= null;
     }
   }

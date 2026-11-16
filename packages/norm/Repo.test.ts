@@ -1101,13 +1101,34 @@ describe('norm.Repo (edge paths over mock executor)', () => {
       (exec.lastOf('UPSERT') as unknown as Row).updateOnConflict,
       [],
     );
-    // A column updateOnConflict names stays out of the row, which oql
-    // refuses on every engine.
-    await db.repo('Guarded').upsert({ id: 1 }, {
-      conflictKeys: ['id'],
-      updateOnConflict: ['label'],
-    });
-    asserts.assertEquals(sent('UPSERT'), [{ id: 1 }]);
+  });
+
+  it('upsert refuses an updateOnConflict column a row has no value for', async () => {
+    for (const dialect of ['sqlite', 'mongo']) {
+      const { db, exec } = makeDb();
+      Object.assign(exec.capabilities, { dialect });
+      const opts = { conflictKeys: ['id'], updateOnConflict: ['label'] };
+      const single = await asserts.assertRejects(
+        () => db.repo('Guarded').upsert({ id: 1 }, opts as never),
+        NormValidationError,
+        "label: updateOnConflict names 'label', which the row does not supply",
+      );
+      asserts.assertEquals(single.context.issues[0]!.op, 'upsert');
+      const batch = await asserts.assertRejects(
+        () => db.repo('Guarded').upsert([{ id: 1 }, { id: 2 }], opts as never),
+        NormValidationError,
+      );
+      asserts.assertEquals(
+        batch.context.issues.map((i) => i.path),
+        ['[0].label', '[1].label'],
+      );
+      asserts.assertEquals(exec.calls.length, 0, dialect);
+      await db.repo('Guarded').upsert({ id: 1, label: null }, opts as never);
+      asserts.assertEquals(
+        (exec.lastOf('UPSERT') as unknown as Row).updateOnConflict,
+        ['@label'],
+      );
+    }
   });
 
   it('a column a MongoDB document lacks reads as null', async () => {
