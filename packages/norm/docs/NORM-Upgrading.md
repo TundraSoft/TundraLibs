@@ -20,6 +20,7 @@ changelog has those.
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
+  - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
   - [A filter value from a to-one relation that can match several rows needs it projected](#a-filter-value-from-a-to-one-relation-that-can-match-several-rows-needs-it-projected)
   - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
 
@@ -181,6 +182,15 @@ tested each condition against any matched row there, so
 two orgs each met one condition, and `$ne` held only when no matched row
 had the value. A relation whose key matches one row at most reads as
 before.
+
+### A relation projection without the primary key keeps rows apart
+
+A read that projects a relation but not the entity's primary key, such
+as `project: { '@tenant': true, '@Seats': true }`, merged rows whose
+projected columns were equal into one row holding all their related
+rows. Each row now comes back once with its own related rows, so such a
+read can return more rows, and `total` already counted them. An entity
+with no primary key, a view, still merges them.
 
 ### A filter value from a to-one relation that can match several rows needs it projected
 

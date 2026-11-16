@@ -479,7 +479,10 @@ adaView.data?.CreatedLinks; // { slug: string }[]
 
 A projection that names only relations is rejected, because the
 JSON-aggregate SELECT needs at least one local grouping key. Include a
-local column such as `'@id': true` alongside the relations.
+local column such as `'@id': true` alongside the relations. Each row
+comes back once even when the projection leaves its primary key out and
+two rows hold the same projected values: norm groups by the key too and
+does not return it.
 
 ## Relations
 

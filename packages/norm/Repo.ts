@@ -735,6 +735,8 @@ export class ReadRepo<
     );
     if (options.aggregates !== undefined) {
       this._mergeAggregates(plan, options.aggregates, options);
+    } else {
+      this.__groupByBaseRow(plan);
     }
     if (
       effProject !== undefined && options.project === undefined &&
@@ -1634,6 +1636,30 @@ export class ReadRepo<
       }
       plan.oqlAggregates[alias] = { $$_aggregate: agg.fn, column: `@${col}` };
       plan.oqlProjection[`@${alias}`] = true;
+    }
+  }
+
+  /** A read that projects a relation is grouped, one row per group:
+   * group by the primary key too, so two rows whose projected columns
+   * are equal stay two rows. The key is fetched under a hidden name and
+   * stripped. An entity with no primary key, a view, groups by its
+   * projected columns. */
+  private __groupByBaseRow(plan: ProjectionPlan): void {
+    if (plan.relations.length === 0) return;
+    const pk = (this._compiled.def as { primaryKeys?: readonly string[] })
+      .primaryKeys ?? [];
+    const taken = new Set(
+      Object.entries(plan.oqlProjection).map(([k, v]) =>
+        v === true ? k.slice(1) : v
+      ),
+    );
+    for (const col of pk) {
+      if (plan.oqlProjection[`@${col}`] !== undefined) continue;
+      let key = `__pk_${col}`;
+      while (taken.has(key)) key = `_${key}`;
+      taken.add(key);
+      plan.oqlProjection[`@${col}`] = key;
+      plan.anchorStrips.push(key);
     }
   }
 
