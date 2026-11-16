@@ -35,15 +35,14 @@ const CONFIG = {
     : env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
     'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
 const available = await (async () => {
   const probe = new PostgresEngine('norm-live-pg-probe', CONFIG);
   try {
     await probe.connect();
-    await probe.ping();
-    return true;
+    return await probe.ping();
   } catch {
     return false;
   } finally {

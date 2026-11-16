@@ -35,15 +35,14 @@ const CONFIG = {
     : env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') ||
     'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
 const available = await (async () => {
   const probe = new MariaEngine('norm-live-maria-probe', CONFIG);
   try {
     await probe.connect();
-    await probe.ping();
-    return true;
+    return await probe.ping();
   } catch {
     return false;
   } finally {

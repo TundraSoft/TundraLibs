@@ -220,7 +220,7 @@ describe('norm — date and time filter values (live SQLite)', () => {
     asserts.assertStrictEquals(filter['@day'].$lt, AFTERNOON);
   });
 
-  it('passes null, column references, expressions and other text through', async () => {
+  it('passes null, column references and expressions through', async () => {
     asserts.assertEquals(await ids({ '@day': null }), []);
     asserts.assertEquals(await ids({ '@day': { $null: false } }), [1, 2, 3]);
     asserts.assertEquals(await ids({ '@due': '@day' }), [1]);
@@ -229,8 +229,27 @@ describe('norm — date and time filter values (live SQLite)', () => {
       await ids({ '@ts': { $lt: { $$_expression: 'NOW' } } }),
       [1, 2, 3],
     );
-    asserts.assertEquals(await ids({ '@day': 'tomorrow' }), []);
     asserts.assertEquals(await ids({ '@at': 'noon' }), []);
+  });
+
+  it('refuses text that is not ISO 8601 or not a date, in a filter', async () => {
+    const filters: [Filter, string][] = [
+      [{ '@day': 'tomorrow' }, 'day'],
+      [{ '@ts': { $gte: 'Feb 30 2026' } }, 'ts'],
+      [{ '@tstz': { $in: ['2020-01-13T10:00:00Z', '01/15/2026'] } }, 'tstz'],
+      [{ '@day': '2026-13-45' }, 'day'],
+      [{ '@ts': { $lt: '2026-01-15T25:00' } }, 'ts'],
+    ];
+    for (const [filter, column] of filters) {
+      const e = await asserts.assertRejects(() => ids(filter), NormQueryError);
+      asserts.assertEquals(e.code, 'INVALID_DATE');
+      asserts.assertEquals(e.context.subject, column);
+    }
+    // Text on a text column is not a date.
+    const text = await open().repo('Bookings').find({
+      '@day': { $ne: 'tomorrow' },
+    });
+    asserts.assertEquals(text.data.map((r) => r.id), [10]);
   });
 
   it('refuses a day or time no calendar has, in a write and in a filter', async () => {

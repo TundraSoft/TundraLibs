@@ -7,15 +7,23 @@ changelog has those.
 ## Table of Contents
 
 - [1.13.0](#1130)
-  - [Postgres and Neon refuse a database that is not on UTC](#postgres-and-neon-refuse-a-database-that-is-not-on-utc)
+  - [A Postgres session runs in UTC, and Neon refuses another zone](#a-postgres-session-runs-in-utc-and-neon-refuses-another-zone)
   - [MariaDB dates are written and read in UTC](#mariadb-dates-are-written-and-read-in-utc)
   - [`date()` holds the UTC day on SQLite and MongoDB](#date-holds-the-utc-day-on-sqlite-and-mongodb)
   - [`time()` reads a string](#time-reads-a-string)
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
+  - [An insert default that reads a column is refused](#an-insert-default-that-reads-a-column-is-refused)
+  - [An `updateOnConflict` column a row does not pass is refused](#an-updateonconflict-column-a-row-does-not-pass-is-refused)
+  - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
+  - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
+  - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
+  - [A to-one relation that can match several rows returns each row once](#a-to-one-relation-that-can-match-several-rows-returns-each-row-once)
+  - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
+  - [A to-one relation to a view picks the same row on every engine](#a-to-one-relation-to-a-view-picks-the-same-row-on-every-engine)
 
 ## 1.13.0
 
@@ -26,16 +34,38 @@ below change what an app written against an earlier version sees. Where
 the app host and the database both run on UTC, the first, second and
 fifth change nothing.
 
-### Postgres and Neon refuse a database that is not on UTC
+### A Postgres session runs in UTC, and Neon refuses another zone
 
-`connect()` rejects with `INVALID_CONFIG_VALUE` when the Postgres
-session's `TimeZone` is not UTC. On Neon the first query or `ping()`
-rejects with the same code. Earlier versions connected, and stored and
-filtered the wrong day and clock time in `date()`, `datetime()` and
-`timestamp()` columns.
+The Postgres driver now asks for `TimeZone=UTC` when it connects, so a
+database or role set to another zone runs norm's sessions in UTC.
+Earlier versions ran them in that zone, and stored and filtered the
+wrong day and clock time in `date()`, `datetime()` and `timestamp()`
+columns. `timestamptz()` columns are unaffected.
 
-Set the database to UTC, or accept its zone with `allowNonUtcTimeZone`:
-[The database session](NORM-Dates.md#the-database-session) shows both.
+Rows those versions wrote keep that zone's day and clock time, and read
+back as before, but a filter now compares them in UTC. With the database
+in `Asia/Kolkata`, a `datetime()` written as `2026-11-14T20:00:00Z` was
+stored as `2026-11-15 01:30:00`, so
+`{ '@starts_at': { $lt: '2026-11-15T00:00:00Z' } }` now misses it.
+Convert each `datetime()` and `timestamp()` column once, from the old
+zone to UTC:
+
+```sql
+UPDATE events
+SET starts_at = (starts_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC';
+```
+
+A `date()` column holds the day in the old zone, and has no time to
+convert from.
+
+Behind a pooler that does not pass the zone on, `connect()` rejects with
+`INVALID_CONFIG_VALUE` when the zone the pooler reports is not UTC, and a
+pooler that rejects a `TimeZone` startup parameter fails the connection.
+On Neon the first query or `ping()` rejects with `INVALID_CONFIG_VALUE`.
+Earlier versions connected. `allowNonUtcTimeZone: true` keeps the earlier
+behaviour on both engines, and
+[The database session](NORM-Dates.md#the-database-session) shows how to
+fix the zone instead.
 
 ### MariaDB dates are written and read in UTC
 
@@ -67,7 +97,8 @@ compiles; [Factories](NORM-Schema.md#factories) lists what a write takes.
 ### A date-time string with no offset is UTC
 
 `'2026-01-15T10:00:00'` written to a `date()`, `datetime()`,
-`timestamp()` or `timestamptz()` column is now 10:00 UTC. Earlier
+`timestamp()` or `timestamptz()` column, or given to one as a literal
+`.default()` or `.defaultOnUpdate()`, is now 10:00 UTC. Earlier
 versions let the runtime read it in the host's zone, so a host off UTC
 stored a different instant. A string that names an offset, and a `Date`,
 are unchanged.
@@ -84,10 +115,51 @@ March 2. Such a string now fails:
 | A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`   | `NormValidationError`, with the column's path |
 | A filter value on one of those columns, or `@AsOf` on a temporal entity | `NormQueryError` with code `INVALID_DATE`     |
 | A supplied `EffectiveFrom` on a temporal entity                         | `NormQueryError` with code `TEMPORAL_PAST`    |
+| A literal `.default()` or `.defaultOnUpdate()` on one of those columns  | `NormDefinitionError` from `Entity()`         |
 
 A `Date` is never refused, and a row an earlier version stored keeps the
 shifted day. Validate a date that arrives as text before it reaches norm,
-or catch the error.
+or catch the error. A literal default that is not a date at all also
+fails `Entity()` now; earlier versions failed each insert that used it.
+
+### An insert default that reads a column is refused
+
+A `.default()` expression that reads a column of the row, such as
+`DATE_ADD` of `'@startsOn'`, now fails `Entity()` with
+`NormDefinitionError`. Earlier versions accepted the definition, and
+every insert that left the column out threw a plain `TypeError`. Compute
+the value in a `beforeInsert` hook instead.
+
+### An `updateOnConflict` column a row does not pass is refused
+
+An `upsert()` whose `updateOnConflict` names a column that a row does not
+pass now throws `NormQueryError` with code `UPSERT_CONFLICT_KEY`, before
+anything is written. On a conflict, earlier versions copied the column's
+insert default over the stored value on every engine, or threw a plain
+`TypeError` from oql when the column had no default. A `defaultOnUpdate`
+column the rows leave out now takes its update default, where earlier
+versions wrote its insert default. Pass the column in every row, or leave
+it out of `updateOnConflict`.
+
+### Date text that is not ISO 8601 is refused
+
+A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`
+column now fails validation, with the column's path, for text that is
+not an ISO 8601 date or date-time, such as `'Feb 30 2026'`,
+`'Jan 15 2026 10:00'` or `'01/15/2026'`. A supplied `EffectiveFrom` in
+that form throws a `NormQueryError` with code `TEMPORAL_PAST`. Earlier
+versions handed the text to the runtime's `Date` parser, which read it
+in the host's zone and moved `'Feb 30 2026'` to March, so the stored
+value depended on the host. A column with its own `.guard()` refuses it
+before the guard runs, and a literal default in that form fails
+`Entity()` with `NormDefinitionError`. A filter value in that form on
+one of those columns, or an `@AsOf` in it, throws a `NormQueryError`
+with code `INVALID_DATE`, and so does text in the ISO 8601 shape that is
+no date, such as `'2026-13-45'`. Earlier versions sent both to the
+engine, and the engines disagreed: `'Feb 30 2026'` with `$gte` matched
+no rows on SQLite and MongoDB, every row on MariaDB, and failed on
+Postgres. A `Date` and `time()` columns are unchanged. Send
+`YYYY-MM-DD`, or that with a time and an optional offset, or a `Date`.
 
 ### A MongoDB comparison never matches NULL
 
@@ -106,10 +178,11 @@ now stores `null` in the new document, and the row reads back with
 document, so the row read back without the key. An upsert that updates a
 document already stored leaves its other fields as they are.
 
-A document an earlier version wrote still lacks the field and still reads
-back without the key; a filter for `null` matches it either way. Treat a
-missing key as `null` where the column is read, or write `null` to those
-documents once.
+A document an earlier version or another writer stored without a field
+still lacks it, and now reads back with `null` for that column, top-level
+and inside relation rows, as does a row an upsert returns unchanged.
+Earlier versions returned the row without the key. A filter for `null`
+matches the document either way.
 
 ### `DATE_DIFF` counts complete units and returns a number
 
@@ -128,6 +201,72 @@ Recheck any threshold compared against a `DATE_DIFF`, and drop code that
 handles a `bigint` result.
 [DATE_DIFF units](../../oql/docs/OQL-Compatibility.md#date_diff-units)
 has worked examples.
+
+### A MongoDB filter through a NULL-safe relation is met by one row
+
+A [NULL-safe](NORM-Schema.md#null-safe-keys) to-one relation can match
+several rows. When the read filters through one without projecting it,
+MongoDB now returns a row only when one related row meets every
+condition on that relation, as the SQL engines do. Earlier versions
+tested each condition against any matched row there, so
+`{ '@Org.@name': 'x', '@Org.@tier': { $gt: 5 } }` returned a row whose
+two orgs each met one condition, and `$ne` held only when no matched row
+had the value. A relation whose key matches one row at most reads as
+before.
+
+### A relation projection without the primary key keeps rows apart
+
+A read that projects a relation but not the entity's primary key, such
+as `project: { '@tenant': true, '@Seats': true }`, merged rows whose
+projected columns were equal into one row holding all their related
+rows. Each row now comes back once with its own related rows, so such a
+read can return more rows, and `total` already counted them. An entity
+with no primary key, a view, still merges them.
+
+### A to-one relation that can match several rows returns each row once
+
+A belongsTo or hasOne whose join columns on the related entity are
+neither its primary key nor one of its `unique` groups, a declared
+`reverseCardinality: 'hasOne'` for example, can match several rows. A
+filter through such a relation that the read did not project, as in
+`{ '@Org.@cap': { $lt: 8 } }`, was joined, so a row came back once for
+each related row that passed, and `count()` and `total` counted it as
+often. The row now comes back and is counted once, kept when at least
+one related row passes. The same holds for such a relation used as a
+comparison value, as in `{ '@id': { $lt: '@Seat.@id' } }`: the read
+groups by the primary key, and `count()` and `total` count distinct
+keys. An `orderBy` through such a relation, as in
+`{ '@Org.@cap': 'ASC' }`, repeated rows the same way; each row now comes
+back once, placed by its smallest related value for `ASC` and its
+largest for `DESC`. On an entity with no primary key the comparison
+and the `orderBy` throw `INVALID_PROJECTION`, and with `aggregates`
+they throw `AGGREGATE_MISUSE`, where they counted each match as a row.
+Beside a projected to-many relation they throw `INVALID_PROJECTION`,
+where its list held each related row once per match.
+
+### A matched relation row whose projected columns are all NULL is kept
+
+A related row that matched, but held NULL in every column the read
+projected from it, was read as no match: a belongsTo or hasOne read
+`null`, and a to-many list left the row out. The to-one relation now
+reads an object whose values are `null`, and the list keeps the row. No
+match still reads `null` and `[]`. Code that took `row.Org === null` to
+mean the projected column was NULL must test the column instead.
+
+One case is unchanged: a view, which has no primary key, joined only on
+[NULL-safe](NORM-Schema.md#null-safe-keys) pairs, that declares every
+column `.nullable()`, when the matched row holds NULL in each column
+the read takes from it. A view that declares a column NOT NULL is read
+right.
+
+### A to-one relation to a view picks the same row on every engine
+
+A belongsTo or hasOne whose target is a view, which has no primary key,
+carried whichever matching row the engine returned first, so one engine
+could return a different row from the others. It now carries the one
+lowest by the view's columns in declared order, a NULL after any value,
+skipping encrypted, JSON and mask columns. A read may get a different
+row than before.
 
 ---
 
