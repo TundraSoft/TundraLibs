@@ -232,7 +232,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT __base__."id" AS "id", json_group_array(json_object(:p_0:, "Profile"."userId", :p_1:, "Profile"."bio")) AS "profile" ' +
+          'SELECT __base__."id" AS "id", NULLIF(json_group_array(json_object(:p_0:, "Profile"."userId", :p_1:, "Profile"."bio")), \'[]\') AS "profile" ' +
           'FROM "users" AS __base__ LEFT JOIN "profiles" AS "Profile" ON "Profile"."userId" = __base__."id" ' +
           'GROUP BY __base__."id"',
         params: { p_0: 'userId', p_1: 'bio' },
@@ -439,6 +439,40 @@ const CASES: Case[] = [
         sql:
           'SELECT `userId` AS `userId`, GROUP_CONCAT(`tag` SEPARATOR :p_0:) AS `tags` FROM `orders` GROUP BY `userId`',
         params: { p_0: ', ' },
+      },
+    },
+  },
+  {
+    // json_group_array over no rows is '[]'; NULLIF makes it NULL, as
+    // ARRAY_AGG and JSON_ROW are on the other engines. DISTINCT stays
+    // inside the aggregate call.
+    name: 'SELECT ARRAY_AGG and JSON_ROW over no rows are NULL on SQLite',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'tag'],
+      aggregates: {
+        tags: { $$_aggregate: 'ARRAY_AGG', column: '@tag', distinct: true },
+        rows: { $$_aggregate: 'JSON_ROW', columns: { id: '@id' } },
+      },
+      projection: { '@tags': 'tags', '@rows': 'rows' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT NULLIF(json_group_array(DISTINCT "tag"), '[]') AS "tags", NULLIF(json_group_array(json_object(:p_0:, "id")), '[]') AS "rows" FROM "orders"`,
+        params: { p_0: 'id' },
+      },
+      postgres: {
+        sql:
+          'SELECT ARRAY_AGG(DISTINCT "tag") AS "tags", jsonb_agg(jsonb_build_object(:p_0:::text, "id")) AS "rows" FROM "orders"',
+        params: { p_0: 'id' },
+      },
+      maria: {
+        sql:
+          'SELECT JSON_ARRAYAGG(DISTINCT `tag`) AS `tags`, JSON_ARRAYAGG(JSON_OBJECT(:p_0:, `id`)) AS `rows` FROM `orders`',
+        params: { p_0: 'id' },
       },
     },
   },
@@ -2661,6 +2695,32 @@ const CASES: Case[] = [
   },
 
   {
+    // SQLite has no DATE type: a Date binds as ISO text at UTC midnight,
+    // so CURRENT_DATE renders that text to equal a stored day.
+    name: 'SELECT a DATE column equal to CURRENT_DATE',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'day'],
+      projection: { '@id': true },
+      where: { '@day': { $eq: { $$_expression: 'CURRENT_DATE' } } },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "orders" WHERE "day" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'start of day')`,
+      },
+      postgres: {
+        sql: 'SELECT "id" AS "id" FROM "orders" WHERE "day" = CURRENT_DATE',
+      },
+      maria: {
+        sql: 'SELECT `id` AS `id` FROM `orders` WHERE `day` = CURRENT_DATE()',
+      },
+    },
+  },
+
+  {
     // updateSet: explicit conflict values; references read the EXISTING
     // row, which Postgres only allows through a table qualifier.
     name: 'UPSERT with updateSet (copied column + existing-row expression)',
@@ -3381,7 +3441,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT __base__."id" AS "id", "o"."status" AS "status", json_group_array(json_object(:p_0:, "o"."userId", :p_1:, "o"."amount", :p_2:, "o"."status")) AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
+          'SELECT __base__."id" AS "id", "o"."status" AS "status", NULLIF(json_group_array(json_object(:p_0:, "o"."userId", :p_1:, "o"."amount", :p_2:, "o"."status")), \'[]\') AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
       },
       postgres: {
         sql:

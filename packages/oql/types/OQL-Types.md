@@ -831,8 +831,8 @@ Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
 is a date expression that returns an integer.
 
 SQLite has no date type, so there each of these returns text in place of a
-`Date`: ISO 8601 UTC such as `2026-02-01T10:20:30.000Z`, except
-`CURRENT_DATE`, which is the date alone, `2026-02-01`. The type per engine
+`Date`: ISO 8601 UTC such as `2026-02-01T10:20:30.000Z`, and
+`2026-02-01T00:00:00.000Z` for `CURRENT_DATE`. The type per engine
 is in [date expression results](../docs/OQL-Compatibility.md#date-expression-results).
 
 `CURRENT_TIME` returns a string on every dialect — see

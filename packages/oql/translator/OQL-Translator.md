@@ -673,7 +673,9 @@ What the OQL `NOW` / `CURRENT_DATE` expressions emit per dialect:
 - **MariaDB**: `NOW` → `NOW()`, `CURRENT_DATE` → `CURRENT_DATE()`
 - **SQLite**: `NOW` / `CURRENT_TIMESTAMP` → `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
   (ISO 8601 UTC, the text SQLite drivers write for a `Date`, so values parse
-  as UTC and sort correctly), `CURRENT_DATE` → `date('now')`
+  as UTC and sort correctly), `CURRENT_DATE` →
+  `strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'start of day')`, the text a UTC
+  midnight `Date` binds as
 
 ## Error Handling
 

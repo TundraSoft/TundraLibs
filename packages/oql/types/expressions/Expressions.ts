@@ -94,8 +94,7 @@ type ConditionalArg<
  * **String** (returns string): `CONCAT`, `LOWER`, `UPPER`, `TRIM`,
  * `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
  *
- * **Date** (returns Date; text on SQLite, the date alone for
- * `CURRENT_DATE` and ISO 8601 UTC otherwise): `NOW`,
+ * **Date** (returns Date; ISO 8601 UTC text on SQLite): `NOW`,
  * `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
  * `DATE_TRUNC` — and two that do not return a Date: `CURRENT_TIME`, an
  * `'HH:MM:SS'` UTC string, and `UNIX_TIMESTAMP`, a 64-bit INTEGER.
