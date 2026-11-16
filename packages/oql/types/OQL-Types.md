@@ -401,7 +401,8 @@ applicability, so a boolean filter built dynamically (bypassing the
 type checker) will not be caught by `assertQuery` either.
 
 **Null inside operator values is disallowed.** `$eq: null`, `$ne: null`,
-`$in: [null, …]`, `$nin: [null, …]` are rejected at both the type and
+`$in: [null, …]`, `$nin: [null, …]` and a null in a shorthand list
+(`'@col': ['a', null]`) are rejected at both the type and
 runtime levels — SQL `= NULL` / `<> NULL` are always unknown. Use
 `$null: true` / `$null: false` for null comparisons. The shorthand
 `'@col': null` is still accepted (and means `IS NULL`).
@@ -748,7 +749,9 @@ Mathematical operations returning a number/bigint: `ADD`, `SUBTRACT`,
 `POWER`, `SQRT`, plus `LENGTH` (character count of a string) and
 `DATE_DIFF` (whole time units between two dates). `ADD`/`SUBTRACT`/
 `MULTIPLY`/`DIVIDE`/`MODULO`/`ABS`/`CEIL`/`FLOOR`/`ROUND`/`SQRT` take an
-array of numeric operands; `POWER` takes `{ base, exponent }`.
+array of numeric operands; `POWER` takes `{ base, exponent }`. An operand
+is a number, a numeric column, a nested numeric expression, or a nested
+`COALESCE`, `NULLIF` or `CASE`.
 
 ### String expressions
 
@@ -786,8 +789,9 @@ at the application layer if you need it).
 
 `COALESCE`, `NULLIF` and `CASE` take arguments of any type: a column, a
 literal, `null`, or a nested expression of any kind. They return the
-type of those arguments. Other expressions do not yet accept them as
-arguments, so declare them in `expressions` and project them.
+type of those arguments. Numeric expressions accept them as operands, so
+`DIVIDE` by a `NULLIF` is one expression. String and date expressions do
+not yet accept them as arguments.
 
 - `COALESCE` — `args`: two or more values; the first that is not `NULL`.
 - `NULLIF` — `args`: exactly two values; `NULL` when they are equal,
@@ -795,9 +799,11 @@ arguments, so declare them in `expressions` and project them.
 - `CASE` — `args: { cases: Array<{ when; then }>; else? }`. `when` is a
   filter in the same shape as `where`, and `then` is the result of the
   first case that matches. With no match the result is `else`, or `NULL`
-  when `else` is omitted. On MongoDB, `when` supports `$and`, `$or`,
-  `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$between`
-  and `$null`; other operators throw `DialectUnsupportedError`.
+  when `else` is omitted. On MongoDB, `when` supports `$and`, `$or` and
+  every column operator; `$exists` and `$nexists` throw
+  `DialectUnsupportedError`, and so does a pattern operator whose value
+  is a column, or a `$like`, `$nlike`, `$ilike` or `$nilike` whose value
+  is an expression.
 
 ```ts
 import type { Query } from '@tundralibs/oql';
@@ -839,13 +845,14 @@ There is no general `CAST`. The engines disagree on what it means:
 ### Date expressions
 
 Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
-`CURRENT_TIME`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
-`DATE_TRUNC`. (`DATE_DIFF` returns a number and is classified numeric.)
+`CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC`.
+(`DATE_DIFF` returns a number and is classified numeric.)
 
 SQLite has no date type, so there each of these returns ISO 8601 UTC text,
-such as `2026-02-01T10:20:30.000Z`, in place of a `Date`. On MariaDB a
-`DATE_ADD` whose `date` is a `Date` literal returns text too:
-`2026-02-28 10:20:30.000`.
+such as `2026-02-01T10:20:30.000Z`, in place of a `Date`.
+
+`CURRENT_TIME` returns a string on every dialect — see
+[CURRENT_TIME](../docs/OQL-Compatibility.md#current_time).
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
   `date` (negative `amount` subtracts). Months and years stop at the

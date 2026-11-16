@@ -199,6 +199,13 @@ export abstract class AbstractTranslator {
    */
   protected readonly _offsetOnlyLimit: string | null = null;
 
+  /**
+   * SQL type a projected `COUNT` aggregate is cast to, so it reaches JS as
+   * a number on every dialect. `null` — the default — means the dialect's
+   * `COUNT` already does (SQLite).
+   */
+  protected readonly _countCast: string | null = null;
+
   // =========================================================================
   // Public API — one method per query type
   // =========================================================================
@@ -753,6 +760,21 @@ export abstract class AbstractTranslator {
    */
   protected _likeEscapeClause(): string {
     return ` ESCAPE '${LIKE_ESCAPE_CHAR}'`;
+  }
+
+  /**
+   * Escape a computed `$startsWith` / `$endsWith` / `$contains` operand in
+   * SQL, the way a string literal is escaped before it is bound: the escape
+   * char first, then `%` and `_`.
+   */
+  protected _likeEscapeOperand(sql: string): string {
+    return [LIKE_ESCAPE_CHAR, '%', '_'].reduce(
+      (acc, ch) =>
+        `REPLACE(${acc}, ${this._formatLiteral(ch)}, ${
+          this._formatLiteral(LIKE_ESCAPE_CHAR + ch)
+        })`,
+      sql,
+    );
   }
 
   /**
@@ -1583,18 +1605,19 @@ export abstract class AbstractTranslator {
     exprCache: Map<string, string>,
   ): string {
     if (q.aggregates && stripped in q.aggregates) {
-      const sql = this._translateAggregate(
-        q.aggregates[stripped]!,
-        scope,
-        params,
-        hasJoins,
-      );
+      const agg = q.aggregates[stripped]!;
+      const sql = this._translateAggregate(agg, scope, params, hasJoins);
       // Cache for __buildOrderBy so an aggregate alias referenced in
       // ORDER BY reuses the body instead of re-translating (which would
       // re-append the aggregate's literal params, e.g. a STRING_AGG
       // separator, a second time).
       exprCache.set(stripped, sql);
-      return sql;
+      // Only the projected value is cast: HAVING and ORDER BY compare the
+      // exact count, and the engine already converts a `count()` query's.
+      return agg.$$_aggregate === 'COUNT' && this._countCast !== null &&
+          stripped !== COUNT_ALIAS
+        ? `CAST(${sql} AS ${this._countCast})`
+        : sql;
     }
     if (q.expressions && stripped in q.expressions) {
       const sql = this._translateExpression(
@@ -1732,11 +1755,7 @@ export abstract class AbstractTranslator {
     params: Parameters,
     exprCache: Map<string, string>,
   ): string {
-    const hasAggregates = !!q.aggregates &&
-      Object.keys(q.aggregates).length > 0;
-    const hasAutoExpandedJoin = !!q.joins &&
-      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
-    if (!hasAggregates && !hasAutoExpandedJoin) return '';
+    if (!this.__isGrouped(q)) return '';
     const groupBy: string[] = [];
     for (const key of Object.keys(q.projection)) {
       const stripped = key.slice(1);
@@ -1764,6 +1783,15 @@ export abstract class AbstractTranslator {
     return groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
   }
 
+  /** Whether {@link __buildGroupBy} groups this query. */
+  private __isGrouped(q: Query<'SELECT'>): boolean {
+    const hasAggregates = !!q.aggregates &&
+      Object.keys(q.aggregates).length > 0;
+    const hasAutoExpandedJoin = !!q.joins &&
+      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
+    return hasAggregates || hasAutoExpandedJoin;
+  }
+
   /** Build the ` ORDER BY` clause, or `''` when `q.orderBy` is empty. */
   private __buildOrderBy(
     q: Query<'SELECT'>,
@@ -1777,7 +1805,15 @@ export abstract class AbstractTranslator {
     for (const [key, dir] of Object.entries(q.orderBy)) {
       parts.push(
         `${
-          this.__resolveOrderByKey(q, key, hasJoins, scope, params, exprCache)
+          this.__resolveOrderByKey(
+            q,
+            key,
+            dir,
+            hasJoins,
+            scope,
+            params,
+            exprCache,
+          )
         } ${dir}`,
       );
     }
@@ -1792,12 +1828,17 @@ export abstract class AbstractTranslator {
    * {@link BASE_ALIAS} prefix, an execution-time error on every dialect.
    * Order by the underlying SQL body instead — the same substitution
    * {@link __buildGroupBy} applies. The body was translated and cached by
-   * {@link __buildProjection} (ORDER BY keys are always projection keys),
+   * {@link __buildProjection} (these keys are always projection keys),
    * so this reuses it; the re-translate fallbacks are purely defensive.
+   *
+   * A joined column the query does not project is not in the GROUP BY, so
+   * a grouped query orders by the group's smallest value for `ASC` and its
+   * largest for `DESC`.
    */
   private __resolveOrderByKey(
     q: Query<'SELECT'>,
     key: string,
+    dir: 'ASC' | 'DESC',
     hasJoins: boolean,
     scope: string[],
     params: Parameters,
@@ -1827,7 +1868,13 @@ export abstract class AbstractTranslator {
         );
       }
     }
-    return this._resolveColumnRef(key, hasJoins);
+    const ref = this._resolveColumnRef(key, hasJoins);
+    if (
+      key.includes('.@') && !(key in q.projection) && this.__isGrouped(q)
+    ) {
+      return `${dir === 'ASC' ? 'MIN' : 'MAX'}(${ref})`;
+    }
+    return ref;
   }
 
   /**
@@ -2257,13 +2304,18 @@ export abstract class AbstractTranslator {
         `filter operator '${op}'`,
       );
     }
-    // $startsWith / $endsWith / $contains splice the bound value into a LIKE
-    // pattern. A column ref (or expression) keeps the standard path; a string
-    // literal has its `%`/`_` (and the escape char) escaped with a trailing
-    // ESCAPE clause so it matches verbatim.
+    // $startsWith / $endsWith / $contains splice the value into a LIKE
+    // pattern. Its `%`/`_` (and the escape char) are escaped, with a trailing
+    // ESCAPE clause, so it matches verbatim: a string literal before it is
+    // bound, a column ref or expression in SQL.
     if (op === '$startsWith' || op === '$endsWith' || op === '$contains') {
       const ref = this.__valueColumnRef(val, scope, hasJoins);
-      if (ref !== null) return emit(colSql, ref);
+      if (ref !== null || this.__isExpressionNode(val)) {
+        const operand = this._likeEscapeOperand(
+          ref ?? this.__renderOperatorValue(val, scope, params, hasJoins),
+        );
+        return `${emit(colSql, operand)}${this._likeEscapeClause()}`;
+      }
       if (typeof val !== 'string') {
         return emit(
           colSql,

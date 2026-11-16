@@ -25,7 +25,7 @@ Runtime validators for OQL queries.
 
 The asserts module provides runtime validation for OQL queries. All validators follow the Guardian pattern with two variants:
 
-- **Assert functions** - Throw `TypeError` on validation failure
+- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it
 - **Type guard functions** - Return `boolean` without throwing
 
 This ensures queries are structurally valid before translation and execution.
@@ -131,7 +131,7 @@ const valid = isSelect(query); // Returns boolean
 - WHERE may reference pre-declared `expressions` by their `@key`; the translator substitutes the expression body.
 - JOIN conditions reference declared join columns.
 - Aggregates have valid `$$_aggregate` discriminators and column refs.
-- ORDER BY keys must be projection keys, joined columns, or declared `columns`. An unprojected column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped.
+- ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
 - `limit`, if provided, must be a **positive integer** (`>= 1`; `0` is rejected).
 - `offset`, if provided, must be a **non-negative integer** (`>= 0`).
 - `distinct`, if provided, must be a boolean. `distinct: true` is rejected when combined with `aggregates` or a join-alias projection (`JSON_ROW` auto-expand) — the automatic GROUP BY those trigger already deduplicates rows.
@@ -584,7 +584,7 @@ Signature: `assertFilterOperator(x, columnList?)` / `isFilterOperator(x, columnL
 
 - Value is a non-empty object (not an array)
 - Each key is a valid column identifier (and, if `columnList` is provided, exists in it)
-- Each value is valid Operators (a direct value, an array, or an operator object). An invalid value throws `Invalid FilterOperator: Value for '<key>' must be valid Operators (direct value, array, or operator object)`
+- Each value is valid Operators (a direct value, an array, or an operator object). An invalid value throws `Invalid FilterOperator: Value for '<key>' must be valid Operators - <reason>`, where the reason is the message of the Operators check that failed
 
 ### Operators
 
@@ -603,7 +603,7 @@ const valid = isOperators(operators);
 - Operator values match expected types per slot.
 - Array operators (`$in`, `$nin`, `$between`) require non-empty arrays.
 - `$between` requires exactly two elements.
-- **`null` is rejected** in operator-form values: `$eq: null`, `$ne: null`, `$in: [null, …]`, `$nin: [null, …]`, and comparison-op values like `$gt: null` all throw. Use `$null: true` / `$null: false` for null comparisons.
+- **`null` is rejected** in operator-form values: `$eq: null`, `$ne: null`, `$in: [null, …]`, `$nin: [null, …]`, and comparison-op values like `$gt: null` all throw, and so does a `null` in a shorthand list (`['a', null]`). Use `$null: true` / `$null: false` for null comparisons.
 - **Expressions accepted** in comparison/string operator values: any non-Date object with a `$$_expression` discriminator passes (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`).
 - `$like`/`$nlike`/etc. only valid on string-typed columns.
 - `$gt`/`$gte`/`$lt`/`$lte`/`$between` only valid on numeric/bigint/date columns.
@@ -779,6 +779,8 @@ Signature: `assertExpressions(x, columnList?, depth?, maxDepth?)` / `isExpressio
 
 - Value is a valid base expression with a recognized `$$_expression` type
 - Delegates the category-specific shape (numeric / string / date) to the matching validator
+- A numeric operand may be a nested numeric expression or a nested `COALESCE`, `NULLIF` or `CASE`. String and date expressions do not take nested conditionals
+- A `unit` outside the expression's allowed set throws `OqlError` with code `INVALID_TIME_UNIT`. It applies to `DATE_ADD`, `DATE_DIFF`, `DATE_TRUNC` and `UNIX_TIMESTAMP`
 - An unrecognized type throws `Invalid Expression type: Unknown expression type '<type>'`
 - Nesting beyond `maxDepth` throws to guard against runaway recursion
 
@@ -871,6 +873,7 @@ function handleQuery(query: unknown) {
 
 ```typescript
 import { assertSelect } from '@tundralibs/oql/asserts';
+import { OqlError } from '@tundralibs/oql/errors';
 
 declare function executeQuery(query: unknown): unknown;
 
@@ -880,8 +883,8 @@ function validateAndExecute(query: unknown) {
     // Query is valid, proceed
     return executeQuery(query);
   } catch (error) {
-    if (error instanceof TypeError) {
-      // Validation error
+    if (error instanceof TypeError || error instanceof OqlError) {
+      // Validation error. OqlError here means a bad time unit.
       console.error('Query validation failed:', error.message);
       return { error: error.message };
     }
@@ -955,8 +958,8 @@ assertSelect({
 // Invalid operator
 assertQueryFilter({ '@age': { $invalid: 18 } }, ['age']);
 // TypeError: Invalid QueryFilter: Filter properties are invalid - Invalid
-// FilterOperator: Value for '@age' must be valid Operators (direct value,
-// array, or operator object)
+// FilterOperator: Value for '@age' must be valid Operators - Invalid
+// Operators: Unknown operator '$invalid'. Valid operators are: $eq, $ne, ...
 ```
 
 ## Performance

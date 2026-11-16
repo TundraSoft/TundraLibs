@@ -2,6 +2,7 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { RedisEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 import { RespError, type RespValue } from './resp.ts';
 import { RedisConnection } from './RedisConnection.ts';
 import { EngineError } from '../../errors/mod.ts';
@@ -46,7 +47,7 @@ async function isRedisAvailable(): Promise<boolean> {
   }
 }
 
-const redisAvailable = await isRedisAvailable();
+const redisAvailable = liveAvailable('Redis', await isRedisAvailable());
 
 let keyCounter = 0;
 const k = (label: string) =>

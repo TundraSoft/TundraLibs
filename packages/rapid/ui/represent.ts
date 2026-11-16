@@ -152,7 +152,7 @@ function stampVary<S extends RapidContextState>(
   // Seed from BOTH: what middleware stamped on ctx before the handler ran
   // (cors's `origin`) and what the reply itself declares. Taking one or
   // the other let a handler's own vary silently drop the other's names.
-  let vary = ctx.responseHeaders.get('vary');
+  let vary = ctx._outboundHeader('vary');
   const declared = replyHeader(reply?.headers, 'vary');
   if (declared !== undefined && declared !== null) {
     for (const name of declared.split(',')) {
@@ -330,7 +330,7 @@ export function represent<S extends RapidContextState>(
       appUi?.view !== undefined
     ) {
       vary = mergeVary(vary, 'Cookie');
-      if (ctx.responseHeaders.get('cache-control') === null) {
+      if (ctx._outboundHeader('cache-control') === null) {
         ctx.setHeader('cache-control', 'private');
       }
     }
@@ -461,7 +461,7 @@ export function represent<S extends RapidContextState>(
     // caches must not. A handler's explicit cache policy wins.
     if (
       !headers.has('cache-control') &&
-      ctx.responseHeaders.get('cache-control') === null
+      ctx._outboundHeader('cache-control') === null
     ) {
       headers.set('cache-control', 'private');
     }
@@ -628,7 +628,7 @@ export function representError<S extends RapidContextState>(
       // stricter was already set — these reply headers overwrite ctx's
       // at finalize, and downgrading an explicit `no-store` would let a
       // browser disk-cache an authenticated error page.
-      ...(personal && ctx.responseHeaders.get('cache-control') === null
+      ...(personal && ctx._outboundHeader('cache-control') === null
         ? { 'cache-control': 'private' }
         : {}),
     },

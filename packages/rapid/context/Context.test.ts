@@ -35,6 +35,27 @@ class TestContext extends Context<Record<string, unknown>, { done: true }> {
 }
 
 describe('rapid.context.Context (base)', () => {
+  it('builds state on the first read, once — an invocation that never reads it copies nothing', async () => {
+    let copies = 0;
+    // structuredClone reads the getter, so it counts the copies.
+    const box = {
+      get probe() {
+        copies++;
+        return 1;
+      },
+    };
+    const app = await Application.initialize({
+      name: 'ctxstate',
+      server: { port: 0, hostname: '127.0.0.1' },
+      logger: { handlers: [] },
+    }, { box } as Record<string, unknown>);
+    const ctx = new TestContext(app, { action: 'a' });
+    asserts.assertEquals(copies, 0);
+    asserts.assertEquals(ctx.state.box, { probe: 1 });
+    void ctx.state.box;
+    asserts.assertEquals(copies, 1);
+  });
+
   it('mints a requestId when none is supplied, adopts a supplied one', async () => {
     const app = await makeApp();
     const minted = new TestContext(app, { action: 'a' });

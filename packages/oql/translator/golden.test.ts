@@ -499,11 +499,11 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          'SELECT UPPER("name") AS "label", COUNT(1) AS "total" FROM "users" GROUP BY UPPER("name")',
+          'SELECT UPPER("name") AS "label", CAST(COUNT(1) AS DOUBLE PRECISION) AS "total" FROM "users" GROUP BY UPPER("name")',
       },
       maria: {
         sql:
-          'SELECT UPPER(`name`) AS `label`, COUNT(1) AS `total` FROM `users` GROUP BY UPPER(`name`)',
+          'SELECT UPPER(`name`) AS `label`, CAST(COUNT(1) AS DOUBLE) AS `total` FROM `users` GROUP BY UPPER(`name`)',
       },
     },
   },
@@ -568,6 +568,67 @@ const CASES: Case[] = [
         sql:
           'SELECT COALESCE(`nickname`, `name`, :p_0:) AS `nick`, NULLIF(`name`, :p_1:) AS `blank`, (CASE WHEN `age` >= :p_2: THEN :p_3: WHEN `age` IS NULL THEN NULL ELSE :p_4: END) AS `tier` FROM `users`',
         params: { p_0: 'anon', p_1: '', p_2: 18, p_3: 'adult', p_4: 'minor' },
+      },
+    },
+  },
+  {
+    name: 'SELECT COALESCE, NULLIF and CASE as numeric operands',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'age', 'score'],
+      expressions: {
+        total: {
+          $$_expression: 'ADD',
+          args: ['@score', { $$_expression: 'COALESCE', args: ['@age', 0] }],
+        },
+        gap: {
+          $$_expression: 'SUBTRACT',
+          args: ['@score', { $$_expression: 'NULLIF', args: ['@age', 0] }],
+        },
+        scaled: {
+          $$_expression: 'MULTIPLY',
+          args: ['@score', {
+            $$_expression: 'CASE',
+            args: {
+              cases: [{ when: { '@age': { $gte: 18 } }, then: 2 }],
+              else: 1,
+            },
+          }],
+        },
+        ratio: {
+          $$_expression: 'DIVIDE',
+          args: ['@score', { $$_expression: 'NULLIF', args: ['@age', 0] }],
+        },
+        size: {
+          $$_expression: 'ABS',
+          args: [{ $$_expression: 'COALESCE', args: ['@score', '@age'] }],
+        },
+      },
+      projection: {
+        '@total': 'total',
+        '@gap': 'gap',
+        '@scaled': 'scaled',
+        '@ratio': 'ratio',
+        '@size': 'size',
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS REAL) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+      },
+      postgres: {
+        sql:
+          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS DOUBLE PRECISION) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
+      },
+      maria: {
+        sql:
+          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (CAST(`score` AS DOUBLE) / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
+        params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
     },
   },
@@ -886,9 +947,8 @@ const CASES: Case[] = [
     },
   },
   {
-    // The LIKE family also accepts an Expression operand. There is no
-    // literal to escape, so no ESCAPE clause — the computed value is
-    // spliced into the pattern by the dialect's own concat form. The
+    // The LIKE family also accepts an Expression operand. Its wildcards
+    // are escaped in SQL, so it matches verbatim as a literal does. The
     // Mongo translator has a matching case (`$expr` + `$indexOfCP`).
     name: 'SELECT $startsWith with an Expression value',
     method: 'select',
@@ -903,18 +963,46 @@ const CASES: Case[] = [
     },
     expected: {
       sqlite: {
-        sql:
-          'SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (LOWER("nick") || \'%\')',
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (REPLACE(REPLACE(REPLACE(LOWER("nick"), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\'`,
         params: {},
       },
       postgres: {
-        sql:
-          'SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (LOWER("nick") || \'%\')',
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE (REPLACE(REPLACE(REPLACE(CAST(LOWER("nick") AS TEXT), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\'`,
         params: {},
       },
       maria: {
         sql:
-          "SELECT `id` AS `id` FROM `users` WHERE `name` LIKE CONCAT(LOWER(`nick`), '%')",
+          "SELECT `id` AS `id` FROM `users` WHERE `name` LIKE CONCAT(REPLACE(REPLACE(REPLACE(LOWER(`nick`), '\\\\', '\\\\\\\\'), '%', '\\\\%'), '_', '\\\\_'), '%') ESCAPE '\\\\'",
+        params: {},
+      },
+    },
+  },
+  {
+    name: 'SELECT $contains / $endsWith with a column value',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      projection: { '@id': true },
+      where: { '@name': { $contains: '@nick', $endsWith: '@nick' } },
+    },
+    expected: {
+      sqlite: {
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE ('%' || REPLACE(REPLACE(REPLACE("nick", '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\' AND "name" LIKE ('%' || REPLACE(REPLACE(REPLACE("nick", '\', '\\'), '%', '\%'), '_', '\_')) ESCAPE '\'`,
+        params: {},
+      },
+      postgres: {
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "users" WHERE "name" LIKE ('%' || REPLACE(REPLACE(REPLACE(CAST("nick" AS TEXT), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\' AND "name" LIKE ('%' || REPLACE(REPLACE(REPLACE(CAST("nick" AS TEXT), '\', '\\'), '%', '\%'), '_', '\_')) ESCAPE '\'`,
+        params: {},
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE `name` LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(`nick`, '\\\\', '\\\\\\\\'), '%', '\\\\%'), '_', '\\\\_'), '%') ESCAPE '\\\\' AND `name` LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(`nick`, '\\\\', '\\\\\\\\'), '%', '\\\\%'), '_', '\\\\_')) ESCAPE '\\\\'",
         params: {},
       },
     },
@@ -1336,6 +1424,41 @@ const CASES: Case[] = [
         sql:
           'SELECT `userId` AS `userId`, SUM(`amount`) AS `total` FROM `orders` GROUP BY `userId` HAVING SUM(`amount`) >= :p_0:',
         params: { p_0: 100 },
+      },
+    },
+  },
+  {
+    // COUNT is a bigint on Postgres and MariaDB, so the projected value is
+    // cast to reach JS as a number. The cast goes around the whole call,
+    // DISTINCT included; HAVING and ORDER BY compare the count itself.
+    name: 'SELECT COUNT aggregate is projected as a double',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      aggregates: {
+        sizes: { $$_aggregate: 'COUNT', column: '@amount', distinct: true },
+      },
+      projection: { '@userId': true, '@sizes': 'sizes' },
+      having: { '@sizes': { $gte: 2 } },
+      orderBy: { '@sizes': 'DESC' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT "userId" AS "userId", COUNT(DISTINCT "amount") AS "sizes" FROM "orders" GROUP BY "userId" HAVING COUNT(DISTINCT "amount") >= :p_0: ORDER BY COUNT(DISTINCT "amount") DESC',
+        params: { p_0: 2 },
+      },
+      postgres: {
+        sql:
+          'SELECT "userId" AS "userId", CAST(COUNT(DISTINCT "amount") AS DOUBLE PRECISION) AS "sizes" FROM "orders" GROUP BY "userId" HAVING COUNT(DISTINCT "amount") >= :p_0: ORDER BY COUNT(DISTINCT "amount") DESC',
+        params: { p_0: 2 },
+      },
+      maria: {
+        sql:
+          'SELECT `userId` AS `userId`, CAST(COUNT(DISTINCT `amount`) AS DOUBLE) AS `sizes` FROM `orders` GROUP BY `userId` HAVING COUNT(DISTINCT `amount`) >= :p_0: ORDER BY COUNT(DISTINCT `amount`) DESC',
+        params: { p_0: 2 },
       },
     },
   },
@@ -2206,6 +2329,118 @@ const CASES: Case[] = [
   },
 
   {
+    // One 'HH:MM:SS' UTC string on every dialect. Postgres' own CURRENT_TIME
+    // carries a fraction and the session zone, MariaDB's is session-local.
+    name: 'CURRENT_TIME is the UTC clock time to the second',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'shifts',
+      columns: ['id', 'startsAt'],
+      expressions: { clock: { $$_expression: 'CURRENT_TIME' } },
+      projection: { '@id': true, '@clock': 'clock' },
+      where: { '@startsAt': { $lte: { $$_expression: 'CURRENT_TIME' } } },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id", time('now') AS "clock" FROM "shifts" WHERE "startsAt" <= time('now')`,
+        params: {},
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id", CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME) AS "clock" FROM "shifts" ` +
+          `WHERE "startsAt" <= CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)`,
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT `id` AS `id`, UTC_TIME() AS `clock` FROM `shifts` WHERE `startsAt` <= UTC_TIME()',
+        params: {},
+      },
+    },
+  },
+
+  {
+    // MariaDB binds a Date as text, and TIMESTAMPADD over text returns text:
+    // the cast makes the result a DATETIME. On Postgres the cast is for the
+    // view below, the bound value is a timestamptz already.
+    name: 'DATE_ADD on a Date value casts it on Postgres and MariaDB',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id'],
+      expressions: {
+        due: {
+          $$_expression: 'DATE_ADD',
+          args: {
+            date: new Date('2026-01-31T10:20:30.123Z'),
+            amount: 1,
+            unit: 'MONTHS',
+          },
+        },
+      },
+      projection: { '@id': true, '@due': 'due' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      postgres: {
+        sql:
+          `SELECT "id" AS "id", (:p_0:::timestamptz + (:p_1:::text || ' ' || :p_2:)::interval) AS "due" FROM "orders"`,
+        params: {
+          p_0: new Date('2026-01-31T10:20:30.123Z'),
+          p_1: 1,
+          p_2: 'MONTHS',
+        },
+      },
+      maria: {
+        sql:
+          'SELECT `id` AS `id`, TIMESTAMPADD(MONTH, :p_1:, CAST(:p_0: AS DATETIME(6))) AS `due` FROM `orders`',
+        params: { p_0: new Date('2026-01-31T10:20:30.123Z'), p_1: 1 },
+      },
+    },
+  },
+
+  {
+    // A view body carries the Date as a string literal. Untyped, Postgres
+    // reads `'…' + interval` as interval + interval and rejects the view.
+    name: 'CREATE_VIEW with DATE_ADD on a Date types the inlined literal',
+    method: 'createView',
+    query: {
+      type: 'CREATE_VIEW',
+      view: 'due_dates',
+      query: {
+        type: 'SELECT',
+        table: 'orders',
+        columns: ['id'],
+        expressions: {
+          due: {
+            $$_expression: 'DATE_ADD',
+            args: {
+              date: new Date('2026-01-31T10:20:30.123Z'),
+              amount: 1,
+              unit: 'MONTHS',
+            },
+          },
+        },
+        projection: { '@id': true, '@due': 'due' },
+      },
+    } satisfies Query<'CREATE_VIEW'>,
+    expected: {
+      postgres: {
+        sql:
+          `CREATE VIEW "due_dates" AS SELECT "id" AS "id", ('2026-01-31T10:20:30.123Z'::timestamptz + (1::text || ' ' || 'MONTHS')::interval) AS "due" FROM "orders"`,
+        params: {},
+      },
+      maria: {
+        sql:
+          "CREATE VIEW `due_dates` AS SELECT `id` AS `id`, TIMESTAMPADD(MONTH, 1, CAST('2026-01-31T10:20:30.123Z' AS DATETIME(6))) AS `due` FROM `orders`",
+        params: {},
+      },
+    },
+  },
+
+  {
     // MariaDB takes the unit as a keyword, which cannot be bound, so it is
     // the one dialect that inlines it. SQLite's modifier carries the
     // amount's own sign: a `'+' ||` prefix turns -7 into `+-7 DAYS`, which
@@ -2267,9 +2502,9 @@ const CASES: Case[] = [
 
   {
     // Postgres has no `%` and no two-argument ROUND for a double, which is
-    // what DATE_DIFF returns. `weekday` and `took` are built on one, so
-    // they go through NUMERIC and come back a double. `slot` and `tenth`
-    // are not, and keep the bare form and the type it has always given.
+    // what DATE_DIFF returns, and the translator cannot tell a double
+    // column from an integer one. Every operand goes through NUMERIC and
+    // comes back a double: `slot` and `tenth` the same as the other two.
     name: 'MODULO / ROUND with a precision over DATE_DIFF',
     method: 'select',
     query: {
@@ -2309,8 +2544,45 @@ const CASES: Case[] = [
         sql:
           `SELECT CAST((CAST((${PG_DATE_DIFF} + :p_1:) AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "weekday", ` +
           `CAST(ROUND(CAST(${PG_DATE_DIFF} AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "took", ` +
-          `("id" % :p_2:) AS "slot", ROUND("id", :p_1:) AS "tenth" FROM "orders"`,
+          `CAST((CAST("id" AS NUMERIC) % CAST(:p_2: AS NUMERIC)) AS DOUBLE PRECISION) AS "slot", ` +
+          `CAST(ROUND(CAST("id" AS NUMERIC), :p_1:) AS DOUBLE PRECISION) AS "tenth" FROM "orders"`,
         params: { p_0: 'DAYS', p_1: 1, p_2: 7 },
+      },
+    },
+  },
+  {
+    // 7 / 2 is 3.5 and 2.5 % 2 is 0.5 on every dialect. The first operand
+    // of DIVIDE is cast because two integers otherwise divide to an integer
+    // on SQLite and Postgres, and to a four-place DECIMAL on MariaDB.
+    // SQLite's `%` drops the fraction, so only two whole numbers use it.
+    name: 'DIVIDE and MODULO keep the fraction',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id', 'total', 'qty'],
+      expressions: {
+        each: { $$_expression: 'DIVIDE', args: ['@total', '@qty'] },
+        rest: { $$_expression: 'MODULO', args: ['@total', 2] },
+      },
+      projection: { '@each': 'each', '@rest': 'rest' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql: 'SELECT (CAST("total" AS REAL) / "qty") AS "each", ' +
+          '(CASE WHEN "total" = CAST("total" AS INTEGER) AND :p_0: = CAST(:p_0: AS INTEGER) ' +
+          'THEN "total" % :p_0: ELSE mod("total", :p_0:) END) AS "rest" FROM "orders"',
+        params: { p_0: 2 },
+      },
+      postgres: {
+        sql: 'SELECT (CAST("total" AS DOUBLE PRECISION) / "qty") AS "each", ' +
+          'CAST((CAST("total" AS NUMERIC) % CAST(:p_0: AS NUMERIC)) AS DOUBLE PRECISION) AS "rest" FROM "orders"',
+        params: { p_0: 2 },
+      },
+      maria: {
+        sql:
+          'SELECT (CAST(`total` AS DOUBLE) / `qty`) AS `each`, (`total` % :p_0:) AS `rest` FROM `orders`',
+        params: { p_0: 2 },
       },
     },
   },
@@ -2342,12 +2614,12 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT date_trunc('month', "createdAt") AS "month", COUNT(1) AS "total" FROM "orders" GROUP BY date_trunc('month', "createdAt") ORDER BY date_trunc('month', "createdAt") ASC`,
+          `SELECT date_trunc('month', "createdAt") AS "month", CAST(COUNT(1) AS DOUBLE PRECISION) AS "total" FROM "orders" GROUP BY date_trunc('month', "createdAt") ORDER BY date_trunc('month', "createdAt") ASC`,
         params: {},
       },
       maria: {
         sql:
-          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) AS `month`, COUNT(1) AS `total` FROM `orders` GROUP BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ORDER BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ASC",
+          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) AS `month`, CAST(COUNT(1) AS DOUBLE) AS `total` FROM `orders` GROUP BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ORDER BY CAST(DATE_FORMAT(`createdAt`, '%Y-%m-01') AS DATETIME) ASC",
         params: {},
       },
     },
@@ -3038,12 +3310,123 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          'SELECT __base__."id" AS "id", UPPER(__base__."name") AS "upperName", COUNT(1) AS "total" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", UPPER(__base__."name") ORDER BY UPPER(__base__."name") ASC, COUNT(1) DESC',
+          'SELECT __base__."id" AS "id", UPPER(__base__."name") AS "upperName", CAST(COUNT(1) AS DOUBLE PRECISION) AS "total" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", UPPER(__base__."name") ORDER BY UPPER(__base__."name") ASC, COUNT(1) DESC',
         params: {},
       },
       maria: {
         sql:
-          'SELECT __base__.`id` AS `id`, UPPER(__base__.`name`) AS `upperName`, COUNT(1) AS `total` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`id`, UPPER(__base__.`name`) ORDER BY UPPER(__base__.`name`) ASC, COUNT(1) DESC',
+          'SELECT __base__.`id` AS `id`, UPPER(__base__.`name`) AS `upperName`, CAST(COUNT(1) AS DOUBLE) AS `total` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`id`, UPPER(__base__.`name`) ORDER BY UPPER(__base__.`name`) ASC, COUNT(1) DESC',
+        params: {},
+      },
+    },
+  },
+  {
+    name: 'SELECT ORDER BY an unprojected joined column',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount', 'status'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      orderBy: { '@o.@amount': 'DESC', '@name': 'ASC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" ORDER BY "o"."amount" DESC, __base__."name" ASC',
+        params: {},
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" ORDER BY "o"."amount" DESC, __base__."name" ASC',
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`id` AS `id` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` ORDER BY `o`.`amount` DESC, __base__.`name` ASC',
+        params: {},
+      },
+    },
+  },
+  {
+    // Grouped by the projected join alias: `status` is projected, so it is
+    // in the GROUP BY and orders as itself; `amount` is not, so it orders
+    // by the group's MIN.
+    name:
+      'SELECT ORDER BY an unprojected joined column, alias projected → MIN for ASC',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount', 'status'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@o.@status': 'status', '@o': 'orders' },
+      orderBy: { '@o.@status': 'ASC', '@o.@amount': 'ASC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."id" AS "id", "o"."status" AS "status", json_group_array(json_object(:p_0:, "o"."userId", :p_1:, "o"."amount", :p_2:, "o"."status")) AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."id" AS "id", "o"."status" AS "status", jsonb_agg(jsonb_build_object(:p_0:::text, "o"."userId", :p_1:::text, "o"."amount", :p_2:::text, "o"."status")) AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`id` AS `id`, `o`.`status` AS `status`, JSON_ARRAYAGG(JSON_OBJECT(:p_0:, `o`.`userId`, :p_1:, `o`.`amount`, :p_2:, `o`.`status`)) AS `orders` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`id`, `o`.`status` ORDER BY `o`.`status` ASC, MIN(`o`.`amount`) ASC',
+      },
+    },
+  },
+  {
+    name:
+      'SELECT ORDER BY an unprojected joined column with aggregates → MAX for DESC',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'team'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount', 'status'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { n: { $$_aggregate: 'COUNT' } },
+      projection: { '@team': true, '@n': true },
+      orderBy: { '@team': 'ASC', '@o.@amount': 'DESC' },
+    } satisfies Query<'SELECT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."team" AS "team", COUNT(1) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
+        params: {},
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."team" AS "team", CAST(COUNT(1) AS DOUBLE PRECISION) AS "n" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."team" ORDER BY __base__."team" ASC, MAX("o"."amount") DESC',
+        params: {},
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`team` AS `team`, CAST(COUNT(1) AS DOUBLE) AS `n` FROM `users` AS __base__ LEFT JOIN `orders` AS `o` ON `o`.`userId` = __base__.`id` GROUP BY __base__.`team` ORDER BY __base__.`team` ASC, MAX(`o`.`amount`) DESC',
         params: {},
       },
     },

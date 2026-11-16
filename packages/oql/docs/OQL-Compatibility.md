@@ -352,11 +352,13 @@ The table below summarises the per-dialect emission. The general rule:
 | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | ADD/SUBTRACT/…        | native                                                                              | native                                                 | native                                                           | native (`$add` / `$subtract` / …)                                                   |
 | POWER                 | native                                                                              | native                                                 | native (`POWER` via SQLite built-in math, default since 3.35.0)  | native (`$pow`)                                                                     |
-| ROUND                 | native                                                                              | native                                                 | native                                                           | native                                                                              |
+| DIVIDE                | native; first operand cast to a double                                              | native; first operand cast to a double                 | native; first operand cast to a real                             | native (`$divide`)                                                                  |
+| MODULO                | native, through `NUMERIC`                                                           | native                                                 | emulated (`%` for whole numbers, `mod()` otherwise)              | native (`$mod`)                                                                     |
+| ROUND                 | native; with a precision, through `NUMERIC`                                         | native                                                 | native                                                           | native                                                                              |
 | CONCAT                | native (`\|\|`)                                                                     | native (`CONCAT`)                                      | native (`\|\|`)                                                  | native (`$concat`)                                                                  |
 | TO_STRING             | native (`CAST … AS TEXT`)                                                           | native (`CAST … AS CHAR`)                              | native (`CAST … AS TEXT`)                                        | native (`$toString`)                                                                |
 | COALESCE / NULLIF     | native                                                                              | native                                                 | native                                                           | native (`$ifNull` / `$cond`)                                                        |
-| CASE                  | native                                                                              | native                                                 | native                                                           | native (`$switch`; `when` limited to comparison, `$in`/`$nin`, `$between`, `$null`) |
+| CASE                  | native                                                                              | native                                                 | native                                                           | native (`$switch`; `when` takes every column operator, a pattern via `$regexMatch`) |
 | LENGTH/LOWER/UPPER    | native                                                                              | native                                                 | native                                                           | native                                                                              |
 | TRIM/LTRIM/RTRIM      | native                                                                              | native                                                 | native                                                           | native (`$trim` / `$ltrim` / `$rtrim`)                                              |
 | SUBSTR                | native (`SUBSTRING`)                                                                | native (`SUBSTRING`)                                   | native (`substr`)                                                | native (`$substrCP`)                                                                |
@@ -369,6 +371,77 @@ The table below summarises the per-dialect emission. The general rule:
 | **UUID**              | native (`gen_random_uuid()`)                                                        | native (`UUID()`)                                      | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)                                                 |
 | **HASH**              | native (`digest()` via pgcrypto)                                                    | native (`SHA2(.., 256)`)                               | **passthrough** (no built-in crypto)                             | **passthrough**                                                                     |
 | **ENCRYPT / DECRYPT** | native (`pgp_sym_encrypt` / `pgp_sym_decrypt`)                                      | native (`AES_ENCRYPT` / `AES_DECRYPT`)                 | **passthrough**                                                  | **passthrough**                                                                     |
+
+### Number results
+
+`DIVIDE` keeps the fraction on every dialect: `7` divided by `2` is `3.5`,
+a JavaScript `number`. The SQL dialects cast the first operand to a double
+to get there. Earlier releases returned `3` on Postgres and SQLite, and a
+four-place decimal such as `0.3333` on MariaDB.
+
+`MODULO` keeps the fraction too, so `2.5 % 2` is `0.5`, and the sign of the
+result follows the first operand: `-7 % 2` is `-1` and `7 % -2` is `1`.
+Postgres computes it in `NUMERIC`, which is decimal, so a remainder that a
+double cannot hold exactly differs in its last digits: `2.675 % 2` is
+`0.675` on Postgres and `0.6749999999999998` on the other three. The
+result is cast back to a double, so a `BIGINT` operand gives a `number`
+there, where earlier releases gave a `bigint`.
+
+SQLite calls `mod()` when an operand has a fraction. That is one of
+SQLite's optional math functions: the builds Deno, Bun and Node ship have
+them, and Turso and Cloudflare D1 are untested.
+
+A zero divisor is not portable for either one. Postgres and MongoDB fail
+the query, MariaDB and SQLite return `NULL`.
+
+`ROUND` with a precision goes through `NUMERIC` on Postgres and is cast
+back, so it takes any numeric operand and returns a `number`. The dialects
+do not agree on a value halfway between two results. These are the results
+on PostgreSQL 18, MariaDB 11, SQLite 3.46 and MongoDB 8 for a value passed
+in the query and, where it differs, for a `DOUBLE` column holding it:
+
+| Expression        | Postgres | MariaDB               | SQLite | MongoDB |
+| ----------------- | -------- | --------------------- | ------ | ------- |
+| `ROUND(2.5)`      | `2`      | `3`, column `2`       | `3`    | `2`     |
+| `ROUND(3.5)`      | `4`      | `4`                   | `4`    | `4`     |
+| `ROUND(-2.5)`     | `-2`     | `-3`, column `-2`     | `-3`   | `-2`    |
+| `ROUND(2.5, 0)`   | `3`      | `3`, column `2`       | `3`    | `2`     |
+| `ROUND(-2.5, 0)`  | `-3`     | `-3`, column `-2`     | `-3`   | `-2`    |
+| `ROUND(0.125, 2)` | `0.13`   | `0.13`, column `0.12` | `0.13` | `0.12`  |
+| `ROUND(2.675, 2)` | `2.68`   | `2.68`                | `2.67` | `2.67`  |
+
+A negative precision is not portable either: `ROUND(1234.5, -2)` is `1200`
+on Postgres, MariaDB and MongoDB, and `1235` on SQLite. Round in
+application code when the result has to be the same everywhere.
+
+Whole-number arithmetic over integer columns reaches JavaScript as a
+`bigint` on MariaDB and as a `number` on the other three. This covers
+`ADD`, `SUBTRACT`, `MULTIPLY`, `MODULO` and `ABS`. The result is left as
+MariaDB returns it, because a cast to a double would lose exactness on
+large values. Convert with `Number()` when the values are known to fit.
+
+### CURRENT_TIME
+
+`CURRENT_TIME` is the UTC clock time as an `'HH:MM:SS'` string on every
+dialect: in a select, in a filter, and as a written value. It carries no
+fraction and does not follow the session time zone.
+
+| Dialect  | Emitted                                                                    |
+| -------- | -------------------------------------------------------------------------- |
+| Postgres | `CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)` |
+| MariaDB  | `UTC_TIME()`                                                               |
+| SQLite   | `time('now')`                                                              |
+| MongoDB  | `$dateToString` of `$$NOW` with `%H:%M:%S`                                 |
+
+On Postgres the value is a `TIME`. Comparing it with a text column fails
+there, since Postgres has no operator for the pair.
+
+### DATE_ADD result
+
+`DATE_ADD` on a `Date` value returns what it returns on a column: a Date on
+Postgres, MariaDB and MongoDB, ISO 8601 UTC text on SQLite. MariaDB casts
+the value to `DATETIME(6)` for that, and Postgres to `timestamptz`, which
+is also what lets a view hold the expression.
 
 ### DATE_ADD amount gotcha
 
@@ -447,13 +520,9 @@ pass dates.
 
 The result reaches JavaScript as a whole `number` on every dialect, never a
 `bigint`: Postgres and MariaDB cast it to a double, which is exact for any
-two dates they can hold. Postgres has no `%` and no two-argument `ROUND`
-for a double, so `MODULO`, and `ROUND` with a precision, over a `DATE_DIFF`
-or arithmetic on one go through `NUMERIC` there and are cast back: the
-result is a `number` there too.
-
-`DIVIDE` on a `DATE_DIFF` keeps the fraction on Postgres, MariaDB and
-MongoDB. SQLite divides two integers and drops it.
+two dates they can hold. `DIVIDE`, `MODULO` and `ROUND` over a `DATE_DIFF`
+behave as they do over any other number, see
+[number results](#number-results).
 
 ### UUID gotcha
 
@@ -491,6 +560,20 @@ OQL chose passthrough over throwing because:
 | ARRAY_AGG             | native (`array_agg`)                          | native (`JSON_ARRAYAGG`)                   | native (`json_group_array`)                   | native (`$push`)                                                                                |
 | JSON_ROW              | native (`jsonb_agg(jsonb_build_object(...))`) | native (`JSON_ARRAYAGG(JSON_OBJECT(...))`) | native (`json_group_array(json_object(...))`) | native (`$push` of an object)                                                                   |
 
+`COUNT` reaches JavaScript as a `number` on every dialect. Postgres and
+MariaDB count in a 64-bit integer, so the projected value is cast to a
+double there, which is exact up to 2^53. Earlier releases returned a
+`bigint` on those two. `having` and `orderBy` compare the count before the
+cast.
+
+`distinct: true` on COUNT, SUM or AVG is `COUNT(DISTINCT col)` and its
+siblings in SQL. MongoDB's `$group` has no such accumulator, so the
+translator collects each group's distinct values with `$addToSet` and
+counts, sums or averages that set in the next stage. NULL is left out, as
+in SQL. One group's distinct values therefore have to fit in a single
+16 MB document; a column with more distinct values per group than that
+fails on MongoDB.
+
 ## Filters
 
 All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
@@ -503,6 +586,15 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
   - SQLite uses `LIKE` (already case-insensitive for ASCII; non-ASCII
     requires `PRAGMA case_sensitive_like=OFF`, which is the default).
   - MongoDB uses `$regex` with the `i` option.
+- **Computed operand** (a column reference or an expression as the value):
+  - `$startsWith` / `$endsWith` / `$contains` match it as written on every
+    dialect. A `%`, `_` or `\` in the computed value is escaped in the SQL,
+    as it is in a string literal. MongoDB takes an expression there, not a
+    column reference.
+  - `$like` / `$nlike` / `$ilike` / `$nilike` read it as a pattern on the
+    SQL dialects, so a `%` or `_` in the computed value is a wildcard.
+    MongoDB refuses it, see
+    [below](#when-to-expect-a-throw-vs-a-silent-fallback).
 
 ### NULL in a filter
 
@@ -520,6 +612,7 @@ other. OQL does not pass that through:
 | -------------------------------------------------------------- | ------------------- | ---------------------------------------------------------- |
 | `{ '@a': { $ne: 5 } }`                                         | `a <> 5`            | `{ a: { $nin: [5, null] } }`                               |
 | `{ '@a': { $nin: [5, 6] } }`                                   | `a NOT IN (5, 6)`   | `{ a: { $nin: [5, 6, null] } }`                            |
+| `{ '@a': { $nlike: 'x%' } }`                                   | `a NOT LIKE 'x%'`   | `{ a: { $not: { $regex: '^x.*$' }, $ne: null } }`          |
 | `{ '@a': '@b' }`, `{ '@a': { $lt: '@b' } }`                    | `a = b`, `a < b`    | `$expr` comparison, plus a `$gt: null` guard on each field |
 | `{ '@a': { $lt: { $$_expression: 'ADD', args: ['@b', 1] } } }` | `a < (b + 1)`       | the same guarded `$expr`                                   |
 | `{ '@a': { $between: ['@b', 9] } }`                            | `a BETWEEN b AND 9` | the same guarded `$expr`                                   |
@@ -531,9 +624,6 @@ To include it, ask for it:
 A `CASE` `when` condition follows the same rule:
 `when: { '@a': { $lt: 6 } }` does not take the branch for a null or
 missing `a`.
-
-One place on MongoDB does not follow the rule yet. `$nlike` / `$nilike`
-still match a null or missing field, where SQL's `NOT LIKE` does not.
 
 ## JOINs
 
@@ -607,6 +697,35 @@ way: `IS NULL` on the subquery column, null or missing on MongoDB.
 A `null` value in `on` is a NULL check on the joined column (`IS NULL`;
 null or missing on MongoDB) and cannot be listed in `nullSafe`, nor can
 a literal — `assertJoinDetails` rejects both with a `TypeError`.
+
+### Ordering by a joined column
+
+`orderBy` accepts `'@Alias.@col'` for a column in a join's `columns`,
+projected or not. An alias the query does not join, or a column the
+join does not list, is a `TypeError`. With `distinct: true` the column
+must be projected.
+
+An unprojected joined column sorts on this value:
+
+| Query                                                | Postgres, MariaDB, SQLite                   | MongoDB                                                                       |
+| ---------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| not grouped                                          | the column, one result row per joined row   | smallest value among the document's joined rows for `ASC`, largest for `DESC` |
+| grouped by `aggregates` or by a projected join alias | `MIN(col)` for `ASC`, `MAX(col)` for `DESC` | the same, over the joined rows of the group                                   |
+
+The smallest and largest skip `NULL`. A row or group with no joined
+row, or whose joined values are all `NULL`, sorts as `NULL`.
+
+On MongoDB a projected joined column sorts on the joined array itself.
+An ascending sort then counts a `NULL` among the joined values rather
+than skipping it.
+
+`NULL` placement is the engine's own, for a joined column as for any
+other `orderBy` key, and oql does not change it:
+
+| Direction | Postgres     | MariaDB      | SQLite       | MongoDB      |
+| --------- | ------------ | ------------ | ------------ | ------------ |
+| `ASC`     | `NULL` last  | `NULL` first | `NULL` first | `NULL` first |
+| `DESC`    | `NULL` first | `NULL` last  | `NULL` last  | `NULL` last  |
 
 ## When to expect a throw vs a silent fallback
 

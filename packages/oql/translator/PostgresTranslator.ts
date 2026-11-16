@@ -85,24 +85,6 @@ const PG_INDEX_METHODS = new Set([
 ]);
 
 /**
- * Numeric expressions whose Postgres result is a double when an operand is
- * one. Only a numeric expression can be an operand of another.
- */
-const DOUBLE_CARRIERS = new Set([
-  'ADD',
-  'SUBTRACT',
-  'MULTIPLY',
-  'DIVIDE',
-  'MODULO',
-  'POWER',
-  'SQRT',
-  'ABS',
-  'CEIL',
-  'FLOOR',
-  'ROUND',
-]);
-
-/**
  * Emits PostgreSQL SQL. Stateless and reusable — see
  * {@link AbstractTranslator} for the shared method surface. This is the
  * dialect with the fewest emulations: schemas, TRUNCATE, FULL JOIN,
@@ -152,21 +134,8 @@ export class PostgresTranslator extends AbstractTranslator {
    */
   protected override readonly _offsetOnlyLimit: string | null = null;
 
-  /**
-   * Whether `value` is an expression Postgres evaluates to a double:
-   * a `DATE_DIFF`, or arithmetic over one.
-   */
-  private __isDouble(value: unknown): boolean {
-    if (typeof value !== 'object' || value === null) return false;
-    const { $$_expression: type, args } = value as {
-      $$_expression?: string;
-      args?: unknown;
-    };
-    if (type === 'DATE_DIFF') return true;
-    if (type === undefined || !DOUBLE_CARRIERS.has(type)) return false;
-    return typeof args === 'object' && args !== null &&
-      Object.values(args).some((arg) => this.__isDouble(arg));
-  }
+  /** `COUNT` is a `bigint` here, which the driver returns as a BigInt. */
+  protected override readonly _countCast: string | null = 'DOUBLE PRECISION';
 
   /**
    * Postgres expression emitters. Unlike SQLite's pass-throughs, the
@@ -182,30 +151,34 @@ export class PostgresTranslator extends AbstractTranslator {
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    ['DIVIDE', (a) => `(${a.join(' / ')})`],
-    // Postgres has no `%` and no two-argument ROUND for a double, which
-    // is what DATE_DIFF returns. Such an operand goes through NUMERIC and
-    // the result is cast back, so it still reaches JS as a number.
+    // Two integers divide to an integer here, so the first operand is a
+    // double: 7 / 2 is 3.5, as on MariaDB and MongoDB.
+    [
+      'DIVIDE',
+      (a) => `(CAST(${a[0]} AS DOUBLE PRECISION) / ${a.slice(1).join(' / ')})`,
+    ],
+    // Postgres has no `%` and no two-argument ROUND for a double, and the
+    // type of an operand is not known here. Every operand goes through
+    // NUMERIC and the result is cast back, so it reaches JS as a number.
     [
       'MODULO',
-      (a, e) =>
-        this.__isDouble(e)
-          ? `CAST((${
-            a.map((x) => `CAST(${x} AS NUMERIC)`).join(' % ')
-          }) AS DOUBLE PRECISION)`
-          : `(${a.join(' % ')})`,
+      (a) =>
+        `CAST((${
+          a.map((x) => `CAST(${x} AS NUMERIC)`).join(' % ')
+        }) AS DOUBLE PRECISION)`,
     ],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],
     ['ABS', (a) => `ABS(${a[0]})`],
     ['CEIL', (a) => `CEIL(${a[0]})`],
     ['FLOOR', (a) => `FLOOR(${a[0]})`],
-    ['ROUND', (a, e) => {
-      if (a.length === 1) return `ROUND(${a[0]})`;
-      return this.__isDouble(e)
-        ? `CAST(ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]}) AS DOUBLE PRECISION)`
-        : `ROUND(${a[0]}, ${a[1]})`;
-    }],
+    [
+      'ROUND',
+      (a) =>
+        a.length > 1
+          ? `CAST(ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]}) AS DOUBLE PRECISION)`
+          : `ROUND(${a[0]})`,
+    ],
     ['CONCAT', (a) => a.join(' || ')],
     ['LENGTH', (a) => `LENGTH(${a[0]})`],
     ['TO_STRING', (a) => `CAST(${a[0]} AS TEXT)`],
@@ -240,14 +213,26 @@ export class PostgresTranslator extends AbstractTranslator {
     ],
     ['NOW', () => 'CURRENT_TIMESTAMP'],
     ['CURRENT_DATE', () => 'CURRENT_DATE'],
-    ['CURRENT_TIME', () => 'CURRENT_TIME'],
+    // The UTC clock time as a TIME without fraction or zone: it reaches JS
+    // as 'HH:MM:SS', where CURRENT_TIME gave '18:35:56.811132+00'.
+    [
+      'CURRENT_TIME',
+      () =>
+        `CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)`,
+    ],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP'],
-    ['DATE_ADD', (a) => {
+    ['DATE_ADD', (a, e) => {
       // Postgres: date + interval. Build the interval as a string concat
       // since amount/unit may be parameterised.
       const [date, amount, unit] = a;
-      return `(${date} + (${amount}::text || ' ' || ${unit})::interval)`;
+      // A Date inlined into a view body is an untyped string, and
+      // `unknown + interval` resolves to interval + interval.
+      const typed =
+        e.$$_expression === 'DATE_ADD' && e.args.date instanceof Date
+          ? `${date}::timestamptz`
+          : date;
+      return `(${typed} + (${amount}::text || ' ' || ${unit})::interval)`;
     }],
     ['DATE_DIFF', (a) => {
       // EXTRACT(EPOCH FROM (to - from)) gives seconds. Divide by the
@@ -568,6 +553,11 @@ export class PostgresTranslator extends AbstractTranslator {
     params: Parameters,
   ): string {
     return `${this._parameterize(value, params)}::text`;
+  }
+
+  /** `REPLACE` takes text only, where `||` also took a number or a date. */
+  protected override _likeEscapeOperand(sql: string): string {
+    return super._likeEscapeOperand(`CAST(${sql} AS TEXT)`);
   }
 
   /**

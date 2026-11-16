@@ -15,6 +15,7 @@
 import { describe, it } from '@tundralibs/compat/test';
 import { MongoEngine } from '@tundralibs/drivers/mongo';
 import { envArgs } from '@tundralibs/utils';
+import { requireLive } from './requireLive.ts';
 import { type LiveEngine, runLiveSuite } from './suite.ts';
 import { ActiveLinks } from './models/shortener/mod.ts';
 import { TagsOfPosts } from './models/blog/mod.ts';
@@ -105,12 +106,10 @@ async function dropAll(engine: any): Promise<void> {
 }
 
 if (!available) {
+  const why = `MongoDB at ${BASE.host}:${BASE.port} unreachable or ` +
+    `credentials rejected (fix MONGO_* in packages/norm/.env)`;
   describe('norm.live-mongo', () => {
-    it(
-      `SKIPPED — MongoDB at ${BASE.host}:${BASE.port} unreachable or ` +
-        `credentials rejected (fix MONGO_* in packages/norm/.env)`,
-      () => {},
-    );
+    it(`SKIPPED — ${why}`, () => requireLive(why));
   });
 } else {
   let engine: MongoEngine;

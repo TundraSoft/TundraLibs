@@ -2,6 +2,7 @@ import type { FlattenEntity } from '@tundralibs/utils';
 import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
 import type { QueryFilter } from '../filter/QueryFilter.ts';
+import type { ConditionalExpressions } from './ConditionalExpressions.ts';
 import type { NumericExpressions } from './NumericExpressions.ts';
 import type { DateTruncUnit } from './DateTruncUnit.ts';
 import type { TimeUnit } from './TimeUnit.ts';
@@ -18,11 +19,14 @@ import type { TimeUnit } from './TimeUnit.ts';
  * args to a depth of 10 — so the nested member only brings the type
  * in line with the behaviour on both sides of it.
  *
- * Restricted to {@link NumericExpressions} rather than the whole
+ * Restricted to {@link NumericExpressions} and
+ * {@link ConditionalExpressions} rather than the whole
  * {@link Expressions} union: that is exactly the set the runtime
  * validator accepts in a numeric position, so a string expression
  * such as `CONCAT` stays rejected at compile time instead of
- * throwing at assert time.
+ * throwing at assert time. A conditional's result type is not
+ * checked: `COALESCE` over string columns compiles and is left to
+ * the database.
  *
  * @template T  - Table schema type.
  * @template FT - Flattened table type with `'@'` prefix for column
@@ -37,7 +41,10 @@ type NumericExpressionArg<
   | GetColumnByType<FT, number | bigint>
   | number
   | bigint
-  | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
+  | Extract<
+    Expressions<T, FT>,
+    { $$_expression: NumericExpressions | ConditionalExpressions }
+  >;
 
 /**
  * An argument to a conditional expression (`COALESCE`, `NULLIF`,
@@ -88,9 +95,9 @@ type ConditionalArg<
  * `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
  *
  * **Date** (returns Date; ISO 8601 UTC text on SQLite): `NOW`,
- * `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`,
- * `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC` — and
- * `UNIX_TIMESTAMP`, which returns a 64-bit INTEGER, not a Date.
+ * `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
+ * `DATE_TRUNC` — and two that do not return a Date: `CURRENT_TIME`, an
+ * `'HH:MM:SS'` UTC string, and `UNIX_TIMESTAMP`, a 64-bit INTEGER.
  *
  * **Cryptographic (platform-dependent)**: `ENCRYPT`, `DECRYPT`,
  * `HASH`.
@@ -182,8 +189,7 @@ export type Expressions<
 } | {
   /**
    * Date addition: add a number of time units to a date. Negative
-   * `amount` subtracts. Returns text, not a Date, on SQLite, and on
-   * MariaDB when `date` is a literal.
+   * `amount` subtracts. Returns text, not a Date, on SQLite.
    */
   $$_expression: 'DATE_ADD';
   args: {
@@ -229,7 +235,7 @@ export type Expressions<
   /** Current date without the time component. */
   $$_expression: 'CURRENT_DATE';
 } | {
-  /** Current time without the date component. */
+  /** Current UTC clock time as an `'HH:MM:SS'` string on every dialect. */
   $$_expression: 'CURRENT_TIME';
 } | {
   /** Current timestamp — alias for `NOW`. */

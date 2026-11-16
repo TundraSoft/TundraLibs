@@ -3,6 +3,7 @@ import { describe, it } from '@tundralibs/compat/test';
 import type { Connection } from '@tundralibs/compat';
 import { envArgs } from '@tundralibs/utils';
 import { MemcachedEngine } from './Engine.ts';
+import { liveAvailable } from '../../tests/liveAvailable.ts';
 import { EngineError } from '../../errors/mod.ts';
 
 // Wave-note: emission/option accessors are protected now — tests reach
@@ -55,7 +56,10 @@ async function isMemcachedAvailable(): Promise<boolean> {
   }
 }
 
-const memcachedAvailable = await isMemcachedAvailable();
+const memcachedAvailable = liveAvailable(
+  'Memcached',
+  await isMemcachedAvailable(),
+);
 
 /** Generate a unique key prefix per test to avoid cross-test contamination. */
 let keyCounter = 0;

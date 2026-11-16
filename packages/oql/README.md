@@ -115,7 +115,7 @@ const query: Query<'SELECT', User> = {
 };
 
 // Validate query structure at runtime
-assertSelect(query); // Throws TypeError if invalid
+assertSelect(query); // Throws if invalid
 
 // Translate to SQL
 const translator = new PostgresTranslator();
@@ -281,7 +281,8 @@ const filters: QueryFilter<User> = {
 
 **Null inside operator values is rejected.** `$eq: null` / `$ne: null` /
 `$in: [null, …]` / `$gt: null` etc. all throw — SQL `= NULL` is always
-unknown. Use `$null: true` / `$null: false` instead. The shorthand
+unknown. A null in a shorthand list (`'@col': ['a', null]`) throws too.
+Use `$null: true` / `$null: false` instead. The shorthand
 `'@col': null` is still accepted and means `IS NULL`.
 
 **A comparison never matches a NULL, on MongoDB too.**
@@ -388,6 +389,13 @@ match rows whose key is `NULL` on both sides, list that `on` key in the
 join's `nullSafe` array (`nullSafe: ['@orders.@userId']`); the
 [JOINs section of the Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#joins)
 gives the operator each dialect uses.
+
+`orderBy` takes a joined column whether or not it is projected:
+`orderBy: { '@orders.@total': 'DESC' }`. In a query grouped by
+`aggregates` or by a projected join alias, an unprojected joined column
+orders each group by its smallest value for `ASC` and its largest for
+`DESC`. Where `NULL` sorts depends on the engine; see
+[Ordering by a joined column](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility#ordering-by-a-joined-column).
 
 > **MongoDB ignores the declared join `type` entirely.** `INNER`,
 > `LEFT`, `RIGHT`, and `FULL` all compile to the same LEFT-equivalent
@@ -629,6 +637,10 @@ operator-to-column-type gating (`$like` only on strings, `$gt` only on
 numeric/date) is a **TypeScript-only** guarantee. `assertQuery` does
 **not** re-check it at runtime — see the note under
 [Operators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#operators).
+
+A validator throws `TypeError`. The one exception is a date expression
+with a `unit` outside its allowed set: that throws `OqlError` with code
+`INVALID_TIME_UNIT`, the same error a translator throws for it.
 
 ```typescript
 import type { Query } from '@tundralibs/oql';

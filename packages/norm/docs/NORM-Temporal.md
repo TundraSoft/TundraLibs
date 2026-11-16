@@ -157,7 +157,7 @@ filter value matches no row, because a filter reads it as UTC.
   transaction (atomic), and the `UNIQUE(key, EffectiveTo)` constraint
   enforces one-current-per-key even under concurrency. norm injects the
   period columns as `DATETIME` so the far-future sentinel fits
-  (MariaDB's `TIMESTAMP` caps at 2038).
+  (MariaDB's `TIMESTAMP` ends in 2038 on servers before 11.5).
 - **MongoDB** and the fetch-only dialects (Neon, Turso, D1) have no
   transactions, so the supersede is best-effort: a crash between the
   close and the insert can leave an inconsistent version state, and on

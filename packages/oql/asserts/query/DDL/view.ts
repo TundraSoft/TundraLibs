@@ -5,6 +5,7 @@
  * @module asserts/Query/DDL/View
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import type { Query, TableType } from '../../../types/mod.ts';
 import { assertSelectQuery } from '../DML/mod.ts';
 import { validateIdentifierName } from './common.ts';
@@ -150,6 +151,7 @@ export const assertCreateView: (
   try {
     assertSelectQuery(query.query);
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid CREATE_VIEW query: query must be a valid SELECT query - ${
         error instanceof Error ? error.message : String(error)
@@ -268,6 +270,7 @@ export const assertAlterView: (
     try {
       assertSelectQuery(query.query);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid ALTER_VIEW query: query must be a valid SELECT query - ${
           error instanceof Error ? error.message : String(error)

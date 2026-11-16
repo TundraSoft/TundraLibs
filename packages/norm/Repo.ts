@@ -57,7 +57,13 @@ import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 import type { NormScope } from './scope.ts';
 import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
-import { asUtc, readTimeOfDay, toTimeOfDay, utcDay } from './calendar.ts';
+import {
+  asUtc,
+  readTimeOfDay,
+  rollsOver,
+  toTimeOfDay,
+  utcDay,
+} from './calendar.ts';
 import type { ObjectGuardian } from '@tundralibs/guardian';
 import {
   canonicalizePlain,
@@ -114,22 +120,59 @@ const CLOCKS: ReadonlySet<string> = new Set([
 /** Expressions oql's `DATE_TRUNC` takes as its `date`. */
 const DAY_SOURCES: ReadonlySet<string> = new Set([...CLOCKS, 'DATE_ADD']);
 
+/** Milliseconds in each `DATE_ADD` unit of a fixed length. */
+const UNIT_MS: ReadonlyMap<unknown, number> = new Map([
+  ['DAYS', 86_400_000],
+  ['HOURS', 3_600_000],
+  ['MINUTES', 60_000],
+  ['SECONDS', 1000],
+]);
+
+/** A `DATE_ADD` of a whole amount to a `Date`, computed in UTC as oql
+ * computes it on every engine: a day the target month lacks is that
+ * month's last day, so 31 January plus one month is 28 February.
+ * `undefined` for any other `DATE_ADD`. */
+function addedDate(args: unknown): Date | undefined {
+  const { date, amount, unit } = (args ?? {}) as Record<string, unknown>;
+  if (!(date instanceof Date) || !Number.isInteger(amount)) return undefined;
+  const by = amount as number;
+  const out = new Date(date);
+  const ms = UNIT_MS.get(unit);
+  if (ms !== undefined) {
+    out.setTime(date.getTime() + by * ms);
+  } else if (unit === 'MONTHS' || unit === 'YEARS') {
+    const months = date.getUTCMonth() + (unit === 'YEARS' ? by * 12 : by);
+    out.setUTCFullYear(date.getUTCFullYear(), months, 1);
+    const month = out.getUTCMonth();
+    out.setUTCDate(date.getUTCDate());
+    if (out.getUTCMonth() !== month) out.setUTCDate(0);
+  } else {
+    return undefined;
+  }
+  return Number.isNaN(out.getTime()) ? undefined : out;
+}
+
 /** The UTC day of a clock or `DATE_ADD` expression, reduced by the engine
  * that computes it. `CURRENT_DATE` is written as the day of `NOW`, the
  * same day in the form a stored day has. Any other expression is returned
  * as given.
  *
- * A Mongo insert document (`insertDocument`) cannot evaluate `DATE_TRUNC`.
- * oql computes `CURRENT_DATE` as the UTC day when it builds the document,
- * so a clock is written as that. */
+ * A Mongo insert document (`insertDocument`) cannot evaluate `DATE_TRUNC`
+ * or `DATE_ADD`. oql computes `CURRENT_DATE` as the UTC day when it builds
+ * the document, so a clock is written as that, and a `DATE_ADD` to a
+ * `Date` is computed here. */
 function dayOf(
   expr: ExpressionDefault,
   insertDocument: boolean,
-): ExpressionDefault {
+): ExpressionDefault | Date {
   if (insertDocument) {
-    return CLOCKS.has(expr.$$_expression)
-      ? { $$_expression: 'CURRENT_DATE' }
-      : expr;
+    if (CLOCKS.has(expr.$$_expression)) {
+      return { $$_expression: 'CURRENT_DATE' };
+    }
+    const added = expr.$$_expression === 'DATE_ADD'
+      ? addedDate(expr.args)
+      : undefined;
+    return added === undefined ? expr : utcDay(added);
   }
   const date = expr.$$_expression === 'CURRENT_DATE'
     ? { $$_expression: 'NOW' }
@@ -176,34 +219,48 @@ const VALUE_OPERATORS = new Set(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte']);
 /** Filter operators that compare the column with a list of values. */
 const LIST_OPERATORS = new Set(['$in', '$nin', '$between']);
 
+/** The temporal column a filter value is compared with. */
+type TemporalRef = { entityKey: string; col: string; plainType: string };
+
 /**
  * One filter value for a temporal column, in the form a write stores:
  * the canonical time of day for `TIME`, a `Date` for the date types, its
  * UTC day for `DATE`. Anything a write would not read as one (`null`, a
  * column reference, an expression, other text) comes back as it came.
+ *
+ * @throws {@link NormQueryError} `INVALID_DATE` when a date string names
+ *   a day or time no calendar has, which a write refuses too.
  */
-function temporalValue(type: string, v: unknown): unknown {
-  if (type === 'TIME') return toTimeOfDay(v) ?? v;
-  const d = typeof v === 'string' && ISO_DATE.test(v)
-    ? new Date(asUtc(v) as string)
-    : v;
+function temporalValue(ref: TemporalRef, v: unknown): unknown {
+  if (ref.plainType === 'TIME') return toTimeOfDay(v) ?? v;
+  let d = v;
+  if (typeof v === 'string' && ISO_DATE.test(v)) {
+    if (rollsOver(v)) {
+      throw new NormQueryError(
+        `Column '${ref.col}' on entity '${ref.entityKey}' cannot be ` +
+          `filtered by '${v}': no calendar has that day or time.`,
+        { entity: ref.entityKey, subject: ref.col, code: 'INVALID_DATE' },
+      );
+    }
+    d = new Date(asUtc(v));
+  }
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return v;
-  return type === 'DATE' ? utcDay(d) : d;
+  return ref.plainType === 'DATE' ? utcDay(d) : d;
 }
 
 /** {@linkcode temporalValue} over a filter condition: a bare value, the
  * array shorthand, or the comparison operators of an operator bag.
  * `cond` is the filter walk's own copy, so a bag is rewritten in place. */
-function temporalCondition(type: string, cond: unknown): unknown {
-  if (Array.isArray(cond)) return cond.map((v) => temporalValue(type, v));
+function temporalCondition(ref: TemporalRef, cond: unknown): unknown {
+  if (Array.isArray(cond)) return cond.map((v) => temporalValue(ref, v));
   if (typeof cond !== 'object' || cond === null || cond instanceof Date) {
-    return temporalValue(type, cond);
+    return temporalValue(ref, cond);
   }
   const bag = cond as Row;
   for (const [op, v] of Object.entries(bag)) {
-    if (VALUE_OPERATORS.has(op)) bag[op] = temporalValue(type, v);
+    if (VALUE_OPERATORS.has(op)) bag[op] = temporalValue(ref, v);
     else if (LIST_OPERATORS.has(op) && Array.isArray(v)) {
-      bag[op] = v.map((item) => temporalValue(type, item));
+      bag[op] = v.map((item) => temporalValue(ref, item));
     }
   }
   return bag;
@@ -304,6 +361,10 @@ type ProjectionPlan = {
     whole: boolean;
     cardinality: 'belongsTo' | 'hasOne' | 'hasMany';
     columnFqns: Record<string, string>;
+    /** To-one only, when several target rows can match: the keys the
+     * target's primary key sits under in each candidate, and those of
+     * them fetched only to pick by. */
+    pickBy?: { keys: readonly string[]; strip: readonly string[] };
   }>;
   /** Hidden GROUP-BY anchors added by eager synthesis (all-hidden
    * entities): fetched for the aggregate, stripped from results. */
@@ -1101,14 +1162,11 @@ export class ReadRepo<
   }
 
   /** Recursive worker behind {@linkcode _prepareWhere}. Async because
-   * rewriting a hashed ref has to digest the comparand. `convert` is
-   * off inside a hand-written `$exists`, whose columns belong to
-   * another table.
+   * rewriting a hashed ref has to digest the comparand. A hand-written
+   * `$exists` names another table's columns and is left as written;
+   * only the outer side of its `on` is this entity's, and guarded.
    * @internal */
-  private async __rewriteWhereNode(
-    node: unknown,
-    convert = true,
-  ): Promise<unknown> {
+  private async __rewriteWhereNode(node: unknown): Promise<unknown> {
     if (node === null || node === undefined) return node;
     // Date is `typeof 'object'` with NO enumerable keys — without this
     // short-circuit the object walk below flattens it to {}.
@@ -1122,7 +1180,7 @@ export class ReadRepo<
     if (Array.isArray(node)) {
       const out: unknown[] = [];
       for (const item of node) {
-        out.push(await this.__rewriteWhereNode(item, convert));
+        out.push(await this.__rewriteWhereNode(item));
       }
       return out;
     }
@@ -1133,11 +1191,18 @@ export class ReadRepo<
     // overwrite them.
     const legacy: Row[] = [];
     for (const [key, value] of Object.entries(node as Row)) {
+      if (key === '$exists' || key === '$nexists') {
+        const on = (value as { on?: unknown } | null)?.on;
+        for (const outer of Object.values(on ?? {})) {
+          if (typeof outer === 'string' && outer.startsWith('@')) {
+            this.__checkFilterRef(outer.slice(1));
+          }
+        }
+        out[key] = value;
+        continue;
+      }
       if (!key.startsWith('@')) {
-        out[key] = await this.__rewriteWhereNode(
-          value,
-          convert && key !== '$exists' && key !== '$nexists',
-        );
+        out[key] = await this.__rewriteWhereNode(value);
         continue;
       }
       // Virtual temporal point-in-time key: `@AsOf: T` → the version in
@@ -1147,7 +1212,7 @@ export class ReadRepo<
         const range = await this.__rewriteWhereNode({
           [`@${temporal.from}`]: { $lte: value },
           [`@${temporal.to}`]: { $gt: value },
-        }, convert) as Row;
+        }) as Row;
         Object.assign(out, range);
         continue;
       }
@@ -1165,10 +1230,9 @@ export class ReadRepo<
         continue;
       }
       const cond = await this.__rewriteWhereNode(value);
-      out[key] =
-        convert && (ref.plainType === 'TIME' || DATE_TYPES.has(ref.plainType))
-          ? temporalCondition(ref.plainType, cond)
-          : cond;
+      out[key] = ref.plainType === 'TIME' || DATE_TYPES.has(ref.plainType)
+        ? temporalCondition(ref, cond)
+        : cond;
     }
     if (legacy.length > 0) {
       const existing = out.$and;
@@ -1736,6 +1800,7 @@ export class ReadRepo<
         : undefined;
       const outputKey = typeof value === 'string' ? value : name;
       const colFqns: Record<string, string> = {};
+      const aggCols: Record<string, string | Row> = {};
 
       if (subProj === undefined) {
         // Whole-relation expansion PINS the TARGET's default
@@ -1744,7 +1809,6 @@ export class ReadRepo<
         // `columns` array, leaking hidden() columns whenever a
         // filter/orderBy adds one to the same join.
         addCols(name, target.projectedColumns);
-        const aggCols: Record<string, string | Row> = {};
         for (const col of target.projectedColumns) {
           aggCols[col] = relCol(name, target, col);
           colFqns[col] = `${targetKey}.${col}`;
@@ -1761,7 +1825,6 @@ export class ReadRepo<
         oqlAggregates[name] = { $$_aggregate: 'JSON_ROW', columns: aggCols };
         oqlProjection[`@${name}`] = value === true ? true : (value as string);
       } else {
-        const aggCols: Record<string, string | Row> = {};
         const need: string[] = [];
         const targetColumns = target.def.columns as Record<string, unknown>;
         for (const [subKey, subVal] of Object.entries(subProj)) {
@@ -1810,12 +1873,45 @@ export class ReadRepo<
         oqlProjection[`@${name}`] = true;
       }
 
+      // A to-one relation can match several rows (a NULL-safe key, a
+      // hasOne with more than one child). The target's primary key
+      // rides along so the read picks the same one on every engine; a
+      // join on the whole key matches one row at most and needs none.
+      let pickBy: ProjectionPlan['relations'][number]['pickBy'];
+      const pk = (target.def as { primaryKeys?: readonly string[] })
+        .primaryKeys ?? [];
+      const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
+        ref.slice(name.length + 3)
+      );
+      if (
+        cardinality !== 'hasMany' && pk.length > 0 &&
+        !pk.every((col) => onCols.includes(col))
+      ) {
+        const keys: string[] = [];
+        const strip: string[] = [];
+        for (const col of pk) {
+          const fqn = `${targetKey}.${col}`;
+          let key = Object.keys(colFqns).find((k) => colFqns[k] === fqn);
+          if (key === undefined) {
+            key = `__pk_${col}`;
+            while (key in aggCols) key = `_${key}`;
+            addCols(name, [col]);
+            aggCols[key] = relCol(name, target, col);
+            colFqns[key] = fqn;
+            strip.push(key);
+          }
+          keys.push(key);
+        }
+        pickBy = { keys, strip };
+      }
+
       relations.push({
         outputKey,
         targetKey,
         whole: subProj === undefined,
         cardinality,
         columnFqns: colFqns,
+        ...(pickBy !== undefined ? { pickBy } : {}),
       });
     };
 
@@ -1958,6 +2054,24 @@ export class ReadRepo<
       !(alias in oqlJoins) && mode === 'where' && position === 'key'
         ? nullSafeCols(alias)
         : [];
+    // A filter-only join on a NULL-safe key repeats the base row once
+    // per match, and a value-position ref cannot be lifted out of it.
+    const refuseSafeValueRef = (alias: string, col: string): void => {
+      if (alias in oqlJoins || nullSafeCols(alias).length === 0) return;
+      throw new NormQueryError(
+        `Filter value '@${alias}.@${col}' references NULL-safe relation ` +
+          `'${alias}' on '${compiled.key}', which is not projected — a ` +
+          `row can match several '${alias}' rows there and would come ` +
+          `back once per match. Project '${alias}' (each row then comes ` +
+          `back once), or turn NULL-safe matching off for this read ` +
+          `(nullSafe: { ${alias}: false }).`,
+        {
+          entity: compiled.key,
+          subject: `${alias}.${col}`,
+          code: 'INVALID_PROJECTION',
+        },
+      );
+    };
     const visitAliasRef = (
       alias: string,
       col: string,
@@ -1985,6 +2099,9 @@ export class ReadRepo<
         if (safe.length > 0) {
           existsAliases.set(alias, safe.map((c) => fks[alias]!.on[c]!));
           return;
+        }
+        if (mode === 'where' && position === 'value') {
+          refuseSafeValueRef(alias, col);
         }
         if (!joined) ensureBtJoin(alias);
         addCols(alias, [col]);
@@ -2055,6 +2172,9 @@ export class ReadRepo<
         if (safe.length > 0) {
           existsAliases.set(alias, safe);
           return;
+        }
+        if (mode === 'where' && position === 'value') {
+          refuseSafeValueRef(alias, col);
         }
         if (!joined) ensureRevJoin(alias);
         addCols(alias, [col]);
@@ -2475,7 +2595,8 @@ export class ReadRepo<
   }
 
   /** Drop all-null LEFT-JOIN placeholders; unwrap belongsTo/hasOne to
-   * object-or-null; keep hasMany as arrays. */
+   * object-or-null, the candidate lowest by primary key when several
+   * matched; keep hasMany as arrays. */
   protected _unwrapRelations(rows: Row[], plan: ProjectionPlan): void {
     for (const row of rows) {
       for (const rel of plan.relations) {
@@ -2485,6 +2606,7 @@ export class ReadRepo<
           continue;
         }
         const arr = Array.isArray(val) ? val : [val];
+        const by = rel.pickBy;
         const filtered: Row[] = [];
         for (const item of arr) {
           if (item === null || item === undefined) continue;
@@ -2495,14 +2617,30 @@ export class ReadRepo<
           const obj = item as Row;
           const keys = Object.keys(obj);
           if (keys.length === 0) continue;
-          if (keys.every((k) => obj[k] === null)) continue;
+          if (
+            keys.every((k) => obj[k] === null || by?.strip.includes(k))
+          ) continue;
           filtered.push(obj);
         }
         if (rel.cardinality === 'hasMany') {
           row[rel.outputKey] = filtered;
-        } else {
-          row[rel.outputKey] = filtered[0] ?? null;
+          continue;
         }
+        if (by !== undefined && filtered.length > 1) {
+          filtered.sort((a, b) => {
+            for (const key of by.keys) {
+              const [x, y] = [a[key] as number, b[key] as number];
+              if (x < y) return -1;
+              if (x > y) return 1;
+            }
+            return 0;
+          });
+        }
+        const picked = filtered[0] ?? null;
+        if (by !== undefined && picked !== null) {
+          for (const key of by.strip) delete picked[key];
+        }
+        row[rel.outputKey] = picked;
       }
     }
   }
@@ -2892,6 +3030,7 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'insert');
+    this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow so an encrypted (.encrypt()/.hash())
     // scope column is stored as ciphertext WITH its digest sibling. A raw
@@ -3200,7 +3339,10 @@ export class Repo<
     const d = supplied instanceof Date
       ? supplied
       : new Date(asUtc(supplied) as string);
-    if (Number.isNaN(d.getTime())) {
+    if (
+      Number.isNaN(d.getTime()) ||
+      (typeof supplied === 'string' && rollsOver(supplied))
+    ) {
       throw new NormQueryError(
         `${this._compiled.key}.insert(): '${t.from}' is not a valid date.`,
         { entity: this._compiled.key, subject: t.from, code: 'TEMPORAL_PAST' },
@@ -3403,6 +3545,9 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
+    // A column `updateOnConflict` names must be in the row on every
+    // engine, so one the caller left out stays out.
+    this.__fillNulls(rows, opts.updateOnConflict as readonly string[]);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow (same as insert()) so an encrypted
     // scope column stores ciphertext + its digest sibling, never
@@ -4214,6 +4359,18 @@ export class Repo<
         `unique per scope, or run the upsert on an unscoped handle.`,
       { entity: c.key, code: 'SCOPE_VIOLATION' },
     );
+  }
+
+  /** Write `null` for each nullable column a row leaves out, on MongoDB:
+   * a document holds only the fields written, where SQL stores NULL. */
+  private __fillNulls(rows: Row[], except: readonly string[] = []): void {
+    if (this._executor.capabilities.dialect !== 'mongo') return;
+    const c = this._compiled;
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    for (const col of c.columnNames) {
+      if (specs[col]!.nullable !== true || except.includes(col)) continue;
+      for (const row of rows) row[col] ??= null;
+    }
   }
 
   /** Insert/upsert write pipeline up to (and including) encryption. */

@@ -427,5 +427,18 @@ describe('norm temporal — live SQLite', () => {
       NormQueryError,
     );
     asserts.assertEquals((err as NormQueryError).code, 'TEMPORAL_PAST');
+
+    // So is a day no calendar has, which would be stored as March 2.
+    const impossible = await asserts.assertRejects(
+      () =>
+        repo.insert({
+          Name: 'Platinum',
+          Fees: 700,
+          EffectiveFrom: '2099-02-30' as unknown as Date,
+        }),
+      NormQueryError,
+      'is not a valid date',
+    );
+    asserts.assertEquals(impossible.code, 'TEMPORAL_PAST');
   });
 });

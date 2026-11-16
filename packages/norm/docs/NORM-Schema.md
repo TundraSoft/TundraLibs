@@ -135,7 +135,10 @@ a write also takes an ISO 8601 string, which is what a JSON payload
 carries. A date-time string that names no offset
 (`'2026-01-15T10:00:00'`, or with a space for the `T`) is read as UTC,
 so it is the same instant on every host; a string that names an offset
-keeps it. Any other format is parsed as the runtime's `Date` parses it.
+(`+05:30`, `+0530` or `+05`) keeps it. A string that names a day or
+time no calendar has, such as `'2026-02-30'` or
+`'2026-01-15T24:00:00'`, fails validation. Any other format is parsed
+as the runtime's `Date` parses it.
 A filter value on these columns and on `time` is converted too: see
 [Date and time values](NORM-Querying.md#date-and-time-values).
 [Dates and time zones](NORM-Dates.md) has the native type on each
@@ -195,7 +198,8 @@ await db.repo('Visits').find({
 });
 ```
 
-`zonedInstant` keeps the offset of text that names one. A time the
+`zonedInstant` keeps the offset of text that names one, written
+`+05:30`, `+0530` or `+05`. A time the
 zone's clock skips moves forward by the length of the skip, and a time
 it shows twice is the earlier instant. An unknown zone or a value that
 is not a date throws a `NormError`; see
@@ -430,9 +434,13 @@ On MongoDB an insert document cannot evaluate expressions, so the clock
 expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `UNIX_TIMESTAMP`)
 and `UUID` are computed when the insert is built, the clock ones at one
 instant per statement. A `date()` column given one of them holds the UTC
-day of that instant. Any other expression default fails the insert with
-`DialectUnsupportedError`; use a local generator instead. Updates and
-upserts evaluate expressions in the database on every dialect.
+day of that instant. A `date()` column given a `DATE_ADD` of a whole
+amount to a `Date` holds the UTC day of the result, which norm computes
+with the month-end rule the SQL engines follow. Any other expression
+default fails the insert with `DialectUnsupportedError`, a `DATE_ADD` on
+a `timestamp()` column or with a fractional amount included; use a local
+generator instead. Updates and upserts evaluate expressions in the
+database on every dialect.
 
 ### Transforms
 
@@ -938,7 +946,10 @@ Every FK from `A → B` gives `B` a reverse relation.
   `hasMany`. In `Profiles` above the FK column (`userId`) is the whole
   pk, so `Users` sees `@Profile` as an object-or-null with no explicit
   cardinality needed. Views have no pk, so their reverses are always
-  `hasMany` unless you declare otherwise.
+  `hasMany` unless you declare otherwise. A declared `hasOne` that
+  matches several rows carries the one lowest by primary key; a view has
+  no key to order by, so there it is whichever row the engine returns
+  first.
 
 A reverse name must be free on the target: it cannot collide with one
 of the target's columns, with a foreign-key alias (those resolve first,
@@ -1014,11 +1025,13 @@ Two things follow from matching on NULL:
 - The database does not check an FK constraint for a row whose key
   holds NULL, so nothing guarantees the matching target exists.
 - A unique constraint lets several rows hold NULL, so a NULL key can
-  match more than one target. A projected belongsTo then carries one of
-  them. A filter on a column of the relation keeps the row when any of
-  them passes it, and the row is returned and counted once. On the SQL
-  engines a filter that takes its comparison value from the relation
-  (`'@tenant': '@Org.@tenant'`) still returns the row once per match.
+  match more than one target. A projected belongsTo then carries the
+  one lowest by primary key. A filter on a column of the relation keeps
+  the row when any of them passes it, and the row is returned and
+  counted once. A filter that takes its comparison value from the
+  relation (`'@tenant': '@Org.@tenant'`) needs the relation
+  [projected in the same read](NORM-Querying.md#relation-references),
+  and throws without it.
 
 ### Referential actions
 

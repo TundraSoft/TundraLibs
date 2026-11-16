@@ -6,6 +6,7 @@
  * @module asserts/Query/DML/Select
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import type { Query, TableType } from '../../../types/mod.ts';
 import { assertJoins, assertQueryFilter } from '../../filters/mod.ts';
 import { assertAggregate } from '../../aggregates.ts';
@@ -100,6 +101,7 @@ const validateAggregates = (
     try {
       assertAggregate(value, columnList);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid SELECT query: aggregates['${key}'] is invalid - ${
           error instanceof Error ? error.message : String(error)
@@ -172,6 +174,7 @@ const validateJoinsBlock = (
   try {
     assertJoins(query.joins, [...columnList, ...joinedColumns]);
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid SELECT query: 'joins' is invalid - ${
         error instanceof Error ? error.message : String(error)
@@ -286,7 +289,9 @@ const validateProjectionEntry = (
  * joined column, or a declared base column; each value is `'ASC'` or
  * `'DESC'`. An unprojected base column is rejected under `distinct` or an
  * automatic GROUP BY (aggregates, or a projected join alias), where SQL
- * requires the ORDER BY term to be selected or grouped.
+ * requires the ORDER BY term to be selected or grouped. An unprojected
+ * joined column is rejected under `distinct` only: translators reduce it
+ * with MIN or MAX when the query is grouped.
  *
  * @internal
  */
@@ -314,27 +319,32 @@ const validateOrderBy = (
     );
   }
 
-  const allowed = [...projectionKeys, ...joinedColumns];
+  const joinedKeys = joinedColumns.map((c) => `@${c.replace('.', '.@')}`);
   const joins = (query.joins ?? {}) as Record<string, unknown>;
   const grouped = query.aggregates !== undefined ||
     projectionKeys.some((k) => k.slice(1) in joins);
-  const restriction = query.distinct === true
-    ? `'distinct'`
-    : grouped
-    ? `aggregates or a projected join alias`
-    : undefined;
+  const distinct = query.distinct === true ? `'distinct'` : undefined;
+  const restriction = distinct ??
+    (grouped ? `aggregates or a projected join alias` : undefined);
   for (const [col, direction] of Object.entries(orderBy)) {
-    if (!allowed.includes(col)) {
+    if (!projectionKeys.includes(col)) {
       const isColumn = columnList.includes(col.slice(1));
-      if (isColumn && restriction !== undefined) {
+      const isJoined = joinedKeys.includes(col);
+      const blocked = isColumn ? restriction : isJoined ? distinct : undefined;
+      if (blocked !== undefined) {
         throw new TypeError(
-          `Invalid SELECT query: orderBy key '${col}' must be projected when the query uses ${restriction}`,
+          `Invalid SELECT query: orderBy key '${col}' must be projected when the query uses ${blocked}`,
         );
       }
-      if (!isColumn) {
+      if (!isColumn && !isJoined) {
         throw new TypeError(
           `Invalid SELECT query: orderBy key '${col}' must exist in columns, projection or joined columns. Available: ${
-            [...columnList.map((c) => `@${c}`), ...allowed].join(', ')
+            [
+              ...columnList.map((c) => `@${c}`),
+              ...projectionKeys,
+              ...joinedKeys,
+            ]
+              .join(', ')
           }`,
         );
       }
@@ -359,8 +369,10 @@ const validateOrderBy = (
  *   aggregates (those need GROUP BY semantics — use `having`).
  * - `having` may only reference aggregates, and requires `aggregates` to be
  *   present.
- * - `orderBy` may reference projection keys, joined columns, or declared
- *   base columns (the last only without `distinct` or a GROUP BY).
+ * - `orderBy` may reference projection keys, joined columns
+ *   (`@Alias.@col`, projected or not, but projected under `distinct`), or
+ *   declared base columns (unprojected only without `distinct` or a
+ *   GROUP BY).
  */
 export const assertSelectQuery: <
   PT extends TableType = TableType,

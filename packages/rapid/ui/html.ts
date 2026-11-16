@@ -33,9 +33,14 @@ export class Html {
   /** Prefer `html` / `raw` — this is their shared box. */
   constructor(value: string) {
     this.__value = value;
-    Object.defineProperty(this, BRAND, { value: true, enumerable: false });
   }
 }
+
+// On the prototype, defined once: a `defineProperty` per instance was
+// most of the cost of rendering a long list. Untrusted data still cannot
+// carry it — a parsed JSON object has neither the symbol nor this
+// prototype.
+Object.defineProperty(Html.prototype, BRAND, { value: true });
 
 /**
  * Whether `value` is trusted `Html` (the symbol brand) — the guard the

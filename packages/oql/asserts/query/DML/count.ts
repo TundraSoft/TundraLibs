@@ -4,6 +4,7 @@
  * @module asserts/Query/DML/Count
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import type { Query, TableType } from '../../../types/mod.ts';
 import { assertJoins, assertQueryFilter } from '../../filters/mod.ts';
 import {
@@ -123,6 +124,7 @@ export const assertCountQuery: <PT extends TableType = TableType>(
     try {
       assertJoins(query.joins, [...columnList, ...joinedColumns]);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid COUNT query: 'joins' is invalid - ${
           error instanceof Error ? error.message : String(error)

@@ -8,6 +8,7 @@
  * @module asserts/Expressions/Expression
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import type { Expressions } from '../../types/mod.ts';
 import { assertQueryFilter } from '../filters/filterOperator.ts';
 import { assertBaseExpression } from './base.ts';
@@ -59,7 +60,12 @@ const STRING_TYPES = new Set<string>([
   'TO_STRING',
 ]);
 
-const CONDITIONAL_TYPES = new Set<string>(['COALESCE', 'NULLIF', 'CASE']);
+/** @internal */
+export const CONDITIONAL_TYPES = new Set<string>([
+  'COALESCE',
+  'NULLIF',
+  'CASE',
+]);
 
 const DATE_TYPES = new Set<string>([
   'NOW',
@@ -100,6 +106,7 @@ const assertConditionalArg = (
   try {
     assertExpression(arg, columnList, depth + 1, maxDepth);
   } catch (error) {
+    if (error instanceof OqlError) throw error;
     throw new TypeError(
       `Invalid Expression definition: ${argName} contains invalid nested ` +
         `expression in ${type} - ${

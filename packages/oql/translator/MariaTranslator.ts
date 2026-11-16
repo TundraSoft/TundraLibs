@@ -31,6 +31,7 @@ import { AbstractTranslator } from './AbstractTranslator.ts';
 import type {
   AggregateMap,
   DialectSupport,
+  ExpressionEmitter,
   ExpressionMap,
   FilterOperatorMap,
   IdentifierQuote,
@@ -149,6 +150,9 @@ export class MariaTranslator extends AbstractTranslator {
   protected override readonly _offsetOnlyLimit: string | null =
     '18446744073709551615';
 
+  /** `COUNT` is a `BIGINT` here, which the driver returns as a BigInt. */
+  protected override readonly _countCast: string | null = 'DOUBLE';
+
   /**
    * MariaDB expression emitters. Crypto is native but not interchangeable
    * with the other dialects': `HASH` is `SHA2(…, 256)` and
@@ -157,12 +161,14 @@ export class MariaTranslator extends AbstractTranslator {
    */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
-    (args: string[]) => string
+    ExpressionEmitter
   >([
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    ['DIVIDE', (a) => `(${a.join(' / ')})`],
+    // Two integers divide to a DECIMAL of four places here, so the first
+    // operand is a double: 1 / 3 is 0.3333333333333333, not 0.3333.
+    ['DIVIDE', (a) => `(CAST(${a[0]} AS DOUBLE) / ${a.slice(1).join(' / ')})`],
     ['MODULO', (a) => `(${a.join(' % ')})`],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],
@@ -207,11 +213,19 @@ export class MariaTranslator extends AbstractTranslator {
     ],
     ['NOW', () => 'NOW()'],
     ['CURRENT_DATE', () => 'CURRENT_DATE()'],
-    ['CURRENT_TIME', () => 'CURRENT_TIME()'],
+    // UTC, as on the other dialects: CURRENT_TIME() is session-local.
+    ['CURRENT_TIME', () => 'UTC_TIME()'],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP()'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
     // `unit` arrives as the keyword itself — see `_timeUnitArg`.
-    ['DATE_ADD', (a) => `TIMESTAMPADD(${a[2]}, ${a[1]}, ${a[0]})`],
+    // A Date value binds as text, and TIMESTAMPADD over text returns text.
+    // Cast to DATETIME, the result reaches JS as a Date.
+    ['DATE_ADD', (a, e) => {
+      const date = e.$$_expression === 'DATE_ADD' && e.args.date instanceof Date
+        ? `CAST(${a[0]} AS DATETIME(6))`
+        : a[0];
+      return `TIMESTAMPADD(${a[2]}, ${a[1]}, ${date})`;
+    }],
     // TIMESTAMPDIFF is BIGINT, which reaches JS as a bigint. DOUBLE
     // reaches it as a number, and holds every whole count exactly.
     [

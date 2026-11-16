@@ -105,13 +105,53 @@ describe('oql.types.Expressions', () => {
     const { sql } = translate(query);
     asserts.assertStringIncludes(
       sql,
-      '("price" + ("quantity" * ("price" / :p_0:)))',
+      '("price" + ("quantity" * (CAST("price" AS DOUBLE PRECISION) / :p_0:)))',
+    );
+  });
+
+  it('accepts a conditional nested in an arithmetic args array', () => {
+    const query = {
+      type: 'SELECT',
+      table: 'products',
+      columns: ['name', 'price', 'quantity'],
+      expressions: {
+        unitPrice: {
+          $$_expression: 'DIVIDE',
+          args: [
+            '@price',
+            { $$_expression: 'NULLIF', args: ['@quantity', 0] },
+          ],
+        },
+        stock: {
+          $$_expression: 'ABS',
+          args: [{
+            $$_expression: 'CASE',
+            args: {
+              cases: [{ when: { '@quantity': { $lt: 0 } }, then: 0 }],
+              else: { $$_expression: 'COALESCE', args: ['@quantity', 0] },
+            },
+          }],
+        },
+      },
+      projection: { '@name': true, '@unitPrice': true, '@stock': true },
+    } satisfies Query<'SELECT', Product>;
+
+    assertQuery(query);
+
+    const { sql } = translate(query);
+    asserts.assertStringIncludes(
+      sql,
+      '(CAST("price" AS DOUBLE PRECISION) / NULLIF("quantity", :p_0:))',
+    );
+    asserts.assertStringIncludes(
+      sql,
+      'ABS((CASE WHEN "quantity" < :p_0: THEN :p_0: ELSE COALESCE("quantity", :p_0:) END))',
     );
   });
 
   it('rejects a non-numeric nested expression at runtime', () => {
-    // The type admits only `NumericExpressions` in an arithmetic arg,
-    // matching `assertNumericExpression`. This is the runtime half of
+    // The type admits only numeric and conditional expressions in an
+    // arithmetic arg, matching the validator. This is the runtime half of
     // that contract — hence the cast, which a caller could not write
     // without deliberately stepping around the type.
     const query = {
