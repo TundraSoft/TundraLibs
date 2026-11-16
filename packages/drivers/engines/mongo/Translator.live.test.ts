@@ -30,6 +30,7 @@ const CONFIG = {
     : env.get('MONGO_DB') || 'test',
   username: env.get('MONGO_USERNAME') || env.get('MONGO_USER') || undefined,
   password: env.get('MONGO_PASSWORD') || undefined,
+  authSource: env.get('MONGO_AUTHSOURCE') || undefined,
 };
 
 async function isMongoAvailable(): Promise<boolean> {
