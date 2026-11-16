@@ -76,6 +76,34 @@ describe('rapid.cookies — signed values', () => {
     );
   });
 
+  it('imports the signing key once per secret, and never signs with a stale one', async () => {
+    const other = 'o'.repeat(40);
+    const subtle = crypto.subtle;
+    const original = subtle.importKey;
+    let imports = 0;
+    subtle.importKey = ((...args: Parameters<typeof original>) => {
+      imports++;
+      return original.apply(subtle, args);
+    }) as typeof original;
+    try {
+      await signValue('warm', other);
+      imports = 0;
+      const signed = await signValue('alice', SECRET, 'pref');
+      await signValue('bob', SECRET, 'pref');
+      asserts.assertEquals(
+        await verifySignedValue(signed, SECRET, 'pref'),
+        'alice',
+      );
+      asserts.assertEquals(imports, 1);
+      asserts.assertEquals(
+        await verifySignedValue(signed, other, 'pref'),
+        undefined,
+      );
+    } finally {
+      subtle.importKey = original;
+    }
+  });
+
   it('an EMPTY signed value round-trips (and is distinguishable from a forgery)', async () => {
     const signed = await signValue('', SECRET, 'flag');
     asserts.assertEquals(await verifySignedValue(signed, SECRET, 'flag'), '');
