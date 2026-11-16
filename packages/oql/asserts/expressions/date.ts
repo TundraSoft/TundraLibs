@@ -19,6 +19,13 @@ import { isColumnIdentifier } from '../columnIdentifier.ts';
 import type { DateExpressions, Expressions } from '../../types/mod.ts';
 import { assertBaseExpression, validateTimeUnits } from './base.ts';
 
+/** The clocks `DATE_ADD` takes as its `date`. @internal */
+const CLOCKS: readonly string[] = [
+  'NOW',
+  'CURRENT_TIMESTAMP',
+  'CURRENT_TIMESTAMPTZ',
+];
+
 /**
  * Asserts that a value is a valid NOW expression.
  *
@@ -340,14 +347,16 @@ export const assertUnixTimestampExpression: (
  *
  * The DATE_ADD expression adds or subtracts a specified amount of time from a date.
  * It requires three components:
- * - `date`: A Date object or column identifier containing a date
+ * - `date`: A Date object, a column identifier containing a date, or a
+ *   nested `NOW`, `CURRENT_TIMESTAMP` or `CURRENT_TIMESTAMPTZ`
  * - `amount`: A number or column identifier specifying how much to add (negative to subtract)
  * - `unit`: The time unit ('DAYS', 'MONTHS', 'YEARS', 'HOURS', 'MINUTES', 'SECONDS')
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid DATE_ADD expression
- * @throws {TypeError} If date is not a Date object or valid column identifier
+ * @throws {TypeError} If date is not a Date object, valid column identifier
+ *   or clock expression
  * @throws {TypeError} If amount is not a number or valid column identifier
  * @throws {TypeError} If unit is missing
  * @throws {OqlError} `INVALID_TIME_UNIT` if unit is not a valid time unit
@@ -386,15 +395,17 @@ export const assertDateAddExpression: (
   if ('date' in x.args) {
     // Known column reference (well-formed AND in the columnList, or
     // columnList undefined). Anything else falls through — only Date
-    // objects are valid here, so an @-string not in the list or a bare
-    // literal string both get rejected as wrong type.
-    if (!isColumnIdentifier(x.args.date, columnList)) {
-      if (!(x.args.date instanceof Date)) {
-        throw new TypeError(
-          `Invalid Expression definition: date must be a Date object or ColumnIdentifier, got ${typeof x
-            .args.date}`,
-        );
-      }
+    // objects and the clocks are valid here, so an @-string not in the
+    // list or a bare literal string both get rejected as wrong type.
+    const date = x.args.date as { $$_expression?: unknown } | null;
+    if (
+      !isColumnIdentifier(date, columnList) && !(date instanceof Date) &&
+      !CLOCKS.includes(date?.$$_expression as string)
+    ) {
+      throw new TypeError(
+        `Invalid Expression definition: date must be a Date object or ColumnIdentifier, or a NOW, CURRENT_TIMESTAMP or CURRENT_TIMESTAMPTZ expression, got ${typeof x
+          .args.date}`,
+      );
     }
   } else {
     throw new TypeError(

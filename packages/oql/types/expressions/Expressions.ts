@@ -190,11 +190,17 @@ export type Expressions<
 } | {
   /**
    * Date addition: add a number of time units to a date. Negative
-   * `amount` subtracts. Returns text, not a Date, on SQLite.
+   * `amount` subtracts. Returns text, not a Date, on SQLite. `date` is a
+   * column, a `Date`, or a nested `NOW` / `CURRENT_TIMESTAMP(TZ)`.
    */
   $$_expression: 'DATE_ADD';
   args: {
-    date: GetColumnByType<FT, Date> | Date;
+    date:
+      | GetColumnByType<FT, Date>
+      | Date
+      | {
+        $$_expression: 'NOW' | 'CURRENT_TIMESTAMP' | 'CURRENT_TIMESTAMPTZ';
+      };
     amount: GetColumnByType<FT, number> | number;
     unit: TimeUnit;
   };
