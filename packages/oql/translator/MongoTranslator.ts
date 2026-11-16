@@ -303,8 +303,9 @@ export type MongoAction =
 
 /**
  * Prefix of the temporary field an `$exists` / `$nexists` lookup writes
- * its result to. A counter is appended per node, and the field is unset
- * straight after the `$match` that reads it.
+ * its result to. A counter is appended per node, a `_` is prepended while
+ * a name of the query has it, and the field is unset straight after the
+ * `$match` that reads it.
  */
 const EXISTS_FIELD = '__exists_';
 
@@ -1247,6 +1248,21 @@ export class MongoTranslator {
     return out;
   }
 
+  /**
+   * The field names a SELECT's documents can hold: its columns, join
+   * aliases, declared expressions, aggregates and projected keys. A
+   * temporary field takes a name outside them.
+   */
+  private __queryNames(q: Query<'SELECT'>): Set<string> {
+    return new Set([
+      ...(Array.isArray(q.columns) ? q.columns.map(String) : []),
+      ...Object.keys(q.joins ?? {}),
+      ...Object.keys(q.expressions ?? {}),
+      ...Object.keys(q.aggregates ?? {}),
+      ...Object.keys(q.projection).map((k) => k.slice(1).split('.@')[0]!),
+    ]);
+  }
+
   /** Build a simple `find` op — no joins, no aggregates. */
   private __buildFind(q: Query<'SELECT'>): MongoFindAction {
     const filter = q.where
@@ -1300,26 +1316,36 @@ export class MongoTranslator {
       q.where,
       q.expressions,
     );
-    const deferMatch = filterTouchesJoins || filterTouchesExpr;
+    // A RIGHT or FULL join adds rows whose base columns are NULL, and a
+    // filter on a base column must see those too.
+    const outerJoin = Object.values(q.joins ?? {}).some((def) =>
+      def?.type === 'RIGHT' || def?.type === 'FULL'
+    );
+    const deferMatch = filterTouchesJoins || filterTouchesExpr || outerJoin;
     const whereScope = new ExpressionScope(columns, q.expressions);
+    const names = this.__queryNames(q);
     if (q.where && !deferMatch) {
-      this.__pushMatch(pipeline, q.where, whereScope);
+      this.__pushMatch(pipeline, q.where, whereScope, names);
     }
     if (q.joins) {
       for (const [alias, def] of Object.entries(q.joins)) {
         if (!def) continue;
         const lookup = this.__buildLookup(alias, def, columns);
         if (lookup === null) continue;
+        const type = def.type ?? 'INNER';
+        const rows = pipeline.slice();
         // One row per joined row, as a SQL join returns: the alias holds
         // a single joined document. A row without a match keeps going
-        // with the alias missing, its columns NULL, except on INNER,
-        // SQL's default. RIGHT and FULL keep it too, as LEFT does.
+        // with the alias missing, its columns NULL, on LEFT and FULL.
         pipeline.push(
           lookup,
-          (def.type ?? 'INNER') === 'INNER' ? { $unwind: `$${alias}` } : {
+          type === 'INNER' || type === 'RIGHT' ? { $unwind: `$${alias}` } : {
             $unwind: { path: `$${alias}`, preserveNullAndEmptyArrays: true },
           },
         );
+        if (type === 'RIGHT' || type === 'FULL') {
+          pipeline.push(this.__unmatchedJoinRows(q, alias, def, rows, columns));
+        }
       }
     }
     if (q.expressions) {
@@ -1337,7 +1363,7 @@ export class MongoTranslator {
     // AFTER the expressions $addFields (alias fields exist), but BEFORE any
     // $group, mirroring SQL's WHERE-then-GROUP-BY evaluation order.
     if (q.where && deferMatch) {
-      this.__pushMatch(pipeline, q.where, whereScope);
+      this.__pushMatch(pipeline, q.where, whereScope, names);
     }
     const aggregates = this.__aggregatesOf(q);
     const grouped = Object.keys(aggregates).length > 0;
@@ -1461,6 +1487,7 @@ export class MongoTranslator {
         pipeline,
         q.having,
         new Set([...columns, ...Object.keys(aggregates)]),
+        names,
       );
     }
     // $sort before $project: orderBy names source fields, which an
@@ -1521,20 +1548,22 @@ export class MongoTranslator {
     const nullSafe = (def.nullSafe ?? []) as string[];
 
     if (onEntries.length === 1) {
-      const [joinedKey, localRef] = onEntries[0]!;
-      const localField = this.__joinLocalPath(localRef);
-      if (localField !== null) {
-        const foreignField = this.__joinForeignField(joinedKey, alias);
+      const [key, value] = onEntries[0]!;
+      const [joined, other] = this.__joinPair(key, value, alias);
+      const localField = this.__joinedColumn(other, alias) === null
+        ? this.__joinLocalPath(other)
+        : null;
+      if (joined !== null && localField !== null) {
         const lookup: Record<string, unknown> = {
           from,
           localField,
-          foreignField,
+          foreignField: joined,
         };
         // On its own this form is NULL-safe: a null or missing local
         // field matches every null or missing foreign field. Plain
         // equality never matches NULL, so those foreign rows are dropped.
-        if (!nullSafe.includes(joinedKey)) {
-          lookup.pipeline = [{ $match: { [foreignField]: { $ne: null } } }];
+        if (!nullSafe.includes(key)) {
+          lookup.pipeline = [{ $match: { [joined]: { $ne: null } } }];
         }
         lookup.as = alias;
         return { $lookup: lookup };
@@ -1545,38 +1574,17 @@ export class MongoTranslator {
     // identifiers (lowercase-initial, alphanumeric), so they're generated
     // positionally rather than derived from the field path.
     const letVars: Record<string, unknown> = {};
-    const conditions: unknown[] = [];
-    for (const [joinedKey, value] of onEntries) {
-      const foreignField = `$${this.__joinForeignField(joinedKey, alias)}`;
-      const localPath = this.__joinLocalPath(value);
-      if (localPath !== null || this.__isExpressionNode(value)) {
+    const conditions = this.__joinConditions(
+      alias,
+      def,
+      columns,
+      (operand) => {
         const varName = `v${Object.keys(letVars).length}`;
-        letVars[varName] = localPath !== null
-          ? `$${localPath}`
-          : this.__translateExpression(value as Expressions, columns);
-        conditions.push(
-          ...this.__keyEquals(
-            foreignField,
-            varName,
-            nullSafe.includes(joinedKey),
-          ),
-        );
-        continue;
-      }
-      // null is a NULL check: like SQL's IS NULL, it matches a missing
-      // field too, which aggregation `$eq` would not.
-      if (value === null) {
-        conditions.push({
-          $in: [{ $type: foreignField }, ['null', 'missing']],
-        });
-        continue;
-      }
-      // Literal — a constant condition on the joined collection.
-      conditions.push({
-        $eq: [foreignField, this.__expressionLiteral(value)],
-      });
-    }
-
+        letVars[varName] = operand;
+        return `$$${varName}`;
+      },
+      (field) => `$${field}`,
+    );
     const lookup: Record<string, unknown> = { from };
     if (Object.keys(letVars).length > 0) lookup.let = letVars;
     lookup.pipeline = [{
@@ -1589,31 +1597,152 @@ export class MongoTranslator {
   }
 
   /**
-   * The `$expr` conditions that equate a looked-up collection's field
-   * with a `let` variable the way SQL equates two columns.
+   * The `$unionWith` stage that adds a RIGHT or FULL join's rows without
+   * a match: each document of the joined collection that no row of
+   * `rows`, the stages of the joins before it, meets the `on` map with.
+   * The document sits under its alias as on a matched row, and every
+   * base column is NULL.
+   */
+  private __unmatchedJoinRows(
+    q: Query<'SELECT'>,
+    alias: string,
+    def: NonNullable<NonNullable<Query<'SELECT'>['joins']>[string]>,
+    rows: Record<string, unknown>[],
+    columns: ReadonlySet<string>,
+  ): Record<string, unknown> {
+    let matches = '__matches';
+    while (matches === alias) matches = `_${matches}`;
+    const conditions = this.__joinConditions(
+      alias,
+      def,
+      columns,
+      (operand) => operand,
+      (field) => `$$joined.${field}`,
+    );
+    const base = Array.isArray(q.columns) ? q.columns.map(String) : [];
+    return {
+      $unionWith: {
+        coll: String(def.table),
+        pipeline: [
+          { $replaceRoot: { newRoot: { [alias]: '$$ROOT' } } },
+          {
+            $lookup: {
+              from: q.table,
+              let: { joined: `$${alias}` },
+              pipeline: [...rows, {
+                $match: {
+                  $expr: conditions.length === 1
+                    ? conditions[0]
+                    : { $and: conditions },
+                },
+              }, { $limit: 1 }],
+              as: matches,
+            },
+          },
+          { $match: { [matches]: { $size: 0 } } },
+          {
+            $replaceRoot: {
+              newRoot: {
+                ...Object.fromEntries(base.map((column) => [column, null])),
+                [alias]: `$${alias}`,
+              },
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  /**
+   * The `$expr` conditions of a join's `on` map, one or two per entry.
+   * `outer` turns an operand read from the outer row, a `$path` or a
+   * translated Expression, into what the conditions use, and `joined`
+   * turns a column of the joined collection into its operand.
+   */
+  private __joinConditions(
+    alias: string,
+    def: NonNullable<NonNullable<Query<'SELECT'>['joins']>[string]>,
+    columns: ReadonlySet<string>,
+    outer: (operand: unknown) => unknown,
+    joined: (field: string) => string,
+  ): unknown[] {
+    const nullSafe = (def.nullSafe ?? []) as string[];
+    const conditions: unknown[] = [];
+    for (const [key, value] of Object.entries(def.on)) {
+      const [field, other] = this.__joinPair(key, value, alias);
+      const left = field !== null
+        ? joined(field)
+        : outer(`$${this.__joinLocalPath(key)}`);
+      const otherField = this.__joinedColumn(other, alias);
+      const localPath = this.__joinLocalPath(other);
+      if (otherField !== null) {
+        conditions.push(
+          ...this.__keyEquals(left, joined(otherField), nullSafe.includes(key)),
+        );
+        continue;
+      }
+      if (localPath !== null || this.__isExpressionNode(other)) {
+        const right = outer(
+          localPath !== null
+            ? `$${localPath}`
+            : this.__translateExpression(other as Expressions, columns),
+        );
+        conditions.push(
+          ...this.__keyEquals(left, right, nullSafe.includes(key)),
+        );
+        continue;
+      }
+      // null is a NULL check: like SQL's IS NULL, it matches a missing
+      // field too, which aggregation `$eq` would not.
+      if (other === null) {
+        conditions.push({ $in: [{ $type: left }, ['null', 'missing']] });
+        continue;
+      }
+      // Literal — a constant condition on the joined collection.
+      conditions.push({ $eq: [left, this.__expressionLiteral(other)] });
+    }
+    return conditions;
+  }
+
+  /**
+   * One `on` entry as `[joined column, other side]`. SQL takes the
+   * joined column on either side, so a key naming an outer column and
+   * a value naming the joined one swap. With neither side naming the
+   * joined collection, the joined column is `null` and the key stays
+   * an outer column compared with the value.
+   */
+  private __joinPair(
+    key: string,
+    value: unknown,
+    alias: string,
+  ): [string | null, unknown] {
+    const keyField = this.__joinedColumn(key, alias);
+    if (keyField !== null) return [keyField, value];
+    const valueField = this.__joinedColumn(value, alias);
+    if (valueField !== null) return [valueField, key];
+    return [null, value];
+  }
+
+  /**
+   * The `$expr` conditions that equate two operands the way SQL equates
+   * two columns.
    */
   private __keyEquals(
-    foreignField: string,
-    varName: string,
+    left: unknown,
+    right: unknown,
     nullSafe: boolean,
   ): unknown[] {
     if (nullSafe) {
       // `$ifNull` folds a missing field into null, so null and
       // missing all compare equal — SQL has only the one NULL.
       return [{
-        $eq: [
-          { $ifNull: [foreignField, null] },
-          { $ifNull: [`$$${varName}`, null] },
-        ],
+        $eq: [{ $ifNull: [left, null] }, { $ifNull: [right, null] }],
       }];
     }
     // Aggregation `$eq` holds null equal to null (and missing to
     // missing), which SQL `=` never does. `$gt: null` is true for
     // every value except null and missing.
-    return [
-      { $eq: [foreignField, `$$${varName}`] },
-      { $gt: [foreignField, null] },
-    ];
+    return [{ $eq: [left, right] }, { $gt: [left, null] }];
   }
 
   /**
@@ -1653,7 +1782,11 @@ export class MongoTranslator {
         const varName = `v${Object.keys(letVars).length}`;
         letVars[varName] = outer;
         conditions.push(
-          ...this.__keyEquals(foreignField, varName, nullSafe.includes(key)),
+          ...this.__keyEquals(
+            foreignField,
+            `$$${varName}`,
+            nullSafe.includes(key),
+          ),
         );
         continue;
       }
@@ -1670,7 +1803,12 @@ export class MongoTranslator {
     }];
     if (spec.where) {
       this.__refuseParentCorrelation(spec.where);
-      this.__pushMatch(pipeline, spec.where, new Set());
+      this.__pushMatch(
+        pipeline,
+        spec.where,
+        new Set(),
+        this.__filterColumns(spec.where),
+      );
     }
     pipeline.push({ $limit: 1 });
     const lookup: Record<string, unknown> = { from: spec.table };
@@ -1704,11 +1842,15 @@ export class MongoTranslator {
   }
 
   /**
-   * The joined-side (foreign) field name from an `on` key
-   * (`'@Alias.@userId'` → `'userId'`).
+   * The joined collection's field an `on` key or value names
+   * (`'@Alias.@userId'` → `'userId'`), or `null` when it names no
+   * column of `alias`.
    */
-  private __joinForeignField(joinedKey: string, alias: string): string {
-    return joinedKey.replace(`@${alias}.@`, '');
+  private __joinedColumn(ref: unknown, alias: string): string | null {
+    const prefix = `@${alias}.@`;
+    return typeof ref === 'string' && ref.startsWith(prefix)
+      ? ref.slice(prefix.length)
+      : null;
   }
 
   /**
@@ -1734,11 +1876,10 @@ export class MongoTranslator {
   /**
    * Build a Mongo `projection` document from OQL projection. `1` for
    * include, `0` for exclude. Aliases use `$expr` rename via $project's
-   * `{ alias: '$source' }` form.
+   * `{ alias: '$source' }` form. `_id` is left out unless projected.
    */
   private __buildProjection(q: Query<'SELECT'>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    let hasAliasing = false;
     for (const [key, value] of Object.entries(q.projection)) {
       const stripped = key.slice(1);
       const source = stripped.replace('.@', '.');
@@ -1749,24 +1890,18 @@ export class MongoTranslator {
         out[typeof value === 'string' ? value : column] = {
           $ifNull: [`$${source}`, null],
         };
-        hasAliasing ||= typeof value === 'string';
         continue;
       }
       if (typeof value === 'string') {
         // Alias: { aliasName: '$source.path' }
         out[value] = `$${source}`;
-        hasAliasing = true;
       } else {
         out[source] = 1;
       }
     }
-    if (hasAliasing) {
-      // When any aliasing is present, `_id` ought to be excluded by
-      // default unless the projection explicitly asked for it.
-      if (!Object.prototype.hasOwnProperty.call(out, '_id')) {
-        out._id = 0;
-      }
-    }
+    // A row holds the keys the query projects, as on SQL, so the
+    // document's own `_id`, or a group key, stays out of it.
+    if (!Object.prototype.hasOwnProperty.call(out, '_id')) out._id = 0;
     return out;
   }
 
@@ -2072,22 +2207,41 @@ export class MongoTranslator {
   /**
    * Append a filter to a pipeline as a `$match`. Each `$exists` /
    * `$nexists` node in it adds a `$lookup` ahead of the `$match` and its
-   * temporary field to the `$unset` after it, so later stages see the
-   * documents as they were.
+   * temporary field, named outside `taken`, to the `$unset` after it, so
+   * later stages see the documents as they were.
    */
   private __pushMatch(
     pipeline: Record<string, unknown>[],
     filter: QueryFilter,
     columns: ReadonlySet<string>,
+    taken: ReadonlySet<string>,
   ): void {
     const lookups: Record<string, unknown>[] = [];
-    const match = this.__translateFilter(filter, columns, lookups);
+    const match = this.__translateFilter(filter, columns, lookups, taken);
     pipeline.push(...lookups, { $match: match });
     if (lookups.length > 0) {
       pipeline.push({
-        $unset: lookups.map((_, i) => `${EXISTS_FIELD}${i}`),
+        $unset: lookups.map((l) => (l.$lookup as { as: string }).as),
       });
     }
+  }
+
+  /**
+   * The column names a filter's keys name, at any `$and` / `$or` depth:
+   * a JSON path or a joined column by its first segment.
+   */
+  private __filterColumns(filter: QueryFilter): Set<string> {
+    const out = new Set<string>();
+    for (const [key, value] of Object.entries(filter)) {
+      if (key === '$and' || key === '$or') {
+        for (const sub of value as QueryFilter[]) {
+          this.__filterColumns(sub).forEach((c) => out.add(c));
+        }
+      } else if (key.startsWith('@')) {
+        out.add(key.slice(1).split('.@')[0]!);
+      }
+    }
+    return out;
   }
 
   /**
@@ -2107,6 +2261,7 @@ export class MongoTranslator {
     filter: QueryFilter,
     columns: ReadonlySet<string> = new Set(),
     existsLookups?: Record<string, unknown>[],
+    taken: ReadonlySet<string> = new Set(),
   ): Record<string, unknown> {
     const conditions: Record<string, unknown>[] = [];
     let merged: Record<string, unknown> = {};
@@ -2124,7 +2279,8 @@ export class MongoTranslator {
             `filter operator '${key}' outside a SELECT or COUNT (it runs as a $lookup stage, which a query filter cannot carry)`,
           );
         }
-        const field = `${EXISTS_FIELD}${existsLookups.length}`;
+        let field = `${EXISTS_FIELD}${existsLookups.length}`;
+        while (taken.has(field)) field = `_${field}`;
         existsLookups.push(
           this.__buildExistsLookup(value as ExistsFilter, field, columns),
         );
@@ -2136,14 +2292,14 @@ export class MongoTranslator {
       }
       if (key === '$and') {
         const subs = (value as QueryFilter[]).map((f) =>
-          this.__translateFilter(f, columns, existsLookups)
+          this.__translateFilter(f, columns, existsLookups, taken)
         );
         conditions.push({ $and: subs });
         continue;
       }
       if (key === '$or') {
         const subs = (value as QueryFilter[]).map((f) =>
-          this.__translateFilter(f, columns, existsLookups)
+          this.__translateFilter(f, columns, existsLookups, taken)
         );
         conditions.push({ $or: subs });
         continue;

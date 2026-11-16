@@ -100,7 +100,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: {},
-        options: { projection: { id: 1, name: 1 } },
+        options: { projection: { id: 1, name: 1, _id: 0 } },
       },
     },
   },
@@ -119,7 +119,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: 'active' },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -150,7 +150,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -170,7 +170,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: '@ghost' },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -198,7 +198,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -230,7 +230,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -251,7 +251,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: { $nin: ['BANNED', null] } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -271,7 +271,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { status: { $nin: ['BANNED', 'DELETED', 'DRAFT', null] } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -295,7 +295,7 @@ const CASES: Case[] = [
           status: { $nin: ['BANNED', null] },
           $expr: { $in: [{ $type: '$status' }, ['null', 'missing']] },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -328,7 +328,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -362,7 +362,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -387,7 +387,7 @@ const CASES: Case[] = [
           qty: { $gte: 2, $lte: 8 },
           $and: [{ qty: { $gte: 1, $lte: 9 } }],
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -424,7 +424,7 @@ const CASES: Case[] = [
             { name: { $regex: 'd' } },
           ],
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -448,7 +448,7 @@ const CASES: Case[] = [
             name: { $not: { $regex: '^b.*$', $options: 'i' }, $ne: null },
           }],
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -474,7 +474,7 @@ const CASES: Case[] = [
           qty: { $gte: 1, $lte: 9 },
           $and: [{ qty: { $gte: 2 } }, { $and: [{ id: 1 }] }],
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -524,7 +524,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -553,7 +553,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -575,7 +575,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { 'profile.name': { $eq: 'bob' } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -596,7 +596,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { 'profile.address.city': 'Berlin' },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -615,7 +615,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { 'profile.name': { $regex: '^.*bo.*$' } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -634,7 +634,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { 'profile.deletedAt': null },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -674,7 +674,7 @@ const CASES: Case[] = [
           },
           { $unwind: '$profile' },
           { $match: { 'profile.name': 'bob' } },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
         ],
       },
     },
@@ -700,7 +700,7 @@ const CASES: Case[] = [
           age: { $gte: 18, $lt: 65 },
           role: { $in: ['admin', 'editor'] },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -719,7 +719,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { $or: [{ role: 'admin' }, { role: 'editor' }] },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -807,7 +807,7 @@ const CASES: Case[] = [
             $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
           },
           { $sort: { 'o.amount': -1, name: 1 } },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
         ],
       },
     },
@@ -860,7 +860,7 @@ const CASES: Case[] = [
           },
           { $addFields: { team: '$_id.team' } },
           { $sort: { team: -1, __sort_1: 1 } },
-          { $project: { team: 1, n: 1 } },
+          { $project: { team: 1, n: 1, _id: 0 } },
         ],
       },
     },
@@ -910,7 +910,7 @@ const CASES: Case[] = [
           },
           { $addFields: { id: '$_id.id' } },
           { $sort: { ___sort_0: -1 } },
-          { $project: { id: 1, __sort_0: 1 } },
+          { $project: { id: 1, __sort_0: 1, _id: 0 } },
         ],
       },
     },
@@ -933,7 +933,7 @@ const CASES: Case[] = [
         collection: 'users',
         filter: {},
         options: {
-          projection: { id: 1, createdAt: 1 },
+          projection: { id: 1, createdAt: 1, _id: 0 },
           sort: { createdAt: -1 },
           limit: 10,
           skip: 20,
@@ -956,7 +956,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { name: { $regex: '^John.*$' } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -978,7 +978,7 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: { name: { $regex: '^5\\*x.*$' } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -1002,7 +1002,7 @@ const CASES: Case[] = [
           name: { $not: { $regex: '^John.*$' }, $ne: null },
           nick: { $not: { $regex: '^j.$', $options: 'i' }, $ne: null },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -1021,7 +1021,7 @@ const CASES: Case[] = [
       params: {
         collection: 'logs',
         filter: { msg: { $regex: '^a\\.b\\+c' } },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -1605,7 +1605,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -1636,7 +1636,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -1862,7 +1862,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { n: 1, total: 1 } },
+          { $project: { n: 1, total: 1, _id: 0 } },
         ],
       },
     },
@@ -1900,7 +1900,7 @@ const CASES: Case[] = [
               userId: '$_id.userId',
             },
           },
-          { $project: { userId: 1, s: 1, __sum_s: 1 } },
+          { $project: { userId: 1, s: 1, __sum_s: 1, _id: 0 } },
         ],
       },
     },
@@ -1946,7 +1946,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { id: 1, shown: 1 } },
+          { $project: { id: 1, shown: 1, _id: 0 } },
         ],
       },
     },
@@ -1994,7 +1994,304 @@ const CASES: Case[] = [
             },
           },
           { $unwind: '$P' },
-          { $project: { perm: 1 } },
+          { $project: { perm: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // SQL takes the joined column on either side of an `on` entry.
+    name: 'SELECT with a JOIN on naming the base column first → same $lookup',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        Profile: {
+          table: 'profiles',
+          columns: ['userId', 'bio'],
+          type: 'LEFT',
+          on: { '@id': '@Profile.@userId' },
+        },
+      },
+      projection: { '@id': true, '@Profile.@bio': 'bio' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'profiles',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'Profile',
+            },
+          },
+          {
+            $unwind: { path: '$Profile', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // The joined rows no user matches come in through `$unionWith`, with
+    // the user columns NULL; the base filter runs after, as SQL's WHERE.
+    name: 'SELECT with a RIGHT JOIN → $unionWith of the unmatched rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        Profile: {
+          table: 'profiles',
+          columns: ['userId', 'bio'],
+          type: 'RIGHT',
+          on: { '@Profile.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@Profile.@bio': 'bio' },
+      where: { '@name': 'a' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'profiles',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'Profile',
+            },
+          },
+          { $unwind: '$Profile' },
+          {
+            $unionWith: {
+              coll: 'profiles',
+              pipeline: [
+                { $replaceRoot: { newRoot: { Profile: '$$ROOT' } } },
+                {
+                  $lookup: {
+                    from: 'users',
+                    let: { joined: '$Profile' },
+                    pipeline: [{
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $eq: ['$$joined.userId', '$id'] },
+                            { $gt: ['$$joined.userId', null] },
+                          ],
+                        },
+                      },
+                    }, { $limit: 1 }],
+                    as: '__matches',
+                  },
+                },
+                { $match: { __matches: { $size: 0 } } },
+                {
+                  $replaceRoot: {
+                    newRoot: { id: null, name: null, Profile: '$Profile' },
+                  },
+                },
+              ],
+            },
+          },
+          { $match: { name: 'a' } },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // FULL keeps the users without a profile too; the unmatched profiles
+    // are found by the rows of the joins before it.
+    name: 'SELECT with a FULL JOIN after a LEFT JOIN → $unionWith over both',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'org'],
+      joins: {
+        O: {
+          table: 'orgs',
+          columns: ['id', 'name'],
+          type: 'LEFT',
+          on: { '@O.@id': '@org' },
+        },
+        P: {
+          table: 'profiles',
+          columns: ['userId', 'org', 'bio'],
+          type: 'FULL',
+          on: { '@P.@userId': '@id', '@P.@org': '@O.@name', '@P.@bio': 'x' },
+        },
+      },
+      projection: { '@id': true, '@P.@bio': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orgs',
+              localField: 'org',
+              foreignField: 'id',
+              pipeline: [{ $match: { id: { $ne: null } } }],
+              as: 'O',
+            },
+          },
+          { $unwind: { path: '$O', preserveNullAndEmptyArrays: true } },
+          {
+            $lookup: {
+              from: 'profiles',
+              let: { v0: '$id', v1: '$O.name' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$userId', '$$v0'] },
+                      { $gt: ['$userId', null] },
+                      { $eq: ['$org', '$$v1'] },
+                      { $gt: ['$org', null] },
+                      { $eq: ['$bio', 'x'] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $unwind: { path: '$P', preserveNullAndEmptyArrays: true } },
+          {
+            $unionWith: {
+              coll: 'profiles',
+              pipeline: [
+                { $replaceRoot: { newRoot: { P: '$$ROOT' } } },
+                {
+                  $lookup: {
+                    from: 'users',
+                    let: { joined: '$P' },
+                    pipeline: [
+                      {
+                        $lookup: {
+                          from: 'orgs',
+                          localField: 'org',
+                          foreignField: 'id',
+                          pipeline: [{ $match: { id: { $ne: null } } }],
+                          as: 'O',
+                        },
+                      },
+                      {
+                        $unwind: {
+                          path: '$O',
+                          preserveNullAndEmptyArrays: true,
+                        },
+                      },
+                      {
+                        $match: {
+                          $expr: {
+                            $and: [
+                              { $eq: ['$$joined.userId', '$id'] },
+                              { $gt: ['$$joined.userId', null] },
+                              { $eq: ['$$joined.org', '$O.name'] },
+                              { $gt: ['$$joined.org', null] },
+                              { $eq: ['$$joined.bio', 'x'] },
+                            ],
+                          },
+                        },
+                      },
+                      { $limit: 1 },
+                    ],
+                    as: '__matches',
+                  },
+                },
+                { $match: { __matches: { $size: 0 } } },
+                {
+                  $replaceRoot: {
+                    newRoot: { id: null, org: null, P: '$P' },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$P.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // An entry naming only outer columns is a condition on the outer row.
+    name: 'SELECT with JOIN on entries naming outer columns → let vars',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'grants',
+      columns: ['pid', 'perm'],
+      joins: {
+        P: {
+          table: 'principals',
+          columns: ['id', 'org', 'name'],
+          type: 'INNER',
+          on: { '@pid': '@P.@id', '@perm': 'r', '@P.@org': '@P.@name' },
+        },
+      },
+      projection: { '@perm': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'grants',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'principals',
+              let: { v0: '$pid', v1: '$perm' },
+              pipeline: [{
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id', '$$v0'] },
+                      { $gt: ['$id', null] },
+                      { $eq: ['$$v1', 'r'] },
+                      { $eq: ['$org', '$name'] },
+                      { $gt: ['$org', null] },
+                    ],
+                  },
+                },
+              }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          { $project: { perm: 1, _id: 0 } },
         ],
       },
     },
@@ -2081,7 +2378,7 @@ const CASES: Case[] = [
           },
           { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
           { $match: { 'o.sku': 'A', 'o.amount': { $gt: 5 } } },
-          { $project: { id: 1, sku: { $ifNull: ['$o.sku', null] } } },
+          { $project: { id: 1, sku: { $ifNull: ['$o.sku', null] }, _id: 0 } },
         ],
       },
     },
@@ -2139,7 +2436,7 @@ const CASES: Case[] = [
             },
           },
           { $addFields: { id: '$_id.id' } },
-          { $project: { id: 1, Posts: 1, titles: 1, P: 1 } },
+          { $project: { id: 1, Posts: 1, titles: 1, P: 1, _id: 0 } },
         ],
       },
     },
@@ -2251,7 +2548,7 @@ const CASES: Case[] = [
             },
           },
           { $addFields: { id: '$_id.id' } },
-          { $project: { id: 1, Items: 1 } },
+          { $project: { id: 1, Items: 1, _id: 0 } },
         ],
       },
     },
@@ -2300,7 +2597,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { id: 1, t: 1 } },
+          { $project: { id: 1, t: 1, _id: 0 } },
         ],
       },
     },
@@ -2523,7 +2820,7 @@ const CASES: Case[] = [
             },
           },
           { $unwind: '$P' },
-          { $project: { perm: 1 } },
+          { $project: { perm: 1, _id: 0 } },
         ],
       },
     },
@@ -2564,7 +2861,7 @@ const CASES: Case[] = [
           {
             $unwind: { path: '$P', preserveNullAndEmptyArrays: true },
           },
-          { $project: { perm: 1 } },
+          { $project: { perm: 1, _id: 0 } },
         ],
       },
     },
@@ -2905,7 +3202,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -2934,7 +3231,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -2998,7 +3295,7 @@ const CASES: Case[] = [
             }, false],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -3031,7 +3328,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -3066,7 +3363,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -3106,7 +3403,7 @@ const CASES: Case[] = [
             ],
           },
         },
-        options: { projection: { id: 1 } },
+        options: { projection: { id: 1, _id: 0 } },
       },
     },
   },
@@ -3845,7 +4142,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { __count__: 1 } },
+          { $project: { __count__: 1, _id: 0 } },
         ],
       },
     },
@@ -3889,7 +4186,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { __count__: 1 } },
+          { $project: { __count__: 1, _id: 0 } },
         ],
       },
     },
@@ -3949,7 +4246,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { __count__: 1 } },
+          { $project: { __count__: 1, _id: 0 } },
         ],
       },
     },
@@ -4116,7 +4413,7 @@ const CASES: Case[] = [
               __count__: { $size: { $setDifference: ['$__count__', [null]] } },
             },
           },
-          { $project: { __count__: 1 } },
+          { $project: { __count__: 1, _id: 0 } },
         ],
       },
     },
@@ -4237,7 +4534,7 @@ const CASES: Case[] = [
           },
           { $match: { __exists_0: { $ne: [] } } },
           { $unset: ['__exists_0'] },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
         ],
       },
     },
@@ -4299,7 +4596,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { __count__: 1 } },
+          { $project: { __count__: 1, _id: 0 } },
         ],
       },
     },
@@ -4375,7 +4672,7 @@ const CASES: Case[] = [
             },
           },
           { $unset: ['__exists_0', '__exists_1'] },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
         ],
       },
     },
@@ -4444,7 +4741,74 @@ const CASES: Case[] = [
           },
           { $match: { __exists_0: { $ne: [] } } },
           { $unset: ['__exists_0'] },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // A column of the query, or of the subquery table its sub-where names,
+    // keeps its value: the lookup field takes another name.
+    name: '$exists beside a column named like its lookup field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', '__exists_0'],
+      projection: { '@id': true, '@__exists_0': true },
+      where: {
+        $exists: {
+          table: 'orders',
+          on: { '@userId': '@id' },
+          where: {
+            '@__exists_0': 1,
+            $exists: { table: 'items', on: { '@orderId': 1 } },
+          },
+        },
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                {
+                  $lookup: {
+                    from: 'items',
+                    pipeline: [
+                      { $match: { $expr: { $eq: ['$orderId', 1] } } },
+                      { $limit: 1 },
+                    ],
+                    as: '___exists_0',
+                  },
+                },
+                {
+                  $match: { __exists_0: 1, ___exists_0: { $ne: [] } },
+                },
+                { $unset: ['___exists_0'] },
+                { $limit: 1 },
+              ],
+              as: '___exists_0',
+            },
+          },
+          { $match: { ___exists_0: { $ne: [] } } },
+          { $unset: ['___exists_0'] },
+          { $project: { id: 1, __exists_0: 1, _id: 0 } },
         ],
       },
     },
@@ -4507,7 +4871,7 @@ const CASES: Case[] = [
           },
           { $match: { __exists_0: { $ne: [] } } },
           { $unset: ['__exists_0'] },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
         ],
       },
     },
@@ -4561,7 +4925,7 @@ const CASES: Case[] = [
         collection: 'users',
         pipeline: [
           { $match: { active: false } },
-          { $project: { id: 1, name: 1 } },
+          { $project: { id: 1, name: 1, _id: 0 } },
           { $limit: 10 },
           {
             $merge: {
@@ -4645,7 +5009,7 @@ const CASES: Case[] = [
         pipeline: [
           { $addFields: { total: { $add: ['$a', '$b'] } } },
           { $match: { total: { $gt: 100 } } },
-          { $project: { a: 1, total: 1 } },
+          { $project: { a: 1, total: 1, _id: 0 } },
         ],
       },
     },
@@ -4699,7 +5063,7 @@ const CASES: Case[] = [
               },
             },
           },
-          { $project: { id: 1 } },
+          { $project: { id: 1, _id: 0 } },
         ],
       },
     },
@@ -4851,7 +5215,7 @@ const CASES: Case[] = [
         pipeline: [
           { $match: { active: true } },
           { $sort: { name: 1 } },
-          { $project: { id: 1, name: 1 } },
+          { $project: { id: 1, name: 1, _id: 0 } },
           { $skip: 5 },
           { $limit: 100 },
         ],
@@ -4891,7 +5255,7 @@ const CASES: Case[] = [
           pipeline: [
             { $match: { active: true } },
             { $sort: { name: 1 } },
-            { $project: { id: 1, name: 1 } },
+            { $project: { id: 1, name: 1, _id: 0 } },
             { $skip: 5 },
             { $limit: 100 },
           ],
@@ -5348,7 +5712,7 @@ describe('oql.translator.MongoTranslator — round-4 regressions', () => {
     asserts.assertEquals(stages, ['$match', '$sort', '$project', '$limit']);
     // The projection is preserved — `ssn` (deliberately projected away) is
     // NOT exposed by the view.
-    asserts.assertEquals(pipeline[2], { $project: { id: 1, name: 1 } });
+    asserts.assertEquals(pipeline[2], { $project: { id: 1, name: 1, _id: 0 } });
     asserts.assertEquals(pipeline[3], { $limit: 100 });
   });
 
@@ -5373,7 +5737,7 @@ describe('oql.translator.MongoTranslator — round-4 regressions', () => {
     const pipeline = create.params.pipeline as Record<string, unknown>[];
     const stages = pipeline.map((s) => Object.keys(s)[0]);
     asserts.assertEquals(stages, ['$match', '$sort', '$project', '$limit']);
-    asserts.assertEquals(pipeline[2], { $project: { id: 1, name: 1 } });
+    asserts.assertEquals(pipeline[2], { $project: { id: 1, name: 1, _id: 0 } });
   });
 });
 

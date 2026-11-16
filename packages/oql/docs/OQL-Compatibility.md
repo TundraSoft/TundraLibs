@@ -305,8 +305,11 @@ appends. The emitted pipeline preserves the source SELECT's WHERE /
 projection / limit / sort (a plain-`find` source is expanded to the
 equivalent `$match` → `$project` → `$sort` → `$skip` → `$limit` stages),
 then appends `$merge: { into, whenMatched: 'fail', whenNotMatched:
-'insert' }` — `whenMatched: 'fail'` mirrors a SQL primary-key violation on
-an `_id` collision.
+'insert' }`. A source row carries no `_id` unless the SELECT projects
+it, so each row is a new document and a primary key the target declares
+refuses a duplicate through its unique index, as on SQL;
+`whenMatched: 'fail'` refuses a projected `_id` the target already
+holds.
 
 ### COUNT `having`
 
@@ -316,6 +319,12 @@ GROUP BY, so there is no aggregate alias to filter on. Use a `SELECT` with
 `aggregates` + `having` for post-aggregation filtering. (Previously this
 threw a misleading "column not in list" error on the SQL dialects and was
 silently dropped on MongoDB.)
+
+### Projected keys
+
+A SELECT row holds the keys its projection names, on every dialect. On
+MongoDB the projection leaves `_id` out unless it names `'@_id'`, so a
+row carries neither the document's id nor a grouped query's group key.
 
 ### `limit` / `offset`
 
@@ -750,18 +759,21 @@ result row carries one joined row and a joined column holds one value.
 `where`, the group, `having`, `orderBy`, `limit` and `offset` then run
 over those rows in SQL's order.
 
-| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB                                       |
-| ----------------- | -------- | --------- | -------------- | --------------------------------------------- |
-| INNER, by default | ✅       | ✅        | ✅             | ✅                                            |
-| LEFT              | ✅       | ✅        | ✅             | ✅                                            |
-| RIGHT             | ✅       | ✅        | ✅             | ⚠️ behaves like LEFT, the tables not reversed |
-| FULL              | ✅       | ❌ throws | ✅             | ⚠️ behaves like LEFT, does **not** throw      |
+| Join type         | Postgres | MariaDB   | SQLite (3.39+) | MongoDB |
+| ----------------- | -------- | --------- | -------------- | ------- |
+| INNER, by default | ✅       | ✅        | ✅             | ✅      |
+| LEFT              | ✅       | ✅        | ✅             | ✅      |
+| RIGHT             | ✅       | ✅        | ✅             | ✅      |
+| FULL              | ✅       | ❌ throws | ✅             | ✅      |
 
 An INNER join drops a row with no joined row. A LEFT join keeps it, and
-its joined columns are `NULL`. On MongoDB a RIGHT or FULL join compiles
-to the LEFT form, so rows that exist only on the joined side are
-missing. Swap the two tables for a RIGHT join, or run two queries and
-merge them for a FULL one.
+its joined columns are `NULL`. A RIGHT join keeps each joined row that
+no row matches, with the base columns and the columns of earlier joins
+`NULL`; a FULL join keeps both kinds. On MongoDB those joined rows come
+from a `$unionWith` over the joined collection, MongoDB 4.4 or later,
+which keeps each document that no row built by the earlier joins meets
+the `on` map with. With a RIGHT or FULL join the `where` runs after
+every join, as SQL's does, even when it names only base columns.
 
 What a join returns, on every dialect:
 
@@ -777,7 +789,9 @@ What a join returns, on every dialect:
   without a joined row adds one entry of `NULL`s.
 
 Every entry in a join's `on` map is a condition, and they AND together
-on every dialect. On MongoDB that means two `$lookup` shapes:
+on every dialect. An entry may name the joined column on either side:
+`{ '@Profile.@userId': '@id' }` and `{ '@id': '@Profile.@userId' }`
+return the same rows. On MongoDB that means two `$lookup` shapes:
 
 - **One entry whose value is a column ref** → the concise
   `localField` / `foreignField` form.
@@ -848,7 +862,7 @@ document and never unwound it. These MongoDB results change:
 | aliased joined column, `'@o.@sku': 'item'` | `item: ['A', …]`                                      | `item: 'A'`                                |
 | projected join alias, `'@o': true`         | the raw looked-up documents                           | JSON_ROW of the declared columns, grouped  |
 | JSON_ROW over a join                       | one row per base document, `[]` without a match       | grouped, `[{ col: null }]` without a match |
-| row of a JSON_ROW query over a join        | `_id` is the document id                              | `_id` is the group key                     |
+| row of a JSON_ROW query over a join        | `_id` is the document id                              | no `_id`                                   |
 | filter on a joined column                  | any joined row matching kept the document, all rows   | only the matching joined rows              |
 | `'@o.@id': null`                           | matched nothing                                       | the rows without a joined row              |
 | joined column as a filter value            | matched nothing                                       | compared per row                           |
@@ -900,12 +914,6 @@ We **silently fall back / passthrough** for:
 The split is deliberate: silent fallbacks happen when there's a
 reasonable substitute that keeps the query semantically meaningful;
 we throw when emitting anything would actively mislead the caller.
-
-**One entry in this document is not a deliberate fallback**: a `RIGHT`
-or `FULL` join on MongoDB silently behaves like `LEFT` rather than being
-emulated or rejected, see [JOINs](#joins) above. Every other row in this
-document reflects an intentional degradation; that one is a translator
-gap.
 
 ## `LPAD` / `RPAD` on SQLite
 
