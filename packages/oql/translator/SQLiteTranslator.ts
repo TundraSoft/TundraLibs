@@ -322,6 +322,28 @@ export class SQLiteTranslator extends AbstractTranslator {
   ]);
 
   /**
+   * `group_concat` takes `DISTINCT` only without a separator, so a
+   * distinct `STRING_AGG` collects the group's distinct values with
+   * `json_group_array` and joins them in a scalar subquery. The values
+   * are cast to text first, the form `group_concat` joins, so two values
+   * are one when their text is equal.
+   */
+  protected override _distinctAggregate(
+    fn: AggregateFunction,
+    args: string[],
+    sql: string,
+  ): string {
+    if (fn !== 'STRING_AGG') return super._distinctAggregate(fn, args, sql);
+    // The derived table keeps the column names of `json_each` out of
+    // reach of the aggregated column.
+    return `(SELECT group_concat(e.value, ${
+      args[1]
+    }) FROM (SELECT json_group_array(DISTINCT CAST(${
+      args[0]
+    } AS TEXT)) AS a) d, json_each(d.a) e)`;
+  }
+
+  /**
    * SQLite filter-operator emitters. `$ilike` / `$nilike` fall back to
    * plain `LIKE`, which SQLite folds case-insensitively for ASCII only —
    * accented and non-Latin text compares case-*sensitively*.

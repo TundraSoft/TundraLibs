@@ -1113,9 +1113,9 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Translate an Aggregate node to SQL. `distinct` is spliced into the
-   * function call centrally; `COUNT()` without a column emits `COUNT(1)`
-   * via the dialect's emitter map.
+   * Translate an Aggregate node to SQL. `distinct` goes through
+   * {@link AbstractTranslator._distinctAggregate}; `COUNT()` without a
+   * column emits `COUNT(1)` via the dialect's emitter map.
    */
   protected _translateAggregate(
     agg: Aggregates,
@@ -1133,9 +1133,22 @@ export abstract class AbstractTranslator {
     const args = this.__flattenAggregateArgs(agg, scope, params, hasJoins);
     const sql = emit(args);
     if ('distinct' in agg && agg.distinct) {
-      return sql.replace('(', '(DISTINCT ');
+      return this._distinctAggregate(agg.$$_aggregate, args, sql);
     }
     return sql;
+  }
+
+  /**
+   * The `distinct` form of the aggregate call `sql`, which the dialect's
+   * emitter built from `args`. The base splices `DISTINCT` into the call;
+   * a dialect overrides this for a function that cannot take it there.
+   */
+  protected _distinctAggregate(
+    _fn: Aggregates['$$_aggregate'],
+    _args: string[],
+    sql: string,
+  ): string {
+    return sql.replace('(', '(DISTINCT ');
   }
 
   /**

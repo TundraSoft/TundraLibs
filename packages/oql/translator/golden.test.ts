@@ -443,6 +443,43 @@ const CASES: Case[] = [
     },
   },
   {
+    // SQLite's group_concat takes DISTINCT only without a separator, so
+    // the distinct values are collected first and joined in a subquery.
+    name: 'SELECT STRING_AGG with distinct and a separator',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'tag'],
+      aggregates: {
+        tags: {
+          $$_aggregate: 'STRING_AGG',
+          column: '@tag',
+          distinct: true,
+          separator: '; ',
+        },
+      },
+      projection: { '@userId': true, '@tags': 'tags' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT "userId" AS "userId", (SELECT group_concat(e.value, :p_0:) FROM (SELECT json_group_array(DISTINCT CAST("tag" AS TEXT)) AS a) d, json_each(d.a) e) AS "tags" FROM "orders" GROUP BY "userId"',
+        params: { p_0: '; ' },
+      },
+      postgres: {
+        sql:
+          'SELECT "userId" AS "userId", STRING_AGG(DISTINCT "tag", :p_0:::text) AS "tags" FROM "orders" GROUP BY "userId"',
+        params: { p_0: '; ' },
+      },
+      maria: {
+        sql:
+          'SELECT `userId` AS `userId`, GROUP_CONCAT(DISTINCT `tag` SEPARATOR :p_0:) AS `tags` FROM `orders` GROUP BY `userId`',
+        params: { p_0: '; ' },
+      },
+    },
+  },
+  {
     // json_group_array over no rows is '[]'; NULLIF makes it NULL, as
     // ARRAY_AGG and JSON_ROW are on the other engines. DISTINCT stays
     // inside the aggregate call.

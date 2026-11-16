@@ -17,6 +17,7 @@ changelog has those.
   - [A filter value naming an expression reads its value](#a-filter-value-naming-an-expression-reads-its-value)
   - [A name in a partial-index `where` is a column](#a-name-in-a-partial-index-where-is-a-column)
   - [SQLite `CURRENT_DATE` and empty `ARRAY_AGG`](#sqlite-current_date-and-empty-array_agg)
+  - [SQLite runs `STRING_AGG` with `distinct`](#sqlite-runs-string_agg-with-distinct)
   - [MongoDB returns what SQL returns](#mongodb-returns-what-sql-returns)
   - [`$exists` keys: null, and nested](#exists-keys-null-and-nested)
   - [An `orderBy` key needs its `@` prefixes](#an-orderby-key-needs-its--prefixes)
@@ -125,6 +126,12 @@ column `b`. On MongoDB a value `'@b'` is still the text. See
 `'2026-11-16T00:00:00.000Z'`, as projected and as written. ARRAY_AGG and
 JSON_ROW over no rows were `[]` and are now `NULL`, as on the other
 dialects.
+
+### SQLite runs `STRING_AGG` with `distinct`
+
+A STRING_AGG with `distinct` failed in SQLite with
+`DISTINCT aggregates must have exactly one argument`. It now returns the
+group's distinct values joined by the separator, as on the other dialects.
 
 ### MongoDB returns what SQL returns
 

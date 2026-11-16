@@ -684,8 +684,12 @@ more distinct values per group than that fails on MongoDB.
 STRING_AGG skips NULL and is `NULL` when no value is left, on every
 dialect. It takes text: over a number column Postgres and MongoDB fail,
 MariaDB and SQLite join the numbers as text. The order of the values in
-STRING_AGG and ARRAY_AGG is not defined on any dialect. SQLite fails on
-STRING_AGG with `distinct`.
+STRING_AGG and ARRAY_AGG is not defined on any dialect.
+
+SQLite's `group_concat` takes `DISTINCT` only without a separator. A
+STRING_AGG with `distinct` there collects the group's distinct values with
+`json_group_array` and joins them in a subquery, with any separator. Two
+values are one when their text is equal.
 
 ### Aggregates over no values
 
