@@ -3465,10 +3465,10 @@ export class Repo<
    * @param data - One row or a batch.
    * @param opts - `conflictKeys` (required), `updateOnConflict`, `decrypt`.
    * @throws {@link NormQueryError} If a conflict key is encrypted, a
-   *   payload value contradicts the active `db.scope(...)`, or the
-   *   write would collide with a row outside that scope.
-   * @throws {@link NormValidationError} If a value fails its column rules,
-   *   or an `updateOnConflict` column has no value in a row.
+   *   row does not pass an `updateOnConflict` column, a payload value
+   *   contradicts the active `db.scope(...)`, or the write would collide
+   *   with a row outside that scope.
+   * @throws {@link NormValidationError} If a value fails its column rules.
    * @throws {TypeError} From `@tundralibs/oql`'s query asserts when a
    *   `conflictKeys` entry names a column the entity does not have.
    */
@@ -3599,24 +3599,20 @@ export class Repo<
         }
       }
     }
-    const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
-    // A column `updateOnConflict` copies needs a value in every row.
-    const uncopyable: ValidationIssue[] = [];
+    // A column `updateOnConflict` copies takes the incoming value, so
+    // every row must pass it: an insert default filling it would
+    // overwrite the stored value. A `defaultOnUpdate` column left out
+    // takes its update default instead of a copy.
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    const stamped = new Set<string>();
     for (const col of opts.updateOnConflict ?? []) {
-      rows.forEach((row, i) => {
-        if (row[col] !== undefined) return;
-        uncopyable.push({
-          model: c.key,
-          op: 'upsert',
-          path: (isBatch ? `[${i}].` : '') + col,
-          message: `updateOnConflict names '${col}', which the row does ` +
-            `not supply and no default fills`,
-        });
-      });
+      if (callerRows.every((row) => row[col] !== undefined)) continue;
+      if (specs[col]?.default?.update === undefined) {
+        refuse(col, 'the payload does not pass it');
+      }
+      stamped.add(col);
     }
-    if (uncopyable.length > 0) {
-      throw new NormValidationError({ issues: uncopyable });
-    }
+    const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
     this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow (same as insert()) so an encrypted
@@ -3710,7 +3706,8 @@ export class Repo<
     const scopeCols = new Set(scopeApplied?.keys() ?? []);
     let copied: string[];
     if (opts.updateOnConflict !== undefined) {
-      copied = [...(opts.updateOnConflict as readonly string[])];
+      copied = (opts.updateOnConflict as readonly string[])
+        .filter((col) => !stamped.has(col));
     } else if (opts.update === undefined) {
       copied = callerCols.filter((col) =>
         !pk.has(col) && !conflictCols.includes(col) && !scopeCols.has(col) &&
@@ -3742,7 +3739,10 @@ export class Repo<
     }
     const beforeUpdate = (c.hooks as { beforeUpdate?: unknown })
       ?.beforeUpdate;
-    if (typeof beforeUpdate === 'function' && copied.length > 0) {
+    if (
+      typeof beforeUpdate === 'function' &&
+      (copied.length > 0 || stamped.size > 0)
+    ) {
       throw new NormQueryError(
         `upsert on '${c.key}' would copy incoming columns on conflict, ` +
           `but its beforeUpdate hook cannot run on them. Pass update: ` +
@@ -3771,7 +3771,7 @@ export class Repo<
         if (replacement !== undefined) payload = replacement as Row;
       }
       [updateSet] = await this.__prepareValidated([payload], false, 'update');
-    } else if (copied.length > 0) {
+    } else if (copied.length > 0 || stamped.size > 0) {
       [updateSet] = await this.__prepareValidated([{}], false, 'update');
     }
     if (updateSet !== undefined) {

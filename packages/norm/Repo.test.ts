@@ -1103,25 +1103,19 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     );
   });
 
-  it('upsert refuses an updateOnConflict column a row has no value for', async () => {
+  it('upsert refuses an updateOnConflict column a row does not pass', async () => {
     for (const dialect of ['sqlite', 'mongo']) {
       const { db, exec } = makeDb();
       Object.assign(exec.capabilities, { dialect });
       const opts = { conflictKeys: ['id'], updateOnConflict: ['label'] };
-      const single = await asserts.assertRejects(
-        () => db.repo('Guarded').upsert({ id: 1 }, opts as never),
-        NormValidationError,
-        "label: updateOnConflict names 'label', which the row does not supply",
-      );
-      asserts.assertEquals(single.context.issues[0]!.op, 'upsert');
-      const batch = await asserts.assertRejects(
-        () => db.repo('Guarded').upsert([{ id: 1 }, { id: 2 }], opts as never),
-        NormValidationError,
-      );
-      asserts.assertEquals(
-        batch.context.issues.map((i) => i.path),
-        ['[0].label', '[1].label'],
-      );
+      for (const data of [{ id: 1 }, [{ id: 1 }, { id: 2 }]]) {
+        const err = await asserts.assertRejects(
+          () => db.repo('Guarded').upsert(data, opts as never),
+          NormQueryError,
+          "Column 'label' on entity 'Guarded' cannot be updated on conflict",
+        );
+        asserts.assertEquals(err.context.code, 'UPSERT_CONFLICT_KEY');
+      }
       asserts.assertEquals(exec.calls.length, 0, dialect);
       await db.repo('Guarded').upsert({ id: 1, label: null }, opts as never);
       asserts.assertEquals(
