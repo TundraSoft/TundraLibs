@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.2](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.8.1...compat-v2.8.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* **compat:** reject WebServer start on Node when the port cannot be bound ([#891](https://github.com/TundraSoft/TundraLibs/issues/891)) ([e0ead38](https://github.com/TundraSoft/TundraLibs/commit/e0ead3865d671380ea06b6eb6e75cb8a5189185f))
+
 ## [2.8.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.8.0...compat-v2.8.1) (2026-10-27)
 
 

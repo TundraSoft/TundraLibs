@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.9.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.8.0...drivers-v1.9.0) (2026-11-16)
+
+
+### Features
+
+* **drivers:** ask Postgres for a UTC session at startup ([#931](https://github.com/TundraSoft/TundraLibs/issues/931)) ([dab99e7](https://github.com/TundraSoft/TundraLibs/commit/dab99e7c3d8c7e6ecead150846e1affa6acc9809))
+* **drivers:** refuse a Neon session that is not in UTC ([#870](https://github.com/TundraSoft/TundraLibs/issues/870)) ([46e3779](https://github.com/TundraSoft/TundraLibs/commit/46e377982ed3e4e11aa6ce05f1a3a12b3e47e69f))
+* **drivers:** refuse a Postgres session that is not in UTC ([#845](https://github.com/TundraSoft/TundraLibs/issues/845)) ([d292323](https://github.com/TundraSoft/TundraLibs/commit/d292323aebf301d66734b72943bcc5cf2f5e3bbc))
+
+
+### Bug Fixes
+
+* **drivers,norm:** read and write MariaDB dates in UTC ([#844](https://github.com/TundraSoft/TundraLibs/issues/844)) ([70a9ea4](https://github.com/TundraSoft/TundraLibs/commit/70a9ea4282bb42de1438681d71e4f6c527070081))
+* **drivers:** a placeholder scanner Safari can load, with nested Postgres comments ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** accept every zero-offset spelling of UTC in the Postgres time zone check ([#892](https://github.com/TundraSoft/TundraLibs/issues/892)) ([fc13ca4](https://github.com/TundraSoft/TundraLibs/commit/fc13ca4c0a90c2c04e646b1da115be2c683f3530))
+* **drivers:** bind a whole number as INTEGER on node:sqlite ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** cast chains, SQLite -0 and a failed Neon zone check ([#926](https://github.com/TundraSoft/TundraLibs/issues/926)) ([053ee0c](https://github.com/TundraSoft/TundraLibs/commit/053ee0c92a39a8ac3861c787b3b93f60761c9616))
+* **drivers:** connect to a Postgres or Neon database whatever its time zone ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **drivers:** give a refused MariaDB or Postgres login its own error code ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **drivers:** leave a :name: inside quoted text or a comment alone ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** make Neon ping run the UTC session check ([#893](https://github.com/TundraSoft/TundraLibs/issues/893)) ([f9df595](https://github.com/TundraSoft/TundraLibs/commit/f9df5953732a289b944afc83475118c704e53fe0))
+* **drivers:** map three errors to the right code and name the object in more messages ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** name the key and column in error messages, never a placeholder ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** send a Date inside a MariaDB array parameter in UTC ([#875](https://github.com/TundraSoft/TundraLibs/issues/875)) ([71738aa](https://github.com/TundraSoft/TundraLibs/commit/71738aa63153ad0e90113b09b2fe42c33b7093a2))
+* **drivers:** the non-UTC refusal says what to do behind a pooler ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** type a Date parameter as timestamptz on Neon ([#868](https://github.com/TundraSoft/TundraLibs/issues/868)) ([ec8a03a](https://github.com/TundraSoft/TundraLibs/commit/ec8a03aa73a12edb2a7eca4bc4971b4d1f067d47))
+* **oql:** a $exists inside a CASE condition correlates to the query's table on SQL ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** a MongoDB LIKE pattern matches across a newline, and not before one ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** reject a null inside a shorthand list filter ([#920](https://github.com/TundraSoft/TundraLibs/issues/920)) ([b35d568](https://github.com/TundraSoft/TundraLibs/commit/b35d568cf848bb382a4e4826414ff435753d4216))
+* **oql:** return each engine's own result again where unreleased code forced them to agree ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+
+
+### Documentation
+
+* **drivers:** add upgrade notes for the changes since 1.8.0 ([635f64a](https://github.com/TundraSoft/TundraLibs/commit/635f64a20b17e3e8ebba959d7bb051c3b10911cf))
+* **drivers:** correct the UTC session and time zone notes ([#894](https://github.com/TundraSoft/TundraLibs/issues/894)) ([770a78c](https://github.com/TundraSoft/TundraLibs/commit/770a78cc434ab80cc22e4f3af12a1f0c3aab70c0))
+
 ## [1.8.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.7.0...drivers-v1.8.0) (2026-10-23)
 
 
