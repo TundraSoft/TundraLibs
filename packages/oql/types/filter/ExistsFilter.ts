@@ -28,6 +28,11 @@ import type { QueryFilter } from './QueryFilter.ts';
  * values: their embedded column refs cannot be qualified reliably
  * inside the subquery, so the validator rejects them.
  *
+ * A node inside another node's `where` correlates to that parent
+ * subquery: a bare `@x` value is the parent table's column `x`, which
+ * the translator cannot check, since the table declares no columns.
+ * MongoDB throws `DialectUnsupportedError` for such a node.
+ *
  * Outer refs stay correct in both outer shapes: when the outer query
  * has joins, base refs resolve through the `__base__` alias; without
  * joins they are qualified with the outer table's own name (a table's

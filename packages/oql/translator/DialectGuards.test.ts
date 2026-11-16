@@ -734,4 +734,49 @@ describe('oql.translator.guards', () => {
       );
     });
   });
+
+  describe('nested $exists', () => {
+    // users → orders → items → marks: each node correlates to its parent.
+    const marks = { table: 'marks', on: { '@itemId': '@id' } };
+    const items = {
+      table: 'items',
+      on: { '@orderId': '@id' },
+      where: { $or: [{ '@sku': 'A' }, { $nexists: marks }] },
+    };
+    const select = {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      projection: { '@id': true },
+      where: {
+        $exists: {
+          table: 'orders',
+          on: { '@userId': '@id' },
+          where: { $exists: items },
+        },
+      },
+    } as unknown as Query<'SELECT'>;
+
+    it('correlates to its parent subquery at every level on SQL', () => {
+      asserts.assertEquals(
+        new SQLiteTranslator().select(select).sql,
+        'SELECT "id" AS "id" FROM "users" WHERE EXISTS (SELECT 1 FROM "orders" AS "__exists__" ' +
+          'WHERE "__exists__"."userId" = "users"."id" AND EXISTS (SELECT 1 FROM "items" AS "__exists_1__" ' +
+          'WHERE "__exists_1__"."orderId" = "__exists__"."id" AND (("__exists_1__"."sku" = :p_0:) OR ' +
+          '(NOT EXISTS (SELECT 1 FROM "marks" AS "__exists_2__" ' +
+          'WHERE "__exists_2__"."itemId" = "__exists_1__"."id")))))',
+      );
+    });
+
+    it('refuses a parent correlation on MongoDB', () => {
+      const err = asserts.assertThrows(
+        () => new MongoTranslator().select(select),
+        DialectUnsupportedError,
+      );
+      asserts.assertEquals(
+        err.feature,
+        "a nested '$exists' correlated to its parent subquery by '@id'",
+      );
+    });
+  });
 });

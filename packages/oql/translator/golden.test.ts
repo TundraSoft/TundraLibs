@@ -2059,12 +2059,12 @@ const CASES: Case[] = [
   {
     // A $exists whose sub-`where` itself carries a nested $exists.
     // __prefixExistsKeys passes the nested spec through untouched (it only
-    // rewrites plain column keys), then __translateExists recurses and the
-    // inner subquery REUSES the "__exists__" alias — it shadows the outer one
-    // (innermost FROM wins), so the inner `on` LHS still qualifies as
-    // "__exists__"."orderId". The inner `on` value `1` is a plain literal and
-    // parameterises; the outer `@id` still correlates to the query root.
-    name: '$exists nested inside a sub-where reuses the __exists__ alias',
+    // rewrites plain column keys), then __translateExists recurses. The
+    // inner subquery is aliased "__exists_1__" so it does not shadow the
+    // outer one, and its bare `@id` is the outer subquery's column. The
+    // inner `1` is a plain literal and parameterises; the outer `@id`
+    // still correlates to the query root.
+    name: '$exists nested inside a sub-where correlates to its parent',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -2075,7 +2075,12 @@ const CASES: Case[] = [
         $exists: {
           table: 'orders',
           on: { '@userId': '@id' },
-          where: { $exists: { table: 'refunds', on: { '@orderId': 1 } } },
+          where: {
+            $exists: {
+              table: 'refunds',
+              on: { '@orderId': '@id', '@kind': 1 },
+            },
+          },
         },
       },
     },
@@ -2084,21 +2089,21 @@ const CASES: Case[] = [
         sql:
           'SELECT "id" AS "id", "name" AS "name" FROM "users" WHERE EXISTS ' +
           '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id" ' +
-          'AND EXISTS (SELECT 1 FROM "refunds" AS "__exists__" WHERE "__exists__"."orderId" = :p_0:))',
+          'AND EXISTS (SELECT 1 FROM "refunds" AS "__exists_1__" WHERE "__exists_1__"."orderId" = "__exists__"."id" AND "__exists_1__"."kind" = :p_0:))',
         params: { p_0: 1 },
       },
       postgres: {
         sql:
           'SELECT "id" AS "id", "name" AS "name" FROM "users" WHERE EXISTS ' +
           '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id" ' +
-          'AND EXISTS (SELECT 1 FROM "refunds" AS "__exists__" WHERE "__exists__"."orderId" = :p_0:))',
+          'AND EXISTS (SELECT 1 FROM "refunds" AS "__exists_1__" WHERE "__exists_1__"."orderId" = "__exists__"."id" AND "__exists_1__"."kind" = :p_0:))',
         params: { p_0: 1 },
       },
       maria: {
         sql:
           'SELECT `id` AS `id`, `name` AS `name` FROM `users` WHERE EXISTS ' +
           '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id` ' +
-          'AND EXISTS (SELECT 1 FROM `refunds` AS `__exists__` WHERE `__exists__`.`orderId` = :p_0:))',
+          'AND EXISTS (SELECT 1 FROM `refunds` AS `__exists_1__` WHERE `__exists_1__`.`orderId` = `__exists__`.`id` AND `__exists_1__`.`kind` = :p_0:))',
         params: { p_0: 1 },
       },
     },

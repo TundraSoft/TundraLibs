@@ -153,7 +153,8 @@ own grammar gaps, for example:
   predicate cannot hold.
 - **MongoDB** — `CREATE_SCHEMA` (databases are implicit), `distinct` on
   `SELECT` / `COUNT`, `STRING_AGG`, an `$exists` / `$nexists` filter on
-  `UPDATE` or `DELETE`, any expression in a `CREATE_INDEX` `where`, and
+  `UPDATE` or `DELETE`, a nested one correlated to its parent subquery,
+  any expression in a `CREATE_INDEX` `where`, and
   column references or expressions in positions a Mongo find-filter cannot
   take.
 

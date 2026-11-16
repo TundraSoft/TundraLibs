@@ -96,12 +96,15 @@ const EXISTS_ALIAS = '__exists__';
  * `outerTable` is the bare (unaliased) name of the query's primary
  * table, used by `$exists` translation to qualify outer column refs
  * when the query has no joins — an unqualified ref inside the subquery
- * would be captured by the subquery table's scope.
+ * would be captured by the subquery table's scope. `exists` is set
+ * while the `where` of an EXISTS subquery is translated: its table
+ * alias and nesting level, which a nested node correlates to.
  */
 type FilterContext = {
   aggregates?: Record<string, Aggregates>;
   expressions?: Record<string, Expressions>;
   outerTable?: string;
+  exists?: { alias: string; level: number };
 };
 
 /**
@@ -1181,6 +1184,7 @@ export abstract class AbstractTranslator {
             hasJoins,
             context?.outerTable,
             depth,
+            context?.exists,
           ),
         );
         continue;
@@ -1396,6 +1400,11 @@ export abstract class AbstractTranslator {
    *    (rewritten onto the {@link EXISTS_ALIAS}); values are always
    *    literals / expressions, never outer refs — correlation happens
    *    exclusively through `on`.
+   *
+   * A node inside another node's `where` has `parent` set. Its table is
+   * aliased `__exists_<level>__` so it does not shadow the parent's, and
+   * its `on` values correlate to the parent subquery table, whose columns
+   * are not declared: a bare `@name` is the parent's column `name`.
    */
   private __translateExists(
     spec: ExistsFilter,
@@ -1405,27 +1414,32 @@ export abstract class AbstractTranslator {
     hasJoins: boolean,
     outerTable: string | undefined,
     depth: number,
+    parent?: { alias: string; level: number },
   ): string {
+    const level = parent === undefined ? 0 : parent.level + 1;
+    const alias = level === 0 ? EXISTS_ALIAS : `__exists_${level}__`;
     const tableSql = this._qualifiedTable(spec.table, spec.schema);
-    const aliasSql = this._quoteIdentifier(EXISTS_ALIAS);
+    const aliasSql = this._quoteIdentifier(alias);
     const conditions: string[] = [];
     const nullSafe = (spec.nullSafe ?? []) as string[];
     for (const [subKey, outerVal] of Object.entries(spec.on)) {
       // `subKey` is a bare `@col` ref into the subquery table — splice
       // in the EXISTS alias so it resolves as `"__exists__"."col"`.
-      const left = this._resolveColumnRef(`@${EXISTS_ALIAS}.${subKey}`, true);
+      const left = this._resolveColumnRef(`@${alias}.${subKey}`, true);
       // `= NULL` is never true; a null value is a NULL check.
       if (outerVal === null) {
         conditions.push(`${left} IS NULL`);
         continue;
       }
-      const right = this.__renderExistsOuterValue(
-        outerVal,
-        scope,
-        params,
-        hasJoins,
-        outerTable,
-      );
+      const right = parent === undefined
+        ? this.__renderExistsOuterValue(
+          outerVal,
+          scope,
+          params,
+          hasJoins,
+          outerTable,
+        )
+        : this.__renderExistsParentValue(outerVal, parent.alias, params);
       conditions.push(
         nullSafe.includes(subKey)
           ? this._nullSafeEquals(left, right)
@@ -1435,14 +1449,14 @@ export abstract class AbstractTranslator {
     if (spec.where) {
       conditions.push(
         this._translateFilter(
-          this.__prefixExistsKeys(spec.where),
+          this.__prefixExistsKeys(spec.where, alias),
           // Empty scope: value-position `@x` strings inside the
           // subquery's own filter never resolve to columns — they fall
           // through to parameterised literals (the standard rule).
           [],
           params,
           true,
-          undefined,
+          { exists: { alias, level } },
           depth + 1,
         ),
       );
@@ -1495,21 +1509,42 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Rewrite an EXISTS sub-`where` so its column keys resolve against
-   * the subquery table: `'@col'` → `'@__exists__.@col'`. `$and` / `$or`
-   * branches recurse; nested `$exists` / `$nexists` specs pass through
-   * untouched — each introduces its own (shadowing) `__exists__` alias
-   * and, via its own `on` map, correlates ONLY to columns of its
-   * immediate outer (parent-subquery) scope; a value that names no such
-   * column is parameterised as a literal, NOT correlated back to the
-   * query root.
+   * Render the parent side of a nested EXISTS `on` entry. A bare `@name`
+   * is the column `name` of the parent subquery table, `parentAlias`;
+   * anything else is parameterised. That table declares no columns, so a
+   * bare name cannot be checked here: one the table lacks fails in the
+   * database.
    */
-  private __prefixExistsKeys(filter: QueryFilter): QueryFilter {
+  private __renderExistsParentValue(
+    value: unknown,
+    parentAlias: string,
+    params: Parameters,
+  ): string {
+    if (
+      typeof value === 'string' && value.startsWith('@') &&
+      JSON_PATH_SEGMENT_PATTERN.test(value.slice(1))
+    ) {
+      return `${this._quoteIdentifier(parentAlias)}.${
+        this._quoteIdentifier(value.slice(1))
+      }`;
+    }
+    return this._parameterize(value, params);
+  }
+
+  /**
+   * Rewrite an EXISTS sub-`where` so its column keys resolve against
+   * the subquery table: `'@col'` → `'@<alias>.@col'`. `$and` / `$or`
+   * branches recurse; nested `$exists` / `$nexists` specs pass through
+   * untouched — each introduces its own alias one level deeper and,
+   * via its own `on` map, correlates ONLY to columns of its immediate
+   * outer (parent-subquery) table, never to the query root.
+   */
+  private __prefixExistsKeys(filter: QueryFilter, alias: string): QueryFilter {
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(filter)) {
       if (key === '$and' || key === '$or') {
         out[key] = (value as QueryFilter[]).map((f) =>
-          this.__prefixExistsKeys(f)
+          this.__prefixExistsKeys(f, alias)
         );
         continue;
       }
@@ -1517,7 +1552,7 @@ export abstract class AbstractTranslator {
         out[key] = value;
         continue;
       }
-      out[`@${EXISTS_ALIAS}.${key}`] = value;
+      out[`@${alias}.${key}`] = value;
     }
     return out as QueryFilter;
   }

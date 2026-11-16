@@ -331,11 +331,14 @@ Correlation goes through `on` only: keys are **single-segment**
 alias), values are outer column refs — or literals when the name does
 not resolve in the outer scope. The optional `where` filters the
 subquery table locally (literals only); expression objects are
-rejected in `on`. Emits native `EXISTS (SELECT 1 …)` on
+rejected in `on`. A node nested in another node's `where` correlates
+to that parent subquery: a bare `'@name'` value in its `on` is the
+parent table's column. Emits native `EXISTS (SELECT 1 …)` on
 Postgres/MariaDB/SQLite. On MongoDB a SELECT or COUNT runs it as a
 `$lookup` stage and returns the same rows; an UPDATE or DELETE
 **throws** `DialectUnsupportedError`, because `updateMany` and
-`deleteMany` cannot carry a pipeline stage. See
+`deleteMany` cannot carry a pipeline stage, and so does a nested node
+correlated to its parent. See
 [Compatibility Matrix](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Compatibility).
 
 ### JOIN Support

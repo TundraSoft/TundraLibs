@@ -1588,11 +1588,12 @@ export class MongoTranslator {
    * `on` values resolve against `columns`, the outer scope, exactly as
    * the SQL translators resolve them: a column reference is bound in
    * `let`, anything else is data. The sub-`where` sees the subquery
-   * table alone, so no outer column is in scope there, and a nested
-   * node correlates only through literals.
+   * table alone, so no outer column is in scope there.
    *
    * @throws {DialectUnsupportedError} For an `on` value that names a
-   *   joined column.
+   *   joined column, and for a node in the sub-`where` whose `on` value
+   *   is a bare `@name`: on SQL that is a column of this subquery's
+   *   table, which this translator does not correlate.
    */
   private __buildExistsLookup(
     spec: ExistsFilter,
@@ -1630,13 +1631,39 @@ export class MongoTranslator {
         $expr: conditions.length === 1 ? conditions[0] : { $and: conditions },
       },
     }];
-    if (spec.where) this.__pushMatch(pipeline, spec.where, new Set());
+    if (spec.where) {
+      this.__refuseParentCorrelation(spec.where);
+      this.__pushMatch(pipeline, spec.where, new Set());
+    }
     pipeline.push({ $limit: 1 });
     const lookup: Record<string, unknown> = { from: spec.table };
     if (Object.keys(letVars).length > 0) lookup.let = letVars;
     lookup.pipeline = pipeline;
     lookup.as = as;
     return { $lookup: lookup };
+  }
+
+  /**
+   * Throw for an `$exists` / `$nexists` node directly in `where`, or in
+   * its `$and` / `$or`, whose `on` value is a bare `@name`.
+   */
+  private __refuseParentCorrelation(where: QueryFilter): void {
+    for (const [key, value] of Object.entries(where)) {
+      if (key === '$and' || key === '$or') {
+        for (const f of value as QueryFilter[]) {
+          this.__refuseParentCorrelation(f);
+        }
+      } else if (key === '$exists' || key === '$nexists') {
+        for (const v of Object.values((value as ExistsFilter).on)) {
+          if (typeof v === 'string' && /^@[a-zA-Z_]\w*$/.test(v)) {
+            throw new DialectUnsupportedError(
+              this.Dialect,
+              `a nested '${key}' correlated to its parent subquery by '${v}'`,
+            );
+          }
+        }
+      }
+    }
   }
 
   /**

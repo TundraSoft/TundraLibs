@@ -331,7 +331,8 @@ type ExistsFilter<PT, FPT> = {
   // join-value rule: an '@x' string is an outer column reference iff
   // `x` names a column in the outer scope; `null` is an IS NULL check;
   // anything else is a parameterised literal. Expressions are NOT
-  // allowed here.
+  // allowed here. In a node nested in another node's `where`, the outer
+  // scope is the parent subquery's table: a bare '@x' is its column.
   on: Record<`@${string}`, null | ColumnTypes | (keyof FPT & string)>;
   // `on` keys compared NULL-safely: the pair also matches when both
   // sides are NULL. Each must be an `on` key whose value is an '@'
