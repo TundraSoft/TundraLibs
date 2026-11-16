@@ -171,6 +171,32 @@ describe('oql.asserts.Expressions.Date', () => {
       );
     });
 
+    it('valid: with a nested clock, and no other expression', () => {
+      for (const clock of ['NOW', 'CURRENT_TIMESTAMP', 'CURRENT_TIMESTAMPTZ']) {
+        assertDateAddExpression({
+          $$_expression: 'DATE_ADD',
+          args: {
+            date: { $$_expression: clock } as any,
+            amount: 1,
+            unit: 'DAYS',
+          },
+        });
+      }
+      asserts.assertThrows(
+        () =>
+          assertDateAddExpression({
+            $$_expression: 'DATE_ADD',
+            args: {
+              date: { $$_expression: 'CURRENT_DATE' },
+              amount: 1,
+              unit: 'DAYS',
+            },
+          } as any),
+        TypeError,
+        'date must be a Date object or ColumnIdentifier',
+      );
+    });
+
     it('valid: with all time units', () => {
       const units = ['DAYS', 'MONTHS', 'YEARS', 'HOURS', 'MINUTES', 'SECONDS'];
 
@@ -195,6 +221,37 @@ describe('oql.asserts.Expressions.Date', () => {
           unit: 'DAYS',
         },
       });
+    });
+
+    it('valid: a COALESCE, NULLIF or CASE as date and amount', () => {
+      const date = { $$_expression: 'COALESCE', args: ['@d', new Date(0)] };
+      for (
+        const amount of [
+          { $$_expression: 'NULLIF', args: ['@n', 0] },
+          {
+            $$_expression: 'CASE',
+            args: { cases: [{ when: { '@n': { $gt: 0 } }, then: '@n' }] },
+          },
+        ]
+      ) {
+        assertDateAddExpression(
+          { $$_expression: 'DATE_ADD', args: { date, amount, unit: 'DAYS' } },
+          ['d', 'n'],
+        );
+      }
+      asserts.assertThrows(
+        () =>
+          assertDateAddExpression({
+            $$_expression: 'DATE_ADD',
+            args: {
+              date: { $$_expression: 'COALESCE', args: ['@d'] },
+              amount: 1,
+              unit: 'DAYS',
+            },
+          }, ['d']),
+        TypeError,
+        'date contains invalid nested expression in DATE_ADD',
+      );
     });
 
     it('valid: isDateAddExpression', () => {
@@ -265,8 +322,8 @@ describe('oql.asserts.Expressions.Date', () => {
             $$_expression: 'DATE_ADD',
             args: { date: new Date(), amount: 7 },
           } as any),
-        TypeError,
-        "Missing 'unit'",
+        OqlError,
+        'got undefined',
       );
     });
 
@@ -508,6 +565,13 @@ describe('oql.asserts.date — DATE_TRUNC', () => {
     );
     assertDateTruncExpression(trunc({ $$_expression: 'NOW' }, 'YEARS'));
     assertDateExpression(trunc('@createdAt', 'MONTHS'), ['createdAt']);
+    assertDateTruncExpression(
+      trunc({
+        $$_expression: 'COALESCE',
+        args: ['@createdAt', { $$_expression: 'NOW' }],
+      }, 'DAYS'),
+      ['createdAt'],
+    );
   });
 
   it('rejects a unit outside DAYS / MONTHS / YEARS, naming the offending value', () => {

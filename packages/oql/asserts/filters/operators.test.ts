@@ -69,6 +69,18 @@ describe('oql.asserts.Filters.Operators', () => {
       );
     });
 
+    it('invalid: an Expression value is validated against the column list', () => {
+      const value = { $$_expression: 'MULTIPLY', args: ['@subtotal', 1.05] };
+      assertOperators({ $gte: value }, undefined, ['subtotal']);
+      for (const op of ['$gte', '$contains']) {
+        asserts.assertThrows(
+          () => assertOperators({ [op]: value }, undefined, ['total']),
+          TypeError,
+          `'${op}' operator value is an invalid Expression`,
+        );
+      }
+    });
+
     it('valid: $eq with different type (no strict checking)', () => {
       assertOperators<{ age: number }>({ $eq: 'string' } as any, 'number');
     });

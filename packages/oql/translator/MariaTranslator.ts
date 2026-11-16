@@ -218,12 +218,17 @@ export class MariaTranslator extends AbstractTranslator {
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP()'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
     // `unit` arrives as the keyword itself — see `_timeUnitArg`.
-    // A Date value binds as text, and TIMESTAMPADD over text returns text.
-    // Cast to DATETIME, the result reaches JS as a Date.
+    // A Date value binds as text, and TIMESTAMPADD over text returns text,
+    // as it does over a COALESCE, NULLIF or CASE holding one. Cast anything
+    // but a column or a clock to DATETIME, the result reaches JS as a Date.
     ['DATE_ADD', (a, e) => {
-      const date = e.$$_expression === 'DATE_ADD' && e.args.date instanceof Date
-        ? `CAST(${a[0]} AS DATETIME(6))`
-        : a[0];
+      const arg = e.$$_expression === 'DATE_ADD' ? e.args.date : '';
+      const typed = typeof arg === 'string' ||
+        (!(arg instanceof Date) &&
+          ['NOW', 'CURRENT_TIMESTAMP', 'CURRENT_TIMESTAMPTZ'].includes(
+            arg.$$_expression,
+          ));
+      const date = typed ? a[0] : `CAST(${a[0]} AS DATETIME(6))`;
       return `TIMESTAMPADD(${a[2]}, ${a[1]}, ${date})`;
     }],
     // TIMESTAMPDIFF is BIGINT, which reaches JS as a bigint. DOUBLE

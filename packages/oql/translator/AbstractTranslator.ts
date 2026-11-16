@@ -49,9 +49,13 @@ import {
   findDisallowedJsonPathOperator,
   JSON_PATH_ALLOWED_OPERATORS,
 } from '../asserts/mod.ts';
-import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
+import {
+  assertInsertFromQuery,
+  isGroupedSelect,
+} from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
+import { findExpression } from './findExpression.ts';
 import { Parameters } from './Parameters.ts';
 import type {
   AggregateMap,
@@ -92,12 +96,15 @@ const EXISTS_ALIAS = '__exists__';
  * `outerTable` is the bare (unaliased) name of the query's primary
  * table, used by `$exists` translation to qualify outer column refs
  * when the query has no joins — an unqualified ref inside the subquery
- * would be captured by the subquery table's scope.
+ * would be captured by the subquery table's scope. `exists` is set
+ * while the `where` of an EXISTS subquery is translated: its table
+ * alias and nesting level, which a nested node correlates to.
  */
 type FilterContext = {
   aggregates?: Record<string, Aggregates>;
   expressions?: Record<string, Expressions>;
   outerTable?: string;
+  exists?: { alias: string; level: number };
 };
 
 /**
@@ -129,6 +136,24 @@ const LIKE_WILDCARDS = /[\\%_]/g;
  * quoted identifiers.
  */
 const JSON_PATH_SEGMENT_PATTERN = /^[a-zA-Z_]\w*$/;
+
+/** A bare `@column` reference: one identifier segment, no path. */
+const BARE_COLUMN_REF = /^@[a-zA-Z_]\w*$/;
+
+/**
+ * Expressions whose value changes from one evaluation to the next: the
+ * clock and the random UUID. No engine can hold one in an index
+ * predicate, so `CREATE_INDEX` refuses them before any SQL is built.
+ */
+const INDEX_VOLATILE_EXPRESSIONS: ReadonlySet<string> = new Set([
+  'NOW',
+  'CURRENT_DATE',
+  'CURRENT_TIME',
+  'CURRENT_TIMESTAMP',
+  'CURRENT_TIMESTAMPTZ',
+  'UNIX_TIMESTAMP',
+  'UUID',
+]);
 
 /**
  * Turns a validated {@link Query} into dialect SQL plus its bind params.
@@ -407,9 +432,22 @@ export abstract class AbstractTranslator {
    * returns `params: {}`.
    *
    * @throws {TypeError} When `q` is not a valid `CREATE_INDEX` query.
+   * @throws {@link DialectUnsupportedError} When `q.where` holds NOW,
+   *   CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, CURRENT_TIMESTAMPTZ,
+   *   UNIX_TIMESTAMP or UUID, whose value changes between evaluations.
    */
   public createIndex(q: Query<'CREATE_INDEX'>): TranslatedQuery {
     assertCreateIndex(q);
+    const volatile = findExpression(
+      q.where,
+      (t) => INDEX_VOLATILE_EXPRESSIONS.has(t),
+    );
+    if (volatile !== null) {
+      throw new DialectUnsupportedError(
+        this.Dialect,
+        `the computed expression ${volatile} in an index predicate`,
+      );
+    }
     const params = new Parameters();
     const sql = this._buildCreateIndex(q, params);
     return { sql: this._inlineParams(sql, params), params: {} };
@@ -883,10 +921,15 @@ export abstract class AbstractTranslator {
 
   /**
    * Add `value` to `params` and return the placeholder text the dialect
-   * uses (`:p_3` / `$3` / `?`).
+   * uses (`:p_3` / `$3` / `?`). `share` is passed to
+   * {@link Parameters.add}: false for a value written to a column.
    */
-  protected _parameterize(value: unknown, params: Parameters): string {
-    const name = params.add(value);
+  protected _parameterize(
+    value: unknown,
+    params: Parameters,
+    share = true,
+  ): string {
+    const name = params.add(value, share);
     const { format, prefix, suffix } = this._parameterStyle;
     if (format === 'numbered') {
       // `name` is `p_N`; convert to 1-based index.
@@ -987,7 +1030,16 @@ export abstract class AbstractTranslator {
     // node and is never bound as a parameter, so the dialect picks its
     // whole form here rather than branching in SQL like DATE_DIFF must.
     if (expr.$$_expression === 'UNIX_TIMESTAMP') {
-      return this._unixTimestamp(expr.unit ?? 'seconds');
+      const unit: unknown = expr.unit;
+      if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
+        throw new OqlError(
+          `Unknown UNIX_TIMESTAMP unit '${
+            String(unit)
+          }' — expected one of seconds, milliseconds`,
+          { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+        );
+      }
+      return this._unixTimestamp(unit ?? 'seconds');
     }
     // `unit` is a translation-time switch here too. It is matched against
     // the three literals, so nothing a caller supplies reaches the SQL.
@@ -1132,6 +1184,7 @@ export abstract class AbstractTranslator {
             hasJoins,
             context?.outerTable,
             depth,
+            context?.exists,
           ),
         );
         continue;
@@ -1193,6 +1246,7 @@ export abstract class AbstractTranslator {
             scope,
             params,
             hasJoins,
+            context,
           ),
         );
         continue;
@@ -1211,6 +1265,7 @@ export abstract class AbstractTranslator {
           scope,
           params,
           hasJoins,
+          context,
         ),
       );
     }
@@ -1345,6 +1400,11 @@ export abstract class AbstractTranslator {
    *    (rewritten onto the {@link EXISTS_ALIAS}); values are always
    *    literals / expressions, never outer refs — correlation happens
    *    exclusively through `on`.
+   *
+   * A node inside another node's `where` has `parent` set. Its table is
+   * aliased `__exists_<level>__` so it does not shadow the parent's, and
+   * its `on` values correlate to the parent subquery table, whose columns
+   * are not declared: a bare `@name` is the parent's column `name`.
    */
   private __translateExists(
     spec: ExistsFilter,
@@ -1354,27 +1414,32 @@ export abstract class AbstractTranslator {
     hasJoins: boolean,
     outerTable: string | undefined,
     depth: number,
+    parent?: { alias: string; level: number },
   ): string {
+    const level = parent === undefined ? 0 : parent.level + 1;
+    const alias = level === 0 ? EXISTS_ALIAS : `__exists_${level}__`;
     const tableSql = this._qualifiedTable(spec.table, spec.schema);
-    const aliasSql = this._quoteIdentifier(EXISTS_ALIAS);
+    const aliasSql = this._quoteIdentifier(alias);
     const conditions: string[] = [];
     const nullSafe = (spec.nullSafe ?? []) as string[];
     for (const [subKey, outerVal] of Object.entries(spec.on)) {
       // `subKey` is a bare `@col` ref into the subquery table — splice
       // in the EXISTS alias so it resolves as `"__exists__"."col"`.
-      const left = this._resolveColumnRef(`@${EXISTS_ALIAS}.${subKey}`, true);
+      const left = this._resolveColumnRef(`@${alias}.${subKey}`, true);
       // `= NULL` is never true; a null value is a NULL check.
       if (outerVal === null) {
         conditions.push(`${left} IS NULL`);
         continue;
       }
-      const right = this.__renderExistsOuterValue(
-        outerVal,
-        scope,
-        params,
-        hasJoins,
-        outerTable,
-      );
+      const right = parent === undefined
+        ? this.__renderExistsOuterValue(
+          outerVal,
+          scope,
+          params,
+          hasJoins,
+          outerTable,
+        )
+        : this.__renderExistsParentValue(outerVal, parent.alias, params);
       conditions.push(
         nullSafe.includes(subKey)
           ? this._nullSafeEquals(left, right)
@@ -1384,14 +1449,14 @@ export abstract class AbstractTranslator {
     if (spec.where) {
       conditions.push(
         this._translateFilter(
-          this.__prefixExistsKeys(spec.where),
+          this.__prefixExistsKeys(spec.where, alias),
           // Empty scope: value-position `@x` strings inside the
           // subquery's own filter never resolve to columns — they fall
           // through to parameterised literals (the standard rule).
           [],
           params,
           true,
-          undefined,
+          { exists: { alias, level } },
           depth + 1,
         ),
       );
@@ -1444,21 +1509,42 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Rewrite an EXISTS sub-`where` so its column keys resolve against
-   * the subquery table: `'@col'` → `'@__exists__.@col'`. `$and` / `$or`
-   * branches recurse; nested `$exists` / `$nexists` specs pass through
-   * untouched — each introduces its own (shadowing) `__exists__` alias
-   * and, via its own `on` map, correlates ONLY to columns of its
-   * immediate outer (parent-subquery) scope; a value that names no such
-   * column is parameterised as a literal, NOT correlated back to the
-   * query root.
+   * Render the parent side of a nested EXISTS `on` entry. A bare `@name`
+   * is the column `name` of the parent subquery table, `parentAlias`;
+   * anything else is parameterised. That table declares no columns, so a
+   * bare name cannot be checked here: one the table lacks fails in the
+   * database.
    */
-  private __prefixExistsKeys(filter: QueryFilter): QueryFilter {
+  private __renderExistsParentValue(
+    value: unknown,
+    parentAlias: string,
+    params: Parameters,
+  ): string {
+    if (
+      typeof value === 'string' && value.startsWith('@') &&
+      JSON_PATH_SEGMENT_PATTERN.test(value.slice(1))
+    ) {
+      return `${this._quoteIdentifier(parentAlias)}.${
+        this._quoteIdentifier(value.slice(1))
+      }`;
+    }
+    return this._parameterize(value, params);
+  }
+
+  /**
+   * Rewrite an EXISTS sub-`where` so its column keys resolve against
+   * the subquery table: `'@col'` → `'@<alias>.@col'`. `$and` / `$or`
+   * branches recurse; nested `$exists` / `$nexists` specs pass through
+   * untouched — each introduces its own alias one level deeper and,
+   * via its own `on` map, correlates ONLY to columns of its immediate
+   * outer (parent-subquery) table, never to the query root.
+   */
+  private __prefixExistsKeys(filter: QueryFilter, alias: string): QueryFilter {
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(filter)) {
       if (key === '$and' || key === '$or') {
         out[key] = (value as QueryFilter[]).map((f) =>
-          this.__prefixExistsKeys(f)
+          this.__prefixExistsKeys(f, alias)
         );
         continue;
       }
@@ -1466,17 +1552,17 @@ export abstract class AbstractTranslator {
         out[key] = value;
         continue;
       }
-      out[`@${EXISTS_ALIAS}.${key}`] = value;
+      out[`@${alias}.${key}`] = value;
     }
     return out as QueryFilter;
   }
 
   /**
-   * Translate a single value as it appears on the right-hand side of an
-   * operator, in INSERT VALUES, or in UPDATE SET.
+   * Translate a single value as it appears in INSERT VALUES or UPDATE SET.
    *
    * `null`/`undefined` → `NULL`; an Expression object → recurse;
-   * everything else → parameterise.
+   * everything else → a placeholder of its own, never shared with an
+   * equal value, since the two columns may differ in type.
    *
    * `allowExpressions` is `true` for UPDATE/UPSERT (where expressions
    * referencing other columns are valid) and `false` for INSERT (where
@@ -1492,7 +1578,7 @@ export abstract class AbstractTranslator {
     if (allowExpressions && this.__isExpressionNode(value)) {
       return this._translateExpression(value, scope, params, false);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   // =========================================================================
@@ -1528,8 +1614,10 @@ export abstract class AbstractTranslator {
 
   /**
    * Build the column scope for a SELECT — base columns (qualified with
-   * BASE_ALIAS when joins are present) plus joined columns plus any
-   * declared expression keys.
+   * BASE_ALIAS when joins are present) plus joined columns. Declared
+   * expression keys are not in it: a filter key or value naming one is
+   * replaced by its body through the filter context, and an `@key` as an
+   * expression argument is not a column, so it binds as text.
    */
   private __buildScope(q: Query<'SELECT'>, hasJoins: boolean): string[] {
     const scope: string[] = [];
@@ -1783,13 +1871,9 @@ export abstract class AbstractTranslator {
     return groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
   }
 
-  /** Whether {@link __buildGroupBy} groups this query. */
+  /** Whether {@link __buildGroupBy} groups this query; the validator's rule. */
   private __isGrouped(q: Query<'SELECT'>): boolean {
-    const hasAggregates = !!q.aggregates &&
-      Object.keys(q.aggregates).length > 0;
-    const hasAutoExpandedJoin = !!q.joins &&
-      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
-    return hasAggregates || hasAutoExpandedJoin;
+    return isGroupedSelect(q);
   }
 
   /** Build the ` ORDER BY` clause, or `''` when `q.orderBy` is empty. */
@@ -1945,7 +2029,7 @@ export abstract class AbstractTranslator {
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, [], params, false);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**
@@ -2089,7 +2173,7 @@ export abstract class AbstractTranslator {
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, columns, params, qualified);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**
@@ -2201,32 +2285,66 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Best-effort scope for partial-index `where` clauses. We don't have
-   * the table's column list at this layer, so harvest column names from
-   * the filter keys themselves — the database enforces real existence.
+   * Column scope for a partial-index `where`. The query carries no column
+   * list, so a name is a column when the query uses it as one: an indexed
+   * column, a filter key, or a bare `@name` argument of an expression.
+   * The last makes `{ '@due': { $lt: DATE_ADD('@start', …) } }` read
+   * `start` as the column it is in a SELECT on that table; a name that is
+   * no column fails in the database instead of binding as text. A
+   * value-position `@name` is a column when it is in this scope, as in a
+   * SELECT. `$exists` subtrees are skipped: they have their own table.
    */
-  protected _scopeFromFilterKeys(
-    filter: Record<string, unknown>,
-  ): string[] {
-    const out: string[] = [];
-    const visit = (f: Record<string, unknown>) => {
+  protected _indexScope(q: Query<'CREATE_INDEX'>): string[] {
+    const out = new Set(q.columns.map((c) => c.slice(1)));
+    const visitArg = (arg: unknown): void => {
+      if (typeof arg === 'string') {
+        if (BARE_COLUMN_REF.test(arg)) out.add(arg.slice(1));
+        return;
+      }
+      if (this.__isExpressionNode(arg) && arg.$$_expression === 'CASE') {
+        for (const c of arg.args.cases) {
+          visitFilter(c.when as Record<string, unknown>);
+          visitArg(c.then);
+        }
+        visitArg(arg.args.else);
+        return;
+      }
+      if (this.__isExpressionNode(arg)) {
+        if ('args' in arg) visitArg(arg.args);
+        return;
+      }
+      if (typeof arg === 'object' && arg !== null && !(arg instanceof Date)) {
+        for (const inner of Object.values(arg)) visitArg(inner);
+      }
+    };
+    const visitValue = (value: unknown): void => {
+      if (this.__isExpressionNode(value)) return visitArg(value);
+      if (
+        typeof value === 'object' && value !== null && !(value instanceof Date)
+      ) {
+        for (const inner of Object.values(value)) visitValue(inner);
+      }
+    };
+    const visitFilter = (f: Record<string, unknown>): void => {
       for (const [key, value] of Object.entries(f)) {
         if (key === '$and' || key === '$or') {
           for (const sub of value as Array<Record<string, unknown>>) {
-            visit(sub);
+            visitFilter(sub);
           }
           continue;
         }
+        if (key === '$exists' || key === '$nexists') continue;
         if (key.startsWith('@')) {
           const stripped = key.slice(1);
-          out.push(
+          out.add(
             stripped.includes('.@') ? stripped.replace('.@', '.') : stripped,
           );
         }
+        visitValue(value);
       }
     };
-    visit(filter);
-    return out;
+    if (q.where) visitFilter(q.where as Record<string, unknown>);
+    return [...out];
   }
 
   /**
@@ -2240,23 +2358,21 @@ export abstract class AbstractTranslator {
     scope: string[],
     params: Parameters,
     hasJoins: boolean,
+    context?: FilterContext,
   ): string {
     if (rhs === null) return `${colSql} IS NULL`;
+    const render = (v: unknown) =>
+      this.__renderOperatorValue(v, scope, params, hasJoins, context);
     if (Array.isArray(rhs)) {
-      const placeholders = rhs
-        .map((v) => this.__renderOperatorValue(v, scope, params, hasJoins))
-        .join(', ');
-      return `${colSql} IN (${placeholders})`;
+      return `${colSql} IN (${rhs.map(render).join(', ')})`;
     }
     if (typeof rhs !== 'object' || rhs instanceof Date) {
-      return `${colSql} = ${
-        this.__renderOperatorValue(rhs, scope, params, hasJoins)
-      }`;
+      return `${colSql} = ${render(rhs)}`;
     }
     const opParts: string[] = [];
     for (const [op, val] of Object.entries(rhs)) {
       opParts.push(
-        this.__emitOperator(colSql, op, val, scope, params, hasJoins),
+        this.__emitOperator(colSql, op, val, scope, params, hasJoins, context),
       );
     }
     return opParts.join(' AND ');
@@ -2279,21 +2395,20 @@ export abstract class AbstractTranslator {
     scope: string[],
     params: Parameters,
     hasJoins: boolean,
+    context?: FilterContext,
   ): string {
+    const render = (v: unknown) =>
+      this.__renderOperatorValue(v, scope, params, hasJoins, context);
     if (op === '$null') {
       return val ? `${colSql} IS NULL` : `${colSql} IS NOT NULL`;
     }
     if (op === '$between') {
       const [lo, hi] = val as [unknown, unknown];
-      const loSql = this.__renderOperatorValue(lo, scope, params, hasJoins);
-      const hiSql = this.__renderOperatorValue(hi, scope, params, hasJoins);
-      return `${colSql} BETWEEN ${loSql} AND ${hiSql}`;
+      return `${colSql} BETWEEN ${render(lo)} AND ${render(hi)}`;
     }
     if (op === '$in' || op === '$nin') {
       const arr = val as unknown[];
-      const placeholders = arr
-        .map((v) => this.__renderOperatorValue(v, scope, params, hasJoins))
-        .join(', ');
+      const placeholders = arr.map(render).join(', ');
       const opSql = op === '$in' ? 'IN' : 'NOT IN';
       return `${colSql} ${opSql} (${placeholders})`;
     }
@@ -2309,19 +2424,13 @@ export abstract class AbstractTranslator {
     // ESCAPE clause, so it matches verbatim: a string literal before it is
     // bound, a column ref or expression in SQL.
     if (op === '$startsWith' || op === '$endsWith' || op === '$contains') {
-      const ref = this.__valueColumnRef(val, scope, hasJoins);
+      const ref = this.__aliasValue(val, scope, params, hasJoins, context) ??
+        this.__valueColumnRef(val, scope, hasJoins);
       if (ref !== null || this.__isExpressionNode(val)) {
-        const operand = this._likeEscapeOperand(
-          ref ?? this.__renderOperatorValue(val, scope, params, hasJoins),
-        );
+        const operand = this._likeEscapeOperand(ref ?? render(val));
         return `${emit(colSql, operand)}${this._likeEscapeClause()}`;
       }
-      if (typeof val !== 'string') {
-        return emit(
-          colSql,
-          this.__renderOperatorValue(val, scope, params, hasJoins),
-        );
-      }
+      if (typeof val !== 'string') return emit(colSql, render(val));
       const escaped = val.replace(
         LIKE_WILDCARDS,
         (ch) => `${LIKE_ESCAPE_CHAR}${ch}`,
@@ -2329,10 +2438,29 @@ export abstract class AbstractTranslator {
       const valueSql = this._parameterize(escaped, params);
       return `${emit(colSql, valueSql)}${this._likeEscapeClause()}`;
     }
-    return emit(
-      colSql,
-      this.__renderOperatorValue(val, scope, params, hasJoins),
-    );
+    return emit(colSql, render(val));
+  }
+
+  /**
+   * A filter value `'@alias'` naming an alias whose filter key
+   * {@link __resolveFilterKey} substitutes: the alias's SQL body, so the
+   * comparison reads its value; `null` for any other value. The alias
+   * wins over a column, as it does for a key.
+   */
+  private __aliasValue(
+    value: unknown,
+    scope: string[],
+    params: Parameters,
+    hasJoins: boolean,
+    context?: FilterContext,
+  ): string | null {
+    if (typeof value !== 'string' || !value.startsWith('@')) return null;
+    const name = value.slice(1);
+    const named = (map?: Record<string, unknown>) => !!map && name in map;
+    if (!named(context?.aggregates) && !named(context?.expressions)) {
+      return null;
+    }
+    return this.__resolveFilterKey(value, scope, params, hasJoins, context);
   }
 
   /**
@@ -2362,21 +2490,25 @@ export abstract class AbstractTranslator {
 
   /**
    * Render an operator's right-hand value as SQL: expression objects are
-   * translated, `@x` strings naming a column in `scope` become qualified
-   * column refs (via {@link AbstractTranslator.__valueColumnRef}), and
-   * everything else is parameterised.
+   * translated, `@x` strings naming an alias of `context` become its body
+   * (via {@link AbstractTranslator.__aliasValue}), those naming a column in
+   * `scope` become qualified column refs (via
+   * {@link AbstractTranslator.__valueColumnRef}), and everything else is
+   * parameterised.
    */
   private __renderOperatorValue(
     value: unknown,
     scope: string[],
     params: Parameters,
     hasJoins: boolean,
+    context?: FilterContext,
   ): string {
     if (value === null) return 'NULL';
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, scope, params, hasJoins);
     }
-    return this.__valueColumnRef(value, scope, hasJoins) ??
+    return this.__aliasValue(value, scope, params, hasJoins, context) ??
+      this.__valueColumnRef(value, scope, hasJoins) ??
       this._parameterize(value, params);
   }
 
@@ -2389,7 +2521,10 @@ export abstract class AbstractTranslator {
   ): string[] {
     if (!('args' in expr) || expr.args === undefined) return [];
     const args = expr.args as unknown;
-    if (typeof args === 'object' && args !== null && !Array.isArray(args)) {
+    if (
+      typeof args === 'object' && args !== null && !Array.isArray(args) &&
+      !this.__isExpressionNode(args)
+    ) {
       return this.__flattenObjectArgs(
         expr.$$_expression,
         args as Record<string, unknown>,

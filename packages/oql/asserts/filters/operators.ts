@@ -7,10 +7,12 @@
  * @module asserts/Filters/Operators
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import type {
   ColumnTypes as _ColumnTypes,
   Operators as _Operators,
 } from '../../types/mod.ts';
+import { assertExpression } from '../expressions/mod.ts';
 
 /**
  * List of valid comparison operators.
@@ -70,9 +72,14 @@ type ColumnTypeHint = 'string' | 'number' | 'bigint' | 'date' | 'boolean';
  * - String operators: { $like, $ilike, $startsWith, etc. } (for string columns)
  * - Comparison operators: { $gt, $gte, $lt, $lte } (for numeric/date columns)
  *
+ * An Expression used as an operator value is validated as a projected one
+ * is, against `columnList`.
+ *
  * @param x - The value to validate
  * @param columnType - Optional expected column type (used for type-specific operator validation)
+ * @param columnList - Optional list of valid column names (without '@' prefix) an Expression value may reference
  * @throws {TypeError} If the value is not a valid operator value
+ * @throws {OqlError} `INVALID_TIME_UNIT` from an Expression value with a missing or unknown unit
  *
  * @example
  * ```ts
@@ -105,9 +112,11 @@ type ColumnTypeHint = 'string' | 'number' | 'bigint' | 'date' | 'boolean';
 export const assertOperators: <T extends _ColumnTypes = _ColumnTypes>(
   x: unknown,
   columnType?: ColumnTypeHint,
+  columnList?: string[],
 ) => asserts x is _Operators<T> = <T extends _ColumnTypes = _ColumnTypes>(
   x: unknown,
   columnType?: ColumnTypeHint,
+  columnList?: string[],
 ): asserts x is _Operators<T> => {
   // null is valid
   if (x === null) {
@@ -166,7 +175,7 @@ export const assertOperators: <T extends _ColumnTypes = _ColumnTypes>(
 
   // Validate each operator — dispatch on category.
   for (const key of keys) {
-    validateOperatorEntry(key, obj[key], columnType);
+    validateOperatorEntry(key, obj[key], columnType, columnList);
   }
 };
 
@@ -180,6 +189,7 @@ const validateOperatorEntry = (
   key: string,
   value: unknown,
   columnType?: ColumnTypeHint,
+  columnList?: string[],
 ): void => {
   if (NULL_OPERATORS.has(key)) {
     validateNullOperator(key, value);
@@ -190,11 +200,11 @@ const validateOperatorEntry = (
     return;
   }
   if (STRING_OPERATORS.has(key)) {
-    validateStringOperator(key, value, columnType);
+    validateStringOperator(key, value, columnType, columnList);
     return;
   }
   if (COMPARISON_OPERATORS.has(key)) {
-    validateComparisonOperator(key, value, columnType);
+    validateComparisonOperator(key, value, columnType, columnList);
     return;
   }
   throw new TypeError(
@@ -260,6 +270,7 @@ const validateStringOperator = (
   key: string,
   value: unknown,
   columnType?: ColumnTypeHint,
+  columnList?: string[],
 ): void => {
   if (columnType && columnType !== 'string') {
     throw new TypeError(
@@ -267,7 +278,9 @@ const validateStringOperator = (
     );
   }
   if (typeof value === 'string') return;
-  if (isExpressionObject(value)) return;
+  if (isExpressionObject(value)) {
+    return validateExpressionValue(key, value, columnList);
+  }
   throw new TypeError(
     `Invalid Operators: '${key}' operator must have a string value or Expression, got ${typeof value}`,
   );
@@ -278,6 +291,7 @@ const validateComparisonOperator = (
   key: string,
   value: unknown,
   columnType?: ColumnTypeHint,
+  columnList?: string[],
 ): void => {
   if (
     (key === '$gt' || key === '$gte' || key === '$lt' || key === '$lte') &&
@@ -298,10 +312,30 @@ const validateComparisonOperator = (
     typeof value === 'boolean' || typeof value === 'bigint' ||
     value instanceof Date
   ) return;
-  if (isExpressionObject(value)) return;
+  if (isExpressionObject(value)) {
+    return validateExpressionValue(key, value, columnList);
+  }
   throw new TypeError(
     `Invalid Operators: '${key}' operator must have a primitive value, Date, or Expression, got ${typeof value}`,
   );
+};
+
+/** @internal */
+const validateExpressionValue = (
+  key: string,
+  value: unknown,
+  columnList?: string[],
+): void => {
+  try {
+    assertExpression(value, columnList);
+  } catch (error) {
+    if (error instanceof OqlError) throw error;
+    throw new TypeError(
+      `Invalid Operators: '${key}' operator value is an invalid Expression - ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 };
 
 /**

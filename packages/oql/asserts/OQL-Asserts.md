@@ -25,7 +25,7 @@ Runtime validators for OQL queries.
 
 The asserts module provides runtime validation for OQL queries. All validators follow the Guardian pattern with two variants:
 
-- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it
+- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it. An `UPDATE` or `DELETE` filter key that reaches through a join throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`. A `SELECT` or `COUNT` reference that names a join alias without the column's `@`, such as `'@Profile.bio'`, throws `OqlError` with code `INVALID_COLUMN_REF`
 - **Type guard functions** - Return `boolean` without throwing
 
 This ensures queries are structurally valid before translation and execution.
@@ -128,7 +128,7 @@ const valid = isSelect(query); // Returns boolean
 - `columns` is a non-empty array; **every column referenced anywhere in the query** (WHERE, joins, aggregates, expressions, orderBy, …) must be listed here.
 - `projection` maps `@`-prefixed column identifiers (or `@expressionKey` / `@aggregateKey` / `@JoinAlias.@col`) to alias strings or `true` for passthrough. **Alias values must not start with `@`** — the alias is the output column name, not a column reference.
 - WHERE uses valid filter operators; aggregates are rejected (use HAVING).
-- WHERE may reference pre-declared `expressions` by their `@key`; the translator substitutes the expression body.
+- WHERE may reference pre-declared `expressions` by their `@key`, as a key or a value; the translator substitutes the expression body. A WHERE value naming an aggregate, or a HAVING value naming an expression, is rejected as the key would be.
 - JOIN conditions reference declared join columns.
 - Aggregates have valid `$$_aggregate` discriminators and column refs.
 - ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.
@@ -203,7 +203,7 @@ const valid = isUpdate(query);
 - Table and columns are specified
 - Data keys are in the column list
 - Data values follow the INSERT rules above (same literal-vs-Expression disambiguation); column references inside Expressions are permitted (UPDATE can reference the row being modified)
-- WHERE clause is valid
+- WHERE clause is valid. A key whose root is not a column, the table or an expression key, such as `'@Items.@sku'`, reaches through a join, which UPDATE does not take: it throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`
 
 ### DELETE Query
 
@@ -222,7 +222,7 @@ const valid = isDelete(query);
 - Table is specified
 - `columns` is a non-empty array — this is the table's column list used to resolve `@col` references inside the optional `where` filter (and any pre-declared `expressions`), **not** a projection (DELETE returns no rows). A missing or empty array throws `Invalid DELETE query: 'columns' must be a non-empty array`.
 - Optional `expressions` are well-formed
-- WHERE clause is valid (syntactically optional — DELETE without WHERE removes every row)
+- WHERE clause is valid (syntactically optional — DELETE without WHERE removes every row). A key that reaches through a join, such as `'@Items.@sku'`, throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`, as for UPDATE
 
 ### UPSERT Query
 
@@ -352,7 +352,8 @@ const valid = isCreateIndex(query);
 - Index name and table
 - Column list with @ prefixes
 - Index method (BTREE, HASH, etc.)
-- Unique/partial index options
+- Unique/partial index options; a partial `where` holding `$exists` or
+  `$nexists` throws `OqlError` `EXISTS_NO_OUTER_TABLE`
 
 ### CREATE VIEW
 
@@ -604,7 +605,7 @@ const valid = isOperators(operators);
 - Array operators (`$in`, `$nin`, `$between`) require non-empty arrays.
 - `$between` requires exactly two elements.
 - **`null` is rejected** in operator-form values: `$eq: null`, `$ne: null`, `$in: [null, …]`, `$nin: [null, …]`, and comparison-op values like `$gt: null` all throw, and so does a `null` in a shorthand list (`['a', null]`). Use `$null: true` / `$null: false` for null comparisons.
-- **Expressions accepted** in comparison/string operator values: any non-Date object with a `$$_expression` discriminator passes (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`).
+- **Expressions accepted** in comparison/string operator values (`$eq: { $$_expression: 'MULTIPLY', args: [...] }`), and validated as a projected expression is: a malformed one throws `Invalid Operators: '<op>' operator value is an invalid Expression - <reason>`, and a bad `unit` throws `OqlError` `INVALID_TIME_UNIT`. `assertOperators(x, columnType?, columnList?)` checks its column references against `columnList`; inside a query that is the projected-expression scope, the declared and joined columns, so an expression or aggregate alias as an argument is refused there as it is in `expressions`.
 - `$like`/`$nlike`/etc. only valid on string-typed columns.
 - `$gt`/`$gte`/`$lt`/`$lte`/`$between` only valid on numeric/bigint/date columns.
 
@@ -752,7 +753,7 @@ import {
 Each pair has the signature `(x, columnList?)`.
 
 - **`assertCountAggregate` / `isCountAggregate`** — `column` is optional. Without it the aggregate is `COUNT(*)` and `distinct` must be absent; with it, optional `distinct: true` makes `COUNT(DISTINCT column)`.
-- **`assertSumAggregate` / `isSumAggregate`**, **`assertAvgAggregate` / `isAvgAggregate`**, **`assertMinAggregate` / `isMinAggregate`**, **`assertMaxAggregate` / `isMaxAggregate`** — require a `column` (column identifier or a nested **numeric** expression); optional boolean `distinct`.
+- **`assertSumAggregate` / `isSumAggregate`**, **`assertAvgAggregate` / `isAvgAggregate`**, **`assertMinAggregate` / `isMinAggregate`**, **`assertMaxAggregate` / `isMaxAggregate`** — require a `column` (column identifier, a nested **numeric** expression, or a `COALESCE`, `NULLIF` or `CASE`); optional boolean `distinct`.
 - **`assertStringAggAggregate` / `isStringAggAggregate`** — requires a `column`; optional `separator` must be a string; optional boolean `distinct`.
 - **`assertArrayAggAggregate` / `isArrayAggAggregate`** — requires a `column`; optional boolean `distinct`.
 - **`assertJsonRowAggregate` / `isJsonRowAggregate`** — requires a `columns: Record<string, ColumnOrExpression>` map (each key becomes a JSON property); `distinct` is not supported.
@@ -779,8 +780,9 @@ Signature: `assertExpressions(x, columnList?, depth?, maxDepth?)` / `isExpressio
 
 - Value is a valid base expression with a recognized `$$_expression` type
 - Delegates the category-specific shape (numeric / string / date) to the matching validator
-- A numeric operand may be a nested numeric expression or a nested `COALESCE`, `NULLIF` or `CASE`. String and date expressions do not take nested conditionals
-- A `unit` outside the expression's allowed set throws `OqlError` with code `INVALID_TIME_UNIT`. It applies to `DATE_ADD`, `DATE_DIFF`, `DATE_TRUNC` and `UNIX_TIMESTAMP`
+- A numeric operand may be a nested numeric expression, a `UNIX_TIMESTAMP`, or a nested `COALESCE`, `NULLIF` or `CASE`. A `COALESCE`, `NULLIF` or `CASE` also stands wherever a date or string expression takes a column: `DATE_ADD` `date` and `amount`, `DATE_DIFF` `from` and `to`, `DATE_TRUNC` `date`, the args of `CONCAT`, `LENGTH`, `LOWER`, `UPPER`, `TRIM`, `LTRIM` and `RTRIM`
+- `ABS`, `CEIL`, `FLOOR` and `SQRT` take exactly one operand and `ROUND` one or two, its precision second; any other count throws `'args' must be an array with …`
+- A `unit` outside the expression's allowed set, or a missing one where it is required, throws `OqlError` with code `INVALID_TIME_UNIT`. It applies to `DATE_ADD`, `DATE_DIFF`, `DATE_TRUNC` and `UNIX_TIMESTAMP`, whose `unit` alone is optional
 - An unrecognized type throws `Invalid Expression type: Unknown expression type '<type>'`
 - Nesting beyond `maxDepth` throws to guard against runaway recursion
 

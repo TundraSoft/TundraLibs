@@ -331,7 +331,8 @@ type ExistsFilter<PT, FPT> = {
   // join-value rule: an '@x' string is an outer column reference iff
   // `x` names a column in the outer scope; `null` is an IS NULL check;
   // anything else is a parameterised literal. Expressions are NOT
-  // allowed here.
+  // allowed here. In a node nested in another node's `where`, the outer
+  // scope is the parent subquery's table: a bare '@x' is its column.
   on: Record<`@${string}`, null | ColumnTypes | (keyof FPT & string)>;
   // `on` keys compared NULL-safely: the pair also matches when both
   // sides are NULL. Each must be an `on` key whose value is an '@'
@@ -453,7 +454,13 @@ starts with `@` cannot reach an identifier position.
 declared in the SELECT/UPDATE/DELETE/COUNT `expressions:` block are
 referenceable by their `@key` alias in WHERE filters — the translator
 substitutes the alias with the expression's SQL body at emit time.
-Same machinery as aggregates in HAVING.
+Same machinery as aggregates in HAVING. A filter value `'@key'` naming
+the alias, alone, in a list or as an operator's value, compares against
+the expression's value the same way; in HAVING a value `'@key'` naming an
+aggregate does. A value naming an aggregate in WHERE, or an expression in
+HAVING, is refused as the key would be. As an expression argument in an
+UPDATE or DELETE, `'@key'` names no column, so the database fails on SQL
+and the MongoDB translator throws `OqlError` `INVALID_COLUMN_REF`.
 
 **JSON / open-record columns** (`T extends Record<string, unknown>`)
 resolve neither the string nor the numeric branch. Only the
@@ -518,60 +525,44 @@ type Expressions<
   T extends TableType = TableType,
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
 > =
-  // numeric
-  | {
-    $$_expression: 'ADD';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'SUBTRACT';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'MULTIPLY';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'DIVIDE';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'MODULO';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'ABS';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'CEIL';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'FLOOR';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
-  | {
-    $$_expression: 'ROUND';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
-  }
+  // numeric — NumericExpressionArg is a numeric column, a number, a bigint, a
+  // nested numeric expression (LENGTH and DATE_DIFF included), a
+  // UNIX_TIMESTAMP, or a COALESCE, NULLIF or CASE, whose result type only
+  // the database knows. ConditionalExpressionArg below is that COALESCE,
+  // NULLIF or CASE alone
+  | { $$_expression: 'ADD'; args: Array<NumericExpressionArg<T, FT>> } // 1 or more
+  | { $$_expression: 'SUBTRACT'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
+  | { $$_expression: 'MULTIPLY'; args: Array<NumericExpressionArg<T, FT>> } // 1 or more
+  | { $$_expression: 'DIVIDE'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
+  | { $$_expression: 'MODULO'; args: Array<NumericExpressionArg<T, FT>> } // 2 or more
+  // ABS, CEIL, FLOOR and SQRT take exactly 1; ROUND takes 1 or 2, the
+  // second its precision. Any other count is refused.
+  | { $$_expression: 'ABS'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'CEIL'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'FLOOR'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'ROUND'; args: Array<NumericExpressionArg<T, FT>> }
+  | { $$_expression: 'SQRT'; args: Array<NumericExpressionArg<T, FT>> }
   | {
     $$_expression: 'POWER';
     args: {
-      base: GetColumnByType<FT, number | bigint> | number | bigint;
-      exponent: GetColumnByType<FT, number | bigint> | number | bigint;
+      base: NumericExpressionArg<T, FT>;
+      exponent: NumericExpressionArg<T, FT>;
     };
   }
+  // LENGTH takes a string column or any string; DATE_DIFF a Date column
+  // or a Date; either also a ConditionalExpressionArg
   | {
-    $$_expression: 'SQRT';
-    args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+    $$_expression: 'LENGTH';
+    args:
+      | GetColumnByType<FT, string>
+      | string
+      | ConditionalExpressionArg<T, FT>;
   }
-  | { $$_expression: 'LENGTH'; args: GetColumnByType<FT, string> | string }
   | {
     $$_expression: 'DATE_DIFF';
     args: {
-      from: GetColumnByType<FT, Date> | Date;
-      to: GetColumnByType<FT, Date> | Date;
+      from: GetColumnByType<FT, Date> | Date | ConditionalExpressionArg<T, FT>;
+      to: GetColumnByType<FT, Date> | Date | ConditionalExpressionArg<T, FT>;
       unit: TimeUnit;
     };
   }
@@ -579,15 +570,27 @@ type Expressions<
   | {
     $$_expression: 'DATE_ADD';
     args: {
-      date: GetColumnByType<FT, Date> | Date;
-      amount: GetColumnByType<FT, number> | number;
+      // a Date column, a Date, a nested NOW / CURRENT_TIMESTAMP(TZ),
+      // or a COALESCE, NULLIF or CASE
+      date:
+        | GetColumnByType<FT, Date>
+        | Date
+        | {
+          $$_expression: 'NOW' | 'CURRENT_TIMESTAMP' | 'CURRENT_TIMESTAMPTZ';
+        }
+        | ConditionalExpressionArg<T, FT>;
+      amount:
+        | GetColumnByType<FT, number>
+        | number
+        | ConditionalExpressionArg<T, FT>;
       unit: TimeUnit;
     };
   }
   | {
     $$_expression: 'DATE_TRUNC';
     args: {
-      // a Date column, or a nested DATE_ADD / NOW / CURRENT_TIMESTAMP(TZ)
+      // a Date column, or a nested DATE_ADD / NOW / CURRENT_TIMESTAMP(TZ) /
+      // COALESCE / NULLIF / CASE
       date: GetColumnByType<FT, Date> | Expressions<T, FT>;
       unit: 'DAYS' | 'MONTHS' | 'YEARS';
     };
@@ -597,9 +600,12 @@ type Expressions<
   | { $$_expression: 'CURRENT_TIME' }
   | { $$_expression: 'CURRENT_TIMESTAMP' }
   | { $$_expression: 'CURRENT_TIMESTAMPTZ' }
+  | { $$_expression: 'UNIX_TIMESTAMP'; unit?: 'seconds' | 'milliseconds' }
   // utility
   | { $$_expression: 'UUID' }
   // string
+  // CONCAT, LOWER, UPPER, TRIM, LTRIM and RTRIM also take a
+  // ConditionalExpressionArg
   | {
     $$_expression: 'CONCAT';
     args: Array<GetColumnByType<FT, string> | string>;
@@ -736,7 +742,8 @@ type DateExpressions =
   | 'CURRENT_TIMESTAMP'
   | 'CURRENT_TIMESTAMPTZ'
   | 'DATE_ADD'
-  | 'DATE_TRUNC';
+  | 'DATE_TRUNC'
+  | 'UNIX_TIMESTAMP';
 ```
 
 > Note: `LENGTH` and `DATE_DIFF` are classified as **numeric** (they
@@ -846,16 +853,20 @@ There is no general `CAST`. The engines disagree on what it means:
 
 Date and time operations returning a Date: `NOW`, `CURRENT_DATE`,
 `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`, `DATE_TRUNC`.
-(`DATE_DIFF` returns a number and is classified numeric.)
+(`DATE_DIFF` returns a number and is classified numeric.) `UNIX_TIMESTAMP`
+is a date expression that returns an integer.
 
-SQLite has no date type, so there each of these returns ISO 8601 UTC text,
-such as `2026-02-01T10:20:30.000Z`, in place of a `Date`.
+SQLite has no date type, so there each of these returns text in place of a
+`Date`: ISO 8601 UTC such as `2026-02-01T10:20:30.000Z`, and
+`2026-02-01T00:00:00.000Z` for `CURRENT_DATE`. The type per engine
+is in [date expression results](../docs/OQL-Compatibility.md#date-expression-results).
 
 `CURRENT_TIME` returns a string on every dialect — see
 [CURRENT_TIME](../docs/OQL-Compatibility.md#current_time).
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
-  `date` (negative `amount` subtracts). Months and years stop at the
+  `date` (negative `amount` subtracts). `date` is a column, a `Date`, or a
+  nested `NOW` / `CURRENT_TIMESTAMP(TZ)`. Months and years stop at the
   target month's last day on every dialect — see
   [DATE_ADD month end](../docs/OQL-Compatibility.md#date_add-month-end).
 - `DATE_DIFF` — `args: { from; to; unit }`; complete time units between
@@ -938,12 +949,16 @@ type Aggregates<
     column: keyof FT | Expressions<T, FT>;
     distinct?: boolean;
   }
-  // SUM / MIN / MAX / AVG — numeric/date columns or numeric expressions
+  // SUM / MIN / MAX / AVG — numeric/date columns, numeric expressions, or
+  // a COALESCE, NULLIF or CASE
   | {
     $$_aggregate: 'SUM' | 'MIN' | 'MAX' | 'AVG';
     column:
       | GetColumnByType<FT, number | bigint | Date>
-      | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
+      | Extract<
+        Expressions<T, FT>,
+        { $$_expression: NumericExpressions | ConditionalExpressions }
+      >;
     distinct?: boolean;
   }
   // STRING_AGG — concatenate with a delimiter
@@ -969,8 +984,8 @@ type Aggregates<
 
 - `COUNT(*)` is its own branch where `column` is `never` (must be
   omitted). `COUNT` with a `column` accepts an optional `distinct`.
-- `SUM`/`MIN`/`MAX`/`AVG` accept a numeric/Date column or a numeric
-  expression.
+- `SUM`/`MIN`/`MAX`/`AVG` accept a numeric/Date column, a numeric
+  expression, or a `COALESCE`, `NULLIF` or `CASE`.
 - `STRING_AGG` carries an optional `separator` (default `','`).
 - `JSON_ROW` takes a `columns` **record** (`key → column/expression`),
   not a flat list.

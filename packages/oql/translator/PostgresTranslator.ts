@@ -20,7 +20,7 @@ import type {
   Query,
 } from '../types/mod.ts';
 import { AbstractTranslator } from './AbstractTranslator.ts';
-import { OqlError } from '../errors/mod.ts';
+import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type {
   AggregateMap,
   DialectSupport,
@@ -31,6 +31,7 @@ import type {
   ParameterStyle,
 } from './types/mod.ts';
 import { Parameters } from './Parameters.ts';
+import { findExpression } from './findExpression.ts';
 
 /**
  * SQL data-type map. Postgres has the broadest type system of the SQL
@@ -74,6 +75,20 @@ const SQL_TYPE_MAP: Record<string, string> = {
  * emitted as `BYTEA(32)`.
  */
 const PG_LENGTH_TYPES = new Set(['CHAR', 'VARCHAR', 'BIT']);
+
+/** A pattern whose escape pairs end in one lone backslash, and its prefix. */
+const LONE_TRAILING_ESCAPE = String.raw`'^((?:[^\\]|\\.)*)\\$'`;
+/** The prefix, then an escaped backslash: two in the replacement text. */
+const ESCAPED_BACKSLASH = String.raw`'\1\\\\'`;
+
+/**
+ * The pattern side of LIKE and ILIKE. A pattern ending in a lone backslash,
+ * the escape character, is an error on Postgres, where MariaDB matches the
+ * backslash itself. A run of backslashes reads as escape pairs, so a run of
+ * odd length gets one more backslash and ends in an escaped one.
+ */
+const likePattern = (pattern: string): string =>
+  `regexp_replace(CAST(${pattern} AS TEXT), ${LONE_TRAILING_ESCAPE}, ${ESCAPED_BACKSLASH})`;
 
 /** Index methods Postgres recognises in `USING <method>`. */
 const PG_INDEX_METHODS = new Set([
@@ -306,10 +321,10 @@ export class PostgresTranslator extends AbstractTranslator {
     ['$gte', (c, v) => `${c} >= ${v}`],
     ['$lt', (c, v) => `${c} < ${v}`],
     ['$lte', (c, v) => `${c} <= ${v}`],
-    ['$like', (c, v) => `${c} LIKE ${v}`],
-    ['$nlike', (c, v) => `${c} NOT LIKE ${v}`],
-    ['$ilike', (c, v) => `${c} ILIKE ${v}`],
-    ['$nilike', (c, v) => `${c} NOT ILIKE ${v}`],
+    ['$like', (c, v) => `${c} LIKE ${likePattern(v)}`],
+    ['$nlike', (c, v) => `${c} NOT LIKE ${likePattern(v)}`],
+    ['$ilike', (c, v) => `${c} ILIKE ${likePattern(v)}`],
+    ['$nilike', (c, v) => `${c} NOT ILIKE ${likePattern(v)}`],
     ['$startsWith', (c, v) => `${c} LIKE (${v} || '%')`],
     ['$endsWith', (c, v) => `${c} LIKE ('%' || ${v})`],
     ['$contains', (c, v) => `${c} LIKE ('%' || ${v} || '%')`],
@@ -483,6 +498,10 @@ export class PostgresTranslator extends AbstractTranslator {
    * `q.where` becomes a partial-index predicate and `q.method` a `USING`
    * clause — but only for a method in `PG_INDEX_METHODS`; anything else is
    * dropped rather than passed through to the server.
+   *
+   * @throws {@link DialectUnsupportedError} When `q.where` holds a
+   *   `DATE_ADD`. Its interval is built from text, which Postgres does not
+   *   mark IMMUTABLE, so no index predicate can hold it.
    */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
@@ -501,7 +520,14 @@ export class PostgresTranslator extends AbstractTranslator {
     let sql =
       `CREATE ${unique}INDEX ${ifNotExists}${indexSql} ON ${tableSql}${method} (${cols})`;
     if (q.where) {
-      const scope = this._scopeFromFilterKeys(q.where);
+      const computed = findExpression(q.where, (t) => t === 'DATE_ADD');
+      if (computed !== null) {
+        throw new DialectUnsupportedError(
+          this.Dialect,
+          `the computed expression ${computed} in an index predicate`,
+        );
+      }
+      const scope = this._indexScope(q);
       sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
     }
     return sql;

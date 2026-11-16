@@ -247,7 +247,7 @@ const action = translator.select(query);
 //   params: {
 //     collection: 'users',
 //     filter: { age: { $gte: 18 } },
-//     options: { projection: { id: 1, email: 1 } }
+//     options: { projection: { id: 1, email: 1, _id: 0 } }
 //   }
 // }
 ```
@@ -273,15 +273,12 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
   itself (see
   [Compatibility](../docs/OQL-Compatibility.md#expressions-on-mongodb))
 
-> **Join `type` is not honoured.** `__buildLookup` reads a join's
-> `table`, `columns`, and `on`, but never its `type` — `INNER`, `LEFT`,
-> `RIGHT`, and `FULL` all emit the identical `$lookup` stage (no
-> `$unwind`, no post-filter), which is uniformly LEFT-outer: an
-> unmatched local document still comes through with an empty array for
-> the join alias. `RIGHT` is **not** emulated by reversing collections
-> and `FULL` does **not** throw — both silently behave like `LEFT`. See
-> the [Compatibility Matrix](../docs/OQL-Compatibility.md#joins) for the
-> full breakdown before relying on join `type` on Mongo.
+A join is a `$lookup` followed by an `$unwind`, so the pipeline sees one
+row per joined row, as SQL does. An `INNER` join drops a document with no
+match and a `LEFT` join keeps it. `RIGHT` and `FULL` add the joined
+documents that no row matches through a `$unionWith`, with the base
+columns `NULL`, and run the `where` after every join. See the
+[Compatibility Matrix](../docs/OQL-Compatibility.md#joins).
 
 **Pipeline-ordering guarantees:**
 
@@ -289,12 +286,15 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
   every field it references — after `$lookup` when it references a joined
   field in **either** key or value position (e.g. `{ '@createdAt': { $gt:
   '@Author.@joinedAt' } }`), and after the expressions `$addFields` when it
-  references a declared expression alias. A pure primary-table filter still
-  gets the efficient early `$match`. (Matching a not-yet-materialised field
+  references a declared expression alias, as a key or a value, and after
+  every join when one is `RIGHT` or `FULL`. Otherwise a pure primary-table
+  filter gets the efficient early `$match`. (Matching a not-yet-materialised field
   silently compares against `missing` and returns wrong rows.)
 - An `$exists` / `$nexists` node puts its `$lookup` directly before the
   `$match` that carries the filter and writes to a temporary
-  `__exists_<n>` field. The `$match` tests that field and an `$unset`
+  `__exists_<n>` field, with one more leading `_` while a column, join
+  alias, expression or aggregate of the query has that name. The
+  `$match` tests that field and an `$unset`
   removes it straight after, ahead of any `$sort` or `$project`. The
   filter stays one `$match`, so an `$or` across a column test and an
   `$exists` is evaluated as a whole.
@@ -341,13 +341,15 @@ const params = new Parameters();
 // Same value added twice returns the same name (dedup).
 const name1 = params.add(18); // 'p_0'
 const name2 = params.add('active'); // 'p_1'
+// `false` opts out: the translators bind each written value on its own.
+const name3 = params.add('active', false); // 'p_2'
 
 // Number of registered params
-params.size; // 2
+params.size; // 3
 
 // Snapshot of all params as a Record<name, value>
 const record = params.asRecord();
-// { p_0: 18, p_1: 'active' }
+// { p_0: 18, p_1: 'active', p_2: 'active' }
 ```
 
 > `Parameters` exposes only `add()`, `asRecord()`, and `size`. The
@@ -523,7 +525,7 @@ const action = translator.select(query);
 //       ]
 //     },
 //     options: {
-//       projection: { id: 1, email: 1, age: 1 },
+//       projection: { id: 1, email: 1, age: 1, _id: 0 },
 //       sort: { age: -1 },
 //       limit: 100
 //     }
@@ -677,7 +679,9 @@ What the OQL `NOW` / `CURRENT_DATE` expressions emit per dialect:
 - **MariaDB**: `NOW` → `NOW()`, `CURRENT_DATE` → `CURRENT_DATE()`
 - **SQLite**: `NOW` / `CURRENT_TIMESTAMP` → `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
   (ISO 8601 UTC, the text SQLite drivers write for a `Date`, so values parse
-  as UTC and sort correctly), `CURRENT_DATE` → `date('now')`
+  as UTC and sort correctly), `CURRENT_DATE` →
+  `strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'start of day')`, the text a UTC
+  midnight `Date` binds as
 
 ## Error Handling
 

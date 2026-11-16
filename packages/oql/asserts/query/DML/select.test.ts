@@ -13,7 +13,8 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { assertSelectQuery, isSelectQuery } from './select.ts';
+import { assertSelectQuery, isGroupedSelect, isSelectQuery } from './select.ts';
+import { OqlError } from '../../../errors/mod.ts';
 
 // orders with a join to users, for the orderBy-through-a-join cases.
 const ORDERS_WITH_USER = {
@@ -968,6 +969,39 @@ describe('oql.asserts.Query.DML.Select', () => {
       );
     });
 
+    it('a value naming an alias where its key is refused', () => {
+      const query = (filter: Record<string, unknown>) => ({
+        type: 'SELECT',
+        table: 'orders',
+        columns: ['userId', 'total'],
+        expressions: { net: { $$_expression: 'ADD', args: ['@total', 1] } },
+        aggregates: {
+          totalSpent: { $$_aggregate: 'SUM', column: '@total' },
+        },
+        projection: { '@userId': true, '@totalSpent': true },
+        ...filter,
+      });
+      asserts.assertThrows(
+        () =>
+          assertSelectQuery(query({
+            where: { $or: [{ '@total': { $in: [1, '@totalSpent'] } }] },
+          })),
+        TypeError,
+        "'where' cannot reference aggregate '@totalSpent' as a value",
+      );
+      asserts.assertThrows(
+        () => assertSelectQuery(query({ having: { '@totalSpent': '@net' } })),
+        TypeError,
+        "'having' cannot reference expression '@net' as a value",
+      );
+      // The aliases they may name: an expression in WHERE, an aggregate
+      // in HAVING.
+      assertSelectQuery(query({
+        where: { '@total': { $lt: '@net' } },
+        having: { '@totalSpent': { $gt: '@totalSpent' } },
+      }));
+    });
+
     it('HAVING present without aggregates', () => {
       asserts.assertThrows(
         () =>
@@ -999,6 +1033,50 @@ describe('oql.asserts.Query.DML.Select', () => {
         TypeError,
         'not in the provided column list',
       );
+    });
+
+    it('an Expression filter value is validated as a projected one is', () => {
+      const query = (filter: Record<string, unknown>) => ({
+        ...ORDERS_WITH_USER,
+        columns: ['id', 'userId', 'total'],
+        expressions: { bonus: { $$_expression: 'ADD', args: ['@total', 1] } },
+        aggregates: { n: { $$_aggregate: 'COUNT' } },
+        projection: { '@userId': true, '@n': true },
+        ...filter,
+      });
+      const add = (...args: unknown[]) => ({ $$_expression: 'ADD', args });
+      // Columns and joined columns, in WHERE and in HAVING.
+      assertSelectQuery(query({
+        where: { '@total': { $lt: add('@id', '@User.@id') } },
+        having: { '@n': { $gt: add('@userId', 1) } },
+      }));
+      const refused: Record<string, Record<string, unknown>> = {
+        'a malformed one': { where: { '@total': { $gt: add('oops') } } },
+        'an expression alias as an argument': {
+          where: { '@total': { $gt: add('@bonus', 1) } },
+        },
+        'an aggregate alias as an argument': {
+          having: { '@n': { $gt: add('@n', 1) } },
+        },
+        'a plain object as an argument': {
+          where: {
+            '@total': {
+              $ne: { $$_expression: 'COALESCE', args: ['@total', { a: '$' }] },
+            },
+          },
+        },
+        'an unknown expression type': {
+          where: { '@total': { $like: { $$_expression: 'NOPE' } } },
+        },
+      };
+      for (const [name, filter] of Object.entries(refused)) {
+        asserts.assertThrows(
+          () => assertSelectQuery(query(filter)),
+          TypeError,
+          'operator value is an invalid Expression',
+          name,
+        );
+      }
     });
   });
 
@@ -1446,6 +1524,57 @@ describe('oql.asserts.Query.DML.Select', () => {
         asserts.assertEquals(query.type, 'SELECT');
         asserts.assertEquals(query.table, 'users');
       }
+    });
+  });
+
+  describe('joined column spelling', () => {
+    const query = {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'meta'],
+      joins: {
+        P: {
+          type: 'LEFT',
+          table: 'profiles',
+          columns: ['userId', 'label'],
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+    };
+
+    it('refuses @Alias.col without its second @, as a key and as a value', () => {
+      for (
+        const where of [{ '@P.label': 'x' }, { '@name': { $eq: '@P.label' } }]
+      ) {
+        const err = asserts.assertThrows(
+          () => assertSelectQuery({ ...query, where }),
+          OqlError,
+          "A joined column is written '@P.@label'",
+        );
+        asserts.assertEquals(err.code, 'INVALID_COLUMN_REF');
+      }
+    });
+
+    it('leaves a reference whose root is not a join alias alone', () => {
+      assertSelectQuery({ ...query, where: { '@name': { $eq: '@meta.a' } } });
+      assertSelectQuery({ ...query, where: { '@P.@label': 'x' } });
+    });
+  });
+
+  describe('isGroupedSelect', () => {
+    it('groups on an aggregate or a projected join alias only', () => {
+      const count = { n: { $$_aggregate: 'COUNT' } };
+      const joins = { P: {} };
+      asserts.assertEquals(
+        [
+          isGroupedSelect({ aggregates: count, projection: { '@n': true } }),
+          isGroupedSelect({ projection: { '@P': true }, joins }),
+          isGroupedSelect({ aggregates: {}, projection: { '@id': true } }),
+          isGroupedSelect({ projection: { '@P.@id': true }, joins }),
+        ],
+        [true, true, false, false],
+      );
     });
   });
 });
