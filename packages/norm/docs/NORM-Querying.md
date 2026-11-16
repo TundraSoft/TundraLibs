@@ -319,7 +319,11 @@ await db.repo('Owners').find({ '@name': { $gt: '@Items.@label' } });
 When the to-one relation can match several rows, the read groups by the
 row's primary key, so each row comes back once, kept when at least one
 matched row passes the comparison. `count()` and `total: true` count
-distinct primary keys. Key-position conditions on the same relation
+distinct primary keys: in the database for a one-column key, and for a
+composite key by reading one row per matching key and counting them in
+the application, since no portable SQL counts distinct column pairs. On
+a large table with a composite key, such a count moves every matching
+key. Key-position conditions on the same relation
 then join with it, so one related row has to meet them all. Three reads
 throw instead: an entity with no primary key, a view, raises
 `INVALID_PROJECTION`, as it has nothing to tell its rows apart by; so

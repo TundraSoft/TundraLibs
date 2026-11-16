@@ -1720,7 +1720,9 @@ export class ReadRepo<
   /** The COUNT IR for a filter, and how to read its answer. A plan that
    * joins a relation which can match several rows repeats a row once
    * per match, so it counts distinct primary keys: in one aggregate for
-   * a single-column key, as grouped rows for a composite one. */
+   * a single-column key, as grouped rows for a composite one, which the
+   * read then counts here: one row per matching key crosses the wire,
+   * since no portable SQL counts distinct column pairs. */
   private __countQuery(
     plan: ProjectionPlan | undefined,
     where: QueryFilter | undefined,
