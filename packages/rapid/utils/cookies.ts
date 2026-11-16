@@ -26,6 +26,34 @@ export type CookieOptions = CompatCookieOptions & {
   signed?: boolean;
 };
 
+/** The last secret imported, and its key. An app signs with one secret. */
+let imported: { secret: string; key: Promise<CryptoKey> } | undefined;
+
+/**
+ * The HMAC key for `secret`, imported ONCE and reused: importing costs more
+ * than a third of a signature on Deno. A failed import is not kept.
+ *
+ * @internal
+ */
+export const signingKey = (secret: string): Promise<CryptoKey> => {
+  if (imported?.secret === secret) return imported.key;
+  const entry = {
+    secret,
+    key: crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign', 'verify'],
+    ),
+  };
+  imported = entry;
+  entry.key.catch(() => {
+    if (imported === entry) imported = undefined;
+  });
+  return entry.key;
+};
+
 /**
  * What the MAC covers. With a `name` the signature is BOUND to that cookie
  * (`name\0value`), so a value signed under one name can never be replayed
@@ -43,7 +71,9 @@ export const signValue = (
   secret: string,
   name?: string,
 ): Promise<string> =>
-  signHMAC(signedInput(value, name), secret).then((mac) => `${value}.${mac}`);
+  signingKey(secret)
+    .then((key) => signHMAC(signedInput(value, name), key))
+    .then((mac) => `${value}.${mac}`);
 
 /**
  * Verify a `value.<hmac>` wire form against `secret` (and the cookie `name`
@@ -65,7 +95,7 @@ export const verifySignedValue = async (
     return (await verifyHMAC(
         signedInput(value, name),
         raw.slice(dot + 1),
-        secret,
+        await signingKey(secret),
       ))
       ? value
       : undefined;
