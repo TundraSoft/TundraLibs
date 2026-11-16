@@ -102,7 +102,7 @@ message text.
 | ----------------------------- | ------------------------- | ------------------------------------------------------------------------------ |
 | `UNKNOWN`                     | —                         | Never thrown. The `.code` getter's fallback for a missing/unrecognised code.   |
 | `DIALECT_UNSUPPORTED`         | `DialectUnsupportedError` | The dialect has no way to express this query, expression, or aggregate.        |
-| `INVALID_COLUMN_REF`          | `OqlError`                | A column reference did not begin with the `@` sigil.                           |
+| `INVALID_COLUMN_REF`          | `OqlError`                | A column reference lacked its `@` sigil or named an expression, not a column.  |
 | `FILTER_DEPTH_EXCEEDED`       | `OqlError`                | A filter nested deeper than 50 levels of `$and` / `$or` / `$exists`.           |
 | `EXISTS_NO_OUTER_TABLE`       | `OqlError`                | A correlated `$exists` was used where there is no outer table to correlate to. |
 | `INSERT_COLUMN_NOT_IN_SCHEMA` | `OqlError`                | INSERT `data` named a column that is not in the query's `columns`.             |
@@ -171,6 +171,13 @@ key, an aggregate's `column`, an order-by entry. **Fix:** prefix it with `@`
 (`'@name'`, or `'@Profile.@bio'` for a joined column). `assertQuery` and the
 `columnIdentifier` asserts already reject this, so a validated query cannot
 reach it.
+
+**Also triggered by**, on MongoDB, an UPDATE or DELETE whose filter value or
+expression argument is an `@key` naming one of its declared `expressions`
+rather than a column, such as `CONCAT('@total', '!')` with `total` declared.
+The SQL dialects read it as a column the table lacks and the database fails;
+MongoDB throws here, before anything is written. **Fix:** write the
+expression itself where its value is needed.
 
 **Extra context:** `ref` — the offending string.
 

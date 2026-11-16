@@ -453,7 +453,10 @@ starts with `@` cannot reach an identifier position.
 declared in the SELECT/UPDATE/DELETE/COUNT `expressions:` block are
 referenceable by their `@key` alias in WHERE filters — the translator
 substitutes the alias with the expression's SQL body at emit time.
-Same machinery as aggregates in HAVING.
+Same machinery as aggregates in HAVING. The alias is a filter key only:
+in an UPDATE or DELETE, `'@key'` as a filter value or an expression
+argument names no column, so the database fails on SQL and the MongoDB
+translator throws `OqlError` `INVALID_COLUMN_REF`.
 
 **JSON / open-record columns** (`T extends Record<string, unknown>`)
 resolve neither the string nor the numeric branch. Only the
