@@ -858,6 +858,44 @@ describe({
         }
       });
 
+      it('PERMISSION_DENIED on a database no login may write to', async () => {
+        const engine = new MariaEngine('maria-err-denied', TEST_CONFIG);
+        try {
+          const e = await asserts.assertRejects(
+            () =>
+              engine.execute({
+                sql: `CREATE TABLE information_schema.${
+                  tableName('err_denied')
+                } (id INT)`,
+              }),
+            EngineError,
+          );
+          asserts.assertEquals(
+            [e.code, e.context.driverErrno],
+            ['PERMISSION_DENIED', 1044],
+          );
+        } finally {
+          await engine.disconnect();
+        }
+      });
+
+      it('OPERATION_FAILED on an Invalid Date parameter', async () => {
+        const engine = new MariaEngine('maria-err-date', TEST_CONFIG);
+        try {
+          const e = await asserts.assertRejects(
+            () =>
+              engine.execute({
+                sql: 'SELECT :at: AS v',
+                params: { at: new Date('nope') },
+              }),
+            EngineError,
+          );
+          asserts.assertEquals(e.code, 'OPERATION_FAILED');
+        } finally {
+          await engine.disconnect();
+        }
+      });
+
       it('names the constraint, column and table in the message', async () => {
         const engine = new MariaEngine('maria-err-names', TEST_CONFIG);
         const parent = tableName('err_parent');

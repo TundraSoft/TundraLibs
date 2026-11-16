@@ -4,7 +4,8 @@
  * `$exists`. Two fixed tables and one case table;
  * every engine must return the SAME rows for every case, read back from a
  * real database. A golden string in oql proves what the translator emits,
- * not what the database does with it.
+ * not what the database does with it. {@linkcode REFUSALS} holds the
+ * queries every engine must refuse with the same typed error.
  *
  * Each engine gets a thin `live-<engine>.test.ts` that hands
  * {@linkcode runLiveSuite} an engine. A new case goes in {@linkcode CASES}
@@ -32,6 +33,9 @@ export type LiveEngine = {
   select(q: Query<'SELECT'>): Promise<EngineQueryResult>;
   update(q: Query<'UPDATE'>): Promise<unknown>;
   delete(q: Query<'DELETE'>): Promise<unknown>;
+  count(q: Query<'COUNT'>): Promise<EngineQueryResult>;
+  createIndex(q: Query<'CREATE_INDEX'>): Promise<unknown>;
+  dropIndex(q: Query<'DROP_INDEX'>): Promise<unknown>;
   dropTable(q: Query<'DROP_TABLE'>): Promise<unknown>;
 };
 
@@ -566,6 +570,23 @@ const CASES: Case[] = [
     },
     expected: [{ id: 2 }, { id: 4 }],
   },
+  // The pattern is 'ACTIVEace' for row 1, NULL for row 2 and 'ACTIVE' for
+  // row 4. No value holds a LIKE wildcard: what one does in a computed
+  // pattern is not settled.
+  ...([
+    ['$like', 'ACTIVE', 4],
+    ['$nlike', 'ACTIVE', 1],
+    ['$ilike', 'active', 4],
+    ['$nilike', 'active', 1],
+  ] as const).map(([operator, prefix, id]): Case => ({
+    name: `a computed ${operator} operand is the pattern of its own row`,
+    where: {
+      '@status': {
+        [operator]: { $$_expression: 'CONCAT', args: [prefix, '@nick'] },
+      },
+    },
+    expected: [{ id }],
+  })),
   {
     name: 'a string literal starting with $ stays text',
     expressions: {
@@ -611,6 +632,31 @@ const CASES: Case[] = [
     },
     expected: [{ id: 1 }, { id: 3 }],
   },
+  // As a wildcard, the `%` of '10%' and '0%' would also match '100', and
+  // the `_` of '1_' and '_0' would match '10%' and '100'.
+  ...([
+    ['$startsWith', '10%', [1]],
+    ['$startsWith', '1_', []],
+    ['$startsWith', 'a_', [4]],
+    ['$startsWith', 'C:\\', [3]],
+    ['$endsWith', '0%', [1]],
+    ['$endsWith', '_0', []],
+    ['$endsWith', '_b', [4]],
+    ['$endsWith', ':\\', [3]],
+    ['$like', 'C:\\', [3]],
+  ] as const).map(([operator, text, ids]): Case => ({
+    name: operator === '$like'
+      ? 'a $like pattern ending in one backslash matches that backslash'
+      : `${operator} '${text}' matches the text as written`,
+    query: {
+      table: ITEMS,
+      columns: ITEM_COLUMNS,
+      projection: { '@id': 'id' },
+      where: { '@code': { [operator]: text } },
+      orderBy: { '@id': 'ASC' },
+    },
+    expected: ids.map((id) => ({ id })),
+  })),
   {
     name: 'a projected expression over a missing field is null',
     query: {
@@ -777,6 +823,28 @@ const CASES: Case[] = [
     expected: [{ id: 3 }, { id: 4 }],
   },
   {
+    name: 'COUNT counts the rows $exists keeps, in each group',
+    query: {
+      aggregates: { n: { $$_aggregate: 'COUNT' } },
+      projection: { '@status': 'status', '@n': 'n' },
+      where: { $exists: { table: ITEMS, on: { '@owner': '@id' } } },
+      orderBy: { '@status': 'ASC' },
+    },
+    expected: [{ status: 'ACTIVE', n: 1 }, { status: 'CLOSED', n: 1 }],
+  },
+  ...([['$exists', [1, 2]], ['$nexists', [3, 4]]] as const).map((
+    [operator, ids],
+  ): Case => ({
+    name: `HAVING ${operator} tests each group against another table`,
+    query: {
+      aggregates: { n: { $$_aggregate: 'COUNT' } },
+      projection: { '@id': 'id', '@n': 'n' },
+      having: { [operator]: { table: ITEMS, on: { '@owner': '@id' } } },
+      orderBy: { '@id': 'ASC' },
+    },
+    expected: ids.map((id) => ({ id, n: 1 })),
+  })),
+  {
     name: '$exists does not match a NULL key',
     where: { $exists: { table: ITEMS, on: { '@owner': '@qty' } } },
     expected: [],
@@ -793,6 +861,219 @@ const CASES: Case[] = [
     expected: [{ id: 3 }, { id: 4 }],
   },
 ];
+
+type Refusal = {
+  name: string;
+  /** Run on {@linkcode TABLE} unless it names its own table. */
+  query: Row & { type: keyof typeof METHODS };
+  /** `TypeError`, or the `code` of the typed error. */
+  throws: string;
+  /** A part of the message, where the error has no code. */
+  says?: string;
+  /** Engines whose database holds the index: there the query must run. */
+  runsOn?: LiveEngineName[];
+};
+
+const METHODS = {
+  SELECT: 'select',
+  UPDATE: 'update',
+  DELETE: 'delete',
+  CREATE_INDEX: 'createIndex',
+} as const;
+const IDS = { type: 'SELECT', projection: { '@id': 'id' } } as const;
+const COUNT_BY_STATUS = {
+  type: 'SELECT',
+  aggregates: { n: { $$_aggregate: 'COUNT' } },
+  projection: { '@status': 'status', '@n': 'n' },
+} as const;
+const INDEX = `${TABLE}_refused`;
+const refusedIndex = (where: Row) => ({
+  type: 'CREATE_INDEX' as const,
+  index: INDEX,
+  columns: ['@name'],
+  where,
+});
+
+// One query for each error the oql upgrade notes list as changed.
+const REFUSALS: Refusal[] = [
+  {
+    name: 'a null inside a list filter',
+    query: { ...IDS, where: { '@qty': [5, null] } },
+    throws: 'TypeError',
+    says: "Value for '@qty' must be valid",
+  },
+  {
+    name: 'an unknown time unit under expressions',
+    query: {
+      type: 'SELECT',
+      expressions: { later: dateAdd(1, 'WEEKS') },
+      projection: { '@later': 'later' },
+    },
+    throws: 'INVALID_TIME_UNIT',
+  },
+  {
+    name: 'a lower-case time unit in a filter operand',
+    query: { ...IDS, where: { '@due': { $gt: dateAdd(1, 'days') } } },
+    throws: 'INVALID_TIME_UNIT',
+  },
+  {
+    name: 'DATE_DIFF without a unit',
+    query: {
+      type: 'SELECT',
+      expressions: {
+        gap: { $$_expression: 'DATE_DIFF', args: { from: '@day', to: '@due' } },
+      },
+      projection: { '@gap': 'gap' },
+    },
+    throws: 'INVALID_TIME_UNIT',
+  },
+  {
+    name: 'an unknown UNIX_TIMESTAMP unit in a filter operand',
+    query: {
+      ...IDS,
+      where: {
+        '@qty': { $lt: { $$_expression: 'UNIX_TIMESTAMP', unit: 'minutes' } },
+      },
+    },
+    throws: 'INVALID_TIME_UNIT',
+  },
+  {
+    name: 'an UPDATE filter through a join',
+    query: {
+      type: 'UPDATE',
+      joins: JOIN_ITEMS,
+      data: { nick: 'z' },
+      where: { '@I.@code': 'none' },
+    },
+    throws: 'RELATION_FILTER_UNSUPPORTED',
+  },
+  {
+    name: 'a DELETE filter through a join',
+    query: {
+      type: 'DELETE',
+      joins: JOIN_ITEMS,
+      where: { '@I.@code': 'none' },
+    },
+    throws: 'RELATION_FILTER_UNSUPPORTED',
+  },
+  {
+    name: 'a joined column key without its second @',
+    query: { ...IDS, joins: JOIN_ITEMS, where: { '@I.code': '100' } },
+    throws: 'INVALID_COLUMN_REF',
+  },
+  {
+    name: 'a joined column value without its second @',
+    query: { ...IDS, joins: JOIN_ITEMS, where: { '@name': '@I.code' } },
+    throws: 'INVALID_COLUMN_REF',
+  },
+  {
+    name: 'a joined column orderBy key without its @ prefixes',
+    query: { ...IDS, joins: JOIN_ITEMS, orderBy: { 'I.amount': 'ASC' } },
+    throws: 'TypeError',
+    says: "orderBy key 'I.amount' must exist",
+  },
+  {
+    name: 'ABS with two operands',
+    query: {
+      type: 'SELECT',
+      expressions: { size: { $$_expression: 'ABS', args: ['@qty', 2] } },
+      projection: { '@size': 'size' },
+    },
+    throws: 'TypeError',
+    says: 'exactly 1 element(s) for ABS',
+  },
+  {
+    name: 'a malformed expression as a filter value',
+    query: {
+      ...IDS,
+      where: {
+        '@qty': { $eq: { $$_expression: 'ADD', args: ['@qty', 'x'] } },
+      },
+    },
+    throws: 'TypeError',
+    says: "Value for '@qty' must be valid",
+  },
+  {
+    name: 'a WHERE value naming an aggregate',
+    query: { ...COUNT_BY_STATUS, where: { '@qty': '@n' } },
+    throws: 'TypeError',
+    says: "'where' cannot reference aggregate '@n'",
+  },
+  {
+    name: 'a HAVING value naming an expression',
+    query: {
+      ...COUNT_BY_STATUS,
+      expressions: { upper: { $$_expression: 'UPPER', args: '@status' } },
+      having: { '@n': '@upper' },
+    },
+    throws: 'TypeError',
+    says: "'having' cannot reference expression '@upper'",
+  },
+  {
+    name: 'an index where with DATE_ADD',
+    query: refusedIndex({
+      '@due': {
+        $gt: {
+          $$_expression: 'DATE_ADD',
+          args: { date: utc('2024-02-01T00:00:00'), amount: 1, unit: 'DAYS' },
+        },
+      },
+    }),
+    throws: 'DIALECT_UNSUPPORTED',
+    runsOn: ['sqlite'],
+  },
+  {
+    name: 'an index where with a clock',
+    query: refusedIndex({ '@at': { $lt: { $$_expression: 'NOW' } } }),
+    throws: 'DIALECT_UNSUPPORTED',
+  },
+  {
+    name: 'an index where with UUID',
+    query: refusedIndex({ '@name': { $eq: { $$_expression: 'UUID' } } }),
+    throws: 'DIALECT_UNSUPPORTED',
+  },
+  {
+    name: 'an index where with $exists',
+    query: refusedIndex({
+      $exists: { table: ITEMS, on: { '@owner': '@id' } },
+    }),
+    throws: 'EXISTS_NO_OUTER_TABLE',
+  },
+  {
+    name: 'an index where with an expression',
+    query: refusedIndex({
+      '@qty': { $gte: { $$_expression: 'ADD', args: ['@id', 1] } },
+    }),
+    throws: 'DIALECT_UNSUPPORTED',
+    runsOn: ['postgres', 'sqlite'],
+  },
+];
+
+/** What `run` throws: `'TypeError'` or a typed error's `code`, and its message. */
+async function thrown(run: () => unknown): Promise<[string?, string?]> {
+  // A translator throws before the engine method returns its promise.
+  const error = await asserts.assertRejects(async () => {
+    await run();
+  }) as Error & { code?: string };
+  return [error instanceof TypeError ? 'TypeError' : error.code, error.message];
+}
+
+/** Fails unless `time` is the host's UTC clock, within a minute. */
+function assertUtcClock(time: unknown): void {
+  asserts.assertEquals(typeof time, 'string');
+  asserts.assertMatch(time as string, /^\d{2}:\d{2}:\d{2}$/);
+  const [h, m, sec] = (time as string).split(':').map(Number);
+  const clock = new Date();
+  const off = Math.abs(
+    h! * 3600 + m! * 60 + sec! -
+      (clock.getUTCHours() * 3600 + clock.getUTCMinutes() * 60 +
+        clock.getUTCSeconds()),
+  );
+  asserts.assert(
+    Math.min(off, 86400 - off) <= 60,
+    `${time} is not the UTC time of ${clock.toISOString()}`,
+  );
+}
 
 /** A Date as its ISO text, and a bigint as a number unless `exactNumbers`. */
 function plain(value: unknown, c: Case): unknown {
@@ -947,21 +1228,194 @@ export async function runLiveSuite(
           projection: { '@now': 'now' },
           where: { '@id': 1 },
         } as unknown as Query<'SELECT'>);
-        const now = result.data[0]?.now;
-        asserts.assertEquals(typeof now, 'string');
-        asserts.assertMatch(now as string, /^\d{2}:\d{2}:\d{2}$/);
-        const [h, m, sec] = (now as string).split(':').map(Number);
-        const clock = new Date();
-        const off = Math.abs(
-          h! * 3600 + m! * 60 + sec! -
-            (clock.getUTCHours() * 3600 + clock.getUTCMinutes() * 60 +
-              clock.getUTCSeconds()),
-        );
-        asserts.assert(
-          Math.min(off, 86400 - off) <= 60,
-          `${now} is not the UTC time of ${clock.toISOString()}`,
-        );
+        assertUtcClock(result.data[0]?.now);
       });
+
+      it('CURRENT_TIME filters, inserts and updates as the UTC clock time', async () => {
+        const table = `${TABLE}_clock`;
+        const columns = ['id', 't', 's'];
+        const now = { $$_expression: 'CURRENT_TIME' };
+        const select = async (query: Row) =>
+          (await engine.select({
+            type: 'SELECT',
+            table,
+            columns,
+            orderBy: { '@id': 'ASC' },
+            ...query,
+          } as unknown as Query<'SELECT'>)).data;
+        await engine.createTable({
+          type: 'CREATE_TABLE',
+          table,
+          columns: {
+            id: { type: 'INTEGER', nullable: false },
+            t: { type: 'TIME' },
+            s: { type: 'VARCHAR', length: 20 },
+          },
+          primaryKey: ['id'],
+        });
+        try {
+          await engine.insert({
+            type: 'INSERT',
+            table,
+            columns,
+            data: [
+              { id: 1, t: '00:00:00', s: 'a' },
+              { id: 2, t: '23:59:59', s: 'b' },
+              { id: 3, t: null, s: null },
+            ],
+          });
+          // The clock is never before row 1 nor after row 2.
+          for (
+            const [early, late, expected] of [
+              ['$lte', '$gte', [{ id: 1 }, { id: 2 }]],
+              ['$gt', '$lt', []],
+            ] as [string, string, Row[]][]
+          ) {
+            asserts.assertEquals(
+              await select({
+                projection: { '@id': 'id' },
+                where: {
+                  $or: [
+                    { '@t': { [early]: now }, '@id': { $in: [1, 3] } },
+                    { '@t': { [late]: now }, '@id': 2 },
+                  ],
+                },
+              }),
+              expected,
+            );
+          }
+          await engine.insert({
+            type: 'INSERT',
+            table,
+            columns,
+            data: [{ id: 4, t: now, s: now }],
+          } as unknown as Query<'INSERT'>);
+          await engine.update({
+            type: 'UPDATE',
+            table,
+            columns,
+            data: { t: now, s: now },
+            where: { '@id': 1 },
+          } as unknown as Query<'UPDATE'>);
+          const written = await select({
+            projection: { '@id': 'id', '@t': 't', '@s': 's' },
+            where: { '@id': { $in: [1, 4] } },
+          });
+          asserts.assertEquals(written.map((row) => row.id), [1, 4]);
+          for (const row of written) {
+            assertUtcClock(row.s);
+            // A TIME column may read back with a fraction, which is not
+            // settled: only its seconds are compared.
+            assertUtcClock(String(row.t).slice(0, 8));
+          }
+        } finally {
+          await engine.dropTable({ type: 'DROP_TABLE', table, ifExists: true });
+        }
+      });
+
+      it('count() counts the rows a filter with $exists keeps', async () => {
+        const owned = { table: ITEMS, on: { '@owner': '@id' } };
+        const cheap = { ...owned, where: { '@amount': { $lt: 3 } } };
+        const counts: [Row, number][] = [
+          [{ where: { $exists: owned } }, 2],
+          [{ where: { $nexists: owned } }, 2],
+          [{ where: { '@status': 'CLOSED', $nexists: cheap } }, 1],
+          [{ joins: JOIN_ITEMS, where: { $exists: cheap } }, 2],
+        ];
+        for (const [query, count] of counts) {
+          const result = await engine.count({
+            type: 'COUNT',
+            table: TABLE,
+            columns: COLUMNS,
+            ...query,
+          } as unknown as Query<'COUNT'>);
+          asserts.assertEquals(result.data, [{ Count: count }]);
+        }
+      });
+
+      it('a unique partial index on a Date condition holds only the rows inside it', async () => {
+        const table = `${TABLE}_dated`;
+        const columns = ['id', 'name', 'day', 'at', 'atz'];
+        const from = utc('2024-02-01T00:00:00');
+        let id = 0;
+        await engine.createTable({
+          type: 'CREATE_TABLE',
+          table,
+          columns: {
+            id: { type: 'INTEGER', nullable: false },
+            name: { type: 'VARCHAR', length: 20 },
+            day: { type: 'DATE' },
+            at: { type: 'TIMESTAMP' },
+            atz: { type: 'TIMESTAMPTZ' },
+          },
+          primaryKey: ['id'],
+        });
+        try {
+          for (
+            const [column, before] of [
+              ['day', utc('2024-01-31T00:00:00')],
+              ['at', utc('2024-01-31T23:59:59')],
+              ['atz', utc('2024-01-31T23:59:59')],
+            ] as const
+          ) {
+            const index: Query<'CREATE_INDEX'> = {
+              type: 'CREATE_INDEX',
+              table,
+              index: `${table}_${column}`,
+              columns: ['@name'],
+              unique: true,
+              where: { [`@${column}`]: { $gte: from } },
+            };
+            if (name === 'maria') {
+              // MariaDB has no partial index.
+              asserts.assertEquals(
+                (await thrown(() => engine.createIndex(index)))[0],
+                'DIALECT_UNSUPPORTED',
+              );
+              continue;
+            }
+            await engine.createIndex(index);
+            const add = (value: Date) =>
+              engine.insert({
+                type: 'INSERT',
+                table,
+                columns,
+                data: [{ id: ++id, name: column, [column]: value }],
+              });
+            await add(before);
+            await add(before);
+            await add(from);
+            asserts.assertEquals(
+              (await thrown(() => add(from)))[0],
+              'DUPLICATE_KEY',
+            );
+          }
+        } finally {
+          await engine.dropTable({ type: 'DROP_TABLE', table, ifExists: true });
+        }
+      });
+
+      for (const r of REFUSALS) {
+        const runs = r.runsOn?.includes(name);
+        it(`${r.name} ${runs ? 'runs' : `throws ${r.throws}`}`, async () => {
+          const run = () =>
+            engine[METHODS[r.query.type]](
+              { table: TABLE, columns: COLUMNS, ...r.query } as never,
+            );
+          if (!runs) {
+            const [kind, message] = await thrown(run);
+            asserts.assertEquals(kind, r.throws);
+            asserts.assertStringIncludes(message!, r.says ?? '');
+            return;
+          }
+          await run();
+          await engine.dropIndex({
+            type: 'DROP_INDEX',
+            table: TABLE,
+            index: INDEX,
+          });
+        });
+      }
 
       it('UPDATE and DELETE filter on a declared expression', async () => {
         const table = `${TABLE}_edit`;
