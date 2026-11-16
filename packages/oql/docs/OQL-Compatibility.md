@@ -492,21 +492,23 @@ there, since Postgres has no operator for the pair.
 
 What JavaScript receives for a date expression, on Postgres 18, MariaDB 11,
 SQLite and MongoDB 8 through the oql drivers, the same on Deno, Bun and
-Node. SQLite has no date type, so every result there is text, and the text
-is not always a full timestamp:
+Node. SQLite has no date type, so a date result there is ISO 8601 UTC text:
 
 | Expression                                        | Postgres             | MariaDB               | SQLite                                                 | MongoDB              |
 | ------------------------------------------------- | -------------------- | --------------------- | ------------------------------------------------------ | -------------------- |
 | `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ` | `Date`               | `Date`, whole seconds | `'2026-11-15T23:00:24.401Z'`                           | `Date`               |
-| `CURRENT_DATE`                                    | `Date`, midnight UTC | `Date`, midnight UTC  | `'2026-11-15'`, the date alone                         | `Date`, midnight UTC |
+| `CURRENT_DATE`                                    | `Date`, midnight UTC | `Date`, midnight UTC  | `'2026-11-15T00:00:00.000Z'`                           | `Date`, midnight UTC |
 | `CURRENT_TIME`                                    | `'23:00:24'`         | `'23:00:24'`          | `'23:00:24'`                                           | `'23:00:24'`         |
 | `DATE_ADD`, `DATE_TRUNC`                          | `Date`               | `Date`                | `'2026-03-16T00:00:00.000Z'`, also for a `DATE` column | `Date`               |
 | `UNIX_TIMESTAMP`                                  | `bigint`             | `bigint`              | `number`                                               | `number`             |
 
-SQLite also stores a `DATE` column as the full ISO 8601 text, so
-`CURRENT_DATE` never equals one there: `'@d': { $eq: CURRENT_DATE }`
-returns no row on SQLite and today's row on the other three. `$gte` and
-`$lt` against it agree on every engine.
+On SQLite a UTC-midnight `Date` in a `DATE` column is stored as the same
+text, which is also what norm writes for a `date()` column, so
+`'@d': { $eq: CURRENT_DATE }` returns today's row on every engine.
+`CURRENT_DATE` there is the text `DATE_TRUNC` of `NOW` to `DAYS` gives.
+Earlier releases rendered it as `'2026-11-15'`, which matched no stored
+day, so `$eq` found no row and `$lte` and `$gt` put today on the wrong
+side.
 
 ### DATE_ADD result
 
@@ -653,12 +655,12 @@ every dialect, and COUNT is `0`. An aggregate query without group keys
 returns one row even when no row matches the filter, as SQL does; with
 group keys it returns no rows. On MongoDB the ungrouped `$group` runs
 inside a `$facet`, which emits that one row when the group has none.
-ARRAY_AGG and JSON_ROW over no rows are `NULL` on Postgres, MariaDB and
-MongoDB, and an empty array on SQLite.
+ARRAY_AGG and JSON_ROW over no rows are `NULL` on every dialect.
 
 Earlier releases gave `0` for such a SUM on MongoDB, plain or `distinct`,
 and returned no row for an ungrouped aggregate over no rows there. A
-`count()` query was already `0`.
+`count()` query was already `0`. They also gave an empty array for
+ARRAY_AGG and JSON_ROW over no rows on SQLite.
 
 A projected expression whose result is `NULL` is a key with `null` on
 every dialect. Earlier releases left the key out of the MongoDB row when
