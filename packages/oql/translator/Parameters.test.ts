@@ -19,6 +19,19 @@ describe('oql.translator.Parameters', () => {
     asserts.assertEquals(p.size, 2);
   });
 
+  it('gives a value added with share false a name of its own', () => {
+    const p = new Parameters();
+    asserts.assertEquals(p.add('10:00:00'), 'p_0');
+    asserts.assertEquals(p.add('10:00:00', false), 'p_1');
+    asserts.assertEquals(p.add('10:00:00', false), 'p_2');
+    asserts.assertEquals(p.add('10:00:00'), 'p_0');
+    asserts.assertEquals(p.asRecord(), {
+      p_0: '10:00:00',
+      p_1: '10:00:00',
+      p_2: '10:00:00',
+    });
+  });
+
   it('dedupes equal Date instances by epoch ms', () => {
     const p = new Parameters();
     asserts.assertEquals(p.add(new Date(0)), 'p_0');

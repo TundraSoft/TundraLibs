@@ -2,7 +2,8 @@
  * Param-name allocator with dedup-on-add. Every translator instance gets one.
  * `add(value)` returns a stable param name; calling it twice with the same
  * value returns the same name. Callers shouldn't care about that — it's a
- * payload optimisation, not a semantic guarantee.
+ * payload optimisation, not a semantic guarantee. `add(value, false)` opts
+ * out, for a value written to a column.
  *
  * `Date`, `bigint` and `string` use string-keyed dedup so identical
  * values dedupe correctly across calls; everything else dedupes by JS Map
@@ -61,10 +62,14 @@ export class Parameters {
   }
 
   /**
-   * Register `value` and return its param name. Same value → same name.
+   * Register `value` and return its param name. Same value → same name,
+   * unless `share` is false: then the value gets a name of its own, which
+   * no later `add` returns. A written value needs that on Postgres, which
+   * gives one placeholder one type, so one string bound to a TIME and a
+   * VARCHAR column fails as "inconsistent types deduced for parameter".
    */
-  public add(value: unknown): string {
-    const key = this.__dedupKey(value);
+  public add(value: unknown, share = true): string {
+    const key = share ? this.__dedupKey(value) : Symbol();
     const existing = this.__params.get(key);
     if (existing !== undefined) return existing.name;
     const name = `${this.__prefix}${this.__params.size}`;

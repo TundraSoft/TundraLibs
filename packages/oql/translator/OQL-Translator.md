@@ -337,13 +337,15 @@ const params = new Parameters();
 // Same value added twice returns the same name (dedup).
 const name1 = params.add(18); // 'p_0'
 const name2 = params.add('active'); // 'p_1'
+// `false` opts out: the translators bind each written value on its own.
+const name3 = params.add('active', false); // 'p_2'
 
 // Number of registered params
-params.size; // 2
+params.size; // 3
 
 // Snapshot of all params as a Record<name, value>
 const record = params.asRecord();
-// { p_0: 18, p_1: 'active' }
+// { p_0: 18, p_1: 'active', p_2: 'active' }
 ```
 
 > `Parameters` exposes only `add()`, `asRecord()`, and `size`. The

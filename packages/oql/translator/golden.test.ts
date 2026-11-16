@@ -2224,6 +2224,33 @@ const CASES: Case[] = [
     },
   },
   {
+    // A written value never shares a placeholder with an equal one: on
+    // Postgres one placeholder has one type, and TIME and VARCHAR differ.
+    name: 'INSERT one string into two columns binds it twice',
+    method: 'insert',
+    query: {
+      type: 'INSERT',
+      table: 'slots',
+      columns: ['id', 'at', 'label'],
+      data: { id: 1, at: '10:00:00', label: '10:00:00' },
+    } satisfies Query<'INSERT'>,
+    expected: {
+      sqlite: {
+        sql:
+          'INSERT INTO "slots" ("id", "at", "label") VALUES (:p_0:, :p_1:, :p_2:) RETURNING "id", "at", "label"',
+        params: { p_0: 1, p_1: '10:00:00', p_2: '10:00:00' },
+      },
+      postgres: {
+        sql:
+          'INSERT INTO "slots" ("id", "at", "label") VALUES (:p_0:, :p_1:, :p_2:) RETURNING "id", "at", "label"',
+      },
+      maria: {
+        sql:
+          'INSERT INTO `slots` (`id`, `at`, `label`) VALUES (:p_0:, :p_1:, :p_2:) RETURNING `id`, `at`, `label`',
+      },
+    },
+  },
+  {
     name: 'INSERT row with explicit null and missing column',
     method: 'insert',
     query: {
@@ -2698,7 +2725,8 @@ const CASES: Case[] = [
 
   {
     // updateSet: explicit conflict values; references read the EXISTING
-    // row, which Postgres only allows through a table qualifier.
+    // row, which Postgres only allows through a table qualifier. `id` and
+    // `clicks` are both 1 and still bind once each.
     name: 'UPSERT with updateSet (copied column + existing-row expression)',
     method: 'upsert',
     query: {
@@ -2716,15 +2744,15 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `INSERT INTO "stats" AS __base__ ("id", "label", "clicks") VALUES (:p_0:, :p_1:, :p_0:) ON CONFLICT ("id") DO UPDATE SET "label" = excluded."label", "clicks" = (__base__."clicks" + :p_2:), "updatedAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') RETURNING "id", "label", "clicks", "updatedAt"`,
+          `INSERT INTO "stats" AS __base__ ("id", "label", "clicks") VALUES (:p_0:, :p_1:, :p_2:) ON CONFLICT ("id") DO UPDATE SET "label" = excluded."label", "clicks" = (__base__."clicks" + :p_3:), "updatedAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') RETURNING "id", "label", "clicks", "updatedAt"`,
       },
       postgres: {
         sql:
-          'INSERT INTO "stats" AS __base__ ("id", "label", "clicks") VALUES (:p_0:, :p_1:, :p_0:) ON CONFLICT ("id") DO UPDATE SET "label" = EXCLUDED."label", "clicks" = (__base__."clicks" + :p_2:), "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "label", "clicks", "updatedAt"',
+          'INSERT INTO "stats" AS __base__ ("id", "label", "clicks") VALUES (:p_0:, :p_1:, :p_2:) ON CONFLICT ("id") DO UPDATE SET "label" = EXCLUDED."label", "clicks" = (__base__."clicks" + :p_3:), "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "label", "clicks", "updatedAt"',
       },
       maria: {
         sql:
-          'INSERT INTO `stats` (`id`, `label`, `clicks`) VALUES (:p_0:, :p_1:, :p_0:) ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `clicks` = (`clicks` + :p_2:), `updatedAt` = NOW() RETURNING `id`, `label`, `clicks`, `updatedAt`',
+          'INSERT INTO `stats` (`id`, `label`, `clicks`) VALUES (:p_0:, :p_1:, :p_2:) ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `clicks` = (`clicks` + :p_3:), `updatedAt` = NOW() RETURNING `id`, `label`, `clicks`, `updatedAt`',
       },
     },
   },
