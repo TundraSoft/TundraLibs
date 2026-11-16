@@ -287,6 +287,20 @@ describe({
         await engine.disconnect();
       });
 
+      it('binds a whole number as INTEGER and a fraction as REAL', async () => {
+        const engine = new SQLiteEngine('int-bind', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: 'SELECT typeof(:n:) AS tn, :n: / 2 AS half, :n: AS n, ' +
+            'typeof(:f:) AS tf',
+          params: { n: 5, f: 1.5 },
+        });
+        asserts.assertStrictEquals(r.data[0]!.n, 5);
+        asserts.assertEquals(r.data, [
+          { tn: 'integer', half: 2, n: 5, tf: 'real' },
+        ]);
+        await engine.disconnect();
+      });
+
       it('leaves a placeholder inside a string, identifier or comment as text', async () => {
         const engine = new SQLiteEngine('quoted', TEST_CONFIG);
         const r = await engine.execute({
