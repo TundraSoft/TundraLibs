@@ -515,6 +515,19 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
       assertEquals(err.message, 'Column not found on NEON::neon-test: nosuch');
     });
 
+    it('names the table an undefined_table message reports', () => {
+      const text = 'relation "nosuch" does not exist';
+      const err = makeEngine().wrap(
+        new NeonHttpError(text, {
+          status: 400,
+          code: '42P01',
+          fields: { message: text, code: '42P01' },
+        }),
+        { sql: 'SELECT * FROM nosuch' },
+      );
+      assertEquals(err.message, 'Table not found on NEON::neon-test: nosuch');
+    });
+
     it('returns an existing EngineError unchanged', () => {
       const eng = makeEngine();
       const pre = new EngineError('MISSING_PARAMETERS', {

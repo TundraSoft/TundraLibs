@@ -64,7 +64,11 @@ import { PgConnection } from './PgConnection.ts';
 import { PgServerError } from './PgServerError.ts';
 import { type EncodedParam, encodeParam } from './binary.ts';
 import { buildSSLRequest } from './protocol.ts';
-import { pgSqlStateToCode, pgUndefinedColumn } from './sqlState.ts';
+import {
+  pgSqlStateToCode,
+  pgUndefinedColumn,
+  pgUndefinedTable,
+} from './sqlState.ts';
 import { nonUtcReason, UTC_ZONE } from './timeZone.ts';
 import type { PostgresEngineOptions } from './types/mod.ts';
 
@@ -506,6 +510,10 @@ export class PostgresEngine
       if (code === 'COLUMN_NOT_FOUND' && meta.column === undefined) {
         const column = pgUndefinedColumn(meta.reason as string);
         if (column !== undefined) meta.column = column;
+      }
+      if (code === 'TABLE_NOT_FOUND' && meta.table === undefined) {
+        const table = pgUndefinedTable(meta.reason as string);
+        if (table !== undefined) meta.table = table;
       }
       if (error.fields.has('n')) meta.constraint = error.fields.get('n');
       if (error.fields.has('D')) meta.detail = error.fields.get('D');

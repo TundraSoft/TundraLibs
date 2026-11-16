@@ -176,6 +176,26 @@ describe('drivers.PostgresEngine.error-mapping (no DB)', () => {
     }
   });
 
+  it('names the table an undefined_table message reports', () => {
+    const cases: Array<[string, string]> = [
+      ['relation "nosuch" does not exist', 'nosuch'],
+      ['relation "app.nosuch" does not exist', 'app.nosuch'],
+      ['table "nosuch" does not exist', 'nosuch'],
+      ['materialized view "nosuch" does not exist', 'nosuch'],
+      ['missing FROM-clause entry for table "u"', 'u'],
+    ];
+    for (const [text, table] of cases) {
+      const err = engine.wrapError(
+        new PgServerError('42P01', new Map([['M', text]])),
+        q,
+      );
+      asserts.assertEquals(
+        err.message,
+        `Table not found on POSTGRES::pg-errmap: ${table}`,
+      );
+    }
+  });
+
   it('maps unknown SQLSTATE to QUERY_EXECUTION_FAILED', () => {
     asserts.assertEquals(codeFor('XX000'), 'QUERY_EXECUTION_FAILED');
   });
@@ -749,6 +769,29 @@ describe({
         } catch (e) {
           asserts.assertInstanceOf(e, EngineError);
           asserts.assertEquals((e as EngineError).code, 'TABLE_NOT_FOUND');
+        }
+        await engine.disconnect();
+      });
+
+      it('names the missing table in the message', async () => {
+        const engine = new PostgresEngine('pg-err-table-name', TEST_CONFIG);
+        for (
+          const sql of [
+            'SELECT * FROM public.tundra_none',
+            'DROP TABLE tundra_none',
+          ]
+        ) {
+          const e = await asserts.assertRejects(
+            () => engine.execute({ sql }),
+            EngineError,
+          );
+          asserts.assertEquals(
+            [e.code, e.context.table],
+            [
+              'TABLE_NOT_FOUND',
+              sql.startsWith('SELECT') ? 'public.tundra_none' : 'tundra_none',
+            ],
+          );
         }
         await engine.disconnect();
       });

@@ -114,6 +114,7 @@ describe({
         ['CHECK constraint failed: t', 'CHECK_VIOLATION'],
         ['no such table: widgets', 'TABLE_NOT_FOUND'],
         ['no such column: qty', 'COLUMN_NOT_FOUND'],
+        ['table t has no column named qty', 'COLUMN_NOT_FOUND'],
         ['near "SELEKT": syntax error', 'SYNTAX_ERROR'],
         ['attempt to write a readonly database', 'PERMISSION_DENIED'],
       ];
@@ -746,6 +747,28 @@ describe({
             asserts.assertInstanceOf(e, EngineError);
             asserts.assertEquals((e as EngineError).code, 'COLUMN_NOT_FOUND');
           }
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
+      it('COLUMN_NOT_FOUND on an insert into an undefined column', async () => {
+        const engine = new SQLiteEngine(
+          'sqlite-err-insert-column',
+          TEST_CONFIG,
+        );
+        const t = tableName('err_insert_column');
+        try {
+          await engine.execute({ sql: `CREATE TABLE ${t} (id INT)` });
+          const e = await asserts.assertRejects(
+            () => engine.execute({ sql: `INSERT INTO ${t} (qty) VALUES (1)` }),
+            EngineError,
+          );
+          asserts.assertEquals(
+            [e.code, e.context.column],
+            ['COLUMN_NOT_FOUND', 'qty'],
+          );
         } finally {
           await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
           await engine.disconnect();

@@ -330,14 +330,24 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     if (e.code) meta.driverCode = e.code;
     if (e.errno !== undefined) meta.driverErrno = e.errno;
     if (e.sqlState) meta.sqlState = e.sqlState;
-    // The server names the key or column only in its message text.
+    // The server names the key, constraint, column or table only in its
+    // message text.
     const text = e.sqlMessage ?? message;
     if (code === 'DUPLICATE_KEY') {
       const key = /for key '([^']+)'/.exec(text)?.[1];
       if (key !== undefined) meta.constraint = key;
+    } else if (code === 'FOREIGN_KEY_VIOLATION' || code === 'CHECK_VIOLATION') {
+      const constraint = /CONSTRAINT `([^`]+)`/.exec(text)?.[1];
+      if (constraint !== undefined) meta.constraint = constraint;
     } else if (code === 'COLUMN_NOT_FOUND') {
       const column = /Unknown column '([^']+)'/.exec(text)?.[1];
       if (column !== undefined) meta.column = column;
+    } else if (code === 'NOT_NULL_VIOLATION') {
+      const column = /(?:Column|Field) '([^']+)'/.exec(text)?.[1];
+      if (column !== undefined) meta.column = column;
+    } else if (code === 'TABLE_NOT_FOUND') {
+      const table = /(?:Table|Unknown table) '([^']+)'/.exec(text)?.[1];
+      if (table !== undefined) meta.table = table;
     }
     return new EngineError(code, meta as never, e);
   }
@@ -357,9 +367,9 @@ function _mariaErrorToCode(
 ): EngineErrorCode {
   switch (e.code) {
     case 'ER_ACCESS_DENIED_ERROR':
-    case 'ER_DBACCESS_DENIED_ERROR':
     case 'ER_PASSWORD_NOT_ALLOWED':
       return 'INVALID_AUTH';
+    case 'ER_DBACCESS_DENIED_ERROR':
     case 'ER_SPECIFIC_ACCESS_DENIED_ERROR':
     case 'ER_TABLEACCESS_DENIED_ERROR':
     case 'ER_COLUMNACCESS_DENIED_ERROR':
@@ -385,6 +395,7 @@ function _mariaErrorToCode(
     case 'ER_NO_DEFAULT_FOR_FIELD':
       return 'NOT_NULL_VIOLATION';
     case 'ER_CHECK_CONSTRAINT_VIOLATED':
+    case 'ER_CONSTRAINT_FAILED':
       return 'CHECK_VIOLATION';
     case 'ER_PARSE_ERROR':
     case 'ER_SYNTAX_ERROR':
