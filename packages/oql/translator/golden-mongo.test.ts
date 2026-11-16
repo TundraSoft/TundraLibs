@@ -78,7 +78,7 @@ const likeRegex = (pattern: unknown) => ({
       }),
       pattern,
     ),
-    { $literal: '$' },
+    { $literal: '\\z' },
   ],
 });
 
@@ -416,11 +416,11 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: {
-          name: { $regex: '^a.*$', $options: 'i' },
+          name: { $regex: '^a.*\\z', $options: 'is' },
           $and: [
-            { name: { $regex: '^.*z$' } },
+            { name: { $regex: '^.*z\\z', $options: 's' } },
             { name: { $regex: '^A' } },
-            { name: { $regex: 'z$' } },
+            { name: { $regex: 'z\\z' } },
             { name: { $regex: 'd' } },
           ],
         },
@@ -443,9 +443,9 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: {
-          name: { $not: { $regex: '^A.*$' }, $ne: null },
+          name: { $not: { $regex: '^A.*\\z', $options: 's' }, $ne: null },
           $and: [{
-            name: { $not: { $regex: '^b.*$', $options: 'i' }, $ne: null },
+            name: { $not: { $regex: '^b.*\\z', $options: 'is' }, $ne: null },
           }],
         },
         options: { projection: { id: 1 } },
@@ -614,7 +614,7 @@ const CASES: Case[] = [
       sql: 'find',
       params: {
         collection: 'users',
-        filter: { 'profile.name': { $regex: '^.*bo.*$' } },
+        filter: { 'profile.name': { $regex: '^.*bo.*\\z', $options: 's' } },
         options: { projection: { id: 1 } },
       },
     },
@@ -948,7 +948,7 @@ const CASES: Case[] = [
       sql: 'find',
       params: {
         collection: 'users',
-        filter: { name: { $regex: '^John.*$' } },
+        filter: { name: { $regex: '^John.*\\z', $options: 's' } },
         options: { projection: { id: 1 } },
       },
     },
@@ -970,7 +970,7 @@ const CASES: Case[] = [
       sql: 'find',
       params: {
         collection: 'users',
-        filter: { name: { $regex: '^5\\*x.*$' } },
+        filter: { name: { $regex: '^5\\*x.*\\z', $options: 's' } },
         options: { projection: { id: 1 } },
       },
     },
@@ -992,8 +992,8 @@ const CASES: Case[] = [
       params: {
         collection: 'users',
         filter: {
-          name: { $not: { $regex: '^John.*$' }, $ne: null },
-          nick: { $not: { $regex: '^j.$', $options: 'i' }, $ne: null },
+          name: { $not: { $regex: '^John.*\\z', $options: 's' }, $ne: null },
+          nick: { $not: { $regex: '^j.\\z', $options: 'is' }, $ne: null },
         },
         options: { projection: { id: 1 } },
       },
@@ -1734,22 +1734,25 @@ const CASES: Case[] = [
       sql: 'aggregate',
       params: {
         collection: 'users',
-        pipeline: [
-          {
-            $addFields: {
-              tier: {
-                $switch: {
-                  branches: [{
-                    case: { $regexMatch: { input: '$name', regex: '^a.*$' } },
-                    then: 1,
-                  }],
-                  default: null,
-                },
+        pipeline: [{
+          $addFields: {
+            tier: {
+              $switch: {
+                branches: [{
+                  case: {
+                    $regexMatch: {
+                      input: '$name',
+                      regex: '^a.*\\z',
+                      options: 's',
+                    },
+                  },
+                  then: 1,
+                }],
+                default: null,
               },
             },
           },
-          { $project: { tier: '$tier', _id: 0 } },
-        ],
+        }, { $project: { tier: '$tier', _id: 0 } }],
       },
     },
   },
@@ -2959,13 +2962,150 @@ const CASES: Case[] = [
         collection: 'users',
         filter: {
           $expr: {
-            $cond: [
-              { $gt: [LOWER_NICK, null] },
-              {
-                $regexMatch: { input: '$name', regex: likeRegex(LOWER_NICK) },
+            $cond: [{
+              $gt: [{
+                $cond: [{ $gt: ['$nick', null] }, { $toLower: '$nick' }, null],
+              }, null],
+            }, {
+              $regexMatch: {
+                input: '$name',
+                regex: {
+                  $concat: ['^', {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: {
+                            $replaceAll: {
+                              input: {
+                                $replaceAll: {
+                                  input: {
+                                    $replaceAll: {
+                                      input: {
+                                        $replaceAll: {
+                                          input: {
+                                            $replaceAll: {
+                                              input: {
+                                                $replaceAll: {
+                                                  input: {
+                                                    $replaceAll: {
+                                                      input: {
+                                                        $replaceAll: {
+                                                          input: {
+                                                            $replaceAll: {
+                                                              input: {
+                                                                $replaceAll: {
+                                                                  input: {
+                                                                    $replaceAll:
+                                                                      {
+                                                                        input: {
+                                                                          $replaceAll:
+                                                                            {
+                                                                              input:
+                                                                                {
+                                                                                  $replaceAll:
+                                                                                    {
+                                                                                      input:
+                                                                                        {
+                                                                                          $replaceAll:
+                                                                                            {
+                                                                                              input:
+                                                                                                {
+                                                                                                  $cond:
+                                                                                                    [
+                                                                                                      {
+                                                                                                        $gt:
+                                                                                                          [
+                                                                                                            '$nick',
+                                                                                                            null,
+                                                                                                          ],
+                                                                                                      },
+                                                                                                      {
+                                                                                                        $toLower:
+                                                                                                          '$nick',
+                                                                                                      },
+                                                                                                      null,
+                                                                                                    ],
+                                                                                                },
+                                                                                              find:
+                                                                                                '\\',
+                                                                                              replacement:
+                                                                                                '\\\\',
+                                                                                            },
+                                                                                        },
+                                                                                      find:
+                                                                                        '.',
+                                                                                      replacement:
+                                                                                        '\\.',
+                                                                                    },
+                                                                                },
+                                                                              find:
+                                                                                '*',
+                                                                              replacement:
+                                                                                '\\*',
+                                                                            },
+                                                                        },
+                                                                        find:
+                                                                          '+',
+                                                                        replacement:
+                                                                          '\\+',
+                                                                      },
+                                                                  },
+                                                                  find: '?',
+                                                                  replacement:
+                                                                    '\\?',
+                                                                },
+                                                              },
+                                                              find: '^',
+                                                              replacement:
+                                                                '\\^',
+                                                            },
+                                                          },
+                                                          find: {
+                                                            $literal: '$',
+                                                          },
+                                                          replacement: '\\$',
+                                                        },
+                                                      },
+                                                      find: '{',
+                                                      replacement: '\\{',
+                                                    },
+                                                  },
+                                                  find: '}',
+                                                  replacement: '\\}',
+                                                },
+                                              },
+                                              find: '(',
+                                              replacement: '\\(',
+                                            },
+                                          },
+                                          find: ')',
+                                          replacement: '\\)',
+                                        },
+                                      },
+                                      find: '|',
+                                      replacement: '\\|',
+                                    },
+                                  },
+                                  find: '[',
+                                  replacement: '\\[',
+                                },
+                              },
+                              find: ']',
+                              replacement: '\\]',
+                            },
+                          },
+                          find: '%',
+                          replacement: '.*',
+                        },
+                      },
+                      find: '_',
+                      replacement: '.',
+                    },
+                  }, { $literal: '\\z' }],
+                },
+                options: 's',
               },
-              false,
-            ],
+            }, false],
           },
         },
         options: { projection: { id: 1 } },
@@ -2990,17 +3130,150 @@ const CASES: Case[] = [
         collection: 'users',
         filter: {
           $expr: {
-            $cond: [
-              { $gt: [LOWER_NICK, null] },
-              {
-                $regexMatch: {
-                  input: '$name',
-                  regex: likeRegex(LOWER_NICK),
-                  options: 'i',
+            $cond: [{
+              $gt: [{
+                $cond: [{ $gt: ['$nick', null] }, { $toLower: '$nick' }, null],
+              }, null],
+            }, {
+              $regexMatch: {
+                input: '$name',
+                regex: {
+                  $concat: ['^', {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: {
+                            $replaceAll: {
+                              input: {
+                                $replaceAll: {
+                                  input: {
+                                    $replaceAll: {
+                                      input: {
+                                        $replaceAll: {
+                                          input: {
+                                            $replaceAll: {
+                                              input: {
+                                                $replaceAll: {
+                                                  input: {
+                                                    $replaceAll: {
+                                                      input: {
+                                                        $replaceAll: {
+                                                          input: {
+                                                            $replaceAll: {
+                                                              input: {
+                                                                $replaceAll: {
+                                                                  input: {
+                                                                    $replaceAll:
+                                                                      {
+                                                                        input: {
+                                                                          $replaceAll:
+                                                                            {
+                                                                              input:
+                                                                                {
+                                                                                  $replaceAll:
+                                                                                    {
+                                                                                      input:
+                                                                                        {
+                                                                                          $replaceAll:
+                                                                                            {
+                                                                                              input:
+                                                                                                {
+                                                                                                  $cond:
+                                                                                                    [
+                                                                                                      {
+                                                                                                        $gt:
+                                                                                                          [
+                                                                                                            '$nick',
+                                                                                                            null,
+                                                                                                          ],
+                                                                                                      },
+                                                                                                      {
+                                                                                                        $toLower:
+                                                                                                          '$nick',
+                                                                                                      },
+                                                                                                      null,
+                                                                                                    ],
+                                                                                                },
+                                                                                              find:
+                                                                                                '\\',
+                                                                                              replacement:
+                                                                                                '\\\\',
+                                                                                            },
+                                                                                        },
+                                                                                      find:
+                                                                                        '.',
+                                                                                      replacement:
+                                                                                        '\\.',
+                                                                                    },
+                                                                                },
+                                                                              find:
+                                                                                '*',
+                                                                              replacement:
+                                                                                '\\*',
+                                                                            },
+                                                                        },
+                                                                        find:
+                                                                          '+',
+                                                                        replacement:
+                                                                          '\\+',
+                                                                      },
+                                                                  },
+                                                                  find: '?',
+                                                                  replacement:
+                                                                    '\\?',
+                                                                },
+                                                              },
+                                                              find: '^',
+                                                              replacement:
+                                                                '\\^',
+                                                            },
+                                                          },
+                                                          find: {
+                                                            $literal: '$',
+                                                          },
+                                                          replacement: '\\$',
+                                                        },
+                                                      },
+                                                      find: '{',
+                                                      replacement: '\\{',
+                                                    },
+                                                  },
+                                                  find: '}',
+                                                  replacement: '\\}',
+                                                },
+                                              },
+                                              find: '(',
+                                              replacement: '\\(',
+                                            },
+                                          },
+                                          find: ')',
+                                          replacement: '\\)',
+                                        },
+                                      },
+                                      find: '|',
+                                      replacement: '\\|',
+                                    },
+                                  },
+                                  find: '[',
+                                  replacement: '\\[',
+                                },
+                              },
+                              find: ']',
+                              replacement: '\\]',
+                            },
+                          },
+                          find: '%',
+                          replacement: '.*',
+                        },
+                      },
+                      find: '_',
+                      replacement: '.',
+                    },
+                  }, { $literal: '\\z' }],
                 },
+                options: 'is',
               },
-              false,
-            ],
+            }, false],
           },
         },
         options: { projection: { id: 1 } },
@@ -3024,23 +3297,138 @@ const CASES: Case[] = [
         collection: 'users',
         filter: {
           $expr: {
-            $cond: [
-              { $gt: ['$nick', null] },
-              {
-                $and: [
-                  {
-                    $not: [{
-                      $regexMatch: {
-                        input: '$name',
-                        regex: likeRegex('$nick'),
-                      },
-                    }],
+            $cond: [{ $gt: ['$nick', null] }, {
+              $and: [{
+                $not: [{
+                  $regexMatch: {
+                    input: '$name',
+                    regex: {
+                      $concat: ['^', {
+                        $replaceAll: {
+                          input: {
+                            $replaceAll: {
+                              input: {
+                                $replaceAll: {
+                                  input: {
+                                    $replaceAll: {
+                                      input: {
+                                        $replaceAll: {
+                                          input: {
+                                            $replaceAll: {
+                                              input: {
+                                                $replaceAll: {
+                                                  input: {
+                                                    $replaceAll: {
+                                                      input: {
+                                                        $replaceAll: {
+                                                          input: {
+                                                            $replaceAll: {
+                                                              input: {
+                                                                $replaceAll: {
+                                                                  input: {
+                                                                    $replaceAll:
+                                                                      {
+                                                                        input: {
+                                                                          $replaceAll:
+                                                                            {
+                                                                              input:
+                                                                                {
+                                                                                  $replaceAll:
+                                                                                    {
+                                                                                      input:
+                                                                                        {
+                                                                                          $replaceAll:
+                                                                                            {
+                                                                                              input:
+                                                                                                {
+                                                                                                  $replaceAll:
+                                                                                                    {
+                                                                                                      input:
+                                                                                                        '$nick',
+                                                                                                      find:
+                                                                                                        '\\',
+                                                                                                      replacement:
+                                                                                                        '\\\\',
+                                                                                                    },
+                                                                                                },
+                                                                                              find:
+                                                                                                '.',
+                                                                                              replacement:
+                                                                                                '\\.',
+                                                                                            },
+                                                                                        },
+                                                                                      find:
+                                                                                        '*',
+                                                                                      replacement:
+                                                                                        '\\*',
+                                                                                    },
+                                                                                },
+                                                                              find:
+                                                                                '+',
+                                                                              replacement:
+                                                                                '\\+',
+                                                                            },
+                                                                        },
+                                                                        find:
+                                                                          '?',
+                                                                        replacement:
+                                                                          '\\?',
+                                                                      },
+                                                                  },
+                                                                  find: '^',
+                                                                  replacement:
+                                                                    '\\^',
+                                                                },
+                                                              },
+                                                              find: {
+                                                                $literal: '$',
+                                                              },
+                                                              replacement:
+                                                                '\\$',
+                                                            },
+                                                          },
+                                                          find: '{',
+                                                          replacement: '\\{',
+                                                        },
+                                                      },
+                                                      find: '}',
+                                                      replacement: '\\}',
+                                                    },
+                                                  },
+                                                  find: '(',
+                                                  replacement: '\\(',
+                                                },
+                                              },
+                                              find: ')',
+                                              replacement: '\\)',
+                                            },
+                                          },
+                                          find: '|',
+                                          replacement: '\\|',
+                                        },
+                                      },
+                                      find: '[',
+                                      replacement: '\\[',
+                                    },
+                                  },
+                                  find: ']',
+                                  replacement: '\\]',
+                                },
+                              },
+                              find: '%',
+                              replacement: '.*',
+                            },
+                          },
+                          find: '_',
+                          replacement: '.',
+                        },
+                      }, { $literal: '\\z' }],
+                    },
+                    options: 's',
                   },
-                  { $gt: ['$name', null] },
-                ],
-              },
-              false,
-            ],
+                }],
+              }, { $gt: ['$name', null] }],
+            }, false],
           },
         },
         options: { projection: { id: 1 } },
@@ -5086,7 +5474,7 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         name: 'matches $ilike with the i option',
         when: { '@a': { $ilike: 'x_' } },
         expected: {
-          $regexMatch: { input: '$a', regex: '^x.$', options: 'i' },
+          $regexMatch: { input: '$a', regex: '^x.\\z', options: 'is' },
         },
       },
       {
@@ -5094,7 +5482,11 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         when: { '@a': { $nlike: 'x%' } },
         expected: {
           $and: [
-            { $not: [{ $regexMatch: { input: '$a', regex: '^x.*$' } }] },
+            {
+              $not: [{
+                $regexMatch: { input: '$a', regex: '^x.*\\z', options: 's' },
+              }],
+            },
             present('$a'),
           ],
         },
@@ -5106,7 +5498,7 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
           $and: [
             {
               $not: [{
-                $regexMatch: { input: '$a', regex: '^x.*$', options: 'i' },
+                $regexMatch: { input: '$a', regex: '^x.*\\z', options: 'is' },
               }],
             },
             present('$a'),
@@ -5125,7 +5517,7 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
         expected: {
           $and: [
             { $regexMatch: { input: '$a', regex: '^a\\.b' } },
-            { $regexMatch: { input: '$a', regex: 'a\\.b$' } },
+            { $regexMatch: { input: '$a', regex: 'a\\.b\\z' } },
             { $regexMatch: { input: '$a', regex: 'a\\.b' } },
           ],
         },
@@ -5179,7 +5571,9 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
       switchOn({
         $cond: [
           present('$b'),
-          { $regexMatch: { input: '$a', regex: likeRegex('$b') } },
+          {
+            $regexMatch: { input: '$a', regex: likeRegex('$b'), options: 's' },
+          },
           false,
         ],
       }),

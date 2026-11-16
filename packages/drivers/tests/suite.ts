@@ -1001,6 +1001,46 @@ export async function runLiveSuite(
           await engine.dropTable({ type: 'DROP_TABLE', table, ifExists: true });
         }
       });
+
+      it('a LIKE pattern matches across a newline, and not before one', async () => {
+        const table = `${TABLE}_lines`;
+        const columns = ['id', 's'];
+        await engine.createTable({
+          type: 'CREATE_TABLE',
+          table,
+          columns: {
+            id: { type: 'INTEGER', nullable: false },
+            s: { type: 'VARCHAR', length: 10 },
+          },
+          primaryKey: ['id'],
+        });
+        try {
+          await engine.insert({
+            type: 'INSERT',
+            table,
+            columns,
+            data: [{ id: 1, s: 'a\nb' }, { id: 2, s: 'ab\n' }, {
+              id: 3,
+              s: 'ab',
+            }],
+          });
+          const ids = async (where: Row) =>
+            (await engine.select({
+              type: 'SELECT',
+              table,
+              columns,
+              projection: { '@id': 'id' },
+              where,
+              orderBy: { '@id': 'ASC' },
+            } as unknown as Query<'SELECT'>)).data.map((r) => r.id);
+          asserts.assertEquals(await ids({ '@s': { $like: 'a%' } }), [1, 2, 3]);
+          asserts.assertEquals(await ids({ '@s': { $like: 'a_b' } }), [1]);
+          asserts.assertEquals(await ids({ '@s': { $like: 'ab' } }), [3]);
+          asserts.assertEquals(await ids({ '@s': { $endsWith: 'b' } }), [1, 3]);
+        } finally {
+          await engine.dropTable({ type: 'DROP_TABLE', table, ifExists: true });
+        }
+      });
     },
   });
 }

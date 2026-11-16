@@ -2684,8 +2684,8 @@ export class MongoTranslator {
         const match = {
           $regexMatch: {
             input: lhs,
-            regex: { $concat: ['^', source, { $literal: '$' }] },
-            ...(op === '$ilike' || op === '$nilike' ? { options: 'i' } : {}),
+            regex: { $concat: ['^', source, { $literal: '\\z' }] },
+            options: op === '$ilike' || op === '$nilike' ? 'is' : 's',
           },
         };
         return whenSet(
@@ -2752,7 +2752,7 @@ export class MongoTranslator {
       case '$endsWith':
         return {
           [fieldPath]: {
-            $regex: `${(val as string).replace(REGEX_SPECIALS, '\\$&')}$`,
+            $regex: `${(val as string).replace(REGEX_SPECIALS, '\\$&')}\\z`,
           },
         };
       case '$contains':
@@ -2786,10 +2786,12 @@ export class MongoTranslator {
       .replace(REGEX_SPECIALS, '\\$&')
       .replaceAll('%', '.*')
       .replaceAll('_', '.');
+    // `s` lets `.` cross a newline, as LIKE's wildcards do, and `\z`
+    // ends at the very end, where `$` also matches before a final newline.
     const inner: Record<string, unknown> = {
-      $regex: `^${escaped}$`,
+      $regex: `^${escaped}\\z`,
+      $options: caseInsensitive ? 'is' : 's',
     };
-    if (caseInsensitive) inner.$options = 'i';
     // `$not` alone also matches a null or missing field; NOT LIKE does not.
     return negate ? { $not: inner, $ne: null } : inner;
   }

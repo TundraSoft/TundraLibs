@@ -105,25 +105,26 @@ column `b`. On MongoDB a value `'@b'` is still the text. See
 These MongoDB results change to the rows the SQL dialects return. The SQL
 dialects are unchanged.
 
-| Query                                                                        | oql 1.5.0 on MongoDB            | Now                    |
-| ---------------------------------------------------------------------------- | ------------------------------- | ---------------------- |
-| `$ne`, `$nin`, `$nlike`, `$nilike` on a null or missing field                | matched it                      | skips it               |
-| `{ '@a': '@b' }` with both fields null                                       | matched                         | no match               |
-| a comparison against an expression, `{ $lt: ADD('@b', 1) }`                  | matched nothing                 | compared per row       |
-| `UPPER`, `LOWER` or `SUBSTR` of null                                         | `''`                            | `null`                 |
-| `LENGTH` of null                                                             | the query failed                | `null`                 |
-| `SUBSTR` without a length                                                    | failed                          | the rest of the string |
-| a literal string starting with `$` in an expression, `'$s'`                  | the value of field `s`          | the text `'$s'`        |
-| an `@` argument that names no declared column, `'@nope'`                     | a field lookup, `null`          | the text `'@nope'`     |
-| COUNT, SUM, AVG or ARRAY_AGG with `distinct: true`                           | not distinct                    | distinct               |
-| a `count()` filtered on a declared expression                                | `0`                             | SQL's count            |
-| STRING_AGG, or `count()` with `distinct`                                     | threw `DialectUnsupportedError` | run                    |
-| a column or expression as a pattern operand, a column inside a list or `$in` | threw `DialectUnsupportedError` | run                    |
-| `$exists` and `$nexists` in a SELECT or COUNT                                | threw `DialectUnsupportedError` | run                    |
-| an UPDATE or DELETE `where` on a declared expression                         | read a field of that name       | the rows SQL matches   |
-| DIVIDE, MODULO or SUBTRACT with three or more operands                       | failed                          | folded left to right   |
-| an INNER join, a document with no joined row                                 | kept, with an empty array       | dropped                |
-| a join `on` naming the base column first                                     | every joined row matched        | as the other order     |
+| Query                                                                        | oql 1.5.0 on MongoDB                                              | Now                    |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------- |
+| `$ne`, `$nin`, `$nlike`, `$nilike` on a null or missing field                | matched it                                                        | skips it               |
+| `{ '@a': '@b' }` with both fields null                                       | matched                                                           | no match               |
+| a comparison against an expression, `{ $lt: ADD('@b', 1) }`                  | matched nothing                                                   | compared per row       |
+| `UPPER`, `LOWER` or `SUBSTR` of null                                         | `''`                                                              | `null`                 |
+| `LENGTH` of null                                                             | the query failed                                                  | `null`                 |
+| `SUBSTR` without a length                                                    | failed                                                            | the rest of the string |
+| a literal string starting with `$` in an expression, `'$s'`                  | the value of field `s`                                            | the text `'$s'`        |
+| an `@` argument that names no declared column, `'@nope'`                     | a field lookup, `null`                                            | the text `'@nope'`     |
+| COUNT, SUM, AVG or ARRAY_AGG with `distinct: true`                           | not distinct                                                      | distinct               |
+| a `count()` filtered on a declared expression                                | `0`                                                               | SQL's count            |
+| STRING_AGG, or `count()` with `distinct`                                     | threw `DialectUnsupportedError`                                   | run                    |
+| a column or expression as a pattern operand, a column inside a list or `$in` | threw `DialectUnsupportedError`                                   | run                    |
+| `$exists` and `$nexists` in a SELECT or COUNT                                | threw `DialectUnsupportedError`                                   | run                    |
+| an UPDATE or DELETE `where` on a declared expression                         | read a field of that name                                         | the rows SQL matches   |
+| DIVIDE, MODULO or SUBTRACT with three or more operands                       | failed                                                            | folded left to right   |
+| an INNER join, a document with no joined row                                 | kept, with an empty array                                         | dropped                |
+| a join `on` naming the base column first                                     | every joined row matched                                          | as the other order     |
+| `$like`, `$ilike`, their negations and `$endsWith` on text with a newline    | `%` and `_` stopped at it, and the end matched before a final one | as LIKE matches        |
 
 To keep a null row that a `$ne` now skips, ask for it, as
 [NULL in a filter](OQL-Compatibility.md#null-in-a-filter) shows.
