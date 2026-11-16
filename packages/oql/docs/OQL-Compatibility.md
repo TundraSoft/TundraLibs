@@ -105,14 +105,16 @@ view definitions, and the `CREATE_INDEX` `TranslatedQuery` returns
 `params: {}`. Quote escaping and non-finite-number rejection follow
 the same rules as `CREATE_VIEW`.
 
-**A partial-index `where` has no column list**, so it takes a name as a
-column when the query uses it as one: an indexed column, a filter key, or
-a bare `'@name'` argument of an expression, as in `DATE_ADD('@start', …)`.
+**A partial-index `where` has no column list**, so on Postgres and SQLite
+it takes a name as a column when the query uses it as one: an indexed
+column, a filter key, or a bare `'@name'` argument of an expression, as in
+`DATE_ADD('@start', …)`.
 An expression argument therefore reads the column it reads in a `SELECT`
 on that table, and a name that is no column fails in the database rather
 than binding as text. A value-position `'@name'`, as in
 `{ '@a': { $gt: '@b' } }`, is a column only when the predicate uses `b` in
-one of those ways; otherwise it is text.
+one of those ways; otherwise it is text. On MongoDB it is always text: a
+partial filter compares a field with a value, never with another field.
 
 **A `Date` in a Postgres view or index definition is an uncast literal**,
 such as `'2026-03-15T00:00:00.000Z'`, which Postgres reads as the column's
