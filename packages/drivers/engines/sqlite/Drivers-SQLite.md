@@ -18,10 +18,9 @@ protocol), so each runtime ships its own bindings:
 ## Capabilities
 
 - File-backed and in-memory (`:memory:`) databases
-- Native `:name:` parameters (rewritten to `:name`; on Bun, further
-  rewritten to `bun:sqlite`'s `$name` form — the rewrite skips string
-  literals, quoted identifiers, and comments, so `strftime('%H:%M', …)` or
-  `WHERE code = 'AB:CD'` behave identically across Deno / Bun / Node)
+- Native `:name:` parameters (rewritten to `:name`, which SQLite itself
+  binds on Deno, Bun and Node, so `strftime('%H:%M', …)` or
+  `WHERE code = 'AB:CD'` behave identically across the three)
 - Per-runtime native bindings auto-selected
 - Transactions (commit / rollback / auto-rollback / timeout)
 

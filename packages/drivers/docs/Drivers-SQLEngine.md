@@ -334,10 +334,13 @@ of its dialect:
 | Other    | `'…'`, `"…"`, `--` and `/* … */` comments                                                           |
 
 A doubled quote inside its own quotes is the quote character. A quote or
-comment left open runs to the end of the statement. Two limits: a Postgres
-block comment nested inside another ends at its first `*/`, and the MariaDB
+comment left open runs to the end of the statement. A Postgres block comment
+nests, as on the server: `/* a /* b */ :c: */` is one comment. On the other
+dialects a block comment ends at its first `*/`. Two MariaDB limits: the
 rules assume backslash escapes are on, so a server running with
-`NO_BACKSLASH_ESCAPES` reads `'C:\'` differently from the scanner.
+`NO_BACKSLASH_ESCAPES` reads `'C:\'` differently from the scanner, and a
+placeholder inside an executable comment `/*! … */` or `/*M! … */` is never
+bound.
 
 ## Value encoding
 

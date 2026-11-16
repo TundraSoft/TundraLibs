@@ -12,8 +12,12 @@
  * `docs/Drivers-SQLEngine.md` under "Named parameters".
  */
 
-/** A `:name:` placeholder; capture group 1 is the name. */
-const NAME = String.raw`(?<!:):([A-Za-z_]\w*):`;
+/**
+ * A `:name:` placeholder; capture group 1 is the name. No pattern here uses a
+ * lookbehind, which Safari before 16.4 cannot parse: the character before a
+ * match is checked in {@link replacePlaceholders}.
+ */
+const NAME = String.raw`:([A-Za-z_]\w*):`;
 const SINGLE = String.raw`'[^']*(?:''[^']*)*(?:'|$)`;
 const SINGLE_BACKSLASH = String.raw`'[^'\\]*(?:(?:\\[\s\S]|'')[^'\\]*)*(?:'|$)`;
 const DOUBLE = String.raw`"[^"]*(?:""[^"]*)*(?:"|$)`;
@@ -22,21 +26,15 @@ const BACKTICK = '`[^`]*(?:``[^`]*)*(?:`|$)';
 const BRACKET = String.raw`\[[^\]]*(?:\]|$)`;
 const LINE_COMMENT = String.raw`--[^\n]*`;
 const BLOCK_COMMENT = String.raw`\/\*[\s\S]*?(?:\*\/|$)`;
-/**
- * Postgres `E'…'`: the `E` must not end an identifier. The match starts at the
- * quote, so the scan does not stop at every `e` in the statement.
- */
-const ESCAPE_STRING = String.raw`(?<=(?<![\w$])[eE])` + SINGLE_BACKSLASH;
-/**
- * Postgres `$$…$$` / `$tag$…$tag$`: the opening `$` must not end an identifier.
- * The tag is capture group 2, after {@link NAME}'s; a named group would make
- * every scan markedly slower.
- */
+/** The opener of a Postgres `$$…$$` / `$tag$…$tag$`, which its closer repeats. */
 const DOLLAR_TAG = String.raw`[A-Za-z_\u0080-\uFFFF][\w\u0080-\uFFFF]*`;
-const DOLLAR = String.raw`(?<![\w$])\$(${DOLLAR_TAG})?\$` +
-  String.raw`[\s\S]*?(?:\$\2\$|$)`;
+const DOLLAR_OPEN = String.raw`\$(?:${DOLLAR_TAG})?\$`;
 /** MariaDB comments: `#`, and `--` only when a space or control character follows. */
 const MARIA_LINE_COMMENT = String.raw`(?:#|--(?=[\x00-\x20]|$))[^\n]*`;
+/** Postgres `E'…'`, matched from its quote once the `E` is known to open it. */
+const ESCAPE_STRING = new RegExp(SINGLE_BACKSLASH, 'y');
+/** A character that can end an identifier, so a `$` or `E` after it is part of it. */
+const IDENT_CHAR = /[\w$]/;
 
 const scanner = (...skip: string[]): RegExp =>
   new RegExp([NAME, ...skip].join('|'), 'g');
@@ -44,14 +42,9 @@ const scanner = (...skip: string[]): RegExp =>
 const SCANNERS: ReadonlyMap<string, RegExp> = new Map([
   [
     'postgres',
-    scanner(
-      ESCAPE_STRING,
-      SINGLE,
-      DOUBLE,
-      DOLLAR,
-      LINE_COMMENT,
-      BLOCK_COMMENT,
-    ),
+    // Dollar quotes and block comments: the opener alone, the end found by
+    // `postgresSkipEnd`.
+    scanner(SINGLE, DOUBLE, DOLLAR_OPEN, LINE_COMMENT, String.raw`\/\*`),
   ],
   [
     'maria',
@@ -94,13 +87,85 @@ export function replacePlaceholders(
   replace: (name: string) => string,
 ): string {
   const re = SCANNERS.get(dialect) ?? DEFAULT_SCANNER;
+  const postgres = dialect === 'postgres';
   re.lastIndex = 0;
   let out = '';
   let last = 0;
   for (let m = re.exec(sql); m !== null; m = re.exec(sql)) {
-    if (m[1] === undefined) continue;
-    out += sql.slice(last, m.index) + replace(m[1]);
-    last = re.lastIndex;
+    const at = m.index;
+    if (m[1] !== undefined) {
+      // A colon that follows a colon never opens a placeholder.
+      if (sql[at - 1] === ':') {
+        re.lastIndex = at + 1;
+        continue;
+      }
+      out += sql.slice(last, at) + replace(m[1]);
+      last = re.lastIndex;
+    } else if (postgres && sql[at] !== '"') {
+      // A quoted identifier, the commonest match in OQL's SQL, needs no more
+      // work. The text is read from `sql`, not `m[0]`, which is slow on Bun.
+      re.lastIndex = postgresSkipEnd(sql, at, re.lastIndex);
+    }
   }
   return last === 0 ? sql : out + sql.slice(last);
+}
+
+/** Whether the character before `index` can end an identifier. */
+const endsIdent = (sql: string, index: number): boolean =>
+  index > 0 && IDENT_CHAR.test(sql[index - 1]!);
+
+/**
+ * Where scanning resumes after the Postgres quote, quote opener or comment
+ * opener that the scanner regex matched from `at` to `end`.
+ *
+ * - A dollar quote ends at the next copy of its opener. A `$` that ends an
+ *   identifier opens none, so `a$b$c` is left alone: resume one character
+ *   on.
+ * - A `'` after an `E` that does not end an identifier opens an `E'…'`
+ *   string, where a backslash escapes.
+ * - A block comment nests, so it ends at the `*` + `/` that closes its own
+ *   opener.
+ */
+function postgresSkipEnd(
+  sql: string,
+  at: number,
+  end: number,
+): number {
+  const c = sql[at];
+  if (c === '$') {
+    if (endsIdent(sql, at)) return at + 1;
+    const close = sql.indexOf(sql.slice(at, end), end);
+    return close === -1 ? sql.length : close + end - at;
+  }
+  if (c === "'") {
+    const e = sql[at - 1];
+    if ((e !== 'e' && e !== 'E') || endsIdent(sql, at - 1)) return end;
+    ESCAPE_STRING.lastIndex = at;
+    // No match only for a string left open after a trailing backslash.
+    return ESCAPE_STRING.exec(sql) === null
+      ? sql.length
+      : ESCAPE_STRING.lastIndex;
+  }
+  if (c === '/') return nestedCommentEnd(sql, end);
+  return end;
+}
+
+/**
+ * The index after the `*` + `/` that closes a block comment whose opener ends
+ * at `from`, counting the openers nested inside it; the statement's length
+ * when it never closes.
+ */
+function nestedCommentEnd(sql: string, from: number): number {
+  let depth = 1;
+  for (let i = from; i < sql.length - 1; i++) {
+    const c = sql[i];
+    if (c === '/' && sql[i + 1] === '*') {
+      depth++;
+      i++;
+    } else if (c === '*' && sql[i + 1] === '/') {
+      if (--depth === 0) return i + 2;
+      i++;
+    }
+  }
+  return sql.length;
 }

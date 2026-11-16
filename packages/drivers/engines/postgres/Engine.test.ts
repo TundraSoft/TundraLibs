@@ -425,6 +425,16 @@ describe({
         ]);
         await engine.disconnect();
       });
+
+      it('ends a nested block comment where Postgres does', async () => {
+        const engine = new PostgresEngine('nested', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT /* a /* b */ :zz: ' */ :a:::int AS v`,
+          params: { a: 1 },
+        });
+        asserts.assertEquals(r.data, [{ v: 1 }]);
+        await engine.disconnect();
+      });
     });
   },
 });

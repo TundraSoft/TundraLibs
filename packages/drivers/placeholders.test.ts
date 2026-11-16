@@ -59,6 +59,14 @@ describe('drivers.replacePlaceholders', () => {
         ['b'],
       ],
       ['postgres', 'a$b$c, :b:, $1', 'a$b$c, <b>, $1', ['b']],
+      // Postgres block comments nest; the others end at the first close.
+      [
+        'postgres',
+        `/* a /* :a: */ :a: ' */ :b:`,
+        `/* a /* :a: */ :a: ' */ <b>`,
+        ['b'],
+      ],
+      ['postgres', `:b:, E'x\\`, `<b>, E'x\\`, ['b']],
       ['postgres', '`:a:`, # :b:', '`<a>`, # <b>', ['a', 'b']],
       // MariaDB: backslash escapes in both quotes; backtick; `#`; `-- `.
       ['maria', `'C:\\', :b:, ':c:'`, `'C:\\', :b:, '<c>'`, ['c']],
@@ -69,6 +77,8 @@ describe('drivers.replacePlaceholders', () => {
       // SQLite: no backslash escape; backtick and bracket identifiers.
       ['sqlite', `'C:\\', :b:`, `'C:\\', <b>`, ['b']],
       ['sqlite', '`:a:`, [:a:], :b:', '`:a:`, [:a:], <b>', ['b']],
+      ['sqlite', '/* /* :a: */ :b: */', '/* /* :a: */ <b> */', ['b']],
+      ['maria', '/* /* :a: */ :b: */', '/* /* :a: */ <b> */', ['b']],
       // An unknown dialect: standard SQL quoting only.
       ['custom', '`:a:`, [:b:]', '`<a>`, [<b>]', ['a', 'b']],
     ];
