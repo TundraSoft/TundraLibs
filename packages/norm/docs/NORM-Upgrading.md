@@ -14,7 +14,7 @@ changelog has those.
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
   - [An insert default that reads a column is refused](#an-insert-default-that-reads-a-column-is-refused)
-  - [An `updateOnConflict` column with no value is a validation error](#an-updateonconflict-column-with-no-value-is-a-validation-error)
+  - [An `updateOnConflict` column a row does not pass is refused](#an-updateonconflict-column-a-row-does-not-pass-is-refused)
   - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
@@ -105,12 +105,16 @@ A `.default()` expression that reads a column of the row, such as
 every insert that left the column out threw a plain `TypeError`. Compute
 the value in a `beforeInsert` hook instead.
 
-### An `updateOnConflict` column with no value is a validation error
+### An `updateOnConflict` column a row does not pass is refused
 
-An `upsert()` whose `updateOnConflict` names a column that a row neither
-passes nor fills by default now throws `NormValidationError` with that
-column's path. Earlier versions threw a plain `TypeError` from oql. Pass
-the column in every row, or leave it out of `updateOnConflict`.
+An `upsert()` whose `updateOnConflict` names a column that a row does not
+pass now throws `NormQueryError` with code `UPSERT_CONFLICT_KEY`, before
+anything is written. On a conflict, earlier versions copied the column's
+insert default over the stored value on every engine, or threw a plain
+`TypeError` from oql when the column had no default. A `defaultOnUpdate`
+column the rows leave out now takes its update default, where earlier
+versions wrote its insert default. Pass the column in every row, or leave
+it out of `updateOnConflict`.
 
 ### Date text that is not ISO 8601 is refused
 
