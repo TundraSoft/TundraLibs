@@ -2523,7 +2523,7 @@ const CASES: Case[] = [
       },
       maria: {
         sql:
-          'INSERT INTO `logs` (`id`, `createdAt`) VALUES (:p_0:, NOW()) RETURNING `id`, `createdAt`',
+          'INSERT INTO `logs` (`id`, `createdAt`) VALUES (:p_0:, NOW(6)) RETURNING `id`, `createdAt`',
       },
     },
   },
@@ -2555,7 +2555,7 @@ const CASES: Case[] = [
       },
       maria: {
         sql:
-          'INSERT INTO `logs` (`id`, `dueAt`) VALUES (:p_0:, TIMESTAMPADD(DAY, :p_1:, NOW())) RETURNING `id`, `dueAt`',
+          'INSERT INTO `logs` (`id`, `dueAt`) VALUES (:p_0:, TIMESTAMPADD(DAY, :p_1:, NOW(6))) RETURNING `id`, `dueAt`',
         params: { p_0: 7, p_1: 1 },
       },
     },
@@ -2615,6 +2615,40 @@ const CASES: Case[] = [
       maria: {
         sql:
           'SELECT `id` AS `id`, UTC_TIME() AS `clock` FROM `shifts` WHERE `startsAt` <= UTC_TIME()',
+        params: {},
+      },
+    },
+  },
+
+  {
+    // A bare NOW() on MariaDB is the whole second: the (6) is the
+    // precision its DATETIME(6) and TIMESTAMP(6) columns keep.
+    name: 'UPDATE sets and filters by the clock',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'jobs',
+      columns: ['id', 'runAt', 'lockedAt', 'seenAt'],
+      data: {
+        lockedAt: { $$_expression: 'NOW' },
+        seenAt: { $$_expression: 'CURRENT_TIMESTAMPTZ' },
+      },
+      where: { '@runAt': { $lte: { $$_expression: 'CURRENT_TIMESTAMP' } } },
+    } satisfies Query<'UPDATE'>,
+    expected: {
+      sqlite: {
+        sql:
+          `UPDATE "jobs" SET "lockedAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), "seenAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE "runAt" <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+        params: {},
+      },
+      postgres: {
+        sql:
+          'UPDATE "jobs" SET "lockedAt" = CURRENT_TIMESTAMP, "seenAt" = CURRENT_TIMESTAMP WHERE "runAt" <= CURRENT_TIMESTAMP',
+        params: {},
+      },
+      maria: {
+        sql:
+          'UPDATE `jobs` SET `lockedAt` = NOW(6), `seenAt` = CURRENT_TIMESTAMP(6) WHERE `runAt` <= CURRENT_TIMESTAMP(6)',
         params: {},
       },
     },
@@ -2914,7 +2948,7 @@ const CASES: Case[] = [
       },
       maria: {
         sql:
-          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-%d') AS DATETIME) AS `day`, CAST(DATE_FORMAT(NOW(), '%Y-01-01') AS DATETIME) AS `year` FROM `orders`",
+          "SELECT CAST(DATE_FORMAT(`createdAt`, '%Y-%m-%d') AS DATETIME) AS `day`, CAST(DATE_FORMAT(NOW(6), '%Y-01-01') AS DATETIME) AS `year` FROM `orders`",
       },
     },
   },
@@ -2974,7 +3008,7 @@ const CASES: Case[] = [
       },
       maria: {
         sql:
-          'INSERT INTO `stats` (`id`, `label`, `clicks`) VALUES (:p_0:, :p_1:, :p_2:) ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `clicks` = (`clicks` + :p_3:), `updatedAt` = NOW() RETURNING `id`, `label`, `clicks`, `updatedAt`',
+          'INSERT INTO `stats` (`id`, `label`, `clicks`) VALUES (:p_0:, :p_1:, :p_2:) ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `clicks` = (`clicks` + :p_3:), `updatedAt` = NOW(6) RETURNING `id`, `label`, `clicks`, `updatedAt`',
       },
     },
   },

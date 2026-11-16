@@ -418,7 +418,7 @@ const { sql, params } = translator.insert(query);
 // sql: INSERT INTO "orders" ("userId", "total", "createdAt")
 //      VALUES (:p_0:, :p_1:, CURRENT_TIMESTAMP) RETURNING "userId", "total", "createdAt"
 // params: { p_0: 123, p_1: 99.99 }
-// (Postgres NOW emits CURRENT_TIMESTAMP; MariaDB emits NOW())
+// (Postgres NOW emits CURRENT_TIMESTAMP; MariaDB emits NOW(6))
 ```
 
 ### SELECT with JOINs and Aggregates
@@ -676,7 +676,7 @@ OQL; the Postgres engine rewrites it to `$N` downstream.
 What the OQL `NOW` / `CURRENT_DATE` expressions emit per dialect:
 
 - **PostgreSQL**: `NOW` → `CURRENT_TIMESTAMP`, `CURRENT_DATE` → `CURRENT_DATE`
-- **MariaDB**: `NOW` → `NOW()`, `CURRENT_DATE` → `CURRENT_DATE()`
+- **MariaDB**: `NOW` → `NOW(6)`, `CURRENT_DATE` → `CURRENT_DATE()`
 - **SQLite**: `NOW` / `CURRENT_TIMESTAMP` → `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
   (ISO 8601 UTC, the text SQLite drivers write for a `Date`, so values parse
   as UTC and sort correctly), `CURRENT_DATE` →

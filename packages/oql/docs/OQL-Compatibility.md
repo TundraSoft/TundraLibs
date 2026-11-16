@@ -203,6 +203,12 @@ precision on both Postgres and MariaDB, matching PG's micros; SQLite and
 MongoDB retain **milliseconds**. Anything finer than a millisecond is
 therefore portable only between Postgres and MariaDB.
 
+The clock expressions keep that precision. On MariaDB `NOW` renders
+`NOW(6)`, and `CURRENT_TIMESTAMP` and `CURRENT_TIMESTAMPTZ` render
+`CURRENT_TIMESTAMP(6)`, because the bare functions stop at the whole
+second. [`CURRENT_TIME`](#current_time) is the whole second on every
+dialect.
+
 ## DML
 
 ### RETURNING
@@ -525,13 +531,13 @@ What JavaScript receives for a date expression, on Postgres 18, MariaDB 11,
 SQLite and MongoDB 8 through the oql drivers, the same on Deno, Bun and
 Node. SQLite has no date type, so a date result there is ISO 8601 UTC text:
 
-| Expression                                        | Postgres             | MariaDB               | SQLite                                                 | MongoDB              |
-| ------------------------------------------------- | -------------------- | --------------------- | ------------------------------------------------------ | -------------------- |
-| `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ` | `Date`               | `Date`, whole seconds | `'2026-11-15T23:00:24.401Z'`                           | `Date`               |
-| `CURRENT_DATE`                                    | `Date`, midnight UTC | `Date`, midnight UTC  | `'2026-11-15T00:00:00.000Z'`                           | `Date`, midnight UTC |
-| `CURRENT_TIME`                                    | `'23:00:24'`         | `'23:00:24'`          | `'23:00:24'`                                           | `'23:00:24'`         |
-| `DATE_ADD`, `DATE_TRUNC`                          | `Date`               | `Date`                | `'2026-03-16T00:00:00.000Z'`, also for a `DATE` column | `Date`               |
-| `UNIX_TIMESTAMP`                                  | `bigint`             | `bigint`              | `number`                                               | `number`             |
+| Expression                                        | Postgres             | MariaDB              | SQLite                                                 | MongoDB              |
+| ------------------------------------------------- | -------------------- | -------------------- | ------------------------------------------------------ | -------------------- |
+| `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ` | `Date`               | `Date`               | `'2026-11-15T23:00:24.401Z'`                           | `Date`               |
+| `CURRENT_DATE`                                    | `Date`, midnight UTC | `Date`, midnight UTC | `'2026-11-15T00:00:00.000Z'`                           | `Date`, midnight UTC |
+| `CURRENT_TIME`                                    | `'23:00:24'`         | `'23:00:24'`         | `'23:00:24'`                                           | `'23:00:24'`         |
+| `DATE_ADD`, `DATE_TRUNC`                          | `Date`               | `Date`               | `'2026-03-16T00:00:00.000Z'`, also for a `DATE` column | `Date`               |
+| `UNIX_TIMESTAMP`                                  | `bigint`             | `bigint`             | `number`                                               | `number`             |
 
 On SQLite a UTC-midnight `Date` in a `DATE` column is stored as the same
 text, which is also what norm writes for a `date()` column, so

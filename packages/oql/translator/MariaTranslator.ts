@@ -211,12 +211,14 @@ export class MariaTranslator extends AbstractTranslator {
           ? `RPAD(${a[0]}, ${a[1]}, ${a[2]})`
           : `RPAD(${a[0]}, ${a[1]}, ' ')`,
     ],
-    ['NOW', () => 'NOW()'],
+    // (6), the precision of the date-time column types: a bare NOW() is
+    // the whole second, so a row written this second is after it.
+    ['NOW', () => 'NOW(6)'],
     ['CURRENT_DATE', () => 'CURRENT_DATE()'],
     // UTC, as on the other dialects: CURRENT_TIME() is session-local.
     ['CURRENT_TIME', () => 'UTC_TIME()'],
-    ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP()'],
-    ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
+    ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP(6)'],
+    ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP(6)'], // no native TZ
     // `unit` arrives as the keyword itself — see `_timeUnitArg`.
     // A Date value binds as text, and TIMESTAMPADD over text returns text,
     // as it does over a COALESCE, NULLIF or CASE holding one. Cast anything

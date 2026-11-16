@@ -11,6 +11,7 @@ changelog has those.
   - [`COUNT` is a number](#count-is-a-number)
   - [`MODULO` and `ROUND` results](#modulo-and-round-results)
   - [`CURRENT_TIME` is a UTC `'HH:MM:SS'` string](#current_time-is-a-utc-hhmmss-string)
+  - [MariaDB reads `NOW` to the microsecond](#mariadb-reads-now-to-the-microsecond)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [`DATE_ADD` runs on MariaDB and stops at the month end on SQLite](#date_add-runs-on-mariadb-and-stops-at-the-month-end-on-sqlite)
   - [A computed operand of a pattern operator is matched as written](#a-computed-operand-of-a-pattern-operator-is-matched-as-written)
@@ -64,6 +65,20 @@ MariaDB still returns a `bigint` for `MODULO` over integer columns, see
 | MongoDB  | a `Date`, also when written on insert                              | `'07:20:46'`                  |
 
 Compare it with a string, not a `Date`.
+
+### MariaDB reads `NOW` to the microsecond
+
+`NOW`, `CURRENT_TIMESTAMP` and `CURRENT_TIMESTAMPTZ` rendered `NOW()` and
+`CURRENT_TIMESTAMP()` on MariaDB, which stop at the whole second. A value
+written from one lost its fraction, and `{ '@at': { $lte: NOW } }` missed
+a row written earlier in the same second. They now render `NOW(6)` and
+`CURRENT_TIMESTAMP(6)`, the precision the `DATETIME(6)` and
+`TIMESTAMP(6)` columns keep, in a written value, a selected value and a
+filter. A `DATE_ADD` over one keeps the fraction.
+
+`CURRENT_TIME` is unchanged. A `NOW` written to a `TIME` column now keeps
+its fraction, as it does on Postgres; write `CURRENT_TIME` for the clock
+to the second.
 
 ### `DATE_DIFF` counts complete units and returns a number
 
