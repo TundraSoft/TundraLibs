@@ -20,7 +20,7 @@ const CONFIG = {
     ? `${env.get('DB_SCHEMA')}_drivers`
     : env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USER') || 'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
 await runLiveSuite('maria', () => new MariaEngine('oql-live', CONFIG));

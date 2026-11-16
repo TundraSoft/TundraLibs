@@ -37,7 +37,7 @@ const TEST_CONFIG = {
   port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
   database: env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USER') || 'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
   pool: { min: 2, max: 8, acquireTimeoutSeconds: 10 },
 };
 
@@ -88,7 +88,14 @@ function record(scenario: string, ms: number, error?: Error): void {
 }
 
 async function setup(engine: PostgresEngine): Promise<void> {
-  await engine.connect();
+  await engine.connect().catch((e: Error) => {
+    if (TEST_CONFIG.password !== undefined) throw e;
+    console.error(
+      `${e.message}. POSTGRES_PASSWORD is not set: set it in ` +
+        'packages/drivers/.env or the environment.',
+    );
+    exit(1);
+  });
   await engine.execute({
     sql: `DROP TABLE IF EXISTS ${TABLE}`,
   });

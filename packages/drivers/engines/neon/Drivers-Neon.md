@@ -142,7 +142,9 @@ check. When the zone request itself fails, the query rejects with
 `OPERATION_FAILED` for the operation `session time zone check`, the request's
 error on `cause`, and `ping()` returns `false`.
 
-Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`). Set
+Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`).
+Through a pooled endpoint the zone is the one the pooler's server connection
+opened with, so the fix applies once the pooler opens a new one. Set
 `allowNonUtcTimeZone: true` only when the application keeps every instant in
 `timestamptz` and wants the session zone's days and clock times, which
 `date_trunc`, `EXTRACT` and casts still use; it also drops the extra request.

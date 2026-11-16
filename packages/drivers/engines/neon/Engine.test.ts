@@ -234,6 +234,16 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
       assertEquals((err as EngineError).code, 'MISSING_PARAMETERS');
     });
 
+    it('leaves a placeholder inside a string, dollar quote or comment as text', () => {
+      const eng = makeEngine();
+      const q = eng.std({
+        sql: "SELECT ':a:', $$:zz:$$, 'HH24:MI:SS', :a: -- :zz:",
+        params: { a: 1 },
+      });
+      assertEquals(q.sql, "SELECT ':a:', $$:zz:$$, 'HH24:MI:SS', $1 -- :zz:;");
+      assertEquals(q.__params, [1]);
+    });
+
     it('leaves a cast chain alone, beside a parameter that is cast', () => {
       const eng = makeEngine();
       const q = eng.std({
@@ -490,6 +500,32 @@ describe('drivers.engines.neon.NeonHttpEngine', () => {
         sql: 'SELECT 1',
       });
       assertEquals(wrapped.code, 'QUERY_EXECUTION_FAILED');
+    });
+
+    it('names the column an undefined_column message reports', () => {
+      const text = 'column "nosuch" does not exist';
+      const err = makeEngine().wrap(
+        new NeonHttpError(text, {
+          status: 400,
+          code: '42703',
+          fields: { message: text, code: '42703' },
+        }),
+        { sql: 'SELECT nosuch FROM t' },
+      );
+      assertEquals(err.message, 'Column not found on NEON::neon-test: nosuch');
+    });
+
+    it('names the table an undefined_table message reports', () => {
+      const text = 'relation "nosuch" does not exist';
+      const err = makeEngine().wrap(
+        new NeonHttpError(text, {
+          status: 400,
+          code: '42P01',
+          fields: { message: text, code: '42P01' },
+        }),
+        { sql: 'SELECT * FROM nosuch' },
+      );
+      assertEquals(err.message, 'Table not found on NEON::neon-test: nosuch');
     });
 
     it('returns an existing EngineError unchanged', () => {

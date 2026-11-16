@@ -208,161 +208,15 @@ function _openBun(path: string, options: OpenOptions): SqliteDb {
   return _wrapBun(db);
 }
 
-/**
- * Rewrite `:name` bind placeholders to bun:sqlite's `$name` form, skipping
- * anything inside a single-quoted string literal, a quoted identifier
- * (`"..."`, `` `...` ``, or `[...]`), or a comment. SQLite's own parser (used
- * by the Deno/Node bindings) never treats `:name` inside a quoted span as a
- * parameter, so neither may we — otherwise `strftime('%H:%M', ...)`,
- * `WHERE code = 'AB:CD'`, or an identifier like `[a:b]` / `` `a:b` `` would be
- * corrupted on Bun only.
- *
- * SQLite escaping rules honoured: `''` inside a single-quoted string, `""`
- * inside a double-quoted identifier, and `` `` `` inside a backtick identifier
- * are literal quote characters, not terminators. A `[...]` bracket identifier
- * has no escape — the first `]` closes it (SQLite's MS-Access/T-SQL-compat
- * quoting).
- */
-export function _rewriteBunPlaceholders(sql: string): string {
-  let out = '';
-  const n = sql.length;
-  let i = 0;
-  while (i < n) {
-    const ch = sql[i]!;
-
-    // Single-quoted string literal — copy verbatim (handle '' escape).
-    if (ch === "'") {
-      out += ch;
-      i++;
-      while (i < n) {
-        out += sql[i];
-        if (sql[i] === "'") {
-          if (sql[i + 1] === "'") {
-            out += sql[i + 1];
-            i += 2;
-            continue;
-          }
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-
-    // Double-quoted identifier — copy verbatim (handle "" escape).
-    if (ch === '"') {
-      out += ch;
-      i++;
-      while (i < n) {
-        out += sql[i];
-        if (sql[i] === '"') {
-          if (sql[i + 1] === '"') {
-            out += sql[i + 1];
-            i += 2;
-            continue;
-          }
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-
-    // Backtick-quoted identifier — copy verbatim (handle `` escape). SQLite
-    // accepts backtick identifiers for MySQL compatibility.
-    if (ch === '`') {
-      out += ch;
-      i++;
-      while (i < n) {
-        out += sql[i];
-        if (sql[i] === '`') {
-          if (sql[i + 1] === '`') {
-            out += sql[i + 1];
-            i += 2;
-            continue;
-          }
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-
-    // Bracket-quoted identifier `[...]` — copy verbatim. SQLite accepts these
-    // for MS-Access/T-SQL compatibility; there is no escape sequence, so the
-    // first `]` closes the identifier.
-    if (ch === '[') {
-      out += ch;
-      i++;
-      while (i < n) {
-        out += sql[i];
-        if (sql[i] === ']') {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-
-    // Line comment `-- ... <EOL>` — copy verbatim.
-    if (ch === '-' && sql[i + 1] === '-') {
-      while (i < n && sql[i] !== '\n') {
-        out += sql[i];
-        i++;
-      }
-      continue;
-    }
-
-    // Block comment `/* ... */` — copy verbatim.
-    if (ch === '/' && sql[i + 1] === '*') {
-      out += '/*';
-      i += 2;
-      while (i < n && !(sql[i] === '*' && sql[i + 1] === '/')) {
-        out += sql[i];
-        i++;
-      }
-      if (i < n) {
-        out += '*/';
-        i += 2;
-      }
-      continue;
-    }
-
-    // `:name` placeholder (letter/underscore first). Anything else is copied
-    // as-is, which also leaves `::casts` and time literals outside strings
-    // untouched — the base standardizer already resolved `:name:` params.
-    if (ch === ':' && i + 1 < n && /[A-Za-z_]/.test(sql[i + 1]!)) {
-      let j = i + 1;
-      while (j < n && /\w/.test(sql[j]!)) j++;
-      out += '$' + sql.slice(i + 1, j);
-      i = j;
-      continue;
-    }
-
-    out += ch;
-    i++;
-  }
-  return out;
-}
-
 // deno-lint-ignore no-explicit-any
 function _wrapBun(db: any): SqliteDb {
   return {
     exec: (sql: string) => db.exec(sql),
     prepare: (sql: string) => {
-      // bun:sqlite uses `$name` placeholders, not `:name`. Rewrite the SQL
-      // and prepend `$` to parameter object keys to match. The rewrite is
-      // string/comment-aware: a bare `sql.replaceAll(/:name/)` also mangles
-      // `:name` sequences *inside* string literals (e.g. strftime('%H:%M')
-      // → '%H$M') and comments, which the Deno/Node bindings never do — a
-      // silent Bun-only divergence in a library whose contract is identical
-      // behaviour across runtimes.
-      const bunSql = _rewriteBunPlaceholders(sql);
-      const stmt = db.prepare(bunSql);
+      // The SQL keeps its `:name` placeholders, so SQLite's own parser
+      // finds them, as on Deno and Node. bun:sqlite binds an object by the
+      // key with its prefix, so each key gets its `:`.
+      const stmt = db.prepare(sql);
       // Lossless int64 reads (bind side is already lossless). Chainable;
       // see _downgradeSafeBigints for the uniform contract.
       stmt.safeIntegers?.(true);
@@ -380,7 +234,7 @@ function _wrapBun(db: any): SqliteDb {
         for (
           const [k, v] of Object.entries(first as Record<string, unknown>)
         ) {
-          out[k.startsWith('$') ? k : `$${k}`] = v;
+          out[`:${k}`] = v;
         }
         return [out, ...params.slice(1)];
       };
@@ -491,15 +345,43 @@ async function _openNodeSqlite(
     }
   }
   const db = new Database(path, { readOnly: options.readonly ?? false });
-  return _wrapNodeStmt(db);
+  return _wrapNodeStmt(db, _wholeNumbersAsBigints);
+}
+
+/**
+ * `node:sqlite` binds every JS number as REAL, whole numbers included, where
+ * the Deno and Bun bindings bind them as INTEGER: `typeof(?)`, `5 / 2` and
+ * what a column without a type stores would differ. A whole number in the
+ * safe integer range is bound as a bigint, so as INTEGER; fractions and
+ * larger magnitudes stay REAL. Named parameters arrive as one object.
+ */
+function _wholeNumbersAsBigints(
+  params: ReadonlyArray<unknown>,
+): ReadonlyArray<unknown> {
+  const bind = (v: unknown): unknown =>
+    typeof v === 'number' && Number.isSafeInteger(v) ? BigInt(v) : v;
+  return params.map((p) => {
+    if (p === null || typeof p !== 'object' || Array.isArray(p)) {
+      return bind(p);
+    }
+    if (Object.getPrototypeOf(p) !== Object.prototype) return p;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(p)) out[k] = bind(v);
+    return out;
+  });
 }
 
 /**
  * Wrap a Node-style SQLite database (better-sqlite3 OR node:sqlite —
  * the surface is intentionally similar across both).
  */
-// deno-lint-ignore no-explicit-any
-function _wrapNodeStmt(db: any): SqliteDb {
+function _wrapNodeStmt(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  bindArgs: (
+    params: ReadonlyArray<unknown>,
+  ) => ReadonlyArray<unknown> = (params) => params,
+): SqliteDb {
   return {
     exec: (sql: string) => db.exec(sql),
     prepare: (sql: string) => {
@@ -512,10 +394,10 @@ function _wrapNodeStmt(db: any): SqliteDb {
       return {
         all: (params) =>
           _downgradeSafeBigints(
-            stmt.all(...params) as Record<string, unknown>[],
+            stmt.all(...bindArgs(params)) as Record<string, unknown>[],
           ),
         run: (params) => {
-          const r = stmt.run(...params);
+          const r = stmt.run(...bindArgs(params));
           // Big-int read mode makes run() metadata bigint too — coerce.
           return {
             changes: Number(r.changes ?? 0),

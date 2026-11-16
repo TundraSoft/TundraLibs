@@ -114,6 +114,7 @@ describe({
         ['CHECK constraint failed: t', 'CHECK_VIOLATION'],
         ['no such table: widgets', 'TABLE_NOT_FOUND'],
         ['no such column: qty', 'COLUMN_NOT_FOUND'],
+        ['table t has no column named qty', 'COLUMN_NOT_FOUND'],
         ['near "SELEKT": syntax error', 'SYNTAX_ERROR'],
         ['attempt to write a readonly database', 'PERMISSION_DENIED'],
       ];
@@ -148,8 +149,8 @@ describe({
 
     it('lifts constraint / column names into metadata (resolves the template placeholder)', () => {
       // UNIQUE / CHECK fill `${constraint}`; NOT NULL fills `${column}`. Without
-      // this the EngineError template renders a literal `${constraint}` /
-      // `${column}` (onMissing:'literal') and the context field stays undefined.
+      // this the message leaves the name out and the context field stays
+      // undefined.
       const dup = engine.wrapError(
         {
           code: 'SQLITE_CONSTRAINT_UNIQUE',
@@ -283,6 +284,32 @@ describe({
           params: { v: -0 },
         });
         asserts.assertStrictEquals(r.data[0]!.v, 0);
+        await engine.disconnect();
+      });
+
+      it('binds a whole number as INTEGER and a fraction as REAL', async () => {
+        const engine = new SQLiteEngine('int-bind', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: 'SELECT typeof(:n:) AS tn, :n: / 2 AS half, :n: AS n, ' +
+            'typeof(:f:) AS tf',
+          params: { n: 5, f: 1.5 },
+        });
+        asserts.assertStrictEquals(r.data[0]!.n, 5);
+        asserts.assertEquals(r.data, [
+          { tn: 'integer', half: 2, n: 5, tf: 'real' },
+        ]);
+        await engine.disconnect();
+      });
+
+      it('leaves a placeholder inside a string, identifier or comment as text', async () => {
+        const engine = new SQLiteEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql:
+            `SELECT ':a:' AS t, :a: AS v, replace(:s:, ':sep:', '-') AS d, ` +
+            `1 AS [:zz:] -- :zz:`,
+          params: { a: 1, s: 'x:sep:y' },
+        });
+        asserts.assertEquals(r.data, [{ t: ':a:', v: 1, d: 'x-y', ':zz:': 1 }]);
         await engine.disconnect();
       });
 
@@ -734,6 +761,28 @@ describe({
             asserts.assertInstanceOf(e, EngineError);
             asserts.assertEquals((e as EngineError).code, 'COLUMN_NOT_FOUND');
           }
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
+      it('COLUMN_NOT_FOUND on an insert into an undefined column', async () => {
+        const engine = new SQLiteEngine(
+          'sqlite-err-insert-column',
+          TEST_CONFIG,
+        );
+        const t = tableName('err_insert_column');
+        try {
+          await engine.execute({ sql: `CREATE TABLE ${t} (id INT)` });
+          const e = await asserts.assertRejects(
+            () => engine.execute({ sql: `INSERT INTO ${t} (qty) VALUES (1)` }),
+            EngineError,
+          );
+          asserts.assertEquals(
+            [e.code, e.context.column],
+            ['COLUMN_NOT_FOUND', 'qty'],
+          );
         } finally {
           await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
           await engine.disconnect();

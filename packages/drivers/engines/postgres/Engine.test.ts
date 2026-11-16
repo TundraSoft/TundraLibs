@@ -34,7 +34,7 @@ const TEST_CONFIG = {
     ? `${env.get('DB_SCHEMA')}_drivers`
     : env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USER') || 'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
 async function isPgAvailable(): Promise<boolean> {
@@ -154,6 +154,44 @@ describe('drivers.PostgresEngine.error-mapping (no DB)', () => {
         codeFor(sqlState),
         expected,
         `SQLSTATE ${sqlState} should map to ${expected}`,
+      );
+    }
+  });
+
+  it('names the column an undefined_column message reports', () => {
+    const cases: Array<[string, string]> = [
+      ['column "nosuch" does not exist', 'nosuch'],
+      ['column u.nosuch does not exist', 'u.nosuch'],
+      ['column "nosuch" of relation "users" does not exist', 'nosuch'],
+    ];
+    for (const [text, column] of cases) {
+      const err = engine.wrapError(
+        new PgServerError('42703', new Map([['M', text]])),
+        q,
+      );
+      asserts.assertEquals(
+        err.message,
+        `Column not found on POSTGRES::pg-errmap: ${column}`,
+      );
+    }
+  });
+
+  it('names the table an undefined_table message reports', () => {
+    const cases: Array<[string, string]> = [
+      ['relation "nosuch" does not exist', 'nosuch'],
+      ['relation "app.nosuch" does not exist', 'app.nosuch'],
+      ['table "nosuch" does not exist', 'nosuch'],
+      ['materialized view "nosuch" does not exist', 'nosuch'],
+      ['missing FROM-clause entry for table "u"', 'u'],
+    ];
+    for (const [text, table] of cases) {
+      const err = engine.wrapError(
+        new PgServerError('42P01', new Map([['M', text]])),
+        q,
+      );
+      asserts.assertEquals(
+        err.message,
+        `Table not found on POSTGRES::pg-errmap: ${table}`,
       );
     }
   });
@@ -392,6 +430,29 @@ describe({
           params: { n: '7' },
         });
         asserts.assertEquals(r.data, [{ d: '2026-01-15', n: '7' }]);
+        await engine.disconnect();
+      });
+
+      it('leaves a placeholder inside a string, dollar quote or comment as text', async () => {
+        const engine = new PostgresEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT ':a:' AS t, :a:::int AS v, $$:zz:$$ AS d, ` +
+            `to_char(:ts:::timestamptz AT TIME ZONE 'UTC', 'HH24:MI:SS') AS c -- :zz:`,
+          params: { a: 1, ts: new Date('2026-01-15T20:04:05Z') },
+        });
+        asserts.assertEquals(r.data, [
+          { t: ':a:', v: 1, d: ':zz:', c: '20:04:05' },
+        ]);
+        await engine.disconnect();
+      });
+
+      it('ends a nested block comment where Postgres does', async () => {
+        const engine = new PostgresEngine('nested', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT /* a /* b */ :zz: ' */ :a:::int AS v`,
+          params: { a: 1 },
+        });
+        asserts.assertEquals(r.data, [{ v: 1 }]);
         await engine.disconnect();
       });
     });
@@ -718,6 +779,29 @@ describe({
         } catch (e) {
           asserts.assertInstanceOf(e, EngineError);
           asserts.assertEquals((e as EngineError).code, 'TABLE_NOT_FOUND');
+        }
+        await engine.disconnect();
+      });
+
+      it('names the missing table in the message', async () => {
+        const engine = new PostgresEngine('pg-err-table-name', TEST_CONFIG);
+        for (
+          const sql of [
+            'SELECT * FROM public.tundra_none',
+            'DROP TABLE tundra_none',
+          ]
+        ) {
+          const e = await asserts.assertRejects(
+            () => engine.execute({ sql }),
+            EngineError,
+          );
+          asserts.assertEquals(
+            [e.code, e.context.table],
+            [
+              'TABLE_NOT_FOUND',
+              sql.startsWith('SELECT') ? 'public.tundra_none' : 'tundra_none',
+            ],
+          );
         }
         await engine.disconnect();
       });

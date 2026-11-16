@@ -14,10 +14,10 @@ const TEST_CONFIG = {
   port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
   database: env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USER') || 'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
-// Engine CONSTRUCTION throws on missing config (empty password), so it
+// Engine CONSTRUCTION throws on an invalid config, so it
 // lives inside the guard too — unconfigured means skip, same contract
 // as the memcached/redis siblings, never a module-scope crash.
 const engines = (() => {
@@ -50,7 +50,12 @@ if (engines !== undefined) {
 }
 
 if (!serverAvailable) {
-  console.warn('PostgreSQL unreachable or unconfigured; skipping benchmarks.');
+  console.warn(
+    'PostgreSQL unreachable or unconfigured; skipping benchmarks.' +
+      (TEST_CONFIG.password === undefined
+        ? ' POSTGRES_PASSWORD is not set.'
+        : ''),
+  );
 } else {
   const { single, pooled } = engines!;
   const TABLE = 'tundra_bench_pg';

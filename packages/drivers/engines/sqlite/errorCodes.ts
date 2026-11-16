@@ -54,7 +54,11 @@ export function sqliteErrorToCode(
     return 'CHECK_VIOLATION';
   }
   if (lower.includes('no such table')) return 'TABLE_NOT_FOUND';
-  if (lower.includes('no such column')) return 'COLUMN_NOT_FOUND';
+  if (
+    lower.includes('no such column') || lower.includes('has no column named')
+  ) {
+    return 'COLUMN_NOT_FOUND';
+  }
   if (lower.includes('syntax error')) return 'SYNTAX_ERROR';
   if (code === 'SQLITE_READONLY' || lower.includes('readonly database')) {
     return 'PERMISSION_DENIED';
@@ -70,8 +74,8 @@ export function sqliteErrorToCode(
  * users.name`, `no such table: widgets`). The standardized `EngineError`
  * templates reference `${constraint}` (DUPLICATE_KEY / CHECK_VIOLATION) and
  * `${column}` (NOT_NULL_VIOLATION), so the wrapping engine must lift these
- * names out of the message or the placeholder survives verbatim in the
- * rendered message and `context.constraint` / `.column` stay `undefined`.
+ * names out of the message or the rendered message leaves the name out and
+ * `context.constraint` / `.column` stay `undefined`.
  *
  * Pure: a function of the message text only, with no native-driver or wire
  * imports, so **both** the native `SQLiteEngine` and the Turso / libSQL
@@ -81,7 +85,7 @@ export function sqliteErrorToCode(
  *
  * Note: `FOREIGN KEY constraint failed` carries no name (SQLite does not report
  * one), so no `constraint` is extracted for it — matching what the native
- * engine emits (a literal `${constraint}` in that one case).
+ * engine emits (a message without a name in that one case).
  */
 export function parseSqliteErrorMeta(
   message: string,
@@ -89,7 +93,8 @@ export function parseSqliteErrorMeta(
   const meta: { constraint?: string; column?: string; table?: string } = {};
   const tableMatch = /no such table:\s*([^\s]+)/i.exec(message);
   if (tableMatch) meta.table = tableMatch[1];
-  const colMatch = /no such column:\s*([^\s]+)/i.exec(message);
+  const colMatch = /(?:no such column:|has no column named)\s*([^\s]+)/i
+    .exec(message);
   if (colMatch) meta.column = colMatch[1];
   const notNullMatch = /not null constraint failed:\s*([^\s]+)/i.exec(message);
   if (notNullMatch) meta.column = notNullMatch[1];

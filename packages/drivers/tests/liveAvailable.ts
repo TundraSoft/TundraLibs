@@ -1,6 +1,10 @@
 import { it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 
+/** `LIVE_DB_REQUIRED=true`, which CI sets: a live test may not skip. */
+export const LIVE_DB_REQUIRED =
+  envArgs('./packages/drivers/').get('LIVE_DB_REQUIRED') === 'true';
+
 /**
  * Gate for a live suite whose engine has a service in CI. Returns
  * `available` unchanged, so an unreachable engine still skips its tests.
@@ -9,10 +13,7 @@ import { envArgs } from '@tundralibs/utils';
  * live tests skipped.
  */
 export function liveAvailable(engine: string, available: boolean): boolean {
-  if (
-    !available &&
-    envArgs('./packages/drivers/').get('LIVE_DB_REQUIRED') === 'true'
-  ) {
+  if (!available && LIVE_DB_REQUIRED) {
     it(`${engine} is reachable (LIVE_DB_REQUIRED)`, () => {
       throw new Error(
         `${engine} is unreachable and LIVE_DB_REQUIRED=true: its live tests would have been skipped`,

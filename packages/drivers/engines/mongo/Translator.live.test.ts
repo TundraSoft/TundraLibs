@@ -24,9 +24,13 @@ const env = envArgs('./packages/drivers/');
 const CONFIG = {
   host: env.get('MONGO_HOST') || 'localhost',
   port: Number.parseInt(env.get('MONGO_PORT') || '27017', 10),
-  database: env.get('MONGO_DB') || 'test',
+  // CI sets DB_SCHEMA to keep this package's collections apart from NORM's.
+  database: env.get('DB_SCHEMA')
+    ? `${env.get('DB_SCHEMA')}_drivers`
+    : env.get('MONGO_DB') || 'test',
   username: env.get('MONGO_USERNAME') || env.get('MONGO_USER') || undefined,
   password: env.get('MONGO_PASSWORD') || undefined,
+  authSource: env.get('MONGO_AUTHSOURCE') || undefined,
 };
 
 async function isMongoAvailable(): Promise<boolean> {
