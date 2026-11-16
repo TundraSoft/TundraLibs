@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.13.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.12.1...norm-v1.13.0) (2026-11-16)
+
+
+### Features
+
+* **crypt:** bind the mode, key length and PBKDF2 settings into the CBC/CTR MAC ([#846](https://github.com/TundraSoft/TundraLibs/issues/846)) ([f6fc84b](https://github.com/TundraSoft/TundraLibs/commit/f6fc84bbd30b2ee941391afa5ba19f5eb08ddcc1))
+* **norm:** convert date and time filter values by column type ([#897](https://github.com/TundraSoft/TundraLibs/issues/897)) ([22c074b](https://github.com/TundraSoft/TundraLibs/commit/22c074b1a4ea0a66cd7cb61c53ae3718964c07e9))
+* **norm:** export date and time helpers, with named time zone variants ([#898](https://github.com/TundraSoft/TundraLibs/issues/898)) ([1ff3ea0](https://github.com/TundraSoft/TundraLibs/commit/1ff3ea0d710d34181c8326af1666ba7f9a355d01))
+* **norm:** NULL-safe relation keys via nullSafe ([#860](https://github.com/TundraSoft/TundraLibs/issues/860)) ([ad1a33d](https://github.com/TundraSoft/TundraLibs/commit/ad1a33d14432b97f9b15f54f08f36737046a2a01))
+
+
+### Bug Fixes
+
+* **drivers,norm:** read and write MariaDB dates in UTC ([#844](https://github.com/TundraSoft/TundraLibs/issues/844)) ([70a9ea4](https://github.com/TundraSoft/TundraLibs/commit/70a9ea4282bb42de1438681d71e4f6c527070081))
+* **drivers:** connect to a Postgres or Neon database whatever its time zone ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **drivers:** give a refused MariaDB or Postgres login its own error code ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **norm:** a MongoDB filter through a relation is met by one related row ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** a MongoDB row carries only the keys the read asks for ([2eb3093](https://github.com/TundraSoft/TundraLibs/commit/2eb30931dbd2dc3333eff746aea354bc60a27ff9))
+* **norm:** a to-one relation that can match several rows returns each row once ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** create views after the views they read ([#850](https://github.com/TundraSoft/TundraLibs/issues/850)) ([1abf036](https://github.com/TundraSoft/TundraLibs/commit/1abf0364ae5611b9ea3759ac76f408ff7e51bf84))
+* **norm:** date defaults and date filter text mean the same on every host and engine ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** fill nulls and compute a DATE_ADD day on a MongoDB insert ([#935](https://github.com/TundraSoft/TundraLibs/issues/935)) ([83bcb35](https://github.com/TundraSoft/TundraLibs/commit/83bcb356a66de24351629346de1415ca2e9e3ae7))
+* **norm:** give a Date filter its own read-cache key ([#888](https://github.com/TundraSoft/TundraLibs/issues/888)) ([f70b56f](https://github.com/TundraSoft/TundraLibs/commit/f70b56fca1574db8cf08d9dd767525c7d080ab3a))
+* **norm:** leave a left-out MongoDB field unwritten, and a view's to-one row to the engine ([2eb3093](https://github.com/TundraSoft/TundraLibs/commit/2eb30931dbd2dc3333eff746aea354bc60a27ff9))
+* **norm:** read a date-time string with no offset as UTC ([#874](https://github.com/TundraSoft/TundraLibs/issues/874)) ([ecb84f3](https://github.com/TundraSoft/TundraLibs/commit/ecb84f3641f3206b51a64229ee08bc7983d21d01))
+* **norm:** read a field a MongoDB document lacks as null ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** refuse a date no calendar has, and read an offset with no colon ([#928](https://github.com/TundraSoft/TundraLibs/issues/928)) ([a6cd889](https://github.com/TundraSoft/TundraLibs/commit/a6cd8891132914638347d513d175b75b5bd4ee01))
+* **norm:** refuse an updateOnConflict column the upsert rows do not pass ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** refuse bad defaults at definition and uncopyable upsert columns ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** refuse date text that is not ISO 8601 on a write ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** refuse fan-out filter values, pick to-one rows by key, leave $exists as written ([#933](https://github.com/TundraSoft/TundraLibs/issues/933)) ([9cece9e](https://github.com/TundraSoft/TundraLibs/commit/9cece9e7767ea4dd7a68f87083f6e45cdbb06b56))
+* **norm:** report a rejected date string as the caller sent it ([#905](https://github.com/TundraSoft/TundraLibs/issues/905)) ([0211a40](https://github.com/TundraSoft/TundraLibs/commit/0211a40cdcc79d39b133ba6081ff480b29a480af))
+* **norm:** return a row once through a nullSafe relation ([#889](https://github.com/TundraSoft/TundraLibs/issues/889)) ([e027eea](https://github.com/TundraSoft/TundraLibs/commit/e027eeaf46a8b0e9b8f6a4e0ebe4733210fb8417))
+* **norm:** return each row once for a to-one filter value and keep all-NULL relation matches ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+* **norm:** store date() as its UTC day and read time() as a string ([#843](https://github.com/TundraSoft/TundraLibs/issues/843)) ([cbe2ba2](https://github.com/TundraSoft/TundraLibs/commit/cbe2ba266ef61b153ca7e69520f934a9ecde1ad3))
+* **norm:** store the UTC day for a date() column defaulted from an expression ([#887](https://github.com/TundraSoft/TundraLibs/issues/887)) ([4c07cef](https://github.com/TundraSoft/TundraLibs/commit/4c07cef0d0ce56273005cd62017a5a9e595805d9))
+* **norm:** TableLock no longer stalls a SQLite rebuild ([#851](https://github.com/TundraSoft/TundraLibs/issues/851)) ([f8c665c](https://github.com/TundraSoft/TundraLibs/commit/f8c665c4da862567f09384dab92b05d1539cef67))
+* **oql:** a $exists inside a CASE condition correlates to the query's table on SQL ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** a MongoDB LIKE pattern matches across a newline, and not before one ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** return each engine's own result again where unreleased code forced them to agree ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+
+
+### Documentation
+
+* **norm:** add a dates and time zones page and correct the timestamp notes ([#904](https://github.com/TundraSoft/TundraLibs/issues/904)) ([b4aac10](https://github.com/TundraSoft/TundraLibs/commit/b4aac102fba23bbb340dfcaecacfa9fce0582892))
+* **norm:** add upgrade notes for the date, time and NULL changes ([#917](https://github.com/TundraSoft/TundraLibs/issues/917)) ([3351358](https://github.com/TundraSoft/TundraLibs/commit/33513585edf3f76f9b7aded3b936d91b725ee422))
+* **norm:** correct the query error code count and the MariaDB TIMESTAMP range ([#936](https://github.com/TundraSoft/TundraLibs/issues/936)) ([3aed317](https://github.com/TundraSoft/TundraLibs/commit/3aed3177e717cc52d67902744252c5b4b69be7a0))
+* **norm:** put filter value conversion on the roadmap ([#872](https://github.com/TundraSoft/TundraLibs/issues/872)) ([69a27e8](https://github.com/TundraSoft/TundraLibs/commit/69a27e8c8593ac56bb3e9273cb7c6932e0428f92))
+* **norm:** say what a composite-key count through a fanning relation costs ([2eb3093](https://github.com/TundraSoft/TundraLibs/commit/2eb30931dbd2dc3333eff746aea354bc60a27ff9))
+* **norm:** the Postgres driver asks for a UTC session, and the upgrade note says what that changes ([82f58ed](https://github.com/TundraSoft/TundraLibs/commit/82f58edab4ede2bda257b8a16d365ddd713b1244))
+
 ## [1.12.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.12.0...norm-v1.12.1) (2026-10-20)
 
 

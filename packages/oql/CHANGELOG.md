@@ -1,5 +1,69 @@
 # Changelog
 
+## [1.6.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.5.0...oql-v1.6.0) (2026-11-16)
+
+
+### Features
+
+* **oql:** $exists and $nexists filters run on MongoDB ([#930](https://github.com/TundraSoft/TundraLibs/issues/930)) ([9a050d1](https://github.com/TundraSoft/TundraLibs/commit/9a050d1e70c56380c8c7376b9e26723bd2315328))
+* **oql:** COALESCE, NULLIF and CASE expressions ([#854](https://github.com/TundraSoft/TundraLibs/issues/854)) ([1788040](https://github.com/TundraSoft/TundraLibs/commit/17880408750b2b8f54fa670a5d9ad10a6a46db58))
+* **oql:** DATE_TRUNC expression for day, month and year ([#859](https://github.com/TundraSoft/TundraLibs/issues/859)) ([d35b91c](https://github.com/TundraSoft/TundraLibs/commit/d35b91c4bf6dd3ea1a31abc6db2cfe6892096c4f))
+* **oql:** NULL-safe join and EXISTS keys via nullSafe ([#855](https://github.com/TundraSoft/TundraLibs/issues/855)) ([3a10e77](https://github.com/TundraSoft/TundraLibs/commit/3a10e7719d4a5aa93cf44b48bec994fe25b19016))
+* **oql:** order by a joined column that is not projected ([#941](https://github.com/TundraSoft/TundraLibs/issues/941)) ([048f812](https://github.com/TundraSoft/TundraLibs/commit/048f812a752145dcec49516f18ab64bd8fa5769e))
+* **oql:** orderBy may name a declared column that is not projected ([#853](https://github.com/TundraSoft/TundraLibs/issues/853)) ([87bcb43](https://github.com/TundraSoft/TundraLibs/commit/87bcb43c8e82fa77a19bfa71434ba55facb4db0a))
+
+
+### Bug Fixes
+
+* **drivers:** connect to a Postgres or Neon database whatever its time zone ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **drivers:** give a refused MariaDB or Postgres login its own error code ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **oql:** a $exists inside a CASE condition correlates to the query's table on SQL ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** a filter value naming an alias compares the alias's value ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** a MongoDB join returns one row per joined row ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** a MongoDB LIKE pattern matches across a newline, and not before one ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** a nested $exists correlates to its parent subquery on SQL ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** a Postgres LIKE pattern ending in a backslash matches it as MariaDB does ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** accept NOW as the date of a DATE_ADD ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** close two MongoDB NULL matches the SQL dialects never make ([#886](https://github.com/TundraSoft/TundraLibs/issues/886)) ([c9715d2](https://github.com/TundraSoft/TundraLibs/commit/c9715d2843786c066432b53359373fd918a9f7d4))
+* **oql:** compare a computed filter operand on MongoDB ([#857](https://github.com/TundraSoft/TundraLibs/issues/857)) ([4ab8425](https://github.com/TundraSoft/TundraLibs/commit/4ab8425a87a74ed648f3cd6b851b96431d42c9a6))
+* **oql:** count calendar months and years in DATE_DIFF on every dialect ([#869](https://github.com/TundraSoft/TundraLibs/issues/869)) ([a3e44d5](https://github.com/TundraSoft/TundraLibs/commit/a3e44d592ba4e15c2eb0359f557a7b85a8d5d22c))
+* **oql:** count exact DATE_DIFF gaps correctly on SQLite ([#865](https://github.com/TundraSoft/TundraLibs/issues/865)) ([e91bb95](https://github.com/TundraSoft/TundraLibs/commit/e91bb95868ecea16973a5db922dd8b0ac9cc5d7d))
+* **oql:** DATE_ADD and DATE_DIFF on MariaDB, negative DATE_ADD on SQLite ([#856](https://github.com/TundraSoft/TundraLibs/issues/856)) ([298fe78](https://github.com/TundraSoft/TundraLibs/commit/298fe78c5752a158750c9051a59d97e22d05eb03))
+* **oql:** DATE_DIFF between two date columns on Postgres ([#885](https://github.com/TundraSoft/TundraLibs/issues/885)) ([3df7ea1](https://github.com/TundraSoft/TundraLibs/commit/3df7ea1338170202085634229f33ddef5ea2ee3f))
+* **oql:** DIVIDE and MODULO keep the fraction and COUNT is a number on every SQL dialect ([#932](https://github.com/TundraSoft/TundraLibs/issues/932)) ([2f33380](https://github.com/TundraSoft/TundraLibs/commit/2f3338087d5f69d812fe862cb76a8f65f3c18387))
+* **oql:** drop the partial unit in DATE_DIFF on MongoDB ([#867](https://github.com/TundraSoft/TundraLibs/issues/867)) ([11bdbac](https://github.com/TundraSoft/TundraLibs/commit/11bdbacf10d2426164669de9a9d7739a1a65ee65))
+* **oql:** drop the partial unit in DATE_DIFF on Postgres ([#863](https://github.com/TundraSoft/TundraLibs/issues/863)) ([05141c2](https://github.com/TundraSoft/TundraLibs/commit/05141c20474334dd9717d056fb64d6a3fbaf82b7))
+* **oql:** escape computed LIKE operands and align DATE_ADD and CURRENT_TIME results ([#942](https://github.com/TundraSoft/TundraLibs/issues/942)) ([641239c](https://github.com/TundraSoft/TundraLibs/commit/641239c725b9e62bea58b190f070574bf8fb0b77))
+* **oql:** index conditions read expression columns and refuse clock expressions ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** keep a string starting with $ a literal in MongoDB expressions ([#884](https://github.com/TundraSoft/TundraLibs/issues/884)) ([c98192b](https://github.com/TundraSoft/TundraLibs/commit/c98192b55d56fe180968bb25180d1fdece57e635))
+* **oql:** make a MongoDB CASE condition false on a NULL input ([#880](https://github.com/TundraSoft/TundraLibs/issues/880)) ([8212724](https://github.com/TundraSoft/TundraLibs/commit/82127241119efe56fdb9af55bb04507dd467d9cd))
+* **oql:** MongoDB $exists reads a joined column and works inside CASE ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** MongoDB aggregates over no values match SQL ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** MongoDB COUNT, STRING_AGG, ARRAY_AGG distinct, computed patterns and SUBTRACT match SQL ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** MongoDB joins return SQL's rows, and rows carry _id only when projected ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** MongoDB returns what the SQL engines return for eight query shapes ([#939](https://github.com/TundraSoft/TundraLibs/issues/939)) ([ae67fe7](https://github.com/TundraSoft/TundraLibs/commit/ae67fe7ce551b2d72676f60cb90a4b897ea67604))
+* **oql:** MongoDB UPDATE and DELETE read expression aliases as SQL does ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** never match NULL in a MongoDB comparison ([#862](https://github.com/TundraSoft/TundraLibs/issues/862)) ([93b24a4](https://github.com/TundraSoft/TundraLibs/commit/93b24a4267745e1dc49a2c0c8c80833d401ffc4d))
+* **oql:** read a null EXISTS key as IS NULL ([#861](https://github.com/TundraSoft/TundraLibs/issues/861)) ([e7b6735](https://github.com/TundraSoft/TundraLibs/commit/e7b6735718f8d0a01199c919ed1b00d6f3aa9544))
+* **oql:** reject a null inside a shorthand list filter ([#920](https://github.com/TundraSoft/TundraLibs/issues/920)) ([b35d568](https://github.com/TundraSoft/TundraLibs/commit/b35d568cf848bb382a4e4826414ff435753d4216))
+* **oql:** reject an unknown time unit in a filter operand on every engine ([#881](https://github.com/TundraSoft/TundraLibs/issues/881)) ([9b24f4a](https://github.com/TundraSoft/TundraLibs/commit/9b24f4aa2e2c3192d425c41b1a377d8257907df5))
+* **oql:** reject an unknown UNIX_TIMESTAMP unit in every translator ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** return DATE_DIFF as a number on every dialect ([#899](https://github.com/TundraSoft/TundraLibs/issues/899)) ([34053b1](https://github.com/TundraSoft/TundraLibs/commit/34053b10c06429227be580e16aff568065d0b59f))
+* **oql:** return each engine's own result again where unreleased code forced them to agree ([1a127e6](https://github.com/TundraSoft/TundraLibs/commit/1a127e6a0f28cd3efc601c6feadaa8f9625b2cb7))
+* **oql:** SQLite CURRENT_DATE equals a stored day, and empty ARRAY_AGG is NULL ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** stop DATE_ADD at the month's last day on SQLite ([#873](https://github.com/TundraSoft/TundraLibs/issues/873)) ([c7e0cb6](https://github.com/TundraSoft/TundraLibs/commit/c7e0cb623f89d098eb076f73e9f8bae8a0ee492d))
+* **oql:** the validator checks operand counts, filter-value expressions and missing units ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** typed errors for relation filters and misspelled joined columns, MongoDB DIVIDE folds ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** validator errors say more, and arithmetic takes COALESCE, NULLIF and CASE ([#934](https://github.com/TundraSoft/TundraLibs/issues/934)) ([103c537](https://github.com/TundraSoft/TundraLibs/commit/103c53738b0f6c1cb60b95165eda9691ad9afb78))
+
+
+### Documentation
+
+* **oql:** add upgrade notes for the results and errors that changed since 1.5.0 ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** list the two MongoDB null gaps on the roadmap ([#871](https://github.com/TundraSoft/TundraLibs/issues/871)) ([45a2eb1](https://github.com/TundraSoft/TundraLibs/commit/45a2eb1ee716fc414fae64b26d7e3a17e87daaf2))
+* **oql:** scope JSDoc, numeric argument listing and date expression results per engine ([0b811b0](https://github.com/TundraSoft/TundraLibs/commit/0b811b0f267364bf5c3b8df1a6682a3cc1119f45))
+* **oql:** state what DATE_ADD and DATE_TRUNC return on each engine ([#882](https://github.com/TundraSoft/TundraLibs/issues/882)) ([79ef602](https://github.com/TundraSoft/TundraLibs/commit/79ef602d94ed3262980cd72ac5d6ce00db5ad170))
+
 ## [1.5.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.4.0...oql-v1.5.0) (2026-10-19)
 
 

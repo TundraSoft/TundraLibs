@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.15.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.14.0...rapid-v0.15.0) (2026-11-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **rapid:** in DEVELOPMENT an app with a data route that declares no `response` no longer boots. Declare one on each route, or set `server.requireResponse: false`.
+* **rapid:** in DEVELOPMENT an app with a data route that declares no `response` no longer boots. Declare one on each route, or set `server.requireResponse: false`.
+
+### Features
+
+* **rapid:** every data route declares what it answers with ([#918](https://github.com/TundraSoft/TundraLibs/issues/918)) ([3ae3289](https://github.com/TundraSoft/TundraLibs/commit/3ae3289d33c4a0775ee44e7b98180bcaf5701275))
+* **rapid:** keep hand-written lines in the modules barrel ([#866](https://github.com/TundraSoft/TundraLibs/issues/866)) ([bafbbe5](https://github.com/TundraSoft/TundraLibs/commit/bafbbe534e85eed447e44eb6159620ef2c5d20c2))
+* **rapid:** rapid sdk calls a public route without the credential ([#902](https://github.com/TundraSoft/TundraLibs/issues/902)) ([c921794](https://github.com/TundraSoft/TundraLibs/commit/c921794408d1d86f7eac5ed366f1a6d30cdedc38))
+* **rapid:** rapid sdk declares each schema once and derives the rest with guardian ([#907](https://github.com/TundraSoft/TundraLibs/issues/907)) ([0679614](https://github.com/TundraSoft/TundraLibs/commit/0679614fd16e323a51fac353315ddcb0ddefb6c6))
+* **rapid:** rapid sdk returns a collection's paging window with its items ([#906](https://github.com/TundraSoft/TundraLibs/issues/906)) ([5f68f3f](https://github.com/TundraSoft/TundraLibs/commit/5f68f3fc9c76a495f1cc4d1289228713054f97d4))
+* **rapid:** rapid sdk turns header binds into a headers argument ([#901](https://github.com/TundraSoft/TundraLibs/issues/901)) ([ecae351](https://github.com/TundraSoft/TundraLibs/commit/ecae351edff42292abeba3dcb867ffa94b97ebb8))
+* **rapid:** rapid sdk writes a typed RESTler client for the app's API ([#883](https://github.com/TundraSoft/TundraLibs/issues/883)) ([582eaef](https://github.com/TundraSoft/TundraLibs/commit/582eaef4599a4e4e50a5f80bf6292b6432c6e4c3))
+* **rapid:** refuse an application option the app does not have ([#919](https://github.com/TundraSoft/TundraLibs/issues/919)) ([a551056](https://github.com/TundraSoft/TundraLibs/commit/a551056af66862d43ae67c8ec569a89f8ea17c02))
+* **rapid:** schedule jobs in a named time zone ([#858](https://github.com/TundraSoft/TundraLibs/issues/858)) ([8bd8ecb](https://github.com/TundraSoft/TundraLibs/commit/8bd8ecbf62de0d32336c88b135647620a81c0d6f))
+* **rapid:** shutdownSignals makes a signal stop the app, and the scaffold sets it ([#916](https://github.com/TundraSoft/TundraLibs/issues/916)) ([036f2b4](https://github.com/TundraSoft/TundraLibs/commit/036f2b4607f37147cec37550c9329484bf068614))
+
+
+### Bug Fixes
+
+* **drivers:** connect to a Postgres or Neon database whatever its time zone ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **drivers:** give a refused MariaDB or Postgres login its own error code ([3a5c4f9](https://github.com/TundraSoft/TundraLibs/commit/3a5c4f9411992b88620a186420590e73e3ff7897))
+* **rapid:** a restarted app takes uploads again, and one with modules refuses to restart ([#910](https://github.com/TundraSoft/TundraLibs/issues/910)) ([712e219](https://github.com/TundraSoft/TundraLibs/commit/712e2196e4ce02fa57f377edc519b4262dfdc5f2))
+* **rapid:** a stream reply that will never be sent is cancelled ([#914](https://github.com/TundraSoft/TundraLibs/issues/914)) ([1a24e6d](https://github.com/TundraSoft/TundraLibs/commit/1a24e6d10c71e57e89a2aee1ba2ab84165c3141c))
+* **rapid:** an idempotency store that cannot save the record no longer fails the request ([#911](https://github.com/TundraSoft/TundraLibs/issues/911)) ([62d3a43](https://github.com/TundraSoft/TundraLibs/commit/62d3a43f39270db0b80375808b7600c7053b8739))
+* **rapid:** close the route cache's access, key and reply gaps ([#909](https://github.com/TundraSoft/TundraLibs/issues/909)) ([3e65b9c](https://github.com/TundraSoft/TundraLibs/commit/3e65b9c5604e205b23a9fb8eaba72e0607293aee))
+* **rapid:** name the non-UTC time zone opt-out in the scaffolded Norm.yaml ([#878](https://github.com/TundraSoft/TundraLibs/issues/878)) ([c3fa052](https://github.com/TundraSoft/TundraLibs/commit/c3fa0525affd7d799468b7023d2e85fdde98f262))
+* **rapid:** the docs try-it sends no credential to a public operation ([#913](https://github.com/TundraSoft/TundraLibs/issues/913)) ([db92136](https://github.com/TundraSoft/TundraLibs/commit/db92136424c4a97f17b38d03931785263558507e))
+* **rapid:** the scaffolded main.ts exports the app and starts only when run directly ([#915](https://github.com/TundraSoft/TundraLibs/issues/915)) ([548d89a](https://github.com/TundraSoft/TundraLibs/commit/548d89a3e9c4ee74f472884b9739adb7b4fc9331))
+
+
+### Performance
+
+* **rapid:** brand Html once on the prototype ([#922](https://github.com/TundraSoft/TundraLibs/issues/922)) ([538c963](https://github.com/TundraSoft/TundraLibs/commit/538c9631e67582dec43c21cbb42cff490c747301))
+* **rapid:** build ctx.state on its first read ([#923](https://github.com/TundraSoft/TundraLibs/issues/923)) ([d5919ac](https://github.com/TundraSoft/TundraLibs/commit/d5919acce25c84ad86ba2ad7921836d01651f883))
+* **rapid:** copy the response headers only when they are read ([#921](https://github.com/TundraSoft/TundraLibs/issues/921)) ([95389da](https://github.com/TundraSoft/TundraLibs/commit/95389daea3ab2108c062f032693db91e6c8b8976))
+* **rapid:** import the signing key once ([#984](https://github.com/TundraSoft/TundraLibs/issues/984)) ([3f3fce0](https://github.com/TundraSoft/TundraLibs/commit/3f3fce0a7947acb8c950cf873d0667b2f66edcd2))
+* **rapid:** parse the request body from the bytes already read ([#927](https://github.com/TundraSoft/TundraLibs/issues/927)) ([9f265ba](https://github.com/TundraSoft/TundraLibs/commit/9f265bae709d6aa242bfffcaedf8c4ee639e1994))
+* **rapid:** re-issue the session cookie that was just verified ([#929](https://github.com/TundraSoft/TundraLibs/issues/929)) ([c801a86](https://github.com/TundraSoft/TundraLibs/commit/c801a8687007f69c3c1842aa9dec5e3d754c190f))
+* **rapid:** read one outbound header without copying them all ([#925](https://github.com/TundraSoft/TundraLibs/issues/925)) ([ddd9754](https://github.com/TundraSoft/TundraLibs/commit/ddd97546334a2e138dfe40daad196cda1b256b8e))
+* **rapid:** share one run among requests that miss the same cache key ([#924](https://github.com/TundraSoft/TundraLibs/issues/924)) ([1edfd94](https://github.com/TundraSoft/TundraLibs/commit/1edfd940474f9659765fe5e6dbaabe9b98f7d3a9))
+
+
+### Documentation
+
+* **rapid:** add the review's follow-ups to the roadmap ([#912](https://github.com/TundraSoft/TundraLibs/issues/912)) ([fea8a9d](https://github.com/TundraSoft/TundraLibs/commit/fea8a9db1937a192f52cee5320f21ec969e0aa83))
+* **rapid:** drop shipped caching and metrics items from the roadmap ([#900](https://github.com/TundraSoft/TundraLibs/issues/900)) ([040169b](https://github.com/TundraSoft/TundraLibs/commit/040169ba9b10d301c8bf621f4ce3f87854d6754e))
+* **rapid:** move the SSE live bridge under the cluster work in the roadmap ([#908](https://github.com/TundraSoft/TundraLibs/issues/908)) ([b7598de](https://github.com/TundraSoft/TundraLibs/commit/b7598deaabece584ace0f0e58c4e40709c745c48))
+* **rapid:** show ctx.redirect in middleware as ctx.response ([#848](https://github.com/TundraSoft/TundraLibs/issues/848)) ([67c543a](https://github.com/TundraSoft/TundraLibs/commit/67c543aefa687aba43d31468df8f8c931939f0d4))
+* **rapid:** tag the module testability sketch as not compiled ([#864](https://github.com/TundraSoft/TundraLibs/issues/864)) ([2f1e802](https://github.com/TundraSoft/TundraLibs/commit/2f1e80299a3160c4cec8ff32e651dc62b579bfc1))
+
 ## [0.14.0](https://github.com/TundraSoft/TundraLibs/compare/rapid-v0.13.0...rapid-v0.14.0) (2026-10-26)
 
 
