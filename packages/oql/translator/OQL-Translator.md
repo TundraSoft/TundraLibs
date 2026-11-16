@@ -292,7 +292,9 @@ columns `NULL`, and run the `where` after every join. See the
   silently compares against `missing` and returns wrong rows.)
 - An `$exists` / `$nexists` node puts its `$lookup` directly before the
   `$match` that carries the filter and writes to a temporary
-  `__exists_<n>` field. The `$match` tests that field and an `$unset`
+  `__exists_<n>` field, with one more leading `_` while a column, join
+  alias, expression or aggregate of the query has that name. The
+  `$match` tests that field and an `$unset`
   removes it straight after, ahead of any `$sort` or `$project`. The
   filter stays one `$match`, so an `$or` across a column test and an
   `$exists` is evaluated as a whole.

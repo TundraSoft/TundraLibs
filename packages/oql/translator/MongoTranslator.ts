@@ -304,8 +304,9 @@ export type MongoAction =
 
 /**
  * Prefix of the temporary field an `$exists` / `$nexists` lookup writes
- * its result to. A counter is appended per node, and the field is unset
- * straight after the `$match` that reads it.
+ * its result to. A counter is appended per node, a `_` is prepended while
+ * a name of the query has it, and the field is unset straight after the
+ * `$match` that reads it.
  */
 const EXISTS_FIELD = '__exists_';
 
@@ -1223,6 +1224,21 @@ export class MongoTranslator {
     return out;
   }
 
+  /**
+   * The field names a SELECT's documents can hold: its columns, join
+   * aliases, declared expressions, aggregates and projected keys. A
+   * temporary field takes a name outside them.
+   */
+  private __queryNames(q: Query<'SELECT'>): Set<string> {
+    return new Set([
+      ...(Array.isArray(q.columns) ? q.columns.map(String) : []),
+      ...Object.keys(q.joins ?? {}),
+      ...Object.keys(q.expressions ?? {}),
+      ...Object.keys(q.aggregates ?? {}),
+      ...Object.keys(q.projection).map((k) => k.slice(1).split('.@')[0]!),
+    ]);
+  }
+
   /** Build a simple `find` op — no joins, no aggregates. */
   private __buildFind(q: Query<'SELECT'>): MongoFindAction {
     const filter = q.where
@@ -1282,8 +1298,9 @@ export class MongoTranslator {
       def?.type === 'RIGHT' || def?.type === 'FULL'
     );
     const deferMatch = filterTouchesJoins || filterTouchesExpr || outerJoin;
+    const names = this.__queryNames(q);
     if (q.where && !deferMatch) {
-      this.__pushMatch(pipeline, q.where, columns);
+      this.__pushMatch(pipeline, q.where, columns, names);
     }
     if (q.joins) {
       for (const [alias, def] of Object.entries(q.joins)) {
@@ -1321,7 +1338,7 @@ export class MongoTranslator {
     // AFTER the expressions $addFields (alias fields exist), but BEFORE any
     // $group, mirroring SQL's WHERE-then-GROUP-BY evaluation order.
     if (q.where && deferMatch) {
-      this.__pushMatch(pipeline, q.where, columns);
+      this.__pushMatch(pipeline, q.where, columns, names);
     }
     const aggregates = this.__aggregatesOf(q);
     const grouped = Object.keys(aggregates).length > 0;
@@ -1414,7 +1431,7 @@ export class MongoTranslator {
       }
     }
     if (q.having) {
-      this.__pushMatch(pipeline, q.having, columns);
+      this.__pushMatch(pipeline, q.having, columns, names);
     }
     // $sort before $project: orderBy names source fields, which an
     // alias or an unprojected column would no longer have after it.
@@ -1726,7 +1743,14 @@ export class MongoTranslator {
         $expr: conditions.length === 1 ? conditions[0] : { $and: conditions },
       },
     }];
-    if (spec.where) this.__pushMatch(pipeline, spec.where, new Set());
+    if (spec.where) {
+      this.__pushMatch(
+        pipeline,
+        spec.where,
+        new Set(),
+        this.__filterColumns(spec.where),
+      );
+    }
     pipeline.push({ $limit: 1 });
     const lookup: Record<string, unknown> = { from: spec.table };
     if (Object.keys(letVars).length > 0) lookup.let = letVars;
@@ -2099,22 +2123,41 @@ export class MongoTranslator {
   /**
    * Append a filter to a pipeline as a `$match`. Each `$exists` /
    * `$nexists` node in it adds a `$lookup` ahead of the `$match` and its
-   * temporary field to the `$unset` after it, so later stages see the
-   * documents as they were.
+   * temporary field, named outside `taken`, to the `$unset` after it, so
+   * later stages see the documents as they were.
    */
   private __pushMatch(
     pipeline: Record<string, unknown>[],
     filter: QueryFilter,
     columns: ReadonlySet<string>,
+    taken: ReadonlySet<string>,
   ): void {
     const lookups: Record<string, unknown>[] = [];
-    const match = this.__translateFilter(filter, columns, lookups);
+    const match = this.__translateFilter(filter, columns, lookups, taken);
     pipeline.push(...lookups, { $match: match });
     if (lookups.length > 0) {
       pipeline.push({
-        $unset: lookups.map((_, i) => `${EXISTS_FIELD}${i}`),
+        $unset: lookups.map((l) => (l.$lookup as { as: string }).as),
       });
     }
+  }
+
+  /**
+   * The column names a filter's keys name, at any `$and` / `$or` depth:
+   * a JSON path or a joined column by its first segment.
+   */
+  private __filterColumns(filter: QueryFilter): Set<string> {
+    const out = new Set<string>();
+    for (const [key, value] of Object.entries(filter)) {
+      if (key === '$and' || key === '$or') {
+        for (const sub of value as QueryFilter[]) {
+          this.__filterColumns(sub).forEach((c) => out.add(c));
+        }
+      } else if (key.startsWith('@')) {
+        out.add(key.slice(1).split('.@')[0]!);
+      }
+    }
+    return out;
   }
 
   /**
@@ -2134,6 +2177,7 @@ export class MongoTranslator {
     filter: QueryFilter,
     columns: ReadonlySet<string> = new Set(),
     existsLookups?: Record<string, unknown>[],
+    taken: ReadonlySet<string> = new Set(),
   ): Record<string, unknown> {
     const conditions: Record<string, unknown>[] = [];
     let merged: Record<string, unknown> = {};
@@ -2151,7 +2195,8 @@ export class MongoTranslator {
             `filter operator '${key}' outside a SELECT or COUNT (it runs as a $lookup stage, which a query filter cannot carry)`,
           );
         }
-        const field = `${EXISTS_FIELD}${existsLookups.length}`;
+        let field = `${EXISTS_FIELD}${existsLookups.length}`;
+        while (taken.has(field)) field = `_${field}`;
         existsLookups.push(
           this.__buildExistsLookup(value as ExistsFilter, field, columns),
         );
@@ -2163,14 +2208,14 @@ export class MongoTranslator {
       }
       if (key === '$and') {
         const subs = (value as QueryFilter[]).map((f) =>
-          this.__translateFilter(f, columns, existsLookups)
+          this.__translateFilter(f, columns, existsLookups, taken)
         );
         conditions.push({ $and: subs });
         continue;
       }
       if (key === '$or') {
         const subs = (value as QueryFilter[]).map((f) =>
-          this.__translateFilter(f, columns, existsLookups)
+          this.__translateFilter(f, columns, existsLookups, taken)
         );
         conditions.push({ $or: subs });
         continue;

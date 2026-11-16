@@ -4184,6 +4184,73 @@ const CASES: Case[] = [
     },
   },
   {
+    // A column of the query, or of the subquery table its sub-where names,
+    // keeps its value: the lookup field takes another name.
+    name: '$exists beside a column named like its lookup field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', '__exists_0'],
+      projection: { '@id': true, '@__exists_0': true },
+      where: {
+        $exists: {
+          table: 'orders',
+          on: { '@userId': '@id' },
+          where: {
+            '@__exists_0': 1,
+            $exists: { table: 'items', on: { '@orderId': 1 } },
+          },
+        },
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                {
+                  $lookup: {
+                    from: 'items',
+                    pipeline: [
+                      { $match: { $expr: { $eq: ['$orderId', 1] } } },
+                      { $limit: 1 },
+                    ],
+                    as: '___exists_0',
+                  },
+                },
+                {
+                  $match: { __exists_0: 1, ___exists_0: { $ne: [] } },
+                },
+                { $unset: ['___exists_0'] },
+                { $limit: 1 },
+              ],
+              as: '___exists_0',
+            },
+          },
+          { $match: { ___exists_0: { $ne: [] } } },
+          { $unset: ['___exists_0'] },
+          { $project: { id: 1, __exists_0: 1 } },
+        ],
+      },
+    },
+  },
+  {
     // One of each `on` value: a column, a NULL-safe column, null, and an
     // `@` string that names no outer column and so is data.
     name: '$exists keys: column, nullSafe column, null and literal',
