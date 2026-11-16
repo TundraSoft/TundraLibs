@@ -2,6 +2,7 @@ import type { FlattenEntity } from '@tundralibs/utils';
 import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
 import type { Expressions } from '../expressions/Expressions.ts';
+import type { ConditionalExpressions } from '../expressions/ConditionalExpressions.ts';
 import type { NumericExpressions } from '../expressions/NumericExpressions.ts';
 import type { AggregateFunction } from './AggregateFunction.ts';
 
@@ -68,7 +69,10 @@ export type Aggregates<
   >;
   column:
     | GetColumnByType<FT, number | bigint | Date>
-    | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
+    | Extract<
+      Expressions<T, FT>,
+      { $$_expression: NumericExpressions | ConditionalExpressions }
+    >;
   /** Apply `DISTINCT` to the column before aggregating. */
   distinct?: boolean;
 } | {
@@ -79,8 +83,8 @@ export type Aggregates<
    * - PostgreSQL: `string_agg(column, separator)`.
    * - MariaDB/MySQL: `GROUP_CONCAT(column SEPARATOR separator)`.
    * - SQLite: `group_concat(column, separator)`.
-   * - MongoDB: `$reduce` with `$concat` (4.4+) or `$push` + join
-   *   in the application layer.
+   * - MongoDB: `$push`, or `$addToSet` for `distinct`, joined by
+   *   `$reduce` with `$concat`.
    */
   $$_aggregate: 'STRING_AGG';
   column: keyof FT | Expressions<T, FT>;
@@ -96,7 +100,7 @@ export type Aggregates<
    * - PostgreSQL: `array_agg(column)` or `json_agg(column)`.
    * - MariaDB/MySQL: `JSON_ARRAYAGG(column)`.
    * - SQLite: `json_group_array(column)`.
-   * - MongoDB: `$push`.
+   * - MongoDB: `$push`, or `$addToSet` for `distinct`.
    */
   $$_aggregate: 'ARRAY_AGG';
   column: keyof FT | Expressions<T, FT>;

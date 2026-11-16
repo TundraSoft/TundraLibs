@@ -23,6 +23,7 @@
 import { isColumnIdentifier } from '../columnIdentifier.ts';
 import type { Expressions, StringExpressions } from '../../types/mod.ts';
 import { assertBaseExpression } from './base.ts';
+import { assertConditionalOperand } from './expression.ts';
 
 /**
  * Helper function to validate a single string argument expression.
@@ -31,6 +32,8 @@ import { assertBaseExpression } from './base.ts';
  * @param x - The expression to validate
  * @param type - The expression type name
  * @param columnList - Optional list of valid column names (without '@' prefix)
+ * @param depth - Current recursion depth (internal use, default: 0)
+ * @param maxDepth - Maximum allowed recursion depth (default: 10)
  * @throws {TypeError} If the expression structure is invalid
  * @internal
  */
@@ -38,6 +41,8 @@ const assertSingleArgStringExpression = (
   x: unknown,
   type: string,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): void => {
   assertBaseExpression(x, type);
   if (!('args' in x)) {
@@ -49,6 +54,9 @@ const assertSingleArgStringExpression = (
   // literal. @-strings that aren't in the list fall through and are
   // accepted as literals.
   if (isColumnIdentifier(x.args, columnList)) return;
+  if (
+    assertConditionalOperand(x.args, 'args', type, columnList, depth, maxDepth)
+  ) return;
   if (typeof x.args !== 'string') {
     throw new TypeError(
       `Invalid Expression definition: Invalid 'args' property in ${type} expression`,
@@ -175,7 +183,8 @@ export const isUUIDExpression = (
  * Asserts that a value is a valid CONCAT expression.
  *
  * The CONCAT expression joins multiple strings together. It accepts an array
- * of string literals and/or column identifiers.
+ * of string literals, column identifiers and COALESCE, NULLIF or CASE
+ * expressions.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -196,9 +205,13 @@ export const isUUIDExpression = (
 export const assertConcatExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'CONCAT' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'CONCAT' }> => {
   assertBaseExpression(x, 'CONCAT');
   if (!('args' in x) || !Array.isArray(x.args) || x.args.length === 0) {
@@ -206,10 +219,20 @@ export const assertConcatExpression: (
       `Invalid Expression definition: 'args' must be a non-empty array for CONCAT expression`,
     );
   }
-  for (const arg of x.args) {
+  for (const [i, arg] of x.args.entries()) {
     // Known column reference accepted; otherwise must be a string
     // literal (@-strings not in columnList fall through as literals).
     if (isColumnIdentifier(arg, columnList)) continue;
+    if (
+      assertConditionalOperand(
+        arg,
+        `args[${i}]`,
+        'CONCAT',
+        columnList,
+        depth,
+        maxDepth,
+      )
+    ) continue;
     if (typeof arg !== 'string') {
       throw new TypeError(
         `Invalid Expression definition: Invalid argument ${arg} in CONCAT expression`,
@@ -256,8 +279,8 @@ export const isConcatExpression: (
 /**
  * Asserts that a value is a valid LOWER expression.
  *
- * The LOWER expression converts a string to lowercase. Accepts a string literal
- * or column identifier.
+ * The LOWER expression converts a string to lowercase. Accepts a string literal,
+ * column identifier, or COALESCE, NULLIF or CASE expression.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -272,11 +295,15 @@ export const isConcatExpression: (
 export const assertLowerExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'LOWER' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'LOWER' }> => {
-  assertSingleArgStringExpression(x, 'LOWER', columnList);
+  assertSingleArgStringExpression(x, 'LOWER', columnList, depth, maxDepth);
 };
 
 /**
@@ -313,8 +340,8 @@ export const isLowerExpression: (
 /**
  * Asserts that a value is a valid UPPER expression.
  *
- * The UPPER expression converts a string to uppercase. Accepts a string literal
- * or column identifier.
+ * The UPPER expression converts a string to uppercase. Accepts a string literal,
+ * column identifier, or COALESCE, NULLIF or CASE expression.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -329,11 +356,15 @@ export const isLowerExpression: (
 export const assertUpperExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'UPPER' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'UPPER' }> => {
-  assertSingleArgStringExpression(x, 'UPPER', columnList);
+  assertSingleArgStringExpression(x, 'UPPER', columnList, depth, maxDepth);
 };
 
 /**
@@ -371,7 +402,8 @@ export const isUpperExpression: (
  * Asserts that a value is a valid TRIM expression.
  *
  * The TRIM expression removes leading and trailing whitespace from a string.
- * Accepts a string literal or column identifier.
+ * Accepts a string literal, column identifier, or COALESCE, NULLIF or CASE
+ * expression.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -386,11 +418,15 @@ export const isUpperExpression: (
 export const assertTrimExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'TRIM' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'TRIM' }> => {
-  assertSingleArgStringExpression(x, 'TRIM', columnList);
+  assertSingleArgStringExpression(x, 'TRIM', columnList, depth, maxDepth);
 };
 
 /**
@@ -428,7 +464,8 @@ export const isTrimExpression: (
  * Asserts that a value is a valid LTRIM expression.
  *
  * The LTRIM expression removes leading (left-side) whitespace only from a string.
- * Trailing whitespace is preserved. Accepts a string literal or column identifier.
+ * Trailing whitespace is preserved. Accepts a string literal, column
+ * identifier, or COALESCE, NULLIF or CASE expression.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -443,11 +480,15 @@ export const isTrimExpression: (
 export const assertLTrimExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'LTRIM' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'LTRIM' }> => {
-  assertSingleArgStringExpression(x, 'LTRIM', columnList);
+  assertSingleArgStringExpression(x, 'LTRIM', columnList, depth, maxDepth);
 };
 
 /**
@@ -485,7 +526,8 @@ export const isLTrimExpression: (
  * Asserts that a value is a valid RTRIM expression.
  *
  * The RTRIM expression removes trailing (right-side) whitespace only from a string.
- * Leading whitespace is preserved. Accepts a string literal or column identifier.
+ * Leading whitespace is preserved. Accepts a string literal, column
+ * identifier, or COALESCE, NULLIF or CASE expression.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -500,11 +542,15 @@ export const isLTrimExpression: (
 export const assertRTrimExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'RTRIM' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'RTRIM' }> => {
-  assertSingleArgStringExpression(x, 'RTRIM', columnList);
+  assertSingleArgStringExpression(x, 'RTRIM', columnList, depth, maxDepth);
 };
 
 /**
@@ -1341,17 +1387,17 @@ export const assertStringExpression: (
   if (x.$$_expression === 'UUID') {
     assertUUIDExpression(x);
   } else if (x.$$_expression === 'CONCAT') {
-    assertConcatExpression(x, columnList);
+    assertConcatExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'LOWER') {
-    assertLowerExpression(x, columnList);
+    assertLowerExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'UPPER') {
-    assertUpperExpression(x, columnList);
+    assertUpperExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'TRIM') {
-    assertTrimExpression(x, columnList);
+    assertTrimExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'LTRIM') {
-    assertLTrimExpression(x, columnList);
+    assertLTrimExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'RTRIM') {
-    assertRTrimExpression(x, columnList);
+    assertRTrimExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'SUBSTR') {
     assertSubstrExpression(x, columnList);
   } else if (x.$$_expression === 'REPLACE') {

@@ -32,10 +32,9 @@
  * - Expressions: UUID materialises a fresh value via `crypto.randomUUID()`
  *   at translate time. HASH/ENCRYPT/DECRYPT/LPAD/RPAD pass the input
  *   through unchanged (Mongo has no aggregation-pipeline crypto/padding).
- * - Aggregates: STRING_AGG throws — no clean Mongo equivalent.
- * - Deduplication: `SELECT { distinct: true }` and `COUNT { distinct }`
- *   throw — Mongo has no find-level DISTINCT; build a `$group` pipeline
- *   explicitly when you need one.
+ * - Deduplication: `SELECT { distinct: true }` throws — Mongo has no
+ *   find-level DISTINCT; build a `$group` pipeline explicitly when you
+ *   need one. `COUNT { distinct }` counts a `$group`'s distinct set.
  * - `$exists` / `$nexists` filters run as a `$lookup` stage, so a SELECT
  *   or COUNT carrying one is an aggregation pipeline. UPDATE, DELETE and
  *   a partial-index predicate take a query filter, which has no stage to
@@ -77,6 +76,7 @@ import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import { COUNT_ALIAS } from './AbstractTranslator.ts';
+import { findExpression } from './findExpression.ts';
 
 // =============================================================================
 // Mongo action types — discriminated union of every translator output shape.
@@ -303,8 +303,9 @@ export type MongoAction =
 
 /**
  * Prefix of the temporary field an `$exists` / `$nexists` lookup writes
- * its result to. A counter is appended per node, and the field is unset
- * straight after the `$match` that reads it.
+ * its result to. A counter is appended per node, a `_` is prepended while
+ * a name of the query has it, and the field is unset straight after the
+ * `$match` that reads it.
  */
 const EXISTS_FIELD = '__exists_';
 
@@ -313,6 +314,17 @@ const EXISTS_FIELD = '__exists_';
  * `$regex` operator interprets the value as a JS regex source.
  */
 const REGEX_SPECIALS = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * The replacements that turn a LIKE pattern into a regex source, in order:
+ * each {@link REGEX_SPECIALS} character escaped, the backslash first, then
+ * the wildcards. A computed pattern runs them as `$replaceAll` stages.
+ */
+const LIKE_TO_REGEX_STEPS: readonly (readonly [string, string])[] = [
+  ...'\\.*+?^${}()|[]'.split('').map((c) => [c, `\\${c}`] as const),
+  ['%', '.*'],
+  ['_', '.'],
+];
 
 /**
  * Filter operators whose value is spliced into a regex pattern. Their
@@ -336,6 +348,60 @@ const LIKE_OPERATORS: ReadonlySet<string> = new Set([
 const NO_COLUMNS: ReadonlySet<string> = new Set();
 
 /**
+ * A column scope carrying the statement's declared expressions. A `where`
+ * value `@name` naming one compares that expression's value inside
+ * `$expr`, as the SQL translators compare its body.
+ */
+class ExpressionScope extends Set<string> {
+  public readonly expressions: Readonly<Record<string, Expressions>>;
+
+  constructor(
+    columns: Iterable<string>,
+    expressions: Record<string, Expressions> = {},
+  ) {
+    super(columns);
+    this.expressions = expressions;
+  }
+
+  /**
+   * The declared expression a `where` key `@name` names. As in SQL it wins
+   * over a column of the same name.
+   */
+  public expressionAt(key: string): Expressions | undefined {
+    const name = key.slice(1);
+    return Object.hasOwn(this.expressions, name)
+      ? this.expressions[name]
+      : undefined;
+  }
+}
+
+/**
+ * The column scope of an UPDATE or DELETE. A `where` key naming a declared
+ * expression compares its value inside `$expr`, since a query filter sees
+ * no computed field. The SQL translators also put the expression keys in
+ * the scope, so an `@key` expression argument there names a column the
+ * table lacks and the database refuses it; here the translator throws
+ * instead.
+ */
+class WriteScope extends ExpressionScope {}
+
+/**
+ * The column scope of a SELECT's `expressions` stage. A CASE condition
+ * there may hold `$exists` / `$nexists`: each adds its `$lookup` to
+ * `lookups`, written to a field named outside `taken`, for the stage to
+ * run first.
+ */
+class CaseExistsScope extends Set<string> {
+  public readonly lookups: Record<string, unknown>[] = [];
+  public readonly taken: ReadonlySet<string>;
+
+  constructor(columns: Iterable<string>, taken: ReadonlySet<string>) {
+    super(columns);
+    this.taken = taken;
+  }
+}
+
+/**
  * The aggregates whose `distinct` MongoDB has to compute in two steps,
  * each mapped to the expression that reduces the set of a group's distinct
  * values. The set holds one `null` when any row's value was null; SQL's
@@ -343,7 +409,10 @@ const NO_COLUMNS: ReadonlySet<string> = new Set();
  */
 const DISTINCT_REDUCERS: Readonly<Record<string, (set: string) => unknown>> = {
   COUNT: (set) => ({ $size: { $setDifference: [set, [null]] } }),
-  SUM: (set) => ({ $sum: set }),
+  // `$sum` of no values is 0, SQL's SUM is NULL: `$max` is null exactly then.
+  SUM: (set) => ({
+    $cond: [{ $gt: [{ $max: set }, null] }, { $sum: set }, null],
+  }),
   AVG: (set) => ({ $avg: set }),
 };
 
@@ -432,8 +501,8 @@ export class MongoTranslator {
    *
    * @throws {TypeError} When `q` is not a valid `SELECT` query.
    * @throws {@link DialectUnsupportedError} For `distinct`, an
-   *   `$exists` / `$nexists` key bound to a joined column, `STRING_AGG`,
-   *   and any other expression or operator with no Mongo equivalent.
+   *   `$exists` / `$nexists` key bound to a joined column, and any other
+   *   expression or operator with no Mongo equivalent.
    */
   public select(
     q: Query<'SELECT'>,
@@ -531,22 +600,25 @@ export class MongoTranslator {
 
   /**
    * Translate an `UPDATE`. Always `multiple: true`, and a `q.where`-less
-   * query yields an empty filter that matches the whole collection.
+   * query yields an empty filter that matches the whole collection. A
+   * `where` key naming a declared expression compares inside `$expr`.
    *
    * @throws {TypeError} When `q` is not a valid `UPDATE` query.
    * @throws {@link DialectUnsupportedError} For an `$exists` / `$nexists`
    *   filter — `updateMany` takes a query filter, not a pipeline.
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when an expression
+   *   argument names a declared expression, which is no column. A `where`
+   *   value naming one compares its value, as a key does.
    */
   public update(q: Query<'UPDATE'>): MongoUpdateAction {
     assertUpdate(q);
+    const columns = new WriteScope(this.__columnsOf(q), q.expressions);
     return {
       sql: 'update',
       params: {
         collection: q.table,
-        filter: q.where
-          ? this.__translateFilter(q.where, this.__columnsOf(q))
-          : {},
-        data: this.__updateBody(q.data, this.__columnsOf(q)),
+        filter: q.where ? this.__translateFilter(q.where, columns) : {},
+        data: this.__updateBody(q.data, columns),
         options: { multiple: true },
       },
     };
@@ -554,21 +626,24 @@ export class MongoTranslator {
 
   /**
    * Translate a `DELETE`. Always `multiple: true`, and a `q.where`-less
-   * query yields an empty filter — which deletes every document.
+   * query yields an empty filter — which deletes every document. A
+   * `where` key naming a declared expression compares inside `$expr`.
    *
    * @throws {TypeError} When `q` is not a valid `DELETE` query.
    * @throws {@link DialectUnsupportedError} For an `$exists` / `$nexists`
    *   filter — `deleteMany` takes a query filter, not a pipeline.
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when an expression
+   *   argument names a declared expression, which is no column. A `where`
+   *   value naming one compares its value, as a key does.
    */
   public delete(q: Query<'DELETE'>): MongoDeleteAction {
     assertDelete(q);
+    const columns = new WriteScope(this.__columnsOf(q), q.expressions);
     return {
       sql: 'delete',
       params: {
         collection: q.table,
-        filter: q.where
-          ? this.__translateFilter(q.where, this.__columnsOf(q))
-          : {},
+        filter: q.where ? this.__translateFilter(q.where, columns) : {},
         options: { multiple: true },
       },
     };
@@ -731,47 +806,52 @@ export class MongoTranslator {
   }
 
   /**
-   * Translate a `COUNT`. A count is a native `count`; with joins or an
-   * `$exists` / `$nexists` filter it is rewritten as a SELECT and comes
-   * back as a pipeline.
+   * Translate a `COUNT`. A count is a native `count`; with joins,
+   * `distinct`, an `$exists` / `$nexists` filter or a filter on a declared
+   * expression it is rewritten as a SELECT, as the SQL translators do, and
+   * comes back as a pipeline.
    *
    * @throws {TypeError} When `q` is not a valid `COUNT` query.
-   * @throws {@link DialectUnsupportedError} When `q.distinct` is set —
-   *   Mongo has no count-level DISTINCT.
    */
   public count(
     q: Query<'COUNT'>,
   ): MongoCountAction | MongoFindAction | MongoAggregateAction {
     assertCount(q);
-    if (q.distinct !== undefined) {
-      throw new DialectUnsupportedError(
-        this.Dialect,
-        `COUNT with 'distinct' (build an explicit $group + $count pipeline instead)`,
-      );
-    }
     // Mongo native `count` only supports filter — no pre-count expression
-    // chain. If the OQL caller asked for joins, or the filter needs a
-    // `$lookup` stage, we fall back to an aggregate count; otherwise the
-    // simpler path.
-    if (q.joins || this.__filterHasExists(q.where)) {
-      const sel = this.__buildSelect({
+    // chain. Anything else falls back to an aggregate count.
+    if (
+      q.joins || q.distinct !== undefined || this.__filterHasExists(q.where) ||
+      this.__filterReferencesExpressions(q.where, q.expressions)
+    ) {
+      return this.__buildSelect({
         type: 'SELECT',
         table: q.table,
         schema: q.schema,
         columns: q.columns,
+        expressions: q.expressions,
         joins: q.joins,
         where: q.where,
-        aggregates: { [COUNT_ALIAS]: { $$_aggregate: 'COUNT' } },
+        aggregates: {
+          [COUNT_ALIAS]: q.distinct === undefined
+            ? { $$_aggregate: 'COUNT' }
+            : {
+              $$_aggregate: 'COUNT',
+              column: `@${String(q.distinct[0])}`,
+              distinct: true,
+            },
+        },
         projection: { [`@${COUNT_ALIAS}`]: true },
       });
-      return sel;
     }
     return {
       sql: 'count',
       params: {
         collection: q.table,
         filter: q.where
-          ? this.__translateFilter(q.where, this.__columnsOf(q))
+          ? this.__translateFilter(
+            q.where,
+            new ExpressionScope(this.__columnsOf(q), q.expressions),
+          )
           : {},
       },
     };
@@ -927,9 +1007,18 @@ export class MongoTranslator {
    * ignored.
    *
    * @throws {TypeError} When `q` is not a valid `CREATE_INDEX` query.
+   * @throws {@link DialectUnsupportedError} When `q.where` holds an
+   *   expression: a partial filter takes no `$expr`.
    */
   public createIndex(q: Query<'CREATE_INDEX'>): MongoCreateIndexAction {
     assertCreateIndex(q);
+    const computed = findExpression(q.where);
+    if (computed !== null) {
+      throw new DialectUnsupportedError(
+        this.Dialect,
+        `the computed expression ${computed} in an index predicate`,
+      );
+    }
     return {
       sql: 'createIndex',
       params: {
@@ -1144,27 +1233,50 @@ export class MongoTranslator {
   }
 
   /**
-   * The orderBy keys that name a joined column the query does not
-   * project, each mapped to `[field, operator, path]`. `$lookup` leaves
-   * the joined rows in an array, so the key sorts on a computed `field`:
-   * the smallest value at `path` for `ASC`, the largest for `DESC`, NULLs
-   * skipped. That is the MIN / MAX the SQL translators order a grouped
-   * query by. The inclusion `$project` drops the field again.
+   * For a grouped query, the orderBy keys that name a joined column the
+   * query does not project, each mapped to `[field, operator, path]`.
+   * Such a column is no group key, so the key sorts on a `field` the
+   * `$group` accumulates: the group's smallest value at `path` for `ASC`,
+   * its largest for `DESC`, NULLs skipped, as the SQL translators order
+   * by MIN / MAX. The field takes a `_` prefix while an aggregate or a
+   * projected key has its name, and the inclusion `$project` drops it.
    */
   private __joinedSorts(
     q: Query<'SELECT'>,
+    aggregates: Record<string, unknown>,
   ): Record<string, [string, string, string]> {
+    const taken = new Set([
+      ...Object.keys(aggregates),
+      ...Object.keys(q.projection).map((k) => k.slice(1).split('.@')[0]),
+    ]);
     const out: Record<string, [string, string, string]> = {};
     Object.entries(q.orderBy ?? {}).forEach(([key, dir], i) => {
       if (key.includes('.@') && !(key in q.projection)) {
+        let field = `__sort_${i}`;
+        while (taken.has(field)) field = `_${field}`;
         out[key] = [
-          `__sort_${i}`,
+          field,
           dir === 'ASC' ? '$min' : '$max',
           `$${key.slice(1).replace('.@', '.')}`,
         ];
       }
     });
     return out;
+  }
+
+  /**
+   * The field names a SELECT's documents can hold: its columns, join
+   * aliases, declared expressions, aggregates and projected keys. A
+   * temporary field takes a name outside them.
+   */
+  private __queryNames(q: Query<'SELECT'>): Set<string> {
+    return new Set([
+      ...(Array.isArray(q.columns) ? q.columns.map(String) : []),
+      ...Object.keys(q.joins ?? {}),
+      ...Object.keys(q.expressions ?? {}),
+      ...Object.keys(q.aggregates ?? {}),
+      ...Object.keys(q.projection).map((k) => k.slice(1).split('.@')[0]!),
+    ]);
   }
 
   /** Build a simple `find` op — no joins, no aggregates. */
@@ -1220,139 +1332,189 @@ export class MongoTranslator {
       q.where,
       q.expressions,
     );
-    const deferMatch = filterTouchesJoins || filterTouchesExpr;
+    // A RIGHT or FULL join adds rows whose base columns are NULL, and a
+    // filter on a base column must see those too.
+    const outerJoin = Object.values(q.joins ?? {}).some((def) =>
+      def?.type === 'RIGHT' || def?.type === 'FULL'
+    );
+    const deferMatch = filterTouchesJoins || filterTouchesExpr || outerJoin;
+    const whereScope = new ExpressionScope(columns, q.expressions);
+    const names = this.__queryNames(q);
     if (q.where && !deferMatch) {
-      this.__pushMatch(pipeline, q.where, columns);
+      this.__pushMatch(pipeline, q.where, whereScope, names);
     }
     if (q.joins) {
       for (const [alias, def] of Object.entries(q.joins)) {
         if (!def) continue;
         const lookup = this.__buildLookup(alias, def, columns);
-        if (lookup !== null) pipeline.push(lookup);
+        if (lookup === null) continue;
+        const type = def.type ?? 'INNER';
+        const rows = pipeline.slice();
+        // One row per joined row, as a SQL join returns: the alias holds
+        // a single joined document. A row without a match keeps going
+        // with the alias missing, its columns NULL, on LEFT and FULL.
+        pipeline.push(
+          lookup,
+          type === 'INNER' || type === 'RIGHT' ? { $unwind: `$${alias}` } : {
+            $unwind: { path: `$${alias}`, preserveNullAndEmptyArrays: true },
+          },
+        );
+        if (type === 'RIGHT' || type === 'FULL') {
+          pipeline.push(this.__unmatchedJoinRows(q, alias, def, rows, columns));
+        }
       }
-      // Joined fields land under `<alias>: [docs...]`. For
-      // `belongsTo` / `hasOne`-style joins, we'd ideally `$unwind`
-      // here so callers can match on `Alias.field` as if it were a
-      // single document — but unwind drops parent rows that lack the
-      // join, breaking LEFT JOIN semantics. Mongo's array-path
-      // matching (`'Alias.field': value` matches if any element has
-      // that field-value) handles the common case fine, so we skip
-      // the unwind. If the caller needs single-row semantics they
-      // can post-process.
     }
     if (q.expressions) {
       const addFields: Record<string, unknown> = {};
+      const scope = new CaseExistsScope(columns, names);
       for (const [name, expr] of Object.entries(q.expressions)) {
-        addFields[name] = this.__translateExpression(expr, columns);
+        // A missing result would leave the key out of the row, where SQL
+        // has NULL.
+        addFields[name] = this.__nullIfMissing(
+          this.__translateExpression(expr, scope),
+        );
       }
-      pipeline.push({ $addFields: addFields });
+      pipeline.push(...scope.lookups, { $addFields: addFields });
+      if (scope.lookups.length > 0) {
+        pipeline.push({
+          $unset: scope.lookups.map((l) => (l.$lookup as { as: string }).as),
+        });
+      }
     }
-    // Deferred $match — runs AFTER every $lookup (joined arrays exist) and
+    // Deferred $match — runs AFTER every $lookup (joined rows exist) and
     // AFTER the expressions $addFields (alias fields exist), but BEFORE any
     // $group, mirroring SQL's WHERE-then-GROUP-BY evaluation order.
     if (q.where && deferMatch) {
-      this.__pushMatch(pipeline, q.where, columns);
+      this.__pushMatch(pipeline, q.where, whereScope, names);
     }
-    const joinedSorts = this.__joinedSorts(q);
-    let grouped = false;
-    if (q.aggregates) {
-      // JSON_ROW over a $lookup'd alias is NOT a $group job on Mongo:
-      // $lookup already aggregated the related docs into an array per
-      // base doc (no row fan-out to collapse). Pushing it through
-      // $group evaluates '$Alias.field' AGAINST THE ARRAY — every
-      // object field becomes an array of values. The faithful mapping
-      // is a $map projecting the requested fields per element.
-      const mapFields: Record<string, unknown> = {};
-      const groupAggs: Record<string, unknown> = {};
-      for (const [name, agg] of Object.entries(q.aggregates)) {
-        const alias = this.__jsonRowLookupAlias(agg, q.joins);
-        if (alias !== null) {
-          const cols = (agg as { columns: Record<string, string> }).columns;
-          const inObj: Record<string, unknown> = {};
-          for (const [k, source] of Object.entries(cols)) {
-            inObj[k] = `$$r.${source.replace(`@${alias}.@`, '')}`;
-          }
-          mapFields[name] = {
-            $map: { input: `$${alias}`, as: 'r', in: inObj },
+    const aggregates = this.__aggregatesOf(q);
+    const grouped = Object.keys(aggregates).length > 0;
+    const joinedSorts = grouped ? this.__joinedSorts(q, aggregates) : {};
+    if (grouped) {
+      const groupId: Record<string, unknown> = {};
+      const groupBody: Record<string, unknown> = { _id: groupId };
+      const groupedKeys: string[] = [];
+      // Auto-GROUP-BY: every projection key not in aggregates is
+      // grouped.
+      for (const key of Object.keys(q.projection)) {
+        const stripped = key.slice(1);
+        if (stripped in aggregates) continue;
+        if (q.joins && stripped in q.joins) continue;
+        // A group key name takes no `.`, so a joined column nests under
+        // its alias, `_id.o.sku`, and is put back at `o.sku` below.
+        // Nested, a missing value groups apart from null unless made null.
+        const path = stripped.replace('.@', '.');
+        const [head, sub] = path.split('.');
+        groupId[head!] = sub === undefined ? `$${path}` : {
+          ...groupId[head!] as object,
+          [sub]: { $ifNull: [`$${path}`, null] },
+        };
+        groupedKeys.push(path);
+      }
+      const flatten: Record<string, unknown> = {};
+      // What each `$group` field holds over no rows at all.
+      const empty: Record<string, unknown> = { _id: groupId };
+      for (const [name, agg] of Object.entries(aggregates)) {
+        const { $$_aggregate: fn, column, distinct } = agg as {
+          $$_aggregate: string;
+          column?: unknown;
+          distinct?: boolean;
+        };
+        const reduce = distinct === true ? DISTINCT_REDUCERS[fn] : undefined;
+        if (reduce !== undefined) {
+          // `$group` has no DISTINCT accumulator: collect the group's
+          // distinct values, then reduce that set once the group is built.
+          groupBody[name] = {
+            $addToSet: this.__columnRef(column, columns),
           };
+          flatten[name] = reduce(`$${name}`);
+          empty[name] = [];
           continue;
         }
-        groupAggs[name] = agg;
-      }
-      if (Object.keys(mapFields).length > 0) {
-        pipeline.push({ $addFields: mapFields });
-      }
-      if (Object.keys(groupAggs).length > 0) {
-        const groupId: Record<string, unknown> = {};
-        const groupBody: Record<string, unknown> = { _id: groupId };
-        const groupedKeys: string[] = [];
-        // Auto-GROUP-BY: every projection key not in aggregates is
-        // grouped.
-        for (const key of Object.keys(q.projection)) {
-          const stripped = key.slice(1);
-          if (q.aggregates && stripped in q.aggregates) continue;
-          if (q.joins && stripped in q.joins) continue;
-          groupId[stripped] = `$${stripped.replace('.@', '.')}`;
-          groupedKeys.push(stripped);
-        }
-        const flatten: Record<string, unknown> = {};
-        for (const [name, agg] of Object.entries(groupAggs)) {
-          const { $$_aggregate: fn, column, distinct } = agg as {
-            $$_aggregate: string;
-            column?: unknown;
-            distinct?: boolean;
+        // deno-lint-ignore no-explicit-any
+        groupBody[name] = this.__translateAggregate(agg as any, columns);
+        empty[name] = fn === 'COUNT' ? 0 : null;
+        if (fn === 'STRING_AGG') {
+          // SQL skips NULL and gives NULL when nothing is left.
+          const separator = (agg as { separator?: string }).separator ?? ',';
+          flatten[name] = {
+            $reduce: {
+              input: {
+                $filter: { input: `$${name}`, cond: { $ne: ['$$this', null] } },
+              },
+              initialValue: null,
+              in: {
+                $cond: [
+                  { $eq: ['$$value', null] },
+                  '$$this',
+                  {
+                    $concat: [
+                      '$$value',
+                      this.__expressionLiteral(separator),
+                      '$$this',
+                    ],
+                  },
+                ],
+              },
+            },
           };
-          const reduce = distinct === true ? DISTINCT_REDUCERS[fn] : undefined;
-          if (reduce !== undefined) {
-            // `$group` has no DISTINCT accumulator: collect the group's
-            // distinct values, then reduce that set once the group is built.
-            groupBody[name] = {
-              $addToSet: this.__columnRef(column, columns),
-            };
-            flatten[name] = reduce(`$${name}`);
-            continue;
-          }
-          // deno-lint-ignore no-explicit-any
-          groupBody[name] = this.__translateAggregate(agg as any, columns);
         }
-        // Mapped JSON_ROW fields survive the group via $first — each
-        // group key tuple identifies the base doc(s); SQL semantics
-        // for this mix are group-dependent anyway.
-        for (const name of Object.keys(mapFields)) {
-          groupBody[name] = { $first: `$${name}` };
+        if (fn === 'SUM') {
+          // `$sum` of no values is 0, SQL's SUM is NULL. The largest
+          // value is null exactly then, so it rides along to tell.
+          let seen = `__sum_${name}`;
+          while (seen in aggregates) seen = `_${seen}`;
+          groupBody[seen] = { $max: this.__columnRef(column, columns) };
+          flatten[name] = {
+            $cond: [{ $gt: [`$${seen}`, null] }, `$${name}`, null],
+          };
         }
-        // The joined arrays do not survive $group, so the sort values are
-        // accumulated in it: the inner operator reduces one document's
-        // array, the outer one the group.
-        for (const [field, op, path] of Object.values(joinedSorts)) {
-          groupBody[field] = { [op]: { [op]: path } };
-        }
-        grouped = true;
+      }
+      // An unprojected joined column is no group key, so its sort value
+      // is accumulated in the group.
+      for (const [field, op, path] of Object.values(joinedSorts)) {
+        groupBody[field] = { [op]: path };
+      }
+      if (groupedKeys.length > 0) {
         pipeline.push({ $group: groupBody });
-        // After $group, grouped fields live under `_id.<key>`. Flatten
-        // them back to top level so the subsequent $match / $sort /
-        // $project sees plain field names.
-        for (const key of groupedKeys) flatten[key] = `$_id.${key}`;
-        if (Object.keys(flatten).length > 0) {
-          pipeline.push({ $addFields: flatten });
-        }
+      } else {
+        // Without a group key SQL returns one row even when no row
+        // matched, and `$group` returns none. `$facet` always emits one
+        // document, holding the group's row or nothing.
+        pipeline.push(
+          { $facet: { rows: [{ $group: groupBody }] } },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: empty,
+                }],
+              },
+            },
+          },
+        );
+      }
+      // After $group, grouped fields live under `_id.<key>`. Flatten
+      // them back to their own paths so the subsequent $match / $sort /
+      // $project read them as before the group.
+      for (const key of groupedKeys) flatten[key] = `$_id.${key}`;
+      if (Object.keys(flatten).length > 0) {
+        pipeline.push({ $addFields: flatten });
       }
     }
     if (q.having) {
-      this.__pushMatch(pipeline, q.having, columns);
+      // After `$group` each aggregate is a field, so a value naming one
+      // reads it, as a key does.
+      this.__pushMatch(
+        pipeline,
+        q.having,
+        new Set([...columns, ...Object.keys(aggregates)]),
+        names,
+      );
     }
     // $sort before $project: orderBy names source fields, which an
     // alias or an unprojected column would no longer have after it.
     if (q.orderBy && Object.keys(q.orderBy).length > 0) {
-      if (!grouped && Object.keys(joinedSorts).length > 0) {
-        pipeline.push({
-          $addFields: Object.fromEntries(
-            Object.values(joinedSorts).map((
-              [field, op, path],
-            ) => [field, { [op]: path }]),
-          ),
-        });
-      }
       pipeline.push({ $sort: this.__buildSort(q.orderBy, joinedSorts) });
     }
     const projection = this.__buildProjection(q);
@@ -1408,20 +1570,22 @@ export class MongoTranslator {
     const nullSafe = (def.nullSafe ?? []) as string[];
 
     if (onEntries.length === 1) {
-      const [joinedKey, localRef] = onEntries[0]!;
-      const localField = this.__joinLocalPath(localRef);
-      if (localField !== null) {
-        const foreignField = this.__joinForeignField(joinedKey, alias);
+      const [key, value] = onEntries[0]!;
+      const [joined, other] = this.__joinPair(key, value, alias);
+      const localField = this.__joinedColumn(other, alias) === null
+        ? this.__joinLocalPath(other)
+        : null;
+      if (joined !== null && localField !== null) {
         const lookup: Record<string, unknown> = {
           from,
           localField,
-          foreignField,
+          foreignField: joined,
         };
         // On its own this form is NULL-safe: a null or missing local
         // field matches every null or missing foreign field. Plain
         // equality never matches NULL, so those foreign rows are dropped.
-        if (!nullSafe.includes(joinedKey)) {
-          lookup.pipeline = [{ $match: { [foreignField]: { $ne: null } } }];
+        if (!nullSafe.includes(key)) {
+          lookup.pipeline = [{ $match: { [joined]: { $ne: null } } }];
         }
         lookup.as = alias;
         return { $lookup: lookup };
@@ -1432,38 +1596,17 @@ export class MongoTranslator {
     // identifiers (lowercase-initial, alphanumeric), so they're generated
     // positionally rather than derived from the field path.
     const letVars: Record<string, unknown> = {};
-    const conditions: unknown[] = [];
-    for (const [joinedKey, value] of onEntries) {
-      const foreignField = `$${this.__joinForeignField(joinedKey, alias)}`;
-      const localPath = this.__joinLocalPath(value);
-      if (localPath !== null || this.__isExpressionNode(value)) {
+    const conditions = this.__joinConditions(
+      alias,
+      def,
+      columns,
+      (operand) => {
         const varName = `v${Object.keys(letVars).length}`;
-        letVars[varName] = localPath !== null
-          ? `$${localPath}`
-          : this.__translateExpression(value as Expressions, columns);
-        conditions.push(
-          ...this.__keyEquals(
-            foreignField,
-            varName,
-            nullSafe.includes(joinedKey),
-          ),
-        );
-        continue;
-      }
-      // null is a NULL check: like SQL's IS NULL, it matches a missing
-      // field too, which aggregation `$eq` would not.
-      if (value === null) {
-        conditions.push({
-          $in: [{ $type: foreignField }, ['null', 'missing']],
-        });
-        continue;
-      }
-      // Literal — a constant condition on the joined collection.
-      conditions.push({
-        $eq: [foreignField, this.__expressionLiteral(value)],
-      });
-    }
-
+        letVars[varName] = operand;
+        return `$$${varName}`;
+      },
+      (field) => `$${field}`,
+    );
     const lookup: Record<string, unknown> = { from };
     if (Object.keys(letVars).length > 0) lookup.let = letVars;
     lookup.pipeline = [{
@@ -1476,31 +1619,152 @@ export class MongoTranslator {
   }
 
   /**
-   * The `$expr` conditions that equate a looked-up collection's field
-   * with a `let` variable the way SQL equates two columns.
+   * The `$unionWith` stage that adds a RIGHT or FULL join's rows without
+   * a match: each document of the joined collection that no row of
+   * `rows`, the stages of the joins before it, meets the `on` map with.
+   * The document sits under its alias as on a matched row, and every
+   * base column is NULL.
+   */
+  private __unmatchedJoinRows(
+    q: Query<'SELECT'>,
+    alias: string,
+    def: NonNullable<NonNullable<Query<'SELECT'>['joins']>[string]>,
+    rows: Record<string, unknown>[],
+    columns: ReadonlySet<string>,
+  ): Record<string, unknown> {
+    let matches = '__matches';
+    while (matches === alias) matches = `_${matches}`;
+    const conditions = this.__joinConditions(
+      alias,
+      def,
+      columns,
+      (operand) => operand,
+      (field) => `$$joined.${field}`,
+    );
+    const base = Array.isArray(q.columns) ? q.columns.map(String) : [];
+    return {
+      $unionWith: {
+        coll: String(def.table),
+        pipeline: [
+          { $replaceRoot: { newRoot: { [alias]: '$$ROOT' } } },
+          {
+            $lookup: {
+              from: q.table,
+              let: { joined: `$${alias}` },
+              pipeline: [...rows, {
+                $match: {
+                  $expr: conditions.length === 1
+                    ? conditions[0]
+                    : { $and: conditions },
+                },
+              }, { $limit: 1 }],
+              as: matches,
+            },
+          },
+          { $match: { [matches]: { $size: 0 } } },
+          {
+            $replaceRoot: {
+              newRoot: {
+                ...Object.fromEntries(base.map((column) => [column, null])),
+                [alias]: `$${alias}`,
+              },
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  /**
+   * The `$expr` conditions of a join's `on` map, one or two per entry.
+   * `outer` turns an operand read from the outer row, a `$path` or a
+   * translated Expression, into what the conditions use, and `joined`
+   * turns a column of the joined collection into its operand.
+   */
+  private __joinConditions(
+    alias: string,
+    def: NonNullable<NonNullable<Query<'SELECT'>['joins']>[string]>,
+    columns: ReadonlySet<string>,
+    outer: (operand: unknown) => unknown,
+    joined: (field: string) => string,
+  ): unknown[] {
+    const nullSafe = (def.nullSafe ?? []) as string[];
+    const conditions: unknown[] = [];
+    for (const [key, value] of Object.entries(def.on)) {
+      const [field, other] = this.__joinPair(key, value, alias);
+      const left = field !== null
+        ? joined(field)
+        : outer(`$${this.__joinLocalPath(key)}`);
+      const otherField = this.__joinedColumn(other, alias);
+      const localPath = this.__joinLocalPath(other);
+      if (otherField !== null) {
+        conditions.push(
+          ...this.__keyEquals(left, joined(otherField), nullSafe.includes(key)),
+        );
+        continue;
+      }
+      if (localPath !== null || this.__isExpressionNode(other)) {
+        const right = outer(
+          localPath !== null
+            ? `$${localPath}`
+            : this.__translateExpression(other as Expressions, columns),
+        );
+        conditions.push(
+          ...this.__keyEquals(left, right, nullSafe.includes(key)),
+        );
+        continue;
+      }
+      // null is a NULL check: like SQL's IS NULL, it matches a missing
+      // field too, which aggregation `$eq` would not.
+      if (other === null) {
+        conditions.push({ $in: [{ $type: left }, ['null', 'missing']] });
+        continue;
+      }
+      // Literal — a constant condition on the joined collection.
+      conditions.push({ $eq: [left, this.__expressionLiteral(other)] });
+    }
+    return conditions;
+  }
+
+  /**
+   * One `on` entry as `[joined column, other side]`. SQL takes the
+   * joined column on either side, so a key naming an outer column and
+   * a value naming the joined one swap. With neither side naming the
+   * joined collection, the joined column is `null` and the key stays
+   * an outer column compared with the value.
+   */
+  private __joinPair(
+    key: string,
+    value: unknown,
+    alias: string,
+  ): [string | null, unknown] {
+    const keyField = this.__joinedColumn(key, alias);
+    if (keyField !== null) return [keyField, value];
+    const valueField = this.__joinedColumn(value, alias);
+    if (valueField !== null) return [valueField, key];
+    return [null, value];
+  }
+
+  /**
+   * The `$expr` conditions that equate two operands the way SQL equates
+   * two columns.
    */
   private __keyEquals(
-    foreignField: string,
-    varName: string,
+    left: unknown,
+    right: unknown,
     nullSafe: boolean,
   ): unknown[] {
     if (nullSafe) {
       // `$ifNull` folds a missing field into null, so null and
       // missing all compare equal — SQL has only the one NULL.
       return [{
-        $eq: [
-          { $ifNull: [foreignField, null] },
-          { $ifNull: [`$$${varName}`, null] },
-        ],
+        $eq: [{ $ifNull: [left, null] }, { $ifNull: [right, null] }],
       }];
     }
     // Aggregation `$eq` holds null equal to null (and missing to
     // missing), which SQL `=` never does. `$gt: null` is true for
     // every value except null and missing.
-    return [
-      { $eq: [foreignField, `$$${varName}`] },
-      { $gt: [foreignField, null] },
-    ];
+    return [{ $eq: [left, right] }, { $gt: [left, null] }];
   }
 
   /**
@@ -1511,13 +1775,13 @@ export class MongoTranslator {
    *
    * `on` values resolve against `columns`, the outer scope, exactly as
    * the SQL translators resolve them: a column reference is bound in
-   * `let`, anything else is data. The sub-`where` sees the subquery
-   * table alone, so no outer column is in scope there, and a nested
-   * node correlates only through literals.
+   * `let`, a joined column included, as it holds the value of the
+   * unwound row, and anything else is data. The sub-`where` sees the
+   * subquery table alone, so no outer column is in scope there.
    *
-   * @throws {DialectUnsupportedError} For an `on` value that names a
-   *   joined column — `$lookup` leaves the joined rows in an array, and
-   *   there is no row of the join to correlate with.
+   * @throws {DialectUnsupportedError} For a node in the sub-`where` whose
+   *   `on` value is a bare `@name`: on SQL that is a column of this
+   *   subquery's table, which this translator does not correlate.
    */
   private __buildExistsLookup(
     spec: ExistsFilter,
@@ -1531,16 +1795,14 @@ export class MongoTranslator {
       const foreignField = `$${key.slice(1)}`;
       const outer = this.__valueFieldRef(value, columns);
       if (outer !== null) {
-        if (outer.includes('.')) {
-          throw new DialectUnsupportedError(
-            this.Dialect,
-            `an '$exists' / '$nexists' key bound to the joined column '${value}'`,
-          );
-        }
         const varName = `v${Object.keys(letVars).length}`;
         letVars[varName] = outer;
         conditions.push(
-          ...this.__keyEquals(foreignField, varName, nullSafe.includes(key)),
+          ...this.__keyEquals(
+            foreignField,
+            `$$${varName}`,
+            nullSafe.includes(key),
+          ),
         );
         continue;
       }
@@ -1555,7 +1817,15 @@ export class MongoTranslator {
         $expr: conditions.length === 1 ? conditions[0] : { $and: conditions },
       },
     }];
-    if (spec.where) this.__pushMatch(pipeline, spec.where, new Set());
+    if (spec.where) {
+      this.__refuseParentCorrelation(spec.where);
+      this.__pushMatch(
+        pipeline,
+        spec.where,
+        new Set(),
+        this.__filterColumns(spec.where),
+      );
+    }
     pipeline.push({ $limit: 1 });
     const lookup: Record<string, unknown> = { from: spec.table };
     if (Object.keys(letVars).length > 0) lookup.let = letVars;
@@ -1565,11 +1835,38 @@ export class MongoTranslator {
   }
 
   /**
-   * The joined-side (foreign) field name from an `on` key
-   * (`'@Alias.@userId'` → `'userId'`).
+   * Throw for an `$exists` / `$nexists` node directly in `where`, or in
+   * its `$and` / `$or`, whose `on` value is a bare `@name`.
    */
-  private __joinForeignField(joinedKey: string, alias: string): string {
-    return joinedKey.replace(`@${alias}.@`, '');
+  private __refuseParentCorrelation(where: QueryFilter): void {
+    for (const [key, value] of Object.entries(where)) {
+      if (key === '$and' || key === '$or') {
+        for (const f of value as QueryFilter[]) {
+          this.__refuseParentCorrelation(f);
+        }
+      } else if (key === '$exists' || key === '$nexists') {
+        for (const v of Object.values((value as ExistsFilter).on)) {
+          if (typeof v === 'string' && /^@[a-zA-Z_]\w*$/.test(v)) {
+            throw new DialectUnsupportedError(
+              this.Dialect,
+              `a nested '${key}' correlated to its parent subquery by '${v}'`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * The joined collection's field an `on` key or value names
+   * (`'@Alias.@userId'` → `'userId'`), or `null` when it names no
+   * column of `alias`.
+   */
+  private __joinedColumn(ref: unknown, alias: string): string | null {
+    const prefix = `@${alias}.@`;
+    return typeof ref === 'string' && ref.startsWith(prefix)
+      ? ref.slice(prefix.length)
+      : null;
   }
 
   /**
@@ -1595,29 +1892,32 @@ export class MongoTranslator {
   /**
    * Build a Mongo `projection` document from OQL projection. `1` for
    * include, `0` for exclude. Aliases use `$expr` rename via $project's
-   * `{ alias: '$source' }` form.
+   * `{ alias: '$source' }` form. `_id` is left out unless projected.
    */
   private __buildProjection(q: Query<'SELECT'>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    let hasAliasing = false;
     for (const [key, value] of Object.entries(q.projection)) {
       const stripped = key.slice(1);
       const source = stripped.replace('.@', '.');
+      const [alias, column] = stripped.split('.@');
+      if (column !== undefined && q.joins?.[alias!]) {
+        // A joined column is a key of its own, named as SQL names it, and
+        // NULL when the row has no joined row.
+        out[typeof value === 'string' ? value : column] = {
+          $ifNull: [`$${source}`, null],
+        };
+        continue;
+      }
       if (typeof value === 'string') {
         // Alias: { aliasName: '$source.path' }
         out[value] = `$${source}`;
-        hasAliasing = true;
       } else {
         out[source] = 1;
       }
     }
-    if (hasAliasing) {
-      // When any aliasing is present, `_id` ought to be excluded by
-      // default unless the projection explicitly asked for it.
-      if (!Object.prototype.hasOwnProperty.call(out, '_id')) {
-        out._id = 0;
-      }
-    }
+    // A row holds the keys the query projects, as on SQL, so the
+    // document's own `_id`, or a group key, stays out of it.
+    if (!Object.prototype.hasOwnProperty.call(out, '_id')) out._id = 0;
     return out;
   }
 
@@ -1661,7 +1961,7 @@ export class MongoTranslator {
           Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
         );
       case 'UNIX_TIMESTAMP':
-        return (expr as { unit?: string }).unit === 'milliseconds'
+        return this.__unixTimestampUnit(expr) === 'milliseconds'
           ? now.getTime()
           : Math.floor(now.getTime() / 1000);
       case 'UUID':
@@ -1752,7 +2052,7 @@ export class MongoTranslator {
    * join aliases — `'@<Alias>.@<col>'` — in EITHER position:
    *   - a filter KEY (`{ '@Author.@name': … }`), or
    *   - a VALUE (`{ '@createdAt': { $gt: '@Author.@joinedAt' } }`).
-   * Both need the joined array to exist, so the aggregate builder uses
+   * Both need the joined row to exist, so the aggregate builder uses
    * this to run `$match` AFTER `$lookup`. Scanning only keys (the original
    * bug) routed a value-position joined ref to the early `$match`, where
    * the missing path sorts below all BSON types and the comparison
@@ -1798,11 +2098,11 @@ export class MongoTranslator {
   }
 
   /**
-   * Walk a filter and return `true` if any key references a declared
-   * expression alias (`@<exprName>`). Such a key must be matched AFTER the
-   * `$addFields` expressions stage materialises the field — the aggregate
-   * builder uses this to defer the `$match`. Expression aliases appear only
-   * in key position (a WHERE alias filter), so values aren't scanned.
+   * Walk a filter and return `true` if any key or value references a
+   * declared expression alias (`@<exprName>`). Such a key must be matched
+   * AFTER the `$addFields` expressions stage materialises the field — the
+   * aggregate builder uses this to defer the `$match`. A value compares the
+   * expression itself, and is deferred with the keys.
    */
   private __filterReferencesExpressions(
     filter: QueryFilter | undefined,
@@ -1826,6 +2126,15 @@ export class MongoTranslator {
         ) {
           return true;
         }
+        // Or a value naming one, alone, in a list or under an operator.
+        const named = (v: unknown): boolean =>
+          (typeof v === 'string' && v.startsWith('@') &&
+            names.has(v.slice(1))) ||
+          (Array.isArray(v) && v.some(named));
+        if (
+          named(value) || (typeof value === 'object' && value !== null &&
+            Object.values(value).some(named))
+        ) return true;
       }
       return false;
     };
@@ -1860,6 +2169,9 @@ export class MongoTranslator {
    * column path is in `columns` becomes a `$x` field reference (for use inside
    * `$expr`); anything else is data. Mirrors the SQL translator's rule so the
    * same OQL filter compares columns in both dialects.
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when the string names a
+   *   declared expression of an UPDATE or DELETE.
    */
   private __valueFieldRef(
     value: unknown,
@@ -1867,7 +2179,32 @@ export class MongoTranslator {
   ): string | null {
     if (typeof value !== 'string' || !value.startsWith('@')) return null;
     const path = value.slice(1).replace('.@', '.');
+    this.__assertNotExpression(value, path, columns);
     return columns.has(path) ? `$${path}` : null;
+  }
+
+  /**
+   * Refuse an `@` value or expression argument of an UPDATE or DELETE that
+   * names one of its declared expressions rather than a column. SQL reads
+   * it as a column the table lacks and the database fails; MongoDB would
+   * compare or store the text.
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` for such a reference.
+   */
+  private __assertNotExpression(
+    ref: string,
+    path: string,
+    columns: ReadonlySet<string>,
+  ): void {
+    if (
+      columns instanceof WriteScope && !columns.has(path) &&
+      columns.expressionAt(ref) !== undefined
+    ) {
+      throw new OqlError(
+        `'${ref}' names the declared expression '${path}', not a column: an UPDATE or DELETE reads only columns in a value or an expression argument`,
+        { code: 'INVALID_COLUMN_REF', dialect: this.Dialect, ref },
+      );
+    }
   }
 
   /**
@@ -1886,22 +2223,41 @@ export class MongoTranslator {
   /**
    * Append a filter to a pipeline as a `$match`. Each `$exists` /
    * `$nexists` node in it adds a `$lookup` ahead of the `$match` and its
-   * temporary field to the `$unset` after it, so later stages see the
-   * documents as they were.
+   * temporary field, named outside `taken`, to the `$unset` after it, so
+   * later stages see the documents as they were.
    */
   private __pushMatch(
     pipeline: Record<string, unknown>[],
     filter: QueryFilter,
     columns: ReadonlySet<string>,
+    taken: ReadonlySet<string>,
   ): void {
     const lookups: Record<string, unknown>[] = [];
-    const match = this.__translateFilter(filter, columns, lookups);
+    const match = this.__translateFilter(filter, columns, lookups, taken);
     pipeline.push(...lookups, { $match: match });
     if (lookups.length > 0) {
       pipeline.push({
-        $unset: lookups.map((_, i) => `${EXISTS_FIELD}${i}`),
+        $unset: lookups.map((l) => (l.$lookup as { as: string }).as),
       });
     }
+  }
+
+  /**
+   * The column names a filter's keys name, at any `$and` / `$or` depth:
+   * a JSON path or a joined column by its first segment.
+   */
+  private __filterColumns(filter: QueryFilter): Set<string> {
+    const out = new Set<string>();
+    for (const [key, value] of Object.entries(filter)) {
+      if (key === '$and' || key === '$or') {
+        for (const sub of value as QueryFilter[]) {
+          this.__filterColumns(sub).forEach((c) => out.add(c));
+        }
+      } else if (key.startsWith('@')) {
+        out.add(key.slice(1).split('.@')[0]!);
+      }
+    }
+    return out;
   }
 
   /**
@@ -1921,6 +2277,7 @@ export class MongoTranslator {
     filter: QueryFilter,
     columns: ReadonlySet<string> = new Set(),
     existsLookups?: Record<string, unknown>[],
+    taken: ReadonlySet<string> = new Set(),
   ): Record<string, unknown> {
     const conditions: Record<string, unknown>[] = [];
     let merged: Record<string, unknown> = {};
@@ -1938,7 +2295,8 @@ export class MongoTranslator {
             `filter operator '${key}' outside a SELECT or COUNT (it runs as a $lookup stage, which a query filter cannot carry)`,
           );
         }
-        const field = `${EXISTS_FIELD}${existsLookups.length}`;
+        let field = `${EXISTS_FIELD}${existsLookups.length}`;
+        while (taken.has(field)) field = `_${field}`;
         existsLookups.push(
           this.__buildExistsLookup(value as ExistsFilter, field, columns),
         );
@@ -1950,16 +2308,24 @@ export class MongoTranslator {
       }
       if (key === '$and') {
         const subs = (value as QueryFilter[]).map((f) =>
-          this.__translateFilter(f, columns, existsLookups)
+          this.__translateFilter(f, columns, existsLookups, taken)
         );
         conditions.push({ $and: subs });
         continue;
       }
       if (key === '$or') {
         const subs = (value as QueryFilter[]).map((f) =>
-          this.__translateFilter(f, columns, existsLookups)
+          this.__translateFilter(f, columns, existsLookups, taken)
         );
         conditions.push({ $or: subs });
+        continue;
+      }
+      const declared = columns instanceof WriteScope
+        ? columns.expressionAt(key)
+        : undefined;
+      if (declared !== undefined) {
+        const field = this.__translateExpression(declared, columns);
+        exprs.push(...this.__aliasConditions(field, value, columns));
         continue;
       }
       // Per-column condition; key looks like `@col`, `@Alias.@col`, or a
@@ -2048,11 +2414,8 @@ export class MongoTranslator {
    * (`{ field: <mongo-spec> }`) plus any `$expr` `exprs` for value-position
    * column references (`@otherCol`), and `clashes`: per-field specs kept
    * out of `spec` because two OQL operators translate to the same Mongo
-   * key, each to be ANDed beside it. A column reference is resolved to a
-   * `$expr` comparison for the comparison operators; for `$in`/`$nin` and the
-   * LIKE family — which Mongo cannot faithfully express field-to-field — a
-   * {@link DialectUnsupportedError} is thrown rather than silently treating
-   * the reference as a literal.
+   * key, each to be ANDed beside it. A column reference, and for the
+   * pattern operators an Expression, compares inside `$expr`.
    */
   private __translateColumnCondition(
     fieldPath: string,
@@ -2067,14 +2430,15 @@ export class MongoTranslator {
     const clashes: Record<string, unknown>[] = [];
     const lhs = `$${fieldPath}`;
     if (rhs === null) return { spec: { [fieldPath]: null }, exprs, clashes };
+    if (this.__namesExpression(rhs, columns)) {
+      exprs.push(...this.__aliasConditions(lhs, rhs, columns));
+      return { spec: {}, exprs, clashes };
+    }
     if (Array.isArray(rhs)) {
-      // Implicit $in. A column ref inside the list cannot be expressed in a
-      // Mongo $match — reject rather than silently treat it as a literal.
+      // Implicit $in. A column ref inside the list compares in `$expr`.
       if (rhs.some((el) => this.__valueFieldRef(el, columns) !== null)) {
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          'column reference inside an $in / array filter value',
-        );
+        exprs.push(this.__conditionToExpr(lhs, '$in', rhs, columns));
+        return { spec: {}, exprs, clashes };
       }
       return { spec: { [fieldPath]: { $in: rhs } }, exprs, clashes };
     }
@@ -2158,31 +2522,17 @@ export class MongoTranslator {
         op === '$ilike' || op === '$nilike' || op === '$startsWith' ||
         op === '$endsWith' || op === '$contains'
       ) {
-        const hasRef = (op === '$in' || op === '$nin')
+        // A column, or for the pattern operators an Expression, has no
+        // per-field form, so it compares inside `$expr`. `$in` and `$nin`
+        // take primitive arrays only, no Expression.
+        const computed = (op === '$in' || op === '$nin')
           ? (val as unknown[]).some((el) =>
             this.__valueFieldRef(el, columns) !== null
           )
-          : this.__valueFieldRef(val, columns) !== null;
-        if (hasRef) {
-          throw new DialectUnsupportedError(
-            this.Dialect,
-            `column reference as the value of '${op}'`,
-          );
-        }
-        // The LIKE family also accepts an Expression value (see
-        // `asserts/filters/operators.ts`). A computed operand can't be
-        // spliced into a `$regex` at translation time, so it routes
-        // through `$expr` instead of the per-field literal spec.
-        // (`$in` / `$nin` take primitive arrays only — no Expression.)
-        if (op !== '$in' && op !== '$nin' && this.__isExpressionNode(val)) {
-          exprs.push(
-            this.__likeExpressionOperand(
-              lhs,
-              op,
-              val as Expressions,
-              columns,
-            ),
-          );
+          : this.__valueFieldRef(val, columns) !== null ||
+            this.__isExpressionNode(val);
+        if (computed) {
+          exprs.push(this.__conditionToExpr(lhs, op, val, columns));
           continue;
         }
         if (op === '$nin') {
@@ -2207,6 +2557,49 @@ export class MongoTranslator {
   }
 
   /**
+   * Whether a filter value holds an `@name` naming one of the declared
+   * expressions of `columns`, alone, in a list or as an operator's value.
+   */
+  private __namesExpression(
+    value: unknown,
+    columns: ReadonlySet<string>,
+  ): boolean {
+    if (!(columns instanceof ExpressionScope)) return false;
+    const names = (v: unknown): boolean =>
+      typeof v === 'string' && v.startsWith('@') &&
+      columns.expressionAt(v) !== undefined;
+    const inList = (v: unknown) => Array.isArray(v) ? v.some(names) : names(v);
+    return inList(value) ||
+      (typeof value === 'object' && value !== null &&
+        Object.values(value).some(inList));
+  }
+
+  /**
+   * The `$expr` comparisons of `field` against a filter value, each
+   * `@name` naming a declared expression of `columns` replaced by that
+   * expression, so it compares the expression's value.
+   */
+  private __aliasConditions(
+    field: unknown,
+    value: unknown,
+    columns: ReadonlySet<string>,
+  ): unknown[] {
+    const node = (v: unknown): unknown =>
+      columns instanceof ExpressionScope && typeof v === 'string' &&
+        v.startsWith('@')
+        ? columns.expressionAt(v) ?? v
+        : v;
+    return Object.entries(this.__conditionOps(value)).map(([op, operand]) =>
+      this.__conditionToExpr(
+        field,
+        op,
+        Array.isArray(operand) ? operand.map(node) : node(operand),
+        columns,
+      )
+    );
+  }
+
+  /**
    * AND a `$expr` comparison with a guard per operand that is true only
    * for a value that is neither null nor missing. BSON orders both below
    * every other value and holds them equal to each other, so an
@@ -2220,8 +2613,9 @@ export class MongoTranslator {
   }
 
   /**
-   * Translate a LIKE-family operator whose value is an OQL Expression
-   * into an aggregation `$expr` fragment.
+   * Translate a pattern operator whose value is computed, a column or an
+   * OQL Expression already translated to `operand`, into an aggregation
+   * `$expr` fragment.
    *
    * `$startsWith` / `$endsWith` / `$contains` carry *literal* substring
    * semantics on the SQL side (the `%` / `_` of a bound value and of a
@@ -2229,22 +2623,16 @@ export class MongoTranslator {
    * Mongo's literal string-search operators — no regex, hence nothing to
    * escape.
    *
-   * `$like` / `$nlike` / `$ilike` / `$nilike` are the opposite: their
-   * value IS a wildcard pattern, and translating that grammar to a regex
-   * requires reading the pattern at translation time. When it is computed
-   * server-side there is no pattern to read, and Mongo has no
-   * LIKE-pattern matcher to hand it to — so we refuse rather than emit
-   * something that quietly means something else.
-   *
-   * @throws {DialectUnsupportedError} For the `$like` family.
+   * `$like` / `$nlike` / `$ilike` / `$nilike` read their value as a
+   * wildcard pattern, as on SQL. The pattern becomes a regex at run time
+   * by the same steps {@link __likeToRegex} takes at translation time,
+   * and `$regexMatch` applies it.
    */
-  private __likeExpressionOperand(
-    lhs: string,
+  private __computedPattern(
+    lhs: unknown,
     op: string,
-    expr: Expressions,
-    columns: ReadonlySet<string>,
+    operand: unknown,
   ): unknown {
-    const operand = this.__translateExpression(expr, columns);
     // SQL matches nothing against a NULL operand; `$indexOfCP` and
     // `$strLenCP` throw on one.
     const whenSet = (match: unknown): unknown => ({
@@ -2291,13 +2679,30 @@ export class MongoTranslator {
           },
         });
       }
-      default:
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          `Expression as the value of '${op}' (a LIKE pattern must be ` +
-            `known at translation time to become a regex — use ` +
-            `'$startsWith' / '$endsWith' / '$contains' for a computed operand)`,
+      default: {
+        const source = LIKE_TO_REGEX_STEPS.reduce<unknown>(
+          (input, [find, replacement]) => ({
+            $replaceAll: {
+              input,
+              find: this.__expressionLiteral(find),
+              replacement,
+            },
+          }),
+          operand,
         );
+        const match = {
+          $regexMatch: {
+            input: lhs,
+            regex: { $concat: ['^', source, { $literal: '$' }] },
+            ...(op === '$ilike' || op === '$nilike' ? { options: 'i' } : {}),
+          },
+        };
+        return whenSet(
+          op === '$nlike' || op === '$nilike'
+            ? this.__notNull({ $not: [match] }, lhs)
+            : match,
+        );
+      }
     }
   }
 
@@ -2308,7 +2713,7 @@ export class MongoTranslator {
   ): Record<string, unknown> {
     // The LIKE family splices its value into a regex, so it must be a
     // string by this point. `__translateColumnCondition` has already
-    // routed column refs (throws) and Expressions (`$expr`) away; this
+    // routed column refs and Expressions to `$expr`; this
     // guards the remaining shapes so hand-built, unvalidated input gets
     // a dialect error rather than a `val.replace is not a function`
     // TypeError from below.
@@ -2399,6 +2804,25 @@ export class MongoTranslator {
   }
 
   /**
+   * The `unit` of a `UNIX_TIMESTAMP` node, `'seconds'` when absent.
+   *
+   * @throws {OqlError} `INVALID_TIME_UNIT` when the unit is present and is
+   *   neither `'seconds'` nor `'milliseconds'`.
+   */
+  private __unixTimestampUnit(expr: Expressions): 'seconds' | 'milliseconds' {
+    const unit: unknown = (expr as { unit?: unknown }).unit;
+    if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
+      throw new OqlError(
+        `Unknown UNIX_TIMESTAMP unit '${
+          String(unit)
+        }' — expected one of seconds, milliseconds`,
+        { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+      );
+    }
+    return unit ?? 'seconds';
+  }
+
+  /**
    * Map an OQL {@link TimeUnit} to the unit name Mongo's `$dateAdd`
    * expects. See {@link MONGO_TIME_UNITS}.
    *
@@ -2424,11 +2848,15 @@ export class MongoTranslator {
 
   /**
    * Resolve an expression argument for Mongo. An `@` string is a `$field`
-   * path when it names one of `columns` or a path into one, and text
-   * otherwise, as on the SQL dialects; MongoDB reads no `@` string as a
+   * path when it names one of `columns`, and text otherwise, as on the SQL
+   * dialects: a JSON path such as `'@meta.@tag'` is text, since only a
+   * filter key reads into a JSON column. MongoDB reads no `@` string as a
    * field path or an operator. A nested expression object is translated
    * recursively, and anything else is a literal (see
    * {@link __expressionLiteral}).
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when the string names a
+   *   declared expression of an UPDATE or DELETE.
    */
   private __resolveExpressionRef(
     v: unknown,
@@ -2436,9 +2864,8 @@ export class MongoTranslator {
   ): unknown {
     if (typeof v === 'string' && v.startsWith('@')) {
       const path = v.slice(1).replace('.@', '.');
-      return columns.has(path) || columns.has(path.split('.')[0]!)
-        ? `$${path}`
-        : v;
+      this.__assertNotExpression(v, path, columns);
+      return columns.has(path) ? `$${path}` : v;
     }
     if (
       typeof v === 'object' && v !== null && !(v instanceof Date) &&
@@ -2473,16 +2900,50 @@ export class MongoTranslator {
     return ambiguous ? { $literal: v } : v;
   }
 
+  /** `v`, made null where it would evaluate to missing. */
+  private __nullIfMissing(v: unknown): unknown {
+    return this.__mayBeMissing(v) ? { $ifNull: [v, null] } : v;
+  }
+
+  /**
+   * Whether a translated expression can evaluate to missing rather than
+   * null: a field path, or an operator that returns one of its operands
+   * as it is. Every other operator returns null for a missing input.
+   */
+  private __mayBeMissing(v: unknown): boolean {
+    if (typeof v === 'string') return v.startsWith('$') && !v.startsWith('$$');
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+    const o = v as Record<string, unknown>;
+    if ('$ifNull' in o) {
+      return this.__mayBeMissing((o.$ifNull as unknown[]).at(-1));
+    }
+    if ('$cond' in o) {
+      const [, then, otherwise] = o.$cond as unknown[];
+      return this.__mayBeMissing(then) || this.__mayBeMissing(otherwise);
+    }
+    if ('$switch' in o) {
+      const s = o.$switch as {
+        branches: { then: unknown }[];
+        default: unknown;
+      };
+      return s.branches.some((b) => this.__mayBeMissing(b.then)) ||
+        this.__mayBeMissing(s.default);
+    }
+    return false;
+  }
+
   /**
    * Translate a `CASE` condition — a {@link QueryFilter} — to an
    * aggregation boolean expression, which `$switch` needs in place of a
    * find filter. Covers `$and` / `$or` and the comparison, `$in` /
-   * `$nin`, `$between`, `$null` and pattern operators; `$exists`
-   * subqueries throw. A condition is true exactly where SQL's is: each
+   * `$nin`, `$between`, `$null` and pattern operators, and `$exists` /
+   * `$nexists` in a SELECT's `expressions`, which test the size of their
+   * lookup's field. A condition is true exactly where SQL's is: each
    * comparison is false on a null or missing input.
    *
    * @throws {DialectUnsupportedError} For an operator outside that set,
-   *   and for a pattern operand the filter path refuses too.
+   *   an `$exists` / `$nexists` anywhere else, and a pattern operand the
+   *   filter path refuses too.
    */
   private __filterToExpr(
     filter: QueryFilter,
@@ -2498,6 +2959,20 @@ export class MongoTranslator {
         });
         continue;
       }
+      if (
+        (key === '$exists' || key === '$nexists') &&
+        columns instanceof CaseExistsScope
+      ) {
+        let field = `${EXISTS_FIELD}${columns.lookups.length}`;
+        while (columns.taken.has(field)) field = `_${field}`;
+        columns.lookups.push(
+          this.__buildExistsLookup(value as ExistsFilter, field, columns),
+        );
+        parts.push({
+          [key === '$exists' ? '$gt' : '$eq']: [{ $size: `$${field}` }, 0],
+        });
+        continue;
+      }
       if (key.startsWith('$')) {
         throw new DialectUnsupportedError(
           this.Dialect,
@@ -2505,21 +2980,28 @@ export class MongoTranslator {
         );
       }
       const field = this.__columnRef(key, columns);
-      const isOps = typeof value === 'object' && value !== null &&
-        !(value instanceof Date) && !Array.isArray(value) &&
-        !('$$_expression' in value);
-      const ops = isOps
-        ? value as Record<string, unknown>
-        : value === null
-        ? { $null: true }
-        : Array.isArray(value)
-        ? { $in: value }
-        : { $eq: value };
-      for (const [op, operand] of Object.entries(ops)) {
+      for (const [op, operand] of Object.entries(this.__conditionOps(value))) {
         parts.push(this.__conditionToExpr(field, op, operand, columns));
       }
     }
     return parts.length === 1 ? parts[0] : { $and: parts };
+  }
+
+  /**
+   * The operators of a filter value, with the shorthands spelled out: a
+   * literal is `$eq`, `null` is `$null` and a list is `$in`.
+   */
+  private __conditionOps(value: unknown): Record<string, unknown> {
+    const isOps = typeof value === 'object' && value !== null &&
+      !(value instanceof Date) && !Array.isArray(value) &&
+      !('$$_expression' in value);
+    return isOps
+      ? value as Record<string, unknown>
+      : value === null
+      ? { $null: true }
+      : Array.isArray(value)
+      ? { $in: value }
+      : { $eq: value };
   }
 
   /** One `field <op> operand` comparison of {@link __filterToExpr}. */
@@ -2542,18 +3024,12 @@ export class MongoTranslator {
       return resolved;
     };
     if (LIKE_OPERATORS.has(op)) {
-      if (this.__valueFieldRef(operand, columns) !== null) {
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          `column reference as the value of '${op}'`,
-        );
-      }
-      if (this.__isExpressionNode(operand)) {
-        return this.__likeExpressionOperand(
-          field as string,
+      const ref = this.__valueFieldRef(operand, columns);
+      if (ref !== null || this.__isExpressionNode(operand)) {
+        return this.__computedPattern(
+          field,
           op,
-          operand as Expressions,
-          columns,
+          ref ?? this.__translateExpression(operand as Expressions, columns),
         );
       }
       // The pattern a filter would use, matched by `$regexMatch`. That is
@@ -2632,14 +3108,21 @@ export class MongoTranslator {
       // Math
       case 'ADD':
         return { $add: (args as unknown[]).map(r) };
-      case 'SUBTRACT':
-        return { $subtract: (args as unknown[]).map(r) };
       case 'MULTIPLY':
         return { $multiply: (args as unknown[]).map(r) };
+      // `$subtract`, `$divide` and `$mod` take exactly two operands; SQL
+      // chains `a - b - c` left to right, so the fold does too.
+      case 'SUBTRACT':
       case 'DIVIDE':
-        return { $divide: (args as unknown[]).map(r) };
-      case 'MODULO':
-        return { $mod: (args as unknown[]).map(r) };
+      case 'MODULO': {
+        const op = {
+          SUBTRACT: '$subtract',
+          DIVIDE: '$divide',
+          MODULO: '$mod',
+        }[expr.$$_expression];
+        const [first, ...rest] = (args as unknown[]).map(r);
+        return rest.reduce((acc, x) => ({ [op]: [acc, x] }), first);
+      }
       case 'POWER': {
         const a = args as { base: unknown; exponent: unknown };
         return { $pow: [r(a.base), r(a.exponent)] };
@@ -2714,8 +3197,7 @@ export class MongoTranslator {
         return { $dateTrunc: { date: '$$NOW', unit: 'day' } };
       case 'UNIX_TIMESTAMP': {
         // A Long (int64) either way: $$NOW is ms since epoch once cast.
-        const unit = (expr as { unit?: string }).unit ?? 'seconds';
-        return unit === 'milliseconds'
+        return this.__unixTimestampUnit(expr) === 'milliseconds'
           ? { $toLong: '$$NOW' }
           : { $toLong: { $floor: { $divide: [{ $toLong: '$$NOW' }, 1000] } } };
       }
@@ -2847,28 +3329,25 @@ export class MongoTranslator {
    * Translate an OQL Aggregate to a Mongo aggregation `$group` value.
    * Returns the operator object that goes inside `$group: { _id: …, X: <here> }`.
    */
-  /** JSON_ROW whose columns ALL reference one $lookup'd join alias —
-   * the shape relation projections emit. Returns the alias, or null
-   * when the aggregate needs the $group path. */
-  private __jsonRowLookupAlias(
-    agg: unknown,
-    joins: Query<'SELECT'>['joins'] | undefined,
-  ): string | null {
-    const a = agg as {
-      $$_aggregate?: string;
-      columns?: Record<string, unknown>;
-    };
-    if (a.$$_aggregate !== 'JSON_ROW' || joins === undefined) return null;
-    if (a.columns === undefined) return null;
-    let alias: string | null = null;
-    for (const source of Object.values(a.columns)) {
-      if (typeof source !== 'string') return null;
-      const m = source.match(/^@([^.]+)\.@/);
-      if (m === null) return null;
-      if (alias === null) alias = m[1]!;
-      else if (alias !== m[1]) return null;
+  /**
+   * The query's aggregates, plus a JSON_ROW of every declared column for
+   * each projected join alias, which the SQL translators expand the same
+   * way. Either one groups the query.
+   */
+  private __aggregatesOf(q: Query<'SELECT'>): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...q.aggregates };
+    for (const key of Object.keys(q.projection)) {
+      const alias = key.slice(1);
+      const def = q.joins?.[alias];
+      if (!def || alias in out || alias in (q.expressions ?? {})) continue;
+      out[alias] = {
+        $$_aggregate: 'JSON_ROW',
+        columns: Object.fromEntries(
+          def.columns.map((c) => [String(c), `@${alias}.@${String(c)}`]),
+        ),
+      };
     }
-    return alias !== null && alias in joins ? alias : null;
+    return out;
   }
 
   private __translateAggregate(
@@ -2876,6 +3355,7 @@ export class MongoTranslator {
     columns: ReadonlySet<string>,
   ): unknown {
     const ref = (col: unknown): unknown => this.__columnRef(col, columns);
+    const present = (col: unknown): unknown => this.__nullIfMissing(ref(col));
     switch (agg.$$_aggregate) {
       case 'COUNT':
         // SQL `COUNT(col)` counts every NON-NULL value, including falsy
@@ -2902,23 +3382,22 @@ export class MongoTranslator {
         return { $min: ref(agg.column) };
       case 'MAX':
         return { $max: ref(agg.column) };
-      case 'STRING_AGG': {
-        // Mongo has no SQL-style STRING_AGG. Use $push + $reduce as a
-        // best effort; clearer to throw and let users build the pipeline
-        // explicitly when they need this.
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          `aggregate 'STRING_AGG' (use a custom $push/$reduce pipeline)`,
-        );
-      }
+      // The values, joined once the group is built (see `__buildAggregate`).
+      case 'STRING_AGG':
+        return {
+          [agg.distinct === true ? '$addToSet' : '$push']: ref(agg.column),
+        };
+      // `$push` skips a missing value, and an object leaves out a missing
+      // field; SQL collects NULL for both, as for a join without a match.
       case 'ARRAY_AGG':
-        return { $push: ref(agg.column) };
+        return {
+          [agg.distinct === true ? '$addToSet' : '$push']: present(agg.column),
+        };
       case 'JSON_ROW': {
-        // Build per-row object then aggregate via $push.
         const cols = agg.columns as Record<string, unknown>;
         const rowObj: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(cols)) {
-          rowObj[k] = ref(v);
+          rowObj[k] = present(v);
         }
         return { $push: rowObj };
       }

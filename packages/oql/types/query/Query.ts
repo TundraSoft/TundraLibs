@@ -374,7 +374,10 @@ export type Query<
             unique?: boolean;
             /**
              * Optional `WHERE` for partial indexes — only rows
-             * matching this filter are included.
+             * matching this filter are included. A bare `'@name'`
+             * expression argument is read as a column, and a
+             * value-position `'@name'` is a column when `name` is an
+             * indexed column, a filter key or such an argument.
              */
             where?: QueryFilter<PT>;
             /** When true, don't error if the index already exists. */

@@ -19,9 +19,9 @@ import type { TimeUnit } from './TimeUnit.ts';
  * args to a depth of 10 — so the nested member only brings the type
  * in line with the behaviour on both sides of it.
  *
- * Restricted to {@link NumericExpressions} and
- * {@link ConditionalExpressions} rather than the whole
- * {@link Expressions} union: that is exactly the set the runtime
+ * Restricted to {@link NumericExpressions},
+ * {@link ConditionalExpressions} and `UNIX_TIMESTAMP` rather than the
+ * whole {@link Expressions} union: that is exactly the set the runtime
  * validator accepts in a numeric position, so a string expression
  * such as `CONCAT` stays rejected at compile time instead of
  * throwing at assert time. A conditional's result type is not
@@ -43,7 +43,12 @@ type NumericExpressionArg<
   | bigint
   | Extract<
     Expressions<T, FT>,
-    { $$_expression: NumericExpressions | ConditionalExpressions }
+    {
+      $$_expression:
+        | NumericExpressions
+        | ConditionalExpressions
+        | 'UNIX_TIMESTAMP';
+    }
   >;
 
 /**
@@ -69,6 +74,21 @@ type ConditionalArg<
   | Date
   | null
   | Expressions<T, FT>;
+
+/**
+ * A `COALESCE`, `NULLIF` or `CASE` in a date or string argument
+ * position. As in a numeric position, its result type is not checked.
+ *
+ * @template T  - Table schema type.
+ * @template FT - Flattened table type with `'@'` prefix for column
+ *                references.
+ *
+ * @internal
+ */
+type ConditionalExpressionArg<
+  T extends TableType,
+  FT extends FlattenEntity<T, '', '@'>,
+> = Extract<Expressions<T, FT>, { $$_expression: ConditionalExpressions }>;
 
 /**
  * Type-safe expression definitions for computed values in database
@@ -174,7 +194,7 @@ export type Expressions<
 } | {
   /** Length: number of characters in a string. */
   $$_expression: 'LENGTH';
-  args: GetColumnByType<FT, string> | string;
+  args: GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>;
 } | {
   /**
    * Date difference: complete time units between `from` and `to`
@@ -182,26 +202,37 @@ export type Expressions<
    */
   $$_expression: 'DATE_DIFF';
   args: {
-    from: GetColumnByType<FT, Date> | Date;
-    to: GetColumnByType<FT, Date> | Date;
+    from: GetColumnByType<FT, Date> | Date | ConditionalExpressionArg<T, FT>;
+    to: GetColumnByType<FT, Date> | Date | ConditionalExpressionArg<T, FT>;
     unit: TimeUnit;
   };
 } | {
   /**
    * Date addition: add a number of time units to a date. Negative
-   * `amount` subtracts. Returns text, not a Date, on SQLite.
+   * `amount` subtracts. Returns text, not a Date, on SQLite. `date` is a
+   * column, a `Date`, or a nested `NOW` / `CURRENT_TIMESTAMP(TZ)`.
    */
   $$_expression: 'DATE_ADD';
   args: {
-    date: GetColumnByType<FT, Date> | Date;
-    amount: GetColumnByType<FT, number> | number;
+    date:
+      | GetColumnByType<FT, Date>
+      | Date
+      | {
+        $$_expression: 'NOW' | 'CURRENT_TIMESTAMP' | 'CURRENT_TIMESTAMPTZ';
+      }
+      | ConditionalExpressionArg<T, FT>;
+    amount:
+      | GetColumnByType<FT, number>
+      | number
+      | ConditionalExpressionArg<T, FT>;
     unit: TimeUnit;
   };
 } | {
   /**
    * Start of the day, month or year `date` falls in, as a Date (text on
    * SQLite) — the value to group rows by period. `date` is a column or
-   * a nested `DATE_ADD` / `NOW`, never a literal.
+   * a nested `DATE_ADD` / `NOW` / `COALESCE` / `NULLIF` / `CASE`, never
+   * a literal.
    *
    * `unit` is a TRANSLATION-TIME switch, not a value: it must be a
    * literal on the node and is never bound as a parameter.
@@ -225,7 +256,8 @@ export type Expressions<
             | 'CURRENT_TIMESTAMP'
             | 'CURRENT_TIMESTAMPTZ';
         }
-      >;
+      >
+      | ConditionalExpressionArg<T, FT>;
     unit: DateTruncUnit;
   };
 } | {
@@ -259,7 +291,7 @@ export type Expressions<
    * as a parameter, so it must be a literal on the node.
    *
    * What JavaScript receives differs by driver, not by this expression:
-   * the Postgres driver decodes `BIGINT` as `bigint`, while MariaDB,
+   * the Postgres and MariaDB drivers decode `BIGINT` as `bigint`, while
    * SQLite and MongoDB hand back a `number`. Coerce at the edge if a
    * multi-dialect app needs one type.
    */
@@ -274,7 +306,9 @@ export type Expressions<
 } | {
   /** Concatenate multiple strings. */
   $$_expression: 'CONCAT';
-  args: Array<GetColumnByType<FT, string> | string>;
+  args: Array<
+    GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>
+  >;
 } | {
   /**
    * Text form of a value — a BIGINT read this way survives JSON (a
@@ -285,23 +319,23 @@ export type Expressions<
 } | {
   /** Lowercase. */
   $$_expression: 'LOWER';
-  args: GetColumnByType<FT, string> | string;
+  args: GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>;
 } | {
   /** Uppercase. */
   $$_expression: 'UPPER';
-  args: GetColumnByType<FT, string> | string;
+  args: GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>;
 } | {
   /** Trim leading and trailing whitespace. */
   $$_expression: 'TRIM';
-  args: GetColumnByType<FT, string> | string;
+  args: GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>;
 } | {
   /** Left trim — remove leading whitespace. */
   $$_expression: 'LTRIM';
-  args: GetColumnByType<FT, string> | string;
+  args: GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>;
 } | {
   /** Right trim — remove trailing whitespace. */
   $$_expression: 'RTRIM';
-  args: GetColumnByType<FT, string> | string;
+  args: GetColumnByType<FT, string> | string | ConditionalExpressionArg<T, FT>;
 } | {
   /**
    * Substring extraction. `start` is 1-based (SQL-native). Omit

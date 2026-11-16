@@ -7,7 +7,7 @@
  * @module asserts/Query/DML
  */
 
-export { assertSelectQuery, isSelectQuery } from './select.ts';
+export { assertSelectQuery, isGroupedSelect, isSelectQuery } from './select.ts';
 export { assertInsertQuery, isInsertQuery } from './insert.ts';
 export { assertInsertFromQuery, isInsertFromQuery } from './insertFromQuery.ts';
 export { assertUpdateQuery, isUpdateQuery } from './update.ts';

@@ -9,6 +9,7 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { assertDeleteQuery, isDeleteQuery } from './delete.ts';
+import { OqlError } from '../../../errors/mod.ts';
 
 describe('oql.asserts.Query.DML.Delete', () => {
   describe('valid queries', () => {
@@ -293,6 +294,22 @@ describe('oql.asserts.Query.DML.Delete', () => {
         TypeError,
         'non-empty array',
       );
+    });
+  });
+
+  describe('invalid where', () => {
+    it('refuses a filter through a relation', () => {
+      const err = asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'orders',
+            columns: ['id'],
+            where: { '@Items.@sku': 'ZZ' },
+          }),
+        OqlError,
+      );
+      asserts.assertEquals(err.code, 'RELATION_FILTER_UNSUPPORTED');
     });
   });
 

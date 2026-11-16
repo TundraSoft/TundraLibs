@@ -16,9 +16,24 @@ import {
   assertSchemaName,
   assertTableName,
 } from '../common.ts';
-import { validateExpressions } from './common.ts';
+import { assertJoinedColumnRefs, validateExpressions } from './common.ts';
 
 const DEPRECATED_PROPS = ['groupBy', 'returnColumns'] as const;
+
+/**
+ * Whether a SELECT gets an automatic GROUP BY: it declares at least one
+ * aggregate, or projects a join alias whole. The one rule the validator
+ * and the translators share.
+ */
+export const isGroupedSelect = (query: {
+  aggregates?: unknown;
+  joins?: unknown;
+  projection?: unknown;
+}): boolean =>
+  Object.keys(Object(query.aggregates)).length > 0 ||
+  Object.keys(Object(query.projection)).some((k) =>
+    Object.hasOwn(Object(query.joins), k.slice(1))
+  );
 
 /**
  * Validates the optional `distinct` flag. Must be a boolean. When
@@ -39,8 +54,8 @@ const validateDistinct = (query: Record<string, unknown>): void => {
         .distinct}`,
     );
   }
-  if (query.distinct !== true) return;
-  if (query.aggregates !== undefined) {
+  if (query.distinct !== true || !isGroupedSelect(query)) return;
+  if (Object.keys(Object(query.aggregates)).length > 0) {
     throw new TypeError(
       `Invalid SELECT query: 'distinct' cannot be combined with 'aggregates' — aggregate SELECTs GROUP BY every non-aggregated projection key, which already deduplicates rows`,
     );
@@ -285,6 +300,38 @@ const validateProjectionEntry = (
 };
 
 /**
+ * The first filter value that is one of `refs` (`'@name'` keys), alone, in
+ * a list or as an operator's value, at any `$and` / `$or` depth. Such a
+ * value reads the alias, so it is refused where a key naming the alias is.
+ *
+ * @internal
+ */
+const findAliasValue = (
+  filter: unknown,
+  refs: string[],
+): string | undefined => {
+  const named = (v: unknown): string | undefined =>
+    typeof v === 'string' && refs.includes(v)
+      ? v
+      : Array.isArray(v)
+      ? v.map(named).find((r) => r !== undefined)
+      : undefined;
+  for (const [key, value] of Object.entries(Object(filter))) {
+    const found = key === '$and' || key === '$or'
+      ? (value as unknown[]).map((f) => findAliasValue(f, refs))
+        .find((r) => r !== undefined)
+      : key.startsWith('$')
+      ? undefined
+      : named(value) ??
+        (typeof value === 'object' && value !== null
+          ? Object.values(value).map(named).find((r) => r !== undefined)
+          : undefined);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
+/**
  * Validates `query.orderBy`: each key references a projection key, a
  * joined column, or a declared base column; each value is `'ASC'` or
  * `'DESC'`. An unprojected base column is rejected under `distinct` or an
@@ -320,9 +367,7 @@ const validateOrderBy = (
   }
 
   const joinedKeys = joinedColumns.map((c) => `@${c.replace('.', '.@')}`);
-  const joins = (query.joins ?? {}) as Record<string, unknown>;
-  const grouped = query.aggregates !== undefined ||
-    projectionKeys.some((k) => k.slice(1) in joins);
+  const grouped = isGroupedSelect(query);
   const distinct = query.distinct === true ? `'distinct'` : undefined;
   const restriction = distinct ??
     (grouped ? `aggregates or a projected join alias` : undefined);
@@ -397,6 +442,7 @@ export const assertSelectQuery: <
   assertTableName(query, 'SELECT');
   assertSchemaName(query, 'SELECT');
   const columnList = assertColumns(query, 'SELECT');
+  assertJoinedColumnRefs(query, 'SELECT');
   const availableKeys: string[] = columnList.map((c) => `@${c}`);
 
   // Pre-collect joined-column names so aggregate / expression validation
@@ -453,8 +499,10 @@ export const assertSelectQuery: <
         undefined,
         undefined,
         jsonPathRoots,
+        aggregateAndExpressionScope,
       );
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid SELECT query: 'where' is invalid - ${
           error instanceof Error ? error.message : String(error)
@@ -471,6 +519,12 @@ export const assertSelectQuery: <
         );
       }
     }
+    const aggregateValue = findAliasValue(query.where, aggregateKeys);
+    if (aggregateValue !== undefined) {
+      throw new TypeError(
+        `Invalid SELECT query: 'where' cannot reference aggregate '${aggregateValue}' as a value. Use 'having' for aggregate filters`,
+      );
+    }
   }
 
   if (query.having !== undefined) {
@@ -481,12 +535,29 @@ export const assertSelectQuery: <
     }
     const havingAllowedKeys = aggregateKeys.map((k) => k.substring(1));
     try {
-      assertQueryFilter(query.having, havingAllowedKeys);
+      assertQueryFilter(
+        query.having,
+        havingAllowedKeys,
+        undefined,
+        undefined,
+        undefined,
+        aggregateAndExpressionScope,
+      );
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid SELECT query: 'having' is invalid - ${
           error instanceof Error ? error.message : String(error)
         }`,
+      );
+    }
+    const expressionValue = findAliasValue(
+      query.having,
+      expressionKeys.filter((k) => !aggregateKeys.includes(k)),
+    );
+    if (expressionValue !== undefined) {
+      throw new TypeError(
+        `Invalid SELECT query: 'having' cannot reference expression '${expressionValue}' as a value. 'having' reads aggregates only, as its keys do`,
       );
     }
   }

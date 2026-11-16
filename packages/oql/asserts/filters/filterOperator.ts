@@ -10,6 +10,7 @@
  * @module asserts/Filters/FilterOperator
  */
 
+import { OqlError } from '../../errors/mod.ts';
 import type {
   FilterOperator,
   QueryFilter,
@@ -45,9 +46,14 @@ import { assertOperators } from './operators.ts';
  *                        (without '@' prefix) eligible as JSON-path roots.
  *                        Callers must exclude join aliases and the base
  *                        table name so precedence matches the translators.
+ * @param expressionScope - Optional list of column names an Expression
+ *                          used as a filter value may reference, as for a
+ *                          projected Expression (default: `columnList`)
  * @throws {TypeError} If the value is not a valid FilterOperator
  * @throws {TypeError} If a JSON-path key carries an operator outside
  *                     {@link JSON_PATH_ALLOWED_OPERATORS}
+ * @throws {OqlError} `INVALID_TIME_UNIT` from an Expression value with a
+ *                    missing or unknown unit
  *
  * @example
  * ```ts
@@ -72,10 +78,12 @@ export const assertFilterOperator: <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
   jsonPathRoots?: string[],
+  expressionScope?: string[],
 ) => asserts x is FilterOperator<T> = <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
   jsonPathRoots?: string[],
+  expressionScope?: string[],
 ): asserts x is FilterOperator<T> => {
   if (typeof x !== 'object' || x === null || Array.isArray(x)) {
     throw new TypeError(
@@ -114,8 +122,9 @@ export const assertFilterOperator: <T extends TableType = TableType>(
 
     // Value must be valid Operators
     try {
-      assertOperators(value);
+      assertOperators(value, undefined, expressionScope ?? columnList);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid FilterOperator: Value for '${key}' must be valid Operators - ${
           error instanceof Error ? error.message : String(error)
@@ -186,10 +195,15 @@ const MAX_QUERY_FILTER_DEPTH = 10;
  * @param jsonPathRoots - Optional list of declared base-table columns
  *                        eligible as JSON-path roots — see
  *                        {@link assertFilterOperator}
+ * @param expressionScope - Optional list of column names an Expression
+ *                          used as a filter value may reference — see
+ *                          {@link assertFilterOperator}
  * @throws {TypeError} If the value is not a valid QueryFilter
  * @throws {TypeError} If maximum nesting depth is exceeded
  * @throws {TypeError} If a JSON-path key carries an operator outside
  *                     {@link JSON_PATH_ALLOWED_OPERATORS}
+ * @throws {OqlError} `INVALID_TIME_UNIT` from an Expression value with a
+ *                    missing or unknown unit
  *
  * @example
  * ```ts
@@ -228,12 +242,14 @@ export const assertQueryFilter: <T extends TableType = TableType>(
   depth?: number,
   maxDepth?: number,
   jsonPathRoots?: string[],
+  expressionScope?: string[],
 ) => asserts x is QueryFilter<T> = <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
   depth = 0,
   maxDepth = MAX_QUERY_FILTER_DEPTH,
   jsonPathRoots?: string[],
+  expressionScope?: string[],
 ): asserts x is QueryFilter<T> => {
   // Check recursion depth limit
   if (depth > maxDepth) {
@@ -295,8 +311,10 @@ export const assertQueryFilter: <T extends TableType = TableType>(
           depth + 1,
           maxDepth,
           jsonPathRoots,
+          expressionScope,
         );
       } catch (error) {
+        if (error instanceof OqlError) throw error;
         throw new TypeError(
           `Invalid QueryFilter: '${logicalKey}' element at index ${i} is invalid - ${
             error instanceof Error ? error.message : String(error)
@@ -327,8 +345,14 @@ export const assertQueryFilter: <T extends TableType = TableType>(
     }
 
     try {
-      assertFilterOperator<T>(filterObj, columnList, jsonPathRoots);
+      assertFilterOperator<T>(
+        filterObj,
+        columnList,
+        jsonPathRoots,
+        expressionScope,
+      );
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid QueryFilter: Filter properties are invalid - ${
           error instanceof Error ? error.message : String(error)

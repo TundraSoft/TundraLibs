@@ -21,7 +21,10 @@ import { describe, it } from '@tundralibs/compat/test';
 import { SQLiteTranslator } from './SQLiteTranslator.ts';
 import { PostgresTranslator } from './PostgresTranslator.ts';
 import { MariaTranslator } from './MariaTranslator.ts';
-import { MongoTranslator } from './MongoTranslator.ts';
+import {
+  type MongoAggregateAction,
+  MongoTranslator,
+} from './MongoTranslator.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type { Query } from '../types/mod.ts';
 import type {
@@ -342,6 +345,86 @@ describe('oql.translator.guards', () => {
     });
   });
 
+  describe('UNIX_TIMESTAMP unit', () => {
+    // Same gap again: `unit` picks the emitted form at translation time, so
+    // an unchecked one silently became seconds. The asserts never see these
+    // positions, so the translators must check it.
+    const stamp = (unit?: unknown) => ({
+      $$_expression: 'UNIX_TIMESTAMP',
+      unit,
+    });
+    const positions: Record<string, (operand: unknown) => Query<'SELECT'>> = {
+      'a filter operand': (operand) =>
+        ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          projection: { '@id': true },
+          where: { '@at': { $gte: operand } },
+        }) as unknown as Query<'SELECT'>,
+      'a nested argument': (operand) =>
+        ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          projection: { '@id': true },
+          where: {
+            '@at': { $gte: { $$_expression: 'ADD', args: ['@id', operand] } },
+          },
+        }) as unknown as Query<'SELECT'>,
+      'a CASE condition': (operand) =>
+        ({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'at'],
+          expressions: {
+            e: {
+              $$_expression: 'CASE',
+              args: {
+                cases: [{ when: { '@at': { $gte: operand } }, then: 1 }],
+                else: 0,
+              },
+            },
+          },
+          projection: { '@id': true, '@e': true },
+        }) as unknown as Query<'SELECT'>,
+    };
+    const translators = () => [
+      new SQLiteTranslator(),
+      new PostgresTranslator(),
+      new MariaTranslator(),
+      new MongoTranslator(),
+    ];
+
+    for (const [position, query] of Object.entries(positions)) {
+      it(`refuses an unknown unit with the same error on every engine: ${position}`, () => {
+        for (const unit of ['minutes', 'SECONDS', null]) {
+          const messages = translators().map((t) => {
+            const err = asserts.assertThrows(
+              () => t.select(query(stamp(unit))),
+              OqlError,
+            );
+            asserts.assertEquals(err.code, 'INVALID_TIME_UNIT');
+            return err.message;
+          });
+          asserts.assertEquals(new Set(messages).size, 1);
+        }
+      });
+    }
+
+    it('reads a missing unit as seconds on every engine', () => {
+      // Control: same shapes, so the unit is what the test above rejects.
+      for (const query of Object.values(positions)) {
+        for (const t of translators()) {
+          const out = (unit?: string) =>
+            JSON.stringify(t.select(query(stamp(unit))));
+          asserts.assertEquals(out(), out('seconds'));
+          asserts.assertNotEquals(out(), out('milliseconds'));
+        }
+      }
+    });
+  });
+
   describe('param inlining', () => {
     it('refuses to inline a non-named placeholder format', () => {
       const err = asserts.assertThrows(
@@ -438,6 +521,289 @@ describe('oql.translator.guards', () => {
       asserts.assertEquals(maria.literal('a\\b'), `'a\\\\b'`);
       asserts.assertEquals(sqlite.literal('a\\b'), `'a\\b'`);
       asserts.assertEquals(postgres.literal('a\\b'), `'a\\b'`);
+    });
+  });
+
+  describe('index predicate', () => {
+    const index = (operand: unknown) =>
+      ({
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where: { '@due': { $gte: operand } },
+      }) as Query<'CREATE_INDEX'>;
+    const dateAdd = {
+      $$_expression: 'DATE_ADD',
+      args: { date: new Date('2026-03-15T00:00:00Z'), amount: 1, unit: 'DAYS' },
+    };
+    const add = { $$_expression: 'ADD', args: ['@due', 1] };
+
+    it('refuses DATE_ADD where the engine cannot hold it, with one error', () => {
+      // Postgres builds the interval from text, which is not IMMUTABLE; a
+      // MongoDB partial filter takes no $expr. SQLite can hold it.
+      const features = [new PostgresTranslator(), new MongoTranslator()].map(
+        (t) => {
+          const err = asserts.assertThrows(
+            () => t.createIndex(index(dateAdd)),
+            DialectUnsupportedError,
+          );
+          return err.feature;
+        },
+      );
+      asserts.assertEquals(features, [
+        'the computed expression DATE_ADD in an index predicate',
+        'the computed expression DATE_ADD in an index predicate',
+      ]);
+      asserts.assertStringIncludes(
+        new SQLiteTranslator().createIndex(index(dateAdd)).sql,
+        'WHERE "due" >= strftime(',
+      );
+    });
+
+    it('refuses an $exists or $nexists on every dialect with one error', () => {
+      // No engine takes a subquery in an index predicate: Postgres and
+      // SQLite fail in the database, MariaDB has no partial index.
+      const translators = [
+        new PostgresTranslator(),
+        new MariaTranslator(),
+        new SQLiteTranslator(),
+        new MongoTranslator(),
+      ];
+      for (const node of ['$exists', '$nexists']) {
+        const where = {
+          $or: [{ '@due': null }, {
+            [node]: { table: 'items', on: { '@orderId': 1 } },
+          }],
+        };
+        for (const t of translators) {
+          const err = asserts.assertThrows(
+            () =>
+              t.createIndex({ ...index(1), where } as Query<'CREATE_INDEX'>),
+            OqlError,
+            `'where' holds '${node}'`,
+          );
+          asserts.assertEquals(err.code, 'EXISTS_NO_OUTER_TABLE');
+        }
+      }
+    });
+
+    it('refuses any expression on MongoDB only', () => {
+      asserts.assertThrows(
+        () => new MongoTranslator().createIndex(index(add)),
+        DialectUnsupportedError,
+        'the computed expression ADD in an index predicate',
+      );
+      asserts.assertEquals(
+        new PostgresTranslator().createIndex(index(add)).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("due" + 1)',
+      );
+    });
+
+    it('refuses a clock or UUID expression on every engine, with one error', () => {
+      const translators = [
+        new PostgresTranslator(),
+        new SQLiteTranslator(),
+        new MariaTranslator(),
+        new MongoTranslator(),
+      ];
+      for (
+        const type of [
+          'NOW',
+          'CURRENT_DATE',
+          'CURRENT_TIME',
+          'CURRENT_TIMESTAMP',
+          'CURRENT_TIMESTAMPTZ',
+          'UNIX_TIMESTAMP',
+          'UUID',
+        ]
+      ) {
+        // Nested too, so the search has to walk expression arguments;
+        // MongoDB names the outer COALESCE there, as it refuses any.
+        const nested = {
+          $$_expression: 'COALESCE',
+          args: ['@due', { $$_expression: type }],
+        };
+        for (const t of translators) {
+          for (const operand of [{ $$_expression: type }, nested]) {
+            const err = asserts.assertThrows(
+              () => t.createIndex(index(operand)),
+              DialectUnsupportedError,
+            );
+            const named = t instanceof MongoTranslator && operand === nested
+              ? 'COALESCE'
+              : type;
+            asserts.assertEquals(
+              err.feature,
+              `the computed expression ${named} in an index predicate`,
+            );
+          }
+        }
+      }
+    });
+
+    it('reads a bare @name expression argument as a column', () => {
+      const where = {
+        '@due': { $gte: { $$_expression: 'ADD', args: ['@start', 1] } },
+        '@n': { $gt: '@start' },
+        '@m': { $gt: '@id' },
+        '@s': { $endsWith: '@example.com' },
+      };
+      const q = {
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where,
+      } as Query<'CREATE_INDEX'>;
+      asserts.assertEquals(
+        new PostgresTranslator().createIndex(q).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("start" + 1)' +
+          ` AND "n" > "start" AND "m" > "id"` +
+          ` AND "s" LIKE ('%' || '@example.com') ESCAPE '\\'`,
+      );
+      asserts.assertStringIncludes(
+        new SQLiteTranslator().createIndex(q).sql,
+        'WHERE "due" >= ("start" + 1) AND "n" > "start" AND "m" > "id"',
+      );
+    });
+
+    it('reads a bare @name inside CASE as a column', () => {
+      const q = {
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where: {
+          '@due': {
+            $gt: {
+              $$_expression: 'CASE',
+              args: {
+                cases: [{ when: { '@kind': 'a' }, then: '@start' }],
+                else: '@stop',
+              },
+            },
+          },
+        },
+      } as Query<'CREATE_INDEX'>;
+      asserts.assertEquals(
+        new SQLiteTranslator().createIndex(q).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" > ' +
+          `(CASE WHEN "kind" = 'a' THEN "start" ELSE "stop" END)`,
+      );
+    });
+  });
+
+  describe('joined column spelling', () => {
+    const withJoin = (extra: Record<string, unknown>) =>
+      ({
+        type: 'SELECT',
+        table: 'users',
+        columns: ['id', 'name', 'meta'],
+        joins: {
+          P: {
+            type: 'LEFT',
+            table: 'profiles',
+            columns: ['userId', 'label'],
+            on: { '@P.@userId': '@id' },
+          },
+        },
+        projection: { '@id': true },
+        ...extra,
+      }) as unknown as Query<'SELECT'>;
+    const misspelled = [
+      withJoin({ where: { '@P.label': 'x' } }),
+      withJoin({ where: { '@name': '@P.label' } }),
+      withJoin({
+        expressions: {
+          c: { $$_expression: 'COALESCE', args: ['@P.label', 'none'] },
+        },
+        projection: { '@id': true, '@c': 'c' },
+      }),
+    ];
+    const refuses = (t: { select(q: Query<'SELECT'>): unknown }) => {
+      for (const q of misspelled) {
+        const err = asserts.assertThrows(() => t.select(q), OqlError);
+        asserts.assertEquals(err.code, 'INVALID_COLUMN_REF');
+      }
+    };
+
+    it('refuses @Alias.col on every SQL dialect; @meta.a stays text', () => {
+      for (
+        const t of [
+          new SQLiteTranslator(),
+          new PostgresTranslator(),
+          new MariaTranslator(),
+        ]
+      ) {
+        refuses(t);
+        const { params } = t.select(
+          withJoin({ where: { '@name': '@meta.a' } }),
+        );
+        asserts.assertEquals(Object.values(params ?? {}), ['@meta.a']);
+      }
+    });
+
+    it('refuses @Alias.col on MongoDB; @meta.a stays text', () => {
+      const t = new MongoTranslator();
+      refuses(t);
+      const { params } = t.select(
+        withJoin({
+          expressions: {
+            c: { $$_expression: 'COALESCE', args: ['@meta.a', 'none'] },
+          },
+          projection: { '@id': true, '@c': 'c' },
+        }),
+      ) as MongoAggregateAction;
+      asserts.assertEquals(
+        params.pipeline.find((stage) => '$addFields' in stage),
+        { $addFields: { c: { $ifNull: ['@meta.a', 'none'] } } },
+      );
+    });
+  });
+
+  describe('nested $exists', () => {
+    // users → orders → items → marks: each node correlates to its parent.
+    const marks = { table: 'marks', on: { '@itemId': '@id' } };
+    const items = {
+      table: 'items',
+      on: { '@orderId': '@id' },
+      where: { $or: [{ '@sku': 'A' }, { $nexists: marks }] },
+    };
+    const select = {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      projection: { '@id': true },
+      where: {
+        $exists: {
+          table: 'orders',
+          on: { '@userId': '@id' },
+          where: { $exists: items },
+        },
+      },
+    } as unknown as Query<'SELECT'>;
+
+    it('correlates to its parent subquery at every level on SQL', () => {
+      asserts.assertEquals(
+        new SQLiteTranslator().select(select).sql,
+        'SELECT "id" AS "id" FROM "users" WHERE EXISTS (SELECT 1 FROM "orders" AS "__exists__" ' +
+          'WHERE "__exists__"."userId" = "users"."id" AND EXISTS (SELECT 1 FROM "items" AS "__exists_1__" ' +
+          'WHERE "__exists_1__"."orderId" = "__exists__"."id" AND (("__exists_1__"."sku" = :p_0:) OR ' +
+          '(NOT EXISTS (SELECT 1 FROM "marks" AS "__exists_2__" ' +
+          'WHERE "__exists_2__"."itemId" = "__exists_1__"."id")))))',
+      );
+    });
+
+    it('refuses a parent correlation on MongoDB', () => {
+      const err = asserts.assertThrows(
+        () => new MongoTranslator().select(select),
+        DialectUnsupportedError,
+      );
+      asserts.assertEquals(
+        err.feature,
+        "a nested '$exists' correlated to its parent subquery by '@id'",
+      );
     });
   });
 });

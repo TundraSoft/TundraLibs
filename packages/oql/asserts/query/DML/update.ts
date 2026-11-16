@@ -12,7 +12,11 @@ import {
   assertSchemaName,
   assertTableName,
 } from '../common.ts';
-import { validateDataEntry, validateExpressions } from './common.ts';
+import {
+  assertNoRelationFilter,
+  validateDataEntry,
+  validateExpressions,
+} from './common.ts';
 
 /**
  * Validates `query.data` for UPDATE: must be a non-empty plain object whose
@@ -81,12 +85,14 @@ export const assertUpdateQuery: <PT extends TableType = TableType>(
     // the base table name takes precedence (qualified-column form) and
     // is excluded. UPDATE has no joins, so no alias exclusion is needed.
     const jsonPathRoots = columnList.filter((c) => c !== query.table);
+    assertNoRelationFilter(query.where, query, columnList, 'UPDATE');
     assertQueryFilter(
       query.where,
       availableKeys,
       undefined,
       undefined,
       jsonPathRoots,
+      columnList,
     );
   }
 };

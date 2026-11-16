@@ -14,8 +14,8 @@ import type { QueryFilter } from './QueryFilter.ts';
  * the outer query's tables.
  *
  * MongoDB runs the node as a `$lookup` stage on SELECT and COUNT and
- * returns the same rows. UPDATE and DELETE throw there, as does an
- * `on` value naming a joined column.
+ * returns the same rows, an `on` value naming a joined column
+ * included. UPDATE and DELETE throw there.
  *
  * **`on` — the correlation map.** Follows the join `on` conventions:
  * each KEY is a column of the subquery `table` (single-segment
@@ -27,6 +27,11 @@ import type { QueryFilter } from './QueryFilter.ts';
  * and is parameterised. Expression objects are NOT allowed as `on`
  * values: their embedded column refs cannot be qualified reliably
  * inside the subquery, so the validator rejects them.
+ *
+ * A node inside another node's `where` correlates to that parent
+ * subquery: a bare `@x` value is the parent table's column `x`, which
+ * the translator cannot check, since the table declares no columns.
+ * MongoDB throws `DialectUnsupportedError` for such a node.
  *
  * Outer refs stay correct in both outer shapes: when the outer query
  * has joins, base refs resolve through the `__base__` alias; without

@@ -18,6 +18,14 @@ import { OqlError } from '../../errors/mod.ts';
 import { isColumnIdentifier } from '../columnIdentifier.ts';
 import type { DateExpressions, Expressions } from '../../types/mod.ts';
 import { assertBaseExpression, validateTimeUnits } from './base.ts';
+import { assertConditionalOperand } from './expression.ts';
+
+/** The clocks `DATE_ADD` takes as its `date`. @internal */
+const CLOCKS: readonly string[] = [
+  'NOW',
+  'CURRENT_TIMESTAMP',
+  'CURRENT_TIMESTAMPTZ',
+];
 
 /**
  * Asserts that a value is a valid NOW expression.
@@ -340,17 +348,19 @@ export const assertUnixTimestampExpression: (
  *
  * The DATE_ADD expression adds or subtracts a specified amount of time from a date.
  * It requires three components:
- * - `date`: A Date object or column identifier containing a date
- * - `amount`: A number or column identifier specifying how much to add (negative to subtract)
+ * - `date`: A Date object, a column identifier, a nested `NOW`,
+ *   `CURRENT_TIMESTAMP` or `CURRENT_TIMESTAMPTZ`, or COALESCE, NULLIF or CASE
+ * - `amount`: A number, column identifier, or COALESCE, NULLIF or CASE,
+ *   specifying how much to add (negative to subtract)
  * - `unit`: The time unit ('DAYS', 'MONTHS', 'YEARS', 'HOURS', 'MINUTES', 'SECONDS')
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid DATE_ADD expression
- * @throws {TypeError} If date is not a Date object or valid column identifier
+ * @throws {TypeError} If date is not a Date object, valid column identifier
+ *   or clock expression
  * @throws {TypeError} If amount is not a number or valid column identifier
- * @throws {TypeError} If unit is missing
- * @throws {OqlError} `INVALID_TIME_UNIT` if unit is not a valid time unit
+ * @throws {OqlError} `INVALID_TIME_UNIT` if unit is missing or not a valid time unit
  *
  * @example
  * ```ts
@@ -365,9 +375,13 @@ export const assertUnixTimestampExpression: (
 export const assertDateAddExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'DATE_ADD' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'DATE_ADD' }> => {
   assertBaseExpression(x, 'DATE_ADD');
   if (!('args' in x)) {
@@ -383,18 +397,30 @@ export const assertDateAddExpression: (
       `Invalid Expression definition: args key must be an object with date, amount and unit properties`,
     );
   }
+  const conditional = (arg: unknown, name: string) =>
+    assertConditionalOperand(
+      arg,
+      name,
+      'DATE_ADD',
+      columnList,
+      depth,
+      maxDepth,
+    );
   if ('date' in x.args) {
     // Known column reference (well-formed AND in the columnList, or
     // columnList undefined). Anything else falls through — only Date
-    // objects are valid here, so an @-string not in the list or a bare
-    // literal string both get rejected as wrong type.
-    if (!isColumnIdentifier(x.args.date, columnList)) {
-      if (!(x.args.date instanceof Date)) {
-        throw new TypeError(
-          `Invalid Expression definition: date must be a Date object or ColumnIdentifier, got ${typeof x
-            .args.date}`,
-        );
-      }
+    // objects and the clocks are valid here, so an @-string not in the
+    // list or a bare literal string both get rejected as wrong type.
+    const date = x.args.date as { $$_expression?: unknown } | null;
+    if (
+      !isColumnIdentifier(date, columnList) && !(date instanceof Date) &&
+      !CLOCKS.includes(date?.$$_expression as string) &&
+      !conditional(date, 'date')
+    ) {
+      throw new TypeError(
+        `Invalid Expression definition: date must be a Date object or ColumnIdentifier, or a NOW, CURRENT_TIMESTAMP or CURRENT_TIMESTAMPTZ expression, got ${typeof x
+          .args.date}`,
+      );
     }
   } else {
     throw new TypeError(
@@ -402,7 +428,10 @@ export const assertDateAddExpression: (
     );
   }
   if ('amount' in x.args) {
-    if (!isColumnIdentifier(x.args.amount, columnList)) {
+    if (
+      !isColumnIdentifier(x.args.amount, columnList) &&
+      !conditional(x.args.amount, 'amount')
+    ) {
       if (typeof x.args.amount !== 'number') {
         throw new TypeError(
           `Invalid Expression definition: amount must be a number or ColumnIdentifier, got ${typeof x
@@ -415,13 +444,7 @@ export const assertDateAddExpression: (
       `Invalid Expression definition: Missing 'amount' property in args`,
     );
   }
-  if ('unit' in x.args) {
-    validateTimeUnits(x.args.unit);
-  } else {
-    throw new TypeError(
-      `Invalid Expression definition: Missing 'unit' property in args`,
-    );
-  }
+  validateTimeUnits((x.args as { unit?: unknown }).unit);
 };
 
 /**
@@ -475,7 +498,8 @@ const DATE_TRUNC_UNITS: readonly string[] = ['DAYS', 'MONTHS', 'YEARS'];
  * the day, month or year `date` falls in.
  *
  * `date` is a column identifier, or a nested `DATE_ADD`, `NOW`,
- * `CURRENT_TIMESTAMP` or `CURRENT_TIMESTAMPTZ` expression. `unit` is a
+ * `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `COALESCE`, `NULLIF` or
+ * `CASE` expression. `unit` is a
  * translation-time switch, so it must be the literal `'DAYS'`,
  * `'MONTHS'` or `'YEARS'`.
  *
@@ -495,9 +519,13 @@ const DATE_TRUNC_UNITS: readonly string[] = ['DAYS', 'MONTHS', 'YEARS'];
 export const assertDateTruncExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { $$_expression: 'DATE_TRUNC' }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { $$_expression: 'DATE_TRUNC' }> => {
   assertBaseExpression(x, 'DATE_TRUNC');
   if (!('args' in x) || typeof x.args !== 'object' || x.args === null) {
@@ -506,17 +534,27 @@ export const assertDateTruncExpression: (
     );
   }
   const { date, unit } = x.args as { date?: unknown; unit?: unknown };
-  if (!isColumnIdentifier(date, columnList)) {
+  if (
+    !isColumnIdentifier(date, columnList) &&
+    !assertConditionalOperand(
+      date,
+      'date',
+      'DATE_TRUNC',
+      columnList,
+      depth,
+      maxDepth,
+    )
+  ) {
     assertBaseExpression(date);
     if (date.$$_expression === 'DATE_ADD') {
-      assertDateAddExpression(date, columnList);
+      assertDateAddExpression(date, columnList, depth + 1, maxDepth);
     } else if (
       date.$$_expression !== 'NOW' &&
       date.$$_expression !== 'CURRENT_TIMESTAMP' &&
       date.$$_expression !== 'CURRENT_TIMESTAMPTZ'
     ) {
       throw new TypeError(
-        `Invalid Expression definition: date must be a ColumnIdentifier or a DATE_ADD, NOW, CURRENT_TIMESTAMP or CURRENT_TIMESTAMPTZ expression, got '${date.$$_expression}'`,
+        `Invalid Expression definition: date must be a ColumnIdentifier or a DATE_ADD, NOW, CURRENT_TIMESTAMP, CURRENT_TIMESTAMPTZ, COALESCE, NULLIF or CASE expression, got '${date.$$_expression}'`,
       );
     }
   }
@@ -587,9 +625,9 @@ export const assertDateExpression: (
   } else if (x.$$_expression === 'CURRENT_TIMESTAMPTZ') {
     assertCurrentTimestampTZExpression(x);
   } else if (x.$$_expression === 'DATE_ADD') {
-    assertDateAddExpression(x, columnList);
+    assertDateAddExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'DATE_TRUNC') {
-    assertDateTruncExpression(x, columnList);
+    assertDateTruncExpression(x, columnList, depth, maxDepth);
   } else if (x.$$_expression === 'UNIX_TIMESTAMP') {
     assertUnixTimestampExpression(x);
   } else {

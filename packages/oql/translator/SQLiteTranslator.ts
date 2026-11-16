@@ -25,6 +25,7 @@
 
 import type {
   AggregateFunction,
+  Aggregates,
   ColumnDefinition,
   DateTruncUnit,
   Expressions,
@@ -215,7 +216,12 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['LPAD', (a) => this.__padExpression(a, 'left')],
     ['RPAD', (a) => this.__padExpression(a, 'right')],
     ['NOW', () => `strftime(${ISO_8601_UTC}, 'now')`],
-    ['CURRENT_DATE', () => `date('now')`],
+    // The UTC day as a bound UTC-midnight Date is written, and as
+    // DATE_TRUNC of NOW to DAYS renders, so it equals a stored day.
+    [
+      'CURRENT_DATE',
+      () => `strftime(${ISO_8601_UTC}, 'now', 'start of day')`,
+    ],
     ['CURRENT_TIME', () => `time('now')`],
     ['CURRENT_TIMESTAMP', () => `strftime(${ISO_8601_UTC}, 'now')`],
     ['CURRENT_TIMESTAMPTZ', () => `strftime(${ISO_8601_UTC}, 'now')`],
@@ -338,6 +344,23 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['$endsWith', (c, v) => `${c} LIKE ('%' || ${v})`],
     ['$contains', (c, v) => `${c} LIKE ('%' || ${v} || '%')`],
   ]);
+
+  /**
+   * `json_group_array` over no rows is `'[]'`, where the other engines'
+   * ARRAY_AGG and JSON_ROW are NULL. Over one row or more it holds at
+   * least one element, so only the empty case becomes NULL.
+   */
+  protected override _translateAggregate(
+    agg: Aggregates,
+    scope: string[],
+    params: Parameters,
+    hasJoins: boolean,
+  ): string {
+    const sql = super._translateAggregate(agg, scope, params, hasJoins);
+    return agg.$$_aggregate === 'ARRAY_AGG' || agg.$$_aggregate === 'JSON_ROW'
+      ? `NULLIF(${sql}, '[]')`
+      : sql;
+  }
 
   // ---------------------------------------------------------------------------
   // Filters: JSON path extraction
@@ -549,7 +572,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     let sql =
       `CREATE ${unique}INDEX ${ifNotExists}${indexSql} ON ${tableSql} (${cols})`;
     if (q.where) {
-      const scope = this._scopeFromFilterKeys(q.where);
+      const scope = this._indexScope(q);
       sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
     }
     return sql;
