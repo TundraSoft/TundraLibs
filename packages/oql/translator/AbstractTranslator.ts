@@ -55,6 +55,7 @@ import {
 } from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
+import { findExpression } from './findExpression.ts';
 import { Parameters } from './Parameters.ts';
 import type {
   AggregateMap,
@@ -132,6 +133,24 @@ const LIKE_WILDCARDS = /[\\%_]/g;
  * quoted identifiers.
  */
 const JSON_PATH_SEGMENT_PATTERN = /^[a-zA-Z_]\w*$/;
+
+/** A bare `@column` reference: one identifier segment, no path. */
+const BARE_COLUMN_REF = /^@[a-zA-Z_]\w*$/;
+
+/**
+ * Expressions whose value changes from one evaluation to the next: the
+ * clock and the random UUID. No engine can hold one in an index
+ * predicate, so `CREATE_INDEX` refuses them before any SQL is built.
+ */
+const INDEX_VOLATILE_EXPRESSIONS: ReadonlySet<string> = new Set([
+  'NOW',
+  'CURRENT_DATE',
+  'CURRENT_TIME',
+  'CURRENT_TIMESTAMP',
+  'CURRENT_TIMESTAMPTZ',
+  'UNIX_TIMESTAMP',
+  'UUID',
+]);
 
 /**
  * Turns a validated {@link Query} into dialect SQL plus its bind params.
@@ -410,9 +429,22 @@ export abstract class AbstractTranslator {
    * returns `params: {}`.
    *
    * @throws {TypeError} When `q` is not a valid `CREATE_INDEX` query.
+   * @throws {@link DialectUnsupportedError} When `q.where` holds NOW,
+   *   CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, CURRENT_TIMESTAMPTZ,
+   *   UNIX_TIMESTAMP or UUID, whose value changes between evaluations.
    */
   public createIndex(q: Query<'CREATE_INDEX'>): TranslatedQuery {
     assertCreateIndex(q);
+    const volatile = findExpression(
+      q.where,
+      (t) => INDEX_VOLATILE_EXPRESSIONS.has(t),
+    );
+    if (volatile !== null) {
+      throw new DialectUnsupportedError(
+        this.Dialect,
+        `the computed expression ${volatile} in an index predicate`,
+      );
+    }
     const params = new Parameters();
     const sql = this._buildCreateIndex(q, params);
     return { sql: this._inlineParams(sql, params), params: {} };
@@ -2213,32 +2245,66 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Best-effort scope for partial-index `where` clauses. We don't have
-   * the table's column list at this layer, so harvest column names from
-   * the filter keys themselves — the database enforces real existence.
+   * Column scope for a partial-index `where`. The query carries no column
+   * list, so a name is a column when the query uses it as one: an indexed
+   * column, a filter key, or a bare `@name` argument of an expression.
+   * The last makes `{ '@due': { $lt: DATE_ADD('@start', …) } }` read
+   * `start` as the column it is in a SELECT on that table; a name that is
+   * no column fails in the database instead of binding as text. A
+   * value-position `@name` is a column when it is in this scope, as in a
+   * SELECT. `$exists` subtrees are skipped: they have their own table.
    */
-  protected _scopeFromFilterKeys(
-    filter: Record<string, unknown>,
-  ): string[] {
-    const out: string[] = [];
-    const visit = (f: Record<string, unknown>) => {
+  protected _indexScope(q: Query<'CREATE_INDEX'>): string[] {
+    const out = new Set(q.columns.map((c) => c.slice(1)));
+    const visitArg = (arg: unknown): void => {
+      if (typeof arg === 'string') {
+        if (BARE_COLUMN_REF.test(arg)) out.add(arg.slice(1));
+        return;
+      }
+      if (this.__isExpressionNode(arg) && arg.$$_expression === 'CASE') {
+        for (const c of arg.args.cases) {
+          visitFilter(c.when as Record<string, unknown>);
+          visitArg(c.then);
+        }
+        visitArg(arg.args.else);
+        return;
+      }
+      if (this.__isExpressionNode(arg)) {
+        if ('args' in arg) visitArg(arg.args);
+        return;
+      }
+      if (typeof arg === 'object' && arg !== null && !(arg instanceof Date)) {
+        for (const inner of Object.values(arg)) visitArg(inner);
+      }
+    };
+    const visitValue = (value: unknown): void => {
+      if (this.__isExpressionNode(value)) return visitArg(value);
+      if (
+        typeof value === 'object' && value !== null && !(value instanceof Date)
+      ) {
+        for (const inner of Object.values(value)) visitValue(inner);
+      }
+    };
+    const visitFilter = (f: Record<string, unknown>): void => {
       for (const [key, value] of Object.entries(f)) {
         if (key === '$and' || key === '$or') {
           for (const sub of value as Array<Record<string, unknown>>) {
-            visit(sub);
+            visitFilter(sub);
           }
           continue;
         }
+        if (key === '$exists' || key === '$nexists') continue;
         if (key.startsWith('@')) {
           const stripped = key.slice(1);
-          out.push(
+          out.add(
             stripped.includes('.@') ? stripped.replace('.@', '.') : stripped,
           );
         }
+        visitValue(value);
       }
     };
-    visit(filter);
-    return out;
+    if (q.where) visitFilter(q.where as Record<string, unknown>);
+    return [...out];
   }
 
   /**

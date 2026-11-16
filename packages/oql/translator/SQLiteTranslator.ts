@@ -549,7 +549,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     let sql =
       `CREATE ${unique}INDEX ${ifNotExists}${indexSql} ON ${tableSql} (${cols})`;
     if (q.where) {
-      const scope = this._scopeFromFilterKeys(q.where);
+      const scope = this._indexScope(q);
       sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
     }
     return sql;
