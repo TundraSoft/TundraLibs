@@ -259,12 +259,20 @@ literally, so `$$NOW` would be saved as the string `"$$NOW"`.
   `$expr`, NULL-guarded as a `CASE` condition is. It takes the operators
   a SELECT `where` on the alias takes, and a column inside an `$in` list
   as well.
+- **An expression alias as a filter value**, `{ '@qty': { $lt: '@d' } }`
+  with `d` declared, compares the expression inside `$expr` in a SELECT,
+  COUNT, UPDATE or DELETE, as SQL compares its body. On MongoDB `$like`,
+  `$nlike`, `$ilike` and `$nilike` refuse it with
+  `DialectUnsupportedError`, as they refuse any expression value, and a
+  HAVING value naming an aggregate inside `$in` or `$nin`, or as a LIKE
+  pattern, throws as a column there does. Earlier releases compared the
+  text, or threw `INVALID_COLUMN_REF` in an UPDATE or DELETE.
 - **An expression alias where a column belongs**: in an UPDATE or
-  DELETE, an `@key` naming a declared expression as a filter value or an
-  expression argument throws `OqlError` `INVALID_COLUMN_REF` before
-  anything is written. The SQL dialects read it as a column the table
-  lacks, and the database fails with Column not found. Earlier releases
-  stored or compared the text on MongoDB.
+  DELETE, an `@key` naming a declared expression as an expression
+  argument throws `OqlError` `INVALID_COLUMN_REF` before anything is
+  written. The SQL dialects read it as a column the table lacks, and the
+  database fails with Column not found. Earlier releases stored or
+  compared the text on MongoDB.
 - **A JSON path as an expression argument**, `'@meta.@tag'` or
   `'@meta.tag'`, is text on every dialect: only a filter key reads into a
   JSON column. Earlier releases read the nested field on MongoDB.

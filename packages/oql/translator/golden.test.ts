@@ -1483,6 +1483,75 @@ const CASES: Case[] = [
     },
   },
   {
+    // A value naming an alias compares the alias's body, as a key naming
+    // it does: an expression in WHERE, an aggregate in HAVING.
+    name: 'SELECT WHERE and HAVING values naming an alias compare its body',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      expressions: {
+        doubled: { $$_expression: 'MULTIPLY', args: ['@userId', 2] },
+      },
+      aggregates: {
+        total: { $$_aggregate: 'SUM', column: '@amount' },
+        most: { $$_aggregate: 'MAX', column: '@amount' },
+      },
+      projection: { '@userId': true, '@total': 'total' },
+      where: { '@amount': { $lt: '@doubled' } },
+      having: { '@total': { $gt: '@most' } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT "userId" AS "userId", SUM("amount") AS "total" FROM "orders" WHERE "amount" < ("userId" * :p_0:) GROUP BY "userId" HAVING SUM("amount") > MAX("amount")',
+        params: { p_0: 2 },
+      },
+      postgres: {
+        sql:
+          'SELECT "userId" AS "userId", SUM("amount") AS "total" FROM "orders" WHERE "amount" < ("userId" * :p_0:) GROUP BY "userId" HAVING SUM("amount") > MAX("amount")',
+        params: { p_0: 2 },
+      },
+      maria: {
+        sql:
+          'SELECT `userId` AS `userId`, SUM(`amount`) AS `total` FROM `orders` WHERE `amount` < (`userId` * :p_0:) GROUP BY `userId` HAVING SUM(`amount`) > MAX(`amount`)',
+        params: { p_0: 2 },
+      },
+    },
+  },
+  {
+    // The UPDATE scope holds the expression keys, so a value naming one
+    // read as a column the table lacks.
+    name: 'UPDATE WHERE value naming an expression alias compares its body',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'qty'],
+      expressions: { d: { $$_expression: 'ADD', args: ['@qty', 1] } },
+      data: { qty: 0 },
+      where: { '@id': { $in: ['@d', 5] } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'UPDATE "users" SET "qty" = :p_0: WHERE "id" IN (("qty" + :p_1:), :p_2:)',
+        params: { p_0: 0, p_1: 1, p_2: 5 },
+      },
+      postgres: {
+        sql:
+          'UPDATE "users" SET "qty" = :p_0: WHERE "id" IN (("qty" + :p_1:), :p_2:)',
+        params: { p_0: 0, p_1: 1, p_2: 5 },
+      },
+      maria: {
+        sql:
+          'UPDATE `users` SET `qty` = :p_0: WHERE `id` IN ((`qty` + :p_1:), :p_2:)',
+        params: { p_0: 0, p_1: 1, p_2: 5 },
+      },
+    },
+  },
+  {
     // COUNT is a bigint on Postgres and MariaDB, so the projected value is
     // cast to reach JS as a number. The cast goes around the whole call,
     // DISTINCT included; HAVING and ORDER BY compare the count itself.

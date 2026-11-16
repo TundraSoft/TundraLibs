@@ -1205,6 +1205,7 @@ export abstract class AbstractTranslator {
             scope,
             params,
             hasJoins,
+            context,
           ),
         );
         continue;
@@ -1223,6 +1224,7 @@ export abstract class AbstractTranslator {
           scope,
           params,
           hasJoins,
+          context,
         ),
       );
     }
@@ -1541,9 +1543,9 @@ export abstract class AbstractTranslator {
   /**
    * Build the column scope for a SELECT — base columns (qualified with
    * BASE_ALIAS when joins are present) plus joined columns. Declared
-   * expression keys are not in it: a filter key naming one is replaced by
-   * its body through the filter context, and an `@key` as an expression
-   * argument or a filter value is not a column, so it binds as text.
+   * expression keys are not in it: a filter key or value naming one is
+   * replaced by its body through the filter context, and an `@key` as an
+   * expression argument is not a column, so it binds as text.
    */
   private __buildScope(q: Query<'SELECT'>, hasJoins: boolean): string[] {
     const scope: string[] = [];
@@ -2250,23 +2252,21 @@ export abstract class AbstractTranslator {
     scope: string[],
     params: Parameters,
     hasJoins: boolean,
+    context?: FilterContext,
   ): string {
     if (rhs === null) return `${colSql} IS NULL`;
+    const render = (v: unknown) =>
+      this.__renderOperatorValue(v, scope, params, hasJoins, context);
     if (Array.isArray(rhs)) {
-      const placeholders = rhs
-        .map((v) => this.__renderOperatorValue(v, scope, params, hasJoins))
-        .join(', ');
-      return `${colSql} IN (${placeholders})`;
+      return `${colSql} IN (${rhs.map(render).join(', ')})`;
     }
     if (typeof rhs !== 'object' || rhs instanceof Date) {
-      return `${colSql} = ${
-        this.__renderOperatorValue(rhs, scope, params, hasJoins)
-      }`;
+      return `${colSql} = ${render(rhs)}`;
     }
     const opParts: string[] = [];
     for (const [op, val] of Object.entries(rhs)) {
       opParts.push(
-        this.__emitOperator(colSql, op, val, scope, params, hasJoins),
+        this.__emitOperator(colSql, op, val, scope, params, hasJoins, context),
       );
     }
     return opParts.join(' AND ');
@@ -2289,21 +2289,20 @@ export abstract class AbstractTranslator {
     scope: string[],
     params: Parameters,
     hasJoins: boolean,
+    context?: FilterContext,
   ): string {
+    const render = (v: unknown) =>
+      this.__renderOperatorValue(v, scope, params, hasJoins, context);
     if (op === '$null') {
       return val ? `${colSql} IS NULL` : `${colSql} IS NOT NULL`;
     }
     if (op === '$between') {
       const [lo, hi] = val as [unknown, unknown];
-      const loSql = this.__renderOperatorValue(lo, scope, params, hasJoins);
-      const hiSql = this.__renderOperatorValue(hi, scope, params, hasJoins);
-      return `${colSql} BETWEEN ${loSql} AND ${hiSql}`;
+      return `${colSql} BETWEEN ${render(lo)} AND ${render(hi)}`;
     }
     if (op === '$in' || op === '$nin') {
       const arr = val as unknown[];
-      const placeholders = arr
-        .map((v) => this.__renderOperatorValue(v, scope, params, hasJoins))
-        .join(', ');
+      const placeholders = arr.map(render).join(', ');
       const opSql = op === '$in' ? 'IN' : 'NOT IN';
       return `${colSql} ${opSql} (${placeholders})`;
     }
@@ -2319,19 +2318,13 @@ export abstract class AbstractTranslator {
     // ESCAPE clause, so it matches verbatim: a string literal before it is
     // bound, a column ref or expression in SQL.
     if (op === '$startsWith' || op === '$endsWith' || op === '$contains') {
-      const ref = this.__valueColumnRef(val, scope, hasJoins);
+      const ref = this.__aliasValue(val, scope, params, hasJoins, context) ??
+        this.__valueColumnRef(val, scope, hasJoins);
       if (ref !== null || this.__isExpressionNode(val)) {
-        const operand = this._likeEscapeOperand(
-          ref ?? this.__renderOperatorValue(val, scope, params, hasJoins),
-        );
+        const operand = this._likeEscapeOperand(ref ?? render(val));
         return `${emit(colSql, operand)}${this._likeEscapeClause()}`;
       }
-      if (typeof val !== 'string') {
-        return emit(
-          colSql,
-          this.__renderOperatorValue(val, scope, params, hasJoins),
-        );
-      }
+      if (typeof val !== 'string') return emit(colSql, render(val));
       const escaped = val.replace(
         LIKE_WILDCARDS,
         (ch) => `${LIKE_ESCAPE_CHAR}${ch}`,
@@ -2339,10 +2332,29 @@ export abstract class AbstractTranslator {
       const valueSql = this._parameterize(escaped, params);
       return `${emit(colSql, valueSql)}${this._likeEscapeClause()}`;
     }
-    return emit(
-      colSql,
-      this.__renderOperatorValue(val, scope, params, hasJoins),
-    );
+    return emit(colSql, render(val));
+  }
+
+  /**
+   * A filter value `'@alias'` naming an alias whose filter key
+   * {@link __resolveFilterKey} substitutes: the alias's SQL body, so the
+   * comparison reads its value; `null` for any other value. The alias
+   * wins over a column, as it does for a key.
+   */
+  private __aliasValue(
+    value: unknown,
+    scope: string[],
+    params: Parameters,
+    hasJoins: boolean,
+    context?: FilterContext,
+  ): string | null {
+    if (typeof value !== 'string' || !value.startsWith('@')) return null;
+    const name = value.slice(1);
+    const named = (map?: Record<string, unknown>) => !!map && name in map;
+    if (!named(context?.aggregates) && !named(context?.expressions)) {
+      return null;
+    }
+    return this.__resolveFilterKey(value, scope, params, hasJoins, context);
   }
 
   /**
@@ -2372,21 +2384,25 @@ export abstract class AbstractTranslator {
 
   /**
    * Render an operator's right-hand value as SQL: expression objects are
-   * translated, `@x` strings naming a column in `scope` become qualified
-   * column refs (via {@link AbstractTranslator.__valueColumnRef}), and
-   * everything else is parameterised.
+   * translated, `@x` strings naming an alias of `context` become its body
+   * (via {@link AbstractTranslator.__aliasValue}), those naming a column in
+   * `scope` become qualified column refs (via
+   * {@link AbstractTranslator.__valueColumnRef}), and everything else is
+   * parameterised.
    */
   private __renderOperatorValue(
     value: unknown,
     scope: string[],
     params: Parameters,
     hasJoins: boolean,
+    context?: FilterContext,
   ): string {
     if (value === null) return 'NULL';
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, scope, params, hasJoins);
     }
-    return this.__valueColumnRef(value, scope, hasJoins) ??
+    return this.__aliasValue(value, scope, params, hasJoins, context) ??
+      this.__valueColumnRef(value, scope, hasJoins) ??
       this._parameterize(value, params);
   }
 

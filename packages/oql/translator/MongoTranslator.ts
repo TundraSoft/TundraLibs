@@ -337,14 +337,11 @@ const LIKE_OPERATORS: ReadonlySet<string> = new Set([
 const NO_COLUMNS: ReadonlySet<string> = new Set();
 
 /**
- * The column scope of an UPDATE or DELETE, carrying the statement's
- * declared expressions. A `where` key naming one compares its value inside
- * `$expr`, since a query filter sees no computed field. The SQL translators
- * also put the expression keys in the scope, so an `@key` value or
- * expression argument there names a column the table lacks and the
- * database refuses it; here the translator throws instead.
+ * A column scope carrying the statement's declared expressions. A `where`
+ * value `@name` naming one compares that expression's value inside
+ * `$expr`, as the SQL translators compare its body.
  */
-class WriteScope extends Set<string> {
+class ExpressionScope extends Set<string> {
   public readonly expressions: Readonly<Record<string, Expressions>>;
 
   constructor(
@@ -366,6 +363,16 @@ class WriteScope extends Set<string> {
       : undefined;
   }
 }
+
+/**
+ * The column scope of an UPDATE or DELETE. A `where` key naming a declared
+ * expression compares its value inside `$expr`, since a query filter sees
+ * no computed field. The SQL translators also put the expression keys in
+ * the scope, so an `@key` expression argument there names a column the
+ * table lacks and the database refuses it; here the translator throws
+ * instead.
+ */
+class WriteScope extends ExpressionScope {}
 
 /**
  * The aggregates whose `distinct` MongoDB has to compute in two steps,
@@ -572,8 +579,9 @@ export class MongoTranslator {
    * @throws {TypeError} When `q` is not a valid `UPDATE` query.
    * @throws {@link DialectUnsupportedError} For an `$exists` / `$nexists`
    *   filter — `updateMany` takes a query filter, not a pipeline.
-   * @throws {@link OqlError} `INVALID_COLUMN_REF` when a value or an
-   *   expression argument names a declared expression, which is no column.
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when an expression
+   *   argument names a declared expression, which is no column. A `where`
+   *   value naming one compares its value, as a key does.
    */
   public update(q: Query<'UPDATE'>): MongoUpdateAction {
     assertUpdate(q);
@@ -597,8 +605,9 @@ export class MongoTranslator {
    * @throws {TypeError} When `q` is not a valid `DELETE` query.
    * @throws {@link DialectUnsupportedError} For an `$exists` / `$nexists`
    *   filter — `deleteMany` takes a query filter, not a pipeline.
-   * @throws {@link OqlError} `INVALID_COLUMN_REF` when a value or an
-   *   expression argument names a declared expression, which is no column.
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when an expression
+   *   argument names a declared expression, which is no column. A `where`
+   *   value naming one compares its value, as a key does.
    */
   public delete(q: Query<'DELETE'>): MongoDeleteAction {
     assertDelete(q);
@@ -810,7 +819,10 @@ export class MongoTranslator {
       params: {
         collection: q.table,
         filter: q.where
-          ? this.__translateFilter(q.where, this.__columnsOf(q))
+          ? this.__translateFilter(
+            q.where,
+            new ExpressionScope(this.__columnsOf(q), q.expressions),
+          )
           : {},
       },
     };
@@ -1277,8 +1289,9 @@ export class MongoTranslator {
       q.expressions,
     );
     const deferMatch = filterTouchesJoins || filterTouchesExpr;
+    const whereScope = new ExpressionScope(columns, q.expressions);
     if (q.where && !deferMatch) {
-      this.__pushMatch(pipeline, q.where, columns);
+      this.__pushMatch(pipeline, q.where, whereScope);
     }
     if (q.joins) {
       for (const [alias, def] of Object.entries(q.joins)) {
@@ -1312,7 +1325,7 @@ export class MongoTranslator {
     // AFTER the expressions $addFields (alias fields exist), but BEFORE any
     // $group, mirroring SQL's WHERE-then-GROUP-BY evaluation order.
     if (q.where && deferMatch) {
-      this.__pushMatch(pipeline, q.where, columns);
+      this.__pushMatch(pipeline, q.where, whereScope);
     }
     const aggregates = this.__aggregatesOf(q);
     const grouped = Object.keys(aggregates).length > 0;
@@ -1405,7 +1418,13 @@ export class MongoTranslator {
       }
     }
     if (q.having) {
-      this.__pushMatch(pipeline, q.having, columns);
+      // After `$group` each aggregate is a field, so a value naming one
+      // reads it, as a key does.
+      this.__pushMatch(
+        pipeline,
+        q.having,
+        new Set([...columns, ...Object.keys(aggregates)]),
+      );
     }
     // $sort before $project: orderBy names source fields, which an
     // alias or an unprojected column would no longer have after it.
@@ -1864,11 +1883,11 @@ export class MongoTranslator {
   }
 
   /**
-   * Walk a filter and return `true` if any key references a declared
-   * expression alias (`@<exprName>`). Such a key must be matched AFTER the
-   * `$addFields` expressions stage materialises the field — the aggregate
-   * builder uses this to defer the `$match`. Expression aliases appear only
-   * in key position (a WHERE alias filter), so values aren't scanned.
+   * Walk a filter and return `true` if any key or value references a
+   * declared expression alias (`@<exprName>`). Such a key must be matched
+   * AFTER the `$addFields` expressions stage materialises the field — the
+   * aggregate builder uses this to defer the `$match`. A value compares the
+   * expression itself, and is deferred with the keys.
    */
   private __filterReferencesExpressions(
     filter: QueryFilter | undefined,
@@ -1892,6 +1911,15 @@ export class MongoTranslator {
         ) {
           return true;
         }
+        // Or a value naming one, alone, in a list or under an operator.
+        const named = (v: unknown): boolean =>
+          (typeof v === 'string' && v.startsWith('@') &&
+            names.has(v.slice(1))) ||
+          (Array.isArray(v) && v.some(named));
+        if (
+          named(value) || (typeof value === 'object' && value !== null &&
+            Object.values(value).some(named))
+        ) return true;
       }
       return false;
     };
@@ -2061,11 +2089,7 @@ export class MongoTranslator {
         : undefined;
       if (declared !== undefined) {
         const field = this.__translateExpression(declared, columns);
-        for (
-          const [op, operand] of Object.entries(this.__conditionOps(value))
-        ) {
-          exprs.push(this.__conditionToExpr(field, op, operand, columns));
-        }
+        exprs.push(...this.__aliasConditions(field, value, columns));
         continue;
       }
       // Per-column condition; key looks like `@col`, `@Alias.@col`, or a
@@ -2173,6 +2197,10 @@ export class MongoTranslator {
     const clashes: Record<string, unknown>[] = [];
     const lhs = `$${fieldPath}`;
     if (rhs === null) return { spec: { [fieldPath]: null }, exprs, clashes };
+    if (this.__namesExpression(rhs, columns)) {
+      exprs.push(...this.__aliasConditions(lhs, rhs, columns));
+      return { spec: {}, exprs, clashes };
+    }
     if (Array.isArray(rhs)) {
       // Implicit $in. A column ref inside the list cannot be expressed in a
       // Mongo $match — reject rather than silently treat it as a literal.
@@ -2310,6 +2338,49 @@ export class MongoTranslator {
       mergeLiteral({ [fieldPath]: { $nin: [...excluded, null] } });
     }
     return { spec: out, exprs, clashes };
+  }
+
+  /**
+   * Whether a filter value holds an `@name` naming one of the declared
+   * expressions of `columns`, alone, in a list or as an operator's value.
+   */
+  private __namesExpression(
+    value: unknown,
+    columns: ReadonlySet<string>,
+  ): boolean {
+    if (!(columns instanceof ExpressionScope)) return false;
+    const names = (v: unknown): boolean =>
+      typeof v === 'string' && v.startsWith('@') &&
+      columns.expressionAt(v) !== undefined;
+    const inList = (v: unknown) => Array.isArray(v) ? v.some(names) : names(v);
+    return inList(value) ||
+      (typeof value === 'object' && value !== null &&
+        Object.values(value).some(inList));
+  }
+
+  /**
+   * The `$expr` comparisons of `field` against a filter value, each
+   * `@name` naming a declared expression of `columns` replaced by that
+   * expression, so it compares the expression's value.
+   */
+  private __aliasConditions(
+    field: unknown,
+    value: unknown,
+    columns: ReadonlySet<string>,
+  ): unknown[] {
+    const node = (v: unknown): unknown =>
+      columns instanceof ExpressionScope && typeof v === 'string' &&
+        v.startsWith('@')
+        ? columns.expressionAt(v) ?? v
+        : v;
+    return Object.entries(this.__conditionOps(value)).map(([op, operand]) =>
+      this.__conditionToExpr(
+        field,
+        op,
+        Array.isArray(operand) ? operand.map(node) : node(operand),
+        columns,
+      )
+    );
   }
 
   /**

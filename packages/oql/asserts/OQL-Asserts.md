@@ -128,7 +128,7 @@ const valid = isSelect(query); // Returns boolean
 - `columns` is a non-empty array; **every column referenced anywhere in the query** (WHERE, joins, aggregates, expressions, orderBy, …) must be listed here.
 - `projection` maps `@`-prefixed column identifiers (or `@expressionKey` / `@aggregateKey` / `@JoinAlias.@col`) to alias strings or `true` for passthrough. **Alias values must not start with `@`** — the alias is the output column name, not a column reference.
 - WHERE uses valid filter operators; aggregates are rejected (use HAVING).
-- WHERE may reference pre-declared `expressions` by their `@key`; the translator substitutes the expression body.
+- WHERE may reference pre-declared `expressions` by their `@key`, as a key or a value; the translator substitutes the expression body. A WHERE value naming an aggregate, or a HAVING value naming an expression, is rejected as the key would be.
 - JOIN conditions reference declared join columns.
 - Aggregates have valid `$$_aggregate` discriminators and column refs.
 - ORDER BY keys must be projection keys, declared `columns`, or a joined column written `@Alias.@col`, where `Alias` is a join of the query and `col` is in that join's `columns`. An unprojected base column is rejected with `distinct: true`, `aggregates`, or a projected join alias, where SQL requires the ORDER BY term to be selected or grouped. An unprojected joined column is rejected only with `distinct: true`.

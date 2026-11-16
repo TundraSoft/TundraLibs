@@ -300,6 +300,38 @@ const validateProjectionEntry = (
 };
 
 /**
+ * The first filter value that is one of `refs` (`'@name'` keys), alone, in
+ * a list or as an operator's value, at any `$and` / `$or` depth. Such a
+ * value reads the alias, so it is refused where a key naming the alias is.
+ *
+ * @internal
+ */
+const findAliasValue = (
+  filter: unknown,
+  refs: string[],
+): string | undefined => {
+  const named = (v: unknown): string | undefined =>
+    typeof v === 'string' && refs.includes(v)
+      ? v
+      : Array.isArray(v)
+      ? v.map(named).find((r) => r !== undefined)
+      : undefined;
+  for (const [key, value] of Object.entries(Object(filter))) {
+    const found = key === '$and' || key === '$or'
+      ? (value as unknown[]).map((f) => findAliasValue(f, refs))
+        .find((r) => r !== undefined)
+      : key.startsWith('$')
+      ? undefined
+      : named(value) ??
+        (typeof value === 'object' && value !== null
+          ? Object.values(value).map(named).find((r) => r !== undefined)
+          : undefined);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
+/**
  * Validates `query.orderBy`: each key references a projection key, a
  * joined column, or a declared base column; each value is `'ASC'` or
  * `'DESC'`. An unprojected base column is rejected under `distinct` or an
@@ -487,6 +519,12 @@ export const assertSelectQuery: <
         );
       }
     }
+    const aggregateValue = findAliasValue(query.where, aggregateKeys);
+    if (aggregateValue !== undefined) {
+      throw new TypeError(
+        `Invalid SELECT query: 'where' cannot reference aggregate '${aggregateValue}' as a value. Use 'having' for aggregate filters`,
+      );
+    }
   }
 
   if (query.having !== undefined) {
@@ -511,6 +549,15 @@ export const assertSelectQuery: <
         `Invalid SELECT query: 'having' is invalid - ${
           error instanceof Error ? error.message : String(error)
         }`,
+      );
+    }
+    const expressionValue = findAliasValue(
+      query.having,
+      expressionKeys.filter((k) => !aggregateKeys.includes(k)),
+    );
+    if (expressionValue !== undefined) {
+      throw new TypeError(
+        `Invalid SELECT query: 'having' cannot reference expression '${expressionValue}' as a value. 'having' reads aggregates only, as its keys do`,
       );
     }
   }
