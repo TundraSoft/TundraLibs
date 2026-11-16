@@ -440,5 +440,19 @@ describe('norm temporal — live SQLite', () => {
       'is not a valid date',
     );
     asserts.assertEquals(impossible.code, 'TEMPORAL_PAST');
+
+    // And text that is not ISO 8601, which the runtime reads in the
+    // host's zone.
+    const loose = await asserts.assertRejects(
+      () =>
+        repo.insert({
+          Name: 'Platinum',
+          Fees: 700,
+          EffectiveFrom: 'Dec 31 2099' as unknown as Date,
+        }),
+      NormQueryError,
+      'is not a valid date',
+    );
+    asserts.assertEquals(loose.code, 'TEMPORAL_PAST');
   });
 });

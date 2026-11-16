@@ -137,8 +137,8 @@ carries. A date-time string that names no offset
 so it is the same instant on every host; a string that names an offset
 (`+05:30`, `+0530` or `+05`) keeps it. A string that names a day or
 time no calendar has, such as `'2026-02-30'` or
-`'2026-01-15T24:00:00'`, fails validation. Any other format is parsed
-as the runtime's `Date` parses it.
+`'2026-01-15T24:00:00'`, fails validation, and so does text in any
+other format, such as `'Feb 30 2026'` or `'01/15/2026'`.
 A filter value on these columns and on `time` is converted too: see
 [Date and time values](NORM-Querying.md#date-and-time-values).
 [Dates and time zones](NORM-Dates.md) has the native type on each

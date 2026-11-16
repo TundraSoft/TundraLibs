@@ -52,6 +52,16 @@ export function asUtc(v: unknown): unknown {
 }
 
 /**
+ * Whether `text` is a date or date-time as {@link asUtc} reads it:
+ * `YYYY-MM-DD`, alone or with a time, a fraction and `Z` or an offset.
+ * Other text, such as `'Feb 30 2026'`, `new Date()` reads its own way on
+ * each runtime, in the host's zone.
+ */
+export function isDateText(text: string): boolean {
+  return DATE_TEXT.test(text);
+}
+
+/**
  * Whether `text` starts with a day or clock no calendar has that
  * `new Date()` moves to a later day instead of refusing: `2026-02-30`
  * is read as March 2, and `24:00` as the next midnight.

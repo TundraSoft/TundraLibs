@@ -146,6 +146,33 @@ describe('norm.guardians (cell guardians + validateRows)', () => {
     }
   });
 
+  it('date: text that is not ISO 8601 is rejected, under a guard() too', () => {
+    // The runtime reads these in the host's zone; the first as March 2.
+    const loose = [
+      'Feb 30 2026',
+      'Jan 15 2026 10:00',
+      '2026/01/15',
+      '01/15/2026',
+    ];
+    const specs = [
+      Column.date().spec,
+      Column.datetime().spec,
+      Column.timestamp().spec,
+      Column.timestamptz().spec,
+      Specs.when,
+    ];
+    for (const spec of specs) {
+      const g = buildCellGuardian(spec);
+      for (const text of loose) {
+        asserts.assertThrows(
+          () => g.parse(text),
+          GuardianError,
+          `Cannot coerce "${text}" to Date`,
+        );
+      }
+    }
+  });
+
   it('date: an offset with no colon is the same instant', () => {
     const g = buildCellGuardian(Column.timestamptz().spec);
     const at = new Date('2025-06-01T10:00:00Z');

@@ -13,6 +13,7 @@ changelog has those.
   - [`time()` reads a string](#time-reads-a-string)
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
+  - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
@@ -89,6 +90,22 @@ March 2. Such a string now fails:
 A `Date` is never refused, and a row an earlier version stored keeps the
 shifted day. Validate a date that arrives as text before it reaches norm,
 or catch the error.
+
+### Date text that is not ISO 8601 is refused
+
+A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`
+column now fails validation, with the column's path, for text that is
+not an ISO 8601 date or date-time, such as `'Feb 30 2026'`,
+`'Jan 15 2026 10:00'` or `'01/15/2026'`. A supplied `EffectiveFrom` in
+that form throws a `NormQueryError` with code `TEMPORAL_PAST`. Earlier
+versions handed the text to the runtime's `Date` parser, which read it
+in the host's zone and moved `'Feb 30 2026'` to March, so the stored
+value depended on the host. A column with its own `.guard()` refuses it
+before the guard runs. A `Date` and `time()` columns are unchanged, and
+a filter value in that form still reaches the engine as it is, as
+[Date and time values](NORM-Querying.md#date-and-time-values) says.
+Send `YYYY-MM-DD`, or that with a time and an optional offset, or a
+`Date`.
 
 ### A MongoDB comparison never matches NULL
 
