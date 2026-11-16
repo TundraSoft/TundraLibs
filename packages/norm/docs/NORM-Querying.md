@@ -241,15 +241,16 @@ converts it, so the same filter matches the same rows on every engine:
 This applies to the equality shorthand, a list of values, `$eq`, `$ne`,
 `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, and `$between`, on the
 entity's own columns and through `'@Alias.@col'`. `null`, a column
-reference, an expression, and a string that does not start with an
-ISO 8601 date (on `time()`, one that is not a time) reach the engine
-unchanged. Nothing inside a
+reference, an expression, and on `time()` a string that is not a time
+reach the engine unchanged. Nothing inside a
 [hand-written `$exists`](#hand-written-exists--nexists-advanced) is
 converted.
 
-A date string that names a day or time no calendar has, such as
-`'2026-02-30'` or `'2026-01-15T24:00:00'`, throws a `NormQueryError`
-with code `INVALID_DATE`, as a write of it fails validation.
+On a date column, a string that is not an ISO 8601 date or date-time,
+such as `'Feb 30 2026'` or `'tomorrow'`, or that names a day or time no
+calendar has, such as `'2026-02-30'`, `'2026-13-45'` or
+`'2026-01-15T24:00:00'`, throws a `NormQueryError` with code
+`INVALID_DATE`, as a write of it fails validation.
 
 On a `date()` column a value stands for its UTC day, whatever its time:
 

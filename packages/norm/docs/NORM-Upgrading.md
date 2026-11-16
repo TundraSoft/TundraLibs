@@ -128,11 +128,14 @@ versions handed the text to the runtime's `Date` parser, which read it
 in the host's zone and moved `'Feb 30 2026'` to March, so the stored
 value depended on the host. A column with its own `.guard()` refuses it
 before the guard runs, and a literal default in that form fails
-`Entity()` with `NormDefinitionError`. A `Date` and `time()` columns are unchanged, and
-a filter value in that form still reaches the engine as it is, as
-[Date and time values](NORM-Querying.md#date-and-time-values) says.
-Send `YYYY-MM-DD`, or that with a time and an optional offset, or a
-`Date`.
+`Entity()` with `NormDefinitionError`. A filter value in that form on
+one of those columns, or an `@AsOf` in it, throws a `NormQueryError`
+with code `INVALID_DATE`, and so does text in the ISO 8601 shape that is
+no date, such as `'2026-13-45'`. Earlier versions sent both to the
+engine, and the engines disagreed: `'Feb 30 2026'` with `$gte` matched
+no rows on SQLite and MongoDB, every row on MariaDB, and failed on
+Postgres. A `Date` and `time()` columns are unchanged. Send
+`YYYY-MM-DD`, or that with a time and an optional offset, or a `Date`.
 
 ### A MongoDB comparison never matches NULL
 

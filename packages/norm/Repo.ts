@@ -210,10 +210,6 @@ function jsonDate(v: unknown): unknown {
   return typeof v === 'string' ? new Date(asUtc(v) as string) : v;
 }
 
-/** A date, alone or followed by a time: the strings a filter on a date
- * column converts. */
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/;
-
 /** Filter operators that compare the column with one value. */
 const VALUE_OPERATORS = new Set(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte']);
 
@@ -226,24 +222,30 @@ type TemporalRef = { entityKey: string; col: string; plainType: string };
 /**
  * One filter value for a temporal column, in the form a write stores:
  * the canonical time of day for `TIME`, a `Date` for the date types, its
- * UTC day for `DATE`. Anything a write would not read as one (`null`, a
- * column reference, an expression, other text) comes back as it came.
+ * UTC day for `DATE`. Anything else a write would not read as one
+ * (`null`, a column reference, an expression) comes back as it came.
  *
- * @throws {@link NormQueryError} `INVALID_DATE` when a date string names
- *   a day or time no calendar has, which a write refuses too.
+ * @throws {@link NormQueryError} `INVALID_DATE` when a string on a date
+ *   column is not ISO 8601 or names a day or time no calendar has, which
+ *   a write refuses too.
  */
 function temporalValue(ref: TemporalRef, v: unknown): unknown {
   if (ref.plainType === 'TIME') return toTimeOfDay(v) ?? v;
   let d = v;
-  if (typeof v === 'string' && ISO_DATE.test(v)) {
-    if (rollsOver(v)) {
+  if (typeof v === 'string' && !v.startsWith('@')) {
+    d = new Date(asUtc(v));
+    const why = !isDateText(v)
+      ? 'it is not an ISO 8601 date or date-time'
+      : rollsOver(v) || Number.isNaN((d as Date).getTime())
+      ? 'no calendar has that day or time'
+      : undefined;
+    if (why !== undefined) {
       throw new NormQueryError(
         `Column '${ref.col}' on entity '${ref.entityKey}' cannot be ` +
-          `filtered by '${v}': no calendar has that day or time.`,
+          `filtered by '${v}': ${why}.`,
         { entity: ref.entityKey, subject: ref.col, code: 'INVALID_DATE' },
       );
     }
-    d = new Date(asUtc(v));
   }
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return v;
   return ref.plainType === 'DATE' ? utcDay(d) : d;
