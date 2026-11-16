@@ -1088,7 +1088,14 @@ const CASES: Case[] = [
           {
             $addFields: {
               nick: { $ifNull: ['$nickname', '$name', 'anon'] },
-              blank: { $cond: [{ $eq: ['$name', ''] }, null, '$name'] },
+              // NULLIF returns the field itself, missing when it is: the
+              // `$ifNull` keeps the key in the row with null, as on SQL.
+              blank: {
+                $ifNull: [
+                  { $cond: [{ $eq: ['$name', ''] }, null, '$name'] },
+                  null,
+                ],
+              },
               tier: {
                 $switch: {
                   branches: [
@@ -1604,12 +1611,161 @@ const CASES: Case[] = [
             $group: {
               _id: { userId: '$userId' },
               total: { $sum: '$amount' },
+              // `$sum` of no values is 0; SQL's SUM is NULL, and so is
+              // `$max` exactly then.
+              __sum_total: { $max: '$amount' },
             },
           },
           // Flatten the grouped key back to top level so the subsequent
           // $project sees a plain `userId` field.
-          { $addFields: { userId: '$_id.userId' } },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+              userId: '$_id.userId',
+            },
+          },
           { $project: { userId: 1, total: '$total', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // SQL returns one row for an ungrouped aggregate over no rows, COUNT 0
+    // and SUM NULL; `$group` alone would return none.
+    name: 'SELECT ungrouped aggregates → $facet, one row over no rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      where: { '@userId': 7 },
+      aggregates: {
+        n: { $$_aggregate: 'COUNT' },
+        total: { $$_aggregate: 'SUM', column: '@amount' },
+      },
+      projection: { '@n': true, '@total': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          { $match: { userId: 7 } },
+          {
+            $facet: {
+              rows: [{
+                $group: {
+                  _id: {},
+                  n: { $sum: 1 },
+                  total: { $sum: '$amount' },
+                  __sum_total: { $max: '$amount' },
+                },
+              }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, n: 0, total: null },
+                }],
+              },
+            },
+          },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+            },
+          },
+          { $project: { n: 1, total: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The SUM's helper field takes another name when an aggregate has its.
+    name: 'SELECT SUM beside an aggregate named like its helper field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      aggregates: {
+        s: { $$_aggregate: 'SUM', column: '@amount' },
+        __sum_s: { $$_aggregate: 'MAX', column: '@amount' },
+      },
+      projection: { '@userId': true, '@s': true, '@__sum_s': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $group: {
+              _id: { userId: '$userId' },
+              s: { $sum: '$amount' },
+              ___sum_s: { $max: '$amount' },
+              __sum_s: { $max: '$amount' },
+            },
+          },
+          {
+            $addFields: {
+              s: { $cond: [{ $gt: ['$___sum_s', null] }, '$s', null] },
+              userId: '$_id.userId',
+            },
+          },
+          { $project: { userId: 1, s: 1, __sum_s: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // A CASE result that is a column is missing where the column is; the
+    // `$ifNull` keeps the key in the row with null, as on SQL.
+    name: 'SELECT an expression that can be missing → $ifNull to null',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'nick', 'role'],
+      expressions: {
+        shown: {
+          $$_expression: 'CASE',
+          args: { cases: [{ when: { '@role': 'a' }, then: '@nick' }] },
+        },
+      },
+      projection: { '@id': true, '@shown': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              shown: {
+                $ifNull: [{
+                  $switch: {
+                    branches: [{
+                      case: {
+                        $and: [{ $eq: ['$role', 'a'] }, {
+                          $gt: ['$role', null],
+                        }],
+                      },
+                      then: '$nick',
+                    }],
+                    default: null,
+                  },
+                }, null],
+              },
+            },
+          },
+          { $project: { id: 1, shown: 1 } },
         ],
       },
     },
@@ -2879,15 +3035,37 @@ const CASES: Case[] = [
       params: {
         collection: 'scores',
         pipeline: [
+          // Ungrouped: `$facet` emits one row even when nothing matched,
+          // the empty sets of SQL's row over no rows.
           {
-            $group: {
-              _id: {},
-              s: { $addToSet: '$score' },
-              a: { $addToSet: '$score' },
-              lo: { $min: '$score' },
+            $facet: {
+              rows: [{
+                $group: {
+                  _id: {},
+                  s: { $addToSet: '$score' },
+                  a: { $addToSet: '$score' },
+                  lo: { $min: '$score' },
+                },
+              }],
             },
           },
-          { $addFields: { s: { $sum: '$s' }, a: { $avg: '$a' } } },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, s: [], a: [], lo: null },
+                }],
+              },
+            },
+          },
+          {
+            $addFields: {
+              s: {
+                $cond: [{ $gt: [{ $max: '$s' }, null] }, { $sum: '$s' }, null],
+              },
+              a: { $avg: '$a' },
+            },
+          },
           { $project: { s: '$s', a: '$a', lo: '$lo', _id: 0 } },
         ],
       },
@@ -3148,7 +3326,20 @@ const CASES: Case[] = [
           },
           { $match: { __exists_0: { $size: 0 } } },
           { $unset: ['__exists_0'] },
-          { $group: { _id: {}, __count__: { $sum: 1 } } },
+          {
+            $facet: {
+              rows: [{ $group: { _id: {}, __count__: { $sum: 1 } } }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, __count__: 0 },
+                }],
+              },
+            },
+          },
           { $project: { __count__: 1 } },
         ],
       },
@@ -3447,9 +3638,20 @@ const CASES: Case[] = [
         collection: 'orders',
         pipeline: [
           {
-            $group: { _id: { userId: '$userId' }, total: { $sum: '$amount' } },
+            $group: {
+              _id: { userId: '$userId' },
+              total: { $sum: '$amount' },
+              __sum_total: { $max: '$amount' },
+            },
           },
-          { $addFields: { userId: '$_id.userId' } },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+              userId: '$_id.userId',
+            },
+          },
           { $project: { userId: 1, total: '$total', _id: 0 } },
           {
             $merge: {
