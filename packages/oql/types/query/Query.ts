@@ -374,12 +374,20 @@ export type Query<
             unique?: boolean;
             /**
              * Optional `WHERE` for partial indexes — only rows
-             * matching this filter are included. A bare `'@name'`
-             * expression argument is read as a column, and a
-             * value-position `'@name'` is a column when `name` is an
-             * indexed column, a filter key or such an argument.
+             * matching this filter are included. Without
+             * `tableColumns`, a bare `'@name'` expression argument
+             * is read as a column, and a value-position `'@name'`
+             * is a column when `name` is an indexed column, a
+             * filter key or such an argument.
              */
             where?: QueryFilter<PT>;
+            /**
+             * The table's columns, name → {@link ColumnDefinition},
+             * as `CREATE_TABLE` takes them. When set, `columns` and
+             * every `where` key must name one, and a `'@name'` in
+             * `where` is a column exactly when `name` is declared.
+             */
+            tableColumns?: Record<keyof PT, ColumnDefinition>;
             /** When true, don't error if the index already exists. */
             ifNotExists?: boolean;
           }

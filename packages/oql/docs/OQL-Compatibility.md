@@ -87,9 +87,13 @@ value changes between evaluations; a `DATE_ADD` on Postgres, which builds
 its interval from text and so is not IMMUTABLE; and any expression on
 MongoDB, whose partial filter takes no `$expr`. Each throws
 `DialectUnsupportedError` before the statement reaches the database.
-`DATE_TRUNC` on a `TIMESTAMPTZ` or `DATE` column still fails in the
-database on Postgres, which calls it not IMMUTABLE there; on a
-`TIMESTAMP` column it is accepted.
+So does a filter operator MongoDB refuses in a partial filter, named in
+the error: `$ne`, `$nin`, `$null: false`, `$null` beside another operator
+on the same column, `$like`, `$nlike`, `$ilike`, `$nilike`, `$startsWith`,
+`$endsWith` and `$contains`.
+`DATE_TRUNC` on a `TIMESTAMPTZ` or `DATE` column fails in the database on
+Postgres, which calls it not IMMUTABLE there, unless `tableColumns`,
+below, declares the column; on a `TIMESTAMP` column it is accepted.
 An `$exists` or `$nexists` in the `where` throws `OqlError`
 `EXISTS_NO_OUTER_TABLE` on every dialect, MariaDB included: no engine
 takes a subquery in an index predicate.
@@ -108,7 +112,8 @@ view definitions, and the `CREATE_INDEX` `TranslatedQuery` returns
 `params: {}`. Quote escaping and non-finite-number rejection follow
 the same rules as `CREATE_VIEW`.
 
-**A partial-index `where` has no column list**, so on Postgres and SQLite
+**A partial-index `where` has no column list unless `tableColumns` gives
+one**, so on Postgres and SQLite
 it takes a name as a column when the query uses it as one: an indexed
 column, a filter key, or a bare `'@name'` argument of an expression, as in
 `DATE_ADD('@start', …)`.
@@ -118,6 +123,46 @@ than binding as text. A value-position `'@name'`, as in
 `{ '@a': { $gt: '@b' } }`, is a column only when the predicate uses `b` in
 one of those ways; otherwise it is text. On MongoDB it is always text: a
 partial filter compares a field with a value, never with another field.
+
+**`tableColumns` declares the table's columns**, name →
+`ColumnDefinition` as `CREATE_TABLE` takes them. The `where` is then read
+as a `SELECT` on that table reads its own. The indexed `columns` and every
+`where` key must name a declared column, or the query throws the
+`TypeError` an unknown column gets there. A `'@name'` value or expression
+argument is a column exactly when `name` is declared; an undeclared one is
+text, or refused where the expression takes no text. A `'@col.@key'` key
+reads inside a declared JSON column.
+
+```ts
+import type { Query } from '@tundralibs/oql';
+
+export const index: Query<'CREATE_INDEX'> = {
+  type: 'CREATE_INDEX',
+  index: 'ux_orders_late',
+  table: 'orders',
+  columns: ['@customerId'],
+  unique: true,
+  // "shippedOn" > "dueOn"; without tableColumns, > the text '@dueOn'.
+  where: { '@shippedOn': { $gt: '@dueOn' } },
+  tableColumns: {
+    customerId: { type: 'INTEGER' },
+    shippedOn: { type: 'DATE' },
+    dueOn: { type: 'DATE' },
+  },
+};
+```
+
+MongoDB throws `DialectUnsupportedError` for a declared column used as a
+value: a partial filter cannot compare two fields. On Postgres a
+`DATE_TRUNC` of a column declared `TIMESTAMPTZ` or `DATE` is written as
+`date_trunc(unit, col, 'UTC')` or
+`date_trunc(unit, CAST(col AS TIMESTAMP))`, which an index accepts. Both
+truncate in UTC: the value a `SELECT` computes in a UTC session, here in
+every session. A `DATE_TRUNC` of a nested expression keeps the plain call.
+Postgres uses a partial index only for a query that repeats its condition,
+so it does not pick this one for a `SELECT` that renders the plain
+`date_trunc`. It still refuses a condition comparing a `TIMESTAMPTZ` side
+with a `DATE` or `TIMESTAMP` side, as not IMMUTABLE.
 
 **A `Date` in a Postgres view or index definition is an uncast literal**,
 such as `'2026-03-15T00:00:00.000Z'`, which Postgres reads as the column's

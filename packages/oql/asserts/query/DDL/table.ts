@@ -114,7 +114,7 @@ const rejectExtraProps = (
  * column identifier and each value is a valid column definition.
  * @internal
  */
-const validateColumnMap = (
+export const validateColumnMap = (
   cols: unknown,
   context: string,
 ): string[] => {

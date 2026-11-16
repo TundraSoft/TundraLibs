@@ -50,6 +50,39 @@ describe('oql.asserts.Query.DDL.Index', () => {
       });
     });
 
+    it('tableColumns: columns and where keys must name a declared column', () => {
+      const index = (extra: Record<string, unknown>) => ({
+        type: 'CREATE_INDEX',
+        index: 'idx_active_users',
+        table: 'users',
+        columns: ['@createdAt'],
+        tableColumns: {
+          createdAt: { type: 'TIMESTAMPTZ' },
+          status: { type: 'VARCHAR', length: 20 },
+        },
+        ...extra,
+      });
+      assertCreateIndex(index({ where: { '@status': 'active' } }));
+      asserts.assertThrows(
+        () => assertCreateIndex(index({ where: { '@state': 'active' } })),
+        TypeError,
+        'ColumnIdentifier "@state" is not in the provided column list',
+      );
+      asserts.assertThrows(
+        () => assertCreateIndex(index({ columns: ['@state'] })),
+        TypeError,
+        'ColumnIdentifier "@state" is not in the provided column list',
+      );
+      asserts.assertThrows(
+        () =>
+          assertCreateIndex(
+            index({ tableColumns: { createdAt: { type: 'NOPE' } } }),
+          ),
+        TypeError,
+        "column 'createdAt' has invalid SQL type 'NOPE'",
+      );
+    });
+
     it('valid: each method type', () => {
       for (
         const method of ['BTREE', 'HASH', 'GIN', 'GIST', 'BRIN', 'FULLTEXT']

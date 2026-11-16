@@ -495,9 +495,17 @@ export class PostgresTranslator extends AbstractTranslator {
   }
 
   /**
+   * Postgres types of the columns `tableColumns` declares, by quoted name,
+   * set while a partial-index `where` is rendered.
+   */
+  private __indexColumnTypes: Map<string, string | undefined> | undefined;
+
+  /**
    * `q.where` becomes a partial-index predicate and `q.method` a `USING`
    * clause — but only for a method in `PG_INDEX_METHODS`; anything else is
-   * dropped rather than passed through to the server.
+   * dropped rather than passed through to the server. In it, `DATE_TRUNC`
+   * of a column `q.tableColumns` declares TIMESTAMPTZ or DATE truncates in
+   * UTC, the form Postgres marks IMMUTABLE.
    *
    * @throws {@link DialectUnsupportedError} When `q.where` holds a
    *   `DATE_ADD`. Its interval is built from text, which Postgres does not
@@ -528,7 +536,17 @@ export class PostgresTranslator extends AbstractTranslator {
         );
       }
       const scope = this._indexScope(q);
-      sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
+      this.__indexColumnTypes = new Map(
+        Object.entries(q.tableColumns ?? {}).map(([name, def]) => [
+          this._quoteIdentifier(name),
+          SQL_TYPE_MAP[(def as { type: string }).type],
+        ]),
+      );
+      try {
+        sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
+      } finally {
+        this.__indexColumnTypes = undefined;
+      }
     }
     return sql;
   }
@@ -715,8 +733,20 @@ export class PostgresTranslator extends AbstractTranslator {
     return this._renderTypeSuffix(baseType, def);
   }
 
+  /**
+   * In a partial-index `where`, a column declared TIMESTAMPTZ or DATE takes
+   * the form Postgres marks IMMUTABLE, truncating in UTC: the plain call
+   * reads the session time zone, which no index predicate may.
+   */
   protected override _dateTrunc(date: string, unit: DateTruncUnit): string {
     const field = { DAYS: 'day', MONTHS: 'month', YEARS: 'year' }[unit];
+    const declared = this.__indexColumnTypes?.get(date);
+    if (declared === 'TIMESTAMPTZ') {
+      return `date_trunc('${field}', ${date}, 'UTC')`;
+    }
+    if (declared === 'DATE') {
+      return `date_trunc('${field}', CAST(${date} AS TIMESTAMP))`;
+    }
     return `date_trunc('${field}', ${date})`;
   }
 

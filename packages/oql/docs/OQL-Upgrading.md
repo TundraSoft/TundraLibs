@@ -16,6 +16,7 @@ changelog has those.
   - [A computed operand of a pattern operator is matched as written](#a-computed-operand-of-a-pattern-operator-is-matched-as-written)
   - [A filter value naming an expression reads its value](#a-filter-value-naming-an-expression-reads-its-value)
   - [A name in a partial-index `where` is a column](#a-name-in-a-partial-index-where-is-a-column)
+  - [MongoDB refuses a partial-index operator it cannot hold](#mongodb-refuses-a-partial-index-operator-it-cannot-hold)
   - [SQLite `CURRENT_DATE` and empty `ARRAY_AGG`](#sqlite-current_date-and-empty-array_agg)
   - [MongoDB returns what SQL returns](#mongodb-returns-what-sql-returns)
   - [`$exists` keys: null, and nested](#exists-keys-null-and-nested)
@@ -116,8 +117,18 @@ On Postgres and SQLite a bare `'@b'` argument of an expression in a
 partial-index `where`, and a value `'@b'` naming an indexed column, were
 inlined as the text `'@b'`: Postgres failed with `invalid input syntax`,
 and SQLite created the index with that condition. Both now read the
-column `b`. On MongoDB a value `'@b'` is still the text. See
-[Indexes](OQL-Compatibility.md#indexes).
+column `b`. On MongoDB a value `'@b'` is still the text. To name any
+other column of the table, declare the table's columns in the new
+`tableColumns` field. See [Indexes](OQL-Compatibility.md#indexes).
+
+### MongoDB refuses a partial-index operator it cannot hold
+
+A partial-index `where` using `$ne`, `$nin`, `$null: false`, `$null`
+beside another operator on the same column, `$like`, `$nlike`, `$ilike`,
+`$nilike`, `$startsWith`, `$endsWith` or `$contains` reached MongoDB, which
+failed with `Error in specification`. It now throws
+`DialectUnsupportedError` naming the operator before any call. No index
+that was created before is refused now.
 
 ### SQLite `CURRENT_DATE` and empty `ARRAY_AGG`
 

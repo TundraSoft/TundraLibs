@@ -154,7 +154,9 @@ own grammar gaps, for example:
 - **MongoDB** — `CREATE_SCHEMA` (databases are implicit), `distinct` on
   `SELECT` / `COUNT`, `STRING_AGG`, an `$exists` / `$nexists` filter on
   `UPDATE` or `DELETE`, a nested one correlated to its parent subquery,
-  any expression in a `CREATE_INDEX` `where`, and
+  any expression in a `CREATE_INDEX` `where`, an operator a partial
+  filter does not take there (`$ne`, `$nin`, `$null: false`, the pattern
+  operators) or a column of `tableColumns` as a value, and
   column references or expressions in positions a Mongo find-filter cannot
   take.
 

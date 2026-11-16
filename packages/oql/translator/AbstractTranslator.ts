@@ -2285,7 +2285,8 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Column scope for a partial-index `where`. The query carries no column
+   * Column scope for a partial-index `where`: the columns `q.tableColumns`
+   * declares. Without it the query carries no column
    * list, so a name is a column when the query uses it as one: an indexed
    * column, a filter key, or a bare `@name` argument of an expression.
    * The last makes `{ '@due': { $lt: DATE_ADD('@start', …) } }` read
@@ -2295,6 +2296,7 @@ export abstract class AbstractTranslator {
    * SELECT. `$exists` subtrees are skipped: they have their own table.
    */
   protected _indexScope(q: Query<'CREATE_INDEX'>): string[] {
+    if (q.tableColumns) return Object.keys(q.tableColumns);
     const out = new Set(q.columns.map((c) => c.slice(1)));
     const visitArg = (arg: unknown): void => {
       if (typeof arg === 'string') {

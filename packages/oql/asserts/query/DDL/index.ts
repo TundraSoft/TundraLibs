@@ -12,6 +12,7 @@ import {
   assertTableName,
 } from '../common.ts';
 import { validateIdentifierName } from './common.ts';
+import { validateColumnMap } from './table.ts';
 import { assertColumnIdentifier } from '../../columnIdentifier.ts';
 import { assertQueryFilter } from '../../filters/mod.ts';
 
@@ -34,6 +35,7 @@ const CREATE_INDEX_PROPS = new Set([
   'method',
   'unique',
   'where',
+  'tableColumns',
   'ifNotExists',
 ]);
 
@@ -70,8 +72,10 @@ const findExistsNode = (filter: unknown): string | null => {
  * `unique`/`ifNotExists` are booleans, and optional `where` is a valid
  * partial-index filter.
  *
- * The `where` clause is validated without a column list — the actual column
- * existence check happens at execution time against the live schema.
+ * Without `tableColumns` the `where` clause is validated without a column
+ * list — the actual column existence check happens at execution time against
+ * the live schema. With it, `columns` and every `where` key must name a
+ * declared column.
  *
  * @throws {OqlError} `EXISTS_NO_OUTER_TABLE` for an `$exists` / `$nexists`
  *   in `where`, at any `$and` / `$or` depth: no engine takes a subquery
@@ -135,6 +139,13 @@ export const assertCreateIndex: (
     );
   }
 
+  const declared = query.tableColumns === undefined
+    ? undefined
+    : validateColumnMap(
+      query.tableColumns,
+      'CREATE_INDEX query (tableColumns)',
+    );
+
   for (const [i, col] of query.columns.entries()) {
     if (typeof col !== 'string') {
       throw new TypeError(
@@ -147,7 +158,7 @@ export const assertCreateIndex: (
       );
     }
     try {
-      assertColumnIdentifier(col);
+      assertColumnIdentifier(col, declared);
     } catch (error) {
       throw new TypeError(
         `Invalid CREATE_INDEX query: columns[${i}] '${col}' is not a valid column identifier - ${
@@ -184,11 +195,12 @@ export const assertCreateIndex: (
   }
 
   if ('where' in query && query.where !== undefined) {
-    // Partial-index `where` references columns of the indexed table. We don't
-    // have that column list at this layer, so pass `undefined` (no constraint)
-    // — column existence is enforced by the database at execution time.
+    // Partial-index `where` references columns of the indexed table. Without
+    // `tableColumns` there is no column list at this layer, so pass
+    // `undefined` (no constraint) — column existence is enforced by the
+    // database at execution time.
     try {
-      assertQueryFilter(query.where);
+      assertQueryFilter(query.where, declared, undefined, undefined, declared);
     } catch (error) {
       throw new TypeError(
         `Invalid CREATE_INDEX query: 'where' clause is invalid - ${

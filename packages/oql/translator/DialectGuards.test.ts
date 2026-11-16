@@ -692,6 +692,159 @@ describe('oql.translator.guards', () => {
           `(CASE WHEN "kind" = 'a' THEN "start" ELSE "stop" END)`,
       );
     });
+
+    const tableColumns = {
+      id: { type: 'INTEGER' },
+      due: { type: 'TIMESTAMPTZ' },
+      day: { type: 'DATE' },
+      start: { type: 'TIMESTAMP' },
+      n: { type: 'INTEGER' },
+      m: { type: 'INTEGER' },
+      s: { type: 'VARCHAR', length: 40 },
+    };
+    const declared = (where: unknown, columns = tableColumns) =>
+      ({
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where,
+        tableColumns: columns,
+      }) as Query<'CREATE_INDEX'>;
+
+    it('tableColumns decides which @name value is a column', () => {
+      const where = { '@m': { $gt: '@n' }, '@s': '@zz' };
+      const sql = 'CREATE INDEX "idx_due" ON "orders" ("id")' +
+        ` WHERE "m" > "n" AND "s" = '@zz'`;
+      asserts.assertEquals(
+        new PostgresTranslator().createIndex(declared(where)).sql,
+        sql,
+      );
+      asserts.assertEquals(
+        new SQLiteTranslator().createIndex(declared(where)).sql,
+        sql,
+      );
+      // Without the field `n` is neither indexed, a key nor an argument.
+      asserts.assertStringIncludes(
+        new PostgresTranslator().createIndex(
+          { ...declared(where), tableColumns: undefined },
+        ).sql,
+        `WHERE "m" > '@n' AND "s" = '@zz'`,
+      );
+    });
+
+    it('MongoDB refuses a declared column as a value, text stays text', () => {
+      const mongo = new MongoTranslator();
+      for (
+        const where of [
+          { '@m': { $gt: '@n' } },
+          { '@m': '@n' },
+          { '@m': { $in: [1, '@n'] } },
+          { $or: [{ '@s': 'a' }, { $and: [{ '@m': { $lte: '@n' } }] }] },
+        ]
+      ) {
+        asserts.assertEquals(
+          asserts.assertThrows(
+            () => mongo.createIndex(declared(where)),
+            DialectUnsupportedError,
+          ).feature,
+          'the column @n as a value in an index predicate',
+        );
+      }
+      asserts.assertEquals(
+        mongo.createIndex(declared({ '@s': '@zz' })).params.options
+          ?.partialFilterExpression,
+        { s: '@zz' },
+      );
+    });
+
+    it('MongoDB refuses each operator a partial filter cannot hold', () => {
+      const mongo = new MongoTranslator();
+      const refused: [Record<string, unknown>, string][] = [
+        [{ $like: 'a%' }, '$like'],
+        [{ $nlike: 'a%' }, '$nlike'],
+        [{ $ilike: 'a%' }, '$ilike'],
+        [{ $nilike: 'a%' }, '$nilike'],
+        [{ $startsWith: 'a' }, '$startsWith'],
+        [{ $endsWith: 'a' }, '$endsWith'],
+        [{ $contains: 'a' }, '$contains'],
+        [{ $ne: 'a' }, '$ne'],
+        [{ $nin: ['a'] }, '$nin'],
+        [{ $null: false }, '$null: false'],
+        [{ $null: true, $gt: 'a' }, '$null beside another operator'],
+      ];
+      for (const [operators, named] of refused) {
+        for (
+          const where of [
+            { '@s': operators },
+            { $or: [{ '@n': 1 }, { $and: [{ '@s': operators }] }] },
+          ]
+        ) {
+          for (const q of [declared(where), index(1)]) {
+            asserts.assertEquals(
+              asserts.assertThrows(
+                () => mongo.createIndex({ ...q, where }),
+                DialectUnsupportedError,
+              ).feature,
+              `the filter operator ${named} in an index predicate`,
+            );
+          }
+        }
+      }
+      // What MongoDB 8 takes is passed on.
+      asserts.assertEquals(
+        mongo.createIndex(declared({
+          '@s': { $in: ['a', 'b'] },
+          '@n': { $gte: 1, $lt: 9 },
+          '@m': { $between: [1, 5] },
+          $or: [{ '@day': null }, { '@start': { $null: true } }],
+        })).params.options?.partialFilterExpression,
+        {
+          s: { $in: ['a', 'b'] },
+          n: { $gte: 1, $lt: 9 },
+          m: { $gte: 1, $lte: 5 },
+          $and: [{ $or: [{ day: null }, { start: null }] }],
+        },
+      );
+    });
+
+    it('Postgres truncates a declared TIMESTAMPTZ or DATE column in UTC', () => {
+      // date_trunc(text, timestamptz) reads the session time zone, so
+      // Postgres refuses it in an index predicate as not IMMUTABLE.
+      const trunc = (date: string) => ({
+        $$_expression: 'DATE_TRUNC',
+        args: { date, unit: 'MONTHS' },
+      });
+      const where = {
+        '@due': { $gte: trunc('@due') },
+        '@day': { $gte: trunc('@day') },
+        '@start': { $gte: trunc('@start') },
+      };
+      const t = new PostgresTranslator();
+      asserts.assertEquals(
+        t.createIndex(declared(where)).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id")' +
+          ` WHERE "due" >= date_trunc('month', "due", 'UTC')` +
+          ` AND "day" >= date_trunc('month', CAST("day" AS TIMESTAMP))` +
+          ` AND "start" >= date_trunc('month', "start")`,
+      );
+      // The declared types end with the index: a SELECT keeps its form.
+      asserts.assertStringIncludes(
+        t.select({
+          type: 'SELECT',
+          table: 'orders',
+          columns: ['id', 'due'],
+          projection: { '@id': true },
+          where: { '@due': { $gte: trunc('@due') } },
+        } as Query<'SELECT'>).sql,
+        `WHERE "due" >= date_trunc('month', "due")`,
+      );
+      asserts.assertStringIncludes(
+        t.createIndex({ ...declared(where), tableColumns: undefined }).sql,
+        `WHERE "due" >= date_trunc('month', "due")` +
+          ` AND "day" >= date_trunc('month', "day")`,
+      );
+    });
   });
 
   describe('joined column spelling', () => {

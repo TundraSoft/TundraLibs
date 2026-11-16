@@ -1008,7 +1008,9 @@ export class MongoTranslator {
    *
    * @throws {TypeError} When `q` is not a valid `CREATE_INDEX` query.
    * @throws {@link DialectUnsupportedError} When `q.where` holds an
-   *   expression: a partial filter takes no `$expr`.
+   *   expression, a `'@name'` value naming a column of `q.tableColumns`,
+   *   or an operator a partial filter does not take: it has no `$expr`,
+   *   `$regex` or negation.
    */
   public createIndex(q: Query<'CREATE_INDEX'>): MongoCreateIndexAction {
     assertCreateIndex(q);
@@ -1019,6 +1021,10 @@ export class MongoTranslator {
         `the computed expression ${computed} in an index predicate`,
       );
     }
+    const columns = q.tableColumns
+      ? new Set(Object.keys(q.tableColumns))
+      : this.__columnsOf(q);
+    if (q.where) this.__assertIndexFilter(q.where, columns);
     return {
       sql: 'createIndex',
       params: {
@@ -1033,13 +1039,65 @@ export class MongoTranslator {
             ? {
               partialFilterExpression: this.__translateFilter(
                 q.where,
-                this.__columnsOf(q),
+                columns,
               ),
             }
             : {}),
         },
       },
     };
+  }
+
+  /**
+   * Refuse what a `partialFilterExpression` cannot hold. MongoDB takes
+   * equality, `$gt` / `$gte` / `$lt` / `$lte`, `$in`, `$and` and `$or`
+   * there, and no `$regex`, `$not`, `$ne`, `$nin` or `$expr`.
+   *
+   * @throws {@link DialectUnsupportedError} Naming the operator, or the
+   *   `'@name'` value that names a column of `columns`.
+   */
+  private __assertIndexFilter(
+    filter: QueryFilter,
+    columns: ReadonlySet<string>,
+  ): void {
+    const refuse = (what: string): never => {
+      throw new DialectUnsupportedError(
+        this.Dialect,
+        `${what} in an index predicate`,
+      );
+    };
+    const value = (v: unknown): void => {
+      if (Array.isArray(v)) return v.forEach(value);
+      if (this.__valueFieldRef(v, columns) !== null) {
+        refuse(`the column ${v} as a value`);
+      }
+    };
+    for (const [key, rhs] of Object.entries(filter)) {
+      if (key === '$and' || key === '$or') {
+        for (const sub of rhs as QueryFilter[]) {
+          this.__assertIndexFilter(sub, columns);
+        }
+        continue;
+      }
+      if (
+        typeof rhs !== 'object' || rhs === null || Array.isArray(rhs) ||
+        rhs instanceof Date
+      ) {
+        value(rhs);
+        continue;
+      }
+      const ops = Object.entries(rhs);
+      for (const [op, val] of ops) {
+        if (LIKE_OPERATORS.has(op) || op === '$ne' || op === '$nin') {
+          refuse(`the filter operator ${op}`);
+        }
+        if (op === '$null' && !val) refuse('the filter operator $null: false');
+        if (op === '$null' && ops.length > 1) {
+          refuse('the filter operator $null beside another operator');
+        }
+        value(val);
+      }
+    }
   }
 
   /**
