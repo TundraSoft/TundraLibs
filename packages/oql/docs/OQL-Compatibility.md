@@ -352,6 +352,15 @@ query has joins, and are qualified with the outer table's own name
 otherwise, so they can never be captured by the subquery table's
 scope.
 
+A node inside another node's `where` correlates to that parent
+subquery, not to the query root. Its table is aliased
+`__exists_<level>__`, so it does not shadow the parent's, and a bare
+`'@name'` value in its `on` is the parent table's column `name`. That
+table declares no columns, so such a name is always read as a column,
+and one the table lacks fails in the database. Any other value is a
+literal. Earlier releases bound the bare name as text: Postgres failed
+on a number column and the other engines matched no row.
+
 On MongoDB a SELECT or COUNT carrying the node runs as an aggregation
 pipeline. Each node is a `$lookup` whose sub-pipeline matches the `on`
 map against the outer columns bound in `let`, applies the node's
@@ -366,7 +375,8 @@ to run a lookup in, so an UPDATE or DELETE carrying the node throws on
 MongoDB, as does a partial-index predicate. Select the keys with the
 same filter first, then update or delete by `$in` on them. An `on`
 value that names a joined column (`'@Alias.@col'`) also throws on
-MongoDB.
+MongoDB, as does a nested node correlated to its parent: an `on` value
+that is a bare `'@name'`.
 
 ## Expressions
 
@@ -821,6 +831,8 @@ We **throw** (as `DialectUnsupportedError`) when:
   the `where` on MongoDB.
 - `FULL JOIN` on MariaDB.
 - `STRING_AGG` aggregate on MongoDB.
+- A nested `$exists` / `$nexists` correlated to its parent subquery on
+  MongoDB.
 - `CREATE_SCHEMA` on MongoDB.
 - `$like` / `$nlike` / `$ilike` / `$nilike` with an **Expression** value
   on MongoDB — the operand of those operators _is_ a wildcard pattern,
