@@ -177,8 +177,9 @@ const assertArrayNumericExpression = (
 /**
  * Asserts that a value is a valid ADD expression.
  *
- * The ADD expression sums multiple numeric values. All arguments can be numeric
- * literals (number or bigint) or column identifiers.
+ * The ADD expression sums its arguments.
+ * Each argument is a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -247,7 +248,8 @@ export const isAddExpression: (
  * Asserts that a value is a valid SUBTRACT expression.
  *
  * The SUBTRACT expression subtracts all remaining arguments from the first argument.
- * All arguments can be numeric literals (number or bigint) or column identifiers.
+ * Each argument is a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -316,7 +318,8 @@ export const isSubtractExpression: (
  * Asserts that a value is a valid MULTIPLY expression.
  *
  * The MULTIPLY expression calculates the product of all numeric arguments.
- * All arguments can be numeric literals (number or bigint) or column identifiers.
+ * Each argument is a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -384,13 +387,15 @@ export const isMultiplyExpression: (
 /**
  * Asserts that a value is a valid DIVIDE expression.
  *
- * The DIVIDE expression divides the first argument by the second argument.
- * All arguments can be numeric literals (number or bigint) or column identifiers.
+ * The DIVIDE expression divides the first argument by each of the others,
+ * left to right.
+ * Each argument is a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid DIVIDE expression
- * @throws {TypeError} If args is not an array with exactly 2 elements
+ * @throws {TypeError} If args is not an array with two or more elements
  *
  * @example
  * ```ts
@@ -453,13 +458,15 @@ export const isDivideExpression: (
 /**
  * Asserts that a value is a valid MODULO expression.
  *
- * The MODULO expression calculates the remainder after dividing the first argument
- * by the second argument. All arguments can be numeric literals or column identifiers.
+ * The MODULO expression takes the remainder of the first argument divided by
+ * the second, then of that result by each further argument, left to right.
+ * Each argument is a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
  * @throws {TypeError} If the value is not a valid MODULO expression
- * @throws {TypeError} If args is not an array with exactly 2 elements
+ * @throws {TypeError} If args is not an array with two or more elements
  *
  * @example
  * ```ts
@@ -524,7 +531,8 @@ export const isModuloExpression: (
  * Asserts that a value is a valid ABS expression.
  *
  * The ABS expression returns the absolute (non-negative) value of a number.
- * The argument can be a numeric literal or column identifier.
+ * The argument is a number, a bigint, a column reference, a nested numeric
+ * or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -593,7 +601,8 @@ export const isAbsExpression: (
  * Asserts that a value is a valid CEIL expression.
  *
  * The CEIL expression rounds a number up to the nearest integer.
- * The argument can be a numeric literal or column identifier.
+ * The argument is a number, a bigint, a column reference, a nested numeric
+ * or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -662,7 +671,8 @@ export const isCeilExpression: (
  * Asserts that a value is a valid FLOOR expression.
  *
  * The FLOOR expression rounds a number down to the nearest integer.
- * The argument can be a numeric literal or column identifier.
+ * The argument is a number, a bigint, a column reference, a nested numeric
+ * or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -730,8 +740,10 @@ export const isFloorExpression: (
 /**
  * Asserts that a value is a valid ROUND expression.
  *
- * The ROUND expression rounds a number to the nearest integer.
- * The argument can be a numeric literal or column identifier.
+ * The ROUND expression rounds a number to the nearest integer, or to the
+ * precision an optional second argument gives.
+ * Each argument is a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -800,7 +812,8 @@ export const isRoundExpression: (
  * Asserts that a value is a valid POWER expression.
  *
  * The POWER expression raises a base number to the power of an exponent (base^exponent).
- * Both base and exponent can be numeric literals or column identifiers.
+ * Base and exponent are each a number, a bigint, a column reference, a nested
+ * numeric or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -910,7 +923,8 @@ export const isPowerExpression: (
  * Asserts that a value is a valid SQRT expression.
  *
  * The SQRT expression returns the square root of a number.
- * The argument can be a numeric literal or column identifier.
+ * The argument is a number, a bigint, a column reference, a nested numeric
+ * or UNIX_TIMESTAMP expression, or a COALESCE, NULLIF or CASE.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
