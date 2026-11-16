@@ -1077,25 +1077,19 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     );
   });
 
-  it('a nullable column left out is written as null on MongoDB', async () => {
+  it('a nullable column left out is not written, on MongoDB too', async () => {
     const { db, exec } = makeDb();
     const sent = (type: string) =>
       (exec.lastOf(type) as unknown as { data: Row[] }).data;
-    // SQL stores NULL for a column the statement leaves out.
     await db.repo('Guarded').insert({ id: 1 });
     asserts.assertEquals(sent('INSERT'), [{ id: 1 }]);
 
-    // A document holds only the fields written.
+    // The document leaves the field out; a read returns it as null.
     Object.assign(exec.capabilities, { dialect: 'mongo' });
     await db.repo('Guarded').insert({ id: 1 });
-    asserts.assertEquals(sent('INSERT'), [{ id: 1, label: null }]);
-    await db.repo('Guarded').insert([{ id: 1 }, { id: 2, label: 'kept' }]);
-    asserts.assertEquals(sent('INSERT'), [
-      { id: 1, label: null },
-      { id: 2, label: 'kept' },
-    ]);
+    asserts.assertEquals(sent('INSERT'), [{ id: 1 }]);
     await db.repo('Guarded').upsert({ id: 1 }, { conflictKeys: ['id'] });
-    asserts.assertEquals(sent('UPSERT'), [{ id: 1, label: null }]);
+    asserts.assertEquals(sent('UPSERT'), [{ id: 1 }]);
     // A conflict still copies only what the caller passed.
     asserts.assertEquals(
       (exec.lastOf('UPSERT') as unknown as Row).updateOnConflict,
@@ -1172,6 +1166,24 @@ describe('norm.Repo (edge paths over mock executor)', () => {
       (await db.repo('Guarded').upsert({ id: 1 }, { conflictKeys: ['id'] }))
         .data,
       [{ id: 1, label: null }],
+    );
+  });
+
+  it('a MongoDB row carries no _id or field the entity does not declare', async () => {
+    const { db, exec } = makeDb();
+    Object.assign(exec.capabilities, { dialect: 'mongo' });
+    // A read projects the declared columns; the document adds its `_id`.
+    exec.selectQueue.push([{ _id: 'ObjectId', id: 1, label: 'a' }]);
+    asserts.assertEquals((await db.repo('Guarded').find()).data, [
+      { id: 1, label: 'a' },
+    ]);
+    // A write returns the stored document, a field another writer added
+    // included.
+    exec.selectQueue.push([{ _id: 'ObjectId', id: 1, label: 'a', extra: 'x' }]);
+    asserts.assertEquals(
+      (await db.repo('Guarded').upsert({ id: 1 }, { conflictKeys: ['id'] }))
+        .data,
+      [{ id: 1, label: 'a' }],
     );
   });
 
@@ -2162,7 +2174,7 @@ describe('norm.Repo — nullSafe relation keys', () => {
     asserts.assertEquals(found.data[0]!.Notes, [{ note: null }]);
   });
 
-  it('a to-one relation to a view picks the row lowest by its columns in declared order', async () => {
+  it('a to-one relation to a view carries the first row the engine returns', async () => {
     const Rooms = Entity('ns_rooms', {
       id: Column.integer(),
     }, { pk: ['id'] });
@@ -2194,13 +2206,12 @@ describe('norm.Repo — nullSafe relation keys', () => {
       exec,
       undefined,
     );
-    // A NULL rank sorts after every rank; equal ranks fall to the note.
     exec.selectQueue.push([{
       id: 1,
       Note: [
-        { note: 'c', __pk_roomId: 1, __pk_rank: null },
-        { note: 'b', __pk_roomId: 1, __pk_rank: 2 },
-        { note: 'a', __pk_roomId: 1, __pk_rank: 2 },
+        { note: 'c', __pk_roomId: 1 },
+        { note: 'b', __pk_roomId: 1 },
+        { note: 'a', __pk_roomId: 1 },
       ],
     }]);
     const found = await db.repo('Rooms').find(undefined, {
@@ -2212,8 +2223,8 @@ describe('norm.Repo — nullSafe relation keys', () => {
           aggregates: { Note: { columns: Record<string, unknown> } };
         }).aggregates.Note.columns,
       ),
-      ['note', '__pk_roomId', '__pk_rank'],
+      ['note', '__pk_roomId'],
     );
-    asserts.assertEquals(found.data[0]!.Note, { note: 'a' });
+    asserts.assertEquals(found.data[0]!.Note, { note: 'c' });
   });
 });

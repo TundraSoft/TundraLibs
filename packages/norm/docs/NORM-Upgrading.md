@@ -17,13 +17,12 @@ changelog has those.
   - [An `updateOnConflict` column a row does not pass is refused](#an-updateonconflict-column-a-row-does-not-pass-is-refused)
   - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
-  - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
+  - [A MongoDB row reads `null` for a field its document lacks](#a-mongodb-row-reads-null-for-a-field-its-document-lacks)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
   - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
   - [A to-one relation that can match several rows returns each row once](#a-to-one-relation-that-can-match-several-rows-returns-each-row-once)
   - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
-  - [A to-one relation to a view picks the same row on every engine](#a-to-one-relation-to-a-view-picks-the-same-row-on-every-engine)
 
 ## 1.13.0
 
@@ -170,19 +169,18 @@ To keep those rows, ask for them:
 [NULL in a filter](../../oql/docs/OQL-Compatibility.md#null-in-a-filter)
 has the full rule.
 
-### A MongoDB insert stores `null` for a nullable column left out
+### A MongoDB row reads `null` for a field its document lacks
 
-An insert or upsert that leaves out a nullable column with no default
-now stores `null` in the new document, and the row reads back with
-`null`, as on the SQL engines. Earlier versions left the field out of the
-document, so the row read back without the key. An upsert that updates a
-document already stored leaves its other fields as they are.
+An insert or upsert that leaves out a nullable column still writes no
+field for it. A document without a field now reads back with `null` for
+that column, top-level and inside relation rows, as does a row an insert
+or upsert returns. Earlier versions returned the row without the key. A
+filter for `null` matches the document either way.
 
-A document an earlier version or another writer stored without a field
-still lacks it, and now reads back with `null` for that column, top-level
-and inside relation rows, as does a row an upsert returns unchanged.
-Earlier versions returned the row without the key. A filter for `null`
-matches the document either way.
+A row no longer carries the document's `_id` unless the read names it,
+and a row an insert or upsert returns carries the declared columns only,
+not a field another writer added. Earlier versions returned the
+ObjectId `_id` beside the columns.
 
 ### `DATE_DIFF` counts complete units and returns a number
 
@@ -261,15 +259,6 @@ One case is unchanged: a view, which has no primary key, joined only on
 column `.nullable()`, when the matched row holds NULL in each column
 the read takes from it. A view that declares a column NOT NULL is read
 right.
-
-### A to-one relation to a view picks the same row on every engine
-
-A belongsTo or hasOne whose target is a view, which has no primary key,
-carried whichever matching row the engine returned first, so one engine
-could return a different row from the others. It now carries the one
-lowest by the view's columns in declared order, a NULL after any value,
-skipping encrypted, JSON and mask columns. A read may get a different
-row than before.
 
 ---
 
