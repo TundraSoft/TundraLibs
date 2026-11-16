@@ -247,7 +247,7 @@ const action = translator.select(query);
 //   params: {
 //     collection: 'users',
 //     filter: { age: { $gte: 18 } },
-//     options: { projection: { id: 1, email: 1 } }
+//     options: { projection: { id: 1, email: 1, _id: 0 } }
 //   }
 // }
 ```
@@ -523,7 +523,7 @@ const action = translator.select(query);
 //       ]
 //     },
 //     options: {
-//       projection: { id: 1, email: 1, age: 1 },
+//       projection: { id: 1, email: 1, age: 1, _id: 0 },
 //       sort: { age: -1 },
 //       limit: 100
 //     }

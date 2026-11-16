@@ -284,8 +284,11 @@ appends. The emitted pipeline preserves the source SELECT's WHERE /
 projection / limit / sort (a plain-`find` source is expanded to the
 equivalent `$match` → `$project` → `$sort` → `$skip` → `$limit` stages),
 then appends `$merge: { into, whenMatched: 'fail', whenNotMatched:
-'insert' }` — `whenMatched: 'fail'` mirrors a SQL primary-key violation on
-an `_id` collision.
+'insert' }`. A source row carries no `_id` unless the SELECT projects
+it, so each row is a new document and a primary key the target declares
+refuses a duplicate through its unique index, as on SQL;
+`whenMatched: 'fail'` refuses a projected `_id` the target already
+holds.
 
 ### COUNT `having`
 
@@ -295,6 +298,12 @@ GROUP BY, so there is no aggregate alias to filter on. Use a `SELECT` with
 `aggregates` + `having` for post-aggregation filtering. (Previously this
 threw a misleading "column not in list" error on the SQL dialects and was
 silently dropped on MongoDB.)
+
+### Projected keys
+
+A SELECT row holds the keys its projection names, on every dialect. On
+MongoDB the projection leaves `_id` out unless it names `'@_id'`, so a
+row carries neither the document's id nor a grouped query's group key.
 
 ### `limit` / `offset`
 
@@ -806,7 +815,7 @@ document and never unwound it. These MongoDB results change:
 | aliased joined column, `'@o.@sku': 'item'` | `item: ['A', …]`                                      | `item: 'A'`                                |
 | projected join alias, `'@o': true`         | the raw looked-up documents                           | JSON_ROW of the declared columns, grouped  |
 | JSON_ROW over a join                       | one row per base document, `[]` without a match       | grouped, `[{ col: null }]` without a match |
-| row of a JSON_ROW query over a join        | `_id` is the document id                              | `_id` is the group key                     |
+| row of a JSON_ROW query over a join        | `_id` is the document id                              | no `_id`                                   |
 | filter on a joined column                  | any joined row matching kept the document, all rows   | only the matching joined rows              |
 | `'@o.@id': null`                           | matched nothing                                       | the rows without a joined row              |
 | joined column as a filter value            | matched nothing                                       | compared per row                           |

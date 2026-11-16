@@ -1794,11 +1794,10 @@ export class MongoTranslator {
   /**
    * Build a Mongo `projection` document from OQL projection. `1` for
    * include, `0` for exclude. Aliases use `$expr` rename via $project's
-   * `{ alias: '$source' }` form.
+   * `{ alias: '$source' }` form. `_id` is left out unless projected.
    */
   private __buildProjection(q: Query<'SELECT'>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    let hasAliasing = false;
     for (const [key, value] of Object.entries(q.projection)) {
       const stripped = key.slice(1);
       const source = stripped.replace('.@', '.');
@@ -1809,24 +1808,18 @@ export class MongoTranslator {
         out[typeof value === 'string' ? value : column] = {
           $ifNull: [`$${source}`, null],
         };
-        hasAliasing ||= typeof value === 'string';
         continue;
       }
       if (typeof value === 'string') {
         // Alias: { aliasName: '$source.path' }
         out[value] = `$${source}`;
-        hasAliasing = true;
       } else {
         out[source] = 1;
       }
     }
-    if (hasAliasing) {
-      // When any aliasing is present, `_id` ought to be excluded by
-      // default unless the projection explicitly asked for it.
-      if (!Object.prototype.hasOwnProperty.call(out, '_id')) {
-        out._id = 0;
-      }
-    }
+    // A row holds the keys the query projects, as on SQL, so the
+    // document's own `_id`, or a group key, stays out of it.
+    if (!Object.prototype.hasOwnProperty.call(out, '_id')) out._id = 0;
     return out;
   }
 
