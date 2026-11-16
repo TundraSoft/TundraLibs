@@ -220,7 +220,8 @@ server still reports a non-UTC `TimeZone` at startup is refused with
 server that reports no `TimeZone` is not checked. If a pooler in between does
 not pass the parameter on, fix the zone on the server. A role's own `timezone`
 setting overrides its database's, so use `ALTER ROLE` when the role has one,
-otherwise the database:
+otherwise the database. Behind a pooler, the role is the one the pooler signs
+in as, and the setting applies once the pooler opens a new server connection:
 
 ```sql
 ALTER DATABASE app SET timezone TO 'UTC';

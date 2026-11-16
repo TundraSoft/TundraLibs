@@ -20,5 +20,9 @@ export function nonUtcReason(zone: string): string {
   return `the database session runs in ${zone}, not UTC; ` +
     `set timezone to 'UTC' with ALTER ROLE, or with ALTER DATABASE when ` +
     `the role has no setting of its own, ` +
-    `or pass allowNonUtcTimeZone: true to accept it`;
+    `or pass allowNonUtcTimeZone: true to accept it. ` +
+    `Behind a pooler such as PgBouncer or a Neon pooled endpoint, the zone ` +
+    `is the one the pooler's server connection opened with: set it for the ` +
+    `role the pooler signs in as, and it applies once the pooler opens a ` +
+    `new server connection`;
 }

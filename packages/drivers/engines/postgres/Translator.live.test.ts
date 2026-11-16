@@ -20,9 +20,12 @@ const env = envArgs('./packages/drivers/');
 const CONFIG = {
   host: env.get('POSTGRES_HOST') || 'localhost',
   port: Number.parseInt(env.get('POSTGRES_PORT') || '5432', 10),
-  database: env.get('POSTGRES_DB') || 'postgres',
+  // CI sets DB_SCHEMA to keep this package's tables apart from NORM's.
+  database: env.get('DB_SCHEMA')
+    ? `${env.get('DB_SCHEMA')}_drivers`
+    : env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USER') || 'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
 async function isPostgresAvailable(): Promise<boolean> {

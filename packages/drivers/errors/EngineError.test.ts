@@ -225,6 +225,19 @@ describe('EngineError', () => {
       asserts.assert(error.message.includes('backup'));
       asserts.assert(error.message.includes('Disk full'));
     });
+
+    it('leaves out a closing name the metadata does not hold', () => {
+      const meta = { instanceId: VALID_INSTANCE_ID };
+      asserts.assertEquals(
+        new EngineError('DUPLICATE_KEY', meta).message,
+        `Duplicate key violation on ${VALID_INSTANCE_ID}`,
+      );
+      asserts.assertEquals(
+        new EngineError('COLUMN_NOT_FOUND', { ...meta, column: 'email' })
+          .message,
+        `Column not found on ${VALID_INSTANCE_ID}: email`,
+      );
+    });
   });
 
   describe('toJSON', () => {

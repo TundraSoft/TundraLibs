@@ -8,7 +8,7 @@ import * as asserts from '@std/asserts';
 import { isDeno } from '@tundralibs/compat';
 import { makeTempDir, remove } from '@tundralibs/compat/file';
 import { join } from '@tundralibs/compat/path';
-import { _openDeno, _rewriteBunPlaceholders, openDatabase } from './adapter.ts';
+import { _openDeno, openDatabase } from './adapter.ts';
 
 // =============================================================================
 // Test Suites
@@ -50,6 +50,21 @@ describe({
             const rows = stmt.all([1]);
             asserts.assertStrictEquals(rows.length, 1);
             asserts.assertStrictEquals(rows[0]!.val, 'a');
+          } finally {
+            db.close();
+          }
+        });
+
+        it('binds a :name parameter and leaves :word in quotes and comments as text', async () => {
+          const db = await openDatabase(':memory:');
+          try {
+            const rows = db.prepare(
+              "SELECT strftime('%H:%M', '2026-01-15 20:04:05') AS hhmm, " +
+                '1 AS [c:d], 2 AS `e:f`, :id AS id /* :nope */ -- :nope',
+            ).all([{ id: 7 }]);
+            asserts.assertEquals(rows, [
+              { hhmm: '20:04', 'c:d': 1, 'e:f': 2, id: 7 },
+            ]);
           } finally {
             db.close();
           }
@@ -252,90 +267,3 @@ db.close();
     },
   });
 }
-
-// Regression (round-3 finding #11): the Bun placeholder rewrite `:name` →
-// `$name` must be string/comment-aware. A naive `replaceAll(/:name/)` also
-// mangles `:name` sequences inside quoted literals (e.g. `'%H:%M'` → `'%H$M'`)
-// — a silent Bun-only divergence from the Deno/Node bindings, whose SQLite
-// parsers never touch quoted text. Pure-function test: runs on every runtime.
-describe('drivers.sqlite.adapter._rewriteBunPlaceholders', () => {
-  it('rewrites bind placeholders outside string literals', () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT * FROM t WHERE id = :id AND n = :name'),
-      'SELECT * FROM t WHERE id = $id AND n = $name',
-    );
-  });
-
-  it('leaves :word inside a single-quoted literal untouched', () => {
-    // strftime time format — the headline scenario.
-    asserts.assertEquals(
-      _rewriteBunPlaceholders(
-        "SELECT strftime('%H:%M', created_at) AS hhmm FROM events",
-      ),
-      "SELECT strftime('%H:%M', created_at) AS hhmm FROM events",
-    );
-    // A literal that looks like a placeholder must stay literal (else the
-    // query silently returns zero rows on Bun).
-    asserts.assertEquals(
-      _rewriteBunPlaceholders("SELECT * FROM parts WHERE code = 'AB:CD'"),
-      "SELECT * FROM parts WHERE code = 'AB:CD'",
-    );
-  });
-
-  it('still rewrites a real placeholder that follows a quoted literal', () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders(
-        "SELECT * FROM t WHERE label = 'a:b' AND id = :id",
-      ),
-      "SELECT * FROM t WHERE label = 'a:b' AND id = $id",
-    );
-  });
-
-  it("honours '' escapes inside single-quoted literals", () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders("SELECT ':x''y:z' AS s, :real"),
-      "SELECT ':x''y:z' AS s, $real",
-    );
-  });
-
-  it('leaves :word inside a double-quoted identifier untouched', () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT "col:with:colons" FROM t WHERE id = :id'),
-      'SELECT "col:with:colons" FROM t WHERE id = $id',
-    );
-  });
-
-  it('leaves :word inside a backtick-quoted identifier untouched', () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT `col:with:colons` FROM t WHERE id = :id'),
-      'SELECT `col:with:colons` FROM t WHERE id = $id',
-    );
-  });
-
-  it('honours `` escapes inside backtick identifiers', () => {
-    // A doubled backtick is a literal backtick, not a terminator: the :y
-    // stays inside the identifier and only the trailing :real is rewritten.
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT `a``b:y` AS c, :real FROM t'),
-      'SELECT `a``b:y` AS c, $real FROM t',
-    );
-  });
-
-  it('leaves :word inside a [bracket] identifier untouched', () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT [col:with:colons] FROM t WHERE id = :id'),
-      'SELECT [col:with:colons] FROM t WHERE id = $id',
-    );
-  });
-
-  it('leaves :word inside line and block comments untouched', () => {
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT :id -- not a :param here\nFROM t'),
-      'SELECT $id -- not a :param here\nFROM t',
-    );
-    asserts.assertEquals(
-      _rewriteBunPlaceholders('SELECT /* :nope */ :id FROM t'),
-      'SELECT /* :nope */ $id FROM t',
-    );
-  });
-});

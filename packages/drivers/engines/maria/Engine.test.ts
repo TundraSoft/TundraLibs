@@ -32,7 +32,7 @@ const TEST_CONFIG = {
     ? `${env.get('DB_SCHEMA')}_drivers`
     : env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USER') || 'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
 async function isMariaAvailable(): Promise<boolean> {
@@ -179,6 +179,7 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
       ['ER_PASSWORD_NOT_ALLOWED', 'INVALID_AUTH'],
       ['ER_TABLEACCESS_DENIED_ERROR', 'PERMISSION_DENIED'],
       ['ER_SPECIFIC_ACCESS_DENIED_ERROR', 'PERMISSION_DENIED'],
+      ['ER_DBACCESS_DENIED_ERROR', 'PERMISSION_DENIED'],
       ['ER_BAD_DB_ERROR', 'DATABASE_NOT_FOUND'],
       ['ER_NO_SUCH_TABLE', 'TABLE_NOT_FOUND'],
       ['ER_BAD_FIELD_ERROR', 'COLUMN_NOT_FOUND'],
@@ -187,6 +188,7 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
       ['ER_ROW_IS_REFERENCED', 'FOREIGN_KEY_VIOLATION'],
       ['ER_BAD_NULL_ERROR', 'NOT_NULL_VIOLATION'],
       ['ER_CHECK_CONSTRAINT_VIOLATED', 'CHECK_VIOLATION'],
+      ['ER_CONSTRAINT_FAILED', 'CHECK_VIOLATION'],
       ['ER_PARSE_ERROR', 'SYNTAX_ERROR'],
       ['ER_LOCK_DEADLOCK', 'DEADLOCK'],
       ['ER_LOCK_WAIT_TIMEOUT', 'LOCK_TIMEOUT'],
@@ -201,6 +203,71 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
         expected,
         `${driverCode} should map to ${expected}`,
       );
+    }
+  });
+
+  it('names the key and the column the server message reports', () => {
+    const wrap = (code: string, sqlMessage: string) =>
+      engine.wrapError(
+        { code, sqlMessage, message: `(conn) ${sqlMessage}` },
+        q,
+      );
+    const dup = wrap(
+      'ER_DUP_ENTRY',
+      "Duplicate entry 'a' for key 'users_email'",
+    );
+    asserts.assertEquals(dup.context.constraint, 'users_email');
+    asserts.assertEquals(
+      dup.message,
+      'Duplicate key violation on MARIA::maria-errmap: users_email',
+    );
+    const col = wrap(
+      'ER_BAD_FIELD_ERROR',
+      "Unknown column 'u.nosuch' in 'SELECT'",
+    );
+    asserts.assertEquals(
+      col.message,
+      'Column not found on MARIA::maria-errmap: u.nosuch',
+    );
+  });
+
+  it('names the constraint, column and table the server message reports', () => {
+    const cases: Array<[string, string, string, string]> = [
+      [
+        'ER_NO_REFERENCED_ROW_2',
+        'Cannot add or update a child row: a foreign key constraint fails ' +
+        '(`app`.`orders`, CONSTRAINT `orders_user_fk` FOREIGN KEY (`uid`) ' +
+        'REFERENCES `users` (`id`))',
+        'constraint',
+        'orders_user_fk',
+      ],
+      [
+        'ER_CONSTRAINT_FAILED',
+        'CONSTRAINT `orders_qty_pos` failed for `app`.`orders`',
+        'constraint',
+        'orders_qty_pos',
+      ],
+      ['ER_BAD_NULL_ERROR', "Column 'qty' cannot be null", 'column', 'qty'],
+      [
+        'ER_NO_DEFAULT_FOR_FIELD',
+        "Field 'qty' doesn't have a default value",
+        'column',
+        'qty',
+      ],
+      [
+        'ER_NO_SUCH_TABLE',
+        "Table 'app.nosuch' doesn't exist",
+        'table',
+        'app.nosuch',
+      ],
+    ];
+    for (const [code, sqlMessage, key, name] of cases) {
+      const err = engine.wrapError(
+        { code, sqlMessage, message: `(conn) ${sqlMessage}` },
+        q,
+      );
+      asserts.assertEquals(err.context[key], name, code);
+      asserts.assert(err.message.endsWith(`maria-errmap: ${name}`), code);
     }
   });
 
@@ -305,6 +372,19 @@ describe({
           sql: 'SELECT COUNT(*) AS n FROM information_schema.TABLES',
         });
         asserts.assertEquals(typeof r.data[0]?.n, 'bigint');
+        await engine.disconnect();
+      });
+
+      it('leaves a placeholder inside a string or comment as text', async () => {
+        const engine = new MariaEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT ':a:' AS t, :a: AS v, 'it\\'s :zz:' AS d, ` +
+            `TO_CHAR(:ts:, 'HH24:MI:SS') AS c # :zz:`,
+          params: { a: 1, ts: new Date('2026-01-15T20:04:05Z') },
+        });
+        asserts.assertEquals(r.data, [
+          { t: ':a:', v: 1, d: "it's :zz:", c: '20:04:05' },
+        ]);
         await engine.disconnect();
       });
     });
@@ -774,6 +854,65 @@ describe({
           }
         } finally {
           await engine.execute({ sql: `DROP TABLE IF EXISTS ${t}` });
+          await engine.disconnect();
+        }
+      });
+
+      it('names the constraint, column and table in the message', async () => {
+        const engine = new MariaEngine('maria-err-names', TEST_CONFIG);
+        const parent = tableName('err_parent');
+        const child = tableName('err_child');
+        const failure = async (sql: string): Promise<EngineError> => {
+          try {
+            await engine.execute({ sql });
+          } catch (e) {
+            asserts.assertInstanceOf(e, EngineError);
+            return e;
+          }
+          throw new Error(`expected ${sql} to fail`);
+        };
+        try {
+          await engine.execute({
+            sql: `CREATE TABLE ${parent} (id INT PRIMARY KEY)`,
+          });
+          await engine.execute({
+            sql: `CREATE TABLE ${child} (id INT, pid INT, v INT NOT NULL, ` +
+              `CONSTRAINT ${child}_fk FOREIGN KEY (pid) REFERENCES ${parent} (id), ` +
+              `CONSTRAINT ${child}_pos CHECK (v > 0))`,
+          });
+          const cases: Array<[string, string, string]> = [
+            [
+              `INSERT INTO ${child} VALUES (1, 9, 1)`,
+              'FOREIGN_KEY_VIOLATION',
+              `${child}_fk`,
+            ],
+            [
+              `INSERT INTO ${child} VALUES (1, NULL, -1)`,
+              'CHECK_VIOLATION',
+              `${child}_pos`,
+            ],
+            [
+              `INSERT INTO ${child} VALUES (1, 1, NULL)`,
+              'NOT_NULL_VIOLATION',
+              'v',
+            ],
+            [
+              `SELECT * FROM ${parent}_none`,
+              'TABLE_NOT_FOUND',
+              `${TEST_CONFIG.database}.${parent}_none`,
+            ],
+          ];
+          for (const [sql, code, name] of cases) {
+            const e = await failure(sql);
+            asserts.assertEquals(
+              [e.code, e.message.endsWith(`maria-err-names: ${name}`)],
+              [code, true],
+              e.message,
+            );
+          }
+        } finally {
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${child}` });
+          await engine.execute({ sql: `DROP TABLE IF EXISTS ${parent}` });
           await engine.disconnect();
         }
       });

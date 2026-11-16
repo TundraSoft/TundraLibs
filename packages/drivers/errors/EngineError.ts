@@ -22,6 +22,18 @@ export type EngineErrorMeta = {
   originalCode?: string;
 } & Record<string, unknown>;
 
+/** `template` without a closing `: ${key}` that `meta` holds no value for,
+ * so a name the engine did not report never shows as a raw placeholder. */
+function withoutMissingTail(
+  template: string,
+  meta: Record<string, unknown>,
+): string {
+  return template.replace(
+    /: \$\{(\w+)\}$/,
+    (tail, key: string) => meta[key] === undefined ? '' : tail,
+  );
+}
+
 /**
  * Thrown by `BaseEngine` and subclasses. `code` is one of the values
  * from {@link EngineErrorCodes} (unknown codes are coerced to
@@ -75,7 +87,8 @@ export class EngineError<M extends EngineErrorMeta = EngineErrorMeta>
    * `meta`. A code missing from {@link EngineErrorCodes} is downgraded to
    * `'UNKNOWN_ERROR'` and preserved at `meta.originalCode` rather than
    * throwing, so a driver mapping an unfamiliar server error still produces a
-   * usable error.
+   * usable error. A template ending in `: ${key}` drops that tail when
+   * `meta` has no `key`.
    *
    * @param code - Key into {@link EngineErrorCodes}.
    * @param meta - Template variables; `instanceId` must be `"<Engine>::<Name>"`.
@@ -86,7 +99,7 @@ export class EngineError<M extends EngineErrorMeta = EngineErrorMeta>
       meta.originalCode = code;
       code = 'UNKNOWN_ERROR';
     }
-    super(EngineErrorCodes[code], meta, cause);
+    super(withoutMissingTail(EngineErrorCodes[code], meta), meta, cause);
     const [engine, name] = meta.instanceId.split('::');
     this.engine = engine!;
     this.connectionName = name!;
