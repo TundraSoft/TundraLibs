@@ -270,6 +270,146 @@ describe('drivers.PostgresEngine session time zone (no DB)', () => {
   });
 });
 
+describe('drivers.PostgresEngine startup refusal (no DB)', () => {
+  // Connects to a server that answers the startup message with an
+  // ErrorResponse, as PgBouncer does for a login it will not take.
+  const refusedWith = async (sqlState: string, message: string) => {
+    const body = new TextEncoder().encode(
+      `SFATAL\0C${sqlState}\0M${message}\0\0`,
+    );
+    const reply = new Uint8Array(5 + body.length);
+    reply[0] = 'E'.charCodeAt(0);
+    new DataView(reply.buffer).setUint32(1, body.length + 4);
+    reply.set(body, 5);
+    const port = await getFreePort();
+    const listener = await listen({ port, hostname: '127.0.0.1' });
+    const served = listener.accept().then(async (conn) => {
+      await conn.read();
+      await conn.write(reply);
+      return conn;
+    });
+    const engine = new PostgresEngine('refused-fake', {
+      host: '127.0.0.1',
+      port,
+      database: 'app',
+      username: 'app',
+    });
+    const error = await asserts.assertRejects(
+      () => engine.connect(),
+      EngineError,
+    );
+    (await served).close();
+    await engine.disconnect();
+    listener.close();
+    return error;
+  };
+
+  it('a refused startup parameter is CONNECTION_FAILED, and the message names it and what to do', async () => {
+    const timeout = await refusedWith(
+      '08P01',
+      'unsupported startup parameter: statement_timeout',
+    );
+    asserts.assertEquals(timeout.code, 'CONNECTION_FAILED');
+    asserts.assertEquals(timeout.context.parameter, 'statement_timeout');
+    asserts.assertEquals(
+      timeout.message,
+      'Failed to connect to POSTGRES::refused-fake: the server refused the ' +
+        `startup parameter statement_timeout; add it to the pooler's ` +
+        'ignore_startup_parameters, or leave statementTimeoutMs unset behind ' +
+        'a pooler',
+    );
+    // application_name is always sent, so there is no option to leave out.
+    const appName = await refusedWith(
+      '08P01',
+      'unsupported startup parameter: application_name',
+    );
+    asserts.assertEquals(appName.context.parameter, 'application_name');
+    asserts.assertEquals(
+      appName.message,
+      'Failed to connect to POSTGRES::refused-fake: the server refused the ' +
+        `startup parameter application_name; add it to the pooler's ` +
+        'ignore_startup_parameters',
+    );
+  });
+
+  it('a startup error with no code of its own is CONNECTION_FAILED with the reason the server gave', async () => {
+    const error = await refusedWith('08P01', 'no such database: app');
+    asserts.assertEquals(error.code, 'CONNECTION_FAILED');
+    asserts.assertEquals(
+      error.message,
+      'Failed to connect to POSTGRES::refused-fake: no such database: app',
+    );
+    asserts.assertEquals(error.context.sqlState, '08P01');
+    asserts.assertFalse('parameter' in error.context);
+  });
+
+  it('a startup error keeps the code its SQLSTATE maps to', async () => {
+    const error = await refusedWith('28P01', 'password authentication failed');
+    asserts.assertEquals(error.code, 'INVALID_AUTH');
+  });
+});
+
+// A pooler in front of Postgres, PgBouncer in CI. The engine never talks to
+// it unless these are set.
+const POOLER_CONFIG = {
+  host: env.get('PGBOUNCER_HOST'),
+  port: Number.parseInt(env.get('PGBOUNCER_PORT') || '6432', 10),
+  database: env.get('PGBOUNCER_DB'),
+  username: env.get('PGBOUNCER_USER'),
+  password: env.get('PGBOUNCER_PASSWORD') || undefined,
+};
+const poolerConfigured = !!POOLER_CONFIG.host;
+if (!poolerConfigured) {
+  console.warn(
+    '[postgres.Engine pooler] skipped: set PGBOUNCER_HOST, PGBOUNCER_PORT, ' +
+      'PGBOUNCER_USER, PGBOUNCER_PASSWORD and PGBOUNCER_DB to run it',
+  );
+}
+
+describe({
+  name: 'drivers.PostgresEngine behind a pooler',
+  ignore: !poolerConfigured,
+  fn: () => {
+    it('logs in with the startup parameters it always sends, and they reach the session', async () => {
+      const engine = new PostgresEngine('pooler-pg', {
+        ...POOLER_CONFIG,
+        applicationName: 'drivers pooler test',
+      });
+      await engine.connect();
+      try {
+        const r = await engine.execute<Record<string, string>>({
+          sql: `SELECT current_setting('application_name') AS app, ` +
+            `current_setting('TimeZone') AS tz, ` +
+            `current_setting('client_encoding') AS enc`,
+        });
+        asserts.assertEquals(r.data[0], {
+          app: 'drivers pooler test',
+          tz: 'UTC',
+          enc: 'UTF8',
+        });
+      } finally {
+        await engine.disconnect();
+      }
+    });
+
+    it('statementTimeoutMs is refused at login as CONNECTION_FAILED naming statement_timeout', async () => {
+      const engine = new PostgresEngine('pooler-pg', {
+        ...POOLER_CONFIG,
+        statementTimeoutMs: 5000,
+      });
+      const error = await asserts.assertRejects(
+        () => engine.connect(),
+        EngineError,
+      );
+      await engine.disconnect();
+      asserts.assertEquals(error.code, 'CONNECTION_FAILED');
+      asserts.assertEquals(error.context.parameter, 'statement_timeout');
+      asserts.assertStringIncludes(error.message, 'ignore_startup_parameters');
+      asserts.assertStringIncludes(error.message, 'statementTimeoutMs');
+    });
+  },
+});
+
 describe({
   name: 'drivers.PostgresEngine.engine-specific',
   ignore: !pgAvailable,

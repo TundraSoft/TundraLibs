@@ -131,6 +131,8 @@ Queries run in the database's session `TimeZone`, Neon's default being GMT.
 message, so this engine cannot, and it does not check the zone. For the reason
 given under [Postgres → Time zone](../postgres/Drivers-Postgres.md#time-zone),
 set the zone on the database: `ALTER DATABASE app SET timezone TO 'UTC'`.
+It applies to server connections opened after it, so through a pooled
+endpoint the old zone holds until the pooler opens new ones.
 
 ## Limitations
 

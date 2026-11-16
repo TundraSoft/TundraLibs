@@ -42,9 +42,9 @@ export const EngineErrorCodes: Record<EngineErrorCode, string> = {
   /**
    * Failed to establish connection to database/cache.
    * Common causes: invalid host/port, network issues, auth failure.
-   * Variables: instanceId
+   * Variables: instanceId, reason (when the engine reports one)
    */
-  CONNECTION_FAILED: 'Failed to connect to ${instanceId}',
+  CONNECTION_FAILED: 'Failed to connect to ${instanceId}: ${reason}',
 
   /**
    * Failed to cleanly disconnect from database/cache.

@@ -344,23 +344,42 @@ describe({
   ignore: !mariaAvailable,
   fn: () => {
     describe('authentication', () => {
-      it('should reject bad password', async () => {
+      it('rejects a bad password as INVALID_AUTH', async () => {
         const engine = new MariaEngine('auth-bad', {
           ...TEST_CONFIG,
           password: 'definitely-wrong-password',
           pool: { min: 1, acquireTimeoutSeconds: 5 },
         });
-        try {
-          await engine.connect();
-          asserts.fail('expected auth failure');
-        } catch (e) {
-          asserts.assertInstanceOf(e, EngineError);
-          asserts.assert(
-            (e as EngineError).code === 'INVALID_AUTH' ||
-              (e as EngineError).code === 'CONNECTION_FAILED',
-            `unexpected code: ${(e as EngineError).code}`,
-          );
-        }
+        const e = await asserts.assertRejects(() => engine.connect());
+        asserts.assertInstanceOf(e, EngineError);
+        asserts.assertEquals(e.code, 'INVALID_AUTH');
+        await engine.disconnect();
+      });
+
+      it('rejects an unknown database as DATABASE_NOT_FOUND', async () => {
+        const engine = new MariaEngine('auth-db', {
+          ...TEST_CONFIG,
+          database: 'no_such_database_here',
+          pool: { min: 1, acquireTimeoutSeconds: 5 },
+        });
+        const e = await asserts.assertRejects(() => engine.connect());
+        asserts.assertInstanceOf(e, EngineError);
+        asserts.assertEquals(e.code, 'DATABASE_NOT_FOUND');
+        await engine.disconnect();
+      });
+
+      it('reports a closed port as CONNECTION_FAILED with the reason', async () => {
+        const engine = new MariaEngine('auth-port', {
+          ...TEST_CONFIG,
+          port: 1,
+          pool: { min: 1, acquireTimeoutSeconds: 5 },
+        });
+        const e = await asserts.assertRejects(() => engine.connect());
+        asserts.assertInstanceOf(e, EngineError);
+        asserts.assertEquals(e.code, 'CONNECTION_FAILED');
+        asserts.assert(
+          e.message.length > 'Failed to connect to MARIA::auth-port'.length,
+        );
         await engine.disconnect();
       });
     });

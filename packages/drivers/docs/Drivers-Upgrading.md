@@ -91,11 +91,13 @@ with a syntax error, where 1.8.0 threw `MISSING_PARAMETERS` for `b`.
 
 ### Error codes and messages
 
-| Error                                                                                | drivers 1.8.0            | Now                 |
-| ------------------------------------------------------------------------------------ | ------------------------ | ------------------- |
-| a CHECK failure on MariaDB                                                           | `QUERY_EXECUTION_FAILED` | `CHECK_VIOLATION`   |
-| access denied to a database on MariaDB, errno 1044, as on `CREATE DATABASE` or `USE` | `INVALID_AUTH`           | `PERMISSION_DENIED` |
-| an insert naming a column the table lacks, on SQLite, Turso and D1                   | `QUERY_EXECUTION_FAILED` | `COLUMN_NOT_FOUND`  |
+| Error                                                                                | drivers 1.8.0            | Now                                  |
+| ------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------ |
+| a CHECK failure on MariaDB                                                           | `QUERY_EXECUTION_FAILED` | `CHECK_VIOLATION`                    |
+| access denied to a database on MariaDB, errno 1044, as on `CREATE DATABASE` or `USE` | `INVALID_AUTH`           | `PERMISSION_DENIED`                  |
+| an insert naming a column the table lacks, on SQLite, Turso and D1                   | `QUERY_EXECUTION_FAILED` | `COLUMN_NOT_FOUND`                   |
+| a Postgres server error during startup or login that has no code of its own          | `QUERY_EXECUTION_FAILED` | `CONNECTION_FAILED`                  |
+| a MariaDB login with a wrong password, or to an unknown database                     | `CONNECTION_FAILED`      | `INVALID_AUTH`, `DATABASE_NOT_FOUND` |
 
 Messages that ended in a raw placeholder such as `${constraint}` now end
 with the name the server reported, which also lands on `context`:
@@ -109,6 +111,14 @@ with the name the server reported, which also lands on `context`:
 
 A SQLite foreign-key failure names no key, so its message ends at the
 instance id.
+
+A `CONNECTION_FAILED` message now ends with the reason when the engine
+reports one, which Postgres, MariaDB and MongoDB do:
+`Failed to connect to POSTGRES::app: connect ECONNREFUSED 127.0.0.1:5432`.
+Behind PgBouncer, `statementTimeoutMs` still fails the login, now as
+`CONNECTION_FAILED` with a message that names `statement_timeout` and says how
+to allow it. See
+[Postgres → Behind PgBouncer](../engines/postgres/Drivers-Postgres.md#behind-pgbouncer--pgcat--rds-proxy).
 
 ### SQLite binds `-0` as `0` and whole numbers as integers
 
