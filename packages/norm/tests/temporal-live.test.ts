@@ -83,7 +83,7 @@ const FIXTURES: Fixture[] = [
       database: dbName() || env.get('POSTGRES_DB') || 'postgres',
       username: env.get('POSTGRES_USERNAME') || env.get('POSTGRES_USER') ||
         'postgres',
-      password: env.get('POSTGRES_PASSWORD') || '',
+      password: env.get('POSTGRES_PASSWORD') || undefined,
     },
     ddl: `CREATE TABLE fee_schedule (
       "Id" VARCHAR(40) PRIMARY KEY, "Name" VARCHAR(30) NOT NULL,
@@ -99,7 +99,7 @@ const FIXTURES: Fixture[] = [
       port: Number.parseInt(env.get('MARIA_PORT') || '3306', 10),
       database: dbName() || env.get('MARIA_DB') || 'mysql',
       username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') || 'root',
-      password: env.get('MARIA_PASSWORD') || '',
+      password: env.get('MARIA_PASSWORD') || undefined,
     },
     // DATETIME(6) — MariaDB TIMESTAMP caps at 2038; the sentinel is 2099.
     ddl: 'CREATE TABLE fee_schedule (' +
@@ -125,25 +125,36 @@ const FIXTURES: Fixture[] = [
   },
 ];
 
-for (const fx of FIXTURES) {
+/**
+ * Each fixture's connected Norm, or why it could not connect. Opened while
+ * the file loads, not in `beforeAll`: an unreachable MongoDB gives up after
+ * 30 s, past Bun's 5 s hook limit, so on Bun the hook timed out instead of
+ * the test skipping.
+ */
+const OPENED = await Promise.all(FIXTURES.map(async (fx) => {
+  let norm: Norm | undefined;
+  try {
+    // `connect()` warms the pool and rejects when the database is
+    // unreachable.
+    norm = new Norm({ database: fx.dbConfig });
+    await norm.connect();
+    return { norm, reason: '' };
+  } catch (e) {
+    await norm?.disconnect().catch(() => {});
+    return {
+      norm: undefined,
+      reason: `${fx.name} unavailable: ${(e as Error).message}`,
+    };
+  }
+}));
+
+for (const [i, fx] of FIXTURES.entries()) {
   describe(`norm temporal — live ${fx.name}`, () => {
-    let norm: Norm | undefined;
+    const { norm, reason } = OPENED[i]!;
     let db: NormDb<{ FeeSchedule: typeof FeeSchedule }> | undefined;
-    let reason = '';
 
     beforeAll(async () => {
-      // Probe availability by actually opening the pool — `connect()` warms
-      // it and rejects when the database is unreachable, so a down engine
-      // skips exactly as the old engine.connect()+ping() check did.
-      try {
-        norm = new Norm({ database: fx.dbConfig });
-        await norm.connect();
-      } catch (e) {
-        reason = `${fx.name} unavailable: ${(e as Error).message}`;
-        await norm?.disconnect().catch(() => {});
-        norm = undefined;
-        return;
-      }
+      if (norm === undefined) return;
       db = norm.use(Schema('T', { FeeSchedule }));
       if (fx.ddl !== undefined) {
         await db.raw('DROP TABLE IF EXISTS fee_schedule').catch(() => {});

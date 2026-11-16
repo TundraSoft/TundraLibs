@@ -241,15 +241,16 @@ converts it, so the same filter matches the same rows on every engine:
 This applies to the equality shorthand, a list of values, `$eq`, `$ne`,
 `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, and `$between`, on the
 entity's own columns and through `'@Alias.@col'`. `null`, a column
-reference, an expression, and a string that does not start with an
-ISO 8601 date (on `time()`, one that is not a time) reach the engine
-unchanged. Nothing inside a
+reference, an expression, and on `time()` a string that is not a time
+reach the engine unchanged. Nothing inside a
 [hand-written `$exists`](#hand-written-exists--nexists-advanced) is
 converted.
 
-A date string that names a day or time no calendar has, such as
-`'2026-02-30'` or `'2026-01-15T24:00:00'`, throws a `NormQueryError`
-with code `INVALID_DATE`, as a write of it fails validation.
+On a date column, a string that is not an ISO 8601 date or date-time,
+such as `'Feb 30 2026'` or `'tomorrow'`, or that names a day or time no
+calendar has, such as `'2026-02-30'`, `'2026-13-45'` or
+`'2026-01-15T24:00:00'`, throws a `NormQueryError` with code
+`INVALID_DATE`, as a write of it fails validation.
 
 On a `date()` column a value stands for its UTC day, whatever its time:
 
@@ -280,7 +281,10 @@ await db.repo('Visits').count({ '@Link.@slug': 'link-00' });
 Filtering through a to-many relation that is not projected is lifted
 into a correlated `$exists` subquery, so it never fans out. A base row
 matching N related rows still comes back once, and `count()` does not
-over-count:
+over-count. The same holds for a belongsTo or hasOne whose key can
+match several rows: one matched
+[NULL-safe](#null-safe-relation-keys), or joined on columns that are
+neither the related entity's primary key nor one of its `unique` groups:
 
 ```typescript ignore
 // Every link with at least one visit from 'IN' — each link ONCE:
@@ -312,24 +316,21 @@ await db.repo('Links').find({ '@createdAt': { $gt: '@Owner.@createdAt' } });
 await db.repo('Owners').find({ '@name': { $gt: '@Items.@label' } });
 ```
 
-A relation matched [NULL-safe](#null-safe-relation-keys) supplies a
-comparison value only when the same read projects it. Unprojected, a
-row would come back once for each target it matches, so the read throws
-`INVALID_PROJECTION`. `count()` and `total: true` count without the
-projection and always throw for such a filter:
+When the to-one relation can match several rows, the read groups by the
+row's primary key, so each row comes back once, kept when at least one
+matched row passes the comparison. `count()` and `total: true` count
+distinct primary keys. Key-position conditions on the same relation
+then join with it, so one related row has to meet them all. Three reads
+throw instead: an entity with no primary key, a view, raises
+`INVALID_PROJECTION`, as it has nothing to tell its rows apart by; so
+does a projected to-many relation in the same read, whose list would
+hold each row once per match; and `aggregates` raise
+`AGGREGATE_MISUSE`, as each match would be aggregated as a row.
 
 ```typescript ignore
-// Grants.Org is nullSafe. Projected — each grant comes back once:
-await db.repo('Grants').find({ '@tenant': '@Org.@tenant' }, {
-  project: { '@id': true, '@Org': true },
-});
-
-// Not projected — NormQueryError. Project it, or match on plain
-// equality for this read:
+// Grants.Org is nullSafe — each grant comes back, and is counted, once:
 await db.repo('Grants').find({ '@tenant': '@Org.@tenant' });
-await db.repo('Grants').count({ '@tenant': '@Org.@tenant' }, {
-  nullSafe: { Org: false },
-});
+await db.repo('Grants').count({ '@tenant': '@Org.@tenant' });
 ```
 
 ### Hand-written `$exists` / `$nexists` (advanced)
@@ -472,7 +473,10 @@ adaView.data?.CreatedLinks; // { slug: string }[]
 
 A projection that names only relations is rejected, because the
 JSON-aggregate SELECT needs at least one local grouping key. Include a
-local column such as `'@id': true` alongside the relations.
+local column such as `'@id': true` alongside the relations. Each row
+comes back once even when the projection leaves its primary key out and
+two rows hold the same projected values: norm groups by the key too and
+does not return it.
 
 ## Relations
 
@@ -676,6 +680,12 @@ page.data[0]!.slug; // 'link-10'
 Order by a stable key when paging so successive windows do not overlap.
 Ordering by a to-many relation requires projecting it: an unprojected
 to-many runs as an `EXISTS` subquery, which has no ordering scope.
+Ordering by a belongsTo or hasOne that can match several rows returns
+each row once, placed by its smallest related value for `ASC` and its
+largest for `DESC`. On an entity with no primary key, or beside a
+projected to-many relation, it throws `INVALID_PROJECTION`, and with
+`aggregates` `AGGREGATE_MISUSE`, as a comparison value from such a
+relation does.
 
 ## Writes
 
@@ -763,7 +773,9 @@ A conflict never changes the primary key, the conflict keys, an
 `.insertOnly()` or norm-owned column, or a column whose value came only
 from an insert default (a generated id, `CreatedOn`, `Status: 'ACTIVE'`).
 Naming one of them in `updateOnConflict` or `update` throws
-`UPSERT_CONFLICT_KEY`.
+`UPSERT_CONFLICT_KEY`, so every row must pass each column named in
+`updateOnConflict`. A `defaultOnUpdate` column the rows leave out is the
+exception: it takes its update default.
 
 When a conflict has nothing to write (you passed only keys and insert-only
 columns, or `updateOnConflict: []`), the row is untouched: no

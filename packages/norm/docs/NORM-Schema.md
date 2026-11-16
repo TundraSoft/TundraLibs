@@ -137,8 +137,10 @@ carries. A date-time string that names no offset
 so it is the same instant on every host; a string that names an offset
 (`+05:30`, `+0530` or `+05`) keeps it. A string that names a day or
 time no calendar has, such as `'2026-02-30'` or
-`'2026-01-15T24:00:00'`, fails validation. Any other format is parsed
-as the runtime's `Date` parses it.
+`'2026-01-15T24:00:00'`, fails validation, and so does text in any
+other format, such as `'Feb 30 2026'` or `'01/15/2026'`. As a literal
+`.default()` or `.defaultOnUpdate()` such a string fails `Entity()` with
+`NormDefinitionError`.
 A filter value on these columns and on `time` is converted too: see
 [Date and time values](NORM-Querying.md#date-and-time-values).
 [Dates and time zones](NORM-Dates.md) has the native type on each
@@ -428,18 +430,34 @@ An `ExpressionDefault` is `{ $$_expression: string, args?: unknown }`.
 It is never validated as a JS value and is passed through to the query
 as given, except on a `date()` column where norm stores the day (SQLite
 and MongoDB): there a clock or `DATE_ADD` expression is reduced to its
-UTC day.
+UTC day. A `.default()` expression cannot read a column of the row being
+inserted, such as `DATE_ADD` of `'@startsOn'`: `Entity()` throws
+`NormDefinitionError`. Compute such a value in a `beforeInsert` hook. A
+`DATE_ADD` default adds to a `Date` or to a clock, `NOW`,
+`CURRENT_TIMESTAMP` or `CURRENT_TIMESTAMPTZ`, with the same result on
+every engine. The clock is read where a plain `NOW` default reads it: by
+the database on SQL, by the application on MongoDB.
+
+```typescript
+import { Column } from '@tundralibs/norm';
+
+const expiresAt = Column.timestamp().default({
+  $$_expression: 'DATE_ADD',
+  args: { date: { $$_expression: 'NOW' }, amount: 30, unit: 'DAYS' },
+});
+```
 
 On MongoDB an insert document cannot evaluate expressions, so the clock
-expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `UNIX_TIMESTAMP`)
-and `UUID` are computed when the insert is built, the clock ones at one
-instant per statement. A `date()` column given one of them holds the UTC
-day of that instant. A `date()` column given a `DATE_ADD` of a whole
-amount to a `Date` holds the UTC day of the result, which norm computes
-with the month-end rule the SQL engines follow. Any other expression
-default fails the insert with `DialectUnsupportedError`, a `DATE_ADD` on
-a `timestamp()` column or with a fractional amount included; use a local
-generator instead. Updates and upserts evaluate expressions in the
+expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`,
+`CURRENT_DATE`, `CURRENT_TIME`, `UNIX_TIMESTAMP`) and `UUID` are computed
+when the insert is built, the clock ones at one instant per statement.
+`CURRENT_TIME` is the UTC time of day of that instant as `'HH:MM:SS'`. A `date()` column given one of them holds the UTC
+day of that instant. A `DATE_ADD` of a whole amount to a `Date` or a
+clock is computed by norm, with the month-end rule the SQL engines
+follow and one clock reading per insert call; a `date()` column holds
+the UTC day of the result. Any other expression default fails the insert
+with `DialectUnsupportedError`, a `DATE_ADD` with a fractional amount
+included; use a local generator instead. Updates and upserts evaluate expressions in the
 database on every dialect.
 
 ### Transforms
@@ -947,9 +965,11 @@ Every FK from `A → B` gives `B` a reverse relation.
   pk, so `Users` sees `@Profile` as an object-or-null with no explicit
   cardinality needed. Views have no pk, so their reverses are always
   `hasMany` unless you declare otherwise. A declared `hasOne` that
-  matches several rows carries the one lowest by primary key; a view has
-  no key to order by, so there it is whichever row the engine returns
-  first.
+  matches several rows carries the one lowest by primary key. A view has
+  no key, so there it carries the one lowest by the view's columns in
+  declared order, a NULL after any value; encrypted, JSON and mask
+  columns are skipped. A filter or ordering through such a `hasOne` returns each row
+  once; see [Relation references](NORM-Querying.md#relation-references).
 
 A reverse name must be free on the target: it cannot collide with one
 of the target's columns, with a foreign-key alias (those resolve first,
@@ -993,7 +1013,7 @@ export const Orgs = Entity('orgs', {
   id: Column.integer(),
   tenant: Column.integer(),
   code: Column.varchar(20).nullable(), // NULL = the tenant's default org
-}, { pk: ['id'] });
+}, { pk: ['id'], unique: { tenantCode: ['tenant', 'code'] } });
 
 export const Grants = Entity('grants', {
   id: Column.integer(),
@@ -1026,12 +1046,11 @@ Two things follow from matching on NULL:
   holds NULL, so nothing guarantees the matching target exists.
 - A unique constraint lets several rows hold NULL, so a NULL key can
   match more than one target. A projected belongsTo then carries the
-  one lowest by primary key. A filter on a column of the relation keeps
-  the row when any of them passes it, and the row is returned and
-  counted once. A filter that takes its comparison value from the
-  relation (`'@tenant': '@Org.@tenant'`) needs the relation
-  [projected in the same read](NORM-Querying.md#relation-references),
-  and throws without it.
+  one lowest by primary key. A filter on a column of the relation, or
+  one that takes its comparison value from it
+  (`'@tenant': '@Org.@tenant'`), keeps the row when any of them passes
+  it, and the row is returned and counted once; see
+  [Relation references](NORM-Querying.md#relation-references).
 
 ### Referential actions
 

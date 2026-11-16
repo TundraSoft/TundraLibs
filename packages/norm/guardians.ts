@@ -36,7 +36,7 @@ import {
   type ObjectGuardian,
   StringGuardian,
 } from '@tundralibs/guardian';
-import { asUtc, rollsOver, toTimeOfDay } from './calendar.ts';
+import { asUtc, isDateText, rollsOver, toTimeOfDay } from './calendar.ts';
 import type { ColumnSpec } from './definition/mod.ts';
 import { isExpressionValue } from './definition/Column.ts';
 import { NormValidationError, type ValidationIssue } from './errors/mod.ts';
@@ -128,10 +128,11 @@ function buildBase(spec: ColumnSpec) {
       .process((v) => {
         const marked = asUtc(v);
         // Report the string the caller sent, without the added `Z`. A
-        // day the runtime would roll over is refused, not stored shifted.
+        // day the runtime would roll over is refused, not stored shifted,
+        // and so is text that is not ISO 8601.
         if (
           typeof v === 'string' &&
-          (rollsOver(v) ||
+          (!isDateText(v) || rollsOver(v) ||
             (marked !== v && Number.isNaN(Date.parse(marked as string))))
         ) {
           throw new GuardianError(`Cannot coerce "${v}" to Date`, {
@@ -197,7 +198,9 @@ function buildBase(spec: ColumnSpec) {
 export function rehydrateDefault(spec: ColumnSpec, v: unknown): unknown {
   if (typeof v === 'function') return v;
   if (spec.type === 'BIGINT' && typeof v === 'string') return BigInt(v);
-  if (DATE_TYPES.has(spec.type) && typeof v === 'string') return new Date(v);
+  if (DATE_TYPES.has(spec.type) && typeof v === 'string') {
+    return new Date(asUtc(v));
+  }
   return v;
 }
 

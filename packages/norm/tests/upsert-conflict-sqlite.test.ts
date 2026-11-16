@@ -212,6 +212,44 @@ describe('norm.upsert conflict semantics (live sqlite)', () => {
     }
   });
 
+  it('refuses an updateOnConflict column the payload leaves to its default', async () => {
+    await links().upsert(
+      { Grp: 'd', Key: 'a', Target: 't', CreatedBy: 'a', Status: 'KEEP' },
+      { conflictKeys },
+    );
+    for (
+      const data of [
+        { Grp: 'd', Key: 'a', Target: 't2', CreatedBy: 'a' },
+        [
+          { Grp: 'd', Key: 'a', Target: 't2', CreatedBy: 'a' },
+          { Grp: 'd', Key: 'b', Target: 't2', CreatedBy: 'a' },
+        ],
+      ]
+    ) {
+      const err = await asserts.assertRejects(
+        () =>
+          links().upsert(data, {
+            conflictKeys,
+            updateOnConflict: ['Target', 'Status'],
+          }),
+        NormQueryError,
+        "Column 'Status' on entity 'Links' cannot be updated on conflict",
+      );
+      asserts.assertEquals(err.context.code, 'UPSERT_CONFLICT_KEY');
+    }
+    const kept = await links().findOne({ '@Grp': 'd', '@Key': 'a' });
+    asserts.assertEquals(kept.data?.Status, 'KEEP');
+    asserts.assertEquals(kept.data?.Target, 't');
+    // A defaultOnUpdate column left out takes its update default.
+    const r = await links().upsert(
+      { Grp: 'd', Key: 'a', Target: 't3', CreatedBy: 'a' },
+      { conflictKeys, updateOnConflict: ['Target', 'UpdatedOn'] },
+    );
+    asserts.assertEquals(r.data[0]!.Target, 't3');
+    asserts.assertEquals(r.data[0]!.Status, 'KEEP');
+    asserts.assertInstanceOf(r.data[0]!.UpdatedOn, Date);
+  });
+
   it('a beforeUpdate hook runs on an update payload and blocks a copy', async () => {
     const hooked = db.repo('Hooked');
     await hooked.insert({ Id: 1, Name: 'ada' });
