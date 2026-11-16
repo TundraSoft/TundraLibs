@@ -421,11 +421,11 @@ where: {
 ```
 
 **Column references compare two columns.** A direct value, `$eq`,
-`$ne`, `$gt`/`$gte`/`$lt`/`$lte` and either `$between` bound accept
-another column of the **same value type** as `'@col'`; a column of a
-different type is a compile error. The translators render it as that
-column on every dialect (a `$expr` on MongoDB). `$in`/`$nin` lists take
-literals only, since MongoDB cannot express a column inside a list.
+`$ne`, `$gt`/`$gte`/`$lt`/`$lte`, either `$between` bound and an element
+of an `$in`, `$nin` or shorthand list accept another column of the
+**same value type** as `'@col'`; a column of a different type is a
+compile error. The translators render it as that column on every
+dialect (a `$expr` on MongoDB).
 
 ```typescript
 import type { QueryFilter } from '@tundralibs/oql';
@@ -440,11 +440,17 @@ type Link = {
 
 const overCap: QueryFilter<Link> = { '@clicks': { $gt: '@cap' } };
 const edited: QueryFilter<Link> = { '@updatedAt': { $gt: '@createdAt' } };
+const atCapOrUnused: QueryFilter<Link> = { '@clicks': { $in: ['@cap', 0] } };
 // const bad: QueryFilter<Link> = { '@createdAt': { $gt: '@clicks' } };
 // ❌ a Date column cannot compare against a number column
 
-console.log(overCap, edited);
+console.log(overCap, edited, atCapOrUnused);
 ```
+
+The types know only the declared columns. An expression or aggregate
+alias is checked at runtime: with a declared schema it does not
+type-check as a filter key, or as a value on a column that is not a
+`string`.
 
 At runtime an `@` string is a column reference only when it names a
 column in scope; otherwise it binds as a literal, so user data that

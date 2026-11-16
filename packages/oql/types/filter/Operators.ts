@@ -28,12 +28,12 @@ import type { Expressions } from '../expressions/Expressions.ts';
  * value as an operator; to exact-match a JSON document that
  * contains operator-shaped keys, wrap it explicitly in `$eq`.
  *
- * **Column references.** A direct value, `$eq`, `$ne` and the
- * comparison operators also accept another column of the SAME value
- * type, as `'@col'` — `{ '@updatedAt': { $gt: '@createdAt' } }`. The
- * translators render an `@` string naming an in-scope column as that
- * column on every dialect (a `$expr` on MongoDB). `$in` / `$nin` lists
- * take literals only: MongoDB cannot express a column inside a list.
+ * **Column references.** A direct value, a list element, `$eq`, `$ne`,
+ * an `$in` / `$nin` element and the comparison operators also accept
+ * another column of the SAME value type, as `'@col'` —
+ * `{ '@updatedAt': { $gt: '@createdAt' } }`. The translators render an
+ * `@` string naming an in-scope column as that column on every dialect
+ * (a `$expr` on MongoDB).
  */
 export type Operators<
   T extends ColumnTypes = ColumnTypes,
@@ -43,15 +43,15 @@ export type Operators<
   | null
   | T
   | ColumnRefOf<FPT, T>
-  | Array<NonNullable<T>>
+  | Array<NonNullable<T> | ColumnRefOf<FPT, T>>
   | {
     // `null` is intentionally excluded from $eq/$ne/$in/$nin values.
     // SQL `= NULL` and `<> NULL` are always unknown (never true);
     // for null comparisons use `$null: true` / `$null: false` instead.
     $eq?: NonNullable<T> | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
     $ne?: NonNullable<T> | Expressions<PT, FPT> | ColumnRefOf<FPT, T>;
-    $in?: Array<NonNullable<T>>;
-    $nin?: Array<NonNullable<T>>;
+    $in?: Array<NonNullable<T> | ColumnRefOf<FPT, T>>;
+    $nin?: Array<NonNullable<T> | ColumnRefOf<FPT, T>>;
     $null?: boolean;
   }
     & (

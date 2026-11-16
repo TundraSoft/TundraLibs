@@ -75,7 +75,7 @@ describe('oql.types.FilterOperator', () => {
     asserts.assertEquals(params, { p_0: 42 });
   });
 
-  it('accepts a same-typed column reference as the value of =, <>, comparisons and BETWEEN — and rejects a mismatched type or an $in list of refs', () => {
+  it('accepts a same-typed column reference as the value of =, <>, comparisons and BETWEEN — and rejects a mismatched type', () => {
     type Event = {
       id: number;
       createdAt: Date;
@@ -110,15 +110,67 @@ describe('oql.types.FilterOperator', () => {
       // @ts-expect-error a Date column cannot compare against a number column
       where: { '@createdAt': { $gt: '@clicks' } },
     } satisfies Query<'SELECT', Event>;
-    const listOfRefs = {
+    asserts.assert(mismatched);
+  });
+
+  it('accepts a same-typed column reference inside $in, $nin and a shorthand list', () => {
+    type Event = {
+      id: number;
+      createdAt: Date;
+      updatedAt: Date | null;
+      clicks: number;
+      cap: number;
+      live: boolean;
+      open: boolean;
+    };
+    const query = {
       type: 'SELECT',
       table: 'events',
-      columns: ['id', 'clicks', 'cap'],
+      columns: [
+        'id',
+        'createdAt',
+        'updatedAt',
+        'clicks',
+        'cap',
+        'live',
+        'open',
+      ],
       projection: { '@id': true },
-      // @ts-expect-error $in takes literals only (MongoDB cannot list columns)
-      where: { '@clicks': { $in: ['@cap'] } },
+      where: {
+        '@clicks': { $in: ['@cap', 5] },
+        '@cap': { $nin: ['@clicks', '@id'] },
+        '@id': ['@clicks', 9],
+        '@createdAt': { $in: ['@updatedAt'] },
+        '@live': ['@open'],
+      },
     } satisfies Query<'SELECT', Event>;
-    asserts.assert(mismatched && listOfRefs);
+    const { sql, params } = translate(query);
+    asserts.assertStringIncludes(sql, '"clicks" IN ("cap", :p_0:)');
+    asserts.assertStringIncludes(sql, '"cap" NOT IN ("clicks", "id")');
+    asserts.assertStringIncludes(sql, '"id" IN ("clicks", :p_1:)');
+    asserts.assertStringIncludes(sql, '"createdAt" IN ("updatedAt")');
+    asserts.assertStringIncludes(sql, '"live" IN ("open")');
+    asserts.assertEquals(params, { p_0: 5, p_1: 9 });
+  });
+
+  it('refuses a wrong literal and a column of another type in every value position', () => {
+    type Event = { id: number; createdAt: Date; clicks: number; label: string };
+    type Where = NonNullable<Query<'SELECT', Event>['where']>;
+    const refused: Where[] = [
+      // @ts-expect-error a number column takes no text
+      { '@clicks': 'five' },
+      // @ts-expect-error a number column takes no text in a comparison
+      { '@clicks': { $lt: 'five' } },
+      // @ts-expect-error a number list takes no text
+      { '@clicks': { $in: [5, 'five'] } },
+      // @ts-expect-error a number list takes no text column
+      { '@clicks': { $nin: ['@label'] } },
+      // @ts-expect-error a number list takes no Date column
+      { '@clicks': ['@createdAt'] },
+      // @ts-expect-error a Date list takes no number
+      { '@createdAt': { $in: [5] } },
+    ];
+    asserts.assertEquals(refused.length, 6);
   });
 
   it('still accepts operator objects on a query with no declared schema', () => {
