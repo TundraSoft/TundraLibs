@@ -378,6 +378,7 @@ function _mariaErrorToCode(
     case 'ER_NO_DB_ERROR':
       return 'DATABASE_NOT_FOUND';
     case 'ER_NO_SUCH_TABLE':
+    case 'ER_BAD_TABLE_ERROR':
     case 'ER_UNKNOWN_TABLE':
       return 'TABLE_NOT_FOUND';
     case 'ER_BAD_FIELD_ERROR':

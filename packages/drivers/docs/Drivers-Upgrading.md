@@ -109,6 +109,7 @@ with a syntax error, where 1.8.0 threw `MISSING_PARAMETERS` for `b`.
 | Error                                                                                | drivers 1.8.0            | Now                 |
 | ------------------------------------------------------------------------------------ | ------------------------ | ------------------- |
 | a CHECK failure on MariaDB                                                           | `QUERY_EXECUTION_FAILED` | `CHECK_VIOLATION`   |
+| `DROP TABLE` on a missing table on MariaDB, errno 1051                               | `QUERY_EXECUTION_FAILED` | `TABLE_NOT_FOUND`   |
 | access denied to a database on MariaDB, errno 1044, as on `CREATE DATABASE` or `USE` | `INVALID_AUTH`           | `PERMISSION_DENIED` |
 | an insert naming a column the table lacks, on SQLite, Turso and D1                   | `QUERY_EXECUTION_FAILED` | `COLUMN_NOT_FOUND`  |
 

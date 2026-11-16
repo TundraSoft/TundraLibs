@@ -182,6 +182,7 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
       ['ER_DBACCESS_DENIED_ERROR', 'PERMISSION_DENIED'],
       ['ER_BAD_DB_ERROR', 'DATABASE_NOT_FOUND'],
       ['ER_NO_SUCH_TABLE', 'TABLE_NOT_FOUND'],
+      ['ER_BAD_TABLE_ERROR', 'TABLE_NOT_FOUND'],
       ['ER_BAD_FIELD_ERROR', 'COLUMN_NOT_FOUND'],
       ['ER_DUP_ENTRY', 'DUPLICATE_KEY'],
       ['ER_NO_REFERENCED_ROW_2', 'FOREIGN_KEY_VIOLATION'],
@@ -257,6 +258,12 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
       [
         'ER_NO_SUCH_TABLE',
         "Table 'app.nosuch' doesn't exist",
+        'table',
+        'app.nosuch',
+      ],
+      [
+        'ER_BAD_TABLE_ERROR',
+        "Unknown table 'app.nosuch'",
         'table',
         'app.nosuch',
       ],
@@ -898,6 +905,11 @@ describe({
             ],
             [
               `SELECT * FROM ${parent}_none`,
+              'TABLE_NOT_FOUND',
+              `${TEST_CONFIG.database}.${parent}_none`,
+            ],
+            [
+              `DROP TABLE ${parent}_none`,
               'TABLE_NOT_FOUND',
               `${TEST_CONFIG.database}.${parent}_none`,
             ],
