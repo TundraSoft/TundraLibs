@@ -108,7 +108,7 @@ message text.
 | `DIALECT_UNSUPPORTED`         | `DialectUnsupportedError` | The dialect has no way to express this query, expression, or aggregate.        |
 | `INVALID_COLUMN_REF`          | `OqlError`                | A column reference lacked an `@`, or named an expression, not a column.        |
 | `FILTER_DEPTH_EXCEEDED`       | `OqlError`                | A filter nested deeper than 50 levels of `$and` / `$or` / `$exists`.           |
-| `EXISTS_NO_OUTER_TABLE`       | `OqlError`                | A correlated `$exists` was used where there is no outer table to correlate to. |
+| `EXISTS_NO_OUTER_TABLE`       | `OqlError`                | An `$exists` was used where there is no outer table, such as an index `where`. |
 | `INSERT_COLUMN_NOT_IN_SCHEMA` | `OqlError`                | INSERT `data` named a column that is not in the query's `columns`.             |
 | `JOIN_NO_COLUMNS`             | `OqlError`                | A join alias was projected whole, but the join declares no columns.            |
 | `ALTER_VIEW_EMPTY`            | `OqlError`                | `ALTER_VIEW` carried neither `renameTo` nor `query`.                           |
@@ -225,23 +225,26 @@ independent guards in different layers, not a typo.
 
 ### `EXISTS_NO_OUTER_TABLE`
 
-An `$exists` / `$nexists` filter tried to correlate a value back to a column
-of the outer query, in a position where OQL has no outer table name to
-qualify it with. Emitting the reference unqualified would silently bind it to
-the **subquery's** table (innermost `FROM` wins in SQL), quietly changing the
-predicate's meaning, so OQL refuses instead.
+An `$exists` / `$nexists` filter sits in a position where OQL has no outer
+table name to qualify a correlated reference with. Emitting the reference
+unqualified would silently bind it to the **subquery's** table (innermost
+`FROM` wins in SQL), quietly changing the predicate's meaning, so OQL
+refuses instead.
 
-**Triggered by** a correlated `$exists` inside a `CREATE_INDEX` partial-index
-predicate — the only filter position OQL translates without a surrounding
-query. Correlated `$exists` in a `SELECT` / `COUNT` / `UPDATE` / `DELETE`
-`where` is fully supported on the SQL dialects: those call sites pass the
-query's own table as the correlation context.
+**Triggered by** any `$exists` / `$nexists` inside a `CREATE_INDEX`
+partial-index `where`, correlated or not, at any `$and` / `$or` depth.
+`assertCreateIndex` throws it, so every dialect does: no engine takes a
+subquery in an index predicate. Correlated `$exists` in a `SELECT` /
+`COUNT` / `UPDATE` / `DELETE` `where` is supported on the SQL dialects,
+which pass the query's own table as the correlation context; on MongoDB
+UPDATE and DELETE throw `DIALECT_UNSUPPORTED` for it.
 
-**Fix:** drop the correlation from the index predicate — a partial index can
-only test columns of the table it indexes. If you need the correlated
-condition, apply it in the query's `where` instead.
+**Fix:** drop the `$exists` from the index predicate — a partial index can
+only test columns of the table it indexes. If you need the condition,
+apply it in the query's `where` instead.
 
-**Extra context:** `ref` — the reference that could not be correlated.
+**Extra context:** `ref` — the reference that could not be correlated, or
+the `$exists` / `$nexists` key an index `where` holds.
 
 ### `INSERT_COLUMN_NOT_IN_SCHEMA`
 

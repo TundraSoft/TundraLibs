@@ -4,6 +4,7 @@
  * @module asserts/Query/DDL/Index
  */
 
+import { OqlError } from '../../../errors/mod.ts';
 import type { Query, TableType } from '../../../types/mod.ts';
 import {
   assertQueryType,
@@ -46,6 +47,23 @@ const DROP_INDEX_PROPS = new Set([
 ]);
 
 /**
+ * The first `$exists` / `$nexists` key of a filter, at any `$and` / `$or`
+ * depth, or `null`. @internal
+ */
+const findExistsNode = (filter: unknown): string | null => {
+  for (const [key, value] of Object.entries(Object(filter))) {
+    if (key === '$exists' || key === '$nexists') return key;
+    if ((key === '$and' || key === '$or') && Array.isArray(value)) {
+      for (const sub of value) {
+        const node = findExistsNode(sub);
+        if (node !== null) return node;
+      }
+    }
+  }
+  return null;
+};
+
+/**
  * Asserts a value is a valid `CREATE_INDEX` query: `index` and `table` are
  * valid identifiers, `columns` is a non-empty array of column identifiers
  * (`@`-prefixed), optional `method` is one of {@link INDEX_METHODS}, optional
@@ -54,6 +72,10 @@ const DROP_INDEX_PROPS = new Set([
  *
  * The `where` clause is validated without a column list — the actual column
  * existence check happens at execution time against the live schema.
+ *
+ * @throws {OqlError} `EXISTS_NO_OUTER_TABLE` for an `$exists` / `$nexists`
+ *   in `where`, at any `$and` / `$or` depth: no engine takes a subquery
+ *   in an index predicate.
  */
 export const assertCreateIndex: (
   x: unknown,
@@ -172,6 +194,13 @@ export const assertCreateIndex: (
         `Invalid CREATE_INDEX query: 'where' clause is invalid - ${
           error instanceof Error ? error.message : String(error)
         }`,
+      );
+    }
+    const node = findExistsNode(query.where);
+    if (node !== null) {
+      throw new OqlError(
+        `Invalid CREATE_INDEX query: 'where' holds '${node}', a subquery, which no index predicate can hold`,
+        { code: 'EXISTS_NO_OUTER_TABLE', ref: node },
       );
     }
   }

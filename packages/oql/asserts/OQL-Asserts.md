@@ -352,7 +352,8 @@ const valid = isCreateIndex(query);
 - Index name and table
 - Column list with @ prefixes
 - Index method (BTREE, HASH, etc.)
-- Unique/partial index options
+- Unique/partial index options; a partial `where` holding `$exists` or
+  `$nexists` throws `OqlError` `EXISTS_NO_OUTER_TABLE`
 
 ### CREATE VIEW
 

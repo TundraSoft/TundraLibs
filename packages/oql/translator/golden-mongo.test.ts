@@ -4747,6 +4747,136 @@ const CASES: Case[] = [
     },
   },
   {
+    // A joined column holds the unwound row's value, bound like a base
+    // column; the match runs after the join.
+    name: '$exists keyed on a joined column binds its value',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'profiles',
+          columns: ['id', 'userId'],
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      where: {
+        $exists: { table: 'orders', on: { '@profileId': '@P.@id' } },
+      },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'profiles',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$P.id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$profileId', '$$v0'] },
+                        { $gt: ['$profileId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '__exists_0',
+            },
+          },
+          { $match: { __exists_0: { $ne: [] } } },
+          { $unset: ['__exists_0'] },
+          { $project: { id: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // The CASE condition's lookup runs before the expressions stage, which
+    // tests its size; the field avoids the column named like it.
+    name: '$nexists inside a CASE condition of a SELECT expression',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', '__exists_0'],
+      expressions: {
+        buyer: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { $nexists: { table: 'orders', on: { '@userId': '@id' } } },
+              then: 'no',
+            }],
+            else: 'yes',
+          },
+        },
+      },
+      projection: { '@id': true, '@buyer': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '___exists_0',
+            },
+          },
+          {
+            $addFields: {
+              buyer: {
+                $switch: {
+                  branches: [{
+                    case: { $eq: [{ $size: '$___exists_0' }, 0] },
+                    then: 'no',
+                  }],
+                  default: 'yes',
+                },
+              },
+            },
+          },
+          { $unset: ['___exists_0'] },
+          { $project: { id: 1, buyer: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     // A column of the query, or of the subquery table its sub-where names,
     // keeps its value: the lookup field takes another name.
     name: '$exists beside a column named like its lookup field',
@@ -5296,30 +5426,6 @@ describe('oql.translator.MongoTranslator — $exists refusals', () => {
       DialectUnsupportedError,
     );
     asserts.assertStringIncludes(err.feature, 'outside a SELECT or COUNT');
-  });
-
-  it('refuses a key bound to a joined column, naming the column', () => {
-    const err = asserts.assertThrows(
-      () =>
-        t.select({
-          type: 'SELECT',
-          table: 'users',
-          columns: ['id'],
-          joins: {
-            P: {
-              table: 'profiles',
-              columns: ['id', 'userId'],
-              on: { '@P.@userId': '@id' },
-            },
-          },
-          projection: { '@id': true },
-          where: {
-            $exists: { table: 'orders', on: { '@profileId': '@P.@id' } },
-          },
-        } as unknown as Query<'SELECT'>),
-      DialectUnsupportedError,
-    );
-    asserts.assertStringIncludes(err.feature, '@P.@id');
   });
 });
 

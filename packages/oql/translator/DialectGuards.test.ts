@@ -561,6 +561,33 @@ describe('oql.translator.guards', () => {
       );
     });
 
+    it('refuses an $exists or $nexists on every dialect with one error', () => {
+      // No engine takes a subquery in an index predicate: Postgres and
+      // SQLite fail in the database, MariaDB has no partial index.
+      const translators = [
+        new PostgresTranslator(),
+        new MariaTranslator(),
+        new SQLiteTranslator(),
+        new MongoTranslator(),
+      ];
+      for (const node of ['$exists', '$nexists']) {
+        const where = {
+          $or: [{ '@due': null }, {
+            [node]: { table: 'items', on: { '@orderId': 1 } },
+          }],
+        };
+        for (const t of translators) {
+          const err = asserts.assertThrows(
+            () =>
+              t.createIndex({ ...index(1), where } as Query<'CREATE_INDEX'>),
+            OqlError,
+            `'where' holds '${node}'`,
+          );
+          asserts.assertEquals(err.code, 'EXISTS_NO_OUTER_TABLE');
+        }
+      }
+    });
+
     it('refuses any expression on MongoDB only', () => {
       asserts.assertThrows(
         () => new MongoTranslator().createIndex(index(add)),

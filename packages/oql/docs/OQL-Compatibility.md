@@ -90,6 +90,9 @@ MongoDB, whose partial filter takes no `$expr`. Each throws
 `DATE_TRUNC` on a `TIMESTAMPTZ` or `DATE` column still fails in the
 database on Postgres, which calls it not IMMUTABLE there; on a
 `TIMESTAMP` column it is accepted.
+An `$exists` or `$nexists` in the `where` throws `OqlError`
+`EXISTS_NO_OUTER_TABLE` on every dialect, MariaDB included: no engine
+takes a subquery in an index predicate.
 
 **MariaDB DROP INDEX caveat**: `ifExists` and `cascade` are silently
 dropped because MariaDB's `DROP INDEX` grammar does not accept them.
@@ -404,11 +407,18 @@ SQL.
 
 `updateMany` and `deleteMany` take a query filter, which has no stage
 to run a lookup in, so an UPDATE or DELETE carrying the node throws on
-MongoDB, as does a partial-index predicate. Select the keys with the
+MongoDB. A partial-index predicate cannot hold the node on any dialect,
+see [Indexes](#indexes). Select the keys with the
 same filter first, then update or delete by `$in` on them. An `on`
-value that names a joined column (`'@Alias.@col'`) also throws on
-MongoDB, as does a nested node correlated to its parent: an `on` value
-that is a bare `'@name'`.
+value that names a joined column, `'@Alias.@col'`, reads that column
+of the row, as on SQL. A nested node correlated to its parent, an `on`
+value that is a bare `'@name'`, throws on MongoDB.
+
+A `CASE` `when` condition may hold the node in a SELECT's
+`expressions`. On MongoDB its `$lookup` runs just before the stage that
+computes the expressions, and the condition tests the size of the
+looked-up array. Anywhere else a CASE condition is translated, such as
+UPDATE `data`, the node throws `DialectUnsupportedError` on MongoDB.
 
 ## Expressions
 

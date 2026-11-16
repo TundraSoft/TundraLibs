@@ -14,8 +14,8 @@ import type { QueryFilter } from './QueryFilter.ts';
  * the outer query's tables.
  *
  * MongoDB runs the node as a `$lookup` stage on SELECT and COUNT and
- * returns the same rows. UPDATE and DELETE throw there, as does an
- * `on` value naming a joined column.
+ * returns the same rows, an `on` value naming a joined column
+ * included. UPDATE and DELETE throw there.
  *
  * **`on` — the correlation map.** Follows the join `on` conventions:
  * each KEY is a column of the subquery `table` (single-segment
