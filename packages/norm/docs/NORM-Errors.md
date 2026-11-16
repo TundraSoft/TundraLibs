@@ -118,7 +118,7 @@ never a database failure. Two of the ten (`TEMPORAL_PAST`,
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `UNKNOWN_ENTITY`        | `db.repo(key)` or `db.query({ entity })` names a registry key no composed schema provides.                                                                                                                                                                              | Compose the schema that declares it (`norm.use(...)`), or fix the key. Treat as a programming error, not user input.                                                     |
 | `NON_FILTERABLE_COLUMN` | A filter, `orderBy`, or column reference targets a column marked `unfilterable()` (implied by `encrypt()`), locally or through a relation, or a hashed column got a non-plaintext value, a column-to-column compare, or a non-equality operator.                        | Filter the plaintext `.hash()` sibling instead of the ciphertext, and keep hashed-column filters to `$eq` / `$ne` / `$in` / `$nin` / `$null` with plaintext (or `null`). |
-| `AGGREGATE_MISUSE`      | An `aggregate` request is malformed (unknown fn, non-local column, alias collision) or combined with something incompatible: `total: true`, relation projections, mask columns, or an encrypted column.                                                                 | Group over plain, physical, local columns; drop `total` (a grouped query's total is its row count) and read relations in a separate query.                               |
+| `AGGREGATE_MISUSE`      | An `aggregate` request is malformed (unknown fn, non-local column, alias collision) or combined with something incompatible: `total: true`, relation projections, a relation join that repeats rows, mask columns, or an encrypted column.                              | Group over plain, physical, local columns; drop `total` (a grouped query's total is its row count) and read relations in a separate query.                               |
 | `UPSERT_CONFLICT_KEY`   | A `conflictKeys` / `updateOnConflict` / `update` entry is a virtual mask, an encrypted (nondeterministic) column, a primary-key, conflict-key or insert-only column, a column a row does not pass, or a copy that the entity's `beforeUpdate` hook could not see.       | Point the conflict key at a plain column or the encrypted column's `.hash()` sibling; change keys with `update()`; pass `update: {..}` on an entity with `beforeUpdate`. |
 | `UPSERT_BATCH_SHAPE`    | An upsert batch passes different columns in different rows; one conflict clause cannot serve them all.                                                                                                                                                                  | Pass the same columns in every row (`null` where you mean null), or upsert rows one at a time.                                                                           |
 | `SCOPE_VIOLATION`       | A `db.scope(...)` spec is invalid (a key that is not a single `@column`, or a value that is not an equality primitive), a scoped write would move a row out of its scope, a scoped upsert would adopt an outside row, or `truncate()` is called on a scoped handle.     | Fix the scope spec, or drop the offending column from the payload and let the scope fill it. Use `delete({})` instead of `truncate()` on a scoped handle.                |
@@ -131,11 +131,13 @@ Three refusals reuse an existing code rather than getting one of their
 own: ordering by, or supplying a filter value from, an unprojected
 to-many relation raises `INVALID_PROJECTION` (an unprojected to-many
 runs as an `EXISTS` subquery, so project it or move the condition to
-key position); supplying a filter value from an unprojected to-one
-relation that can match several rows, one matched
-[NULL-safe](NORM-Querying.md#null-safe-relation-keys) or joined on
+key position); an entity with no primary key that takes a filter value
+from, or orders by, a to-one relation able to match several rows, one
+matched [NULL-safe](NORM-Querying.md#null-safe-relation-keys) or joined on
 columns that are no declared key of the related entity, raises it too,
-because the row would come back once per match; and a scoped
+because nothing tells its rows apart, and so does such a filter value
+or ordering beside a projected to-many relation, whose list would hold
+each row once per match; and a scoped
 upsert whose scope column is encrypted with no `.hash()` sibling raises
 `SCOPE_VIOLATION`.
 

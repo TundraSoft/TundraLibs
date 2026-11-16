@@ -965,12 +965,11 @@ Every FK from `A → B` gives `B` a reverse relation.
   pk, so `Users` sees `@Profile` as an object-or-null with no explicit
   cardinality needed. Views have no pk, so their reverses are always
   `hasMany` unless you declare otherwise. A declared `hasOne` that
-  matches several rows carries the one lowest by primary key; a view has
-  no key to order by, so there it is whichever row the engine returns
-  first. Unless the FK's local columns are this entity's primary key or
-  one of its `unique` groups, a filter that takes its comparison value
-  from a `hasOne` needs it
-  [projected in the same read](NORM-Querying.md#relation-references).
+  matches several rows carries the one lowest by primary key. A view has
+  no key, so there it carries the one lowest by the view's columns in
+  declared order, a NULL after any value; encrypted, JSON and mask
+  columns are skipped. A filter or ordering through such a `hasOne` returns each row
+  once; see [Relation references](NORM-Querying.md#relation-references).
 
 A reverse name must be free on the target: it cannot collide with one
 of the target's columns, with a foreign-key alias (those resolve first,
@@ -1047,12 +1046,11 @@ Two things follow from matching on NULL:
   holds NULL, so nothing guarantees the matching target exists.
 - A unique constraint lets several rows hold NULL, so a NULL key can
   match more than one target. A projected belongsTo then carries the
-  one lowest by primary key. A filter on a column of the relation keeps
-  the row when any of them passes it, and the row is returned and
-  counted once. A filter that takes its comparison value from the
-  relation (`'@tenant': '@Org.@tenant'`) needs the relation
-  [projected in the same read](NORM-Querying.md#relation-references),
-  and throws without it.
+  one lowest by primary key. A filter on a column of the relation, or
+  one that takes its comparison value from it
+  (`'@tenant': '@Org.@tenant'`), keeps the row when any of them passes
+  it, and the row is returned and counted once; see
+  [Relation references](NORM-Querying.md#relation-references).
 
 ### Referential actions
 

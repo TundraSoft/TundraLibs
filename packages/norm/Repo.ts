@@ -358,6 +358,10 @@ type ProjectionPlan = {
    * (per-table pruning cannot invalidate it when the related table is
    * written). */
   existsAliases: readonly string[];
+  /** Aliases joined for a filter or ordering, not projected, that can
+   * match several rows: the read groups by the base row so each comes
+   * back once, and a count counts distinct primary keys. */
+  fanOut: readonly string[];
   /** Output key → `<registryKey>.<col>` provenance. */
   aliasMap: Map<string, string>;
   relations: Array<{
@@ -741,6 +745,8 @@ export class ReadRepo<
     );
     if (options.aggregates !== undefined) {
       this._mergeAggregates(plan, options.aggregates, options);
+    } else {
+      this.__groupByBaseRow(plan);
     }
     if (
       effProject !== undefined && options.project === undefined &&
@@ -912,23 +918,13 @@ export class ReadRepo<
     //     the projection's aggregates/joins, which would fan out).
     let total: number | undefined;
     if (options.total === true) {
-      const cq = {
-        type: 'COUNT',
-        ...this._irBase(),
-        columns: c.columnNames,
-        ...(countPlan !== undefined &&
-            Object.keys(countPlan.oqlJoins).length > 0
-          ? { joins: countPlan.oqlJoins }
-          : {}),
-        ...(countPlan?.where !== undefined
-          ? { where: countPlan.where }
-          : where
-          ? { where }
-          : {}),
-      } as NormDMLQuery;
-      const cres = await this._executor.execute<Row>(cq);
+      const counted = this.__countQuery(
+        countPlan,
+        (countPlan?.where ?? where) as QueryFilter | undefined,
+      );
+      const cres = await this._executor.execute<Row>(counted.q);
       this._emitCall('COUNT', cres.time, cres.isSlow, id);
-      total = coerceCount(cres.data[0]?.Count);
+      total = counted.read(cres.data);
     }
 
     // 11. Populate the cache on a miss (no-op when caching did not apply
@@ -1036,13 +1032,8 @@ export class ReadRepo<
       Object.keys(plan.oqlJoins).length > 0;
     const cacheIneligible = plan !== undefined &&
       (hasJoins || plan.existsAliases.length > 0);
-    const q = {
-      type: 'COUNT',
-      ...this._irBase(),
-      columns: c.columnNames,
-      ...(hasJoins ? { joins: plan!.oqlJoins } : {}),
-      ...(effWhere ? { where: effWhere } : {}),
-    } as NormDMLQuery;
+    const counted = this.__countQuery(plan, effWhere);
+    const q = counted.q;
 
     const lookup = await this._cacheLookup('COUNT', q, {
       noCache: options.noCache,
@@ -1064,7 +1055,7 @@ export class ReadRepo<
     const res = await this._executor.execute<Row>(q);
     this._emitCall('COUNT', res.time, res.isSlow, id);
     // Postgres/MariaDB return COUNT() as BIGINT-string; coerce.
-    const count = coerceCount(res.data[0]?.Count);
+    const count = counted.read(res.data);
     await this._cacheStore(lookup.key, count);
     return makeResult({
       id,
@@ -1574,6 +1565,15 @@ export class ReadRepo<
         { entity: c.key, code: 'AGGREGATE_MISUSE' },
       );
     }
+    if (plan.fanOut.length > 0) {
+      throw new NormQueryError(
+        `aggregates cannot combine with a filter or orderBy through ` +
+          `relation '${plan.fanOut[0]}' on '${c.key}', which can match ` +
+          `several rows: each match would be aggregated as a row. Filter ` +
+          `through it in key position, which runs as an EXISTS subquery.`,
+        { entity: c.key, subject: plan.fanOut[0], code: 'AGGREGATE_MISUSE' },
+      );
+    }
     if (plan.relations.length > 0) {
       throw new NormQueryError(
         `aggregates cannot combine with relation projections on ` +
@@ -1641,6 +1641,123 @@ export class ReadRepo<
       plan.oqlAggregates[alias] = { $$_aggregate: agg.fn, column: `@${col}` };
       plan.oqlProjection[`@${alias}`] = true;
     }
+  }
+
+  /** A read that projects a relation is grouped, one row per group:
+   * group by the primary key too, so two rows whose projected columns
+   * are equal stay two rows. A read that joins a relation only to filter
+   * or order by it, and that relation can match several rows, is grouped
+   * the same way, behind a hidden row count. The key and the count are
+   * fetched under hidden names and stripped. An entity with no primary
+   * key, a view, groups by its projected columns, and has nothing to
+   * group by when it projects no relation.
+   *
+   * @throws {@link NormQueryError} `INVALID_PROJECTION` for such a join
+   *   on an entity with no primary key, or beside a projected to-many,
+   *   whose list would hold each row once per match. */
+  private __groupByBaseRow(plan: ProjectionPlan): void {
+    if (plan.relations.length === 0 && plan.fanOut.length === 0) return;
+    const list = plan.relations.find((r) => r.cardinality === 'hasMany');
+    if (plan.fanOut.length > 0 && list !== undefined) {
+      const c = this._compiled;
+      throw new NormQueryError(
+        `'${c.key}' projects to-many relation '${list.outputKey}' and ` +
+          `joins relation '${plan.fanOut[0]}', which can match several ` +
+          `rows, for a filter or orderBy: the list would hold each row ` +
+          `once per match. Filter through '${plan.fanOut[0]}' in key ` +
+          `position, or read the list in a separate query.`,
+        { entity: c.key, subject: plan.fanOut[0], code: 'INVALID_PROJECTION' },
+      );
+    }
+    const pk = this.__rowKey(plan);
+    const taken = new Set(
+      Object.entries(plan.oqlProjection).map(([k, v]) =>
+        v === true ? k.slice(1) : v
+      ),
+    );
+    for (const col of pk) {
+      if (plan.oqlProjection[`@${col}`] !== undefined) continue;
+      let key = `__pk_${col}`;
+      while (taken.has(key)) key = `_${key}`;
+      taken.add(key);
+      plan.oqlProjection[`@${col}`] = key;
+      plan.anchorStrips.push(key);
+    }
+    if (plan.relations.length > 0) return;
+    let rows = '__rows';
+    while (taken.has(rows) || rows in plan.oqlAggregates) rows = `_${rows}`;
+    plan.oqlAggregates[rows] = { $$_aggregate: 'COUNT' };
+    plan.oqlProjection[`@${rows}`] = true;
+    plan.anchorStrips.push(rows);
+    // MongoDB returns the group key as `_id`, as a read that projects a
+    // relation does not.
+    if (this._executor.capabilities.dialect === 'mongo' && !taken.has('_id')) {
+      plan.anchorStrips.push('_id');
+    }
+  }
+
+  /** The base entity's primary key, which tells its rows apart when a
+   * join repeats them.
+   *
+   * @throws {@link NormQueryError} `INVALID_PROJECTION` when the plan
+   *   joins a relation that can match several rows, projects none, and
+   *   the entity has no primary key. */
+  private __rowKey(plan: ProjectionPlan): readonly string[] {
+    const c = this._compiled;
+    const pk = (c.def as { primaryKeys?: readonly string[] }).primaryKeys ??
+      [];
+    if (pk.length > 0 || plan.relations.length > 0) return pk;
+    const alias = plan.fanOut[0]!;
+    throw new NormQueryError(
+      `'${c.key}' has no primary key, so a read that joins relation ` +
+        `'${alias}', which can match several rows, cannot return or ` +
+        `count each of its rows once. Filter through '${alias}' in key ` +
+        `position, which runs as an EXISTS subquery.`,
+      { entity: c.key, subject: alias, code: 'INVALID_PROJECTION' },
+    );
+  }
+
+  /** The COUNT IR for a filter, and how to read its answer. A plan that
+   * joins a relation which can match several rows repeats a row once
+   * per match, so it counts distinct primary keys: in one aggregate for
+   * a single-column key, as grouped rows for a composite one. */
+  private __countQuery(
+    plan: ProjectionPlan | undefined,
+    where: QueryFilter | undefined,
+  ): { q: NormDMLQuery; read: (rows: Row[]) => number } {
+    const base = {
+      ...this._irBase(),
+      columns: this._compiled.columnNames,
+      ...(plan !== undefined && Object.keys(plan.oqlJoins).length > 0
+        ? { joins: plan.oqlJoins }
+        : {}),
+      ...(where !== undefined ? { where } : {}),
+    };
+    if (plan === undefined || plan.fanOut.length === 0) {
+      return {
+        q: { type: 'COUNT', ...base } as NormDMLQuery,
+        read: (rows) => coerceCount(rows[0]?.Count),
+      };
+    }
+    const pk = this.__rowKey(plan);
+    const single = pk.length === 1;
+    const q = {
+      type: 'SELECT',
+      ...base,
+      aggregates: {
+        __rows: single
+          ? { $$_aggregate: 'COUNT', column: `@${pk[0]}`, distinct: true }
+          : { $$_aggregate: 'COUNT' },
+      },
+      projection: {
+        ...(single ? {} : Object.fromEntries(pk.map((k) => [`@${k}`, true]))),
+        '@__rows': true,
+      },
+    } as NormDMLQuery;
+    return {
+      q,
+      read: (rows) => single ? coerceCount(rows[0]?.__rows) : rows.length,
+    };
   }
 
   /** Resolve the caller-supplied projection (plus filter / orderBy
@@ -1895,16 +2012,34 @@ export class ReadRepo<
       // child) picks by it so every engine returns the same one. A join
       // on the whole key matches one row at most and a to-many keeps
       // them all, so those carry the first key column only. A target
-      // with no primary key (a view) carries its join columns instead:
-      // only a NULL-safe match on NULL leaves them all NULL.
+      // with no primary key (a view) carries its join columns instead,
+      // plus its first NOT NULL column when every pair is NULL-safe,
+      // since a match on NULL leaves those all NULL. A to-one there
+      // picks by its columns in declared order, all of them but the
+      // encrypted, JSON and mask ones, which do not order alike.
       const pk = (target.def as { primaryKeys?: readonly string[] })
         .primaryKeys ?? [];
       const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
         ref.slice(name.length + 3)
       );
-      const picks = cardinality !== 'hasMany' && pk.length > 0 &&
-        !pk.every((col) => onCols.includes(col));
-      const carried = picks ? pk : pk.length > 0 ? pk.slice(0, 1) : onCols;
+      const picks = cardinality !== 'hasMany' &&
+        !(pk.length > 0 && pk.every((col) => onCols.includes(col)));
+      const specs = target.def.columns as Record<string, ColumnSpec>;
+      const safeRefs = oqlJoins[name]!.nullSafe ?? [];
+      const notNull = Object.keys(specs).find((col) =>
+        specs[col]!.nullable !== true && !target.masks.has(col)
+      );
+      const carried = pk.length > 0
+        ? picks ? pk : pk.slice(0, 1)
+        : picks
+        ? Object.keys(specs).filter((col) =>
+          !target.localEncrypted.has(col) && !target.masks.has(col) &&
+          specs[col]!.type !== 'JSON' && specs[col]!.type !== 'JSONB'
+        )
+        : notNull !== undefined &&
+            onCols.every((col) => safeRefs.includes(`@${name}.@${col}`))
+        ? [...onCols, notNull]
+        : onCols;
       const keys: string[] = [];
       const strip: string[] = [];
       for (const col of carried) {
@@ -2060,58 +2195,57 @@ export class ReadRepo<
     // Pass 2: filter/orderBy refs may need filter-only joins.
     // Lifted alias → its NULL-safe columns on the related table.
     const existsAliases = new Map<string, readonly string[]>();
-    // A NULL-safe key can match several rows of a to-one relation, so a
-    // filter-only ref to it is lifted like a to-many one: the FK-holder
-    // columns to lift on, none when the ref joins.
-    const liftedSafeCols = (
-      alias: string,
-      mode: 'where' | 'orderBy',
-      position: 'key' | 'value',
-    ): readonly string[] =>
-      !(alias in oqlJoins) && mode === 'where' && position === 'key'
-        ? nullSafeCols(alias)
-        : [];
-    // A filter-only join to a to-one relation that can match several
-    // rows (a NULL-safe key, or a key that is no declared unique key of
-    // the related table) repeats the base row once per match, and a
-    // value-position ref cannot be lifted out of it.
-    const projectedAliases = new Set(Object.keys(oqlJoins));
-    const refuseManyValueRef = (
-      alias: string,
-      col: string,
-      target: CompiledEntity,
-      targetCols: readonly string[],
-    ): void => {
-      if (projectedAliases.has(alias)) return;
-      const safe = nullSafeCols(alias).length > 0;
+    // A to-one relation can match several rows when its key is NULL-safe
+    // or its join columns on the related entity cover neither that
+    // entity's primary key nor one of its declared unique groups.
+    const coversKey = (target: CompiledEntity, cols: readonly string[]) => {
       const def = target.def as {
         primaryKeys?: readonly string[];
         uniques?: Record<string, readonly string[]>;
       };
-      const pk = def.primaryKeys ?? [];
-      const unique = [pk, ...Object.values(def.uniques ?? {})].some((set) =>
-        set.length > 0 && set.every((c) => targetCols.includes(c))
-      );
-      if (unique && !safe) return;
-      throw new NormQueryError(
-        `Filter value '@${alias}.@${col}' references ` +
-          `${safe ? 'NULL-safe ' : ''}relation '${alias}' on ` +
-          `'${compiled.key}', which is not projected — a row can match ` +
-          `several '${alias}' rows there and would come back once per ` +
-          `match. Project '${alias}' (each row then comes back once)` +
-          (unique
-            ? `, or turn NULL-safe matching off for this read ` +
-              `(nullSafe: { ${alias}: false }).`
-            : !safe && pk.length > 0
-            ? `, or declare its join columns (${targetCols.join(', ')}) ` +
-              `unique on '${target.key}'.`
-            : `.`),
-        {
-          entity: compiled.key,
-          subject: `${alias}.${col}`,
-          code: 'INVALID_PROJECTION',
-        },
-      );
+      return [def.primaryKeys ?? [], ...Object.values(def.uniques ?? {})]
+        .some((set) => set.length > 0 && set.every((c) => cols.includes(c)));
+    };
+    const matchesMany = (alias: string): boolean => {
+      if (nullSafeCols(alias).length > 0) return true;
+      if (alias in fks) {
+        const fk = fks[alias]!;
+        return !coversKey(
+          runtime.compiled.get(fk.model)!,
+          Object.values(fk.on),
+        );
+      }
+      const rel = reverseEntries!.get(alias)!;
+      return rel.cardinality === 'hasMany' ||
+        !coversKey(runtime.compiled.get(rel.sourceKey)!, Object.values(rel.on));
+    };
+    // A filter-only ref to such a relation is lifted like a to-many one,
+    // so each base row comes back once: the FK-holder columns matched
+    // NULL-safe, or undefined when the ref joins. A value-position ref
+    // cannot be lifted: its relation joins, for its key refs too, so one
+    // related row meets them all.
+    const valueAliases = new Set<string>();
+    walkJoinRefs(where, (a, _c, pos) => {
+      if (pos === 'value') valueAliases.add(a);
+    });
+    const lifted = (
+      alias: string,
+      mode: 'where' | 'orderBy',
+      position: 'key' | 'value',
+    ): readonly string[] | undefined =>
+      !(alias in oqlJoins) && mode === 'where' && position === 'key' &&
+        !valueAliases.has(alias) && matchesMany(alias)
+        ? nullSafeCols(alias)
+        : undefined;
+    // A join no projection asked for, to a relation that can match
+    // several rows, repeats the base row once per match: the read groups
+    // by the base row instead.
+    const projectedAliases = new Set(Object.keys(oqlJoins));
+    const fanOut = new Set<string>();
+    const joinsMany = (alias: string): void => {
+      if (!projectedAliases.has(alias) && matchesMany(alias)) {
+        fanOut.add(alias);
+      }
     };
     const visitAliasRef = (
       alias: string,
@@ -2136,14 +2270,12 @@ export class ReadRepo<
             },
           );
         }
-        const safe = liftedSafeCols(alias, mode, position);
-        if (safe.length > 0) {
+        const safe = lifted(alias, mode, position);
+        if (safe !== undefined) {
           existsAliases.set(alias, safe.map((c) => fks[alias]!.on[c]!));
           return;
         }
-        if (mode === 'where' && position === 'value') {
-          refuseManyValueRef(alias, col, target, Object.values(fks[alias]!.on));
-        }
+        joinsMany(alias);
         if (!joined) ensureBtJoin(alias);
         addCols(alias, [col]);
         return;
@@ -2209,14 +2341,12 @@ export class ReadRepo<
           existsAliases.set(alias, nullSafeCols(alias));
           return;
         }
-        const safe = liftedSafeCols(alias, mode, position);
-        if (safe.length > 0) {
+        const safe = lifted(alias, mode, position);
+        if (safe !== undefined) {
           existsAliases.set(alias, safe);
           return;
         }
-        if (mode === 'where' && position === 'value') {
-          refuseManyValueRef(alias, col, target, Object.values(revRel.on));
-        }
+        joinsMany(alias);
         if (!joined) ensureRevJoin(alias);
         addCols(alias, [col]);
         return;
@@ -2249,6 +2379,7 @@ export class ReadRepo<
         ? this.__liftToExists(where, existsAliases) as Row
         : where,
       existsAliases: [...existsAliases.keys()],
+      fanOut: [...fanOut],
       aliasMap,
       relations,
       masks,
@@ -2683,9 +2814,8 @@ export class ReadRepo<
         if (by !== undefined && filtered.length > 1) {
           filtered.sort((a, b) => {
             for (const key of by) {
-              const [x, y] = [a[key] as number, b[key] as number];
-              if (x < y) return -1;
-              if (x > y) return 1;
+              const order = comparePick(a[key], b[key]);
+              if (order !== 0) return order;
             }
             return 0;
           });
@@ -4964,6 +5094,25 @@ function visitJoinRef(
   const dotIdx = stripped.indexOf('.@');
   if (dotIdx === -1) return;
   visit(stripped.slice(0, dotIdx), stripped.slice(dotIdx + 2), position);
+}
+
+/** Order two candidate values of a to-one pick the same way on every
+ * engine: NULL after every value; numbers, bigints and dates by value;
+ * strings by UTF-16 code unit; anything else by its JSON text. */
+function comparePick(x: unknown, y: unknown): number {
+  if (x === null || x === undefined) {
+    return y === null || y === undefined ? 0 : 1;
+  }
+  if (y === null || y === undefined) return -1;
+  const [a, b] = [x, y].map((v) => v instanceof Date ? v.getTime() : v);
+  const num = (v: unknown) => typeof v === 'number' || typeof v === 'bigint';
+  const text = (v: unknown) =>
+    typeof v === 'bigint' ? String(v) : JSON.stringify(v);
+  const [p, q] = (num(a) && num(b)) ||
+      (typeof a === 'string' && typeof b === 'string')
+    ? [a, b] as [number, number]
+    : [text(a), text(b)];
+  return p < q ? -1 : p > q ? 1 : 0;
 }
 
 /** Human phrase for the plaintext kind a hashed column accepts —

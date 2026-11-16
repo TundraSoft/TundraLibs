@@ -20,8 +20,10 @@ changelog has those.
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
-  - [A filter value from a to-one relation that can match several rows needs it projected](#a-filter-value-from-a-to-one-relation-that-can-match-several-rows-needs-it-projected)
+  - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
+  - [A to-one relation that can match several rows returns each row once](#a-to-one-relation-that-can-match-several-rows-returns-each-row-once)
   - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
+  - [A to-one relation to a view picks the same row on every engine](#a-to-one-relation-to-a-view-picks-the-same-row-on-every-engine)
 
 ## 1.13.0
 
@@ -190,25 +192,35 @@ two orgs each met one condition, and `$ne` held only when no matched row
 had the value. A relation whose key matches one row at most reads as
 before.
 
-### A filter value from a to-one relation that can match several rows needs it projected
+### A relation projection without the primary key keeps rows apart
 
-A belongsTo or hasOne relation used as a comparison value, as in
-`{ '@id': { $lt: '@Seat.@id' } }`, was joined when the read did not
-project it. Where the join columns on the related entity are not unique
-there, a row came back once for each related row that passed, and
-`count()` and `total` counted it as often. Such a read now throws
-`NormQueryError` with the code `INVALID_PROJECTION`, as it already did
-for a NULL-safe relation. The check reads the schema, not the data: it
-passes when those join columns cover the related entity's primary key or
-one of its `unique` groups.
+A read that projects a relation but not the entity's primary key, such
+as `project: { '@tenant': true, '@Seats': true }`, merged rows whose
+projected columns were equal into one row holding all their related
+rows. Each row now comes back once with its own related rows, so such a
+read can return more rows, and `total` already counted them. An entity
+with no primary key, a view, still merges them.
 
-Project the relation and each row comes back once, kept when at least
-one related row passes the comparison. `count()` and `total: true` count
-without the projection and throw for such a filter. Where the columns
-are unique in fact, declare them in the related entity's `unique`
-option, which the next migration emits as a unique index; a view has no
-such option. [Relation references](NORM-Querying.md#relation-references)
-has the rule.
+### A to-one relation that can match several rows returns each row once
+
+A belongsTo or hasOne whose join columns on the related entity are
+neither its primary key nor one of its `unique` groups, a declared
+`reverseCardinality: 'hasOne'` for example, can match several rows. A
+filter through such a relation that the read did not project, as in
+`{ '@Org.@cap': { $lt: 8 } }`, was joined, so a row came back once for
+each related row that passed, and `count()` and `total` counted it as
+often. The row now comes back and is counted once, kept when at least
+one related row passes. The same holds for such a relation used as a
+comparison value, as in `{ '@id': { $lt: '@Seat.@id' } }`: the read
+groups by the primary key, and `count()` and `total` count distinct
+keys. An `orderBy` through such a relation, as in
+`{ '@Org.@cap': 'ASC' }`, repeated rows the same way; each row now comes
+back once, placed by its smallest related value for `ASC` and its
+largest for `DESC`. On an entity with no primary key the comparison
+and the `orderBy` throw `INVALID_PROJECTION`, and with `aggregates`
+they throw `AGGREGATE_MISUSE`, where they counted each match as a row.
+Beside a projected to-many relation they throw `INVALID_PROJECTION`,
+where its list held each related row once per match.
 
 ### A matched relation row whose projected columns are all NULL is kept
 
@@ -219,8 +231,20 @@ reads an object whose values are `null`, and the list keeps the row. No
 match still reads `null` and `[]`. Code that took `row.Org === null` to
 mean the projected column was NULL must test the column instead.
 
-One case is unchanged: a view, which has no primary key, joined on
-[NULL-safe](NORM-Schema.md#null-safe-keys) pairs that all hold NULL.
+One case is unchanged: a view, which has no primary key, joined only on
+[NULL-safe](NORM-Schema.md#null-safe-keys) pairs, that declares every
+column `.nullable()`, when the matched row holds NULL in each column
+the read takes from it. A view that declares a column NOT NULL is read
+right.
+
+### A to-one relation to a view picks the same row on every engine
+
+A belongsTo or hasOne whose target is a view, which has no primary key,
+carried whichever matching row the engine returned first, so one engine
+could return a different row from the others. It now carries the one
+lowest by the view's columns in declared order, a NULL after any value,
+skipping encrypted, JSON and mask columns. A read may get a different
+row than before.
 
 ---
 
