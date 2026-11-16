@@ -2,6 +2,7 @@ import type { FlattenEntity } from '@tundralibs/utils';
 import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
 import type { Expressions } from '../expressions/Expressions.ts';
+import type { ConditionalExpressions } from '../expressions/ConditionalExpressions.ts';
 import type { NumericExpressions } from '../expressions/NumericExpressions.ts';
 import type { AggregateFunction } from './AggregateFunction.ts';
 
@@ -68,7 +69,10 @@ export type Aggregates<
   >;
   column:
     | GetColumnByType<FT, number | bigint | Date>
-    | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
+    | Extract<
+      Expressions<T, FT>,
+      { $$_expression: NumericExpressions | ConditionalExpressions }
+    >;
   /** Apply `DISTINCT` to the column before aggregating. */
   distinct?: boolean;
 } | {

@@ -1359,6 +1359,46 @@ describe('oql.asserts.Expressions.String', () => {
         "Expected a String expression type, got 'MULTIPLY'",
       );
     });
+
+    it('valid: a COALESCE, NULLIF or CASE as a string argument', () => {
+      const nested = [
+        { $$_expression: 'COALESCE', args: ['@name', '-'] },
+        { $$_expression: 'NULLIF', args: ['@name', ''] },
+        {
+          $$_expression: 'CASE',
+          args: { cases: [{ when: { '@name': { $null: true } }, then: '-' }] },
+        },
+      ];
+      for (const arg of nested) {
+        assertStringExpression(
+          { $$_expression: 'CONCAT', args: [arg, '!'] } as any,
+          ['name'],
+        );
+        for (const op of ['LOWER', 'UPPER', 'TRIM', 'LTRIM', 'RTRIM']) {
+          assertStringExpression({ $$_expression: op, args: arg } as any, [
+            'name',
+          ]);
+        }
+      }
+      asserts.assertThrows(
+        () =>
+          assertStringExpression({
+            $$_expression: 'UPPER',
+            args: { $$_expression: 'COALESCE', args: ['@name'] },
+          } as any, ['name']),
+        TypeError,
+        'args contains invalid nested expression in UPPER',
+      );
+      asserts.assertThrows(
+        () =>
+          assertStringExpression({
+            $$_expression: 'CONCAT',
+            args: ['a', { $$_expression: 'UPPER', args: '@name' }],
+          } as any, ['name']),
+        TypeError,
+        'Invalid argument',
+      );
+    });
   });
 
   describe('isStringExpression', () => {

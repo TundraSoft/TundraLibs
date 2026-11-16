@@ -467,8 +467,10 @@ export const assertSelectQuery: <
         undefined,
         undefined,
         jsonPathRoots,
+        aggregateAndExpressionScope,
       );
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid SELECT query: 'where' is invalid - ${
           error instanceof Error ? error.message : String(error)
@@ -495,8 +497,16 @@ export const assertSelectQuery: <
     }
     const havingAllowedKeys = aggregateKeys.map((k) => k.substring(1));
     try {
-      assertQueryFilter(query.having, havingAllowedKeys);
+      assertQueryFilter(
+        query.having,
+        havingAllowedKeys,
+        undefined,
+        undefined,
+        undefined,
+        aggregateAndExpressionScope,
+      );
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid SELECT query: 'having' is invalid - ${
           error instanceof Error ? error.message : String(error)

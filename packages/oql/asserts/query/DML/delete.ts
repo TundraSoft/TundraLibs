@@ -56,6 +56,7 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
       undefined,
       undefined,
       jsonPathRoots,
+      columnList,
     );
   }
 };

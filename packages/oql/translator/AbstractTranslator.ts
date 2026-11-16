@@ -2399,7 +2399,10 @@ export abstract class AbstractTranslator {
   ): string[] {
     if (!('args' in expr) || expr.args === undefined) return [];
     const args = expr.args as unknown;
-    if (typeof args === 'object' && args !== null && !Array.isArray(args)) {
+    if (
+      typeof args === 'object' && args !== null && !Array.isArray(args) &&
+      !this.__isExpressionNode(args)
+    ) {
       return this.__flattenObjectArgs(
         expr.$$_expression,
         args as Record<string, unknown>,

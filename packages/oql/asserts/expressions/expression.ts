@@ -67,6 +67,40 @@ export const CONDITIONAL_TYPES = new Set<string>([
   'CASE',
 ]);
 
+/**
+ * Validate `arg` when it is a COALESCE, NULLIF or CASE, and say whether it
+ * was one. Its result type is only known to the database, so a typed
+ * argument position takes it wherever it takes a column of that type.
+ *
+ * @throws {TypeError} If `arg` is a conditional expression that is invalid.
+ * @internal
+ */
+export const assertConditionalOperand = (
+  arg: unknown,
+  argName: string,
+  type: string,
+  columnList: string[] | undefined,
+  depth: number,
+  maxDepth: number,
+): boolean => {
+  if (
+    typeof arg !== 'object' || arg === null || !('$$_expression' in arg) ||
+    !CONDITIONAL_TYPES.has(arg.$$_expression as string)
+  ) return false;
+  try {
+    assertExpression(arg, columnList, depth + 1, maxDepth);
+  } catch (error) {
+    if (error instanceof OqlError) throw error;
+    throw new TypeError(
+      `Invalid Expression definition: ${argName} contains invalid nested ` +
+        `expression in ${type} - ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+    );
+  }
+  return true;
+};
+
 const DATE_TYPES = new Set<string>([
   'NOW',
   'CURRENT_DATE',
@@ -167,6 +201,7 @@ const assertConditionalExpression = (
     try {
       assertQueryFilter(c.when, columnList);
     } catch (error) {
+      if (error instanceof OqlError) throw error;
       throw new TypeError(
         `Invalid Expression definition: CASE cases[${i}].when is not a ` +
           `valid filter - ${
