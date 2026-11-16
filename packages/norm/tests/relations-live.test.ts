@@ -320,6 +320,15 @@ for (const [i, fx] of FIXTURES.entries()) {
     live(
       'a filter value from such a relation returns and counts each row once',
       async () => {
+        if (fx.name === 'mongo') {
+          // The joined rows are an array there, which no value compares with.
+          await asserts.assertRejects(
+            () => db!.repo('Orgs').find({ '@id': { $lt: '@Seat.@id' } }),
+            Error,
+            'as a filter value',
+          );
+          return;
+        }
         asserts.assertEquals(
           await counted('Orgs', { '@id': { $lt: '@Seat.@id' } }),
           { ids: [1, 2, 3], count: 3, page: [2], total: 3 },

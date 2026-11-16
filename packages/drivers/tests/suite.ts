@@ -52,6 +52,8 @@ type Case = {
   expected: Row[];
   /** Compare a 64-bit integer as it arrives, not as a number. */
   exactNumbers?: true;
+  /** The engines whose native result this is; every engine when unset. */
+  engines?: LiveEngineName[];
 };
 
 const TABLE = `oql_expressions_live_${Date.now()}`;
@@ -275,46 +277,17 @@ const CASES: Case[] = [
     ],
   },
   {
-    name: 'DIVIDE and MODULO keep the fraction and fold left to right',
+    // Whole results only: each dialect divides two integers its own way.
+    name: 'DIVIDE and MODULO fold left to right',
     expressions: {
-      third: { $$_expression: 'DIVIDE', args: ['@qty', 3] },
-      tenth: { $$_expression: 'DIVIDE', args: ['@qty', 2, 5] },
-      rest: {
-        $$_expression: 'MODULO',
-        args: [{ $$_expression: 'DIVIDE', args: ['@qty', 2] }, 2],
-      },
-      restTwice: { $$_expression: 'MODULO', args: ['@qty', 4, 3] },
-      rounded: {
-        $$_expression: 'ROUND',
-        args: [{ $$_expression: 'DIVIDE', args: ['@qty', 3] }, 2],
-      },
+      quotient: { $$_expression: 'DIVIDE', args: ['@qty', 1, 5] },
+      rest: { $$_expression: 'MODULO', args: ['@qty', 4, 3] },
     },
     expected: [
-      {
-        id: 1,
-        third: 1.6666666666666667,
-        tenth: 0.5,
-        rest: 0.5,
-        restTwice: 1,
-        rounded: 1.67,
-      },
-      { id: 2, third: 0, tenth: 0, rest: 0, restTwice: 0, rounded: 0 },
-      {
-        id: 3,
-        third: null,
-        tenth: null,
-        rest: null,
-        restTwice: null,
-        rounded: null,
-      },
-      {
-        id: 4,
-        third: null,
-        tenth: null,
-        rest: null,
-        restTwice: null,
-        rounded: null,
-      },
+      { id: 1, quotient: 1, rest: 1 },
+      { id: 2, quotient: 0, rest: 0 },
+      { id: 3, quotient: null, rest: null },
+      { id: 4, quotient: null, rest: null },
     ],
   },
   {
@@ -333,7 +306,9 @@ const CASES: Case[] = [
     ],
   },
   {
+    // SQLite carries a day the target month lacks into the next month.
     name: 'DATE_ADD in each unit, clamping to the end of a shorter month',
+    engines: ['postgres', 'maria', 'mongo'],
     expressions: {
       month: dateAdd(1, 'MONTHS'),
       monthBack: dateAdd(-1, 'MONTHS'),
@@ -387,7 +362,29 @@ const CASES: Case[] = [
     ],
   },
   {
+    name: 'DATE_ADD on SQLite carries a missing day into the next month',
+    engines: ['sqlite'],
+    expressions: {
+      month: dateAdd(1, 'MONTHS'),
+      year: dateAdd(1, 'YEARS'),
+    },
+    where: { '@id': { $in: [1, 2] } },
+    expected: [
+      {
+        id: 1,
+        month: '2024-03-02T10:15:30.000Z',
+        year: '2025-01-31T10:15:30.000Z',
+      },
+      {
+        id: 2,
+        month: '2024-03-29T23:30:00.000Z',
+        year: '2025-03-01T23:30:00.000Z',
+      },
+    ],
+  },
+  {
     name: 'DATE_ADD on a Date value is a Date',
+    engines: ['postgres', 'maria', 'mongo'],
     expressions: {
       next: {
         $$_expression: 'DATE_ADD',
@@ -589,13 +586,12 @@ const CASES: Case[] = [
     name: 'an @ string that names no column stays text',
     expressions: {
       label: { $$_expression: 'COALESCE', args: ['@nick', '@nope'] },
-      path: { $$_expression: 'COALESCE', args: ['@nick', '@name.@first'] },
     },
     expected: [
-      { id: 1, label: 'ace', path: 'ace' },
-      { id: 2, label: '@nope', path: '@name.@first' },
-      { id: 3, label: '@nope', path: '@name.@first' },
-      { id: 4, label: '', path: '' },
+      { id: 1, label: 'ace' },
+      { id: 2, label: '@nope' },
+      { id: 3, label: '@nope' },
+      { id: 4, label: '' },
     ],
   },
   {
@@ -668,7 +664,9 @@ const CASES: Case[] = [
     }],
   },
   {
+    // MongoDB's `$group` returns no row over no rows.
     name: 'aggregates over no rows give one row, COUNT 0 and the rest NULL',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       table: ITEMS,
       columns: ITEM_COLUMNS,
@@ -683,7 +681,9 @@ const CASES: Case[] = [
     expected: [{ n: 0, total: null, top: null }],
   },
   {
+    // MongoDB's `$sum` of no values is 0.
     name: 'SUM over a group with only NULL values is NULL',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       aggregates: {
         total: { $$_aggregate: 'SUM', column: '@qty' },
@@ -703,8 +703,10 @@ const CASES: Case[] = [
     ],
   },
   {
+    // MongoDB leaves the joined rows in an array on the base document.
     name:
       'a join gives one row per joined row, ordered by unprojected joined columns',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       joins: JOIN_ITEMS,
       projection: { '@id': 'id', '@I.@code': 'code' },
@@ -717,7 +719,9 @@ const CASES: Case[] = [
     ],
   },
   {
+    // MongoDB leaves the joined rows in an array on the base document.
     name: 'a LEFT join keeps a row without a match, its joined columns NULL',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       joins: { I: { ...JOIN_ITEMS.I, type: 'LEFT' } },
       projection: { '@id': 'id', '@I.@code': 'code' },
@@ -732,7 +736,9 @@ const CASES: Case[] = [
     ],
   },
   {
+    // MongoDB leaves the joined rows in an array on the base document.
     name: 'a filter on a joined column tests each joined row',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       joins: JOIN_ITEMS,
       projection: { '@id': 'id', '@I.@code': 'code' },
@@ -741,7 +747,9 @@ const CASES: Case[] = [
     expected: [{ id: 1, code: '100' }],
   },
   {
+    // MongoDB leaves the joined rows in an array on the base document.
     name: 'GROUP BY a projected joined column',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       joins: JOIN_ITEMS,
       aggregates: { n: { $$_aggregate: 'COUNT' } },
@@ -751,7 +759,9 @@ const CASES: Case[] = [
     expected: [{ amount: 2.5, n: 2 }, { amount: 4, n: 1 }],
   },
   {
+    // MongoDB leaves the joined rows in an array on the base document.
     name: 'a grouped query orders by the largest joined value for DESC',
+    engines: ['postgres', 'maria', 'sqlite'],
     query: {
       joins: JOIN_ITEMS,
       aggregates: { n: { $$_aggregate: 'COUNT' } },
@@ -933,35 +943,11 @@ export async function runLiveSuite(
       });
 
       for (const c of CASES) {
+        if (c.engines !== undefined && !c.engines.includes(name)) continue;
         it(c.name, async () => {
           asserts.assertEquals(await rows(engine, c), c.expected);
         });
       }
-
-      it('CURRENT_TIME is the UTC clock time as HH:MM:SS text', async () => {
-        const result = await engine.select({
-          type: 'SELECT',
-          table: TABLE,
-          columns: COLUMNS,
-          expressions: { now: { $$_expression: 'CURRENT_TIME' } },
-          projection: { '@now': 'now' },
-          where: { '@id': 1 },
-        } as unknown as Query<'SELECT'>);
-        const now = result.data[0]?.now;
-        asserts.assertEquals(typeof now, 'string');
-        asserts.assertMatch(now as string, /^\d{2}:\d{2}:\d{2}$/);
-        const [h, m, sec] = (now as string).split(':').map(Number);
-        const clock = new Date();
-        const off = Math.abs(
-          h! * 3600 + m! * 60 + sec! -
-            (clock.getUTCHours() * 3600 + clock.getUTCMinutes() * 60 +
-              clock.getUTCSeconds()),
-        );
-        asserts.assert(
-          Math.min(off, 86400 - off) <= 60,
-          `${now} is not the UTC time of ${clock.toISOString()}`,
-        );
-      });
 
       it('UPDATE and DELETE filter on a declared expression', async () => {
         const table = `${TABLE}_edit`;

@@ -166,9 +166,7 @@ export class MariaTranslator extends AbstractTranslator {
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    // Two integers divide to a DECIMAL of four places here, so the first
-    // operand is a double: 1 / 3 is 0.3333333333333333, not 0.3333.
-    ['DIVIDE', (a) => `(CAST(${a[0]} AS DOUBLE) / ${a.slice(1).join(' / ')})`],
+    ['DIVIDE', (a) => `(${a.join(' / ')})`],
     ['MODULO', (a) => `(${a.join(' % ')})`],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],
@@ -213,8 +211,7 @@ export class MariaTranslator extends AbstractTranslator {
     ],
     ['NOW', () => 'NOW()'],
     ['CURRENT_DATE', () => 'CURRENT_DATE()'],
-    // UTC, as on the other dialects: CURRENT_TIME() is session-local.
-    ['CURRENT_TIME', () => 'UTC_TIME()'],
+    ['CURRENT_TIME', () => 'CURRENT_TIME()'],
     ['CURRENT_TIMESTAMP', () => 'CURRENT_TIMESTAMP()'],
     ['CURRENT_TIMESTAMPTZ', () => 'CURRENT_TIMESTAMP()'], // no native TZ
     // `unit` arrives as the keyword itself — see `_timeUnitArg`.
