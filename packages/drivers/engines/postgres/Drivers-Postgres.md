@@ -211,28 +211,37 @@ evaluates `date_trunc`, `EXTRACT` and casts, in the session's `TimeZone`. In
 any zone but UTC those store and filter the wrong day and clock time;
 `timestamptz` is correct in every zone. The driver therefore sends
 `TimeZone=UTC` in the startup message, so the session runs in UTC whatever
-zone the database or the role is set to, and `RESET` returns to UTC.
+zone the database or the role is set to, and on a direct connection `RESET`
+returns to UTC.
 
 A check on the zone the server reports is the safety net: a connection whose
 server still reports a non-UTC `TimeZone` at startup is refused with
 `INVALID_CONFIG_VALUE`. Any fixed zero offset counts as UTC, such as `Etc/UTC`,
 `GMT`, `UTC0` or `+00:00`; a regional zone such as `Europe/London` does not. A
-server that reports no `TimeZone` is not checked. If a pooler in between does
-not pass the parameter on, fix the zone on the server. A role's own `timezone`
-setting overrides its database's, so use `ALTER ROLE` when the role has one,
-otherwise the database. Behind a pooler, the role is the one the pooler signs
-in as, and the setting applies once the pooler opens a new server connection:
+server that reports no `TimeZone` is not checked. When a connection is
+refused, fix the zone on the server. A role's own `timezone` setting overrides
+its database's, so use `ALTER ROLE` when the role has one, otherwise the
+database. The setting applies to sessions opened after it, so a server
+connection that is already open, a pooler's included, keeps its zone:
 
 ```sql
 ALTER DATABASE app SET timezone TO 'UTC';
 ```
 
+PgBouncer 1.26.1 and Odyssey 1.5.2, both in transaction mode, keep the zone
+each client asks for: a client runs in UTC on a server connection that other
+clients use in other zones, and the check passes. pgcat, Supavisor, RDS Proxy
+and Neon's pooled endpoint were not tried, and no pooler was found that drops
+the parameter, which is the case the check is there for.
+
+Through those two poolers `RESET TimeZone`, `RESET ALL` and `DISCARD ALL` put
+that client into the role's zone, with no error, until it runs
+`SET TimeZone = 'UTC'`. The driver sends none of them.
+
 `allowNonUtcTimeZone: true` sends no `TimeZone` and accepts whatever zone the
 server reports. Set it when the application keeps every instant in
 `timestamptz` and wants the session zone's days and clock times: `date_trunc`,
-`EXTRACT` and casts still use that zone on a `timestamptz`. Set it also behind
-a pooler that rejects the startup parameter, after fixing the zone on the
-server, since nothing checks it then.
+`EXTRACT` and casts still use that zone on a `timestamptz`.
 
 ## Performance
 

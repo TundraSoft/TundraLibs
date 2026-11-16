@@ -100,7 +100,7 @@ describe('drivers.postgres.timeZone', () => {
   });
 
   describe('nonUtcReason', () => {
-    it('should name the zone, both places to set UTC, the opt-out and the pooler fix', () => {
+    it('should name the zone, both places to set UTC, the opt-out and when the setting applies', () => {
       const reason = nonUtcReason('Asia/Kolkata');
       for (
         const part of [
@@ -108,9 +108,8 @@ describe('drivers.postgres.timeZone', () => {
           'ALTER ROLE',
           'ALTER DATABASE',
           'allowNonUtcTimeZone: true',
-          'PgBouncer or a Neon pooled endpoint',
-          'the role the pooler signs in as',
-          'opens a new server connection',
+          'applies to sessions opened after it',
+          "a pooler's included, keeps its zone",
         ]
       ) {
         asserts.assertStringIncludes(reason, part);

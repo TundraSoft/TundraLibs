@@ -143,8 +143,8 @@ check. When the zone request itself fails, the query rejects with
 error on `cause`, and `ping()` returns `false`.
 
 Fix the zone on the database (`ALTER DATABASE app SET timezone TO 'UTC'`).
-Through a pooled endpoint the zone is the one the pooler's server connection
-opened with, so the fix applies once the pooler opens a new one. Set
+The setting applies to sessions opened after it. How soon a request through
+Neon's endpoint, pooled or not, runs in such a session was not measured. Set
 `allowNonUtcTimeZone: true` only when the application keeps every instant in
 `timestamptz` and wants the session zone's days and clock times, which
 `date_trunc`, `EXTRACT` and casts still use; it also drops the extra request.

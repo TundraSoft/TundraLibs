@@ -25,10 +25,10 @@ changes alter no stored value.
 ### A Postgres session runs in UTC
 
 The driver now sends `TimeZone=UTC` in its startup message. A database or
-role set to another zone connects and runs in UTC, and `RESET ALL` and
-`DISCARD ALL` return to UTC. drivers 1.8.0 ran the session in that zone,
-so a `Date` written to a `date` or `timestamp` column stored that zone's
-day and clock time.
+role set to another zone connects and runs in UTC, and on a direct
+connection `RESET ALL` and `DISCARD ALL` return to UTC. drivers 1.8.0 ran
+the session in that zone, so a `Date` written to a `date` or `timestamp`
+column stored that zone's day and clock time.
 
 Rows 1.8.0 wrote that way keep the old zone's clock, and filters now
 compare them in UTC. Convert each `timestamp` column once:
@@ -40,10 +40,12 @@ SET starts_at = (starts_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC';
 
 A `date` column holds the old zone's day, with no time to convert from.
 
-When the server still reports a zone that is not UTC, for example behind
-a pooler that does not pass the parameter on, `connect()` throws
-`EngineError` `INVALID_CONFIG_VALUE`; 1.8.0 connected. A pooler that
-rejects a `TimeZone` startup parameter fails the connection.
+When the server still reports a zone that is not UTC, `connect()` throws
+`EngineError` `INVALID_CONFIG_VALUE`; 1.8.0 connected. PgBouncer 1.26.1
+and Odyssey 1.5.2 in transaction mode keep the zone each client asks for,
+so a connection through them runs in UTC and is not refused; other poolers
+were not tried. Through those two, `RESET ALL` and `DISCARD ALL` put the
+client into the role's zone.
 `allowNonUtcTimeZone: true` sends no `TimeZone` and checks nothing, as
 1.8.0 did. [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone)
 has the fixes.
@@ -123,8 +125,8 @@ with the name the server reported, which also lands on `context`:
 | `TABLE_NOT_FOUND` on Postgres and MariaDB                   | the table, `users`, on MariaDB with its database, `app.users` |
 
 A SQLite foreign-key failure names no key, so its message ends at the
-instance id. The non-UTC refusal on Postgres and Neon also says to set
-the zone for the role a pooler signs in as.
+instance id. The non-UTC refusal on Postgres and Neon also says that the
+setting applies to sessions opened after it.
 
 ### SQLite binds `-0` as `0` and whole numbers as integers
 
