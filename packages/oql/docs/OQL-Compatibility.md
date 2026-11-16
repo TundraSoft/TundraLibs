@@ -688,6 +688,12 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
     SQL dialects, so a `%` or `_` in the computed value is a wildcard.
     MongoDB refuses it, see
     [below](#when-to-expect-a-throw-vs-a-silent-fallback).
+- **A `$like` pattern ending in a lone backslash**, such as `'a\\'`,
+  matches a backslash in that last place on every dialect. Postgres
+  refuses such a pattern, since the backslash is its escape character, so
+  the translator gives it one more backslash when the trailing run of
+  backslashes is odd. This holds for `$nlike`, `$ilike` and `$nilike`, and
+  for a literal and a computed pattern.
 
 ### NULL in a filter
 

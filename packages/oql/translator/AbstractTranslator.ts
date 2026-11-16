@@ -918,10 +918,15 @@ export abstract class AbstractTranslator {
 
   /**
    * Add `value` to `params` and return the placeholder text the dialect
-   * uses (`:p_3` / `$3` / `?`).
+   * uses (`:p_3` / `$3` / `?`). `share` is passed to
+   * {@link Parameters.add}: false for a value written to a column.
    */
-  protected _parameterize(value: unknown, params: Parameters): string {
-    const name = params.add(value);
+  protected _parameterize(
+    value: unknown,
+    params: Parameters,
+    share = true,
+  ): string {
+    const name = params.add(value, share);
     const { format, prefix, suffix } = this._parameterStyle;
     if (format === 'numbered') {
       // `name` is `p_N`; convert to 1-based index.
@@ -1518,11 +1523,11 @@ export abstract class AbstractTranslator {
   }
 
   /**
-   * Translate a single value as it appears on the right-hand side of an
-   * operator, in INSERT VALUES, or in UPDATE SET.
+   * Translate a single value as it appears in INSERT VALUES or UPDATE SET.
    *
    * `null`/`undefined` → `NULL`; an Expression object → recurse;
-   * everything else → parameterise.
+   * everything else → a placeholder of its own, never shared with an
+   * equal value, since the two columns may differ in type.
    *
    * `allowExpressions` is `true` for UPDATE/UPSERT (where expressions
    * referencing other columns are valid) and `false` for INSERT (where
@@ -1538,7 +1543,7 @@ export abstract class AbstractTranslator {
     if (allowExpressions && this.__isExpressionNode(value)) {
       return this._translateExpression(value, scope, params, false);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   // =========================================================================
@@ -1989,7 +1994,7 @@ export abstract class AbstractTranslator {
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, [], params, false);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**
@@ -2133,7 +2138,7 @@ export abstract class AbstractTranslator {
     if (this.__isExpressionNode(value)) {
       return this._translateExpression(value, columns, params, qualified);
     }
-    return this._parameterize(value, params);
+    return this._parameterize(value, params, false);
   }
 
   /**

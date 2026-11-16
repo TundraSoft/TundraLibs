@@ -76,6 +76,20 @@ const SQL_TYPE_MAP: Record<string, string> = {
  */
 const PG_LENGTH_TYPES = new Set(['CHAR', 'VARCHAR', 'BIT']);
 
+/** A pattern whose escape pairs end in one lone backslash, and its prefix. */
+const LONE_TRAILING_ESCAPE = String.raw`'^((?:[^\\]|\\.)*)\\$'`;
+/** The prefix, then an escaped backslash: two in the replacement text. */
+const ESCAPED_BACKSLASH = String.raw`'\1\\\\'`;
+
+/**
+ * The pattern side of LIKE and ILIKE. A pattern ending in a lone backslash,
+ * the escape character, is an error on Postgres, where MariaDB matches the
+ * backslash itself. A run of backslashes reads as escape pairs, so a run of
+ * odd length gets one more backslash and ends in an escaped one.
+ */
+const likePattern = (pattern: string): string =>
+  `regexp_replace(CAST(${pattern} AS TEXT), ${LONE_TRAILING_ESCAPE}, ${ESCAPED_BACKSLASH})`;
+
 /** Index methods Postgres recognises in `USING <method>`. */
 const PG_INDEX_METHODS = new Set([
   'BTREE',
@@ -307,10 +321,10 @@ export class PostgresTranslator extends AbstractTranslator {
     ['$gte', (c, v) => `${c} >= ${v}`],
     ['$lt', (c, v) => `${c} < ${v}`],
     ['$lte', (c, v) => `${c} <= ${v}`],
-    ['$like', (c, v) => `${c} LIKE ${v}`],
-    ['$nlike', (c, v) => `${c} NOT LIKE ${v}`],
-    ['$ilike', (c, v) => `${c} ILIKE ${v}`],
-    ['$nilike', (c, v) => `${c} NOT ILIKE ${v}`],
+    ['$like', (c, v) => `${c} LIKE ${likePattern(v)}`],
+    ['$nlike', (c, v) => `${c} NOT LIKE ${likePattern(v)}`],
+    ['$ilike', (c, v) => `${c} ILIKE ${likePattern(v)}`],
+    ['$nilike', (c, v) => `${c} NOT ILIKE ${likePattern(v)}`],
     ['$startsWith', (c, v) => `${c} LIKE (${v} || '%')`],
     ['$endsWith', (c, v) => `${c} LIKE ('%' || ${v})`],
     ['$contains', (c, v) => `${c} LIKE ('%' || ${v} || '%')`],
