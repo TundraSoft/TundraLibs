@@ -167,22 +167,8 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['ADD', (a) => `(${a.join(' + ')})`],
     ['SUBTRACT', (a) => `(${a.join(' - ')})`],
     ['MULTIPLY', (a) => `(${a.join(' * ')})`],
-    // Two integers divide to an integer here, so the first operand is a
-    // real: 7 / 2 is 3.5, as on MariaDB and MongoDB.
-    ['DIVIDE', (a) => `(CAST(${a[0]} AS REAL) / ${a.slice(1).join(' / ')})`],
-    // `%` casts both operands to integers, so 2.5 % 2 is 0. `mod()` keeps
-    // the fraction but computes in doubles, which is wrong for an integer
-    // past 2^53, so two whole numbers keep `%`. The test is on the value,
-    // not `typeof`, because Node binds every JS number as a real.
-    [
-      'MODULO',
-      (a) =>
-        a.slice(1).reduce(
-          (x, y) =>
-            `(CASE WHEN ${x} = CAST(${x} AS INTEGER) AND ${y} = CAST(${y} AS INTEGER) THEN ${x} % ${y} ELSE mod(${x}, ${y}) END)`,
-          a[0]!,
-        ),
-    ],
+    ['DIVIDE', (a) => `(${a.join(' / ')})`],
+    ['MODULO', (a) => `(${a.join(' % ')})`],
     ['POWER', (a) => `POWER(${a[0]}, ${a[1]})`],
     ['SQRT', (a) => `SQRT(${a[0]})`],
     ['ABS', (a) => `ABS(${a[0]})`],
@@ -232,19 +218,7 @@ export class SQLiteTranslator extends AbstractTranslator {
         // takes the sign from the amount, and `+-7 DAYS` is not a
         // modifier at all (the whole call returns NULL).
         const [date, amount, unit] = a;
-        const modifier = `${amount} || ' ' || ${unit}`;
-        // SQLite rolls a day the target month lacks into the next month:
-        // 31 Jan plus one month is 3 Mar, where Postgres, MariaDB and
-        // MongoDB give 28 Feb. The day the roll lands on is how far it
-        // overshot, so stepping back that many days is the target
-        // month's last day. A fractional amount moves the day on purpose,
-        // so only a whole one is stepped back.
-        const landed = `strftime('%d', ${date}, ${modifier})`;
-        return `strftime(${ISO_8601_UTC}, ${date}, ${modifier}, ` +
-          `CASE WHEN ${unit} IN ('MONTHS', 'YEARS') ` +
-          `AND ${amount} = CAST(${amount} AS INTEGER) ` +
-          `AND ${landed} <> strftime('%d', ${date}) ` +
-          `THEN '-' || ${landed} || ' days' ELSE '+0 days' END)`;
+        return `strftime(${ISO_8601_UTC}, ${date}, ${amount} || ' ' || ${unit})`;
       },
     ],
     [
@@ -322,6 +296,27 @@ export class SQLiteTranslator extends AbstractTranslator {
   ]);
 
   /**
+   * `group_concat` takes `DISTINCT` only without a separator, and
+   * STRING_AGG always passes one.
+   *
+   * @throws {DialectUnsupportedError} For STRING_AGG with `distinct`.
+   */
+  protected override _translateAggregate(
+    agg: Aggregates,
+    scope: string[],
+    params: Parameters,
+    hasJoins: boolean,
+  ): string {
+    if (agg.$$_aggregate === 'STRING_AGG' && agg.distinct === true) {
+      throw new DialectUnsupportedError(
+        this.Dialect,
+        "aggregate 'STRING_AGG' with 'distinct'",
+      );
+    }
+    return super._translateAggregate(agg, scope, params, hasJoins);
+  }
+
+  /**
    * SQLite filter-operator emitters. `$ilike` / `$nilike` fall back to
    * plain `LIKE`, which SQLite folds case-insensitively for ASCII only —
    * accented and non-Latin text compares case-*sensitively*.
@@ -344,23 +339,6 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['$endsWith', (c, v) => `${c} LIKE ('%' || ${v})`],
     ['$contains', (c, v) => `${c} LIKE ('%' || ${v} || '%')`],
   ]);
-
-  /**
-   * `json_group_array` over no rows is `'[]'`, where the other engines'
-   * ARRAY_AGG and JSON_ROW are NULL. Over one row or more it holds at
-   * least one element, so only the empty case becomes NULL.
-   */
-  protected override _translateAggregate(
-    agg: Aggregates,
-    scope: string[],
-    params: Parameters,
-    hasJoins: boolean,
-  ): string {
-    const sql = super._translateAggregate(agg, scope, params, hasJoins);
-    return agg.$$_aggregate === 'ARRAY_AGG' || agg.$$_aggregate === 'JSON_ROW'
-      ? `NULLIF(${sql}, '[]')`
-      : sql;
-  }
 
   // ---------------------------------------------------------------------------
   // Filters: JSON path extraction

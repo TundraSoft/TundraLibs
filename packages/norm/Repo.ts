@@ -130,7 +130,7 @@ const UNIT_MS: ReadonlyMap<unknown, number> = new Map([
 ]);
 
 /** A `DATE_ADD` of a whole amount to a `Date` or to a clock read as
- * `now`, computed in UTC as oql computes it on every engine: a day the
+ * `now`, computed in UTC as Postgres, MariaDB and MongoDB compute it: a day the
  * target month lacks is that month's last day, so 31 January plus one
  * month is 28 February. `undefined` for any other `DATE_ADD`. */
 function addedDate(args: unknown, now: Date): Date | undefined {

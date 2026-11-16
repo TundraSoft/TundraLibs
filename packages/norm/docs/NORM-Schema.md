@@ -451,10 +451,10 @@ On MongoDB an insert document cannot evaluate expressions, so the clock
 expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`,
 `CURRENT_DATE`, `CURRENT_TIME`, `UNIX_TIMESTAMP`) and `UUID` are computed
 when the insert is built, the clock ones at one instant per statement.
-`CURRENT_TIME` is the UTC time of day of that instant as `'HH:MM:SS'`. A `date()` column given one of them holds the UTC
+`CURRENT_TIME` is that instant, a `Date`; a `time()` column reads it back as its UTC time of day. A `date()` column given one of them holds the UTC
 day of that instant. A `DATE_ADD` of a whole amount to a `Date` or a
-clock is computed by norm, with the month-end rule the SQL engines
-follow and one clock reading per insert call; a `date()` column holds
+clock is computed by norm, with the month-end rule Postgres, MariaDB
+and MongoDB follow and one clock reading per insert call; a `date()` column holds
 the UTC day of the result. Any other expression default fails the insert
 with `DialectUnsupportedError`, a `DATE_ADD` with a fractional amount
 included; use a local generator instead. Updates and upserts evaluate expressions in the

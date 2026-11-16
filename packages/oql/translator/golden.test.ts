@@ -232,9 +232,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT __base__."id" AS "id", NULLIF(json_group_array(json_object(:p_0:, "Profile"."userId", :p_1:, "Profile"."bio")), \'[]\') AS "profile" ' +
-          'FROM "users" AS __base__ LEFT JOIN "profiles" AS "Profile" ON "Profile"."userId" = __base__."id" ' +
-          'GROUP BY __base__."id"',
+          `SELECT __base__."id" AS "id", json_group_array(json_object(:p_0:, "Profile"."userId", :p_1:, "Profile"."bio")) AS "profile" FROM "users" AS __base__ LEFT JOIN "profiles" AS "Profile" ON "Profile"."userId" = __base__."id" GROUP BY __base__."id"`,
         params: { p_0: 'userId', p_1: 'bio' },
       },
       postgres: {
@@ -443,10 +441,41 @@ const CASES: Case[] = [
     },
   },
   {
-    // json_group_array over no rows is '[]'; NULLIF makes it NULL, as
-    // ARRAY_AGG and JSON_ROW are on the other engines. DISTINCT stays
-    // inside the aggregate call.
-    name: 'SELECT ARRAY_AGG and JSON_ROW over no rows are NULL on SQLite',
+    // SQLite's group_concat takes DISTINCT only without a separator.
+    name: 'SELECT STRING_AGG with distinct',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'tag'],
+      aggregates: {
+        tags: {
+          $$_aggregate: 'STRING_AGG',
+          column: '@tag',
+          separator: ', ',
+          distinct: true,
+        },
+      },
+      projection: { '@userId': true, '@tags': 'tags' },
+    },
+    throws: ['sqlite'],
+    expected: {
+      postgres: {
+        sql:
+          'SELECT "userId" AS "userId", STRING_AGG(DISTINCT "tag", :p_0:::text) AS "tags" FROM "orders" GROUP BY "userId"',
+        params: { p_0: ', ' },
+      },
+      maria: {
+        sql:
+          'SELECT `userId` AS `userId`, GROUP_CONCAT(DISTINCT `tag` SEPARATOR :p_0:) AS `tags` FROM `orders` GROUP BY `userId`',
+        params: { p_0: ', ' },
+      },
+    },
+  },
+  {
+    // ARRAY_AGG and JSON_ROW are json_group_array on SQLite. DISTINCT
+    // stays inside the aggregate call.
+    name: 'SELECT ARRAY_AGG and JSON_ROW on SQLite → json_group_array',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -461,7 +490,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `SELECT NULLIF(json_group_array(DISTINCT "tag"), '[]') AS "tags", NULLIF(json_group_array(json_object(:p_0:, "id")), '[]') AS "rows" FROM "orders"`,
+          `SELECT json_group_array(DISTINCT "tag") AS "tags", json_group_array(json_object(:p_0:, "id")) AS "rows" FROM "orders"`,
         params: { p_0: 'id' },
       },
       postgres: {
@@ -651,17 +680,17 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS REAL) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+          `SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"`,
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
       postgres: {
         sql:
-          'SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", (CAST("score" AS DOUBLE PRECISION) / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"',
+          `SELECT ("score" + COALESCE("age", :p_0:)) AS "total", ("score" - NULLIF("age", :p_0:)) AS "gap", ("score" * (CASE WHEN "age" >= :p_1: THEN :p_2: ELSE :p_3: END)) AS "scaled", ("score" / NULLIF("age", :p_0:)) AS "ratio", ABS(COALESCE("score", "age")) AS "size" FROM "users"`,
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
       maria: {
         sql:
-          'SELECT (`score` + COALESCE(`age`, :p_0:)) AS `total`, (`score` - NULLIF(`age`, :p_0:)) AS `gap`, (`score` * (CASE WHEN `age` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS `scaled`, (CAST(`score` AS DOUBLE) / NULLIF(`age`, :p_0:)) AS `ratio`, ABS(COALESCE(`score`, `age`)) AS `size` FROM `users`',
+          `SELECT (\`score\` + COALESCE(\`age\`, :p_0:)) AS \`total\`, (\`score\` - NULLIF(\`age\`, :p_0:)) AS \`gap\`, (\`score\` * (CASE WHEN \`age\` >= :p_1: THEN :p_2: ELSE :p_3: END)) AS \`scaled\`, (\`score\` / NULLIF(\`age\`, :p_0:)) AS \`ratio\`, ABS(COALESCE(\`score\`, \`age\`)) AS \`size\` FROM \`users\``,
         params: { p_0: 0, p_1: 18, p_2: 2, p_3: 1 },
       },
     },
@@ -1241,7 +1270,7 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' LIKE regexp_replace(CAST(:p_0: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\') AND "profile"->>'name' ILIKE regexp_replace(CAST(:p_1: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\')`,
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' LIKE :p_0: AND "profile"->>'name' ILIKE :p_1:`,
         params: { p_0: '%bo%', p_1: '%BO%' },
       },
       maria: {
@@ -1252,9 +1281,7 @@ const CASES: Case[] = [
     },
   },
   {
-    // A Postgres LIKE pattern ending in a lone backslash, the escape
-    // character, is an error there; MariaDB matches the backslash. The
-    // pattern gets one more backslash when its trailing run is odd.
+    // A computed pattern is emitted as the dialect reads it.
     name: 'WHERE $like / $nilike with a computed pattern',
     method: 'select',
     query: {
@@ -1276,8 +1303,8 @@ const CASES: Case[] = [
         params: { p_0: '%' },
       },
       postgres: {
-        sql: String
-          .raw`SELECT "id" AS "id" FROM "files" WHERE "path" LIKE regexp_replace(CAST("mask" AS TEXT), '^((?:[^\\]|\\.)*)\\$', '\1\\\\') AND "path" NOT ILIKE regexp_replace(CAST("mask" || :p_0: AS TEXT), '^((?:[^\\]|\\.)*)\\$', '\1\\\\')`,
+        sql:
+          `SELECT "id" AS "id" FROM "files" WHERE "path" LIKE "mask" AND "path" NOT ILIKE "mask" || :p_0:`,
         params: { p_0: '%' },
       },
       maria: {
@@ -1340,7 +1367,7 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' NOT LIKE regexp_replace(CAST(:p_0: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\') AND "profile"->>'name' NOT ILIKE regexp_replace(CAST(:p_1: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\') AND "profile"->>'bio' LIKE ('%' || :p_2:) ESCAPE '\\' AND "profile"->>'tag' LIKE ('%' || :p_3: || '%') ESCAPE '\\'`,
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' NOT LIKE :p_0: AND "profile"->>'name' NOT ILIKE :p_1: AND "profile"->>'bio' LIKE ('%' || :p_2:) ESCAPE '\\' AND "profile"->>'tag' LIKE ('%' || :p_3: || '%') ESCAPE '\\'`,
         params: { p_0: 'x%', p_1: 'y%', p_2: 'end', p_3: 'mid' },
       },
       maria: {
@@ -2357,6 +2384,50 @@ const CASES: Case[] = [
       },
     },
   },
+  {
+    // A CASE condition correlates to the query's own table, as a `where`
+    // does, with no join to alias it.
+    name: '$exists inside a CASE condition of a SELECT without a join',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      expressions: {
+        buyer: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { $exists: { table: 'orders', on: { '@userId': '@id' } } },
+              then: 'yes',
+            }],
+            else: 'no',
+          },
+        },
+      },
+      projection: { '@id': true, '@buyer': true },
+    },
+    expected: {
+      sqlite: {
+        sql: 'SELECT "id" AS "id", (CASE WHEN EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END) AS "buyer" FROM "users"',
+        params: { p_0: 'yes', p_1: 'no' },
+      },
+      postgres: {
+        sql: 'SELECT "id" AS "id", (CASE WHEN EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END) AS "buyer" FROM "users"',
+        params: { p_0: 'yes', p_1: 'no' },
+      },
+      maria: {
+        sql: 'SELECT `id` AS `id`, (CASE WHEN EXISTS ' +
+          '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id`) ' +
+          'THEN :p_0: ELSE :p_1: END) AS `buyer` FROM `users`',
+        params: { p_0: 'yes', p_1: 'no' },
+      },
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // INSERT
@@ -2545,7 +2616,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `INSERT INTO "logs" ("id", "dueAt") VALUES (:p_0:, strftime('%Y-%m-%dT%H:%M:%fZ', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:, CASE WHEN :p_2: IN ('MONTHS', 'YEARS') AND :p_1: = CAST(:p_1: AS INTEGER) AND strftime('%d', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:) <> strftime('%d', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) THEN '-' || strftime('%d', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:) || ' days' ELSE '+0 days' END)) RETURNING "id", "dueAt"`,
+          `INSERT INTO "logs" ("id", "dueAt") VALUES (:p_0:, strftime('%Y-%m-%dT%H:%M:%fZ', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:)) RETURNING "id", "dueAt"`,
         params: { p_0: 7, p_1: 1, p_2: 'DAYS' },
       },
       postgres: {
@@ -2582,15 +2653,14 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:, CASE WHEN :p_1: IN ('MONTHS', 'YEARS') AND :p_0: = CAST(:p_0: AS INTEGER) AND strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) <> strftime('%d', "createdAt") THEN '-' || strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) || ' days' ELSE '+0 days' END) AS "due" FROM "orders"`,
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS "stamp", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "due" FROM "orders"`,
       },
     },
   },
 
   {
-    // One 'HH:MM:SS' UTC string on every dialect. Postgres' own CURRENT_TIME
-    // carries a fraction and the session zone, MariaDB's is session-local.
-    name: 'CURRENT_TIME is the UTC clock time to the second',
+    // Each dialect's own CURRENT_TIME.
+    name: 'CURRENT_TIME in a projection and a filter',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -2608,13 +2678,12 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT "id" AS "id", CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME) AS "clock" FROM "shifts" ` +
-          `WHERE "startsAt" <= CAST(date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS TIME)`,
+          `SELECT "id" AS "id", CURRENT_TIME AS "clock" FROM "shifts" WHERE "startsAt" <= CURRENT_TIME`,
         params: {},
       },
       maria: {
         sql:
-          'SELECT `id` AS `id`, UTC_TIME() AS `clock` FROM `shifts` WHERE `startsAt` <= UTC_TIME()',
+          `SELECT \`id\` AS \`id\`, CURRENT_TIME() AS \`clock\` FROM \`shifts\` WHERE \`startsAt\` <= CURRENT_TIME()`,
         params: {},
       },
     },
@@ -2733,12 +2802,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:, CASE WHEN :p_1: IN ('MONTHS', 'YEARS') AND :p_0: = CAST(:p_0: AS INTEGER) AND strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) <> strftime('%d', "createdAt") THEN '-' || strftime('%d', "createdAt", :p_0: || ' ' || :p_1:) || ' days' ELSE '+0 days' END) AS "since", ` +
-          `(CASE WHEN :p_2: IN ('MONTHS', 'YEARS') THEN ` +
-          `((CAST(strftime('%Y', "shippedAt") AS INTEGER) * 12 + CAST(strftime('%m', "shippedAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("shippedAt") - julianday("shippedAt", 'start of month')) * 86400000) AS INTEGER)) - ` +
-          `((CAST(strftime('%Y', "createdAt") AS INTEGER) * 12 + CAST(strftime('%m', "createdAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("createdAt") - julianday("createdAt", 'start of month')) * 86400000) AS INTEGER)) ` +
-          `ELSE CAST(ROUND((julianday("shippedAt") - julianday("createdAt")) * 86400000) AS INTEGER) END ` +
-          `/ CASE :p_2: WHEN 'DAYS' THEN 86400000 WHEN 'HOURS' THEN 3600000 WHEN 'MINUTES' THEN 60000 WHEN 'SECONDS' THEN 1000 WHEN 'MONTHS' THEN 2764800000 WHEN 'YEARS' THEN 33177600000 END) AS "took" FROM "orders"`,
+          `SELECT "id" AS "id", strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt", :p_0: || ' ' || :p_1:) AS "since", (CASE WHEN :p_2: IN ('MONTHS', 'YEARS') THEN ((CAST(strftime('%Y', "shippedAt") AS INTEGER) * 12 + CAST(strftime('%m', "shippedAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("shippedAt") - julianday("shippedAt", 'start of month')) * 86400000) AS INTEGER)) - ((CAST(strftime('%Y', "createdAt") AS INTEGER) * 12 + CAST(strftime('%m', "createdAt") AS INTEGER)) * 2764800000 + CAST(ROUND((julianday("createdAt") - julianday("createdAt", 'start of month')) * 86400000) AS INTEGER)) ELSE CAST(ROUND((julianday("shippedAt") - julianday("createdAt")) * 86400000) AS INTEGER) END / CASE :p_2: WHEN 'DAYS' THEN 86400000 WHEN 'HOURS' THEN 3600000 WHEN 'MINUTES' THEN 60000 WHEN 'SECONDS' THEN 1000 WHEN 'MONTHS' THEN 2764800000 WHEN 'YEARS' THEN 33177600000 END) AS "took" FROM "orders"`,
         params: { p_0: -7, p_1: 'DAYS', p_2: 'HOURS' },
       },
       postgres: {
@@ -2810,11 +2874,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // 7 / 2 is 3.5 and 2.5 % 2 is 0.5 on every dialect. The first operand
-    // of DIVIDE is cast because two integers otherwise divide to an integer
-    // on SQLite and Postgres, and to a four-place DECIMAL on MariaDB.
-    // SQLite's `%` drops the fraction, so only two whole numbers use it.
-    name: 'DIVIDE and MODULO keep the fraction',
+    // DIVIDE and MODULO are the dialect's own `/` and `%`. Postgres has no
+    // `%` for a double, so MODULO goes through NUMERIC there.
+    name: 'DIVIDE and MODULO',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -2828,19 +2890,18 @@ const CASES: Case[] = [
     } satisfies Query<'SELECT'>,
     expected: {
       sqlite: {
-        sql: 'SELECT (CAST("total" AS REAL) / "qty") AS "each", ' +
-          '(CASE WHEN "total" = CAST("total" AS INTEGER) AND :p_0: = CAST(:p_0: AS INTEGER) ' +
-          'THEN "total" % :p_0: ELSE mod("total", :p_0:) END) AS "rest" FROM "orders"',
+        sql:
+          `SELECT ("total" / "qty") AS "each", ("total" % :p_0:) AS "rest" FROM "orders"`,
         params: { p_0: 2 },
       },
       postgres: {
-        sql: 'SELECT (CAST("total" AS DOUBLE PRECISION) / "qty") AS "each", ' +
-          'CAST((CAST("total" AS NUMERIC) % CAST(:p_0: AS NUMERIC)) AS DOUBLE PRECISION) AS "rest" FROM "orders"',
+        sql:
+          `SELECT ("total" / "qty") AS "each", CAST((CAST("total" AS NUMERIC) % CAST(:p_0: AS NUMERIC)) AS DOUBLE PRECISION) AS "rest" FROM "orders"`,
         params: { p_0: 2 },
       },
       maria: {
         sql:
-          'SELECT (CAST(`total` AS DOUBLE) / `qty`) AS `each`, (`total` % :p_0:) AS `rest` FROM `orders`',
+          `SELECT (\`total\` / \`qty\`) AS \`each\`, (\`total\` % :p_0:) AS \`rest\` FROM \`orders\``,
         params: { p_0: 2 },
       },
     },
@@ -3080,6 +3141,47 @@ const CASES: Case[] = [
         sql: 'UPDATE `users` SET `status` = :p_0: WHERE EXISTS ' +
           '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id` AND `__exists__`.`total` = :p_1:)',
         params: { p_0: 'vip', p_1: 100 },
+      },
+    },
+  },
+  {
+    name: 'UPDATE data with $nexists inside a CASE condition',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'status'],
+      data: {
+        status: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { $nexists: { table: 'orders', on: { '@userId': '@id' } } },
+              then: 'guest',
+            }],
+            else: 'buyer',
+          },
+        },
+      },
+    } satisfies Query<'UPDATE'>,
+    expected: {
+      sqlite: {
+        sql: 'UPDATE "users" SET "status" = (CASE WHEN NOT EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END)',
+        params: { p_0: 'guest', p_1: 'buyer' },
+      },
+      postgres: {
+        sql: 'UPDATE "users" SET "status" = (CASE WHEN NOT EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END)',
+        params: { p_0: 'guest', p_1: 'buyer' },
+      },
+      maria: {
+        sql: 'UPDATE `users` SET `status` = (CASE WHEN NOT EXISTS ' +
+          '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id`) ' +
+          'THEN :p_0: ELSE :p_1: END)',
+        params: { p_0: 'guest', p_1: 'buyer' },
       },
     },
   },
@@ -3667,7 +3769,7 @@ const CASES: Case[] = [
     expected: {
       sqlite: {
         sql:
-          'SELECT __base__."id" AS "id", "o"."status" AS "status", NULLIF(json_group_array(json_object(:p_0:, "o"."userId", :p_1:, "o"."amount", :p_2:, "o"."status")), \'[]\') AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC',
+          `SELECT __base__."id" AS "id", "o"."status" AS "status", json_group_array(json_object(:p_0:, "o"."userId", :p_1:, "o"."amount", :p_2:, "o"."status")) AS "orders" FROM "users" AS __base__ LEFT JOIN "orders" AS "o" ON "o"."userId" = __base__."id" GROUP BY __base__."id", "o"."status" ORDER BY "o"."status" ASC, MIN("o"."amount") ASC`,
       },
       postgres: {
         sql:

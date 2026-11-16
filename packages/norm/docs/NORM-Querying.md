@@ -305,7 +305,9 @@ side of an operator, for a cross-column comparison. That plans the join
 for a belongsTo or hasOne alias. An unprojected to-many cannot supply a
 comparison value, because it runs as an `EXISTS` subquery with nothing
 to compare an outer column against, so that spelling throws rather than
-comparing against the literal text:
+comparing against the literal text. On MongoDB a joined relation is an
+array on the document, so any relation column in value position throws
+`DialectUnsupportedError` there:
 
 ```typescript ignore
 // belongsTo in value position — joins, compares column to column:

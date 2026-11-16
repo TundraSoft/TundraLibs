@@ -231,6 +231,14 @@ export abstract class AbstractTranslator {
    */
   protected readonly _countCast: string | null = null;
 
+  /**
+   * The table of the SELECT, UPDATE or DELETE being built: the outer
+   * table an `$exists` in a CASE condition correlates to. A CASE is
+   * reached through the expression path, which carries no
+   * {@link FilterContext}.
+   */
+  private __outerTable: string | undefined;
+
   // =========================================================================
   // Public API — one method per query type
   // =========================================================================
@@ -541,6 +549,25 @@ export abstract class AbstractTranslator {
    * diverges (LIMIT/OFFSET ordering, etc).
    */
   protected _buildSelect(q: Query<'SELECT'>, params: Parameters): string {
+    return this.__withOuterTable(q.table, () => this.__selectSql(q, params));
+  }
+
+  /**
+   * Run `build` with `table` as the outer table of a CASE condition's
+   * `$exists`, and put the previous one back after: an INSERT … SELECT
+   * or a view builds a SELECT inside another statement.
+   */
+  private __withOuterTable(table: string, build: () => string): string {
+    const previous = this.__outerTable;
+    this.__outerTable = table;
+    try {
+      return build();
+    } finally {
+      this.__outerTable = previous;
+    }
+  }
+
+  private __selectSql(q: Query<'SELECT'>, params: Parameters): string {
     const hasJoins = !!(q.joins && Object.keys(q.joins).length > 0);
     const scope = this.__buildScope(q, hasJoins);
     // Projection source bodies (expressions, aggregates, and auto-expanded
@@ -654,6 +681,10 @@ export abstract class AbstractTranslator {
 
   /** Build an `UPDATE`. */
   protected _buildUpdate(q: Query<'UPDATE'>, params: Parameters): string {
+    return this.__withOuterTable(q.table, () => this.__updateSql(q, params));
+  }
+
+  private __updateSql(q: Query<'UPDATE'>, params: Parameters): string {
     const cols = q.columns as string[];
     const exprKeys = q.expressions ? Object.keys(q.expressions) : [];
     const scope = [...cols, ...exprKeys];
@@ -677,6 +708,10 @@ export abstract class AbstractTranslator {
 
   /** Build a `DELETE`. */
   protected _buildDelete(q: Query<'DELETE'>, params: Parameters): string {
+    return this.__withOuterTable(q.table, () => this.__deleteSql(q, params));
+  }
+
+  private __deleteSql(q: Query<'DELETE'>, params: Parameters): string {
     const cols = q.columns as string[];
     const exprKeys = q.expressions ? Object.keys(q.expressions) : [];
     const scope = [...cols, ...exprKeys];
@@ -1064,9 +1099,11 @@ export abstract class AbstractTranslator {
       const r = (v: unknown) =>
         this.__renderExprArg(v, scope, params, hasJoins);
       const whens = expr.args.cases.map((c) =>
-        `WHEN ${this._translateFilter(c.when, scope, params, hasJoins)} THEN ${
-          r(c.then)
-        }`
+        `WHEN ${
+          this._translateFilter(c.when, scope, params, hasJoins, {
+            outerTable: this.__outerTable,
+          })
+        } THEN ${r(c.then)}`
       );
       const otherwise = expr.args.else === undefined
         ? ''
