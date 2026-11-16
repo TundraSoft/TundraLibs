@@ -381,6 +381,12 @@ same filter first, then update or delete by `$in` on them. An `on`
 value that names a joined column, `'@Alias.@col'`, reads that column
 of the row, as on SQL.
 
+A `CASE` `when` condition may hold the node in a SELECT's
+`expressions`. On MongoDB its `$lookup` runs just before the stage that
+computes the expressions, and the condition tests the size of the
+looked-up array. Anywhere else a CASE condition is translated, such as
+UPDATE `data`, the node throws `DialectUnsupportedError` on MongoDB.
+
 ## Expressions
 
 The table below summarises the per-dialect emission. The general rule:

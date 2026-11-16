@@ -369,6 +369,22 @@ class WriteScope extends Set<string> {
 }
 
 /**
+ * The column scope of a SELECT's `expressions` stage. A CASE condition
+ * there may hold `$exists` / `$nexists`: each adds its `$lookup` to
+ * `lookups`, written to a field named outside `taken`, for the stage to
+ * run first.
+ */
+class ExpressionScope extends Set<string> {
+  public readonly lookups: Record<string, unknown>[] = [];
+  public readonly taken: ReadonlySet<string>;
+
+  constructor(columns: Iterable<string>, taken: ReadonlySet<string>) {
+    super(columns);
+    this.taken = taken;
+  }
+}
+
+/**
  * The aggregates whose `distinct` MongoDB has to compute in two steps,
  * each mapped to the expression that reduces the set of a group's distinct
  * values. The set holds one `null` when any row's value was null; SQL's
@@ -1325,14 +1341,20 @@ export class MongoTranslator {
     }
     if (q.expressions) {
       const addFields: Record<string, unknown> = {};
+      const scope = new ExpressionScope(columns, names);
       for (const [name, expr] of Object.entries(q.expressions)) {
         // A missing result would leave the key out of the row, where SQL
         // has NULL.
         addFields[name] = this.__nullIfMissing(
-          this.__translateExpression(expr, columns),
+          this.__translateExpression(expr, scope),
         );
       }
-      pipeline.push({ $addFields: addFields });
+      pipeline.push(...scope.lookups, { $addFields: addFields });
+      if (scope.lookups.length > 0) {
+        pipeline.push({
+          $unset: scope.lookups.map((l) => (l.$lookup as { as: string }).as),
+        });
+      }
     }
     // Deferred $match — runs AFTER every $lookup (joined rows exist) and
     // AFTER the expressions $addFields (alias fields exist), but BEFORE any
@@ -2786,12 +2808,14 @@ export class MongoTranslator {
    * Translate a `CASE` condition — a {@link QueryFilter} — to an
    * aggregation boolean expression, which `$switch` needs in place of a
    * find filter. Covers `$and` / `$or` and the comparison, `$in` /
-   * `$nin`, `$between`, `$null` and pattern operators; `$exists`
-   * subqueries throw. A condition is true exactly where SQL's is: each
+   * `$nin`, `$between`, `$null` and pattern operators, and `$exists` /
+   * `$nexists` in a SELECT's `expressions`, which test the size of their
+   * lookup's field. A condition is true exactly where SQL's is: each
    * comparison is false on a null or missing input.
    *
    * @throws {DialectUnsupportedError} For an operator outside that set,
-   *   and for a pattern operand the filter path refuses too.
+   *   an `$exists` / `$nexists` anywhere else, and a pattern operand the
+   *   filter path refuses too.
    */
   private __filterToExpr(
     filter: QueryFilter,
@@ -2804,6 +2828,20 @@ export class MongoTranslator {
           [key]: (value as QueryFilter[]).map((f) =>
             this.__filterToExpr(f, columns)
           ),
+        });
+        continue;
+      }
+      if (
+        (key === '$exists' || key === '$nexists') &&
+        columns instanceof ExpressionScope
+      ) {
+        let field = `${EXISTS_FIELD}${columns.lookups.length}`;
+        while (columns.taken.has(field)) field = `_${field}`;
+        columns.lookups.push(
+          this.__buildExistsLookup(value as ExistsFilter, field, columns),
+        );
+        parts.push({
+          [key === '$exists' ? '$gt' : '$eq']: [{ $size: `$${field}` }, 0],
         });
         continue;
       }

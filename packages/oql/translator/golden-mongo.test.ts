@@ -4248,6 +4248,73 @@ const CASES: Case[] = [
     },
   },
   {
+    // The CASE condition's lookup runs before the expressions stage, which
+    // tests its size; the field avoids the column named like it.
+    name: '$nexists inside a CASE condition of a SELECT expression',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', '__exists_0'],
+      expressions: {
+        buyer: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { $nexists: { table: 'orders', on: { '@userId': '@id' } } },
+              then: 'no',
+            }],
+            else: 'yes',
+          },
+        },
+      },
+      projection: { '@id': true, '@buyer': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              let: { v0: '$id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$v0'] },
+                        { $gt: ['$userId', null] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: '___exists_0',
+            },
+          },
+          {
+            $addFields: {
+              buyer: {
+                $switch: {
+                  branches: [{
+                    case: { $eq: [{ $size: '$___exists_0' }, 0] },
+                    then: 'no',
+                  }],
+                  default: 'yes',
+                },
+              },
+            },
+          },
+          { $unset: ['___exists_0'] },
+          { $project: { id: 1, buyer: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     // A column of the query, or of the subquery table its sub-where names,
     // keeps its value: the lookup field takes another name.
     name: '$exists beside a column named like its lookup field',
