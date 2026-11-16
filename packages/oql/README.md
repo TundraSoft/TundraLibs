@@ -478,8 +478,8 @@ projection; `COUNT { distinct: ['col'] }` emits `COUNT(DISTINCT col)`
 (exactly one declared column — multi-column DISTINCT counts are not
 portable across dialects). `distinct: true` is **rejected** alongside
 `aggregates` or a join-alias projection: those trigger an automatic
-GROUP BY that already deduplicates. MongoDB throws for both — build an
-explicit `$group` pipeline instead.
+GROUP BY that already deduplicates. MongoDB throws for `distinct: true`
+— build an explicit `$group` pipeline instead.
 
 ### Aggregation Functions
 

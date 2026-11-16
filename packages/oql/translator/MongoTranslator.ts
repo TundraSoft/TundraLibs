@@ -32,10 +32,9 @@
  * - Expressions: UUID materialises a fresh value via `crypto.randomUUID()`
  *   at translate time. HASH/ENCRYPT/DECRYPT/LPAD/RPAD pass the input
  *   through unchanged (Mongo has no aggregation-pipeline crypto/padding).
- * - Aggregates: STRING_AGG throws — no clean Mongo equivalent.
- * - Deduplication: `SELECT { distinct: true }` and `COUNT { distinct }`
- *   throw — Mongo has no find-level DISTINCT; build a `$group` pipeline
- *   explicitly when you need one.
+ * - Deduplication: `SELECT { distinct: true }` throws — Mongo has no
+ *   find-level DISTINCT; build a `$group` pipeline explicitly when you
+ *   need one. `COUNT { distinct }` counts a `$group`'s distinct set.
  * - `$exists` / `$nexists` filters run as a `$lookup` stage, so a SELECT
  *   or COUNT carrying one is an aggregation pipeline. UPDATE, DELETE and
  *   a partial-index predicate take a query filter, which has no stage to
@@ -316,6 +315,17 @@ const EXISTS_FIELD = '__exists_';
 const REGEX_SPECIALS = /[.*+?^${}()|[\]\\]/g;
 
 /**
+ * The replacements that turn a LIKE pattern into a regex source, in order:
+ * each {@link REGEX_SPECIALS} character escaped, the backslash first, then
+ * the wildcards. A computed pattern runs them as `$replaceAll` stages.
+ */
+const LIKE_TO_REGEX_STEPS: readonly (readonly [string, string])[] = [
+  ...'\\.*+?^${}()|[]'.split('').map((c) => [c, `\\${c}`] as const),
+  ['%', '.*'],
+  ['_', '.'],
+];
+
+/**
  * Filter operators whose value is spliced into a regex pattern. Their
  * operand must be a plain string by the time it reaches
  * `__translateOperator` — anything else is routed or rejected before that.
@@ -467,8 +477,8 @@ export class MongoTranslator {
    *
    * @throws {TypeError} When `q` is not a valid `SELECT` query.
    * @throws {@link DialectUnsupportedError} For `distinct`, an
-   *   `$exists` / `$nexists` key bound to a joined column, `STRING_AGG`,
-   *   and any other expression or operator with no Mongo equivalent.
+   *   `$exists` / `$nexists` key bound to a joined column, and any other
+   *   expression or operator with no Mongo equivalent.
    */
   public select(
     q: Query<'SELECT'>,
@@ -770,40 +780,42 @@ export class MongoTranslator {
   }
 
   /**
-   * Translate a `COUNT`. A count is a native `count`; with joins or an
-   * `$exists` / `$nexists` filter it is rewritten as a SELECT and comes
-   * back as a pipeline.
+   * Translate a `COUNT`. A count is a native `count`; with joins,
+   * `distinct`, an `$exists` / `$nexists` filter or a filter on a declared
+   * expression it is rewritten as a SELECT, as the SQL translators do, and
+   * comes back as a pipeline.
    *
    * @throws {TypeError} When `q` is not a valid `COUNT` query.
-   * @throws {@link DialectUnsupportedError} When `q.distinct` is set —
-   *   Mongo has no count-level DISTINCT.
    */
   public count(
     q: Query<'COUNT'>,
   ): MongoCountAction | MongoFindAction | MongoAggregateAction {
     assertCount(q);
-    if (q.distinct !== undefined) {
-      throw new DialectUnsupportedError(
-        this.Dialect,
-        `COUNT with 'distinct' (build an explicit $group + $count pipeline instead)`,
-      );
-    }
     // Mongo native `count` only supports filter — no pre-count expression
-    // chain. If the OQL caller asked for joins, or the filter needs a
-    // `$lookup` stage, we fall back to an aggregate count; otherwise the
-    // simpler path.
-    if (q.joins || this.__filterHasExists(q.where)) {
-      const sel = this.__buildSelect({
+    // chain. Anything else falls back to an aggregate count.
+    if (
+      q.joins || q.distinct !== undefined || this.__filterHasExists(q.where) ||
+      this.__filterReferencesExpressions(q.where, q.expressions)
+    ) {
+      return this.__buildSelect({
         type: 'SELECT',
         table: q.table,
         schema: q.schema,
         columns: q.columns,
+        expressions: q.expressions,
         joins: q.joins,
         where: q.where,
-        aggregates: { [COUNT_ALIAS]: { $$_aggregate: 'COUNT' } },
+        aggregates: {
+          [COUNT_ALIAS]: q.distinct === undefined
+            ? { $$_aggregate: 'COUNT' }
+            : {
+              $$_aggregate: 'COUNT',
+              column: `@${String(q.distinct[0])}`,
+              distinct: true,
+            },
+        },
         projection: { [`@${COUNT_ALIAS}`]: true },
       });
-      return sel;
     }
     return {
       sql: 'count',
@@ -1361,6 +1373,31 @@ export class MongoTranslator {
         // deno-lint-ignore no-explicit-any
         groupBody[name] = this.__translateAggregate(agg as any, columns);
         empty[name] = fn === 'COUNT' ? 0 : null;
+        if (fn === 'STRING_AGG') {
+          // SQL skips NULL and gives NULL when nothing is left.
+          const separator = (agg as { separator?: string }).separator ?? ',';
+          flatten[name] = {
+            $reduce: {
+              input: {
+                $filter: { input: `$${name}`, cond: { $ne: ['$$this', null] } },
+              },
+              initialValue: null,
+              in: {
+                $cond: [
+                  { $eq: ['$$value', null] },
+                  '$$this',
+                  {
+                    $concat: [
+                      '$$value',
+                      this.__expressionLiteral(separator),
+                      '$$this',
+                    ],
+                  },
+                ],
+              },
+            },
+          };
+        }
         if (fn === 'SUM') {
           // `$sum` of no values is 0, SQL's SUM is NULL. The largest
           // value is null exactly then, so it rides along to tell.
@@ -2154,11 +2191,8 @@ export class MongoTranslator {
    * (`{ field: <mongo-spec> }`) plus any `$expr` `exprs` for value-position
    * column references (`@otherCol`), and `clashes`: per-field specs kept
    * out of `spec` because two OQL operators translate to the same Mongo
-   * key, each to be ANDed beside it. A column reference is resolved to a
-   * `$expr` comparison for the comparison operators; for `$in`/`$nin` and the
-   * LIKE family — which Mongo cannot faithfully express field-to-field — a
-   * {@link DialectUnsupportedError} is thrown rather than silently treating
-   * the reference as a literal.
+   * key, each to be ANDed beside it. A column reference, and for the
+   * pattern operators an Expression, compares inside `$expr`.
    */
   private __translateColumnCondition(
     fieldPath: string,
@@ -2174,13 +2208,10 @@ export class MongoTranslator {
     const lhs = `$${fieldPath}`;
     if (rhs === null) return { spec: { [fieldPath]: null }, exprs, clashes };
     if (Array.isArray(rhs)) {
-      // Implicit $in. A column ref inside the list cannot be expressed in a
-      // Mongo $match — reject rather than silently treat it as a literal.
+      // Implicit $in. A column ref inside the list compares in `$expr`.
       if (rhs.some((el) => this.__valueFieldRef(el, columns) !== null)) {
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          'column reference inside an $in / array filter value',
-        );
+        exprs.push(this.__conditionToExpr(lhs, '$in', rhs, columns));
+        return { spec: {}, exprs, clashes };
       }
       return { spec: { [fieldPath]: { $in: rhs } }, exprs, clashes };
     }
@@ -2264,31 +2295,17 @@ export class MongoTranslator {
         op === '$ilike' || op === '$nilike' || op === '$startsWith' ||
         op === '$endsWith' || op === '$contains'
       ) {
-        const hasRef = (op === '$in' || op === '$nin')
+        // A column, or for the pattern operators an Expression, has no
+        // per-field form, so it compares inside `$expr`. `$in` and `$nin`
+        // take primitive arrays only, no Expression.
+        const computed = (op === '$in' || op === '$nin')
           ? (val as unknown[]).some((el) =>
             this.__valueFieldRef(el, columns) !== null
           )
-          : this.__valueFieldRef(val, columns) !== null;
-        if (hasRef) {
-          throw new DialectUnsupportedError(
-            this.Dialect,
-            `column reference as the value of '${op}'`,
-          );
-        }
-        // The LIKE family also accepts an Expression value (see
-        // `asserts/filters/operators.ts`). A computed operand can't be
-        // spliced into a `$regex` at translation time, so it routes
-        // through `$expr` instead of the per-field literal spec.
-        // (`$in` / `$nin` take primitive arrays only — no Expression.)
-        if (op !== '$in' && op !== '$nin' && this.__isExpressionNode(val)) {
-          exprs.push(
-            this.__likeExpressionOperand(
-              lhs,
-              op,
-              val as Expressions,
-              columns,
-            ),
-          );
+          : this.__valueFieldRef(val, columns) !== null ||
+            this.__isExpressionNode(val);
+        if (computed) {
+          exprs.push(this.__conditionToExpr(lhs, op, val, columns));
           continue;
         }
         if (op === '$nin') {
@@ -2326,8 +2343,9 @@ export class MongoTranslator {
   }
 
   /**
-   * Translate a LIKE-family operator whose value is an OQL Expression
-   * into an aggregation `$expr` fragment.
+   * Translate a pattern operator whose value is computed, a column or an
+   * OQL Expression already translated to `operand`, into an aggregation
+   * `$expr` fragment.
    *
    * `$startsWith` / `$endsWith` / `$contains` carry *literal* substring
    * semantics on the SQL side (the `%` / `_` of a bound value and of a
@@ -2335,22 +2353,16 @@ export class MongoTranslator {
    * Mongo's literal string-search operators — no regex, hence nothing to
    * escape.
    *
-   * `$like` / `$nlike` / `$ilike` / `$nilike` are the opposite: their
-   * value IS a wildcard pattern, and translating that grammar to a regex
-   * requires reading the pattern at translation time. When it is computed
-   * server-side there is no pattern to read, and Mongo has no
-   * LIKE-pattern matcher to hand it to — so we refuse rather than emit
-   * something that quietly means something else.
-   *
-   * @throws {DialectUnsupportedError} For the `$like` family.
+   * `$like` / `$nlike` / `$ilike` / `$nilike` read their value as a
+   * wildcard pattern, as on SQL. The pattern becomes a regex at run time
+   * by the same steps {@link __likeToRegex} takes at translation time,
+   * and `$regexMatch` applies it.
    */
-  private __likeExpressionOperand(
+  private __computedPattern(
     lhs: unknown,
     op: string,
-    expr: Expressions,
-    columns: ReadonlySet<string>,
+    operand: unknown,
   ): unknown {
-    const operand = this.__translateExpression(expr, columns);
     // SQL matches nothing against a NULL operand; `$indexOfCP` and
     // `$strLenCP` throw on one.
     const whenSet = (match: unknown): unknown => ({
@@ -2397,13 +2409,30 @@ export class MongoTranslator {
           },
         });
       }
-      default:
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          `Expression as the value of '${op}' (a LIKE pattern must be ` +
-            `known at translation time to become a regex — use ` +
-            `'$startsWith' / '$endsWith' / '$contains' for a computed operand)`,
+      default: {
+        const source = LIKE_TO_REGEX_STEPS.reduce<unknown>(
+          (input, [find, replacement]) => ({
+            $replaceAll: {
+              input,
+              find: this.__expressionLiteral(find),
+              replacement,
+            },
+          }),
+          operand,
         );
+        const match = {
+          $regexMatch: {
+            input: lhs,
+            regex: { $concat: ['^', source, { $literal: '$' }] },
+            ...(op === '$ilike' || op === '$nilike' ? { options: 'i' } : {}),
+          },
+        };
+        return whenSet(
+          op === '$nlike' || op === '$nilike'
+            ? this.__notNull({ $not: [match] }, lhs)
+            : match,
+        );
+      }
     }
   }
 
@@ -2414,7 +2443,7 @@ export class MongoTranslator {
   ): Record<string, unknown> {
     // The LIKE family splices its value into a regex, so it must be a
     // string by this point. `__translateColumnCondition` has already
-    // routed column refs (throws) and Expressions (`$expr`) away; this
+    // routed column refs and Expressions to `$expr`; this
     // guards the remaining shapes so hand-built, unvalidated input gets
     // a dialect error rather than a `val.replace is not a function`
     // TypeError from below.
@@ -2709,18 +2738,12 @@ export class MongoTranslator {
       return resolved;
     };
     if (LIKE_OPERATORS.has(op)) {
-      if (this.__valueFieldRef(operand, columns) !== null) {
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          `column reference as the value of '${op}'`,
-        );
-      }
-      if (this.__isExpressionNode(operand)) {
-        return this.__likeExpressionOperand(
+      const ref = this.__valueFieldRef(operand, columns);
+      if (ref !== null || this.__isExpressionNode(operand)) {
+        return this.__computedPattern(
           field,
           op,
-          operand as Expressions,
-          columns,
+          ref ?? this.__translateExpression(operand as Expressions, columns),
         );
       }
       // The pattern a filter would use, matched by `$regexMatch`. That is
@@ -2799,15 +2822,18 @@ export class MongoTranslator {
       // Math
       case 'ADD':
         return { $add: (args as unknown[]).map(r) };
-      case 'SUBTRACT':
-        return { $subtract: (args as unknown[]).map(r) };
       case 'MULTIPLY':
         return { $multiply: (args as unknown[]).map(r) };
-      // `$divide` and `$mod` take exactly two operands; SQL chains
-      // `a / b / c` left to right, so the fold does too.
+      // `$subtract`, `$divide` and `$mod` take exactly two operands; SQL
+      // chains `a - b - c` left to right, so the fold does too.
+      case 'SUBTRACT':
       case 'DIVIDE':
       case 'MODULO': {
-        const op = expr.$$_expression === 'DIVIDE' ? '$divide' : '$mod';
+        const op = {
+          SUBTRACT: '$subtract',
+          DIVIDE: '$divide',
+          MODULO: '$mod',
+        }[expr.$$_expression];
         const [first, ...rest] = (args as unknown[]).map(r);
         return rest.reduce((acc, x) => ({ [op]: [acc, x] }), first);
       }
@@ -3070,19 +3096,17 @@ export class MongoTranslator {
         return { $min: ref(agg.column) };
       case 'MAX':
         return { $max: ref(agg.column) };
-      case 'STRING_AGG': {
-        // Mongo has no SQL-style STRING_AGG. Use $push + $reduce as a
-        // best effort; clearer to throw and let users build the pipeline
-        // explicitly when they need this.
-        throw new DialectUnsupportedError(
-          this.Dialect,
-          `aggregate 'STRING_AGG' (use a custom $push/$reduce pipeline)`,
-        );
-      }
+      // The values, joined once the group is built (see `__buildAggregate`).
+      case 'STRING_AGG':
+        return {
+          [agg.distinct === true ? '$addToSet' : '$push']: ref(agg.column),
+        };
       // `$push` skips a missing value, and an object leaves out a missing
       // field; SQL collects NULL for both, as for a join without a match.
       case 'ARRAY_AGG':
-        return { $push: present(agg.column) };
+        return {
+          [agg.distinct === true ? '$addToSet' : '$push']: present(agg.column),
+        };
       case 'JSON_ROW': {
         const cols = agg.columns as Record<string, unknown>;
         const rowObj: Record<string, unknown> = {};
