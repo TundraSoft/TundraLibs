@@ -142,7 +142,7 @@ import type { EngineErrorMeta } from '@tundralibs/drivers/errors';
 
 ### EngineErrorCodes
 
-Runtime constant mapping each `EngineErrorCode` to its message template. Templates use `${var}` placeholders filled from error metadata when the message is built.
+Runtime constant mapping each `EngineErrorCode` to its message template. Templates use `${var}` placeholders filled from error metadata when the message is built. A template that ends in `: ${var}` leaves that tail out when the engine did not report the value: a SQLite foreign-key failure names no constraint, so its message is `Foreign key constraint violation on SQLITE::app`.
 
 ```typescript
 import { EngineErrorCodes } from '@tundralibs/drivers/errors';

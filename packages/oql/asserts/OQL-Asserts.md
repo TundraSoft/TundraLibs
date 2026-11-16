@@ -25,7 +25,7 @@ Runtime validators for OQL queries.
 
 The asserts module provides runtime validation for OQL queries. All validators follow the Guardian pattern with two variants:
 
-- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it
+- **Assert functions** - Throw `TypeError` on validation failure. A date expression with a `unit` outside its allowed set throws `OqlError` with code `INVALID_TIME_UNIT` instead, the same error the translators throw for it. An `UPDATE` or `DELETE` filter key that reaches through a join throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`. A `SELECT` or `COUNT` reference that names a join alias without the column's `@`, such as `'@Profile.bio'`, throws `OqlError` with code `INVALID_COLUMN_REF`
 - **Type guard functions** - Return `boolean` without throwing
 
 This ensures queries are structurally valid before translation and execution.
@@ -203,7 +203,7 @@ const valid = isUpdate(query);
 - Table and columns are specified
 - Data keys are in the column list
 - Data values follow the INSERT rules above (same literal-vs-Expression disambiguation); column references inside Expressions are permitted (UPDATE can reference the row being modified)
-- WHERE clause is valid
+- WHERE clause is valid. A key whose root is not a column, the table or an expression key, such as `'@Items.@sku'`, reaches through a join, which UPDATE does not take: it throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`
 
 ### DELETE Query
 
@@ -222,7 +222,7 @@ const valid = isDelete(query);
 - Table is specified
 - `columns` is a non-empty array — this is the table's column list used to resolve `@col` references inside the optional `where` filter (and any pre-declared `expressions`), **not** a projection (DELETE returns no rows). A missing or empty array throws `Invalid DELETE query: 'columns' must be a non-empty array`.
 - Optional `expressions` are well-formed
-- WHERE clause is valid (syntactically optional — DELETE without WHERE removes every row)
+- WHERE clause is valid (syntactically optional — DELETE without WHERE removes every row). A key that reaches through a join, such as `'@Items.@sku'`, throws `OqlError` with code `RELATION_FILTER_UNSUPPORTED`, as for UPDATE
 
 ### UPSERT Query
 

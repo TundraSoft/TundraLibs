@@ -77,7 +77,7 @@ failures.
 | `NormDefinitionError`   | `Entity()` / `Schema()` / `use()` and the compile pass. Aggregates every finding on `context.issues`.                                                                                                                                                                                                | Yes, the five definition codes.                       |
 | `NormMigrationError`    | The `Migrator`: drift, blocked drops, plan mismatches, lock contention, refused rewrites.                                                                                                                                                                                                            | Yes, the migration codes, plus `MISSING_SECRET`.      |
 | `NormAdvisoryLockError` | The executor seam when `pg_advisory_lock` / `GET_LOCK` times out. The migrator remaps it to a `NormMigrationError`.                                                                                                                                                                                  | Always `LOCK_TIMEOUT` (set by the constructor).       |
-| `NormValidationError`   | The write path when an insert, update, or upsert payload fails the column-derived Guardian. Detail on `context.issues`.                                                                                                                                                                              | No; branch on the class.                              |
+| `NormValidationError`   | The write path when an insert, update, or upsert payload fails the column-derived Guardian, or an upsert row has no value for an `updateOnConflict` column. Detail on `context.issues`.                                                                                                              | No; branch on the class.                              |
 | `NormHookError`         | The accessor pipeline when a model's `beforeInsert` / `beforeUpdate` / `beforeDelete` / `afterRead` hook throws.                                                                                                                                                                                     | No; `context.model` and `context.hook` identify it.   |
 | `NormUnsupportedError`  | Eagerly, when the configured engine lacks a capability (`db.transaction()` on MongoDB or a fetch-only dialect), or the entity's own shape forbids the call (`update()`/`upsert()`/`delete()`/`truncate()` on a `temporal` entity, which is insert-only on every engine). `context.feature` names it. | No; branch on the class.                              |
 
@@ -131,9 +131,11 @@ Three refusals reuse an existing code rather than getting one of their
 own: ordering by, or supplying a filter value from, an unprojected
 to-many relation raises `INVALID_PROJECTION` (an unprojected to-many
 runs as an `EXISTS` subquery, so project it or move the condition to
-key position); supplying a filter value from an unprojected
-[NULL-safe](NORM-Querying.md#null-safe-relation-keys) relation raises
-it too, because the row would come back once per match; and a scoped
+key position); supplying a filter value from an unprojected to-one
+relation that can match several rows, one matched
+[NULL-safe](NORM-Querying.md#null-safe-relation-keys) or joined on
+columns that are no declared key of the related entity, raises it too,
+because the row would come back once per match; and a scoped
 upsert whose scope column is encrypted with no `.hash()` sibling raises
 `SCOPE_VIOLATION`.
 

@@ -49,7 +49,10 @@ import {
   findDisallowedJsonPathOperator,
   JSON_PATH_ALLOWED_OPERATORS,
 } from '../asserts/mod.ts';
-import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
+import {
+  assertInsertFromQuery,
+  isGroupedSelect,
+} from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import { Parameters } from './Parameters.ts';
@@ -987,7 +990,16 @@ export abstract class AbstractTranslator {
     // node and is never bound as a parameter, so the dialect picks its
     // whole form here rather than branching in SQL like DATE_DIFF must.
     if (expr.$$_expression === 'UNIX_TIMESTAMP') {
-      return this._unixTimestamp(expr.unit ?? 'seconds');
+      const unit: unknown = expr.unit;
+      if (unit !== undefined && unit !== 'seconds' && unit !== 'milliseconds') {
+        throw new OqlError(
+          `Unknown UNIX_TIMESTAMP unit '${
+            String(unit)
+          }' — expected one of seconds, milliseconds`,
+          { code: 'INVALID_TIME_UNIT', dialect: this.Dialect, unit },
+        );
+      }
+      return this._unixTimestamp(unit ?? 'seconds');
     }
     // `unit` is a translation-time switch here too. It is matched against
     // the three literals, so nothing a caller supplies reaches the SQL.
@@ -1528,8 +1540,10 @@ export abstract class AbstractTranslator {
 
   /**
    * Build the column scope for a SELECT — base columns (qualified with
-   * BASE_ALIAS when joins are present) plus joined columns plus any
-   * declared expression keys.
+   * BASE_ALIAS when joins are present) plus joined columns. Declared
+   * expression keys are not in it: a filter key naming one is replaced by
+   * its body through the filter context, and an `@key` as an expression
+   * argument or a filter value is not a column, so it binds as text.
    */
   private __buildScope(q: Query<'SELECT'>, hasJoins: boolean): string[] {
     const scope: string[] = [];
@@ -1783,13 +1797,9 @@ export abstract class AbstractTranslator {
     return groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
   }
 
-  /** Whether {@link __buildGroupBy} groups this query. */
+  /** Whether {@link __buildGroupBy} groups this query; the validator's rule. */
   private __isGrouped(q: Query<'SELECT'>): boolean {
-    const hasAggregates = !!q.aggregates &&
-      Object.keys(q.aggregates).length > 0;
-    const hasAutoExpandedJoin = !!q.joins &&
-      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
-    return hasAggregates || hasAutoExpandedJoin;
+    return isGroupedSelect(q);
   }
 
   /** Build the ` ORDER BY` clause, or `''` when `q.orderBy` is empty. */

@@ -70,8 +70,8 @@ export function sqliteErrorToCode(
  * users.name`, `no such table: widgets`). The standardized `EngineError`
  * templates reference `${constraint}` (DUPLICATE_KEY / CHECK_VIOLATION) and
  * `${column}` (NOT_NULL_VIOLATION), so the wrapping engine must lift these
- * names out of the message or the placeholder survives verbatim in the
- * rendered message and `context.constraint` / `.column` stay `undefined`.
+ * names out of the message or the rendered message leaves the name out and
+ * `context.constraint` / `.column` stay `undefined`.
  *
  * Pure: a function of the message text only, with no native-driver or wire
  * imports, so **both** the native `SQLiteEngine` and the Turso / libSQL
@@ -81,7 +81,7 @@ export function sqliteErrorToCode(
  *
  * Note: `FOREIGN KEY constraint failed` carries no name (SQLite does not report
  * one), so no `constraint` is extracted for it — matching what the native
- * engine emits (a literal `${constraint}` in that one case).
+ * engine emits (a message without a name in that one case).
  */
 export function parseSqliteErrorMeta(
   message: string,

@@ -32,7 +32,7 @@ const TEST_CONFIG = {
     ? `${env.get('DB_SCHEMA')}_drivers`
     : env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USER') || 'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
 async function isMariaAvailable(): Promise<boolean> {
@@ -204,6 +204,31 @@ describe('drivers.MariaEngine.error-mapping (no DB)', () => {
     }
   });
 
+  it('names the key and the column the server message reports', () => {
+    const wrap = (code: string, sqlMessage: string) =>
+      engine.wrapError(
+        { code, sqlMessage, message: `(conn) ${sqlMessage}` },
+        q,
+      );
+    const dup = wrap(
+      'ER_DUP_ENTRY',
+      "Duplicate entry 'a' for key 'users_email'",
+    );
+    asserts.assertEquals(dup.context.constraint, 'users_email');
+    asserts.assertEquals(
+      dup.message,
+      'Duplicate key violation on MARIA::maria-errmap: users_email',
+    );
+    const col = wrap(
+      'ER_BAD_FIELD_ERROR',
+      "Unknown column 'u.nosuch' in 'SELECT'",
+    );
+    asserts.assertEquals(
+      col.message,
+      'Column not found on MARIA::maria-errmap: u.nosuch',
+    );
+  });
+
   it('maps an unknown driver code to QUERY_EXECUTION_FAILED', () => {
     asserts.assertEquals(codeFor('ER_SOMETHING_NEW'), 'QUERY_EXECUTION_FAILED');
   });
@@ -305,6 +330,19 @@ describe({
           sql: 'SELECT COUNT(*) AS n FROM information_schema.TABLES',
         });
         asserts.assertEquals(typeof r.data[0]?.n, 'bigint');
+        await engine.disconnect();
+      });
+
+      it('leaves a placeholder inside a string or comment as text', async () => {
+        const engine = new MariaEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT ':a:' AS t, :a: AS v, 'it\\'s :zz:' AS d, ` +
+            `TO_CHAR(:ts:, 'HH24:MI:SS') AS c # :zz:`,
+          params: { a: 1, ts: new Date('2026-01-15T20:04:05Z') },
+        });
+        asserts.assertEquals(r.data, [
+          { t: ':a:', v: 1, d: "it's :zz:", c: '20:04:05' },
+        ]);
         await engine.disconnect();
       });
     });

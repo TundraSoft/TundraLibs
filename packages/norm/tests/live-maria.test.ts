@@ -35,7 +35,7 @@ const CONFIG = {
     : env.get('MARIA_DB') || 'mysql',
   username: env.get('MARIA_USERNAME') || env.get('MARIA_USER') ||
     'root',
-  password: env.get('MARIA_PASSWORD') || '',
+  password: env.get('MARIA_PASSWORD') || undefined,
 };
 
 const available = await (async () => {

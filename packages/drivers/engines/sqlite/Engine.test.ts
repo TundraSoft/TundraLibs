@@ -148,8 +148,8 @@ describe({
 
     it('lifts constraint / column names into metadata (resolves the template placeholder)', () => {
       // UNIQUE / CHECK fill `${constraint}`; NOT NULL fills `${column}`. Without
-      // this the EngineError template renders a literal `${constraint}` /
-      // `${column}` (onMissing:'literal') and the context field stays undefined.
+      // this the message leaves the name out and the context field stays
+      // undefined.
       const dup = engine.wrapError(
         {
           code: 'SQLITE_CONSTRAINT_UNIQUE',
@@ -283,6 +283,18 @@ describe({
           params: { v: -0 },
         });
         asserts.assertStrictEquals(r.data[0]!.v, 0);
+        await engine.disconnect();
+      });
+
+      it('leaves a placeholder inside a string, identifier or comment as text', async () => {
+        const engine = new SQLiteEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql:
+            `SELECT ':a:' AS t, :a: AS v, replace(:s:, ':sep:', '-') AS d, ` +
+            `1 AS [:zz:] -- :zz:`,
+          params: { a: 1, s: 'x:sep:y' },
+        });
+        asserts.assertEquals(r.data, [{ t: ':a:', v: 1, d: 'x-y', ':zz:': 1 }]);
         await engine.disconnect();
       });
 

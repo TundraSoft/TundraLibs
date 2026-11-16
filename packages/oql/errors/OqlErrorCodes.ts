@@ -27,7 +27,8 @@ export type OqlErrorCode =
   | 'UNHANDLED_EXPRESSION'
   | 'PARAM_INLINE_UNSUPPORTED'
   | 'NON_FINITE_LITERAL'
-  | 'INVALID_TIME_UNIT';
+  | 'INVALID_TIME_UNIT'
+  | 'RELATION_FILTER_UNSUPPORTED';
 
 /**
  * Code → short human description. Parity with the drivers
@@ -40,7 +41,11 @@ export const OqlErrorCodes: Record<OqlErrorCode, string> = {
   UNKNOWN: 'Unknown OQL error',
   /** The target dialect does not support the requested feature. */
   DIALECT_UNSUPPORTED: 'Dialect does not support the requested feature',
-  /** A column reference did not start with the required `@` sigil. */
+  /**
+   * A column reference did not start with the required `@` sigil, or, on
+   * MongoDB, named a declared expression where an UPDATE or DELETE reads
+   * a column.
+   */
   INVALID_COLUMN_REF: 'Malformed column reference',
   /** A JSON-path filter key carried an operator outside the allowed set. */
   JSON_PATH_UNSUPPORTED_OPERATOR:
@@ -66,4 +71,7 @@ export const OqlErrorCodes: Record<OqlErrorCode, string> = {
   NON_FINITE_LITERAL: 'Cannot inline non-finite number literal',
   /** A date-arithmetic expression carried an unrecognised `unit`. */
   INVALID_TIME_UNIT: 'Unrecognised date-arithmetic time unit',
+  /** An UPDATE or DELETE filter key reached through a relation or join. */
+  RELATION_FILTER_UNSUPPORTED:
+    'Relation or join filter not supported in UPDATE or DELETE',
 } as const satisfies Record<OqlErrorCode, string>;

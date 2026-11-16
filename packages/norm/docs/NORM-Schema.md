@@ -137,8 +137,10 @@ carries. A date-time string that names no offset
 so it is the same instant on every host; a string that names an offset
 (`+05:30`, `+0530` or `+05`) keeps it. A string that names a day or
 time no calendar has, such as `'2026-02-30'` or
-`'2026-01-15T24:00:00'`, fails validation. Any other format is parsed
-as the runtime's `Date` parses it.
+`'2026-01-15T24:00:00'`, fails validation, and so does text in any
+other format, such as `'Feb 30 2026'` or `'01/15/2026'`. As a literal
+`.default()` or `.defaultOnUpdate()` such a string fails `Entity()` with
+`NormDefinitionError`.
 A filter value on these columns and on `time` is converted too: see
 [Date and time values](NORM-Querying.md#date-and-time-values).
 [Dates and time zones](NORM-Dates.md) has the native type on each
@@ -428,12 +430,15 @@ An `ExpressionDefault` is `{ $$_expression: string, args?: unknown }`.
 It is never validated as a JS value and is passed through to the query
 as given, except on a `date()` column where norm stores the day (SQLite
 and MongoDB): there a clock or `DATE_ADD` expression is reduced to its
-UTC day.
+UTC day. A `.default()` expression cannot read a column of the row being
+inserted, such as `DATE_ADD` of `'@startsOn'`: `Entity()` throws
+`NormDefinitionError`. Compute such a value in a `beforeInsert` hook.
 
 On MongoDB an insert document cannot evaluate expressions, so the clock
-expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `UNIX_TIMESTAMP`)
-and `UUID` are computed when the insert is built, the clock ones at one
-instant per statement. A `date()` column given one of them holds the UTC
+expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`,
+`CURRENT_DATE`, `CURRENT_TIME`, `UNIX_TIMESTAMP`) and `UUID` are computed
+when the insert is built, the clock ones at one instant per statement.
+`CURRENT_TIME` is the UTC time of day of that instant as `'HH:MM:SS'`. A `date()` column given one of them holds the UTC
 day of that instant. A `date()` column given a `DATE_ADD` of a whole
 amount to a `Date` holds the UTC day of the result, which norm computes
 with the month-end rule the SQL engines follow. Any other expression
@@ -949,7 +954,10 @@ Every FK from `A → B` gives `B` a reverse relation.
   `hasMany` unless you declare otherwise. A declared `hasOne` that
   matches several rows carries the one lowest by primary key; a view has
   no key to order by, so there it is whichever row the engine returns
-  first.
+  first. Unless the FK's local columns are this entity's primary key or
+  one of its `unique` groups, a filter that takes its comparison value
+  from a `hasOne` needs it
+  [projected in the same read](NORM-Querying.md#relation-references).
 
 A reverse name must be free on the target: it cannot collide with one
 of the target's columns, with a foreign-key alias (those resolve first,
@@ -993,7 +1001,7 @@ export const Orgs = Entity('orgs', {
   id: Column.integer(),
   tenant: Column.integer(),
   code: Column.varchar(20).nullable(), // NULL = the tenant's default org
-}, { pk: ['id'] });
+}, { pk: ['id'], unique: { tenantCode: ['tenant', 'code'] } });
 
 export const Grants = Entity('grants', {
   id: Column.integer(),

@@ -59,6 +59,7 @@ import type { Executor, ExecutorQuery, NormDMLQuery } from './executor.ts';
 import { DATE_TYPES, isExpressionValue, validateRows } from './guardians.ts';
 import {
   asUtc,
+  isDateText,
   readTimeOfDay,
   rollsOver,
   toTimeOfDay,
@@ -361,10 +362,14 @@ type ProjectionPlan = {
     whole: boolean;
     cardinality: 'belongsTo' | 'hasOne' | 'hasMany';
     columnFqns: Record<string, string>;
+    /** Keys fetched only for the read itself and dropped before the row
+     * is returned. Never NULL on a matched row, which is what tells one
+     * whose projected columns are all NULL from the LEFT JOIN
+     * placeholder. */
+    strip: readonly string[];
     /** To-one only, when several target rows can match: the keys the
-     * target's primary key sits under in each candidate, and those of
-     * them fetched only to pick by. */
-    pickBy?: { keys: readonly string[]; strip: readonly string[] };
+     * target's primary key sits under in each candidate, to pick by. */
+    pickBy?: readonly string[];
   }>;
   /** Hidden GROUP-BY anchors added by eager synthesis (all-hidden
    * entities): fetched for the aggregate, stripped from results. */
@@ -859,6 +864,10 @@ export class ReadRepo<
           `or the report is silently truncated.`,
       );
     }
+
+    // 4c. A MongoDB document holds only the fields written: read each
+    //     projected column it lacks as the `null` SQL returns.
+    this._fillMissing(rows, plan);
 
     // 5. JSON-parse relation values (SQLite returns aggregates as text),
     //    then decode the BIGINT / date / JSON columns inside them.
@@ -1873,36 +1882,37 @@ export class ReadRepo<
         oqlProjection[`@${name}`] = true;
       }
 
-      // A to-one relation can match several rows (a NULL-safe key, a
-      // hasOne with more than one child). The target's primary key
-      // rides along so the read picks the same one on every engine; a
-      // join on the whole key matches one row at most and needs none.
-      let pickBy: ProjectionPlan['relations'][number]['pickBy'];
+      // The target's primary key rides along: never NULL on a matched
+      // row, it tells one whose projected columns are all NULL from the
+      // LEFT JOIN placeholder, and a to-one relation that can match
+      // several rows (a NULL-safe key, a hasOne with more than one
+      // child) picks by it so every engine returns the same one. A join
+      // on the whole key matches one row at most and a to-many keeps
+      // them all, so those carry the first key column only. A target
+      // with no primary key (a view) carries its join columns instead:
+      // only a NULL-safe match on NULL leaves them all NULL.
       const pk = (target.def as { primaryKeys?: readonly string[] })
         .primaryKeys ?? [];
       const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
         ref.slice(name.length + 3)
       );
-      if (
-        cardinality !== 'hasMany' && pk.length > 0 &&
-        !pk.every((col) => onCols.includes(col))
-      ) {
-        const keys: string[] = [];
-        const strip: string[] = [];
-        for (const col of pk) {
-          const fqn = `${targetKey}.${col}`;
-          let key = Object.keys(colFqns).find((k) => colFqns[k] === fqn);
-          if (key === undefined) {
-            key = `__pk_${col}`;
-            while (key in aggCols) key = `_${key}`;
-            addCols(name, [col]);
-            aggCols[key] = relCol(name, target, col);
-            colFqns[key] = fqn;
-            strip.push(key);
-          }
-          keys.push(key);
+      const picks = cardinality !== 'hasMany' && pk.length > 0 &&
+        !pk.every((col) => onCols.includes(col));
+      const carried = picks ? pk : pk.length > 0 ? pk.slice(0, 1) : onCols;
+      const keys: string[] = [];
+      const strip: string[] = [];
+      for (const col of carried) {
+        const fqn = `${targetKey}.${col}`;
+        let key = Object.keys(colFqns).find((k) => colFqns[k] === fqn);
+        if (key === undefined) {
+          key = `__pk_${col}`;
+          while (key in aggCols) key = `_${key}`;
+          addCols(name, [col]);
+          aggCols[key] = relCol(name, target, col);
+          colFqns[key] = fqn;
+          strip.push(key);
         }
-        pickBy = { keys, strip };
+        keys.push(key);
       }
 
       relations.push({
@@ -1911,7 +1921,8 @@ export class ReadRepo<
         whole: subProj === undefined,
         cardinality,
         columnFqns: colFqns,
-        ...(pickBy !== undefined ? { pickBy } : {}),
+        strip,
+        ...(picks ? { pickBy: keys } : {}),
       });
     };
 
@@ -2054,17 +2065,41 @@ export class ReadRepo<
       !(alias in oqlJoins) && mode === 'where' && position === 'key'
         ? nullSafeCols(alias)
         : [];
-    // A filter-only join on a NULL-safe key repeats the base row once
-    // per match, and a value-position ref cannot be lifted out of it.
-    const refuseSafeValueRef = (alias: string, col: string): void => {
-      if (alias in oqlJoins || nullSafeCols(alias).length === 0) return;
+    // A filter-only join to a to-one relation that can match several
+    // rows (a NULL-safe key, or a key that is no declared unique key of
+    // the related table) repeats the base row once per match, and a
+    // value-position ref cannot be lifted out of it.
+    const projectedAliases = new Set(Object.keys(oqlJoins));
+    const refuseManyValueRef = (
+      alias: string,
+      col: string,
+      target: CompiledEntity,
+      targetCols: readonly string[],
+    ): void => {
+      if (projectedAliases.has(alias)) return;
+      const safe = nullSafeCols(alias).length > 0;
+      const def = target.def as {
+        primaryKeys?: readonly string[];
+        uniques?: Record<string, readonly string[]>;
+      };
+      const pk = def.primaryKeys ?? [];
+      const unique = [pk, ...Object.values(def.uniques ?? {})].some((set) =>
+        set.length > 0 && set.every((c) => targetCols.includes(c))
+      );
+      if (unique && !safe) return;
       throw new NormQueryError(
-        `Filter value '@${alias}.@${col}' references NULL-safe relation ` +
-          `'${alias}' on '${compiled.key}', which is not projected — a ` +
-          `row can match several '${alias}' rows there and would come ` +
-          `back once per match. Project '${alias}' (each row then comes ` +
-          `back once), or turn NULL-safe matching off for this read ` +
-          `(nullSafe: { ${alias}: false }).`,
+        `Filter value '@${alias}.@${col}' references ` +
+          `${safe ? 'NULL-safe ' : ''}relation '${alias}' on ` +
+          `'${compiled.key}', which is not projected — a row can match ` +
+          `several '${alias}' rows there and would come back once per ` +
+          `match. Project '${alias}' (each row then comes back once)` +
+          (unique
+            ? `, or turn NULL-safe matching off for this read ` +
+              `(nullSafe: { ${alias}: false }).`
+            : !safe && pk.length > 0
+            ? `, or declare its join columns (${targetCols.join(', ')}) ` +
+              `unique on '${target.key}'.`
+            : `.`),
         {
           entity: compiled.key,
           subject: `${alias}.${col}`,
@@ -2101,7 +2136,7 @@ export class ReadRepo<
           return;
         }
         if (mode === 'where' && position === 'value') {
-          refuseSafeValueRef(alias, col);
+          refuseManyValueRef(alias, col, target, Object.values(fks[alias]!.on));
         }
         if (!joined) ensureBtJoin(alias);
         addCols(alias, [col]);
@@ -2174,7 +2209,7 @@ export class ReadRepo<
           return;
         }
         if (mode === 'where' && position === 'value') {
-          refuseSafeValueRef(alias, col);
+          refuseManyValueRef(alias, col, target, Object.values(revRel.on));
         }
         if (!joined) ensureRevJoin(alias);
         addCols(alias, [col]);
@@ -2300,6 +2335,24 @@ export class ReadRepo<
       out['$and'] = [...and, ...existsNodes.map((e) => ({ $exists: e }))];
     }
     return out;
+  }
+
+  /** Set `null` for each projected column a MongoDB document does not
+   * carry, top-level and inside relation rows, as SQL returns a NULL.
+   * Runs before the all-null placeholder drop, so a relation row with
+   * none of its projected fields is still dropped as on SQL. */
+  protected _fillMissing(rows: Row[], plan: ProjectionPlan): void {
+    if (this._executor.capabilities.dialect !== 'mongo') return;
+    for (const row of rows) {
+      for (const key of plan.aliasMap.keys()) row[key] ??= null;
+      for (const rel of plan.relations) {
+        const val = row[rel.outputKey];
+        for (const item of Array.isArray(val) ? val : [val]) {
+          if (item === null || typeof item !== 'object') continue;
+          for (const key in rel.columnFqns) (item as Row)[key] ??= null;
+        }
+      }
+    }
   }
 
   /** JSON-parse relation values that came back as strings. */
@@ -2596,7 +2649,8 @@ export class ReadRepo<
 
   /** Drop all-null LEFT-JOIN placeholders; unwrap belongsTo/hasOne to
    * object-or-null, the candidate lowest by primary key when several
-   * matched; keep hasMany as arrays. */
+   * matched; keep hasMany as arrays. A matched row is never all-null:
+   * it carries a key the plan fetched for this, stripped here. */
   protected _unwrapRelations(rows: Row[], plan: ProjectionPlan): void {
     for (const row of rows) {
       for (const rel of plan.relations) {
@@ -2617,18 +2671,12 @@ export class ReadRepo<
           const obj = item as Row;
           const keys = Object.keys(obj);
           if (keys.length === 0) continue;
-          if (
-            keys.every((k) => obj[k] === null || by?.strip.includes(k))
-          ) continue;
+          if (keys.every((k) => obj[k] === null)) continue;
           filtered.push(obj);
-        }
-        if (rel.cardinality === 'hasMany') {
-          row[rel.outputKey] = filtered;
-          continue;
         }
         if (by !== undefined && filtered.length > 1) {
           filtered.sort((a, b) => {
-            for (const key of by.keys) {
+            for (const key of by) {
               const [x, y] = [a[key] as number, b[key] as number];
               if (x < y) return -1;
               if (x > y) return 1;
@@ -2636,11 +2684,16 @@ export class ReadRepo<
             return 0;
           });
         }
-        const picked = filtered[0] ?? null;
-        if (by !== undefined && picked !== null) {
-          for (const key of by.strip) delete picked[key];
+        const kept = rel.cardinality === 'hasMany'
+          ? filtered
+          : filtered.slice(0, 1);
+        for (const item of kept) {
+          if (typeof item !== 'object') continue;
+          for (const key of rel.strip) delete item[key];
         }
-        row[rel.outputKey] = picked;
+        row[rel.outputKey] = rel.cardinality === 'hasMany'
+          ? kept
+          : kept[0] ?? null;
       }
     }
   }
@@ -3341,7 +3394,8 @@ export class Repo<
       : new Date(asUtc(supplied) as string);
     if (
       Number.isNaN(d.getTime()) ||
-      (typeof supplied === 'string' && rollsOver(supplied))
+      (typeof supplied === 'string' &&
+        (!isDateText(supplied) || rollsOver(supplied)))
     ) {
       throw new NormQueryError(
         `${this._compiled.key}.insert(): '${t.from}' is not a valid date.`,
@@ -3413,7 +3467,8 @@ export class Repo<
    * @throws {@link NormQueryError} If a conflict key is encrypted, a
    *   payload value contradicts the active `db.scope(...)`, or the
    *   write would collide with a row outside that scope.
-   * @throws {@link NormValidationError} If a value fails its column rules.
+   * @throws {@link NormValidationError} If a value fails its column rules,
+   *   or an `updateOnConflict` column has no value in a row.
    * @throws {TypeError} From `@tundralibs/oql`'s query asserts when a
    *   `conflictKeys` entry names a column the entity does not have.
    */
@@ -3545,9 +3600,24 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
-    // A column `updateOnConflict` names must be in the row on every
-    // engine, so one the caller left out stays out.
-    this.__fillNulls(rows, opts.updateOnConflict as readonly string[]);
+    // A column `updateOnConflict` copies needs a value in every row.
+    const uncopyable: ValidationIssue[] = [];
+    for (const col of opts.updateOnConflict ?? []) {
+      rows.forEach((row, i) => {
+        if (row[col] !== undefined) return;
+        uncopyable.push({
+          model: c.key,
+          op: 'upsert',
+          path: (isBatch ? `[${i}].` : '') + col,
+          message: `updateOnConflict names '${col}', which the row does ` +
+            `not supply and no default fills`,
+        });
+      });
+    }
+    if (uncopyable.length > 0) {
+      throw new NormValidationError({ issues: uncopyable });
+    }
+    this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow (same as insert()) so an encrypted
     // scope column stores ciphertext + its digest sibling, never
@@ -4363,12 +4433,12 @@ export class Repo<
 
   /** Write `null` for each nullable column a row leaves out, on MongoDB:
    * a document holds only the fields written, where SQL stores NULL. */
-  private __fillNulls(rows: Row[], except: readonly string[] = []): void {
+  private __fillNulls(rows: Row[]): void {
     if (this._executor.capabilities.dialect !== 'mongo') return;
     const c = this._compiled;
     const specs = c.def.columns as Record<string, ColumnSpec>;
     for (const col of c.columnNames) {
-      if (specs[col]!.nullable !== true || except.includes(col)) continue;
+      if (specs[col]!.nullable !== true) continue;
       for (const row of rows) row[col] ??= null;
     }
   }
@@ -4615,6 +4685,13 @@ export class Repo<
     decrypt: boolean,
   ): Promise<ReadRowOf<D>[]> {
     const c = this._compiled;
+    // An upsert onto a MongoDB document returns it as stored, without
+    // the fields it never had; SQL RETURNING carries a NULL for each.
+    if (this._executor.capabilities.dialect === 'mongo') {
+      for (const row of rows) {
+        for (const col of c.columnNames) row[col] ??= null;
+      }
+    }
     this._decodeDateColumns(rows);
     this._decodeJsonColumns(rows);
     this._decodeScalarColumns(rows);

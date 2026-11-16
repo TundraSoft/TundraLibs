@@ -53,6 +53,7 @@ import type { EventOptionKeys } from '@tundralibs/utils';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from '../../SQLEngine.ts';
 import { EngineError } from '../../errors/mod.ts';
+import { replacePlaceholders } from '../../placeholders.ts';
 import { looksLikeTlsRuntimeError } from '../../tls.ts';
 import type {
   EngineQuery,
@@ -63,7 +64,7 @@ import { PgConnection } from './PgConnection.ts';
 import { PgServerError } from './PgServerError.ts';
 import { type EncodedParam, encodeParam } from './binary.ts';
 import { buildSSLRequest } from './protocol.ts';
-import { pgSqlStateToCode } from './sqlState.ts';
+import { pgSqlStateToCode, pgUndefinedColumn } from './sqlState.ts';
 import { nonUtcReason, UTC_ZONE } from './timeZone.ts';
 import type { PostgresEngineOptions } from './types/mod.ts';
 
@@ -430,12 +431,10 @@ export class PostgresEngine
     const orderedNames: string[] = [];
     const missing: string[] = [];
 
-    const rewritten = sqlBody.replaceAll(
-      // Letter-or-underscore-first identifiers only — keeps us from
-      // misfiring on time literals like '00:00:00'. A colon that follows a
-      // colon never opens one, so `x::date::text` stays two casts.
-      /(?<!:):([A-Za-z_]\w*):/g,
-      (_full, key: string) => {
+    const rewritten = replacePlaceholders(
+      sqlBody,
+      this.Dialect,
+      (key) => {
         if (!Object.hasOwn(supplied, key)) {
           missing.push(key);
         }
@@ -504,6 +503,10 @@ export class PostgresEngine
       if (sql) meta.sql = sql;
       if (error.fields.has('t')) meta.table = error.fields.get('t');
       if (error.fields.has('c')) meta.column = error.fields.get('c');
+      if (code === 'COLUMN_NOT_FOUND' && meta.column === undefined) {
+        const column = pgUndefinedColumn(meta.reason as string);
+        if (column !== undefined) meta.column = column;
+      }
       if (error.fields.has('n')) meta.constraint = error.fields.get('n');
       if (error.fields.has('D')) meta.detail = error.fields.get('D');
       return new EngineError(code, meta as never, error);

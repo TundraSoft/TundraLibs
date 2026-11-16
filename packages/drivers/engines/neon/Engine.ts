@@ -46,13 +46,14 @@ import type { EventOptionKeys } from '@tundralibs/utils/Options';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 import { SQLConnectionEngine } from '../../SQLEngine.ts';
 import { EngineError } from '../../errors/mod.ts';
+import { replacePlaceholders } from '../../placeholders.ts';
 import type {
   EngineQuery,
   SQLEngineCapabilities,
   SQLEngineEvents,
 } from '../../types/mod.ts';
 import { decodeTextValue } from '../postgres/values.ts';
-import { pgSqlStateToCode } from '../postgres/sqlState.ts';
+import { pgSqlStateToCode, pgUndefinedColumn } from '../postgres/sqlState.ts';
 import { nonUtcReason, UTC_ZONE } from '../postgres/timeZone.ts';
 import { NeonHttpClient } from './NeonHttpClient.ts';
 import { NeonHttpError } from './NeonHttpError.ts';
@@ -339,12 +340,10 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     const orderedNames: string[] = [];
     const missing: string[] = [];
 
-    const rewritten = sqlBody.replaceAll(
-      // Letter-or-underscore-first identifiers only — keeps us from misfiring
-      // on time literals like '00:00:00'. A colon that follows a colon never
-      // opens one, so `x::date::text` stays two casts.
-      /(?<!:):([A-Za-z_]\w*):/g,
-      (_full, key: string) => {
+    const rewritten = replacePlaceholders(
+      sqlBody,
+      this.Dialect,
+      (key) => {
         if (!Object.hasOwn(supplied, key)) {
           missing.push(key);
         }
@@ -411,6 +410,10 @@ export class NeonHttpEngine extends SQLConnectionEngine<
       };
       if (fields?.table) meta.table = fields.table;
       if (fields?.column) meta.column = fields.column;
+      if (code === 'COLUMN_NOT_FOUND' && meta.column === undefined) {
+        const column = pgUndefinedColumn(error.message);
+        if (column !== undefined) meta.column = column;
+      }
       if (fields?.constraint) meta.constraint = fields.constraint;
       if (fields?.detail) meta.detail = fields.detail;
       return new EngineError(code, meta as never, error);

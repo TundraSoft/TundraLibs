@@ -13,10 +13,15 @@ changelog has those.
   - [`time()` reads a string](#time-reads-a-string)
   - [A date-time string with no offset is UTC](#a-date-time-string-with-no-offset-is-utc)
   - [A date no calendar has is refused](#a-date-no-calendar-has-is-refused)
+  - [An insert default that reads a column is refused](#an-insert-default-that-reads-a-column-is-refused)
+  - [An `updateOnConflict` column with no value is a validation error](#an-updateonconflict-column-with-no-value-is-a-validation-error)
+  - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
+  - [A filter value from a to-one relation that can match several rows needs it projected](#a-filter-value-from-a-to-one-relation-that-can-match-several-rows-needs-it-projected)
+  - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
 
 ## 1.13.0
 
@@ -85,10 +90,44 @@ March 2. Such a string now fails:
 | A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`   | `NormValidationError`, with the column's path |
 | A filter value on one of those columns, or `@AsOf` on a temporal entity | `NormQueryError` with code `INVALID_DATE`     |
 | A supplied `EffectiveFrom` on a temporal entity                         | `NormQueryError` with code `TEMPORAL_PAST`    |
+| A literal `.default()` or `.defaultOnUpdate()` on one of those columns  | `NormDefinitionError` from `Entity()`         |
 
 A `Date` is never refused, and a row an earlier version stored keeps the
 shifted day. Validate a date that arrives as text before it reaches norm,
-or catch the error.
+or catch the error. A literal default that is not a date at all also
+fails `Entity()` now; earlier versions failed each insert that used it.
+
+### An insert default that reads a column is refused
+
+A `.default()` expression that reads a column of the row, such as
+`DATE_ADD` of `'@startsOn'`, now fails `Entity()` with
+`NormDefinitionError`. Earlier versions accepted the definition, and
+every insert that left the column out threw a plain `TypeError`. Compute
+the value in a `beforeInsert` hook instead.
+
+### An `updateOnConflict` column with no value is a validation error
+
+An `upsert()` whose `updateOnConflict` names a column that a row neither
+passes nor fills by default now throws `NormValidationError` with that
+column's path. Earlier versions threw a plain `TypeError` from oql. Pass
+the column in every row, or leave it out of `updateOnConflict`.
+
+### Date text that is not ISO 8601 is refused
+
+A write to a `date()`, `datetime()`, `timestamp()` or `timestamptz()`
+column now fails validation, with the column's path, for text that is
+not an ISO 8601 date or date-time, such as `'Feb 30 2026'`,
+`'Jan 15 2026 10:00'` or `'01/15/2026'`. A supplied `EffectiveFrom` in
+that form throws a `NormQueryError` with code `TEMPORAL_PAST`. Earlier
+versions handed the text to the runtime's `Date` parser, which read it
+in the host's zone and moved `'Feb 30 2026'` to March, so the stored
+value depended on the host. A column with its own `.guard()` refuses it
+before the guard runs, and a literal default in that form fails
+`Entity()` with `NormDefinitionError`. A `Date` and `time()` columns are unchanged, and
+a filter value in that form still reaches the engine as it is, as
+[Date and time values](NORM-Querying.md#date-and-time-values) says.
+Send `YYYY-MM-DD`, or that with a time and an optional offset, or a
+`Date`.
 
 ### A MongoDB comparison never matches NULL
 
@@ -107,10 +146,11 @@ now stores `null` in the new document, and the row reads back with
 document, so the row read back without the key. An upsert that updates a
 document already stored leaves its other fields as they are.
 
-A document an earlier version wrote still lacks the field and still reads
-back without the key; a filter for `null` matches it either way. Treat a
-missing key as `null` where the column is read, or write `null` to those
-documents once.
+A document an earlier version or another writer stored without a field
+still lacks it, and now reads back with `null` for that column, top-level
+and inside relation rows, as does a row an upsert returns unchanged.
+Earlier versions returned the row without the key. A filter for `null`
+matches the document either way.
 
 ### `DATE_DIFF` counts complete units and returns a number
 
@@ -141,6 +181,38 @@ tested each condition against any matched row there, so
 two orgs each met one condition, and `$ne` held only when no matched row
 had the value. A relation whose key matches one row at most reads as
 before.
+
+### A filter value from a to-one relation that can match several rows needs it projected
+
+A belongsTo or hasOne relation used as a comparison value, as in
+`{ '@id': { $lt: '@Seat.@id' } }`, was joined when the read did not
+project it. Where the join columns on the related entity are not unique
+there, a row came back once for each related row that passed, and
+`count()` and `total` counted it as often. Such a read now throws
+`NormQueryError` with the code `INVALID_PROJECTION`, as it already did
+for a NULL-safe relation. The check reads the schema, not the data: it
+passes when those join columns cover the related entity's primary key or
+one of its `unique` groups.
+
+Project the relation and each row comes back once, kept when at least
+one related row passes the comparison. `count()` and `total: true` count
+without the projection and throw for such a filter. Where the columns
+are unique in fact, declare them in the related entity's `unique`
+option, which the next migration emits as a unique index; a view has no
+such option. [Relation references](NORM-Querying.md#relation-references)
+has the rule.
+
+### A matched relation row whose projected columns are all NULL is kept
+
+A related row that matched, but held NULL in every column the read
+projected from it, was read as no match: a belongsTo or hasOne read
+`null`, and a to-many list left the row out. The to-one relation now
+reads an object whose values are `null`, and the list keeps the row. No
+match still reads `null` and `[]`. Code that took `row.Org === null` to
+mean the projected column was NULL must test the column instead.
+
+One case is unchanged: a view, which has no primary key, joined on
+[NULL-safe](NORM-Schema.md#null-safe-keys) pairs that all hold NULL.
 
 ---
 

@@ -167,6 +167,15 @@ describe('drivers.engines.turso.TursoEngine', () => {
       );
       assertEquals((err as EngineError).code, 'MISSING_PARAMETERS');
     });
+
+    it('leaves a placeholder inside a string, identifier or comment as text', () => {
+      const eng = makeEngine();
+      const q = eng.std({
+        sql: "SELECT ':a:', `:zz:`, 'HH24:MI:SS', :a: -- :zz:",
+        params: { a: 1 },
+      });
+      assertEquals(q.sql, "SELECT ':a:', `:zz:`, 'HH24:MI:SS', :a -- :zz:;");
+    });
   });
 
   describe('encodeHranaValue', () => {
@@ -621,10 +630,10 @@ describe('drivers.engines.turso.TursoEngine', () => {
       });
     }
 
-    it('FOREIGN KEY (no name): literal ${constraint} on both engines (matched parity)', () => {
+    it('FOREIGN KEY (no name): no constraint on either engine (matched parity)', () => {
       // SQLite reports no name for a bare `FOREIGN KEY constraint failed`, so
       // neither engine can fill `${constraint}`. They must still MATCH: the
-      // native engine emits a literal placeholder here, and Turso must too.
+      // native engine leaves the name out here, and Turso must too.
       const msg = 'FOREIGN KEY constraint failed';
       const tursoErr = turso.wrap(
         new TursoHttpError(msg, { code: 'SQLITE_CONSTRAINT_FOREIGNKEY' }),

@@ -34,7 +34,7 @@ const TEST_CONFIG = {
     ? `${env.get('DB_SCHEMA')}_drivers`
     : env.get('POSTGRES_DB') || 'postgres',
   username: env.get('POSTGRES_USER') || 'postgres',
-  password: env.get('POSTGRES_PASSWORD') || '',
+  password: env.get('POSTGRES_PASSWORD') || undefined,
 };
 
 async function isPgAvailable(): Promise<boolean> {
@@ -154,6 +154,24 @@ describe('drivers.PostgresEngine.error-mapping (no DB)', () => {
         codeFor(sqlState),
         expected,
         `SQLSTATE ${sqlState} should map to ${expected}`,
+      );
+    }
+  });
+
+  it('names the column an undefined_column message reports', () => {
+    const cases: Array<[string, string]> = [
+      ['column "nosuch" does not exist', 'nosuch'],
+      ['column u.nosuch does not exist', 'u.nosuch'],
+      ['column "nosuch" of relation "users" does not exist', 'nosuch'],
+    ];
+    for (const [text, column] of cases) {
+      const err = engine.wrapError(
+        new PgServerError('42703', new Map([['M', text]])),
+        q,
+      );
+      asserts.assertEquals(
+        err.message,
+        `Column not found on POSTGRES::pg-errmap: ${column}`,
       );
     }
   });
@@ -392,6 +410,19 @@ describe({
           params: { n: '7' },
         });
         asserts.assertEquals(r.data, [{ d: '2026-01-15', n: '7' }]);
+        await engine.disconnect();
+      });
+
+      it('leaves a placeholder inside a string, dollar quote or comment as text', async () => {
+        const engine = new PostgresEngine('quoted', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT ':a:' AS t, :a:::int AS v, $$:zz:$$ AS d, ` +
+            `to_char(:ts:::timestamptz AT TIME ZONE 'UTC', 'HH24:MI:SS') AS c -- :zz:`,
+          params: { a: 1, ts: new Date('2026-01-15T20:04:05Z') },
+        });
+        asserts.assertEquals(r.data, [
+          { t: ':a:', v: 1, d: ':zz:', c: '20:04:05' },
+        ]);
         await engine.disconnect();
       });
     });

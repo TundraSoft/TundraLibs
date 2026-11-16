@@ -588,6 +588,7 @@ const CASES: Case[] = [
               as: 'profile',
             },
           },
+          { $unwind: '$profile' },
           { $match: { 'profile.name': 'bob' } },
           { $project: { id: 1 } },
         ],
@@ -685,9 +686,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // The joined rows are an array under `o`, so the sort value is
-    // computed from it. The inclusion $project drops `__sort_0` again.
-    name: 'SELECT ORDER BY an unprojected joined column → computed sort field',
+    // One row per joined row, as on SQL, so the sort reads the column.
+    name:
+      'SELECT ORDER BY an unprojected joined column → sorts the joined rows',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -718,16 +719,18 @@ const CASES: Case[] = [
               as: 'o',
             },
           },
-          { $addFields: { __sort_0: { $max: '$o.amount' } } },
-          { $sort: { __sort_0: -1, name: 1 } },
+          {
+            $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
+          },
+          { $sort: { 'o.amount': -1, name: 1 } },
           { $project: { id: 1 } },
         ],
       },
     },
   },
   {
-    // $group discards the joined array, so the sort value rides through
-    // it as an accumulator.
+    // An unprojected joined column is no group key, so its MIN rides
+    // through the $group as an accumulator, as SQL orders by MIN.
     name:
       'SELECT ORDER BY an unprojected joined column with aggregates → accumulated in $group',
     method: 'select',
@@ -762,15 +765,68 @@ const CASES: Case[] = [
             },
           },
           {
+            $unwind: { path: '$o', preserveNullAndEmptyArrays: true },
+          },
+          {
             $group: {
               _id: { team: '$team' },
               n: { $sum: 1 },
-              __sort_1: { $min: { $min: '$o.amount' } },
+              __sort_1: { $min: '$o.amount' },
             },
           },
           { $addFields: { team: '$_id.team' } },
           { $sort: { team: -1, __sort_1: 1 } },
           { $project: { team: 1, n: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The accumulated sort field takes another name when an aggregate
+    // has its own, where the two would share one `$group` field.
+    name: 'SELECT ORDER BY a joined column beside an aggregate named __sort_0',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { __sort_0: { $$_aggregate: 'COUNT' } },
+      projection: { '@id': true, '@__sort_0': true },
+      orderBy: { '@o.@amount': 'DESC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              __sort_0: { $sum: 1 },
+              ___sort_0: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $sort: { ___sort_0: -1 } },
+          { $project: { id: 1, __sort_0: 1 } },
         ],
       },
     },
@@ -1088,7 +1144,14 @@ const CASES: Case[] = [
           {
             $addFields: {
               nick: { $ifNull: ['$nickname', '$name', 'anon'] },
-              blank: { $cond: [{ $eq: ['$name', ''] }, null, '$name'] },
+              // NULLIF returns the field itself, missing when it is: the
+              // `$ifNull` keeps the key in the row with null, as on SQL.
+              blank: {
+                $ifNull: [
+                  { $cond: [{ $eq: ['$name', ''] }, null, '$name'] },
+                  null,
+                ],
+              },
               tier: {
                 $switch: {
                   branches: [
@@ -1237,6 +1300,35 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT DIVIDE and MODULO over three operands fold left to right',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'age', 'score'],
+      expressions: {
+        ratio: { $$_expression: 'DIVIDE', args: ['@score', '@age', 2] },
+        rest: { $$_expression: 'MODULO', args: ['@score', '@age', 2] },
+      },
+      projection: { '@ratio': 'ratio', '@rest': 'rest' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              ratio: { $divide: [{ $divide: ['$score', '$age'] }, 2] },
+              rest: { $mod: [{ $mod: ['$score', '$age'] }, 2] },
+            },
+          },
+          { $project: { ratio: '$ratio', rest: '$rest', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     // Unwrapped, `'$secret'` reads the row's `secret` field and `'$$ROOT'`
     // the whole document; the SQL dialects bind both as text.
     name: 'SELECT expression argument starting with $ stays a literal',
@@ -1307,7 +1399,10 @@ const CASES: Case[] = [
       },
       expressions: {
         shown: { $$_expression: 'COALESCE', args: ['@label', '@nope'] },
-        deep: { $$_expression: 'COALESCE', args: ['@meta.@tag', '@nope.@tag'] },
+        deep: {
+          $$_expression: 'COALESCE',
+          args: ['@meta.@tag', '@meta.@a.@b', '@nope.@tag'],
+        },
         joined: { $$_expression: 'COALESCE', args: ['@P.@title', '@P.@nope'] },
         again: { $$_expression: 'COALESCE', args: ['@shown', '-'] },
       },
@@ -1348,10 +1443,11 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           {
             $addFields: {
               shown: { $ifNull: ['$label', '@nope'] },
-              deep: { $ifNull: ['$meta.tag', '@nope.@tag'] },
+              deep: { $ifNull: ['@meta.@tag', '@meta.@a.@b', '@nope.@tag'] },
               joined: { $ifNull: ['$P.title', '@P.@nope'] },
               again: { $ifNull: ['@shown', '-'] },
             },
@@ -1491,7 +1587,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1601,12 +1706,161 @@ const CASES: Case[] = [
             $group: {
               _id: { userId: '$userId' },
               total: { $sum: '$amount' },
+              // `$sum` of no values is 0; SQL's SUM is NULL, and so is
+              // `$max` exactly then.
+              __sum_total: { $max: '$amount' },
             },
           },
           // Flatten the grouped key back to top level so the subsequent
           // $project sees a plain `userId` field.
-          { $addFields: { userId: '$_id.userId' } },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+              userId: '$_id.userId',
+            },
+          },
           { $project: { userId: 1, total: '$total', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // SQL returns one row for an ungrouped aggregate over no rows, COUNT 0
+    // and SUM NULL; `$group` alone would return none.
+    name: 'SELECT ungrouped aggregates → $facet, one row over no rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      where: { '@userId': 7 },
+      aggregates: {
+        n: { $$_aggregate: 'COUNT' },
+        total: { $$_aggregate: 'SUM', column: '@amount' },
+      },
+      projection: { '@n': true, '@total': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          { $match: { userId: 7 } },
+          {
+            $facet: {
+              rows: [{
+                $group: {
+                  _id: {},
+                  n: { $sum: 1 },
+                  total: { $sum: '$amount' },
+                  __sum_total: { $max: '$amount' },
+                },
+              }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, n: 0, total: null },
+                }],
+              },
+            },
+          },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+            },
+          },
+          { $project: { n: 1, total: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // The SUM's helper field takes another name when an aggregate has its.
+    name: 'SELECT SUM beside an aggregate named like its helper field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['userId', 'amount'],
+      aggregates: {
+        s: { $$_aggregate: 'SUM', column: '@amount' },
+        __sum_s: { $$_aggregate: 'MAX', column: '@amount' },
+      },
+      projection: { '@userId': true, '@s': true, '@__sum_s': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $group: {
+              _id: { userId: '$userId' },
+              s: { $sum: '$amount' },
+              ___sum_s: { $max: '$amount' },
+              __sum_s: { $max: '$amount' },
+            },
+          },
+          {
+            $addFields: {
+              s: { $cond: [{ $gt: ['$___sum_s', null] }, '$s', null] },
+              userId: '$_id.userId',
+            },
+          },
+          { $project: { userId: 1, s: 1, __sum_s: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // A CASE result that is a column is missing where the column is; the
+    // `$ifNull` keeps the key in the row with null, as on SQL.
+    name: 'SELECT an expression that can be missing → $ifNull to null',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'nick', 'role'],
+      expressions: {
+        shown: {
+          $$_expression: 'CASE',
+          args: { cases: [{ when: { '@role': 'a' }, then: '@nick' }] },
+        },
+      },
+      projection: { '@id': true, '@shown': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              shown: {
+                $ifNull: [{
+                  $switch: {
+                    branches: [{
+                      case: {
+                        $and: [{ $eq: ['$role', 'a'] }, {
+                          $gt: ['$role', null],
+                        }],
+                      },
+                      then: '$nick',
+                    }],
+                    default: null,
+                  },
+                }, null],
+              },
+            },
+          },
+          { $project: { id: 1, shown: 1 } },
         ],
       },
     },
@@ -1653,6 +1907,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           { $project: { perm: 1 } },
         ],
       },
@@ -1689,7 +1944,277 @@ const CASES: Case[] = [
               as: 'Profile',
             },
           },
-          { $project: { id: 1, bio: '$Profile.bio', _id: 0 } },
+          {
+            $unwind: { path: '$Profile', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              bio: { $ifNull: ['$Profile.bio', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A to-many join gives one row per joined row, as SQL does: the
+    // filter tests each joined row on its own, and a joined column is a
+    // key of the row named as SQL names it.
+    name: 'SELECT a to-many join → $unwind, then the filter per joined row',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'sku', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true, '@o.@sku': true },
+      where: { '@o.@sku': 'A', '@o.@amount': { $gt: 5 } },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          { $match: { 'o.sku': 'A', 'o.amount': { $gt: 5 } } },
+          { $project: { id: 1, sku: { $ifNull: ['$o.sku', null] } } },
+        ],
+      },
+    },
+  },
+  {
+    // JSON_ROW and ARRAY_AGG collect the joined rows of each group, NULL
+    // for a row without a match, as on SQL. A projected join alias is the
+    // JSON_ROW of the join's columns.
+    name: 'SELECT JSON_ROW, ARRAY_AGG and a join alias → $group of joined rows',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          type: 'LEFT',
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      aggregates: {
+        Posts: { $$_aggregate: 'JSON_ROW', columns: { name: '@P.@title' } },
+        titles: { $$_aggregate: 'ARRAY_AGG', column: '@P.@title' },
+      },
+      projection: { '@id': true, '@Posts': true, '@titles': true, '@P': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: { path: '$P', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              Posts: { $push: { name: { $ifNull: ['$P.title', null] } } },
+              titles: { $push: { $ifNull: ['$P.title', null] } },
+              P: {
+                $push: {
+                  userId: { $ifNull: ['$P.userId', null] },
+                  title: { $ifNull: ['$P.title', null] },
+                },
+              },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $project: { id: 1, Posts: 1, titles: 1, P: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // Aggregates run over the joined rows, so COUNT counts them, and a
+    // joined group key nests under its alias: `_id` takes no dotted name.
+    name: 'SELECT aggregates grouped by a joined column → nested group key',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'team'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'sku', 'amount'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: {
+        n: { $$_aggregate: 'COUNT' },
+        hi: { $$_aggregate: 'MAX', column: '@o.@amount' },
+      },
+      projection: { '@team': true, '@o.@sku': 'item', '@n': true, '@hi': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: { team: '$team', o: { sku: { $ifNull: ['$o.sku', null] } } },
+              n: { $sum: 1 },
+              hi: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { team: '$_id.team', 'o.sku': '$_id.o.sku' } },
+          {
+            $project: {
+              team: 1,
+              item: { $ifNull: ['$o.sku', null] },
+              n: 1,
+              hi: 1,
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A filter on a projected to-many join keeps the joined rows it
+    // matches, as on SQL: here the base rows with none, whose JSON_ROW
+    // holds one row of NULLs.
+    name:
+      'SELECT JSON_ROW of a join filtered on its rows → $match before $group',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['id'],
+      joins: {
+        I: {
+          table: 'items',
+          columns: ['id', 'orderId', 'sku'],
+          type: 'LEFT',
+          on: { '@I.@orderId': '@id' },
+        },
+      },
+      aggregates: {
+        Items: { $$_aggregate: 'JSON_ROW', columns: { sku: '@I.@sku' } },
+      },
+      projection: { '@id': true, '@Items': true },
+      where: { '@I.@id': null },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'items',
+              localField: 'id',
+              foreignField: 'orderId',
+              pipeline: [{ $match: { orderId: { $ne: null } } }],
+              as: 'I',
+            },
+          },
+          { $unwind: { path: '$I', preserveNullAndEmptyArrays: true } },
+          { $match: { 'I.id': null } },
+          {
+            $group: {
+              _id: { id: '$id' },
+              Items: { $push: { sku: { $ifNull: ['$I.sku', null] } } },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $project: { id: 1, Items: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // An expression argument naming a joined column reads that row's
+    // value, not the joined array.
+    name: 'SELECT expression over a joined column → computed per joined row',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      joins: {
+        P: {
+          table: 'posts',
+          columns: ['userId', 'title'],
+          type: 'INNER',
+          on: { '@P.@userId': '@id' },
+        },
+      },
+      expressions: { t: { $$_expression: 'UPPER', args: '@P.@title' } },
+      projection: { '@id': true, '@t': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'P',
+            },
+          },
+          { $unwind: '$P' },
+          {
+            $addFields: {
+              t: {
+                $cond: [{ $gt: ['$P.title', null] }, {
+                  $toUpper: '$P.title',
+                }, null],
+              },
+            },
+          },
+          { $project: { id: 1, t: 1 } },
         ],
       },
     },
@@ -1741,7 +2266,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1782,7 +2316,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1830,7 +2373,16 @@ const CASES: Case[] = [
               as: 'U',
             },
           },
-          { $project: { id: 1, userName: '$U.name', _id: 0 } },
+          {
+            $unwind: { path: '$U', preserveNullAndEmptyArrays: true },
+          },
+          {
+            $project: {
+              id: 1,
+              userName: { $ifNull: ['$U.name', null] },
+              _id: 0,
+            },
+          },
         ],
       },
     },
@@ -1884,6 +2436,7 @@ const CASES: Case[] = [
               as: 'P',
             },
           },
+          { $unwind: '$P' },
           { $project: { perm: 1 } },
         ],
       },
@@ -1921,6 +2474,9 @@ const CASES: Case[] = [
               foreignField: 'org',
               as: 'P',
             },
+          },
+          {
+            $unwind: { path: '$P', preserveNullAndEmptyArrays: true },
           },
           { $project: { perm: 1 } },
         ],
@@ -2471,6 +3027,75 @@ const CASES: Case[] = [
       },
     },
   },
+  {
+    // A query filter sees no computed field, so the alias compares as its
+    // expression inside `$expr`, guarded against NULL like a column.
+    name: 'UPDATE where on an expression alias → $expr over the expression',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'qty'],
+      expressions: { d: { $$_expression: 'ADD', args: ['@qty', 1] } },
+      data: { qty: 0 },
+      where: { '@id': { $gt: 0 }, '@d': { $lte: '@id' } },
+    },
+    expected: {
+      sql: 'update',
+      params: {
+        collection: 'users',
+        filter: {
+          id: { $gt: 0 },
+          $expr: {
+            $and: [
+              { $lte: [{ $add: ['$qty', 1] }, '$id'] },
+              { $gt: [{ $add: ['$qty', 1] }, null] },
+              { $gt: ['$id', null] },
+            ],
+          },
+        },
+        data: { $set: { qty: 0 } },
+        options: { multiple: true },
+      },
+    },
+  },
+  {
+    // As in SQL, the alias wins over the column it shadows.
+    name: 'DELETE where on an expression alias inside $or',
+    method: 'delete',
+    query: {
+      type: 'DELETE',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: { name: { $$_expression: 'UPPER', args: '@name' } },
+      where: { $or: [{ '@name': null }, { '@id': 2 }] },
+    },
+    expected: {
+      sql: 'delete',
+      params: {
+        collection: 'users',
+        filter: {
+          $or: [
+            {
+              $expr: {
+                $in: [{
+                  $type: {
+                    $cond: [
+                      { $gt: ['$name', null] },
+                      { $toUpper: '$name' },
+                      null,
+                    ],
+                  },
+                }, ['null', 'missing']],
+              },
+            },
+            { id: 2 },
+          ],
+        },
+        options: { multiple: true },
+      },
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // UPSERT — Mongo-flavoured
@@ -2807,15 +3432,37 @@ const CASES: Case[] = [
       params: {
         collection: 'scores',
         pipeline: [
+          // Ungrouped: `$facet` emits one row even when nothing matched,
+          // the empty sets of SQL's row over no rows.
           {
-            $group: {
-              _id: {},
-              s: { $addToSet: '$score' },
-              a: { $addToSet: '$score' },
-              lo: { $min: '$score' },
+            $facet: {
+              rows: [{
+                $group: {
+                  _id: {},
+                  s: { $addToSet: '$score' },
+                  a: { $addToSet: '$score' },
+                  lo: { $min: '$score' },
+                },
+              }],
             },
           },
-          { $addFields: { s: { $sum: '$s' }, a: { $avg: '$a' } } },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, s: [], a: [], lo: null },
+                }],
+              },
+            },
+          },
+          {
+            $addFields: {
+              s: {
+                $cond: [{ $gt: [{ $max: '$s' }, null] }, { $sum: '$s' }, null],
+              },
+              a: { $avg: '$a' },
+            },
+          },
           { $project: { s: '$s', a: '$a', lo: '$lo', _id: 0 } },
         ],
       },
@@ -3076,7 +3723,20 @@ const CASES: Case[] = [
           },
           { $match: { __exists_0: { $size: 0 } } },
           { $unset: ['__exists_0'] },
-          { $group: { _id: {}, __count__: { $sum: 1 } } },
+          {
+            $facet: {
+              rows: [{ $group: { _id: {}, __count__: { $sum: 1 } } }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, __count__: 0 },
+                }],
+              },
+            },
+          },
           { $project: { __count__: 1 } },
         ],
       },
@@ -3375,9 +4035,20 @@ const CASES: Case[] = [
         collection: 'orders',
         pipeline: [
           {
-            $group: { _id: { userId: '$userId' }, total: { $sum: '$amount' } },
+            $group: {
+              _id: { userId: '$userId' },
+              total: { $sum: '$amount' },
+              __sum_total: { $max: '$amount' },
+            },
           },
-          { $addFields: { userId: '$_id.userId' } },
+          {
+            $addFields: {
+              total: {
+                $cond: [{ $gt: ['$__sum_total', null] }, '$total', null],
+              },
+              userId: '$_id.userId',
+            },
+          },
           { $project: { userId: 1, total: '$total', _id: 0 } },
           {
             $merge: {
@@ -3451,6 +4122,9 @@ const CASES: Case[] = [
               pipeline: [{ $match: { id: { $ne: null } } }],
               as: 'Author',
             },
+          },
+          {
+            $unwind: { path: '$Author', preserveNullAndEmptyArrays: true },
           },
           {
             $match: {
@@ -3534,6 +4208,56 @@ const CASES: Case[] = [
       conflictKeys: ['@id'],
     },
     throws: true,
+  },
+  {
+    // A view over a join reads a joined column as one value per row,
+    // under the key SQL gives it.
+    name: 'CREATE_VIEW over a join projects each joined column as a value',
+    method: 'createView',
+    query: {
+      type: 'CREATE_VIEW',
+      view: 'tags_of_posts',
+      query: {
+        type: 'SELECT',
+        table: 'post_tags',
+        columns: ['postId', 'tagId'],
+        joins: {
+          T: {
+            table: 'tags',
+            columns: ['id', 'name'],
+            type: 'INNER',
+            on: { '@T.@id': '@tagId' },
+          },
+        },
+        projection: { '@postId': true, '@T.@name': 'name' },
+      },
+    },
+    expected: {
+      sql: 'createView',
+      params: {
+        view: 'tags_of_posts',
+        viewOn: 'post_tags',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'tags',
+              localField: 'tagId',
+              foreignField: 'id',
+              pipeline: [{ $match: { id: { $ne: null } } }],
+              as: 'T',
+            },
+          },
+          { $unwind: '$T' },
+          {
+            $project: {
+              postId: 1,
+              name: { $ifNull: ['$T.name', null] },
+              _id: 0,
+            },
+          },
+        ],
+      },
+    },
   },
   {
     // Round-4 finding 2: a plain-`find` source SELECT feeding CREATE_VIEW must
@@ -3670,6 +4394,61 @@ describe('oql.translator.MongoTranslator — $exists refusals', () => {
       DialectUnsupportedError,
     );
     asserts.assertStringIncludes(err.feature, '@P.@id');
+  });
+});
+
+describe('oql.translator.MongoTranslator — expression alias where a column belongs', () => {
+  // SQL resolves these to a column the table lacks and the database
+  // fails; MongoDB would store or compare the text.
+  const expressions = { u: { $$_expression: 'UPPER', args: '@name' } };
+  const refuses = (run: () => unknown) => {
+    const err = asserts.assertThrows(run, OqlError, "'@u'");
+    asserts.assertEquals(err.code, 'INVALID_COLUMN_REF');
+  };
+  const update = (q: Record<string, unknown>) => () =>
+    t.update({
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      expressions,
+      data: { nick: 'x' },
+      ...q,
+    } as unknown as Query<'UPDATE'>);
+
+  it('in UPDATE data', () => {
+    refuses(update({
+      data: { nick: { $$_expression: 'CONCAT', args: ['@u', '!'] } },
+    }));
+  });
+
+  it('as an UPDATE filter value', () => {
+    refuses(update({ where: { '@name': { $ne: '@u' } } }));
+  });
+
+  it('in an expression a filter key names', () => {
+    refuses(update({
+      expressions: {
+        ...expressions,
+        v: { $$_expression: 'LOWER', args: '@u' },
+      },
+      where: { '@v': 'ada' },
+    }));
+  });
+
+  it('in a DELETE filter operand', () => {
+    refuses(() =>
+      t.delete({
+        type: 'DELETE',
+        table: 'users',
+        columns: ['id', 'name', 'nick'],
+        expressions,
+        where: {
+          '@name': {
+            $ne: { $$_expression: 'COALESCE', args: ['@nick', '@u'] },
+          },
+        },
+      } as unknown as Query<'DELETE'>)
+    );
   });
 });
 

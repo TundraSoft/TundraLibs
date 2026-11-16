@@ -20,7 +20,7 @@ import type {
   Query,
 } from '../types/mod.ts';
 import { AbstractTranslator } from './AbstractTranslator.ts';
-import { OqlError } from '../errors/mod.ts';
+import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import type {
   AggregateMap,
   DialectSupport,
@@ -31,6 +31,7 @@ import type {
   ParameterStyle,
 } from './types/mod.ts';
 import { Parameters } from './Parameters.ts';
+import { findExpression } from './findExpression.ts';
 
 /**
  * SQL data-type map. Postgres has the broadest type system of the SQL
@@ -483,6 +484,10 @@ export class PostgresTranslator extends AbstractTranslator {
    * `q.where` becomes a partial-index predicate and `q.method` a `USING`
    * clause — but only for a method in `PG_INDEX_METHODS`; anything else is
    * dropped rather than passed through to the server.
+   *
+   * @throws {@link DialectUnsupportedError} When `q.where` holds a
+   *   `DATE_ADD`. Its interval is built from text, which Postgres does not
+   *   mark IMMUTABLE, so no index predicate can hold it.
    */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
@@ -501,6 +506,13 @@ export class PostgresTranslator extends AbstractTranslator {
     let sql =
       `CREATE ${unique}INDEX ${ifNotExists}${indexSql} ON ${tableSql}${method} (${cols})`;
     if (q.where) {
+      const computed = findExpression(q.where, (t) => t === 'DATE_ADD');
+      if (computed !== null) {
+        throw new DialectUnsupportedError(
+          this.Dialect,
+          `the computed expression ${computed} in an index predicate`,
+        );
+      }
       const scope = this._scopeFromFilterKeys(q.where);
       sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
     }

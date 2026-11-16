@@ -321,6 +321,24 @@ chain such as `x::date::text` passes through and a parameter is cast with
 `:id:::int`. Put a space before a placeholder that follows a lone colon: the
 array slice `arr[:lo:: :hi:]`, not `arr[:lo:::hi:]`.
 
+A `:name:` inside quoted text or a comment is text, not a placeholder:
+`SELECT ':a:'` returns `:a:`, and `to_char(:at:, 'HH24:MI:SS')` binds only
+`:at:`. Every engine, the Neon and D1 rewrites included, scans with the rules
+of its dialect:
+
+| Dialect  | Skipped as text                                                                                     |
+| -------- | --------------------------------------------------------------------------------------------------- |
+| Postgres | `'…'`, `E'…'` with backslash escapes, `"…"`, `$$…$$` and `$tag$…$tag$`, `--` and `/* … */` comments |
+| MariaDB  | `'…'` and `"…"` with backslash escapes, `` `…` ``, `#`, `--` before a space, and `/* … */` comments |
+| SQLite   | `'…'`, `"…"`, `` `…` ``, `[…]`, `--` and `/* … */` comments                                         |
+| Other    | `'…'`, `"…"`, `--` and `/* … */` comments                                                           |
+
+A doubled quote inside its own quotes is the quote character. A quote or
+comment left open runs to the end of the statement. Two limits: a Postgres
+block comment nested inside another ends at its first `*/`, and the MariaDB
+rules assume backslash escapes are on, so a server running with
+`NO_BACKSLASH_ESCAPES` reads `'C:\'` differently from the scanner.
+
 ## Value encoding
 
 Every parameter value is passed through `_encodeValue` in
