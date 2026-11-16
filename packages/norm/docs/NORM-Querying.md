@@ -301,9 +301,7 @@ await db.repo('Links').find({ '@Visits.@country': 'IN' }, {
 
 A relation column may also appear in value position, as the right-hand
 side of an operator, for a cross-column comparison. That plans the join
-for a belongsTo or hasOne alias whose key matches one row at most: its
-join columns on the related entity cover that entity's primary key or
-one of its `unique` groups. An unprojected to-many cannot supply a
+for a belongsTo or hasOne alias. An unprojected to-many cannot supply a
 comparison value, because it runs as an `EXISTS` subquery with nothing
 to compare an outer column against, so that spelling throws rather than
 comparing against the literal text:
@@ -317,29 +315,20 @@ await db.repo('Links').find({ '@createdAt': { $gt: '@Owner.@createdAt' } });
 await db.repo('Owners').find({ '@name': { $gt: '@Items.@label' } });
 ```
 
-A to-one relation whose key can match several rows supplies a
-comparison value only when the same read projects it. That is a relation
-matched [NULL-safe](#null-safe-relation-keys), and one whose join
-columns on the related entity are neither its primary key nor a declared
-`unique` group: a declared `reverseCardinality: 'hasOne'`, or an FK to
-columns that are no key. Unprojected, a row would come back once for
-each target it matches, so the read throws `INVALID_PROJECTION`.
-Projected, each row comes back once, kept when at least one matched
-target passes the comparison. `count()` and `total: true` count without
-the projection and always throw for such a filter:
+When the to-one relation can match several rows, the read groups by the
+row's primary key, so each row comes back once, kept when at least one
+matched row passes the comparison. `count()` and `total: true` count
+distinct primary keys. Key-position conditions on the same relation
+then join with it, so one related row has to meet them all. Two reads
+throw instead: an entity with no primary key, a view, raises
+`INVALID_PROJECTION`, as it has nothing to tell its rows apart by; and
+`aggregates` raise `AGGREGATE_MISUSE`, as each match would be aggregated
+as a row.
 
 ```typescript ignore
-// Grants.Org is nullSafe. Projected — each grant comes back once:
-await db.repo('Grants').find({ '@tenant': '@Org.@tenant' }, {
-  project: { '@id': true, '@Org': true },
-});
-
-// Not projected — NormQueryError. Project it, or match on plain
-// equality for this read: Orgs declares tenant + code unique.
+// Grants.Org is nullSafe — each grant comes back, and is counted, once:
 await db.repo('Grants').find({ '@tenant': '@Org.@tenant' });
-await db.repo('Grants').count({ '@tenant': '@Org.@tenant' }, {
-  nullSafe: { Org: false },
-});
+await db.repo('Grants').count({ '@tenant': '@Org.@tenant' });
 ```
 
 ### Hand-written `$exists` / `$nexists` (advanced)

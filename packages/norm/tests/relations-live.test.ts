@@ -44,13 +44,31 @@ const Seats = Entity('rl_seats', {
     Owner: { model: 'Orgs', on: { orgid: 'id' }, reverseAs: 'Seats' },
   },
 });
-const open = (norm: Norm) => norm.use(Schema('RL', { Orgs, Seats }));
+// One profile per org in fact, a hasOne no unique key declares.
+const Profiles = Entity('rl_profiles', {
+  id: Column.integer(),
+  orgid: Column.integer(),
+  score: Column.integer(),
+}, {
+  pk: ['id'],
+  fk: {
+    Org: {
+      model: 'Orgs',
+      on: { orgid: 'id' },
+      reverseAs: 'Profile',
+      reverseCardinality: 'hasOne',
+    },
+  },
+});
+const open = (norm: Norm) => norm.use(Schema('RL', { Orgs, Seats, Profiles }));
 type Db = ReturnType<typeof open>;
 const TABLES = {
   rl_orgs:
     'id INTEGER PRIMARY KEY, tenant INTEGER NOT NULL, code VARCHAR(20), cap INTEGER NOT NULL',
   rl_seats:
     'id INTEGER PRIMARY KEY, tenant INTEGER NOT NULL, orgcode VARCHAR(20), orgid INTEGER, total INTEGER NOT NULL',
+  rl_profiles:
+    'id INTEGER PRIMARY KEY, orgid INTEGER NOT NULL, score INTEGER NOT NULL',
 };
 
 const dbName = () =>
@@ -156,6 +174,10 @@ for (const [i, fx] of FIXTURES.entries()) {
         { id: 12, tenant: 7, orgcode: 'b', orgid: 2, total: 8 },
         { id: 13, tenant: 7, orgcode: null, orgid: null, total: 1 },
       ]);
+      await opened.repo('Profiles').insert([
+        { id: 20, orgid: 1, score: 9 },
+        { id: 21, orgid: 2, score: 3 },
+      ]);
     });
 
     afterAll(async () => {
@@ -200,7 +222,7 @@ for (const [i, fx] of FIXTURES.entries()) {
     // match one or two seats.
     const ids = (r: { data: Array<{ id: number }> }) => r.data.map((x) => x.id);
     const counted = async (
-      repo: 'Orgs' | 'Seats',
+      repo: 'Orgs' | 'Seats' | 'Profiles',
       filter: Record<string, unknown>,
       options: Record<string, unknown> = {},
     ) => {
@@ -236,6 +258,31 @@ for (const [i, fx] of FIXTURES.entries()) {
           await counted('Orgs', { '@Seat.@total': { $gt: 5 } }),
           { ids: [1, 2, 3], count: 3, page: [2], total: 3 },
         );
+      },
+    );
+
+    live(
+      'a filter value from such a relation returns and counts each row once',
+      async () => {
+        asserts.assertEquals(
+          await counted('Orgs', { '@id': { $lt: '@Seat.@id' } }),
+          { ids: [1, 2, 3], count: 3, page: [2], total: 3 },
+        );
+        asserts.assertEquals(
+          await counted('Seats', { '@total': { $gt: '@Org.@cap' } }),
+          { ids: [10, 11], count: 2, page: [11], total: 2 },
+        );
+        asserts.assertEquals(
+          await counted('Orgs', { '@cap': { $lt: '@Profile.@score' } }),
+          { ids: [1], count: 1, page: [], total: 1 },
+        );
+        const rows = await db!.repo('Seats').find(
+          { '@total': { $gt: '@Org.@cap' } },
+          { orderBy: { '@id': 'ASC' }, limit: 1 },
+        );
+        asserts.assertEquals(rows.data, [
+          { id: 10, tenant: 7, orgcode: 'a', orgid: 1, total: 6 },
+        ]);
       },
     );
   });

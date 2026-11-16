@@ -1669,34 +1669,34 @@ describe('norm.Repo — nullSafe relation keys', () => {
     asserts.assertEquals(q.joins, undefined);
   });
 
-  it('a filter value from an unprojected NULL-safe to-one relation is refused on every dialect', async () => {
+  it('a filter value from an unprojected NULL-safe to-one relation groups by the row and counts its keys on every dialect', async () => {
     const { db, exec } = mock();
     const sameTenant = { '@tenant': '@Org.@tenant' };
-    const refused = async (read: () => Promise<unknown>, text: string) => {
-      const err = await asserts.assertRejects(read, NormQueryError, text);
-      asserts.assertEquals(err.context.code, 'INVALID_PROJECTION');
-    };
     for (const dialect of ['mongo', 'sqlite']) {
       Object.assign(exec.capabilities, { dialect });
       const safe = db.repo('SafeGrants');
-      await refused(() => safe.find(sameTenant), "Filter value '@Org.@tenant'");
-      await refused(() => safe.count(sameTenant), 'NULL-safe relation');
-      await refused(
-        () => db.repo('Grants').find(sameTenant, { nullSafe: true }),
-        'NULL-safe relation',
-      );
-      // total: true counts without the projection.
-      await refused(
-        () => safe.find(sameTenant, { project: withOrg, total: true }),
-        'total: true cannot COUNT',
-      );
+      await safe.find(sameTenant, { total: true });
+      const [q, total] = exec.calls.slice(-2) as unknown as Array<
+        Record<string, unknown>
+      >;
+      asserts.assertEquals(q!.aggregates, {
+        __rows: { $$_aggregate: 'COUNT' },
+      });
+      asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+      await safe.count(sameTenant);
+      for (const counted of [total!, exec.calls.at(-1)!] as Row[]) {
+        asserts.assertEquals(counted.type, 'SELECT');
+        asserts.assertEquals(counted.aggregates, {
+          __rows: { $$_aggregate: 'COUNT', column: '@id', distinct: true },
+        });
+        asserts.assertEquals(counted.projection, { '@__rows': true });
+      }
     }
-    asserts.assertEquals(exec.calls.length, 0);
-    // Projected, or matched by plain equality, it joins.
-    await db.repo('SafeGrants').find(sameTenant, { project: withOrg });
-    asserts.assertEquals(joinKeys(exec, 'Org'), ['@Org.@code']);
+    // Matched by plain equality on a unique key, it joins as it is.
     await db.repo('SafeGrants').find(sameTenant, { nullSafe: false });
+    const plain = exec.lastOf('SELECT') as unknown as Record<string, unknown>;
     asserts.assertEquals(joinKeys(exec, 'Org'), undefined);
+    asserts.assertEquals(plain.aggregates, undefined);
   });
 
   // Plain equality on both: `Seat` is a declared hasOne whose key no
@@ -1714,7 +1714,7 @@ describe('norm.Repo — nullSafe relation keys', () => {
     },
   });
 
-  it('a filter value from an unprojected to-one relation whose key is not unique is refused on every dialect', async () => {
+  it('a filter value from an unprojected to-one relation whose key is not unique groups by the row on every dialect', async () => {
     const exec = new MockExec();
     const seats = use(Schema('NS', { Orgs, Seats: PlainSeats }));
     const db = new NormDb<typeof seats>(
@@ -1723,34 +1723,78 @@ describe('norm.Repo — nullSafe relation keys', () => {
       undefined,
     );
     const below = { '@id': { $lt: '@Seat.@id' } } as const;
-    const withSeat = { '@id': true, '@Seat': true } as const;
-    const refused = async (read: () => Promise<unknown>, text: string) => {
-      const err = await asserts.assertRejects(read, NormQueryError, text);
-      asserts.assertEquals(err.context.code, 'INVALID_PROJECTION');
-    };
     for (const dialect of ['mongo', 'sqlite']) {
       Object.assign(exec.capabilities, { dialect });
-      const orgs = db.repo('Orgs');
-      await refused(() => orgs.find(below), "Filter value '@Seat.@id'");
-      await refused(
-        () => orgs.count(below),
-        "declare its join columns (tenant, orgCode) unique on 'Seats'",
-      );
-      await refused(
-        () => db.repo('Seats').find({ '@id': { $gt: '@Tenant.@id' } }),
-        "Filter value '@Tenant.@id'",
-      );
-      // total: true counts without the projection.
-      await refused(
-        () => orgs.find(below, { project: withSeat, total: true }),
-        'total: true cannot COUNT',
+      exec.selectQueue.push([{ id: 1, tenant: 1, code: 'a', __rows: 2 }]);
+      const found = await db.repo('Orgs').find(below);
+      asserts.assertEquals(found.data, [{ id: 1, tenant: 1, code: 'a' }]);
+      const q = exec.lastOf('SELECT') as unknown as Record<string, unknown>;
+      asserts.assertEquals(q.aggregates, { __rows: { $$_aggregate: 'COUNT' } });
+      exec.selectQueue.push([{ __rows: '3' }]);
+      asserts.assertEquals((await db.repo('Orgs').count(below)).count, 3);
+      await db.repo('Seats').find({ '@id': { $gt: '@Tenant.@id' } });
+      asserts.assertEquals(
+        (exec.lastOf('SELECT') as unknown as Record<string, unknown>)
+          .aggregates,
+        { __rows: { $$_aggregate: 'COUNT' } },
       );
     }
-    asserts.assertEquals(exec.calls.length, 0);
-    // Projected, or on a declared unique key, it joins.
-    await db.repo('Orgs').find(below, { project: withSeat });
+    // On a declared unique key it joins as it is, and counts with COUNT.
     await db.repo('Seats').count({ '@id': { $gt: '@Org.@id' } });
-    asserts.assertEquals(exec.calls.map((q) => q.type), ['SELECT', 'COUNT']);
+    asserts.assertEquals(exec.calls.at(-1)!.type, 'COUNT');
+    // Each match would be aggregated as a row.
+    const err = await asserts.assertRejects(
+      () =>
+        db.repo('Orgs').find(below, {
+          project: { '@tenant': true },
+          aggregates: { n: { fn: 'COUNT', column: '@id' } },
+        }),
+      NormQueryError,
+      "relation 'Seat'",
+    );
+    asserts.assertEquals(err.context.code, 'AGGREGATE_MISUSE');
+  });
+
+  it('an entity with no primary key refuses a filter value from a relation that can match several rows', async () => {
+    const Notes = Entity('ns_org_notes', {
+      tenant: Column.integer(),
+      code: Column.varchar(20).nullable(),
+      note: Column.varchar(20),
+    }, {
+      type: 'VIEW',
+      query: {
+        type: 'SELECT',
+        table: 'ns_notes',
+        columns: ['tenant', 'code', 'note'],
+        projection: { '@tenant': true, '@code': true, '@note': true },
+      },
+      fk: { Org: { model: 'Orgs', on: { tenant: 'tenant' } } },
+    });
+    const exec = new MockExec();
+    const notes = use(Schema('NS', { Orgs, Notes }));
+    const db = new NormDb<typeof notes>(
+      compileRuntime(notes, {}, exec, () => {}),
+      exec,
+      undefined,
+    );
+    const above = { '@tenant': { $lt: '@Org.@id' } } as const;
+    for (
+      const read of [
+        () => db.repo('Notes').find(above),
+        () => db.repo('Notes').count(above),
+      ]
+    ) {
+      const err = await asserts.assertRejects(
+        read,
+        NormQueryError,
+        "'Notes' has no primary key",
+      );
+      asserts.assertEquals(err.context.code, 'INVALID_PROJECTION');
+    }
+    asserts.assertEquals(exec.calls.length, 0);
+    // In key position it runs as an EXISTS subquery.
+    await db.repo('Notes').count({ '@Org.@code': 'a' });
+    asserts.assertEquals(exec.calls.at(-1)!.type, 'COUNT');
   });
 
   it('live SQLite: a row whose NULL key matches several rows is returned and counted once', async () => {
@@ -1852,20 +1896,22 @@ describe('norm.Repo — nullSafe relation keys', () => {
     return { norm, db };
   };
 
-  it('live SQLite: a filter value from a NULL-safe to-one relation returns each row once when projected', async () => {
+  it('live SQLite: a filter value from a NULL-safe to-one relation returns each row once', async () => {
     const { norm, db } = await seated();
     try {
       const above = { '@id': { $gt: '@Org.@id' } } as const;
-      for (
-        const read of [
-          () => db.repo('Seats').find(above),
-          () => db.repo('Seats').count(above),
-          () => db.repo('Orgs').find({ '@id': { $lt: '@Seat.@id' } }),
-        ]
-      ) {
-        const err = await asserts.assertRejects(read, NormQueryError);
-        asserts.assertEquals(err.context.code, 'INVALID_PROJECTION');
-      }
+      const seats = await db.repo('Seats').find(above, {
+        orderBy: { '@id': 'ASC' },
+        limit: 2,
+        total: true,
+      });
+      asserts.assertEquals(seats.data.map((r) => r.id), [10, 11]);
+      asserts.assertEquals(seats.total, 3);
+      asserts.assertEquals((await db.repo('Seats').count(above)).count, 3);
+      const orgs = await db.repo('Orgs').find({ '@id': { $lt: '@Seat.@id' } }, {
+        orderBy: { '@id': 'ASC' },
+      });
+      asserts.assertEquals(orgs.data.map((r) => r.id), [1, 2, 3]);
       const projected = await db.repo('Seats').find(above, {
         project: { '@id': true, '@Org': { '@id': true } },
         orderBy: { '@id': 'ASC' },
@@ -1884,7 +1930,7 @@ describe('norm.Repo — nullSafe relation keys', () => {
     }
   });
 
-  it('live SQLite: a filter value from a to-one relation whose key is not unique returns each row once when projected', async () => {
+  it('live SQLite: a filter value from a to-one relation whose key is not unique returns each row once', async () => {
     const norm = new Norm({
       database: { dialect: 'sqlite', path: ':memory:' },
     });
@@ -1912,16 +1958,18 @@ describe('norm.Repo — nullSafe relation keys', () => {
       ]);
       const below = { '@id': { $lt: '@Seat.@id' } } as const;
       const project = { '@id': true, '@Seat': { '@id': true } } as const;
-      for (
-        const read of [
-          () => db.repo('Orgs').find(below),
-          () => db.repo('Orgs').count(below),
-          () => db.repo('Orgs').find(below, { project, total: true }),
-        ]
-      ) {
-        const err = await asserts.assertRejects(read, NormQueryError);
-        asserts.assertEquals(err.context.code, 'INVALID_PROJECTION');
-      }
+      const orgs = await db.repo('Orgs').find(below, {
+        orderBy: { '@id': 'ASC' },
+        total: true,
+      });
+      asserts.assertEquals(orgs.data.map((r) => r.id), [1, 12]);
+      asserts.assertEquals(orgs.total, 2);
+      asserts.assertEquals((await db.repo('Orgs').count(below)).count, 2);
+      const withTotal = await db.repo('Orgs').find(below, {
+        project,
+        total: true,
+      });
+      asserts.assertEquals(withTotal.total, 2);
       const projected = await db.repo('Orgs').find(below, {
         project,
         orderBy: { '@id': 'ASC' },

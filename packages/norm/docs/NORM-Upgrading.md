@@ -22,7 +22,6 @@ changelog has those.
   - [A MongoDB filter through a NULL-safe relation is met by one row](#a-mongodb-filter-through-a-null-safe-relation-is-met-by-one-row)
   - [A relation projection without the primary key keeps rows apart](#a-relation-projection-without-the-primary-key-keeps-rows-apart)
   - [A to-one relation that can match several rows returns each row once](#a-to-one-relation-that-can-match-several-rows-returns-each-row-once)
-  - [A filter value from a to-one relation that can match several rows needs it projected](#a-filter-value-from-a-to-one-relation-that-can-match-several-rows-needs-it-projected)
   - [A matched relation row whose projected columns are all NULL is kept](#a-matched-relation-row-whose-projected-columns-are-all-null-is-kept)
 
 ## 1.13.0
@@ -202,27 +201,12 @@ filter through such a relation that the read did not project, as in
 `{ '@Org.@cap': { $lt: 8 } }`, was joined, so a row came back once for
 each related row that passed, and `count()` and `total` counted it as
 often. The row now comes back and is counted once, kept when at least
-one related row passes.
-
-### A filter value from a to-one relation that can match several rows needs it projected
-
-A belongsTo or hasOne relation used as a comparison value, as in
-`{ '@id': { $lt: '@Seat.@id' } }`, was joined when the read did not
-project it. Where the join columns on the related entity are not unique
-there, a row came back once for each related row that passed, and
-`count()` and `total` counted it as often. Such a read now throws
-`NormQueryError` with the code `INVALID_PROJECTION`, as it already did
-for a NULL-safe relation. The check reads the schema, not the data: it
-passes when those join columns cover the related entity's primary key or
-one of its `unique` groups.
-
-Project the relation and each row comes back once, kept when at least
-one related row passes the comparison. `count()` and `total: true` count
-without the projection and throw for such a filter. Where the columns
-are unique in fact, declare them in the related entity's `unique`
-option, which the next migration emits as a unique index; a view has no
-such option. [Relation references](NORM-Querying.md#relation-references)
-has the rule.
+one related row passes. The same holds for such a relation used as a
+comparison value, as in `{ '@id': { $lt: '@Seat.@id' } }`: the read
+groups by the primary key, and `count()` and `total` count distinct
+keys. On an entity with no primary key that comparison throws
+`INVALID_PROJECTION`, and with `aggregates` it throws
+`AGGREGATE_MISUSE`.
 
 ### A matched relation row whose projected columns are all NULL is kept
 
