@@ -1152,13 +1152,49 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' LIKE :p_0: AND "profile"->>'name' ILIKE :p_1:`,
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' LIKE regexp_replace(CAST(:p_0: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\') AND "profile"->>'name' ILIKE regexp_replace(CAST(:p_1: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\')`,
         params: { p_0: '%bo%', p_1: '%BO%' },
       },
       maria: {
         sql:
           "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) LIKE :p_0: AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) LIKE :p_1:",
         params: { p_0: '%bo%', p_1: '%BO%' },
+      },
+    },
+  },
+  {
+    // A Postgres LIKE pattern ending in a lone backslash, the escape
+    // character, is an error there; MariaDB matches the backslash. The
+    // pattern gets one more backslash when its trailing run is odd.
+    name: 'WHERE $like / $nilike with a computed pattern',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'files',
+      columns: ['id', 'path', 'mask'],
+      projection: { '@id': true },
+      where: {
+        '@path': {
+          $like: '@mask',
+          $nilike: { $$_expression: 'CONCAT', args: ['@mask', '%'] },
+        },
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT "id" AS "id" FROM "files" WHERE "path" LIKE "mask" AND "path" NOT LIKE "mask" || :p_0:',
+        params: { p_0: '%' },
+      },
+      postgres: {
+        sql: String
+          .raw`SELECT "id" AS "id" FROM "files" WHERE "path" LIKE regexp_replace(CAST("mask" AS TEXT), '^((?:[^\\]|\\.)*)\\$', '\1\\\\') AND "path" NOT ILIKE regexp_replace(CAST("mask" || :p_0: AS TEXT), '^((?:[^\\]|\\.)*)\\$', '\1\\\\')`,
+        params: { p_0: '%' },
+      },
+      maria: {
+        sql:
+          'SELECT `id` AS `id` FROM `files` WHERE `path` LIKE `mask` AND `path` NOT LIKE CONCAT(`mask`, :p_0:)',
+        params: { p_0: '%' },
       },
     },
   },
@@ -1215,7 +1251,7 @@ const CASES: Case[] = [
       },
       postgres: {
         sql:
-          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' NOT LIKE :p_0: AND "profile"->>'name' NOT ILIKE :p_1: AND "profile"->>'bio' LIKE ('%' || :p_2:) ESCAPE '\\' AND "profile"->>'tag' LIKE ('%' || :p_3: || '%') ESCAPE '\\'`,
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' NOT LIKE regexp_replace(CAST(:p_0: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\') AND "profile"->>'name' NOT ILIKE regexp_replace(CAST(:p_1: AS TEXT), '^((?:[^\\\\]|\\\\.)*)\\\\$', '\\1\\\\\\\\') AND "profile"->>'bio' LIKE ('%' || :p_2:) ESCAPE '\\' AND "profile"->>'tag' LIKE ('%' || :p_3: || '%') ESCAPE '\\'`,
         params: { p_0: 'x%', p_1: 'y%', p_2: 'end', p_3: 'mid' },
       },
       maria: {
