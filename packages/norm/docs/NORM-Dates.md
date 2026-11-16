@@ -127,7 +127,9 @@ column reads back as:
 Temporal and audit period columns are `datetime()` columns and shift
 the same way. Set the option only for a schema whose instants are all
 `timestamptz()`, with no `date()` column and no temporal or audit
-table. The drivers have the detail:
+table, or behind a pooler that rejects the `TimeZone` startup parameter
+once the zone is set on the server, since nothing checks it then. The
+drivers have the detail:
 [Postgres → Time zone](../../drivers/engines/postgres/Drivers-Postgres.md#time-zone)
 and [Neon → Time zone](../../drivers/engines/neon/Drivers-Neon.md#time-zone).
 

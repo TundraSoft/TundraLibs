@@ -57,9 +57,10 @@ A `date()` column holds the day in the old zone, and has no time to
 convert from.
 
 Behind a pooler that does not pass the zone on, `connect()` rejects with
-`INVALID_CONFIG_VALUE` when the zone the pooler reports is not UTC. On
-Neon the first query or `ping()` rejects with the same code. Earlier
-versions connected. `allowNonUtcTimeZone: true` keeps the earlier
+`INVALID_CONFIG_VALUE` when the zone the pooler reports is not UTC, and a
+pooler that rejects a `TimeZone` startup parameter fails the connection.
+On Neon the first query or `ping()` rejects with `INVALID_CONFIG_VALUE`.
+Earlier versions connected. `allowNonUtcTimeZone: true` keeps the earlier
 behaviour on both engines, and
 [The database session](NORM-Dates.md#the-database-session) shows how to
 fix the zone instead.
