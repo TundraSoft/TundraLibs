@@ -513,7 +513,7 @@ export class PostgresTranslator extends AbstractTranslator {
           `the computed expression ${computed} in an index predicate`,
         );
       }
-      const scope = this._scopeFromFilterKeys(q.where);
+      const scope = this._indexScope(q);
       sql += ` WHERE ${this._translateFilter(q.where, scope, params, false)}`;
     }
     return sql;

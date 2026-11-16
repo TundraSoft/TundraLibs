@@ -81,11 +81,15 @@ exposed by the view. `CREATE_VIEW` and `ALTER_VIEW` (emulated as
 | `DROP INDEX cascade`  | ✅       | ❌ silently dropped (no concept) | ❌ silently dropped | n/a                              |
 
 ¹ Not with a computed expression the engine cannot hold in an index
-predicate: a `DATE_ADD` on Postgres, which builds its interval from text
-and so is not IMMUTABLE, and any expression on MongoDB, whose partial
-filter takes no `$expr`. Both throw `DialectUnsupportedError`, before the
-statement reaches the database. Other non-IMMUTABLE expressions, such as
-`NOW` on Postgres, still fail in the database.
+predicate: `NOW`, `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`,
+`CURRENT_TIMESTAMPTZ`, `UNIX_TIMESTAMP` and `UUID` on every engine, whose
+value changes between evaluations; a `DATE_ADD` on Postgres, which builds
+its interval from text and so is not IMMUTABLE; and any expression on
+MongoDB, whose partial filter takes no `$expr`. Each throws
+`DialectUnsupportedError` before the statement reaches the database.
+`DATE_TRUNC` on a `TIMESTAMPTZ` or `DATE` column still fails in the
+database on Postgres, which calls it not IMMUTABLE there; on a
+`TIMESTAMP` column it is accepted.
 
 **MariaDB DROP INDEX caveat**: `ifExists` and `cascade` are silently
 dropped because MariaDB's `DROP INDEX` grammar does not accept them.
@@ -100,6 +104,15 @@ inlines literals into the predicate body the same way it does for
 view definitions, and the `CREATE_INDEX` `TranslatedQuery` returns
 `params: {}`. Quote escaping and non-finite-number rejection follow
 the same rules as `CREATE_VIEW`.
+
+**A partial-index `where` has no column list**, so it takes a name as a
+column when the query uses it as one: an indexed column, a filter key, or
+a bare `'@name'` argument of an expression, as in `DATE_ADD('@start', …)`.
+An expression argument therefore reads the column it reads in a `SELECT`
+on that table, and a name that is no column fails in the database rather
+than binding as text. A value-position `'@name'`, as in
+`{ '@a': { $gt: '@b' } }`, is a column only when the predicate uses `b` in
+one of those ways; otherwise it is text.
 
 **A `Date` in a Postgres view or index definition is an uncast literal**,
 such as `'2026-03-15T00:00:00.000Z'`, which Postgres reads as the column's
@@ -817,8 +830,9 @@ document and never unwound it. These MongoDB results change:
 We **throw** (as `DialectUnsupportedError`) when:
 
 - `CREATE_INDEX` with `where` on MariaDB (partial indexes don't exist),
-  with a `DATE_ADD` in the `where` on Postgres, and with any expression in
-  the `where` on MongoDB.
+  with a clock expression or `UUID` in the `where` on every engine, with a
+  `DATE_ADD` in the `where` on Postgres, and with any expression in the
+  `where` on MongoDB.
 - `FULL JOIN` on MariaDB.
 - `STRING_AGG` aggregate on MongoDB.
 - `CREATE_SCHEMA` on MongoDB.

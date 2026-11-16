@@ -141,9 +141,11 @@ dialect just cannot express it.
 
 **Triggered by** two layers. The shared dispatch in `AbstractTranslator`
 raises it when a capability flag is off — `CREATE_SCHEMA`, `DROP_SCHEMA`,
-`TRUNCATE`, `RIGHT JOIN`, `FULL JOIN` — or when the dialect's expression /
-aggregate map has no emitter for the node. Each concrete translator raises it
-for its own grammar gaps, for example:
+`TRUNCATE`, `RIGHT JOIN`, `FULL JOIN` — when the dialect's expression /
+aggregate map has no emitter for the node, or when a `CREATE_INDEX` `where`
+holds `NOW`, a `CURRENT_*` clock, `UNIX_TIMESTAMP` or `UUID`, which no engine
+can hold in an index predicate. Each concrete translator raises it for its
+own grammar gaps, for example:
 
 - **SQLite** — `ALTER COLUMN`, `ALTER CONSTRAINT`, `CREATE_VIEW` with
   `orReplace`, and a rename-only `ALTER_VIEW` (supply a `query` to redefine).

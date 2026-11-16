@@ -572,6 +572,99 @@ describe('oql.translator.guards', () => {
         'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("due" + 1)',
       );
     });
+
+    it('refuses a clock or UUID expression on every engine, with one error', () => {
+      const translators = [
+        new PostgresTranslator(),
+        new SQLiteTranslator(),
+        new MariaTranslator(),
+        new MongoTranslator(),
+      ];
+      for (
+        const type of [
+          'NOW',
+          'CURRENT_DATE',
+          'CURRENT_TIME',
+          'CURRENT_TIMESTAMP',
+          'CURRENT_TIMESTAMPTZ',
+          'UNIX_TIMESTAMP',
+          'UUID',
+        ]
+      ) {
+        // Nested too, so the search has to walk expression arguments;
+        // MongoDB names the outer COALESCE there, as it refuses any.
+        const nested = {
+          $$_expression: 'COALESCE',
+          args: ['@due', { $$_expression: type }],
+        };
+        for (const t of translators) {
+          for (const operand of [{ $$_expression: type }, nested]) {
+            const err = asserts.assertThrows(
+              () => t.createIndex(index(operand)),
+              DialectUnsupportedError,
+            );
+            const named = t instanceof MongoTranslator && operand === nested
+              ? 'COALESCE'
+              : type;
+            asserts.assertEquals(
+              err.feature,
+              `the computed expression ${named} in an index predicate`,
+            );
+          }
+        }
+      }
+    });
+
+    it('reads a bare @name expression argument as a column', () => {
+      const where = {
+        '@due': { $gte: { $$_expression: 'ADD', args: ['@start', 1] } },
+        '@n': { $gt: '@start' },
+        '@m': { $gt: '@id' },
+        '@s': { $endsWith: '@example.com' },
+      };
+      const q = {
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where,
+      } as Query<'CREATE_INDEX'>;
+      asserts.assertEquals(
+        new PostgresTranslator().createIndex(q).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" >= ("start" + 1)' +
+          ` AND "n" > "start" AND "m" > "id"` +
+          ` AND "s" LIKE ('%' || '@example.com') ESCAPE '\\'`,
+      );
+      asserts.assertStringIncludes(
+        new SQLiteTranslator().createIndex(q).sql,
+        'WHERE "due" >= ("start" + 1) AND "n" > "start" AND "m" > "id"',
+      );
+    });
+
+    it('reads a bare @name inside CASE as a column', () => {
+      const q = {
+        type: 'CREATE_INDEX',
+        index: 'idx_due',
+        table: 'orders',
+        columns: ['@id'],
+        where: {
+          '@due': {
+            $gt: {
+              $$_expression: 'CASE',
+              args: {
+                cases: [{ when: { '@kind': 'a' }, then: '@start' }],
+                else: '@stop',
+              },
+            },
+          },
+        },
+      } as Query<'CREATE_INDEX'>;
+      asserts.assertEquals(
+        new SQLiteTranslator().createIndex(q).sql,
+        'CREATE INDEX "idx_due" ON "orders" ("id") WHERE "due" > ' +
+          `(CASE WHEN "kind" = 'a' THEN "start" ELSE "stop" END)`,
+      );
+    });
   });
 
   describe('joined column spelling', () => {
