@@ -938,6 +938,46 @@ export async function runLiveSuite(
         });
       }
 
+      it('NOW is written with its sub-second part', async () => {
+        const table = `${TABLE}_clock`;
+        const columns = ['id', 'at'];
+        await engine.createTable({
+          type: 'CREATE_TABLE',
+          table,
+          columns: {
+            id: { type: 'INTEGER', nullable: false },
+            at: { type: 'TIMESTAMP' },
+          },
+          primaryKey: ['id'],
+        });
+        try {
+          // Two writes 150 ms apart cannot both fall on a whole second.
+          for (const id of [1, 2]) {
+            await engine.insert({
+              type: 'INSERT',
+              table,
+              columns,
+              data: { id, at: { $$_expression: 'NOW' } },
+            } as unknown as Query<'INSERT'>);
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
+          const read = await engine.select({
+            type: 'SELECT',
+            table,
+            columns,
+            projection: { '@at': 'at' },
+          } as unknown as Query<'SELECT'>);
+          const written = read.data.map((r) => new Date(r.at as string | Date));
+          asserts.assertEquals(written.length, 2);
+          asserts.assert(
+            written.some((at) => at.getUTCMilliseconds() !== 0),
+            `whole seconds: ${written.map((at) => at.toISOString())}`,
+          );
+        } finally {
+          await engine.dropTable({ type: 'DROP_TABLE', table, ifExists: true });
+        }
+      });
+
       it('CURRENT_TIME is the UTC clock time as HH:MM:SS text', async () => {
         const result = await engine.select({
           type: 'SELECT',
