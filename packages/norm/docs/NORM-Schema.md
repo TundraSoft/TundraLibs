@@ -432,19 +432,32 @@ as given, except on a `date()` column where norm stores the day (SQLite
 and MongoDB): there a clock or `DATE_ADD` expression is reduced to its
 UTC day. A `.default()` expression cannot read a column of the row being
 inserted, such as `DATE_ADD` of `'@startsOn'`: `Entity()` throws
-`NormDefinitionError`. Compute such a value in a `beforeInsert` hook.
+`NormDefinitionError`. Compute such a value in a `beforeInsert` hook. A
+`DATE_ADD` default adds to a `Date` or to a clock, `NOW`,
+`CURRENT_TIMESTAMP` or `CURRENT_TIMESTAMPTZ`, with the same result on
+every engine. The clock is read where a plain `NOW` default reads it: by
+the database on SQL, by the application on MongoDB.
+
+```typescript
+import { Column } from '@tundralibs/norm';
+
+const expiresAt = Column.timestamp().default({
+  $$_expression: 'DATE_ADD',
+  args: { date: { $$_expression: 'NOW' }, amount: 30, unit: 'DAYS' },
+});
+```
 
 On MongoDB an insert document cannot evaluate expressions, so the clock
 expressions (`NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`,
 `CURRENT_DATE`, `CURRENT_TIME`, `UNIX_TIMESTAMP`) and `UUID` are computed
 when the insert is built, the clock ones at one instant per statement.
 `CURRENT_TIME` is the UTC time of day of that instant as `'HH:MM:SS'`. A `date()` column given one of them holds the UTC
-day of that instant. A `date()` column given a `DATE_ADD` of a whole
-amount to a `Date` holds the UTC day of the result, which norm computes
-with the month-end rule the SQL engines follow. Any other expression
-default fails the insert with `DialectUnsupportedError`, a `DATE_ADD` on
-a `timestamp()` column or with a fractional amount included; use a local
-generator instead. Updates and upserts evaluate expressions in the
+day of that instant. A `DATE_ADD` of a whole amount to a `Date` or a
+clock is computed by norm, with the month-end rule the SQL engines
+follow and one clock reading per insert call; a `date()` column holds
+the UTC day of the result. Any other expression default fails the insert
+with `DialectUnsupportedError`, a `DATE_ADD` with a fractional amount
+included; use a local generator instead. Updates and upserts evaluate expressions in the
 database on every dialect.
 
 ### Transforms

@@ -129,12 +129,15 @@ const UNIT_MS: ReadonlyMap<unknown, number> = new Map([
   ['SECONDS', 1000],
 ]);
 
-/** A `DATE_ADD` of a whole amount to a `Date`, computed in UTC as oql
- * computes it on every engine: a day the target month lacks is that
- * month's last day, so 31 January plus one month is 28 February.
- * `undefined` for any other `DATE_ADD`. */
-function addedDate(args: unknown): Date | undefined {
-  const { date, amount, unit } = (args ?? {}) as Record<string, unknown>;
+/** A `DATE_ADD` of a whole amount to a `Date` or to a clock read as
+ * `now`, computed in UTC as oql computes it on every engine: a day the
+ * target month lacks is that month's last day, so 31 January plus one
+ * month is 28 February. `undefined` for any other `DATE_ADD`. */
+function addedDate(args: unknown, now: Date): Date | undefined {
+  const { amount, unit, ...rest } = (args ?? {}) as Record<string, unknown>;
+  const date = CLOCKS.has((rest.date as ExpressionDefault)?.$$_expression)
+    ? now
+    : rest.date;
   if (!(date instanceof Date) || !Number.isInteger(amount)) return undefined;
   const by = amount as number;
   const out = new Date(date);
@@ -160,18 +163,19 @@ function addedDate(args: unknown): Date | undefined {
  *
  * A Mongo insert document (`insertDocument`) cannot evaluate `DATE_TRUNC`
  * or `DATE_ADD`. oql computes `CURRENT_DATE` as the UTC day when it builds
- * the document, so a clock is written as that, and a `DATE_ADD` to a
- * `Date` is computed here. */
+ * the document, so a clock is written as that, and a `DATE_ADD` is
+ * computed here, its clock read as `now`. */
 function dayOf(
   expr: ExpressionDefault,
   insertDocument: boolean,
+  now: Date,
 ): ExpressionDefault | Date {
   if (insertDocument) {
     if (CLOCKS.has(expr.$$_expression)) {
       return { $$_expression: 'CURRENT_DATE' };
     }
     const added = expr.$$_expression === 'DATE_ADD'
-      ? addedDate(expr.args)
+      ? addedDate(expr.args, now)
       : undefined;
     return added === undefined ? expr : utcDay(added);
   }
@@ -4579,6 +4583,16 @@ export class Repo<
     const dayColumns = this._storedDayColumns();
     const mongoInsert = op === 'insert' &&
       this._executor.capabilities.dialect === 'mongo';
+    // A Mongo insert document cannot evaluate `DATE_ADD`: the instant
+    // columns get it computed here, one clock reading per call.
+    const now = new Date();
+    const specs = c.def.columns as Record<string, ColumnSpec>;
+    const instantColumns = mongoInsert
+      ? Object.keys(specs).filter((col) =>
+        DATE_TYPES.has(specs[col]!.type) && specs[col]!.type !== 'DATE' &&
+        !c.localEncrypted.has(col)
+      )
+      : [];
     const out: Row[] = [];
     for (let i = 0; i < parsed.length; i++) {
       let row = parsed[i]!;
@@ -4605,7 +4619,13 @@ export class Repo<
       for (const col of dayColumns) {
         const v = row[col];
         if (v instanceof Date) row[col] = utcDay(v);
-        else if (isExpressionValue(v)) row[col] = dayOf(v, mongoInsert);
+        else if (isExpressionValue(v)) row[col] = dayOf(v, mongoInsert, now);
+      }
+      for (const col of instantColumns) {
+        const v = row[col];
+        if (isExpressionValue(v) && v.$$_expression === 'DATE_ADD') {
+          row[col] = addedDate(v.args, now) ?? v;
+        }
       }
       out.push(await this.__encryptRow(row));
     }
