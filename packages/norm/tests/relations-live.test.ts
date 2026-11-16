@@ -60,7 +60,38 @@ const Profiles = Entity('rl_profiles', {
     },
   },
 });
-const open = (norm: Norm) => norm.use(Schema('RL', { Orgs, Seats, Profiles }));
+// A view over the seats has no primary key. Its key to Orgs is NULL-safe,
+// so org 5's NULL code matches seat 13, whose projected code is NULL too.
+const SeatView = Entity('rl_seat_view', {
+  orgcode: Column.varchar(20).nullable(),
+  total: Column.integer(),
+  id: Column.integer(),
+}, {
+  type: 'VIEW',
+  query: {
+    type: 'SELECT',
+    table: 'rl_seats',
+    columns: ['id', 'orgcode', 'total'],
+    projection: { '@orgcode': true, '@total': true, '@id': true },
+  },
+  fk: {
+    One: {
+      model: 'Orgs',
+      on: { orgcode: 'code' },
+      reverseAs: 'SeatRow',
+      reverseCardinality: 'hasOne',
+      nullSafe: true,
+    },
+    All: {
+      model: 'Orgs',
+      on: { orgcode: 'code' },
+      reverseAs: 'SeatRows',
+      nullSafe: true,
+    },
+  },
+});
+const open = (norm: Norm) =>
+  norm.use(Schema('RL', { Orgs, Seats, Profiles, SeatView }));
 type Db = ReturnType<typeof open>;
 const TABLES = {
   rl_orgs:
@@ -135,6 +166,12 @@ for (const [i, fx] of FIXTURES.entries()) {
         const clean = new MongoEngine('rl-live-mongo-clean', MONGO);
         try {
           await clean.connect();
+          // deno-lint-ignore no-explicit-any
+          await (clean as any).dropView({
+            type: 'DROP_VIEW',
+            view: 'rl_seat_view',
+            ifExists: true,
+          });
           for (const t of Object.keys(TABLES)) {
             await clean.dropTable({
               type: 'DROP_TABLE',
@@ -147,6 +184,7 @@ for (const [i, fx] of FIXTURES.entries()) {
         }
         return;
       }
+      await db!.raw('DROP VIEW IF EXISTS rl_seat_view');
       for (const t of Object.keys(TABLES).reverse()) {
         await db!.raw(`DROP TABLE IF EXISTS ${t}`);
       }
@@ -161,12 +199,30 @@ for (const [i, fx] of FIXTURES.entries()) {
         for (const [t, ddl] of Object.entries(TABLES)) {
           await opened.raw(`CREATE TABLE ${t} (${ddl})`);
         }
+        await opened.raw(
+          'CREATE VIEW rl_seat_view AS SELECT orgcode, total, id FROM rl_seats',
+        );
+      } else {
+        const views = new MongoEngine('rl-live-mongo-views', MONGO);
+        try {
+          await views.connect();
+          // deno-lint-ignore no-explicit-any
+          await (views as any).createView({
+            type: 'CREATE_VIEW',
+            view: 'rl_seat_view',
+            query: (SeatView as unknown as { query: unknown }).query,
+            ifNotExists: true,
+          });
+        } finally {
+          await views.disconnect().catch(() => {});
+        }
       }
       await opened.repo('Orgs').insert([
         { id: 1, tenant: 7, code: 'a', cap: 5 },
         { id: 2, tenant: 7, code: 'a', cap: 7 },
         { id: 3, tenant: 7, code: 'b', cap: 9 },
         { id: 4, tenant: 8, code: 'c', cap: 1 },
+        { id: 5, tenant: 9, code: null, cap: 3 },
       ]);
       await opened.repo('Seats').insert([
         { id: 10, tenant: 7, orgcode: 'a', orgid: 1, total: 6 },
@@ -208,13 +264,13 @@ for (const [i, fx] of FIXTURES.entries()) {
         });
         asserts.assertEquals(
           orgs.data.map((r) => [r.tenant, r.Seats.map((s) => s.id).sort()]),
-          [[7, [10]], [7, [11, 12]], [7, []], [8, []]],
+          [[7, [10]], [7, [11, 12]], [7, []], [8, []], [9, []]],
         );
         asserts.assertEquals(Object.keys(orgs.data[0]!).sort(), [
           'Seats',
           'tenant',
         ]);
-        asserts.assertEquals(orgs.total, 4);
+        asserts.assertEquals(orgs.total, 5);
       },
     );
 
@@ -313,6 +369,30 @@ for (const [i, fx] of FIXTURES.entries()) {
           orderBy: { '@Owner.@cap': 'DESC', '@id': 'ASC' },
         });
         asserts.assertEquals(ids(owned), [11, 12, 10]);
+      },
+    );
+
+    live(
+      'a matched view row whose projected columns are all NULL is kept',
+      async () => {
+        const orgs = db!.repo('Orgs');
+        const some = { '@id': { $in: [1, 3, 5] } };
+        const all = await orgs.find(some, {
+          project: { '@id': true, '@SeatRows': { '@orgcode': true } },
+          orderBy: { '@id': 'ASC' },
+        });
+        asserts.assertEquals(
+          all.data.map((r) => [r.id, r.SeatRows]),
+          [
+            [1, [{ orgcode: 'a' }, { orgcode: 'a' }]],
+            [3, [{ orgcode: 'b' }]],
+            [5, [{ orgcode: null }]],
+          ],
+        );
+        const code = await orgs.find({ '@id': 5 }, {
+          project: { '@id': true, '@SeatRow': { '@orgcode': true } },
+        });
+        asserts.assertEquals(code.data[0]!.SeatRow, { orgcode: null });
       },
     );
   });

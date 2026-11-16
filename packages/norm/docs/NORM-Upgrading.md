@@ -220,8 +220,11 @@ reads an object whose values are `null`, and the list keeps the row. No
 match still reads `null` and `[]`. Code that took `row.Org === null` to
 mean the projected column was NULL must test the column instead.
 
-One case is unchanged: a view, which has no primary key, joined on
-[NULL-safe](NORM-Schema.md#null-safe-keys) pairs that all hold NULL.
+One case is unchanged: a view, which has no primary key, joined only on
+[NULL-safe](NORM-Schema.md#null-safe-keys) pairs, that declares every
+column `.nullable()`, when the matched row holds NULL in each column
+the read takes from it. A view that declares a column NOT NULL is read
+right.
 
 ---
 

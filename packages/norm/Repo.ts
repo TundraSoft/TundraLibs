@@ -1993,8 +1993,9 @@ export class ReadRepo<
       // child) picks by it so every engine returns the same one. A join
       // on the whole key matches one row at most and a to-many keeps
       // them all, so those carry the first key column only. A target
-      // with no primary key (a view) carries its join columns instead:
-      // only a NULL-safe match on NULL leaves them all NULL.
+      // with no primary key (a view) carries its join columns instead,
+      // plus its first NOT NULL column when every pair is NULL-safe,
+      // since a match on NULL leaves those all NULL.
       const pk = (target.def as { primaryKeys?: readonly string[] })
         .primaryKeys ?? [];
       const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
@@ -2002,7 +2003,19 @@ export class ReadRepo<
       );
       const picks = cardinality !== 'hasMany' && pk.length > 0 &&
         !pk.every((col) => onCols.includes(col));
-      const carried = picks ? pk : pk.length > 0 ? pk.slice(0, 1) : onCols;
+      const specs = target.def.columns as Record<string, ColumnSpec>;
+      const safeRefs = oqlJoins[name]!.nullSafe ?? [];
+      const notNull = Object.keys(specs).find((col) =>
+        specs[col]!.nullable !== true && !target.masks.has(col)
+      );
+      const carried = picks
+        ? pk
+        : pk.length > 0
+        ? pk.slice(0, 1)
+        : notNull !== undefined &&
+            onCols.every((col) => safeRefs.includes(`@${name}.@${col}`))
+        ? [...onCols, notNull]
+        : onCols;
       const keys: string[] = [];
       const strip: string[] = [];
       for (const col of carried) {
