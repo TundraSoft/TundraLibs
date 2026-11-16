@@ -21,11 +21,12 @@ import type { Query } from '@tundralibs/oql/types';
 import type { DdlQuery } from '../executor.ts';
 import type { MigrationAction, RebuildTable } from './rebuild.ts';
 import { NormMigrationError } from '../errors/mod.ts';
-import type {
-  MigrationSnapshot,
-  SnapColumn,
-  SnapEntity,
-  SnapForeignKey,
+import {
+  type MigrationSnapshot,
+  type SnapColumn,
+  type SnapEntity,
+  type SnapForeignKey,
+  viewQuery,
 } from './snapshot.ts';
 
 /** Diff output: ordered actions (DDL + rebuilds) + loud bookkeeping. */
@@ -47,9 +48,10 @@ export type DiffOptions = {
    * place (executor capabilities). When false, such changes emit a
    * REBUILD_TABLE instead of ALTER pieces. Default true. */
   readonly inPlaceAlter?: boolean;
-  /** Target dialect — used ONLY to skip a FK's PHYSICAL constraint
-   * when this dialect cannot honor it (never to change anything else;
-   * `diffSnapshots` otherwise stays dialect-agnostic by design). Omit
+  /** Target dialect — used to skip a FK's PHYSICAL constraint when
+   * this dialect cannot honor it, and on `mongo` to recreate a view
+   * whose earlier snapshot has no {@linkcode SnapEntity.typedDates}
+   * (`diffSnapshots` otherwise stays dialect-agnostic by design). Omit
    * to skip no FK (matches historical behavior). See
    * {@linkcode fkPhysicalSkipReason}. */
   readonly dialect?: 'sqlite' | 'postgres' | 'maria' | 'mongo';
@@ -457,12 +459,17 @@ export function createTableAction(
   return { action, warnings };
 }
 
-function createViewAction(e: SnapEntity): DdlQuery {
+/** The view's SELECT goes through {@linkcode viewQuery} again: read
+ * back from a snapshot file, a `Date` in its `where` is ISO text. */
+function createViewAction(
+  e: SnapEntity,
+  entities: Record<string, SnapEntity>,
+): DdlQuery {
   return {
     type: 'CREATE_VIEW',
     view: e.name,
     ...(e.dbSchema !== undefined ? { schema: e.dbSchema } : {}),
-    query: e.query as Query<'SELECT'>,
+    query: viewQuery(e.query, entities).query as Query<'SELECT'>,
     ...(e.materialized === true ? { materialized: true } : {}),
     ifNotExists: true,
   };
@@ -567,7 +574,11 @@ export function diffSnapshots(
     if (
       JSON.stringify(cur.query) !== JSON.stringify(pre.query) ||
       JSON.stringify(Object.keys(cur.columns).sort()) !==
-        JSON.stringify(Object.keys(pre.columns).sort())
+        JSON.stringify(Object.keys(pre.columns).sort()) ||
+      // MongoDB compares types: the view a snapshot from before
+      // `typedDates` made holds text where the collection holds dates.
+      (dialect === 'mongo' && cur.typedDates === true &&
+        pre.typedDates !== true)
     ) {
       changedViews.push(currKey);
     }
@@ -983,7 +994,7 @@ export function diffSnapshots(
     ...changedViews,
   ];
   for (const k of orderViews(viewCreates, curr.entities)) {
-    actions.push(createViewAction(curr.entities[k]!));
+    actions.push(createViewAction(curr.entities[k]!, curr.entities));
   }
 
   return { actions, blockedDrops, warnings };

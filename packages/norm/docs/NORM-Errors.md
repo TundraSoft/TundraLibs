@@ -181,7 +181,8 @@ and `zonedInstant`; see
 [Dates in a time zone](NORM-Schema.md#dates-in-a-time-zone). A filter
 value on a date column that is not ISO 8601 text, or names a day or
 time no calendar has, raises `INVALID_DATE` as a `NormQueryError`; see
-[Date and time values](NORM-Querying.md#date-and-time-values).
+[Date and time values](NORM-Querying.md#date-and-time-values). The same
+text in a view's `where` raises it from `snapshot()`.
 
 | Code                | Raised when                                                                                                                                      | What to do                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |

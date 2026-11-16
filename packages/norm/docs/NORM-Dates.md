@@ -52,6 +52,7 @@ keeps an `'HH:MM:SS'` string.
 - Writes: [Schema → Factories](NORM-Schema.md#factories).
 - Filters:
   [Querying → Date and time values](NORM-Querying.md#date-and-time-values).
+- A view's `where`: [Schema → VIEW](NORM-Schema.md#view).
 
 ## A day or a clock time in a named zone
 

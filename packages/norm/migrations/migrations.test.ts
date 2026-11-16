@@ -19,7 +19,7 @@ import '@tundralibs/norm/engines/sqlite';
 import { Column, Entity, Norm, Schema } from '../mod.ts';
 import { Guardian } from '@tundralibs/guardian';
 import { registerEngine, resolveEngineFactory } from '../engines/mod.ts';
-import { NormMigrationError } from '../errors/mod.ts';
+import { NormMigrationError, NormQueryError } from '../errors/mod.ts';
 import { snapshot as logicalSnapshot } from '../definition/mod.ts';
 import {
   buildSnapshot,
@@ -373,6 +373,261 @@ describe('norm.migrations (real SQLite end to end)', () => {
     // The flag participates in the drift hash (DDL-relevant).
     const plain = buildSnapshot({ Daily: mkView(false) }, ts);
     asserts.assertNotEquals(withMv.hash, plain.hash);
+  });
+
+  describe("a view's date and time conditions", () => {
+    const ts = '2026-01-01T00:00:00.000Z';
+    const NOON = new Date('2026-03-15T12:00:00.000Z');
+    const DAY = new Date('2026-03-15T00:00:00.000Z');
+    const Slots = Entity('vd_slots', {
+      id: Column.int(),
+      day: Column.date(),
+      at: Column.time(),
+      dt: Column.datetime(),
+      ts: Column.timestamp(),
+      tstz: Column.timestamptz(),
+      note: Column.varchar(40),
+    }, { pk: ['id'] });
+    const Owners = Entity('vd_owners', {
+      id: Column.int(),
+      since: Column.date(),
+    }, { pk: ['id'] });
+    const view = (name: string, where: Record<string, unknown>) =>
+      Entity(name, { id: Column.int() }, {
+        type: 'VIEW',
+        query: {
+          type: 'SELECT',
+          table: 'vd_slots',
+          columns: ['id', 'day', 'at', 'dt', 'ts', 'tstz', 'note'],
+          joins: {
+            O: {
+              table: 'vd_owners',
+              columns: ['id', 'since'],
+              on: { '@id': '@O.@id' },
+            },
+          },
+          projection: { '@id': true },
+          where,
+        } as never,
+      });
+    const whereOf = (e: unknown) =>
+      (e as { query: { where: unknown } }).query.where;
+    /** The CREATE_VIEW actions, by view name. */
+    const createViews = (actions: MigrationAction[]) =>
+      (actions.filter((a) =>
+        !isRebuild(a) && a.type === 'CREATE_VIEW'
+      ) as unknown as { view: string; query: unknown }[])
+        .sort((a, b) => a.view.localeCompare(b.view));
+    // One view per way the stored condition can change.
+    const registry = {
+      Slots,
+      Owners,
+      ByDay: view('vd_by_day', { '@day': { $eq: NOON } }),
+      ByInstant: view('vd_by_instant', { '@dt': { $gte: NOON } }),
+      ByClock: view('vd_by_clock', { '@at': NOON }),
+      ById: view('vd_by_id', { '@id': { $gte: 2 } }),
+    };
+    /** `snap` as norm wrote it before 1.13.0 and as its file holds it:
+     * a view's `where` as written, a `Date` as ISO text, no marker. */
+    const before113 = (snap: MigrationSnapshot): MigrationSnapshot =>
+      JSON.parse(JSON.stringify({
+        ...snap,
+        hash: 'before-1.13.0',
+        entities: Object.fromEntries(
+          Object.entries(snap.entities).map(([key, e]) => {
+            if (e.kind !== 'VIEW') return [key, e];
+            const { typedDates: _marker, ...rest } = e;
+            const def = registry[key as keyof typeof registry];
+            return [key, {
+              ...rest,
+              query: (def as { query?: unknown }).query,
+            }];
+          }),
+        ),
+      }));
+
+    it('are stored converted by column type, as find converts a filter', () => {
+      const snap = buildSnapshot({
+        Slots,
+        Owners,
+        // Sorts before its tables: columns are resolved after all are built.
+        Busy: view('vd_busy', {
+          '@day': { $eq: NOON, $in: ['2026-03-15T23:00:00+05:30', NOON] },
+          '@at': NOON,
+          '@note': '2026-03-15',
+          $or: [
+            { '@dt': { $between: ['2026-03-15 12:00:00', NOON] } },
+            { '@ts': ['2026-03-15T12:00:00Z'] },
+            { '@tstz': { $nin: ['2026-03-15T17:30:00+05:30'] } },
+            { '@at': { $gte: '2026-03-15T12:00:00.000Z', $lt: '13:30' } },
+          ],
+          '@O.@since': { $lt: NOON },
+          $exists: {
+            table: 'vd_owners',
+            on: { '@id': '@id' },
+            where: { '@since': { $gte: '2026-03-15' } },
+          },
+        }),
+        Clock: view('vd_clock', { '@at': { $ne: NOON }, '@id': 1 }),
+      }, ts);
+      asserts.assertEquals(whereOf(snap.entities.Busy), {
+        '@day': { $eq: DAY, $in: [DAY, DAY] },
+        '@at': '12:00:00',
+        '@note': '2026-03-15',
+        $or: [
+          { '@dt': { $between: [NOON, NOON] } },
+          { '@ts': [NOON] },
+          { '@tstz': { $nin: [NOON] } },
+          { '@at': { $gte: '12:00:00', $lt: '13:30:00' } },
+        ],
+        '@O.@since': { $lt: DAY },
+        $exists: {
+          table: 'vd_owners',
+          on: { '@id': '@id' },
+          where: { '@since': { $gte: DAY } },
+        },
+      });
+      asserts.assertEquals(snap.entities.Busy!.typedDates, true);
+      // A clock is text on every engine: nothing for a file to lose.
+      asserts.assertEquals(whereOf(snap.entities.Clock), {
+        '@at': { $ne: '12:00:00' },
+        '@id': 1,
+      });
+      asserts.assertEquals(snap.entities.Clock!.typedDates, undefined);
+    });
+
+    it('build the same view from a Date and from the text a snapshot file holds', () => {
+      const snap = buildSnapshot(registry, ts);
+      const built = createViews(diffSnapshots(null, snap).actions);
+      asserts.assertEquals(built.map((a) => [a.view, whereOf(a)]), [
+        ['vd_by_clock', { '@at': '12:00:00' }],
+        ['vd_by_day', { '@day': { $eq: DAY } }],
+        ['vd_by_id', { '@id': { $gte: 2 } }],
+        ['vd_by_instant', { '@dt': { $gte: NOON } }],
+      ]);
+      const file = JSON.parse(JSON.stringify(snap)) as MigrationSnapshot;
+      asserts.assertEquals(
+        createViews(diffSnapshots(null, file).actions),
+        built,
+      );
+      // A file from before 1.13.0 holds the unconverted text.
+      asserts.assertEquals(
+        createViews(diffSnapshots(null, before113(snap)).actions),
+        built,
+      );
+    });
+
+    it('move the hash when only a Date changes', () => {
+      const hash = (at: Date) =>
+        buildSnapshot({ Slots, V: view('vd_v', { '@dt': { $gte: at } }) }, ts)
+          .hash;
+      asserts.assertEquals(hash(NOON), hash(new Date(NOON)));
+      asserts.assertNotEquals(hash(NOON), hash(new Date(NOON.getTime() + 1)));
+    });
+
+    it('recreate an earlier view exactly when its stored condition differs', () => {
+      const snap = buildSnapshot(registry, ts);
+      const file = JSON.parse(JSON.stringify(snap)) as MigrationSnapshot;
+      const recreated = (dialect: 'sqlite' | 'postgres' | 'maria' | 'mongo') =>
+        createViews(
+          diffSnapshots(before113(snap), file, { dialect, allowDrop: true })
+            .actions,
+        ).map((a) => a.view);
+      // The day was stored as noon, the clock as a date-time.
+      for (const dialect of ['sqlite', 'postgres', 'maria'] as const) {
+        asserts.assertEquals(recreated(dialect), ['vd_by_clock', 'vd_by_day']);
+        asserts.assertEquals(
+          diffSnapshots(file, snap, { dialect }).actions,
+          [],
+        );
+      }
+      // The instant reads the same in both files, but the MongoDB view
+      // made from the earlier one stored it as text.
+      asserts.assertEquals(recreated('mongo'), [
+        'vd_by_clock',
+        'vd_by_day',
+        'vd_by_instant',
+      ]);
+      asserts.assertEquals(
+        diffSnapshots(file, snap, { dialect: 'mongo' }).actions,
+        [],
+      );
+    });
+
+    it('refuse text that is not a date, as find does', () => {
+      const bad = { Slots, V: view('vd_v', { '@day': { $in: ['tomorrow'] } }) };
+      const e = asserts.assertThrows(
+        () => buildSnapshot(bad, ts),
+        NormQueryError,
+      );
+      asserts.assertEquals(e.code, 'INVALID_DATE');
+      asserts.assertEquals(e.context.subject, 'day');
+    });
+
+    it('snapshot() and apply() recreate the views an earlier snapshot stored unconverted', async () => {
+      const { ByDay: _day, ByClock: _clock, ...sameText } = registry;
+      const cases = [
+        [registry, [
+          'CREATE_VIEW vd_by_clock',
+          'CREATE_VIEW vd_by_day',
+          'DROP_VIEW vd_by_clock',
+          'DROP_VIEW vd_by_day',
+        ]],
+        // Only the hash moved: a version with nothing to run.
+        [sameText, []],
+      ] as const;
+      for (const [entities, planned] of cases) {
+        const dir = await makeTempDir({ prefix: 'norm-mig-viewdate-' });
+        const dbDir8 = await makeTempDir({ prefix: 'norm-mig-viewdate-db-' });
+        const norm = new Norm({
+          database: { dialect: 'sqlite', path: dbDir8 },
+        });
+        await norm.connect();
+        try {
+          const db = norm.use(Schema('App', entities));
+          await writeTextFile(
+            `${dir}/${formatVersionFilename(1)}`,
+            JSON.stringify(before113(buildSnapshot(entities, ts))),
+          );
+          const mig = new Migrator(db, { dir });
+          asserts.assertEquals((await mig.apply()).applied, [1]);
+          await db.repo('Owners').insert({ id: 2, since: DAY });
+          await db.repo('Slots').insert({
+            id: 2,
+            day: DAY,
+            at: '12:00',
+            dt: NOON,
+            ts: NOON,
+            tstz: NOON,
+            note: '',
+          });
+
+          const next = await mig.snapshot();
+          asserts.assertEquals([next.version, next.written], [2, true]);
+          const [step] = await mig.plan();
+          asserts.assertEquals(
+            step!.queries.map((q) =>
+              isRebuild(q)
+                ? q.kind
+                : `${q.type} ${(q as { view?: string }).view}`
+            ).sort(),
+            [...planned],
+          );
+          asserts.assertEquals((await mig.apply()).applied, [2]);
+          for (const key of Object.keys(entities).filter((k) => k[0] === 'B')) {
+            const rows = await db.repo(key as 'ById').find({});
+            asserts.assertEquals(rows.data.map((r) => r.id), [2], key);
+          }
+          // Nothing left to write or apply.
+          asserts.assertEquals((await mig.snapshot()).written, false);
+          asserts.assertEquals(await mig.plan(), []);
+        } finally {
+          await norm.disconnect();
+          await removeDir(dir, { recursive: true });
+          await removeDir(dbDir8, { recursive: true });
+        }
+      }
+    });
   });
 
   it('logical and physical snapshot exporters agree on DDL-relevant facts', () => {

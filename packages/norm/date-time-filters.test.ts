@@ -132,10 +132,26 @@ const INSTANT_CASES: Case[] = [
   ['timestamptz equality', { '@tstz': '2020-01-14T15:30:00+05:30' }, [2]],
 ];
 
+/** One view per case, its `where` the case's filter. */
+const VIEW_CASES = [...DATE_CASES, ...TIME_CASES, ...INSTANT_CASES];
+const VIEWS = Object.fromEntries(VIEW_CASES.map(([, where], i) => [
+  `View${i}`,
+  Entity(`slots_view_${i}`, { id: Column.int() }, {
+    type: 'VIEW',
+    query: {
+      type: 'SELECT',
+      table: 'slots',
+      columns: ['id', 'day', 'due', 'at', 'ts', 'tstz'],
+      projection: { '@id': true },
+      where,
+    } as never,
+  }),
+]));
+
 let dir = '';
 let migDir = '';
 let norm: Norm;
-const open = () => norm.use(Schema('App', { Slots, Bookings, Fees }));
+const open = () => norm.use(Schema('App', { Slots, Bookings, Fees, ...VIEWS }));
 
 describe('norm — date and time filter values (live SQLite)', () => {
   beforeAll(async () => {
@@ -179,6 +195,16 @@ describe('norm — date and time filter values (live SQLite)', () => {
       }
     });
   }
+
+  it('a view returns the rows find returns for its condition', async () => {
+    for (const [i, [name, , expected]] of VIEW_CASES.entries()) {
+      // The handle is typed by its tables; a view has `id` as they do.
+      const rows = await open().repo(`View${i}` as 'Slots').find({}, {
+        orderBy: { '@id': 'ASC' },
+      });
+      asserts.assertEquals(rows.data.map((r) => r.id), expected, name);
+    }
+  });
 
   it('reaches a relation column the same way', async () => {
     const filter: Filter = { '@Slot.@day': '2020-01-14T09:00:00Z' };

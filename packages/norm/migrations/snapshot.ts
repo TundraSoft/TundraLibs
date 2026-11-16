@@ -16,6 +16,8 @@
  */
 
 import type { AnyDefinition, ColumnSpec } from '../definition/mod.ts';
+import { isDateText, readTimeOfDay, temporalCondition } from '../calendar.ts';
+import { DATE_TYPES } from '../guardians.ts';
 
 /** One physical column. */
 export type SnapColumn = {
@@ -57,8 +59,13 @@ export type SnapEntity = {
   readonly foreignKeys?: Record<string, SnapForeignKey>;
   readonly indexes?: Record<string, readonly string[]>;
   readonly uniques?: Record<string, readonly string[]>;
-  /** VIEW body — the stored OQL SELECT, verbatim. */
+  /** VIEW body: the stored OQL SELECT, its `where` as
+   * {@linkcode viewQuery} leaves it. */
   readonly query?: unknown;
+  /** VIEW: `query` compares a date column with a `Date`, which the
+   * file holds as ISO text. A snapshot written before 1.13.0 has no
+   * marker, and the MongoDB view made from it stored the text. */
+  readonly typedDates?: true;
   /** VIEW: CREATE MATERIALIZED VIEW (DDL-relevant — hashed). */
   readonly materialized?: true;
   /** MIGRATION HINT — excluded from hashing. */
@@ -112,10 +119,118 @@ function snapColumn(spec: ColumnSpec): SnapColumn {
   };
 }
 
+/** A table a query reads, as the query names it. */
+type QuerySource = { readonly table: string; readonly schema?: string };
+
+/** A copy of a filter condition. For a `TIME` column, ISO date-time
+ * text becomes its UTC clock: a snapshot written before 1.13.0 holds a
+ * `Date` there as that text. */
+function copyCondition(v: unknown, time: boolean): unknown {
+  if (typeof v === 'string') {
+    return time && isDateText(v) ? readTimeOfDay(v) : v;
+  }
+  if (Array.isArray(v)) return v.map((item) => copyCondition(item, time));
+  if (typeof v !== 'object' || v === null || v instanceof Date) return v;
+  return Object.fromEntries(
+    Object.entries(v).map(([k, item]) => [k, copyCondition(item, time)]),
+  );
+}
+
+function holdsDate(v: unknown): boolean {
+  return v instanceof Date ||
+    (typeof v === 'object' && v !== null && Object.values(v).some(holdsDate));
+}
+
+/**
+ * A VIEW's stored SELECT with the date and time values of its `where`
+ * converted by column type, the way `find` converts a filter's: the
+ * view then returns the rows `find` returns for the same condition,
+ * whether a value arrives as a `Date` or as the ISO text a snapshot
+ * file holds for one. Columns of the base table, of a joined table
+ * (`'@Alias.@col'`) and of an `$exists` / `$nexists` table are
+ * resolved against `entities`; a condition on any other key is left
+ * as written.
+ *
+ * @param query - The view's SELECT. It is not modified.
+ * @param entities - Every entity of the snapshot the view belongs to.
+ * @returns The converted query, and whether a date column is compared
+ *   with a `Date` ({@linkcode SnapEntity.typedDates}).
+ * @throws {@link NormQueryError} `INVALID_DATE` when a string on a
+ *   date column is not ISO 8601 or names a day or time no calendar
+ *   has, as `find` throws for the same filter.
+ */
+export function viewQuery(
+  query: unknown,
+  entities: Record<string, SnapEntity>,
+): { query: unknown; typedDates: boolean } {
+  const q = query as QuerySource & {
+    joins?: Record<string, QuerySource>;
+    where?: unknown;
+  };
+  if (q?.where === undefined) return { query, typedDates: false };
+  let typedDates = false;
+  const walk = (
+    node: unknown,
+    base: QuerySource,
+    joins: Record<string, QuerySource>,
+  ): unknown => {
+    if (Array.isArray(node)) return node.map((n) => walk(n, base, joins));
+    if (typeof node !== 'object' || node === null || node instanceof Date) {
+      return node;
+    }
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key === '$exists' || key === '$nexists') {
+        const sub = value as QuerySource & { where?: unknown };
+        out[key] = sub?.where === undefined
+          ? value
+          : { ...sub, where: walk(sub.where, sub, {}) };
+        continue;
+      }
+      if (!key.startsWith('@')) {
+        out[key] = walk(value, base, joins);
+        continue;
+      }
+      const path = key.slice(1).split('.@');
+      const source = path.length === 1
+        ? base
+        : path.length === 2 && Object.hasOwn(joins, path[0]!)
+        ? joins[path[0]!]
+        : undefined;
+      const [entityKey, entity] = Object.entries(entities).find(([, e]) =>
+        e.name === source?.table && e.dbSchema === source.schema
+      ) ?? [];
+      const col = path.at(-1)!;
+      const plainType = entity?.columns[col]?.type;
+      if (
+        entityKey === undefined || plainType === undefined ||
+        !(plainType === 'TIME' || DATE_TYPES.has(plainType))
+      ) {
+        out[key] = value;
+        continue;
+      }
+      out[key] = temporalCondition(
+        { entityKey, col, plainType },
+        copyCondition(value, plainType === 'TIME'),
+      );
+      typedDates ||= plainType !== 'TIME' && holdsDate(out[key]);
+    }
+    return out;
+  };
+  return {
+    query: { ...q, where: walk(q.where, q, q.joins ?? {}) },
+    typedDates,
+  };
+}
+
 /**
  * Build the physical snapshot of a compiled registry. QUERY entities
  * are client-side and skipped; FK entity keys resolve to the target's
- * PHYSICAL table (+dbSchema) so the file is DDL-ready.
+ * PHYSICAL table (+dbSchema) so the file is DDL-ready. A VIEW's
+ * `where` is stored as {@linkcode viewQuery} converts it.
+ *
+ * @throws {@link NormQueryError} `INVALID_DATE` from
+ *   {@linkcode viewQuery}.
  */
 export function buildSnapshot(
   registry: Record<string, AnyDefinition>,
@@ -212,6 +327,18 @@ export function buildSnapshot(
     };
   }
 
+  // A view's condition is converted once every entity's columns are
+  // known: its base table may sort after it.
+  for (const [key, e] of Object.entries(entities)) {
+    if (e.kind !== 'VIEW') continue;
+    const { query, typedDates } = viewQuery(e.query, entities);
+    entities[key] = {
+      ...e,
+      query,
+      ...(typedDates ? { typedDates: true as const } : {}),
+    };
+  }
+
   return {
     format: 1,
     generatedAt,
@@ -233,10 +360,11 @@ function stripHints(e: SnapEntity): unknown {
   return { ...rest, columns: cols };
 }
 
-/** Canonical (key-sorted) JSON of a value. */
+/** Canonical (key-sorted) JSON of a value. A `Date` is its ISO text,
+ * as in the snapshot file. */
 function canonicalJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
-  if (typeof v === 'object' && v !== null) {
+  if (typeof v === 'object' && v !== null && !(v instanceof Date)) {
     const keys = Object.keys(v as Record<string, unknown>).sort();
     return `{${
       keys.map((k) =>

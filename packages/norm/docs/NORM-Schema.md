@@ -734,6 +734,15 @@ the entity keys are called. When a view changes, every view that reads
 it is dropped and recreated with it. Views that read each other in a
 cycle fail the migration with `VIEW_CYCLE`.
 
+A value the view's `where` compares with a date or time column is
+converted as a filter value is, so the view returns the rows `find`
+returns for the same condition; see
+[Querying → Date and time values](NORM-Querying.md#date-and-time-values).
+In a view this reaches the `where` of an `$exists` filter too, and on a
+`time()` column a full ISO date-time string is read as its UTC clock.
+Text on a date column that is not a date fails `snapshot()` with
+`NormQueryError` code `INVALID_DATE`.
+
 ### QUERY
 
 A read-only, client-side stored `SELECT` with no DDL. It is terminal:

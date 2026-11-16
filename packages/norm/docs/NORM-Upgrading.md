@@ -16,6 +16,7 @@ changelog has those.
   - [An insert default that reads a column is refused](#an-insert-default-that-reads-a-column-is-refused)
   - [An `updateOnConflict` column a row does not pass is refused](#an-updateonconflict-column-a-row-does-not-pass-is-refused)
   - [Date text that is not ISO 8601 is refused](#date-text-that-is-not-iso-8601-is-refused)
+  - [A view's date and time conditions match what `find` matches](#a-views-date-and-time-conditions-match-what-find-matches)
   - [A MongoDB comparison never matches NULL](#a-mongodb-comparison-never-matches-null)
   - [A MongoDB insert stores `null` for a nullable column left out](#a-mongodb-insert-stores-null-for-a-nullable-column-left-out)
   - [`DATE_DIFF` counts complete units and returns a number](#date_diff-counts-complete-units-and-returns-a-number)
@@ -160,6 +161,40 @@ engine, and the engines disagreed: `'Feb 30 2026'` with `$gte` matched
 no rows on SQLite and MongoDB, every row on MariaDB, and failed on
 Postgres. A `Date` and `time()` columns are unchanged. Send
 `YYYY-MM-DD`, or that with a time and an optional offset, or a `Date`.
+
+### A view's date and time conditions match what `find` matches
+
+A view whose `where` compares a `date()`, `time()`, `datetime()`,
+`timestamp()` or `timestamptz()` column with a value now returns the
+rows `find` returns for that filter, on every engine. The value is
+converted by the column's type, as a filter value is, when the snapshot
+is written and again when the view is created. Earlier versions put the
+value into the view as the snapshot file held it, and a `Date` is ISO
+text there. With a `Date` at 12:00 UTC on a `date()` column, `$eq`
+matched no row on SQLite and MariaDB where `find` matched one. On
+MongoDB the view compared the stored dates with text, so no such view
+returned the rows `find` did. On Postgres a `Date` on a `time()` column
+failed the migration.
+
+Run `snapshot()` and then `apply()` once. `snapshot()` writes one new
+version when a view compares a `date()`, `datetime()`, `timestamp()` or
+`timestamptz()` column with a value, or a `time()` column with a `Date`.
+On Postgres, MariaDB and SQLite that version recreates the views whose
+stored value the conversion changes: a `Date` on a `date()` or `time()`
+column, and text that was not a full UTC date-time. It has nothing to
+run when no view is in that group. On MongoDB it also recreates every
+view that compares a `date()`, `datetime()`, `timestamp()` or
+`timestamptz()` column with a value.
+
+The snapshot hash now reads the value of a `Date`. Earlier versions
+hashed every `Date` alike, so changing only a `Date` in a view wrote no
+version and the view kept its old condition.
+
+Text in a view's `where` that is not a date now fails `snapshot()` with
+`NormQueryError` code `INVALID_DATE`, as it does in a filter. With
+`renderSql: true`, a `.sql` plan file an earlier version wrote for a
+version that is still pending, and that creates such a view, can fail
+`apply()` with `PLAN_HASH_MISMATCH`; `renderPlans()` rewrites it.
 
 ### A MongoDB comparison never matches NULL
 

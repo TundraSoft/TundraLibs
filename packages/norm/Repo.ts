@@ -62,7 +62,7 @@ import {
   isDateText,
   readTimeOfDay,
   rollsOver,
-  toTimeOfDay,
+  temporalCondition,
   utcDay,
 } from './calendar.ts';
 import type { ObjectGuardian } from '@tundralibs/guardian';
@@ -212,65 +212,6 @@ function toBoolean(v: unknown): unknown {
  * driver runs its session in UTC). */
 function jsonDate(v: unknown): unknown {
   return typeof v === 'string' ? new Date(asUtc(v) as string) : v;
-}
-
-/** Filter operators that compare the column with one value. */
-const VALUE_OPERATORS = new Set(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte']);
-
-/** Filter operators that compare the column with a list of values. */
-const LIST_OPERATORS = new Set(['$in', '$nin', '$between']);
-
-/** The temporal column a filter value is compared with. */
-type TemporalRef = { entityKey: string; col: string; plainType: string };
-
-/**
- * One filter value for a temporal column, in the form a write stores:
- * the canonical time of day for `TIME`, a `Date` for the date types, its
- * UTC day for `DATE`. Anything else a write would not read as one
- * (`null`, a column reference, an expression) comes back as it came.
- *
- * @throws {@link NormQueryError} `INVALID_DATE` when a string on a date
- *   column is not ISO 8601 or names a day or time no calendar has, which
- *   a write refuses too.
- */
-function temporalValue(ref: TemporalRef, v: unknown): unknown {
-  if (ref.plainType === 'TIME') return toTimeOfDay(v) ?? v;
-  let d = v;
-  if (typeof v === 'string' && !v.startsWith('@')) {
-    d = new Date(asUtc(v));
-    const why = !isDateText(v)
-      ? 'it is not an ISO 8601 date or date-time'
-      : rollsOver(v) || Number.isNaN((d as Date).getTime())
-      ? 'no calendar has that day or time'
-      : undefined;
-    if (why !== undefined) {
-      throw new NormQueryError(
-        `Column '${ref.col}' on entity '${ref.entityKey}' cannot be ` +
-          `filtered by '${v}': ${why}.`,
-        { entity: ref.entityKey, subject: ref.col, code: 'INVALID_DATE' },
-      );
-    }
-  }
-  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return v;
-  return ref.plainType === 'DATE' ? utcDay(d) : d;
-}
-
-/** {@linkcode temporalValue} over a filter condition: a bare value, the
- * array shorthand, or the comparison operators of an operator bag.
- * `cond` is the filter walk's own copy, so a bag is rewritten in place. */
-function temporalCondition(ref: TemporalRef, cond: unknown): unknown {
-  if (Array.isArray(cond)) return cond.map((v) => temporalValue(ref, v));
-  if (typeof cond !== 'object' || cond === null || cond instanceof Date) {
-    return temporalValue(ref, cond);
-  }
-  const bag = cond as Row;
-  for (const [op, v] of Object.entries(bag)) {
-    if (VALUE_OPERATORS.has(op)) bag[op] = temporalValue(ref, v);
-    else if (LIST_OPERATORS.has(op) && Array.isArray(v)) {
-      bag[op] = v.map((item) => temporalValue(ref, item));
-    }
-  }
-  return bag;
 }
 
 /** A JSON column's stored TEXT, parsed; anything else as it came. */
