@@ -1169,6 +1169,24 @@ describe('norm.Repo (edge paths over mock executor)', () => {
     );
   });
 
+  it('a MongoDB row carries no _id or field the entity does not declare', async () => {
+    const { db, exec } = makeDb();
+    Object.assign(exec.capabilities, { dialect: 'mongo' });
+    // A read projects the declared columns; the document adds its `_id`.
+    exec.selectQueue.push([{ _id: 'ObjectId', id: 1, label: 'a' }]);
+    asserts.assertEquals((await db.repo('Guarded').find()).data, [
+      { id: 1, label: 'a' },
+    ]);
+    // A write returns the stored document, a field another writer added
+    // included.
+    exec.selectQueue.push([{ _id: 'ObjectId', id: 1, label: 'a', extra: 'x' }]);
+    asserts.assertEquals(
+      (await db.repo('Guarded').upsert({ id: 1 }, { conflictKeys: ['id'] }))
+        .data,
+      [{ id: 1, label: 'a' }],
+    );
+  });
+
   it('truncate() refuses on a scoped handle (regression)', async () => {
     // TRUNCATE carries no WHERE, so on a scoped handle it would silently
     // empty EVERY scope's rows. It must refuse rather than perform an

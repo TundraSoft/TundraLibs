@@ -177,6 +177,11 @@ that column, top-level and inside relation rows, as does a row an insert
 or upsert returns. Earlier versions returned the row without the key. A
 filter for `null` matches the document either way.
 
+A row no longer carries the document's `_id` unless the read names it,
+and a row an insert or upsert returns carries the declared columns only,
+not a field another writer added. Earlier versions returned the
+ObjectId `_id` beside the columns.
+
 ### `DATE_DIFF` counts complete units and returns a number
 
 Every engine now returns the same whole `number` for the same two dates:

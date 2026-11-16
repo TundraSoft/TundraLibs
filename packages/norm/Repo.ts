@@ -879,7 +879,7 @@ export class ReadRepo<
 
     // 4c. A MongoDB document holds only the fields written: read each
     //     projected column it lacks as the `null` SQL returns.
-    this._fillMissing(rows, plan);
+    this._shapeMongoRows(rows, plan);
 
     // 5. JSON-parse relation values (SQLite returns aggregates as text),
     //    then decode the BIGINT / date / JSON columns inside them.
@@ -2468,13 +2468,18 @@ export class ReadRepo<
     return out;
   }
 
-  /** Set `null` for each projected column a MongoDB document does not
-   * carry, top-level and inside relation rows, as SQL returns a NULL.
+  /** On MongoDB, give each row the keys the read asked for: `null` for a
+   * projected column the document does not carry, top-level and inside
+   * relation rows, as SQL returns a NULL, and no `_id` unless the read
+   * names it, since a document carries one the entity never declared.
    * Runs before the all-null placeholder drop, so a relation row with
    * none of its projected fields is still dropped as on SQL. */
-  protected _fillMissing(rows: Row[], plan: ProjectionPlan): void {
+  protected _shapeMongoRows(rows: Row[], plan: ProjectionPlan): void {
     if (this._executor.capabilities.dialect !== 'mongo') return;
+    const keepId = plan.aliasMap.has('_id') || '_id' in plan.oqlAggregates ||
+      plan.relations.some((rel) => rel.outputKey === '_id');
     for (const row of rows) {
+      if (!keepId) delete row._id;
       for (const key of plan.aliasMap.keys()) row[key] ??= null;
       for (const rel of plan.relations) {
         const val = row[rel.outputKey];
@@ -4817,10 +4822,16 @@ export class Repo<
     decrypt: boolean,
   ): Promise<ReadRowOf<D>[]> {
     const c = this._compiled;
-    // An upsert onto a MongoDB document returns it as stored, without
-    // the fields it never had; SQL RETURNING carries a NULL for each.
+    // A MongoDB write returns the document as stored: with its own `_id`
+    // and any field another writer added, and without the fields it
+    // never had. SQL RETURNING carries the declared columns, NULL for a
+    // missing one.
     if (this._executor.capabilities.dialect === 'mongo') {
+      const declared = new Set(c.columnNames);
       for (const row of rows) {
+        for (const key of Object.keys(row)) {
+          if (!declared.has(key)) delete row[key];
+        }
         for (const col of c.columnNames) row[col] ??= null;
       }
     }
