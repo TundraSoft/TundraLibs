@@ -782,6 +782,27 @@ const CASES: Case[] = [
     expected: [{ id: 2 }],
   },
   {
+    name: '$exists inside a CASE condition correlates to the row',
+    expressions: {
+      owns: {
+        $$_expression: 'CASE',
+        args: {
+          cases: [{
+            when: { $exists: { table: ITEMS, on: { '@owner': '@id' } } },
+            then: 'yes',
+          }],
+          else: 'no',
+        },
+      },
+    },
+    expected: [
+      { id: 1, owns: 'yes' },
+      { id: 2, owns: 'yes' },
+      { id: 3, owns: 'no' },
+      { id: 4, owns: 'no' },
+    ],
+  },
+  {
     name: '$nexists keeps the rows another table has no match for',
     where: { $nexists: { table: ITEMS, on: { '@owner': '@id' } } },
     expected: [{ id: 3 }, { id: 4 }],

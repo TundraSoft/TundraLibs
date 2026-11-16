@@ -412,8 +412,10 @@ the joined rows are an array there, with no single value to correlate
 on. A nested node correlated to its parent, an `on` value that is a bare
 `'@name'`, throws on MongoDB too.
 
-A `CASE` `when` condition may hold the node in a SELECT's
-`expressions`. On MongoDB its `$lookup` runs just before the stage that
+A `CASE` `when` condition may hold the node. On the SQL dialects that
+works in a SELECT's `expressions` and in UPDATE `data`, correlated to the
+query's own table as in a `where`. On MongoDB it works in a SELECT's
+`expressions` only: its `$lookup` runs just before the stage that
 computes the expressions, and the condition tests the size of the
 looked-up array. Anywhere else a CASE condition is translated, such as
 UPDATE `data`, the node throws `DialectUnsupportedError` on MongoDB.

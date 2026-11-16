@@ -153,24 +153,25 @@ still seconds.
 
 ### Errors that changed
 
-| Query                                                                         | oql 1.5.0                                                                      | Now                                      |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------- |
-| a `null` inside a list filter, `{ '@a': [7, null] }`                          | the null was ignored, or matched NULL on MongoDB                               | `TypeError`                              |
-| an unknown time unit under `expressions`                                      | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
-| a lower-case time unit in a filter operand, `'days'`                          | ran on Postgres and SQLite                                                     | `OqlError` `INVALID_TIME_UNIT`           |
-| an UPDATE or DELETE filter through a join                                     | `TypeError`                                                                    | `OqlError` `RELATION_FILTER_UNSUPPORTED` |
-| `'@j.amt'` for a column of the join `j`, as a key or value                    | `TypeError` as a key; as a value, a database error on SQL                      | `OqlError` `INVALID_COLUMN_REF`          |
-| ABS, CEIL, FLOOR or SQRT with more than one operand, ROUND with more than two | the extra operands ignored; ROUND failed on SQLite                             | `TypeError`                              |
-| DATE_ADD or DATE_DIFF without a unit                                          | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
-| a malformed expression as a filter value, `NOPE` or `ADD('@b', 'x')`          | `DialectUnsupportedError`, a database error, or rows                           | `TypeError`                              |
-| a WHERE value naming an aggregate, a HAVING value naming an expression        | the text compared, or a database error on Postgres                             | `TypeError`                              |
-| a RIGHT or FULL join on MongoDB                                               | LEFT rows                                                                      | `DialectUnsupportedError`                |
-| a joined column as a filter value on MongoDB, `{ $gt: '@J.@b' }`              | compared with the joined array                                                 | `DialectUnsupportedError`                |
-| STRING_AGG with `distinct` on SQLite                                          | failed in the database                                                         | `DialectUnsupportedError`                |
-| an index `where` with a `DATE_ADD` on Postgres                                | failed in the database                                                         | `DialectUnsupportedError`                |
-| an index `where` with a clock or UUID, Postgres and SQLite                    | failed at the create or at the next write; SQLite took UUID as one fixed value | `DialectUnsupportedError`                |
-| an index `where` with `$exists`                                               | failed in the database, or `DialectUnsupportedError`                           | `OqlError` `EXISTS_NO_OUTER_TABLE`       |
-| an index `where` with any expression on MongoDB                               | an index whose filter held the expression object as a value                    | `DialectUnsupportedError`                |
+| Query                                                                             | oql 1.5.0                                                                      | Now                                      |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------- |
+| a `null` inside a list filter, `{ '@a': [7, null] }`                              | the null was ignored, or matched NULL on MongoDB                               | `TypeError`                              |
+| an unknown time unit under `expressions`                                          | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
+| a lower-case time unit in a filter operand, `'days'`                              | ran on Postgres and SQLite                                                     | `OqlError` `INVALID_TIME_UNIT`           |
+| an UPDATE or DELETE filter through a join                                         | `TypeError`                                                                    | `OqlError` `RELATION_FILTER_UNSUPPORTED` |
+| `'@j.amt'` for a column of the join `j`, as a key or value                        | `TypeError` as a key; as a value, a database error on SQL                      | `OqlError` `INVALID_COLUMN_REF`          |
+| ABS, CEIL, FLOOR or SQRT with more than one operand, ROUND with more than two     | the extra operands ignored; ROUND failed on SQLite                             | `TypeError`                              |
+| DATE_ADD or DATE_DIFF without a unit                                              | `TypeError`                                                                    | `OqlError` `INVALID_TIME_UNIT`           |
+| a malformed expression as a filter value, `NOPE` or `ADD('@b', 'x')`              | `DialectUnsupportedError`, a database error, or rows                           | `TypeError`                              |
+| a WHERE value naming an aggregate, a HAVING value naming an expression            | the text compared, or a database error on Postgres                             | `TypeError`                              |
+| a RIGHT or FULL join on MongoDB                                                   | LEFT rows                                                                      | `DialectUnsupportedError`                |
+| a joined column as a filter value on MongoDB, `{ $gt: '@J.@b' }`                  | compared with the joined array                                                 | `DialectUnsupportedError`                |
+| STRING_AGG with `distinct` on SQLite                                              | failed in the database                                                         | `DialectUnsupportedError`                |
+| a `$exists` inside a CASE condition on SQL, in a SELECT expression or UPDATE data | `OqlError` `EXISTS_NO_OUTER_TABLE`                                             | runs                                     |
+| an index `where` with a `DATE_ADD` on Postgres                                    | failed in the database                                                         | `DialectUnsupportedError`                |
+| an index `where` with a clock or UUID, Postgres and SQLite                        | failed at the create or at the next write; SQLite took UUID as one fixed value | `DialectUnsupportedError`                |
+| an index `where` with `$exists`                                                   | failed in the database, or `DialectUnsupportedError`                           | `OqlError` `EXISTS_NO_OUTER_TABLE`       |
+| an index `where` with any expression on MongoDB                                   | an index whose filter held the expression object as a value                    | `DialectUnsupportedError`                |
 
 The `INVALID_TIME_UNIT` message no longer starts with
 `Invalid SELECT query: expression '<alias>' is invalid:`, and the

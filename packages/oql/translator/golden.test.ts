@@ -2384,6 +2384,50 @@ const CASES: Case[] = [
       },
     },
   },
+  {
+    // A CASE condition correlates to the query's own table, as a `where`
+    // does, with no join to alias it.
+    name: '$exists inside a CASE condition of a SELECT without a join',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id'],
+      expressions: {
+        buyer: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { $exists: { table: 'orders', on: { '@userId': '@id' } } },
+              then: 'yes',
+            }],
+            else: 'no',
+          },
+        },
+      },
+      projection: { '@id': true, '@buyer': true },
+    },
+    expected: {
+      sqlite: {
+        sql: 'SELECT "id" AS "id", (CASE WHEN EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END) AS "buyer" FROM "users"',
+        params: { p_0: 'yes', p_1: 'no' },
+      },
+      postgres: {
+        sql: 'SELECT "id" AS "id", (CASE WHEN EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END) AS "buyer" FROM "users"',
+        params: { p_0: 'yes', p_1: 'no' },
+      },
+      maria: {
+        sql: 'SELECT `id` AS `id`, (CASE WHEN EXISTS ' +
+          '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id`) ' +
+          'THEN :p_0: ELSE :p_1: END) AS `buyer` FROM `users`',
+        params: { p_0: 'yes', p_1: 'no' },
+      },
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // INSERT
@@ -3097,6 +3141,47 @@ const CASES: Case[] = [
         sql: 'UPDATE `users` SET `status` = :p_0: WHERE EXISTS ' +
           '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id` AND `__exists__`.`total` = :p_1:)',
         params: { p_0: 'vip', p_1: 100 },
+      },
+    },
+  },
+  {
+    name: 'UPDATE data with $nexists inside a CASE condition',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'status'],
+      data: {
+        status: {
+          $$_expression: 'CASE',
+          args: {
+            cases: [{
+              when: { $nexists: { table: 'orders', on: { '@userId': '@id' } } },
+              then: 'guest',
+            }],
+            else: 'buyer',
+          },
+        },
+      },
+    } satisfies Query<'UPDATE'>,
+    expected: {
+      sqlite: {
+        sql: 'UPDATE "users" SET "status" = (CASE WHEN NOT EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END)',
+        params: { p_0: 'guest', p_1: 'buyer' },
+      },
+      postgres: {
+        sql: 'UPDATE "users" SET "status" = (CASE WHEN NOT EXISTS ' +
+          '(SELECT 1 FROM "orders" AS "__exists__" WHERE "__exists__"."userId" = "users"."id") ' +
+          'THEN :p_0: ELSE :p_1: END)',
+        params: { p_0: 'guest', p_1: 'buyer' },
+      },
+      maria: {
+        sql: 'UPDATE `users` SET `status` = (CASE WHEN NOT EXISTS ' +
+          '(SELECT 1 FROM `orders` AS `__exists__` WHERE `__exists__`.`userId` = `users`.`id`) ' +
+          'THEN :p_0: ELSE :p_1: END)',
+        params: { p_0: 'guest', p_1: 'buyer' },
       },
     },
   },
