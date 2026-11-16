@@ -50,6 +50,38 @@ const LOWER_NICK = {
   $cond: [{ $gt: ['$nick', null] }, { $toLower: '$nick' }, null],
 };
 
+// A computed LIKE pattern turned into a regex source at run time: each
+// regex special escaped, the backslash first, then `%` and `_`.
+const likeRegex = (pattern: unknown) => ({
+  $concat: [
+    '^',
+    [
+      ['\\', '\\\\'],
+      ['.', '\\.'],
+      ['*', '\\*'],
+      ['+', '\\+'],
+      ['?', '\\?'],
+      ['^', '\\^'],
+      [{ $literal: '$' }, '\\$'],
+      ['{', '\\{'],
+      ['}', '\\}'],
+      ['(', '\\('],
+      [')', '\\)'],
+      ['|', '\\|'],
+      ['[', '\\['],
+      [']', '\\]'],
+      ['%', '.*'],
+      ['_', '.'],
+    ].reduce<unknown>(
+      (input, [find, replacement]) => ({
+        $replaceAll: { input, find, replacement },
+      }),
+      pattern,
+    ),
+    { $literal: '$' },
+  ],
+});
+
 const CASES: Case[] = [
   // ---------------------------------------------------------------------------
   // SELECT → find
@@ -447,22 +479,59 @@ const CASES: Case[] = [
     },
   },
   {
-    // $in with a column reference can't be expressed in a Mongo $match — throw
-    // rather than silently treat the @ref as a literal.
-    name: 'WHERE $in with a @col value throws (unsupported in Mongo)',
+    // A column inside the list compares per row in `$expr`. One equal
+    // element makes IN true whatever the others hold, so only the field is
+    // guarded; NOT IN is unknown on SQL once any element is NULL.
+    name: 'WHERE $in, a list and $nin holding a @col → $expr per row',
     method: 'select',
     query: {
       type: 'SELECT',
       table: 'users',
       columns: ['id', 'status', 'role'],
       projection: { '@id': true },
-      where: { '@status': { $in: ['@role'] } },
+      where: {
+        '@status': { $in: ['@role', 'admin'] },
+        '@role': ['@status'],
+        '@id': { $nin: ['@role', 1] },
+      },
     },
-    throws: true,
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $and: [
+              {
+                $and: [
+                  { $in: ['$status', ['$role', 'admin']] },
+                  { $gt: ['$status', null] },
+                ],
+              },
+              {
+                $and: [
+                  { $in: ['$role', ['$status']] },
+                  { $gt: ['$role', null] },
+                ],
+              },
+              {
+                $and: [
+                  { $not: [{ $in: ['$id', ['$role', 1]] }] },
+                  { $gt: ['$id', null] },
+                  { $gt: ['$role', null] },
+                ],
+              },
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
   },
   {
-    // LIKE-family field-to-field has no faithful Mongo equivalent — throw.
-    name: 'WHERE $startsWith with a @col value throws (unsupported in Mongo)',
+    // A column as the value searches for its text, as a computed
+    // operand does.
+    name: 'WHERE $startsWith with a @col value → $expr $indexOfCP',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -471,7 +540,22 @@ const CASES: Case[] = [
       projection: { '@id': true },
       where: { '@name': { $startsWith: '@prefix' } },
     },
-    throws: true,
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $cond: [
+              { $gt: ['$prefix', null] },
+              { $eq: [{ $indexOfCP: ['$name', '$prefix'] }, 0] },
+              false,
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
   },
   // ---------------------------------------------------------------------------
   // JSON path filtering — `@col.@key` emits Mongo's native dotted path
@@ -1324,6 +1408,33 @@ const CASES: Case[] = [
             },
           },
           { $project: { ratio: '$ratio', rest: '$rest', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    name: 'SELECT SUBTRACT over three operands folds left to right',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'age', 'score'],
+      expressions: {
+        gap: { $$_expression: 'SUBTRACT', args: ['@score', '@age', 2] },
+      },
+      projection: { '@gap': 'gap' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              gap: { $subtract: [{ $subtract: ['$score', '$age'] }, 2] },
+            },
+          },
+          { $project: { gap: '$gap', _id: 0 } },
         ],
       },
     },
@@ -2892,10 +3003,9 @@ const CASES: Case[] = [
     },
   },
   {
-    // `$like`'s value IS a wildcard pattern; translating that grammar to
-    // a regex needs the pattern at translation time. Computed operand →
-    // refuse loudly rather than crash or fake it.
-    name: 'WHERE $like with an Expression value throws (pattern unknowable)',
+    // `$like`'s value is a wildcard pattern, as on SQL: computed, it
+    // becomes a regex at run time and `$regexMatch` applies it.
+    name: 'WHERE $like with an Expression value → $expr $regexMatch',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -2906,10 +3016,27 @@ const CASES: Case[] = [
         '@name': { $like: { $$_expression: 'LOWER', args: '@nick' } },
       },
     },
-    throws: true,
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $cond: [
+              { $gt: [LOWER_NICK, null] },
+              {
+                $regexMatch: { input: '$name', regex: likeRegex(LOWER_NICK) },
+              },
+              false,
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
   },
   {
-    name: 'WHERE $ilike with an Expression value throws (pattern unknowable)',
+    name: 'WHERE $ilike with an Expression value → $regexMatch with i',
     method: 'select',
     query: {
       type: 'SELECT',
@@ -2920,7 +3047,68 @@ const CASES: Case[] = [
         '@name': { $ilike: { $$_expression: 'LOWER', args: '@nick' } },
       },
     },
-    throws: true,
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $cond: [
+              { $gt: [LOWER_NICK, null] },
+              {
+                $regexMatch: {
+                  input: '$name',
+                  regex: likeRegex(LOWER_NICK),
+                  options: 'i',
+                },
+              },
+              false,
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // NOT LIKE is unknown on SQL for a NULL subject or pattern.
+    name: 'WHERE $nlike with a @col pattern → negated $regexMatch, guarded',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name', 'nick'],
+      projection: { '@id': true },
+      where: { '@name': { $nlike: '@nick' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: {
+          $expr: {
+            $cond: [
+              { $gt: ['$nick', null] },
+              {
+                $and: [
+                  {
+                    $not: [{
+                      $regexMatch: {
+                        input: '$name',
+                        regex: likeRegex('$nick'),
+                      },
+                    }],
+                  },
+                  { $gt: ['$name', null] },
+                ],
+              },
+              false,
+            ],
+          },
+        },
+        options: { projection: { id: 1 } },
+      },
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -3487,6 +3675,37 @@ const CASES: Case[] = [
     },
   },
   {
+    // SQL collects NULL once among the distinct values, a missing field
+    // as NULL too.
+    name: 'SELECT ARRAY_AGG with distinct → $addToSet of the value or null',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'scores',
+      columns: ['userId', 'score'],
+      aggregates: {
+        all: { $$_aggregate: 'ARRAY_AGG', column: '@score', distinct: true },
+      },
+      projection: { '@userId': true, '@all': 'all' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'scores',
+        pipeline: [
+          {
+            $group: {
+              _id: { userId: '$userId' },
+              all: { $addToSet: { $ifNull: ['$score', null] } },
+            },
+          },
+          { $addFields: { userId: '$_id.userId' } },
+          { $project: { userId: 1, all: '$all', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     // MIN and MAX of a set are those of its rows: `distinct` changes nothing.
     name: 'SELECT SUM / AVG with distinct reduce the set, MIN keeps $min',
     method: 'select',
@@ -3560,7 +3779,7 @@ const CASES: Case[] = [
     },
   },
   {
-    name: 'COUNT where value naming an expression alias → $expr',
+    name: 'COUNT where value naming an expression alias → pipeline count',
     method: 'count',
     query: {
       type: 'COUNT',
@@ -3570,34 +3789,168 @@ const CASES: Case[] = [
       where: { '@status': '@s' },
     },
     expected: {
-      sql: 'count',
+      sql: 'aggregate',
       params: {
         collection: 'users',
-        filter: {
-          $expr: {
-            $and: [
-              {
-                $eq: ['$status', {
-                  $cond: [
-                    { $gt: ['$status', null] },
-                    { $toUpper: '$status' },
-                    null,
-                  ],
+        pipeline: [
+          {
+            $addFields: {
+              s: {
+                $cond: [
+                  { $gt: ['$status', null] },
+                  { $toUpper: '$status' },
+                  null,
+                ],
+              },
+            },
+          },
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  {
+                    $eq: ['$status', {
+                      $cond: [
+                        { $gt: ['$status', null] },
+                        { $toUpper: '$status' },
+                        null,
+                      ],
+                    }],
+                  },
+                  { $gt: ['$status', null] },
+                  {
+                    $gt: [{
+                      $cond: [
+                        { $gt: ['$status', null] },
+                        { $toUpper: '$status' },
+                        null,
+                      ],
+                    }, null],
+                  },
+                ],
+              },
+            },
+          },
+          {
+            $facet: {
+              rows: [{ $group: { _id: {}, __count__: { $sum: 1 } } }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, __count__: 0 },
                 }],
               },
-              { $gt: ['$status', null] },
-              {
-                $gt: [{
-                  $cond: [
-                    { $gt: ['$status', null] },
-                    { $toUpper: '$status' },
-                    null,
-                  ],
-                }, null],
-              },
-            ],
+            },
           },
+          { $project: { __count__: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    // A native count's filter sees no computed field, so a filter on a
+    // declared expression counts in a pipeline after `$addFields`.
+    name: 'COUNT filtered on an expression alias → pipeline count',
+    method: 'count',
+    query: {
+      type: 'COUNT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: { u: { $$_expression: 'UPPER', args: '@name' } },
+      where: { '@u': 'ADA' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              u: {
+                $cond: [{ $gt: ['$name', null] }, { $toUpper: '$name' }, null],
+              },
+            },
+          },
+          { $match: { u: 'ADA' } },
+          {
+            $facet: {
+              rows: [{ $group: { _id: {}, __count__: { $sum: 1 } } }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, __count__: 0 },
+                }],
+              },
+            },
+          },
+          { $project: { __count__: 1 } },
+        ],
+      },
+    },
+  },
+  {
+    name: 'COUNT with a join filtered on an expression alias keeps it',
+    method: 'count',
+    query: {
+      type: 'COUNT',
+      table: 'users',
+      columns: ['id', 'name'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId'],
+          type: 'LEFT',
+          on: { '@o.@userId': '@id' },
         },
+      },
+      expressions: { u: { $$_expression: 'UPPER', args: '@name' } },
+      where: { '@u': 'ADA' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: { path: '$o', preserveNullAndEmptyArrays: true } },
+          {
+            $addFields: {
+              u: {
+                $cond: [{ $gt: ['$name', null] }, { $toUpper: '$name' }, null],
+              },
+            },
+          },
+          { $match: { u: 'ADA' } },
+          {
+            $facet: {
+              rows: [{ $group: { _id: {}, __count__: { $sum: 1 } } }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, __count__: 0 },
+                }],
+              },
+            },
+          },
+          { $project: { __count__: 1 } },
+        ],
       },
     },
   },
@@ -3728,7 +4081,8 @@ const CASES: Case[] = [
     throws: true,
   },
   {
-    name: 'COUNT with distinct throws (needs an explicit $group pipeline)',
+    // As on SQL, the count is a SELECT of COUNT DISTINCT.
+    name: 'COUNT with distinct → pipeline count of the distinct set',
     method: 'count',
     query: {
       type: 'COUNT',
@@ -3736,21 +4090,113 @@ const CASES: Case[] = [
       columns: ['id', 'userId'],
       distinct: ['userId'],
     },
-    throws: true,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $facet: {
+              rows: [{
+                $group: { _id: {}, __count__: { $addToSet: '$userId' } },
+              }],
+            },
+          },
+          {
+            $replaceRoot: {
+              newRoot: {
+                $ifNull: [{ $arrayElemAt: ['$rows', 0] }, {
+                  $literal: { _id: {}, __count__: [] },
+                }],
+              },
+            },
+          },
+          {
+            $addFields: {
+              __count__: { $size: { $setDifference: ['$__count__', [null]] } },
+            },
+          },
+          { $project: { __count__: 1 } },
+        ],
+      },
+    },
   },
   {
-    name: 'STRING_AGG aggregate throws (no clean Mongo equivalent)',
+    // The values are collected, `$addToSet` for `distinct`, and joined
+    // after the group: NULL skipped, NULL when none is left.
+    name: 'STRING_AGG → collected, then joined with its separator',
     method: 'select',
     query: {
       type: 'SELECT',
       table: 'orders',
       columns: ['userId', 'tag'],
       aggregates: {
-        tags: { $$_aggregate: 'STRING_AGG', column: '@tag', separator: ', ' },
+        tags: { $$_aggregate: 'STRING_AGG', column: '@tag', separator: '$, ' },
+        uniq: { $$_aggregate: 'STRING_AGG', column: '@tag', distinct: true },
       },
-      projection: { '@userId': true, '@tags': 'tags' },
+      projection: { '@userId': true, '@tags': 'tags', '@uniq': 'uniq' },
     },
-    throws: true,
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $group: {
+              _id: { userId: '$userId' },
+              tags: { $push: '$tag' },
+              uniq: { $addToSet: '$tag' },
+            },
+          },
+          {
+            $addFields: {
+              tags: {
+                $reduce: {
+                  input: {
+                    $filter: {
+                      input: '$tags',
+                      cond: { $ne: ['$$this', null] },
+                    },
+                  },
+                  initialValue: null,
+                  in: {
+                    $cond: [
+                      { $eq: ['$$value', null] },
+                      '$$this',
+                      {
+                        $concat: ['$$value', { $literal: '$, ' }, '$$this'],
+                      },
+                    ],
+                  },
+                },
+              },
+              uniq: {
+                $reduce: {
+                  input: {
+                    $filter: {
+                      input: '$uniq',
+                      cond: { $ne: ['$$this', null] },
+                    },
+                  },
+                  initialValue: null,
+                  in: {
+                    $cond: [
+                      { $eq: ['$$value', null] },
+                      '$$this',
+                      { $concat: ['$$value', ',', '$$this'] },
+                    ],
+                  },
+                },
+              },
+              userId: '$_id.userId',
+            },
+          },
+          {
+            $project: { userId: 1, tags: '$tags', uniq: '$uniq', _id: 0 },
+          },
+        ],
+      },
+    },
   },
   {
     // The `$gt: null` guard is SQL's `=`: a NULL key on either side
@@ -4812,12 +5258,17 @@ describe('oql.translator.MongoTranslator — CASE condition on a NULL input', ()
     });
   }
 
-  // The filter path refuses a column as a pattern; so does a CASE.
-  it('refuses a column as the pattern of $like', () => {
-    asserts.assertThrows(
-      () => stageOf({ '@a': { $like: '@b' } }),
-      DialectUnsupportedError,
-      'column reference',
+  // A column as the pattern matches as in the filter path.
+  it('matches a column as the pattern of $like', () => {
+    asserts.assertEquals(
+      stageOf({ '@a': { $like: '@b' } }),
+      switchOn({
+        $cond: [
+          present('$b'),
+          { $regexMatch: { input: '$a', regex: likeRegex('$b') } },
+          false,
+        ],
+      }),
     );
   });
 

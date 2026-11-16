@@ -337,10 +337,10 @@ dialect data (`_offsetOnlyLimit`), not a rewrite of the query.
 
 ### Deduplication — SELECT `distinct` / COUNT `distinct`
 
-| Feature                       | Postgres                   | MariaDB                      | SQLite                     | MongoDB   |
-| ----------------------------- | -------------------------- | ---------------------------- | -------------------------- | --------- |
-| `SELECT { distinct: true }`   | ✅ `SELECT DISTINCT`       | ✅ `SELECT DISTINCT`         | ✅ `SELECT DISTINCT`       | ❌ throws |
-| `COUNT { distinct: ['col'] }` | ✅ `COUNT(DISTINCT "col")` | ✅ `COUNT(DISTINCT \`col\`)` | ✅ `COUNT(DISTINCT "col")` | ❌ throws |
+| Feature                       | Postgres                   | MariaDB                      | SQLite                     | MongoDB        |
+| ----------------------------- | -------------------------- | ---------------------------- | -------------------------- | -------------- |
+| `SELECT { distinct: true }`   | ✅ `SELECT DISTINCT`       | ✅ `SELECT DISTINCT`         | ✅ `SELECT DISTINCT`       | ❌ throws      |
+| `COUNT { distinct: ['col'] }` | ✅ `COUNT(DISTINCT "col")` | ✅ `COUNT(DISTINCT \`col\`)` | ✅ `COUNT(DISTINCT "col")` | ✅ `$addToSet` |
 
 - `SELECT { distinct: true }` is **rejected by the validator** when
   combined with `aggregates` or a join-alias projection (`JSON_ROW`
@@ -349,8 +349,10 @@ dialect data (`_offsetOnlyLimit`), not a rewrite of the query.
 - `COUNT.distinct` takes exactly **one** plain column name from
   `columns` — multi-column DISTINCT counts are not portable across
   dialects.
-- MongoDB throws `DialectUnsupportedError` for both — build an
-  explicit `$group` pipeline when you need Mongo-side dedup.
+- MongoDB throws `DialectUnsupportedError` for `SELECT { distinct: true }`
+  — build an explicit `$group` pipeline when you need Mongo-side dedup.
+  A COUNT with `distinct` counts the column's distinct values in a
+  `$group`, as described under [Aggregates](#aggregates).
 
 ### `$exists` / `$nexists` filters
 
@@ -637,12 +639,12 @@ OQL chose passthrough over throwing because:
 
 ## Aggregates
 
-| Aggregate             | Postgres                                      | MariaDB                                    | SQLite                                        | MongoDB                                                                                         |
-| --------------------- | --------------------------------------------- | ------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| COUNT/SUM/AVG/MIN/MAX | native                                        | native                                     | native                                        | native                                                                                          |
-| STRING_AGG            | native                                        | native (`GROUP_CONCAT`)                    | native (`GROUP_CONCAT`)                       | **throws** (no clean aggregation-pipeline equivalent — build via `$push` + `$reduce` if needed) |
-| ARRAY_AGG             | native (`array_agg`)                          | native (`JSON_ARRAYAGG`)                   | native (`json_group_array`)                   | native (`$push`)                                                                                |
-| JSON_ROW              | native (`jsonb_agg(jsonb_build_object(...))`) | native (`JSON_ARRAYAGG(JSON_OBJECT(...))`) | native (`json_group_array(json_object(...))`) | native (`$push` of an object)                                                                   |
+| Aggregate             | Postgres                                      | MariaDB                                    | SQLite                                        | MongoDB                       |
+| --------------------- | --------------------------------------------- | ------------------------------------------ | --------------------------------------------- | ----------------------------- |
+| COUNT/SUM/AVG/MIN/MAX | native                                        | native                                     | native                                        | native                        |
+| STRING_AGG            | native                                        | native (`GROUP_CONCAT`)                    | native (`GROUP_CONCAT`)                       | `$push`, joined by `$reduce`  |
+| ARRAY_AGG             | native (`array_agg`)                          | native (`JSON_ARRAYAGG`)                   | native (`json_group_array`)                   | native (`$push`)              |
+| JSON_ROW              | native (`jsonb_agg(jsonb_build_object(...))`) | native (`JSON_ARRAYAGG(JSON_OBJECT(...))`) | native (`json_group_array(json_object(...))`) | native (`$push` of an object) |
 
 `COUNT` reaches JavaScript as a `number` on every dialect. Postgres and
 MariaDB count in a 64-bit integer, so the projected value is cast to a
@@ -654,9 +656,16 @@ cast.
 siblings in SQL. MongoDB's `$group` has no such accumulator, so the
 translator collects each group's distinct values with `$addToSet` and
 counts, sums or averages that set in the next stage. NULL is left out, as
-in SQL. One group's distinct values therefore have to fit in a single
-16 MB document; a column with more distinct values per group than that
-fails on MongoDB.
+in SQL. ARRAY_AGG and STRING_AGG with `distinct` collect with `$addToSet`
+too; ARRAY_AGG keeps one NULL, STRING_AGG skips it. One group's distinct
+values therefore have to fit in a single 16 MB document; a column with
+more distinct values per group than that fails on MongoDB.
+
+STRING_AGG skips NULL and is `NULL` when no value is left, on every
+dialect. It takes text: over a number column Postgres and MongoDB fail,
+MariaDB and SQLite join the numbers as text. The order of the values in
+STRING_AGG and ARRAY_AGG is not defined on any dialect. SQLite fails on
+STRING_AGG with `distinct`.
 
 ### Aggregates over no values
 
@@ -692,12 +701,11 @@ All comparison and pattern operators (`$eq`, `$ne`, `$gt`/`$gte`/`$lt`/`$lte`,
 - **Computed operand** (a column reference or an expression as the value):
   - `$startsWith` / `$endsWith` / `$contains` match it as written on every
     dialect. A `%`, `_` or `\` in the computed value is escaped in the SQL,
-    as it is in a string literal. MongoDB takes an expression there, not a
-    column reference.
-  - `$like` / `$nlike` / `$ilike` / `$nilike` read it as a pattern on the
-    SQL dialects, so a `%` or `_` in the computed value is a wildcard.
-    MongoDB refuses it, see
-    [below](#when-to-expect-a-throw-vs-a-silent-fallback).
+    as it is in a string literal.
+  - `$like` / `$nlike` / `$ilike` / `$nilike` read it as a pattern on every
+    dialect, so a `%` or `_` in the computed value is a wildcard. MongoDB
+    turns the value into a regex when the query runs, by the same rules
+    it applies to a literal pattern.
 - **A `$like` pattern ending in a lone backslash**, such as `'a\\'`,
   matches a backslash in that last place on every dialect. Postgres
   refuses such a pattern, since the backslash is its escape character, so
@@ -860,16 +868,9 @@ We **throw** (as `DialectUnsupportedError`) when:
   `DATE_ADD` in the `where` on Postgres, and with any expression in the
   `where` on MongoDB.
 - `FULL JOIN` on MariaDB.
-- `STRING_AGG` aggregate on MongoDB.
 - A nested `$exists` / `$nexists` correlated to its parent subquery on
   MongoDB.
 - `CREATE_SCHEMA` on MongoDB.
-- `$like` / `$nlike` / `$ilike` / `$nilike` with an **Expression** value
-  on MongoDB — the operand of those operators _is_ a wildcard pattern,
-  and turning that grammar into a regex needs the pattern at translation
-  time. (`$startsWith` / `$endsWith` / `$contains` carry literal
-  substring semantics, so a computed operand translates fine there —
-  they become an `$expr` string search.)
 - `ALTER_TABLE` `alterColumns` (as `ALTER COLUMN`) and
   `addForeignKeys` / `dropForeignKeys` (as `ALTER CONSTRAINT`) on
   SQLite — in-place column/constraint changes need a full table rebuild.

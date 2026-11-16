@@ -83,8 +83,8 @@ export type Aggregates<
    * - PostgreSQL: `string_agg(column, separator)`.
    * - MariaDB/MySQL: `GROUP_CONCAT(column SEPARATOR separator)`.
    * - SQLite: `group_concat(column, separator)`.
-   * - MongoDB: `$reduce` with `$concat` (4.4+) or `$push` + join
-   *   in the application layer.
+   * - MongoDB: `$push`, or `$addToSet` for `distinct`, joined by
+   *   `$reduce` with `$concat`.
    */
   $$_aggregate: 'STRING_AGG';
   column: keyof FT | Expressions<T, FT>;
@@ -100,7 +100,7 @@ export type Aggregates<
    * - PostgreSQL: `array_agg(column)` or `json_agg(column)`.
    * - MariaDB/MySQL: `JSON_ARRAYAGG(column)`.
    * - SQLite: `json_group_array(column)`.
-   * - MongoDB: `$push`.
+   * - MongoDB: `$push`, or `$addToSet` for `distinct`.
    */
   $$_aggregate: 'ARRAY_AGG';
   column: keyof FT | Expressions<T, FT>;

@@ -69,7 +69,7 @@ built for.
 | ------------------ | ----------------------------- | -------------------------- | ----------------------------------------- | -------------------------- |
 | Core DML           | Full                          | Full                       | Full                                      | Full                       |
 | Filters            | Full                          | Full                       | Full                                      | Full                       |
-| Aggregates         | Full                          | Full                       | Full                                      | Partial (no STRING_AGG)    |
+| Aggregates         | Full                          | Full                       | Full                                      | Full                       |
 | Joins              | Full                          | RIGHT only (no FULL)       | Full                                      | `$lookup`                  |
 | Expressions        | Full                          | Full                       | Limited (no crypto)                       | Limited                    |
 | JSON columns       | JSONB native                  | JSON native                | json_extract                              | Native                     |
