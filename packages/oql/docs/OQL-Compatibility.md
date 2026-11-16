@@ -71,14 +71,21 @@ exposed by the view. `CREATE_VIEW` and `ALTER_VIEW` (emulated as
 
 ### Indexes
 
-| Feature               | Postgres | MariaDB                          | SQLite              | MongoDB                        |
-| --------------------- | -------- | -------------------------------- | ------------------- | ------------------------------ |
-| Unique                | ✅       | ✅                               | ✅                  | ✅                             |
-| Method (BTREE/HASH)   | ✅       | ✅ `USING BTREE`/`USING HASH`    | ✅ (advisory)       | n/a                            |
-| Method FULLTEXT       | dropped  | ✅ `CREATE FULLTEXT INDEX`       | dropped             | n/a                            |
-| Partial (`where`)     | ✅       | ❌ throws                        | ✅                  | ✅ (`partialFilterExpression`) |
-| `DROP INDEX ifExists` | ✅       | ❌ silently dropped              | ✅                  | n/a                            |
-| `DROP INDEX cascade`  | ✅       | ❌ silently dropped (no concept) | ❌ silently dropped | n/a                            |
+| Feature               | Postgres | MariaDB                          | SQLite              | MongoDB                          |
+| --------------------- | -------- | -------------------------------- | ------------------- | -------------------------------- |
+| Unique                | ✅       | ✅                               | ✅                  | ✅                               |
+| Method (BTREE/HASH)   | ✅       | ✅ `USING BTREE`/`USING HASH`    | ✅ (advisory)       | n/a                              |
+| Method FULLTEXT       | dropped  | ✅ `CREATE FULLTEXT INDEX`       | dropped             | n/a                              |
+| Partial (`where`)     | ✅ ¹     | ❌ throws                        | ✅                  | ✅ ¹ (`partialFilterExpression`) |
+| `DROP INDEX ifExists` | ✅       | ❌ silently dropped              | ✅                  | n/a                              |
+| `DROP INDEX cascade`  | ✅       | ❌ silently dropped (no concept) | ❌ silently dropped | n/a                              |
+
+¹ Not with a computed expression the engine cannot hold in an index
+predicate: a `DATE_ADD` on Postgres, which builds its interval from text
+and so is not IMMUTABLE, and any expression on MongoDB, whose partial
+filter takes no `$expr`. Both throw `DialectUnsupportedError`, before the
+statement reaches the database. Other non-IMMUTABLE expressions, such as
+`NOW` on Postgres, still fail in the database.
 
 **MariaDB DROP INDEX caveat**: `ifExists` and `cascade` are silently
 dropped because MariaDB's `DROP INDEX` grammar does not accept them.
@@ -809,7 +816,9 @@ document and never unwound it. These MongoDB results change:
 
 We **throw** (as `DialectUnsupportedError`) when:
 
-- `CREATE_INDEX` with `where` on MariaDB (partial indexes don't exist).
+- `CREATE_INDEX` with `where` on MariaDB (partial indexes don't exist),
+  with a `DATE_ADD` in the `where` on Postgres, and with any expression in
+  the `where` on MongoDB.
 - `FULL JOIN` on MariaDB.
 - `STRING_AGG` aggregate on MongoDB.
 - `CREATE_SCHEMA` on MongoDB.

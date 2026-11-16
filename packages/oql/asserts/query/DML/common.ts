@@ -1,5 +1,6 @@
 /**
- * Shared DML validators: pre-declared expressions, per-row data entries.
+ * Shared DML validators: pre-declared expressions, per-row data entries,
+ * the UPDATE and DELETE relation-filter refusal, joined-column spelling.
  *
  * @module asserts/Query/DML/Common
  */
@@ -186,4 +187,86 @@ const hasColumnReference = (expr: unknown): boolean => {
     return Object.values(expr).some(hasColumnReference);
   }
   return false;
+};
+
+/**
+ * Refuses a filter key that reaches through a join, `'@Items.@sku'` where
+ * `Items` is not a column of the table. UPDATE and DELETE take no joins,
+ * so such a key cannot resolve on any engine. A declared column as the
+ * root is a JSON path, and the table name or `__base__` a qualified
+ * column; those and an expression key are left to the filter validator. `$exists` subqueries
+ * keep their own scope and are not walked.
+ *
+ * @throws {OqlError} `RELATION_FILTER_UNSUPPORTED` for the first such key.
+ */
+export const assertNoRelationFilter = (
+  where: unknown,
+  query: Record<string, unknown>,
+  columnList: string[],
+  context: 'UPDATE' | 'DELETE',
+): void => {
+  if (typeof where !== 'object' || where === null) return;
+  for (const [key, value] of Object.entries(where)) {
+    if (key === '$and' || key === '$or') {
+      if (Array.isArray(value)) {
+        for (const sub of value) {
+          assertNoRelationFilter(sub, query, columnList, context);
+        }
+      }
+      continue;
+    }
+    if (!key.startsWith('@') || !key.includes('.@')) continue;
+    const root = key.slice(1).split('.@')[0]!;
+    if (
+      columnList.includes(root) || root === query.table ||
+      root === '__base__' || Object.hasOwn(Object(query.expressions), root)
+    ) continue;
+    throw new OqlError(
+      `Invalid ${context} query: filter key '${key}' reads '${root}', which is not a column of '${
+        String(query.table)
+      }'. A filter through a relation or join is not supported in UPDATE or DELETE`,
+      { code: 'RELATION_FILTER_UNSUPPORTED', key },
+    );
+  }
+};
+
+/**
+ * Refuses a reference `'@Alias.x'` whose `Alias` is a join of the query and
+ * whose column lacks its `@`, in any key or value of the query. SQL read it
+ * as a base column literally named `Alias.x` and MongoDB as the joined
+ * field, so one query gave an engine error on one and rows on the other. A
+ * root that is not a join alias, such as `'@meta.a'`, is left alone.
+ *
+ * @throws {OqlError} `INVALID_COLUMN_REF` for the first such reference.
+ */
+export const assertJoinedColumnRefs = (
+  query: Record<string, unknown>,
+  context: 'SELECT' | 'COUNT',
+): void => {
+  const joins = query.joins;
+  if (typeof joins !== 'object' || joins === null) return;
+  const aliases = Object.keys(joins);
+  if (aliases.length === 0) return;
+  const check = (ref: string): void => {
+    if (!ref.startsWith('@')) return;
+    const dot = ref.indexOf('.');
+    if (dot < 0) return;
+    const alias = ref.slice(1, dot);
+    const column = ref.slice(dot + 1);
+    if (!aliases.includes(alias) || column.startsWith('@')) return;
+    throw new OqlError(
+      `Invalid ${context} query: '${ref}' names the join '${alias}' without an '@' before the column. A joined column is written '@${alias}.@${column}'`,
+      { code: 'INVALID_COLUMN_REF', ref },
+    );
+  };
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') return check(value);
+    if (typeof value !== 'object' || value === null) return;
+    if (value instanceof Date) return;
+    for (const [key, inner] of Object.entries(value)) {
+      if (!Array.isArray(value)) check(key);
+      visit(inner);
+    }
+  };
+  visit(query);
 };

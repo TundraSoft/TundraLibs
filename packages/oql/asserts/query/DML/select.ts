@@ -16,9 +16,24 @@ import {
   assertSchemaName,
   assertTableName,
 } from '../common.ts';
-import { validateExpressions } from './common.ts';
+import { assertJoinedColumnRefs, validateExpressions } from './common.ts';
 
 const DEPRECATED_PROPS = ['groupBy', 'returnColumns'] as const;
+
+/**
+ * Whether a SELECT gets an automatic GROUP BY: it declares at least one
+ * aggregate, or projects a join alias whole. The one rule the validator
+ * and the translators share.
+ */
+export const isGroupedSelect = (query: {
+  aggregates?: unknown;
+  joins?: unknown;
+  projection?: unknown;
+}): boolean =>
+  Object.keys(Object(query.aggregates)).length > 0 ||
+  Object.keys(Object(query.projection)).some((k) =>
+    Object.hasOwn(Object(query.joins), k.slice(1))
+  );
 
 /**
  * Validates the optional `distinct` flag. Must be a boolean. When
@@ -39,8 +54,8 @@ const validateDistinct = (query: Record<string, unknown>): void => {
         .distinct}`,
     );
   }
-  if (query.distinct !== true) return;
-  if (query.aggregates !== undefined) {
+  if (query.distinct !== true || !isGroupedSelect(query)) return;
+  if (Object.keys(Object(query.aggregates)).length > 0) {
     throw new TypeError(
       `Invalid SELECT query: 'distinct' cannot be combined with 'aggregates' — aggregate SELECTs GROUP BY every non-aggregated projection key, which already deduplicates rows`,
     );
@@ -320,9 +335,7 @@ const validateOrderBy = (
   }
 
   const joinedKeys = joinedColumns.map((c) => `@${c.replace('.', '.@')}`);
-  const joins = (query.joins ?? {}) as Record<string, unknown>;
-  const grouped = query.aggregates !== undefined ||
-    projectionKeys.some((k) => k.slice(1) in joins);
+  const grouped = isGroupedSelect(query);
   const distinct = query.distinct === true ? `'distinct'` : undefined;
   const restriction = distinct ??
     (grouped ? `aggregates or a projected join alias` : undefined);
@@ -397,6 +410,7 @@ export const assertSelectQuery: <
   assertTableName(query, 'SELECT');
   assertSchemaName(query, 'SELECT');
   const columnList = assertColumns(query, 'SELECT');
+  assertJoinedColumnRefs(query, 'SELECT');
   const availableKeys: string[] = columnList.map((c) => `@${c}`);
 
   // Pre-collect joined-column names so aggregate / expression validation

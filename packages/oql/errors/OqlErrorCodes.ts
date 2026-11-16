@@ -27,7 +27,8 @@ export type OqlErrorCode =
   | 'UNHANDLED_EXPRESSION'
   | 'PARAM_INLINE_UNSUPPORTED'
   | 'NON_FINITE_LITERAL'
-  | 'INVALID_TIME_UNIT';
+  | 'INVALID_TIME_UNIT'
+  | 'RELATION_FILTER_UNSUPPORTED';
 
 /**
  * Code → short human description. Parity with the drivers
@@ -70,4 +71,7 @@ export const OqlErrorCodes: Record<OqlErrorCode, string> = {
   NON_FINITE_LITERAL: 'Cannot inline non-finite number literal',
   /** A date-arithmetic expression carried an unrecognised `unit`. */
   INVALID_TIME_UNIT: 'Unrecognised date-arithmetic time unit',
+  /** An UPDATE or DELETE filter key reached through a relation or join. */
+  RELATION_FILTER_UNSUPPORTED:
+    'Relation or join filter not supported in UPDATE or DELETE',
 } as const satisfies Record<OqlErrorCode, string>;

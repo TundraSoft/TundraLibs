@@ -13,7 +13,7 @@ import {
   assertSchemaName,
   assertTableName,
 } from '../common.ts';
-import { validateExpressions } from './common.ts';
+import { assertJoinedColumnRefs, validateExpressions } from './common.ts';
 
 /**
  * Validates the optional `distinct` property of a COUNT query: a
@@ -91,6 +91,7 @@ export const assertCountQuery: <PT extends TableType = TableType>(
   assertTableName(query, 'COUNT');
   assertSchemaName(query, 'COUNT');
   const columnList = assertColumns(query, 'COUNT');
+  assertJoinedColumnRefs(query, 'COUNT');
 
   validateDistinct(query, columnList);
 

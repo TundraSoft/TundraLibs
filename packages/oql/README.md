@@ -344,7 +344,9 @@ Joined-table columns are referenced with the `'@RelAlias.@column'`
 form throughout the query — projection, where, having, orderBy, and
 join `on` conditions all expect the same shape. Both segments carry
 the `@` prefix so the parser can tell a column reference from a
-literal string regardless of where the reference appears.
+literal string regardless of where the reference appears. A reference
+that names a join alias with the column's `@` missing, `'@RelAlias.column'`,
+throws `OqlError` with code `INVALID_COLUMN_REF` on every engine.
 
 ```typescript
 import type { Query } from '@tundralibs/oql';
@@ -635,9 +637,12 @@ numeric/date) is a **TypeScript-only** guarantee. `assertQuery` does
 **not** re-check it at runtime — see the note under
 [Operators](https://github.com/TundraSoft/TundraLibs/wiki/OQL-Asserts#operators).
 
-A validator throws `TypeError`. The one exception is a date expression
-with a `unit` outside its allowed set: that throws `OqlError` with code
-`INVALID_TIME_UNIT`, the same error a translator throws for it.
+A validator throws `TypeError`, with three exceptions that throw `OqlError`.
+A date expression with a `unit` outside its allowed set throws code
+`INVALID_TIME_UNIT`, the same error a translator throws for it. An `UPDATE`
+or `DELETE` filter key that reaches through a join, such as `'@Items.@sku'`,
+throws code `RELATION_FILTER_UNSUPPORTED`. A joined column written without
+its second `@`, such as `'@Profile.bio'`, throws code `INVALID_COLUMN_REF`.
 
 ```typescript
 import type { Query } from '@tundralibs/oql';

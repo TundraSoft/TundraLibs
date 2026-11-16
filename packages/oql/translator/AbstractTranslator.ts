@@ -49,7 +49,10 @@ import {
   findDisallowedJsonPathOperator,
   JSON_PATH_ALLOWED_OPERATORS,
 } from '../asserts/mod.ts';
-import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
+import {
+  assertInsertFromQuery,
+  isGroupedSelect,
+} from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import { Parameters } from './Parameters.ts';
@@ -1794,13 +1797,9 @@ export abstract class AbstractTranslator {
     return groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
   }
 
-  /** Whether {@link __buildGroupBy} groups this query. */
+  /** Whether {@link __buildGroupBy} groups this query; the validator's rule. */
   private __isGrouped(q: Query<'SELECT'>): boolean {
-    const hasAggregates = !!q.aggregates &&
-      Object.keys(q.aggregates).length > 0;
-    const hasAutoExpandedJoin = !!q.joins &&
-      Object.keys(q.projection).some((k) => k.slice(1) in (q.joins ?? {}));
-    return hasAggregates || hasAutoExpandedJoin;
+    return isGroupedSelect(q);
   }
 
   /** Build the ` ORDER BY` clause, or `''` when `q.orderBy` is empty. */

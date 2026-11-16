@@ -77,6 +77,7 @@ import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import { COUNT_ALIAS } from './AbstractTranslator.ts';
+import { findExpression } from './findExpression.ts';
 
 // =============================================================================
 // Mongo action types — discriminated union of every translator output shape.
@@ -965,9 +966,18 @@ export class MongoTranslator {
    * ignored.
    *
    * @throws {TypeError} When `q` is not a valid `CREATE_INDEX` query.
+   * @throws {@link DialectUnsupportedError} When `q.where` holds an
+   *   expression: a partial filter takes no `$expr`.
    */
   public createIndex(q: Query<'CREATE_INDEX'>): MongoCreateIndexAction {
     assertCreateIndex(q);
+    const computed = findExpression(q.where);
+    if (computed !== null) {
+      throw new DialectUnsupportedError(
+        this.Dialect,
+        `the computed expression ${computed} in an index predicate`,
+      );
+    }
     return {
       sql: 'createIndex',
       params: {
@@ -2793,10 +2803,14 @@ export class MongoTranslator {
         return { $subtract: (args as unknown[]).map(r) };
       case 'MULTIPLY':
         return { $multiply: (args as unknown[]).map(r) };
+      // `$divide` and `$mod` take exactly two operands; SQL chains
+      // `a / b / c` left to right, so the fold does too.
       case 'DIVIDE':
-        return { $divide: (args as unknown[]).map(r) };
-      case 'MODULO':
-        return { $mod: (args as unknown[]).map(r) };
+      case 'MODULO': {
+        const op = expr.$$_expression === 'DIVIDE' ? '$divide' : '$mod';
+        const [first, ...rest] = (args as unknown[]).map(r);
+        return rest.reduce((acc, x) => ({ [op]: [acc, x] }), first);
+      }
       case 'POWER': {
         const a = args as { base: unknown; exponent: unknown };
         return { $pow: [r(a.base), r(a.exponent)] };

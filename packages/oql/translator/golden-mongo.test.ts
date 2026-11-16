@@ -1300,6 +1300,35 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'SELECT DIVIDE and MODULO over three operands fold left to right',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'age', 'score'],
+      expressions: {
+        ratio: { $$_expression: 'DIVIDE', args: ['@score', '@age', 2] },
+        rest: { $$_expression: 'MODULO', args: ['@score', '@age', 2] },
+      },
+      projection: { '@ratio': 'ratio', '@rest': 'rest' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $addFields: {
+              ratio: { $divide: [{ $divide: ['$score', '$age'] }, 2] },
+              rest: { $mod: [{ $mod: ['$score', '$age'] }, 2] },
+            },
+          },
+          { $project: { ratio: '$ratio', rest: '$rest', _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     // Unwrapped, `'$secret'` reads the row's `secret` field and `'$$ROOT'`
     // the whole document; the SQL dialects bind both as text.
     name: 'SELECT expression argument starting with $ stays a literal',
