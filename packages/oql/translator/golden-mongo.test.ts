@@ -916,6 +916,54 @@ const CASES: Case[] = [
     },
   },
   {
+    // ...and when a column of the query has it.
+    name: 'SELECT ORDER BY a joined column in a query with a column __sort_0',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', '__sort_0'],
+      joins: {
+        o: {
+          table: 'orders',
+          columns: ['userId', 'amount'],
+          on: { '@o.@userId': '@id' },
+        },
+      },
+      aggregates: { n: { $$_aggregate: 'COUNT' } },
+      projection: { '@id': true, '@n': true },
+      orderBy: { '@o.@amount': 'DESC' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'id',
+              foreignField: 'userId',
+              pipeline: [{ $match: { userId: { $ne: null } } }],
+              as: 'o',
+            },
+          },
+          { $unwind: '$o' },
+          {
+            $group: {
+              _id: { id: '$id' },
+              n: { $sum: 1 },
+              ___sort_0: { $max: '$o.amount' },
+            },
+          },
+          { $addFields: { id: '$_id.id' } },
+          { $sort: { ___sort_0: -1 } },
+          { $project: { id: 1, n: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
     name: 'SELECT ORDER BY + LIMIT + OFFSET',
     method: 'select',
     query: {
@@ -1901,6 +1949,40 @@ const CASES: Case[] = [
             },
           },
           { $project: { userId: 1, s: 1, __sum_s: 1, _id: 0 } },
+        ],
+      },
+    },
+  },
+  {
+    // ...and when a column of the query has it.
+    name: 'SELECT SUM grouped by a column named like its helper field',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'orders',
+      columns: ['__sum_x', 'amount'],
+      aggregates: { x: { $$_aggregate: 'SUM', column: '@amount' } },
+      projection: { '@__sum_x': true, '@x': true },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'orders',
+        pipeline: [
+          {
+            $group: {
+              _id: { __sum_x: '$__sum_x' },
+              x: { $sum: '$amount' },
+              ___sum_x: { $max: '$amount' },
+            },
+          },
+          {
+            $addFields: {
+              x: { $cond: [{ $gt: ['$___sum_x', null] }, '$x', null] },
+              __sum_x: '$_id.__sum_x',
+            },
+          },
+          { $project: { __sum_x: 1, x: 1, _id: 0 } },
         ],
       },
     },

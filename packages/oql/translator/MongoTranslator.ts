@@ -1238,22 +1238,18 @@ export class MongoTranslator {
    * Such a column is no group key, so the key sorts on a `field` the
    * `$group` accumulates: the group's smallest value at `path` for `ASC`,
    * its largest for `DESC`, NULLs skipped, as the SQL translators order
-   * by MIN / MAX. The field takes a `_` prefix while an aggregate or a
-   * projected key has its name, and the inclusion `$project` drops it.
+   * by MIN / MAX. The field takes a `_` prefix while `names`, the names
+   * of the query, has it, and the inclusion `$project` drops it.
    */
   private __joinedSorts(
     q: Query<'SELECT'>,
-    aggregates: Record<string, unknown>,
+    names: ReadonlySet<string>,
   ): Record<string, [string, string, string]> {
-    const taken = new Set([
-      ...Object.keys(aggregates),
-      ...Object.keys(q.projection).map((k) => k.slice(1).split('.@')[0]),
-    ]);
     const out: Record<string, [string, string, string]> = {};
     Object.entries(q.orderBy ?? {}).forEach(([key, dir], i) => {
       if (key.includes('.@') && !(key in q.projection)) {
         let field = `__sort_${i}`;
-        while (taken.has(field)) field = `_${field}`;
+        while (names.has(field)) field = `_${field}`;
         out[key] = [
           field,
           dir === 'ASC' ? '$min' : '$max',
@@ -1389,7 +1385,7 @@ export class MongoTranslator {
     }
     const aggregates = this.__aggregatesOf(q);
     const grouped = Object.keys(aggregates).length > 0;
-    const joinedSorts = grouped ? this.__joinedSorts(q, aggregates) : {};
+    const joinedSorts = grouped ? this.__joinedSorts(q, names) : {};
     if (grouped) {
       const groupId: Record<string, unknown> = {};
       const groupBody: Record<string, unknown> = { _id: groupId };
@@ -1461,9 +1457,10 @@ export class MongoTranslator {
         }
         if (fn === 'SUM') {
           // `$sum` of no values is 0, SQL's SUM is NULL. The largest
-          // value is null exactly then, so it rides along to tell.
+          // value is null exactly then, so it rides along to tell, in
+          // a field no name of the query has.
           let seen = `__sum_${name}`;
-          while (seen in aggregates) seen = `_${seen}`;
+          while (names.has(seen)) seen = `_${seen}`;
           groupBody[seen] = { $max: this.__columnRef(column, columns) };
           flatten[name] = {
             $cond: [{ $gt: [`$${seen}`, null] }, `$${name}`, null],
