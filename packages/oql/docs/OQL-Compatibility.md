@@ -389,7 +389,7 @@ The table below summarises the per-dialect emission. The general rule:
 | SUBSTR                | native (`SUBSTRING`)                                                                | native (`SUBSTRING`)                                   | native (`substr`)                                                | native (`$substrCP`)                                                                |
 | REPLACE               | native                                                                              | native                                                 | native                                                           | native (`$replaceAll`)                                                              |
 | LPAD / RPAD           | native                                                                              | native                                                 | emulated (`printf` + `replace` + `substr`; custom fill honoured) | passthrough                                                                         |
-| NOW / CURRENT_*       | native                                                                              | native                                                 | native (ISO 8601 UTC text via `strftime`)                        | native (`$$NOW`); on INSERT, computed by the translator                             |
+| NOW / CURRENT_*       | native                                                                              | native                                                 | native, text, see [date results](#date-expression-results)       | native (`$$NOW`); on INSERT, computed by the translator                             |
 | DATE_ADD / DATE_DIFF  | native                                                                              | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`)          | native; DATE_ADD adjusted, see [month end](#date_add-month-end)  | native (`$dateAdd`); DATE_DIFF emulated, see [DATE_DIFF units](#date_diff-units)    |
 | DATE_TRUNC            | native (`date_trunc`)                                                               | emulated (`CAST(DATE_FORMAT(…) AS DATETIME)`)          | native (`strftime(…, 'start of …')`, ISO 8601 UTC text)          | native (`$dateTrunc`, UTC)                                                          |
 | UNIX_TIMESTAMP        | native (`FLOOR(EXTRACT(EPOCH …))::BIGINT`) — the driver decodes it as a JS `bigint` | native (`UNIX_TIMESTAMP()`; milliseconds via `NOW(3)`) | native (`strftime('%s')` / `julianday`, cast to INTEGER)         | native (`$toLong` over `$$NOW`); on INSERT, computed by the translator              |
@@ -460,6 +460,26 @@ fraction and does not follow the session time zone.
 
 On Postgres the value is a `TIME`. Comparing it with a text column fails
 there, since Postgres has no operator for the pair.
+
+### Date expression results
+
+What JavaScript receives for a date expression, on Postgres 18, MariaDB 11,
+SQLite and MongoDB 8 through the oql drivers, the same on Deno, Bun and
+Node. SQLite has no date type, so every result there is text, and the text
+is not always a full timestamp:
+
+| Expression                                        | Postgres             | MariaDB               | SQLite                                                 | MongoDB              |
+| ------------------------------------------------- | -------------------- | --------------------- | ------------------------------------------------------ | -------------------- |
+| `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ` | `Date`               | `Date`, whole seconds | `'2026-11-15T23:00:24.401Z'`                           | `Date`               |
+| `CURRENT_DATE`                                    | `Date`, midnight UTC | `Date`, midnight UTC  | `'2026-11-15'`, the date alone                         | `Date`, midnight UTC |
+| `CURRENT_TIME`                                    | `'23:00:24'`         | `'23:00:24'`          | `'23:00:24'`                                           | `'23:00:24'`         |
+| `DATE_ADD`, `DATE_TRUNC`                          | `Date`               | `Date`                | `'2026-03-16T00:00:00.000Z'`, also for a `DATE` column | `Date`               |
+| `UNIX_TIMESTAMP`                                  | `bigint`             | `bigint`              | `number`                                               | `number`             |
+
+SQLite also stores a `DATE` column as the full ISO 8601 text, so
+`CURRENT_DATE` never equals one there: `'@d': { $eq: CURRENT_DATE }`
+returns no row on SQLite and today's row on the other three. `$gte` and
+`$lt` against it agree on every engine.
 
 ### DATE_ADD result
 

@@ -94,7 +94,8 @@ type ConditionalArg<
  * **String** (returns string): `CONCAT`, `LOWER`, `UPPER`, `TRIM`,
  * `LTRIM`, `RTRIM`, `SUBSTR`, `REPLACE`, `LPAD`, `RPAD`.
  *
- * **Date** (returns Date; ISO 8601 UTC text on SQLite): `NOW`,
+ * **Date** (returns Date; text on SQLite, the date alone for
+ * `CURRENT_DATE` and ISO 8601 UTC otherwise): `NOW`,
  * `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `CURRENT_TIMESTAMPTZ`, `DATE_ADD`,
  * `DATE_TRUNC` — and two that do not return a Date: `CURRENT_TIME`, an
  * `'HH:MM:SS'` UTC string, and `UNIX_TIMESTAMP`, a 64-bit INTEGER.
@@ -259,7 +260,7 @@ export type Expressions<
    * as a parameter, so it must be a literal on the node.
    *
    * What JavaScript receives differs by driver, not by this expression:
-   * the Postgres driver decodes `BIGINT` as `bigint`, while MariaDB,
+   * the Postgres and MariaDB drivers decode `BIGINT` as `bigint`, while
    * SQLite and MongoDB hand back a `number`. Coerce at the edge if a
    * multi-dialect app needs one type.
    */
