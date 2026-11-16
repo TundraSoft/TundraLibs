@@ -169,7 +169,7 @@ Extends [`SQLEngineOptions`](../../docs/Drivers-SQLEngine.md#configuration).
 | `ssl`                    | various   | —       | See [SSL/TLS](../../docs/Drivers-BaseEngine.md#configuration).                                                                                                                                                               |
 | `allowCleartextPassword` | `boolean` | `true`  | Permit cleartext-password auth over an **unencrypted** connection. Permitted by default but warns via `notice` on every such handshake; set `false` to throw `INVALID_AUTH` instead (see [Authentication](#authentication)). |
 | `allowMd5Password`       | `boolean` | `false` | Answer MD5 password auth. Refused with `INVALID_AUTH` by default; set `true` only for a peer that offers nothing better, such as Cloudflare Hyperdrive (see [MD5](#md5)).                                                    |
-| `allowNonUtcTimeZone`    | `boolean` | `false` | Keep the server's session `TimeZone`. By default the driver asks for UTC at startup and refuses a session that is not UTC with `INVALID_CONFIG_VALUE` (see [Time zone](#time-zone)).                                         |
+| `allowNonUtcTimeZone`    | `boolean` | `false` | Keep the server's session `TimeZone`. By default the driver asks for UTC at startup (see [Time zone](#time-zone)).                                                                                                           |
 
 ## Behind PgBouncer / pgcat / RDS Proxy
 
@@ -211,28 +211,20 @@ evaluates `date_trunc`, `EXTRACT` and casts, in the session's `TimeZone`. In
 any zone but UTC those store and filter the wrong day and clock time;
 `timestamptz` is correct in every zone. The driver therefore sends
 `TimeZone=UTC` in the startup message, so the session runs in UTC whatever
-zone the database or the role is set to, and `RESET` returns to UTC.
-
-A check on the zone the server reports is the safety net: a connection whose
-server still reports a non-UTC `TimeZone` at startup is refused with
-`INVALID_CONFIG_VALUE`. Any fixed zero offset counts as UTC, such as `Etc/UTC`,
-`GMT`, `UTC0` or `+00:00`; a regional zone such as `Europe/London` does not. A
-server that reports no `TimeZone` is not checked. If a pooler in between does
-not pass the parameter on, fix the zone on the server. A role's own `timezone`
-setting overrides its database's, so use `ALTER ROLE` when the role has one,
-otherwise the database. Behind a pooler, the role is the one the pooler signs
-in as, and the setting applies once the pooler opens a new server connection:
+zone the database or the role is set to, and `RESET` returns to UTC. The
+driver does not check the zone the server reports: a pooler that does not pass
+the parameter on leaves the session in the zone the server gives it. Set the
+zone on the server for that case. A role's own `timezone` setting overrides
+its database's, so use `ALTER ROLE` when the role has one, otherwise the
+database:
 
 ```sql
 ALTER DATABASE app SET timezone TO 'UTC';
 ```
 
-`allowNonUtcTimeZone: true` sends no `TimeZone` and accepts whatever zone the
-server reports. Set it when the application keeps every instant in
-`timestamptz` and wants the session zone's days and clock times: `date_trunc`,
-`EXTRACT` and casts still use that zone on a `timestamptz`. Set it also behind
-a pooler that rejects the startup parameter, after fixing the zone on the
-server, since nothing checks it then.
+`allowNonUtcTimeZone: true` sends no `TimeZone`, so the session keeps the zone
+the server gives it. Set it when the application wants the session zone's days
+and clock times, or behind a pooler that rejects the startup parameter.
 
 ## Performance
 

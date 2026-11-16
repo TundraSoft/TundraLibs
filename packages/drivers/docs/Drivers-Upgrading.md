@@ -8,7 +8,6 @@ not listed; the changelog has those.
 
 - [1.9.0](#190)
   - [A Postgres session runs in UTC](#a-postgres-session-runs-in-utc)
-  - [Neon refuses a session that is not in UTC](#neon-refuses-a-session-that-is-not-in-utc)
   - [Neon types a `Date` parameter as `timestamptz`](#neon-types-a-date-parameter-as-timestamptz)
   - [MariaDB sessions and `Date` values are UTC](#mariadb-sessions-and-date-values-are-utc)
   - [A `:name:` in quoted text or a comment is text](#a-name-in-quoted-text-or-a-comment-is-text)
@@ -40,24 +39,10 @@ SET starts_at = (starts_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC';
 
 A `date` column holds the old zone's day, with no time to convert from.
 
-When the server still reports a zone that is not UTC, for example behind
-a pooler that does not pass the parameter on, `connect()` throws
-`EngineError` `INVALID_CONFIG_VALUE`; 1.8.0 connected. A pooler that
-rejects a `TimeZone` startup parameter fails the connection.
-`allowNonUtcTimeZone: true` sends no `TimeZone` and checks nothing, as
-1.8.0 did. [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone)
+A pooler that rejects a `TimeZone` startup parameter fails the
+connection. `allowNonUtcTimeZone: true` sends no `TimeZone`, as 1.8.0
+did. [Postgres → Time zone](../engines/postgres/Drivers-Postgres.md#time-zone)
 has the fixes.
-
-### Neon refuses a session that is not in UTC
-
-The first query or `ping()` on a connected engine reads the session zone
-in one extra request. A zone that is not UTC rejects the query with
-`INVALID_CONFIG_VALUE`, and `ping()` rejects with it rather than
-returning `false`. When the zone request itself fails, bad credentials
-included, the query rejects with `OPERATION_FAILED` and `ping()` returns
-`false`. drivers 1.8.0 checked nothing. `allowNonUtcTimeZone: true`
-skips the request. See
-[Neon → Time zone](../engines/neon/Drivers-Neon.md#time-zone).
 
 ### Neon types a `Date` parameter as `timestamptz`
 
@@ -123,8 +108,7 @@ with the name the server reported, which also lands on `context`:
 | `TABLE_NOT_FOUND` on Postgres and MariaDB                   | the table, `users`, on MariaDB with its database, `app.users` |
 
 A SQLite foreign-key failure names no key, so its message ends at the
-instance id. The non-UTC refusal on Postgres and Neon also says to set
-the zone for the role a pooler signs in as.
+instance id.
 
 ### SQLite binds `-0` as `0` and whole numbers as integers
 

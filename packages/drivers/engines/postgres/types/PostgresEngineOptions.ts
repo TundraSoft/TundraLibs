@@ -60,8 +60,7 @@ export type PostgresEngineOptions = SQLEngineOptions & {
   /**
    * Keep the session in the server's own `TimeZone`. Default `false`: the
    * driver asks for `TimeZone=UTC` in the startup message, so a database or
-   * role set to another zone still runs in UTC, and throws
-   * `INVALID_CONFIG_VALUE` when the server reports another zone anyway.
+   * role set to another zone still runs in UTC.
    *
    * Postgres converts a `Date` sent for a `date` or `timestamp` column, and
    * evaluates `date_trunc`, `EXTRACT` and casts, in the session zone, so in

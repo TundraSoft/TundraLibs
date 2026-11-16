@@ -255,12 +255,10 @@ describe('drivers.PostgresEngine session time zone (no DB)', () => {
     return { startup, error };
   };
 
-  it('asks for UTC at startup, and still refuses a server that reports another zone', async () => {
+  it('asks for UTC at startup, and connects whatever zone the server reports', async () => {
     const { startup, error } = await connectTo('Asia/Kolkata', {});
     asserts.assertStringIncludes(startup, 'TimeZone\0UTC\0');
-    asserts.assertInstanceOf(error, EngineError);
-    asserts.assertEquals(error.code, 'INVALID_CONFIG_VALUE');
-    asserts.assertStringIncludes(error.message, 'Asia/Kolkata');
+    asserts.assertStrictEquals(error, undefined);
   });
 
   it('allowNonUtcTimeZone asks for no zone and accepts the one reported', async () => {
