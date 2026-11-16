@@ -2301,6 +2301,39 @@ const CASES: Case[] = [
       },
     },
   },
+  {
+    name: 'INSERT with DATE_ADD of NOW',
+    method: 'insert',
+    query: {
+      type: 'INSERT',
+      table: 'logs',
+      columns: ['id', 'dueAt'],
+      data: {
+        id: 7,
+        dueAt: {
+          $$_expression: 'DATE_ADD',
+          args: { date: { $$_expression: 'NOW' }, amount: 1, unit: 'DAYS' },
+        },
+      },
+    } satisfies Query<'INSERT'>,
+    expected: {
+      sqlite: {
+        sql:
+          `INSERT INTO "logs" ("id", "dueAt") VALUES (:p_0:, strftime('%Y-%m-%dT%H:%M:%fZ', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:, CASE WHEN :p_2: IN ('MONTHS', 'YEARS') AND :p_1: = CAST(:p_1: AS INTEGER) AND strftime('%d', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:) <> strftime('%d', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) THEN '-' || strftime('%d', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), :p_1: || ' ' || :p_2:) || ' days' ELSE '+0 days' END)) RETURNING "id", "dueAt"`,
+        params: { p_0: 7, p_1: 1, p_2: 'DAYS' },
+      },
+      postgres: {
+        sql:
+          `INSERT INTO "logs" ("id", "dueAt") VALUES (:p_0:, (CURRENT_TIMESTAMP + (:p_1:::text || ' ' || :p_2:)::interval)) RETURNING "id", "dueAt"`,
+        params: { p_0: 7, p_1: 1, p_2: 'DAYS' },
+      },
+      maria: {
+        sql:
+          'INSERT INTO `logs` (`id`, `dueAt`) VALUES (:p_0:, TIMESTAMPADD(DAY, :p_1:, NOW())) RETURNING `id`, `dueAt`',
+        params: { p_0: 7, p_1: 1 },
+      },
+    },
+  },
 
   {
     // SQLite stores DB-side timestamps as ISO 8601 UTC text, the format its

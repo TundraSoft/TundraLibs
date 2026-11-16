@@ -171,6 +171,32 @@ describe('oql.asserts.Expressions.Date', () => {
       );
     });
 
+    it('valid: with a nested clock, and no other expression', () => {
+      for (const clock of ['NOW', 'CURRENT_TIMESTAMP', 'CURRENT_TIMESTAMPTZ']) {
+        assertDateAddExpression({
+          $$_expression: 'DATE_ADD',
+          args: {
+            date: { $$_expression: clock } as any,
+            amount: 1,
+            unit: 'DAYS',
+          },
+        });
+      }
+      asserts.assertThrows(
+        () =>
+          assertDateAddExpression({
+            $$_expression: 'DATE_ADD',
+            args: {
+              date: { $$_expression: 'CURRENT_DATE' },
+              amount: 1,
+              unit: 'DAYS',
+            },
+          } as any),
+        TypeError,
+        'date must be a Date object or ColumnIdentifier',
+      );
+    });
+
     it('valid: with all time units', () => {
       const units = ['DAYS', 'MONTHS', 'YEARS', 'HOURS', 'MINUTES', 'SECONDS'];
 

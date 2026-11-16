@@ -558,7 +558,13 @@ type Expressions<
   | {
     $$_expression: 'DATE_ADD';
     args: {
-      date: GetColumnByType<FT, Date> | Date;
+      // a Date column, a Date, or a nested NOW / CURRENT_TIMESTAMP(TZ)
+      date:
+        | GetColumnByType<FT, Date>
+        | Date
+        | {
+          $$_expression: 'NOW' | 'CURRENT_TIMESTAMP' | 'CURRENT_TIMESTAMPTZ';
+        };
       amount: GetColumnByType<FT, number> | number;
       unit: TimeUnit;
     };
@@ -839,7 +845,8 @@ is in [date expression results](../docs/OQL-Compatibility.md#date-expression-res
 [CURRENT_TIME](../docs/OQL-Compatibility.md#current_time).
 
 - `DATE_ADD` — `args: { date; amount; unit }`; add `amount` units to
-  `date` (negative `amount` subtracts). Months and years stop at the
+  `date` (negative `amount` subtracts). `date` is a column, a `Date`, or a
+  nested `NOW` / `CURRENT_TIMESTAMP(TZ)`. Months and years stop at the
   target month's last day on every dialect — see
   [DATE_ADD month end](../docs/OQL-Compatibility.md#date_add-month-end).
 - `DATE_DIFF` — `args: { from; to; unit }`; complete time units between
