@@ -26,6 +26,13 @@ jobs:
       POSTGRES_PORT: '5432'
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      # PgBouncer in transaction mode in front of postgres, started by a step
+      # below. Its role's default time zone is not UTC.
+      PGBOUNCER_HOST: 127.0.0.1
+      PGBOUNCER_PORT: '6432'
+      PGBOUNCER_USER: ci_pooler
+      PGBOUNCER_PASSWORD: ci-pooler
+      PGBOUNCER_DB: ci_pooler
       MARIA_HOST: localhost
       MARIA_PORT: '3306'
       MARIA_USER: root
@@ -154,6 +161,58 @@ jobs:
               sleep 1
             done
           done
+
+      # PgBouncer in transaction mode in front of the postgres service, for the
+      # drivers pooler tests: the same two steps as ci.yml, explained there.
+      - name: Start PgBouncer in transaction mode
+        run: |
+          set -euo pipefail
+          pg_cid=$(docker ps -q --filter "publish=5432")
+          docker exec -e PGPASSWORD=postgres "$pg_cid" psql -U postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE ${PGBOUNCER_USER} LOGIN PASSWORD '${PGBOUNCER_PASSWORD}';" \
+            -c "ALTER ROLE ${PGBOUNCER_USER} SET timezone = 'Asia/Kolkata';" \
+            -c "CREATE DATABASE ${PGBOUNCER_DB} OWNER ${PGBOUNCER_USER};"
+          cfg="${RUNNER_TEMP}/pgbouncer"
+          mkdir -p "$cfg"
+          cat > "$cfg/pgbouncer.ini" <<EOF
+          [databases]
+          ${PGBOUNCER_DB} = host=127.0.0.1 port=5432
+          [pgbouncer]
+          listen_addr = 127.0.0.1
+          listen_port = ${PGBOUNCER_PORT}
+          auth_type = scram-sha-256
+          auth_file = /etc/pgbouncer/userlist.txt
+          pool_mode = transaction
+          admin_users = ${PGBOUNCER_USER}
+          EOF
+          printf '"%s" "%s"\n' "$PGBOUNCER_USER" "$PGBOUNCER_PASSWORD" > "$cfg/userlist.txt"
+          docker run -d --name pgbouncer --network host -v "$cfg:/cfg:ro" \
+            --entrypoint bash postgres:17 -c 'set -e
+              apt-get update -qq && apt-get install -y -qq pgbouncer >/dev/null
+              mkdir -p /etc/pgbouncer
+              cp /cfg/pgbouncer.ini /cfg/userlist.txt /etc/pgbouncer/
+              chown -R postgres /etc/pgbouncer
+              exec su postgres -c "pgbouncer /etc/pgbouncer/pgbouncer.ini"'
+          for _ in $(seq 1 60); do
+            docker exec -e PGPASSWORD="$PGBOUNCER_PASSWORD" pgbouncer \
+              psql -h 127.0.0.1 -p "$PGBOUNCER_PORT" -U "$PGBOUNCER_USER" -d "$PGBOUNCER_DB" \
+              -c 'SELECT 1' >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs pgbouncer
+          exit 1
+
+      - name: Check PgBouncer answers in transaction mode
+        run: |
+          through() {
+            docker exec -e PGPASSWORD="$PGBOUNCER_PASSWORD" pgbouncer \
+              psql -h 127.0.0.1 -p "$PGBOUNCER_PORT" -U "$PGBOUNCER_USER" -d "$1" \
+              -v ON_ERROR_STOP=1 -Atc "$2"
+          }
+          zone=$(through "$PGBOUNCER_DB" "SELECT current_setting('TimeZone')")
+          mode=$(through pgbouncer 'SHOW CONFIG' | grep '^pool_mode|' | cut -d'|' -f2)
+          echo "$(through pgbouncer 'SHOW VERSION'): zone=${zone} pool_mode=${mode}"
+          [ "$zone" = 'Asia/Kolkata' ] && [ "$mode" = 'transaction' ]
 
       # `@db/sqlite` downloads libsqlite3.so on first import, into a shared
       # cache. Under `--parallel` two workers race that download and mmap a
