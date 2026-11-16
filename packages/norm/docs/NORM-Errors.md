@@ -131,9 +131,11 @@ Three refusals reuse an existing code rather than getting one of their
 own: ordering by, or supplying a filter value from, an unprojected
 to-many relation raises `INVALID_PROJECTION` (an unprojected to-many
 runs as an `EXISTS` subquery, so project it or move the condition to
-key position); supplying a filter value from an unprojected
-[NULL-safe](NORM-Querying.md#null-safe-relation-keys) relation raises
-it too, because the row would come back once per match; and a scoped
+key position); supplying a filter value from an unprojected to-one
+relation that can match several rows, one matched
+[NULL-safe](NORM-Querying.md#null-safe-relation-keys) or joined on
+columns that are no declared key of the related entity, raises it too,
+because the row would come back once per match; and a scoped
 upsert whose scope column is encrypted with no `.hash()` sibling raises
 `SCOPE_VIOLATION`.
 

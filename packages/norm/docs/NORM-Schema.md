@@ -949,7 +949,10 @@ Every FK from `A → B` gives `B` a reverse relation.
   `hasMany` unless you declare otherwise. A declared `hasOne` that
   matches several rows carries the one lowest by primary key; a view has
   no key to order by, so there it is whichever row the engine returns
-  first.
+  first. Unless the FK's local columns are this entity's primary key or
+  one of its `unique` groups, a filter that takes its comparison value
+  from a `hasOne` needs it
+  [projected in the same read](NORM-Querying.md#relation-references).
 
 A reverse name must be free on the target: it cannot collide with one
 of the target's columns, with a foreign-key alias (those resolve first,
@@ -993,7 +996,7 @@ export const Orgs = Entity('orgs', {
   id: Column.integer(),
   tenant: Column.integer(),
   code: Column.varchar(20).nullable(), // NULL = the tenant's default org
-}, { pk: ['id'] });
+}, { pk: ['id'], unique: { tenantCode: ['tenant', 'code'] } });
 
 export const Grants = Entity('grants', {
   id: Column.integer(),

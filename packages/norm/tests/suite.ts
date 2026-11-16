@@ -809,6 +809,37 @@ export function runLiveSuite(fixture: LiveFixture): void {
       },
     );
 
+    step(
+      '12t a matched relation row whose projected columns are all NULL is kept',
+      async () => {
+        // Link 2 never had an expiry, and 6 of its 8 visits no referrer.
+        const visit = await db.repo('Visits').findOne({ '@id': 2 }, {
+          project: { '@id': true, '@Link': { '@expiresAt': true } },
+        });
+        asserts.assertEquals(visit.data?.Link, { expiresAt: null });
+        const link = await db.repo('Links').findOne({ '@id': 2 }, {
+          project: { '@id': true, '@Visits': { '@referrer': true } },
+        });
+        const visits = link.data?.Visits as Array<{ referrer: unknown }>;
+        asserts.assertEquals(
+          visits.filter((v) => v.referrer === null).length,
+          6,
+        );
+        asserts.assertEquals(visits.length, 8);
+        asserts.assert(visits.every((v) => Object.keys(v).length === 1));
+        // No match stays null and [].
+        const none = await db.repo('Users').findOne({ '@id': bob }, {
+          project: {
+            '@id': true,
+            '@Profile': { '@bio': true },
+            '@Posts': { '@title': true },
+          },
+        });
+        asserts.assertEquals(none.data?.Profile, null);
+        asserts.assertEquals(none.data?.Posts, []);
+      },
+    );
+
     // ── 13 M2M through the junction ───────────────────────────────────
 
     step(
