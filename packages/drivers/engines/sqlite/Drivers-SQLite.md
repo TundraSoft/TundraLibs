@@ -108,6 +108,20 @@ SQLite values are normalized via `_encodeValue`:
 | `number`, whole, within ±(2^53 − 1) | INTEGER on every runtime |
 | `number`, fractional                | REAL                     |
 
+## JSON results
+
+SQLite returns the result of a JSON function as text. `select` knows from
+the query which outputs are `ARRAY_AGG`, `JSON_ROW` or a projected join
+alias, and returns those as arrays on Deno, Bun and Node. Every other
+value is returned as stored, so a TEXT column holding `{"a":1}` reads back
+as that string.
+
+`execute` runs SQL the engine has not built, and SQLite does not report
+which columns of a statement are JSON on every runtime. A
+`json_object(...)` or `json_group_array(...)` in raw SQL, or a view column
+built from one, therefore reads back as text on Deno, Bun and Node. Parse
+it with `JSON.parse`.
+
 ## In-memory caveat
 
 `:memory:` databases are per-handle. Each `:memory:` handle is its own

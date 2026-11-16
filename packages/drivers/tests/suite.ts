@@ -761,6 +761,25 @@ const CASES: Case[] = [
     expected: [{ status: 'CLOSED', n: 1 }, { status: 'ACTIVE', n: 2 }],
   },
   {
+    name: 'JSON_ROW over a LEFT join collects NULL for a row without a match',
+    query: {
+      joins: { I: { ...JOIN_ITEMS.I, type: 'LEFT' } },
+      aggregates: {
+        rows: {
+          $$_aggregate: 'JSON_ROW',
+          columns: { amount: '@I.@amount', code: '@I.@code' },
+        },
+      },
+      projection: { '@id': 'id', '@rows': 'rows' },
+      where: { '@id': { $in: [2, 3] } },
+      orderBy: { '@id': 'ASC' },
+    },
+    expected: [
+      { id: 2, rows: [{ amount: 4, code: 'C:\\' }] },
+      { id: 3, rows: [{ amount: null, code: null }] },
+    ],
+  },
+  {
     name: '$exists tests the rows of another table',
     where: {
       $exists: {

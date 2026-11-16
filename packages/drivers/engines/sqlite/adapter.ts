@@ -151,6 +151,10 @@ export async function _openDeno(
     // corruption. With it, binds are lossless int64; reads return
     // plain numbers within Number.MAX_SAFE_INTEGER and bigint beyond.
     int64: true,
+    // @db/sqlite parses a result whose SQLite subtype is JSON, so
+    // `json_object(...)` read back as an object here and as text on Bun
+    // and Node, whose bindings expose no subtype. Text on every runtime.
+    parseJson: false,
   });
   return _wrapDeno(db);
 }

@@ -301,6 +301,101 @@ describe({
         await engine.disconnect();
       });
 
+      it('stores 0, 1, -1 and a boolean as INTEGER and 1.5 as REAL in a column with no type', async () => {
+        const engine = new SQLiteEngine('store-type', TEST_CONFIG);
+        await engine.execute({
+          sql: 'CREATE TABLE t (k TEXT, u, i INTEGER, r REAL)',
+        });
+        const stored: Record<string, unknown> = {};
+        for (const v of [0, 1, -1, 1.5, true, 2 ** 53]) {
+          const k = String(v);
+          await engine.execute({
+            sql: 'INSERT INTO t (k, u, i, r) VALUES (:k:, :v:, :v:, :v:)',
+            params: { k, v },
+          });
+          const r = await engine.execute({
+            sql: 'SELECT typeof(u) AS u, typeof(i) AS i, typeof(r) AS r ' +
+              'FROM t WHERE k = :k:',
+            params: { k },
+          });
+          stored[k] = r.data[0];
+        }
+        // 2^53 in the untyped column differs by runtime and is not compared.
+        delete (stored[String(2 ** 53)] as Record<string, unknown>).u;
+        asserts.assertEquals(stored, {
+          '0': { u: 'integer', i: 'integer', r: 'real' },
+          '1': { u: 'integer', i: 'integer', r: 'real' },
+          '-1': { u: 'integer', i: 'integer', r: 'real' },
+          '1.5': { u: 'real', i: 'real', r: 'real' },
+          'true': { u: 'integer', i: 'integer', r: 'real' },
+          [String(2 ** 53)]: { i: 'integer', r: 'real' },
+        });
+        await engine.disconnect();
+      });
+
+      it('select returns ARRAY_AGG, JSON_ROW and a join alias as arrays, and JSON-looking text as text', async () => {
+        const engine = new SQLiteEngine('json-agg', TEST_CONFIG);
+        await engine.execute({
+          sql: 'CREATE TABLE t (id INTEGER PRIMARY KEY, doc TEXT)',
+        });
+        await engine.execute({
+          sql: `INSERT INTO t VALUES (1, '{"a":1}'), (2, '[1,2]')`,
+        });
+        const columns = ['id', 'doc'];
+        const plain = await engine.select({
+          type: 'SELECT',
+          table: 't',
+          columns,
+          projection: { '@id': 'id', '@doc': 'doc' },
+          orderBy: { '@id': 'ASC' },
+        });
+        asserts.assertEquals(plain.data, [
+          { id: 1, doc: '{"a":1}' },
+          { id: 2, doc: '[1,2]' },
+        ]);
+        const grouped = await engine.select({
+          type: 'SELECT',
+          table: 't',
+          columns,
+          joins: { J: { table: 't', columns, on: { '@J.@id': '@id' } } },
+          aggregates: {
+            docs: { $$_aggregate: 'ARRAY_AGG', column: '@J.@doc' },
+            rows: { $$_aggregate: 'JSON_ROW', columns: { doc: '@J.@doc' } },
+            longest: { $$_aggregate: 'MAX', column: '@J.@doc' },
+          },
+          projection: {
+            '@id': 'id',
+            '@docs': 'docs',
+            '@rows': true,
+            '@J': 'joined',
+            '@longest': 'longest',
+          },
+          where: { '@id': 1 },
+        });
+        asserts.assertEquals(grouped.data, [{
+          id: 1,
+          docs: ['{"a":1}'],
+          rows: [{ doc: '{"a":1}' }],
+          joined: [{ id: 1, doc: '{"a":1}' }],
+          longest: '{"a":1}',
+        }]);
+        await engine.disconnect();
+      });
+
+      it('execute returns a JSON function result as text on every runtime', async () => {
+        const engine = new SQLiteEngine('json-raw', TEST_CONFIG);
+        const r = await engine.execute({
+          sql: `SELECT json_object('a', 1) AS o, json_group_array(1) AS a, ` +
+            `'{"a":1}' AS t`,
+        });
+        asserts.assertEquals(r.data, [{
+          o: '{"a":1}',
+          a: '[1]',
+          t: '{"a":1}',
+        }]);
+        await engine.disconnect();
+      });
+
       it('leaves a placeholder inside a string, identifier or comment as text', async () => {
         const engine = new SQLiteEngine('quoted', TEST_CONFIG);
         const r = await engine.execute({

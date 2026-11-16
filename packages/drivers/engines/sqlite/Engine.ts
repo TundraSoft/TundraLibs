@@ -44,10 +44,12 @@ import { join, resolve as resolvePath } from '@tundralibs/compat/path';
 import { makeDir } from '@tundralibs/compat/file';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { SQLiteTranslator } from '@tundralibs/oql/translator';
+import type { Query } from '@tundralibs/oql/types';
 import { SQLEngine } from '../../SQLEngine.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type {
   EngineQuery,
+  EngineQueryResult,
   SQLEngineCapabilities,
   SQLEngineEvents,
 } from '../../types/mod.ts';
@@ -261,6 +263,31 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
 
   //#region SQLEngine hooks
 
+  /**
+   * Runs the SELECT and parses each `ARRAY_AGG`, `JSON_ROW` and projected
+   * join alias, which SQLite returns as JSON text, into an array. The
+   * columns are read from the query, so any other text comes back as
+   * stored, even when it looks like JSON.
+   */
+  public override async select<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    q: Query<'SELECT'>,
+    transactionId?: string,
+  ): Promise<EngineQueryResult<R>> {
+    const result = await super.select<R>(q, transactionId);
+    const names = _jsonProjections(q);
+    if (names.length > 0) {
+      for (const row of result.data as Record<string, unknown>[]) {
+        for (const name of names) {
+          const value = row[name];
+          if (typeof value === 'string') row[name] = JSON.parse(value);
+        }
+      }
+    }
+    return result;
+  }
+
   /** Runs the statement through the prepared-statement cache. */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
@@ -429,6 +456,35 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
 }
 
 //#region Helpers
+
+/**
+ * The output names of a SELECT that hold a JSON aggregate. Follows the
+ * translator's projection order: an aggregate, then an expression, then a
+ * join alias, which it expands to `JSON_ROW`.
+ */
+function _jsonProjections(q: Query<'SELECT'>): string[] {
+  const names: string[] = [];
+  for (const [key, value] of Object.entries(q.projection)) {
+    const source = key.slice(1);
+    let json = false;
+    if (q.aggregates && source in q.aggregates) {
+      const kind = q.aggregates[source]!.$$_aggregate;
+      json = kind === 'ARRAY_AGG' || kind === 'JSON_ROW';
+    } else if (!(q.expressions && source in q.expressions)) {
+      json = q.joins !== undefined && source in q.joins;
+    }
+    if (json) {
+      names.push(
+        typeof value === 'string'
+          ? value
+          : source.includes('.@')
+          ? source.split('.@').at(-1)!
+          : source,
+      );
+    }
+  }
+  return names;
+}
 
 function _isSelect(sql: string): boolean {
   const t = sql.trimStart().slice(0, 8).toUpperCase();

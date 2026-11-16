@@ -15,6 +15,7 @@ not listed; the changelog has those.
   - [A colon after a colon never opens a placeholder](#a-colon-after-a-colon-never-opens-a-placeholder)
   - [Error codes and messages](#error-codes-and-messages)
   - [SQLite binds `-0` as `0` and whole numbers as integers](#sqlite-binds--0-as-0-and-whole-numbers-as-integers)
+  - [SQLite JSON results are the same on Deno, Bun and Node](#sqlite-json-results-are-the-same-on-deno-bun-and-node)
 
 ## 1.9.0
 
@@ -135,6 +136,18 @@ on Bun and Node.
 On Node a whole number or a boolean was bound as `REAL`, so `:v: / 2`
 with `v` 5 was `2.5` and a column with no type stored a `REAL`. It is
 now `INTEGER`, as on Deno and Bun, so the same query returns `2`.
+
+### SQLite JSON results are the same on Deno, Bun and Node
+
+`select` returns `ARRAY_AGG`, `JSON_ROW` and a projected join alias as an
+array on every runtime. drivers 1.8.0 returned an array on Deno and JSON
+text on Bun and Node. Remove a `JSON.parse` of such a value, or keep it
+behind a `typeof value === 'string'` test.
+
+Raw SQL through `execute` returns the result of a JSON function, such as
+`json_object(...)`, as text on every runtime. On Deno 1.8.0 returned it
+parsed, and now a caller on Deno parses it with `JSON.parse`, as on Bun
+and Node.
 
 ---
 
