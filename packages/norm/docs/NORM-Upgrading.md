@@ -7,7 +7,7 @@ changelog has those.
 ## Table of Contents
 
 - [1.13.0](#1130)
-  - [Postgres and Neon refuse a database that is not on UTC](#postgres-and-neon-refuse-a-database-that-is-not-on-utc)
+  - [A Postgres session runs in UTC, and Neon refuses another zone](#a-postgres-session-runs-in-utc-and-neon-refuses-another-zone)
   - [MariaDB dates are written and read in UTC](#mariadb-dates-are-written-and-read-in-utc)
   - [`date()` holds the UTC day on SQLite and MongoDB](#date-holds-the-utc-day-on-sqlite-and-mongodb)
   - [`time()` reads a string](#time-reads-a-string)
@@ -34,16 +34,38 @@ below change what an app written against an earlier version sees. Where
 the app host and the database both run on UTC, the first, second and
 fifth change nothing.
 
-### Postgres and Neon refuse a database that is not on UTC
+### A Postgres session runs in UTC, and Neon refuses another zone
 
-`connect()` rejects with `INVALID_CONFIG_VALUE` when the Postgres
-session's `TimeZone` is not UTC. On Neon the first query or `ping()`
-rejects with the same code. Earlier versions connected, and stored and
-filtered the wrong day and clock time in `date()`, `datetime()` and
-`timestamp()` columns.
+The Postgres driver now asks for `TimeZone=UTC` when it connects, so a
+database or role set to another zone runs norm's sessions in UTC.
+Earlier versions ran them in that zone, and stored and filtered the
+wrong day and clock time in `date()`, `datetime()` and `timestamp()`
+columns. `timestamptz()` columns are unaffected.
 
-Set the database to UTC, or accept its zone with `allowNonUtcTimeZone`:
-[The database session](NORM-Dates.md#the-database-session) shows both.
+Rows those versions wrote keep that zone's day and clock time, and read
+back as before, but a filter now compares them in UTC. With the database
+in `Asia/Kolkata`, a `datetime()` written as `2026-11-14T20:00:00Z` was
+stored as `2026-11-15 01:30:00`, so
+`{ '@starts_at': { $lt: '2026-11-15T00:00:00Z' } }` now misses it.
+Convert each `datetime()` and `timestamp()` column once, from the old
+zone to UTC:
+
+```sql
+UPDATE events
+SET starts_at = (starts_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC';
+```
+
+A `date()` column holds the day in the old zone, and has no time to
+convert from.
+
+Behind a pooler that does not pass the zone on, `connect()` rejects with
+`INVALID_CONFIG_VALUE` when the zone the pooler reports is not UTC, and a
+pooler that rejects a `TimeZone` startup parameter fails the connection.
+On Neon the first query or `ping()` rejects with `INVALID_CONFIG_VALUE`.
+Earlier versions connected. `allowNonUtcTimeZone: true` keeps the earlier
+behaviour on both engines, and
+[The database session](NORM-Dates.md#the-database-session) shows how to
+fix the zone instead.
 
 ### MariaDB dates are written and read in UTC
 
