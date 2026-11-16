@@ -73,7 +73,8 @@ compiles; [Factories](NORM-Schema.md#factories) lists what a write takes.
 ### A date-time string with no offset is UTC
 
 `'2026-01-15T10:00:00'` written to a `date()`, `datetime()`,
-`timestamp()` or `timestamptz()` column is now 10:00 UTC. Earlier
+`timestamp()` or `timestamptz()` column, or given to one as a literal
+`.default()` or `.defaultOnUpdate()`, is now 10:00 UTC. Earlier
 versions let the runtime read it in the host's zone, so a host off UTC
 stored a different instant. A string that names an offset, and a `Date`,
 are unchanged.

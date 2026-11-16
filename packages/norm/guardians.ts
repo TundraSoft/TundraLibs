@@ -198,7 +198,9 @@ function buildBase(spec: ColumnSpec) {
 export function rehydrateDefault(spec: ColumnSpec, v: unknown): unknown {
   if (typeof v === 'function') return v;
   if (spec.type === 'BIGINT' && typeof v === 'string') return BigInt(v);
-  if (DATE_TYPES.has(spec.type) && typeof v === 'string') return new Date(v);
+  if (DATE_TYPES.has(spec.type) && typeof v === 'string') {
+    return new Date(asUtc(v));
+  }
   return v;
 }
 
