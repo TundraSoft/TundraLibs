@@ -2015,15 +2015,14 @@ export class ReadRepo<
       // with no primary key (a view) carries its join columns instead,
       // plus its first NOT NULL column when every pair is NULL-safe,
       // since a match on NULL leaves those all NULL. A to-one there
-      // picks by its columns in declared order, all of them but the
-      // encrypted, JSON and mask ones, which do not order alike.
+      // carries the row the engine returns first.
       const pk = (target.def as { primaryKeys?: readonly string[] })
         .primaryKeys ?? [];
       const onCols = Object.keys(oqlJoins[name]!.on).map((ref) =>
         ref.slice(name.length + 3)
       );
-      const picks = cardinality !== 'hasMany' &&
-        !(pk.length > 0 && pk.every((col) => onCols.includes(col)));
+      const picks = cardinality !== 'hasMany' && pk.length > 0 &&
+        !pk.every((col) => onCols.includes(col));
       const specs = target.def.columns as Record<string, ColumnSpec>;
       const safeRefs = oqlJoins[name]!.nullSafe ?? [];
       const notNull = Object.keys(specs).find((col) =>
@@ -2031,11 +2030,6 @@ export class ReadRepo<
       );
       const carried = pk.length > 0
         ? picks ? pk : pk.slice(0, 1)
-        : picks
-        ? Object.keys(specs).filter((col) =>
-          !target.localEncrypted.has(col) && !target.masks.has(col) &&
-          specs[col]!.type !== 'JSON' && specs[col]!.type !== 'JSONB'
-        )
         : notNull !== undefined &&
             onCols.every((col) => safeRefs.includes(`@${name}.@${col}`))
         ? [...onCols, notNull]
@@ -3219,7 +3213,6 @@ export class Repo<
       }
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'insert');
-    this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow so an encrypted (.encrypt()/.hash())
     // scope column is stored as ciphertext WITH its digest sibling. A raw
@@ -3749,7 +3742,6 @@ export class Repo<
       stamped.add(col);
     }
     const rows = await this.__writeRows(callerRows, isBatch, 'upsert');
-    this.__fillNulls(rows);
     // Norm-owned (non-insertable) scope columns: inject post-validation,
     // routed through __encryptRow (same as insert()) so an encrypted
     // scope column stores ciphertext + its digest sibling, never
@@ -4565,18 +4557,6 @@ export class Repo<
         `unique per scope, or run the upsert on an unscoped handle.`,
       { entity: c.key, code: 'SCOPE_VIOLATION' },
     );
-  }
-
-  /** Write `null` for each nullable column a row leaves out, on MongoDB:
-   * a document holds only the fields written, where SQL stores NULL. */
-  private __fillNulls(rows: Row[]): void {
-    if (this._executor.capabilities.dialect !== 'mongo') return;
-    const c = this._compiled;
-    const specs = c.def.columns as Record<string, ColumnSpec>;
-    for (const col of c.columnNames) {
-      if (specs[col]!.nullable !== true) continue;
-      for (const row of rows) row[col] ??= null;
-    }
   }
 
   /** Insert/upsert write pipeline up to (and including) encryption. */
