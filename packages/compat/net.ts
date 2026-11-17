@@ -250,7 +250,8 @@ export type Connection = {
    * Writes data to the connection.
    *
    * @param data - Data to write (Uint8Array or string)
-   * @returns A promise that resolves to the number of bytes written
+   * @returns A promise that resolves, once every byte is written, to the
+   *   number of bytes written
    */
   write(data: Uint8Array | string): Promise<number>;
 
@@ -294,6 +295,26 @@ export type Connection = {
   // deno-lint-ignore no-explicit-any
   readonly _raw?: any;
 };
+
+/**
+ * Writes every byte to a Deno connection. `Deno.Conn.write` may accept only
+ * part of the buffer and resolve with that count, so it is called until the
+ * whole buffer is sent.
+ * @internal
+ */
+async function _denoWriteAll(
+  conn: { write(p: Uint8Array): Promise<number> },
+  data: Uint8Array | string,
+): Promise<number> {
+  const bytes = typeof data === 'string'
+    ? new TextEncoder().encode(data)
+    : data;
+  let written = 0;
+  while (written < bytes.length) {
+    written += await conn.write(bytes.subarray(written));
+  }
+  return written;
+}
 
 /**
  * Wraps a Node.js-style socket into a Connection interface.
@@ -799,12 +820,7 @@ export async function listen(options: ListenOptions): Promise<Listener> {
               const n = await conn.read(buffer);
               return n === null ? null : buffer.subarray(0, n);
             },
-            write: (data: Uint8Array | string) => {
-              const bytes = typeof data === 'string'
-                ? new TextEncoder().encode(data)
-                : data;
-              return conn.write(bytes);
-            },
+            write: (data: Uint8Array | string) => _denoWriteAll(conn, data),
             close: () => {
               try {
                 conn.close();
@@ -879,12 +895,7 @@ export async function listen(options: ListenOptions): Promise<Listener> {
               const n = await conn.read(buffer);
               return n === null ? null : buffer.subarray(0, n);
             },
-            write: (data: Uint8Array | string) => {
-              const bytes = typeof data === 'string'
-                ? new TextEncoder().encode(data)
-                : data;
-              return conn.write(bytes);
-            },
+            write: (data: Uint8Array | string) => _denoWriteAll(conn, data),
             close: () => {
               try {
                 conn.close();
@@ -926,12 +937,7 @@ export async function listen(options: ListenOptions): Promise<Listener> {
             const n = await conn.read(buffer);
             return n === null ? null : buffer.subarray(0, n);
           },
-          write: (data: Uint8Array | string) => {
-            const bytes = typeof data === 'string'
-              ? new TextEncoder().encode(data)
-              : data;
-            return conn.write(bytes);
-          },
+          write: (data: Uint8Array | string) => _denoWriteAll(conn, data),
           close: () => {
             try {
               conn.close();
@@ -1442,12 +1448,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
           const n = await conn.read(buffer);
           return n === null ? null : buffer.subarray(0, n);
         },
-        write: (data: Uint8Array | string) => {
-          const bytes = typeof data === 'string'
-            ? new TextEncoder().encode(data)
-            : data;
-          return conn.write(bytes);
-        },
+        write: (data: Uint8Array | string) => _denoWriteAll(conn, data),
         close: () => {
           try {
             conn.close();
@@ -1523,12 +1524,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
             const n = await conn.read(buffer);
             return n === null ? null : buffer.subarray(0, n);
           },
-          write: (data: Uint8Array | string) => {
-            const bytes = typeof data === 'string'
-              ? new TextEncoder().encode(data)
-              : data;
-            return conn.write(bytes);
-          },
+          write: (data: Uint8Array | string) => _denoWriteAll(conn, data),
           close: () => {
             try {
               conn.close();
@@ -1576,12 +1572,7 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
           const n = await conn.read(buffer);
           return n === null ? null : buffer.subarray(0, n);
         },
-        write: (data: Uint8Array | string) => {
-          const bytes = typeof data === 'string'
-            ? new TextEncoder().encode(data)
-            : data;
-          return conn.write(bytes);
-        },
+        write: (data: Uint8Array | string) => _denoWriteAll(conn, data),
         close: () => {
           try {
             conn.close();
@@ -1899,12 +1890,7 @@ export async function upgradeTls(
         const n = await tlsConn.read(buffer);
         return n === null ? null : buffer.subarray(0, n);
       },
-      write: (data: Uint8Array | string) => {
-        const bytes = typeof data === 'string'
-          ? new TextEncoder().encode(data)
-          : data;
-        return tlsConn.write(bytes);
-      },
+      write: (data: Uint8Array | string) => _denoWriteAll(tlsConn, data),
       close: () => {
         try {
           tlsConn.close();
