@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.3](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.8.2...compat-v2.8.3) (2026-11-17)
+
+
+### Bug Fixes
+
+* **compat:** a Deno socket write sends every byte ([#989](https://github.com/TundraSoft/TundraLibs/issues/989)) ([1fc26c4](https://github.com/TundraSoft/TundraLibs/commit/1fc26c477073dd4317a76bd59903f3e4bb519ce0))
+
 ## [2.8.2](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.8.1...compat-v2.8.2) (2026-11-16)
 
 
