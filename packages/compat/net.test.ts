@@ -1291,6 +1291,38 @@ describe('compat.net', () => {
         if (RUNTIME === 'NODE') await new Promise((r) => setTimeout(r, 50));
       }
     });
+
+    // Deno.Conn.write may take only part of a large buffer when the peer is
+    // not reading yet (about 320 KiB of 8 MiB on macOS loopback). The rest
+    // used to be dropped, so a large Postgres statement hung.
+    it('sends every byte of a large buffer to a peer that reads late', async () => {
+      const port = 9976;
+      const size = 8 * 1024 * 1024;
+      const listener = await listen({ port, hostname: '127.0.0.1' });
+      try {
+        const client = await connect({ port, hostname: '127.0.0.1' });
+        const server = await listener.accept();
+        const received = (async () => {
+          await new Promise((r) => setTimeout(r, 100));
+          let total = 0;
+          while (total < size) {
+            const chunk = await server.read();
+            if (chunk === null) break;
+            total += chunk.length;
+          }
+          return total;
+        })();
+
+        const written = await client.write(new Uint8Array(size));
+        client.close();
+        asserts.assertEquals(written, size);
+        asserts.assertEquals(await received, size);
+        server.close();
+      } finally {
+        listener.close();
+        if (RUNTIME === 'NODE') await new Promise((r) => setTimeout(r, 50));
+      }
+    });
   });
 
   // ===========================================================================
