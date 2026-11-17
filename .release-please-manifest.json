@@ -1,7 +1,7 @@
 {
   "packages/ambient": "0.2.9",
   "packages/cacher": "1.4.0",
-  "packages/compat": "2.8.2",
+  "packages/compat": "2.8.3",
   "packages/cronus": "1.2.0",
   "packages/crypt": "1.6.0",
   "packages/doctor": "1.5.3",
