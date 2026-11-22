@@ -1,9 +1,9 @@
 /**
- * @fileoverview Tests for isTTY() and consoleSize().
+ * @fileoverview Tests for isTTY(), consoleSize() and writeStdout().
  */
 
 import { describe, it } from '../test.ts';
-import { consoleSize, isTTY } from './terminal.ts';
+import { consoleSize, isTTY, writeStdout } from './terminal.ts';
 import { RUNTIME } from '../runtime.ts';
 import * as asserts from '@std/asserts';
 
@@ -86,6 +86,50 @@ describe({
             stdout.columns = origCols;
             stdout.rows = origRows;
           }
+        }
+      });
+    });
+
+    describe('writeStdout()', () => {
+      // deno-lint-ignore no-explicit-any
+      const g = globalThis as any;
+
+      it('should write every byte, even when the OS takes a few at a time', () => {
+        const text = 'first line\nsecond — line\n';
+        if (RUNTIME === 'DENO') {
+          const original = g.Deno.stdout.writeSync;
+          const chunks: Uint8Array[] = [];
+          g.Deno.stdout.writeSync = (b: Uint8Array) => {
+            const n = Math.min(3, b.length);
+            chunks.push(b.slice(0, n));
+            return n;
+          };
+          try {
+            writeStdout(text);
+          } finally {
+            g.Deno.stdout.writeSync = original;
+          }
+          const all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+          let at = 0;
+          for (const c of chunks) {
+            all.set(c, at);
+            at += c.length;
+          }
+          asserts.assert(chunks.length > 1);
+          asserts.assertEquals(new TextDecoder().decode(all), text);
+        } else {
+          const original = g.process.stdout.write;
+          const written: string[] = [];
+          g.process.stdout.write = (t: string) => {
+            written.push(t);
+            return true;
+          };
+          try {
+            writeStdout(text);
+          } finally {
+            g.process.stdout.write = original;
+          }
+          asserts.assertEquals(written, [text]);
         }
       });
     });

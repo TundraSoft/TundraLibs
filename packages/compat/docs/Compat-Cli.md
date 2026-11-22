@@ -35,6 +35,7 @@ focused submodules under the hood.
 | `argv()` parser     | ✅  | ✅   | ✅      |
 | `isTTY()`           | ✅  | ✅   | ✅      |
 | `consoleSize()`     | ✅  | ✅   | ✅      |
+| `writeStdout()`     | ✅  | ✅   | ✅      |
 | `prompt()` plain    | ✅  | ✅   | ✅      |
 | `prompt()` password | ✅  | ✅   | ✅      |
 | `choose()`          | ✅  | ✅   | ✅      |
@@ -186,6 +187,26 @@ import { consoleSize } from '@tundralibs/compat/cli';
 
 const { columns } = consoleSize();
 console.log('-'.repeat(columns));
+```
+
+#### `writeStdout()`
+
+Writes text to standard output as-is — no newline added, no formatting —
+so many lines can go out in one write. On Deno it repeats the write until
+every byte is taken; on Node.js and Bun it is `process.stdout.write`.
+Throws `UnsupportedRuntimeError` on Workers, the browser and unknown
+runtimes, which have no standard output stream.
+
+```typescript ignore
+function writeStdout(text: string): void;
+```
+
+**Example:**
+
+```typescript
+import { writeStdout } from '@tundralibs/compat/cli';
+
+writeStdout('first line\nsecond line\n');
 ```
 
 ### Interactive prompts

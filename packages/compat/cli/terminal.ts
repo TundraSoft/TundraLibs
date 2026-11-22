@@ -9,6 +9,7 @@
  * @module
  */
 
+import { UnsupportedRuntimeError } from '../Error.ts';
 import { isBun, isDeno, isNode } from '../runtime.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -104,4 +105,47 @@ export const consoleSize = (): { columns: number; rows: number } => {
   }
   /* c8 ignore stop */
   return { columns: 80, rows: 24 };
+};
+
+const ENCODER = new TextEncoder();
+
+/**
+ * Writes `text` to standard output as-is: no newline is added and no
+ * formatting is applied. Cheaper than `console.log` for pre-formatted
+ * output, and the way to send many lines in a single write.
+ *
+ * - **Deno**: `Deno.stdout.writeSync`, repeated until every byte is
+ *   written (a single call may write only part of the buffer)
+ * - **Node.js / Bun**: `process.stdout.write` — synchronous or queued
+ *   by the stream, exactly as it is for `console.log`
+ *
+ * @param text - The text to write
+ * @throws {UnsupportedRuntimeError} On Cloudflare Workers, the browser
+ *   or an unknown runtime, which have no standard output stream.
+ *
+ * @example
+ * ```ts
+ * import { writeStdout } from '@tundralibs/compat/cli';
+ *
+ * writeStdout('first line\nsecond line\n');
+ * ```
+ */
+export const writeStdout = (text: string): void => {
+  /* c8 ignore start */
+  if (isDeno) {
+    const bytes = ENCODER.encode(text);
+    let written = 0;
+    while (written < bytes.length) {
+      written += g.Deno.stdout.writeSync(bytes.subarray(written));
+    }
+    return;
+  }
+  /* c8 ignore stop */
+  /* c8 ignore start */
+  if (isBun || isNode) {
+    g.process.stdout.write(text);
+    return;
+  }
+  /* c8 ignore stop */
+  throw new UnsupportedRuntimeError('writeStdout');
 };

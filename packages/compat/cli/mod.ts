@@ -6,7 +6,8 @@
  * everything via `@tundralibs/compat/cli` or reach into a single area:
  *
  * - {@link "./args.ts" | args/argv} — process invocation tokens + parser
- * - {@link "./terminal.ts" | terminal} — TTY detection, terminal size
+ * - {@link "./terminal.ts" | terminal} — TTY detection, terminal size,
+ *   raw stdout writes
  * - {@link "./prompt.ts" | prompt/choose} — line-based interactive input
  * - {@link "./progress.ts" | ProgressBar} — in-place progress rendering
  * - {@link "./spinner.ts" | Spinner} — animated loading indicator
@@ -15,7 +16,7 @@
  */
 
 export { args, argv, type ArgValue, type ParsedArgs } from './args.ts';
-export { consoleSize, isTTY } from './terminal.ts';
+export { consoleSize, isTTY, writeStdout } from './terminal.ts';
 export {
   choose,
   type ChooseOptions,
