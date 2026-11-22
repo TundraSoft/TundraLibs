@@ -56,6 +56,7 @@ Outputs logs to the console with optional colorization.
   type: 'ConsoleHandler',
   level: SyslogSeverities.DEBUG,
   useColor: false, // Enable colors (default: false)
+  buffered: true, // One write per event-loop turn (default: true)
   formatter: 'standard'
 }
 ```
@@ -63,6 +64,14 @@ Outputs logs to the console with optional colorization.
 ### Options
 
 - `useColor` (boolean) - Enable/disable colored output (default: `false`)
+- `buffered` (boolean) - Collect lines and write them to stdout together on
+  the next turn of the event loop instead of one `console.log` per line
+  (default: `true`). A record at `ERROR` or more severe, and `finalize()`,
+  write everything pending at once, and pending lines are written when the
+  process exits or dies of an uncaught error. A `console.log` of your own
+  made in the meantime appears before the buffered lines; set `false` if that
+  order matters. Ignored on Cloudflare Workers and the browser, which always use
+  `console.log`.
 - `level` (SyslogSeverities) - Minimum log level
 - `formatter` (string | SloggerFormatter) - Output formatter
 

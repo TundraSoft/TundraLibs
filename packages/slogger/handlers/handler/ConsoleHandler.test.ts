@@ -23,6 +23,46 @@ const makeLogObject = (
   timestamp: new Date('2023-01-01T12:00:00Z').getTime(),
 });
 
+// Captures what reaches stdout, one entry per write.
+const captureStdout = async (
+  fn: (writes: string[]) => void | Promise<void>,
+): Promise<string[]> => {
+  // deno-lint-ignore no-explicit-any
+  const g = globalThis as any;
+  const writes: string[] = [];
+  if (g.Deno !== undefined) {
+    const original = g.Deno.stdout.writeSync;
+    g.Deno.stdout.writeSync = (b: Uint8Array) => {
+      writes.push(new TextDecoder().decode(b));
+      return b.length;
+    };
+    try {
+      await fn(writes);
+    } finally {
+      g.Deno.stdout.writeSync = original;
+    }
+  } else {
+    const original = g.process.stdout.write;
+    // Node's test runner reports through stdout too (as bytes): pass
+    // anything that is not ours through untouched.
+    g.process.stdout.write = (t: unknown, ...rest: unknown[]) => {
+      if (typeof t !== 'string') {
+        return original.call(g.process.stdout, t, ...rest);
+      }
+      writes.push(t);
+      return true;
+    };
+    try {
+      await fn(writes);
+    } finally {
+      g.process.stdout.write = original;
+    }
+  }
+  return writes;
+};
+
+const nextTurn = () => new Promise((r) => setTimeout(r, 0));
+
 // Test double that captures console output instead of logging it
 class TestConsoleHandler extends ConsoleHandler {
   public capturedMessages: string[] = [];
@@ -138,7 +178,7 @@ describe('slogger.handlers.consoleHandler', () => {
     );
   });
 
-  it('handle - real ConsoleHandler calls console.log', async () => {
+  it('handle - unbuffered ConsoleHandler calls console.log', async () => {
     const captured: string[] = [];
     const originalLog = console.log;
     console.log = (msg: string) => captured.push(msg);
@@ -146,6 +186,7 @@ describe('slogger.handlers.consoleHandler', () => {
     try {
       const handler = new ConsoleHandler('realConsole', {
         level: 7,
+        buffered: false,
         formatter: simpleFormatter('${message}'),
       });
 
@@ -157,4 +198,95 @@ describe('slogger.handlers.consoleHandler', () => {
     asserts.assertStrictEquals(captured.length, 1);
     asserts.assertStrictEquals(captured[0], 'real console output');
   });
+
+  it('buffered - lines go out together on the next turn', async () => {
+    const handler = new ConsoleHandler('buffered', {
+      level: 7,
+      formatter: simpleFormatter('${message}'),
+    });
+    let before: string[] = [];
+    const writes = await captureStdout(async (writes) => {
+      void handler.handle(makeLogObject(6, 'one'));
+      void handler.handle(makeLogObject(6, 'two'));
+      before = [...writes];
+      await nextTurn();
+    });
+    asserts.assertEquals(before, []);
+    asserts.assertEquals(writes, ['one\ntwo\n']);
+  });
+
+  it('buffered - an ERROR record writes everything pending at once', async () => {
+    const handler = new ConsoleHandler('buffered', {
+      level: 7,
+      formatter: simpleFormatter('${message}'),
+    });
+    const writes = await captureStdout(async (writes) => {
+      void handler.handle(makeLogObject(6, 'context'));
+      void handler.handle(makeLogObject(3, 'failure'));
+      asserts.assertEquals(writes, ['context\nfailure\n']);
+      await nextTurn();
+    });
+    asserts.assertEquals(writes, ['context\nfailure\n']);
+  });
+
+  it('buffered - finalize writes everything pending', async () => {
+    const handler = new ConsoleHandler('buffered', {
+      level: 7,
+      formatter: simpleFormatter('${message}'),
+    });
+    const writes = await captureStdout(async (writes) => {
+      void handler.handle(makeLogObject(6, 'last words'));
+      await handler.finalize();
+      asserts.assertEquals(writes, ['last words\n']);
+      await nextTurn();
+    });
+    asserts.assertEquals(writes, ['last words\n']);
+  });
+
+  it('buffered - a large backlog is written without waiting', async () => {
+    const handler = new ConsoleHandler('buffered', {
+      level: 7,
+      formatter: simpleFormatter('${message}'),
+    });
+    const line = 'x'.repeat(1023);
+    const writes = await captureStdout(async (writes) => {
+      for (let i = 0; i < 64; i++) void handler.handle(makeLogObject(6, line));
+      asserts.assertEquals(writes.length, 1);
+      await nextTurn();
+    });
+    asserts.assertEquals(writes.join(''), `${line}\n`.repeat(64));
+  });
+
+  for (
+    const [how, end, code] of [
+      ['an uncaught error', "throw new Error('boom');", 1],
+      ['Deno.exit()', 'Deno.exit(0);', 0],
+    ] as const
+  ) {
+    it({
+      name: `buffered - pending lines reach stdout when ${how} ends Deno`,
+      // Deno fires no exit event on a crash, so it needs its own hook;
+      // the child process is run with Deno itself.
+      bun: false,
+      node: false,
+      fn: async () => {
+        const root = new URL('../../../../', import.meta.url).pathname;
+        const handler = new URL('./ConsoleHandler.ts', import.meta.url).href;
+        const script = `import { ConsoleHandler } from '${handler}';
+const h = new ConsoleHandler('c', { level: 7, formatter: (l) => l.message });
+void h.handle({ level: 6, message: 'last line' });
+${end}`;
+        const out = await new Deno.Command(Deno.execPath(), {
+          args: ['eval', '--config', `${root}deno.json`, script],
+          stdout: 'piped',
+          stderr: 'piped',
+        }).output();
+        asserts.assertEquals(out.code, code);
+        asserts.assertEquals(
+          new TextDecoder().decode(out.stdout),
+          'last line\n',
+        );
+      },
+    });
+  }
 });
